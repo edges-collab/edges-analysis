@@ -1540,14 +1540,15 @@ def rms_filter():
 
 
 	# All bad spectra
-	IN_bad = np.union1d(inb1, inb2)
+	# ---------------
+	IN_bad = np.union1d(IN1_bad, IN2_bad)
 
 
 
 
 					
 			
-	return LST, RMS1, RMS2, IN1_bad, IN2_bad, IN_bad
+	return LST, RMS1, RMS2, IN1_bad, IN2_bad, IN_bad, f, r_all, w_all, m_all
 
 
 
