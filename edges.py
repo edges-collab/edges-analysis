@@ -1385,7 +1385,7 @@ def data_selection(m, GHA_or_LST='GHA', TIME_1=0, TIME_2=24, sun_el_max=90, moon
 
 
 
-def storing_spectral_rms():	
+def rms_filter():	
 	
 	# Listing files to be processed
 	# -----------------------------
@@ -1821,74 +1821,74 @@ def plots_level3_rms_folder(band, case, YTOP_LOW=10, YTOP_HIGH=50, YBOTTOM_LOW=1
 
 
 
-def rms_filter(rms, gha, Nterms=9, Nstd=3.5):
+#def rms_filter(rms, gha, Nterms=9, Nstd=3.5):
 	
-	"""
+	#"""
 	
-	rms: N x 2. First (second) column is the rms of the first (second) part of the spectral residuals.
-	gha: N.     1D array with GHA of spectra.
-	Nterms: number. Number of polynomial terms to model the rms and the rms std as a function of positive/negative GHA.
-	Nstd: number. Number of sigmas beyond which spectra are flagged.
+	#rms: N x 2. First (second) column is the rms of the first (second) part of the spectral residuals.
+	#gha: N.     1D array with GHA of spectra.
+	#Nterms: number. Number of polynomial terms to model the rms and the rms std as a function of positive/negative GHA.
+	#Nstd: number. Number of sigmas beyond which spectra are flagged.
 	
-	"""
+	#"""
 	
 	
 		
-	# Index of spectra
-	# ----------------
-	I  = np.arange(len(gha))
+	## Index of spectra
+	## ----------------
+	#I  = np.arange(len(gha))
 	
 	
 	
-	# Separate RMS 0 (first half of spectrum) and 1 (second half of spectrum) 
-	# based on positive (p) and negative (n) GHA 
-	# -----------------------------------------------------------------------
+	## Separate RMS 0 (first half of spectrum) and 1 (second half of spectrum) 
+	## based on positive (p) and negative (n) GHA 
+	## -----------------------------------------------------------------------
 	
-	Ip = I[gha>=0]
-	In = I[gha<0]
+	#Ip = I[gha>=0]
+	#In = I[gha<0]
 	
-	Gp = gha[gha>=0]
-	Gn = gha[gha<0]
+	#Gp = gha[gha>=0]
+	#Gn = gha[gha<0]
 		
 	
-	Rp0 = rms[gha>=0,0]			
-	Rn0 = rms[gha<0,0]
+	#Rp0 = rms[gha>=0,0]			
+	#Rn0 = rms[gha<0,0]
 	
-	Wp0 = np.ones(len(Gp))
-	Wn0 = np.ones(len(Gn))
+	#Wp0 = np.ones(len(Gp))
+	#Wn0 = np.ones(len(Gn))
 	
 		
-	Rp1 = rms[gha>=0,1]			
-	Rn1 = rms[gha<0,1]
+	#Rp1 = rms[gha>=0,1]			
+	#Rn1 = rms[gha<0,1]
 	
-	Wp1 = np.ones(len(Gp))
-	Wn1 = np.ones(len(Gn))
+	#Wp1 = np.ones(len(Gp))
+	#Wn1 = np.ones(len(Gn))
 	
 	
 	
-	# Identify bad spectra based on RMS
-	# ---------------------------------
-	RXp0, WXp0 = rfi.cleaning_polynomial(Gp, Rp0, Wp0, Nterms_fg=Nterms, Nterms_std=Nterms, Nstd=Nstd)
-	RXn0, WXn0 = rfi.cleaning_polynomial(-Gn, Rn0, Wn0, Nterms_fg=Nterms, Nterms_std=Nterms, Nstd=Nstd)
+	## Identify bad spectra based on RMS
+	## ---------------------------------
+	#RXp0, WXp0 = rfi.cleaning_polynomial(Gp, Rp0, Wp0, Nterms_fg=Nterms, Nterms_std=Nterms, Nstd=Nstd)
+	#RXn0, WXn0 = rfi.cleaning_polynomial(-Gn, Rn0, Wn0, Nterms_fg=Nterms, Nterms_std=Nterms, Nstd=Nstd)
 	
-	RXp1, WXp1 = rfi.cleaning_polynomial(Gp, Rp1, Wp1, Nterms_fg=Nterms, Nterms_std=Nterms, Nstd=Nstd)
-	RXn1, WXn1 = rfi.cleaning_polynomial(-Gn, Rn1, Wn1, Nterms_fg=Nterms, Nterms_std=Nterms, Nstd=Nstd)	
+	#RXp1, WXp1 = rfi.cleaning_polynomial(Gp, Rp1, Wp1, Nterms_fg=Nterms, Nterms_std=Nterms, Nstd=Nstd)
+	#RXn1, WXn1 = rfi.cleaning_polynomial(-Gn, Rn1, Wn1, Nterms_fg=Nterms, Nterms_std=Nterms, Nstd=Nstd)	
 	
 	
 
-	# Assign zero weight to index of bad spectra
-	# ------------------------------------------
-	Wrms0 = np.ones(len(t[:,0]))
-	Wrms0[Ip[WXp0==0]] = 0
-	Wrms0[In[WXn0==0]] = 0	
+	## Assign zero weight to index of bad spectra
+	## ------------------------------------------
+	#Wrms0 = np.ones(len(t[:,0]))
+	#Wrms0[Ip[WXp0==0]] = 0
+	#Wrms0[In[WXn0==0]] = 0	
 	
-	Wrms1 = np.ones(len(t[:,0]))
-	Wrms1[Ip[WXp1==0]] = 0
-	Wrms1[In[WXn1==0]] = 0
+	#Wrms1 = np.ones(len(t[:,0]))
+	#Wrms1[Ip[WXp1==0]] = 0
+	#Wrms1[In[WXn1==0]] = 0
 	
 	
 	
-	return Wrms0, Wrms1
+	#return Wrms0, Wrms1
 
 
 
