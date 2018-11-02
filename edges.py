@@ -31,6 +31,8 @@ MRO_folder  = '/data5/edges/data/2014_February_Boolardy'
 
 
 def auxiliary_data(weather_file, thermlog_file, band, year, day):
+	"""
+	"""
 
 	# scp -P 64122 loco@150.101.175.77:/media/DATA/EDGES_data/weather.txt /home/raul/Desktop/
 	# scp -P 64122 loco@150.101.175.77:/media/DATA/EDGES_data/thermlog.txt /home/raul/Desktop/
