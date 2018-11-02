@@ -25,7 +25,12 @@ MRO_folder  = '/data5/edges/data/2014_February_Boolardy'
 
 
 
+import os, sys
+edges_code_folder = os.environ['EDGES_CODE']
+sys.path.insert(0, edges_code_folder)
 
+data_folder       = os.environ['EDGES_DATA']
+print('EDGES Data Folder: ' + data_folder)
 
 
 
@@ -1380,17 +1385,18 @@ def data_selection(m, GHA_or_LST='GHA', TIME_1=0, TIME_2=24, sun_el_max=90, moon
 
 
 
-def storing_spectral_rms():
-	
-		
+def storing_spectral_rms():	
 	
 	# Listing files to be processed
-	path_files = home_folder + '/EDGES/spectra/level3/mid_band/nominal_60_160MHz_fullcal/'
+	# -----------------------------
+	path_files = data_folder + '/nominal_60_160MHz_fullcal/'
 	new_list   = listdir(path_files)
 	new_list.sort()
 	
 	
-	for i in range(10): #range(len(new_list)): 
+	# Loading data
+	# ------------
+	for i in range(8): #range(len(new_list)): 
 		print(new_list[i])
 		
 		f, t, p, r, w, rms, m = level3read(path_files + new_list[i])
@@ -1419,34 +1425,52 @@ def storing_spectral_rms():
 			rms_all = np.vstack((rms_all, rms))
 			m_all   = np.vstack((m_all, m))
 	
+	
+	
+	
+	
+	
+	
+	
+	
+	# Necessary for analysis
+	# ----------------------
 	LST  = m_all[:,3]
 	RMS1 = rms_all[:,0]
 	RMS2 = rms_all[:,1]
 	
-	IN = np.arange(0,len(LST))
+	IN   = np.arange(0,len(LST))
 	
 	Npar   = 3
 	Nsigma = 3
 	
 	
-	for i in range(1):
+	
+	
+	# Analysis for low-frequency half of the spectrum
+	# -----------------------------------------------
+	for i in range(24):
 		LST_x  = LST[(LST>=i) & (LST<=(i+1))]
-		RMS1_x = RMS1[(LST>=i) & (LST<=(i+1))]
+		RMS_x  = RMS1[(LST>=i) & (LST<=(i+1))]
 		IN_x   = IN[(LST>=i) & (LST<=(i+1))]
 		
-		print(len(LST_x))
-		
-		
-		done    = 'no'
 		W       = np.ones(len(LST_x))
-		
 		bad_old = -1
 		bad     =  0
 		
+		iteration = 0
 		while bad > bad_old:
-			par   = np.polyfit(LST_x[W>0], RMS1_x[W>0], Npar-1)
+
+			iteration = iteration + 1
+
+			print(' ')
+			print('------------')
+			print('LST: ' + str(i) + '-' + str(i+1) + 'hr')
+			print('Iteration: ' + str(iteration))
+		
+			par   = np.polyfit(LST_x[W>0], RMS_x[W>0], Npar-1)
 			model = np.polyval(par, LST_x)
-			res   = RMS1_x - model
+			res   = RMS_x - model
 			std   = np.std(res[W>0])
 			
 			IN_x_bad = IN_x[np.abs(res) > Nsigma*std]
@@ -1454,9 +1478,76 @@ def storing_spectral_rms():
 			
 			bad_old = np.copy(bad)
 			bad     = len(IN_x_bad)
-							
 			
-	return LST_x, RMS1_x, res
+			print('STD: ' + str(np.round(std,3)) + ' K')
+			print('Number of bad points excised: ' + str(bad))
+
+
+
+		if i == 0:
+			IN1_bad = np.copy(IN_x_bad)
+
+		else:
+			IN1_bad = np.append(IN1_bad, IN_x_bad)
+	
+	
+	
+	
+	
+	# Analysis for high-frequency half of the spectrum
+	# ------------------------------------------------
+	for i in range(24):
+		LST_x  = LST[(LST>=i) & (LST<=(i+1))]
+		RMS_x  = RMS2[(LST>=i) & (LST<=(i+1))]
+		IN_x   = IN[(LST>=i) & (LST<=(i+1))]
+		
+		W       = np.ones(len(LST_x))
+		bad_old = -1
+		bad     =  0
+		
+		iteration = 0
+		while bad > bad_old:
+
+			iteration = iteration + 1
+
+			print(' ')
+			print('------------')
+			print('LST: ' + str(i) + '-' + str(i+1) + 'hr')
+			print('Iteration: ' + str(iteration))
+		
+			par   = np.polyfit(LST_x[W>0], RMS_x[W>0], Npar-1)
+			model = np.polyval(par, LST_x)
+			res   = RMS_x - model
+			std   = np.std(res[W>0])
+			
+			IN_x_bad = IN_x[np.abs(res) > Nsigma*std]
+			W[np.abs(res) > Nsigma*std] = 0
+			
+			bad_old = np.copy(bad)
+			bad     = len(IN_x_bad)
+			
+			print('STD: ' + str(np.round(std,3)) + ' K')
+			print('Number of bad points excised: ' + str(bad))
+
+
+
+		if i == 0:
+			IN2_bad = np.copy(IN_x_bad)
+
+		else:
+			IN2_bad = np.append(IN2_bad, IN_x_bad)	
+
+
+
+	# All bad spectra
+	IN_bad = np.union1d(inb1, inb2)
+
+
+
+
+					
+			
+	return LST, RMS1, RMS2, IN1_bad, IN2_bad, IN_bad
 
 
 
