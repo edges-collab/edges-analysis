@@ -1396,7 +1396,7 @@ def rms_filter():
 	
 	# Loading data
 	# ------------
-	for i in range(8): #range(len(new_list)): 
+	for i in range(len(new_list)):   #range(8): #
 		print(new_list[i])
 		
 		f, t, p, r, w, rms, m = level3read(path_files + new_list[i])
