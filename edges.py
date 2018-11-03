@@ -1385,7 +1385,9 @@ def data_selection(m, GHA_or_LST='GHA', TIME_1=0, TIME_2=24, sun_el_max=90, moon
 
 
 
-def rms_filter():	
+def rms_filter():
+	"""
+	"""
 	
 	# Listing files to be processed
 	# -----------------------------
