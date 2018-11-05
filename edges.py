@@ -1602,8 +1602,22 @@ def integrated_spectra(f, p_all, r_all, w_all, m_all, index_bad, GHA_edges, F_LO
 				#avr_temp, avw_temp   = ba.weighted_mean(avr_array, avw_array)
 	
 		avr, avw   = ba.weighted_mean(r1, w1)
-		avr[(f>136.7) & (f<137.7)] = 0
-		avw[(f>136.7) & (f<137.7)] = 0
+
+
+		# Final RFI cleaning
+		avr[(f>130) & (f<130.4)] = 0
+		avw[(f>130) & (f<130.4)] = 0
+
+		avr[(f>136.1) & (f<138.2)] = 0
+		avw[(f>136.1) & (f<138.2)] = 0
+
+		avr[(f>145.5) & (f<146)] = 0
+		avw[(f>145.5) & (f<146)] = 0
+		
+		avr[(f>149.8) & (f<150.3)] = 0
+		avw[(f>149.8) & (f<150.3)] = 0		
+
+
 		
 		avr_no_rfi, avw_no_rfi = rfi.cleaning_sweep(f, avr, avw, window_width_MHz=5, Npolyterms_block=3, N_choice=20, N_sigma=3)
 	
@@ -1649,13 +1663,55 @@ def integrated_spectra(f, p_all, r_all, w_all, m_all, index_bad, GHA_edges, F_LO
 	
 	
 		
-	return gha_all, data
+	return gha_all, data   # f, avr_no_rfi, avw_no_rfi #
 
 
 
 
 
 
+
+
+
+
+
+
+def integrated_residuals_GHA(file_gha, file_data, flow, fhigh, Nfg):
+	
+	g = np.genfromtxt(file_gha)
+	d = np.genfromtxt(file_data)
+	
+	fx = d[:,0]
+	
+	for i in range(len(g)):
+		index_t = 2*(i+1)-1
+		index_w = 2*(i+1)
+		tx = d[:,index_t]
+		wx = d[:,index_w]
+		
+		f = fx[(fx>=flow) & (fx<=fhigh)]
+		t = tx[(fx>=flow) & (fx<=fhigh)]
+		w = wx[(fx>=flow) & (fx<=fhigh)]
+		
+		#print(index_t)
+		#print(index_w)
+		
+		par = ba.fit_polynomial_fourier('LINLOG', f/200, t, Nfg, Weights=w)
+		
+		r = t - par[1]
+		
+		if i == 0:
+			r_all = np.copy(r)
+			w_all = np.copy(w)
+			
+		elif i > 0:
+			r_all = np.vstack((r_all, r))
+			w_all = np.vstack((w_all, w))
+		
+		
+		
+		
+	return f, r_all, w_all, g
 
 
 
@@ -1757,7 +1813,7 @@ def daily_residuals_LST(file_name, LST_boundaries=np.arange(0,25,2), FLOW=60, FH
 
 
 
-def plot_daily_residuals_LST(f, r, list_names, DY=2, FLOW=50, FHIGH=180, XTICKS=np.arange(60, 180+1, 20), XTEXT=160, YLABEL='ylabel', TITLE='hello', save='no', figure_path='/home/raul/Desktop/', figure_name='2018_150_00'):
+def plot_daily_residuals_LST(f, r, w, list_names, DY=2, FLOW=50, FHIGH=180, XTICKS=np.arange(60, 180+1, 20), XTEXT=160, YLABEL='ylabel', TITLE='hello', save='no', figure_path='/home/raul/Desktop/', figure_name='2018_150_00'):
 	
 	# Nspectra_column=35,
 	#Ncol_real = len(r[:,0])/Nspectra_columns
@@ -1778,7 +1834,7 @@ def plot_daily_residuals_LST(f, r, list_names, DY=2, FLOW=50, FHIGH=180, XTICKS=
 		else:
 			color = 'b'
 			
-		plt.plot(f, r[i]-i*DY, color)
+		plt.plot(f[w[i]>0], (r[i]-i*DY)[w[i]>0], color)
 		plt.text(XTEXT, -i*DY, list_names[i])
 		
 	plt.xlim([FLOW, FHIGH])
