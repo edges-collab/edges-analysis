@@ -1349,11 +1349,6 @@ def data_selection(m, GHA_or_LST='GHA', TIME_1=0, TIME_2=24, sun_el_max=90, moon
 		
 
 
-	
-	
-	
-
-
 	# Sun elevation, Moon elevation, ambient humidity, and receiver temperature
 	index_SUN  = index[m[:,6]   <= sun_el_max]
 	index_MOON = index[m[:,8]   <= moon_el_max]
@@ -1385,7 +1380,7 @@ def data_selection(m, GHA_or_LST='GHA', TIME_1=0, TIME_2=24, sun_el_max=90, moon
 
 
 
-def rms_filter():
+def rms_filter(amb_hum_max=90):
 	"""
 	"""
 	
@@ -1398,34 +1393,34 @@ def rms_filter():
 	
 	# Loading data
 	# ------------
-	for i in range(len(new_list)):   #range(8): #
+	for i in range(len(new_list)):   # range(8): 
 		print(new_list[i])
 		
 		f, t, p, r, w, rms, m = level3read(path_files + new_list[i])
 		
-		#IX = data_selection(m, GHA_or_LST='GHA', TIME_1=GHA1, TIME_2=GHA2, sun_el_max=90, moon_el_max=90, amb_hum_max = 200, min_receiver_temp=0, max_receiver_temp=100)
+		IX = data_selection(m, GHA_or_LST='GHA', TIME_1=0, TIME_2=24, sun_el_max=90, moon_el_max=90, amb_hum_max=amb_hum_max, min_receiver_temp=0, max_receiver_temp=100)
 		
-		#tx   = t[IX,:]
-		#px   = p[IX,:]
-		#rx   = r[IX,:]
-		#wx   = w[IX,:]
-		#rmsx = rms[IX,:]
-		#mx   = m[IX,:]
+		tx   = t[IX,:]
+		px   = p[IX,:]
+		rx   = r[IX,:]
+		wx   = w[IX,:]
+		rmsx = rms[IX,:]
+		mx   = m[IX,:]
 		
 		
 		if i == 0:
-			p_all   = np.copy(p)
-			r_all   = np.copy(r)
-			w_all   = np.copy(w)
-			rms_all = np.copy(rms)
-			m_all   = np.copy(m)
+			p_all   = np.copy(px)
+			r_all   = np.copy(rx)
+			w_all   = np.copy(wx)
+			rms_all = np.copy(rmsx)
+			m_all   = np.copy(mx)
 			
 		elif i > 0:
-			p_all   = np.vstack((p_all, p))
-			r_all   = np.vstack((r_all, r))
-			w_all   = np.vstack((w_all, w))
-			rms_all = np.vstack((rms_all, rms))
-			m_all   = np.vstack((m_all, m))
+			p_all   = np.vstack((p_all, px))
+			r_all   = np.vstack((r_all, rx))
+			w_all   = np.vstack((w_all, wx))
+			rms_all = np.vstack((rms_all, rmsx))
+			m_all   = np.vstack((m_all, mx))
 	
 	
 	
@@ -1437,11 +1432,13 @@ def rms_filter():
 	
 	# Necessary for analysis
 	# ----------------------
-	LST  = m_all[:,3]
+	GHA        = m_all[:,4]
+	GHA[GHA<0] = GHA[GHA<0] + 24	
+
 	RMS1 = rms_all[:,0]
 	RMS2 = rms_all[:,1]
 	
-	IN   = np.arange(0,len(LST))
+	IN   = np.arange(0,len(GHA))
 	
 	Npar   = 3
 	Nsigma = 3
@@ -1452,11 +1449,11 @@ def rms_filter():
 	# Analysis for low-frequency half of the spectrum
 	# -----------------------------------------------
 	for i in range(24):
-		LST_x  = LST[(LST>=i) & (LST<=(i+1))]
-		RMS_x  = RMS1[(LST>=i) & (LST<=(i+1))]
-		IN_x   = IN[(LST>=i) & (LST<=(i+1))]
+		GHA_x  = GHA[(GHA>=i) & (GHA<(i+1))]
+		RMS_x  = RMS1[(GHA>=i) & (GHA<(i+1))]
+		IN_x   = IN[(GHA>=i) & (GHA<(i+1))]
 		
-		W       = np.ones(len(LST_x))
+		W       = np.ones(len(GHA_x))
 		bad_old = -1
 		bad     =  0
 		
@@ -1467,11 +1464,11 @@ def rms_filter():
 
 			print(' ')
 			print('------------')
-			print('LST: ' + str(i) + '-' + str(i+1) + 'hr')
+			print('GHA: ' + str(i) + '-' + str(i+1) + 'hr')
 			print('Iteration: ' + str(iteration))
 		
-			par   = np.polyfit(LST_x[W>0], RMS_x[W>0], Npar-1)
-			model = np.polyval(par, LST_x)
+			par   = np.polyfit(GHA_x[W>0], RMS_x[W>0], Npar-1)
+			model = np.polyval(par, GHA_x)
 			res   = RMS_x - model
 			std   = np.std(res[W>0])
 			
@@ -1499,11 +1496,11 @@ def rms_filter():
 	# Analysis for high-frequency half of the spectrum
 	# ------------------------------------------------
 	for i in range(24):
-		LST_x  = LST[(LST>=i) & (LST<=(i+1))]
-		RMS_x  = RMS2[(LST>=i) & (LST<=(i+1))]
-		IN_x   = IN[(LST>=i) & (LST<=(i+1))]
+		GHA_x  = GHA[(GHA>=i) & (GHA<(i+1))]
+		RMS_x  = RMS2[(GHA>=i) & (GHA<(i+1))]
+		IN_x   = IN[(GHA>=i) & (GHA<(i+1))]
 		
-		W       = np.ones(len(LST_x))
+		W       = np.ones(len(GHA_x))
 		bad_old = -1
 		bad     =  0
 		
@@ -1514,11 +1511,11 @@ def rms_filter():
 
 			print(' ')
 			print('------------')
-			print('LST: ' + str(i) + '-' + str(i+1) + 'hr')
+			print('GHA: ' + str(i) + '-' + str(i+1) + 'hr')
 			print('Iteration: ' + str(iteration))
 		
-			par   = np.polyfit(LST_x[W>0], RMS_x[W>0], Npar-1)
-			model = np.polyval(par, LST_x)
+			par   = np.polyfit(GHA_x[W>0], RMS_x[W>0], Npar-1)
+			model = np.polyval(par, GHA_x)
 			res   = RMS_x - model
 			std   = np.std(res[W>0])
 			
@@ -1550,7 +1547,115 @@ def rms_filter():
 
 					
 			
-	return LST, RMS1, RMS2, IN1_bad, IN2_bad, IN_bad, f, r_all, w_all, m_all
+	return GHA, RMS1, RMS2, IN1_bad, IN2_bad, IN_bad, f, p_all, r_all, w_all, m_all
+
+
+
+
+
+
+
+
+
+def integrated_spectra(f, p_all, r_all, w_all, m_all, index_bad, GHA_edges, F_LOW, F_HIGH, save_path, save_name):
+	
+	
+	index = np.arange(len(r_all[:,0]))
+	
+	index_good = np.setdiff1d(index, index_bad)
+	
+	p = p_all[index_good,:]
+	r = r_all[index_good,:]
+	w = w_all[index_good,:]
+	m = m_all[index_good,:]
+		
+	GHA        = m[:,4]
+	GHA[GHA<0] = GHA[GHA<0] + 24
+	
+
+	for i in range(len(GHA_edges)-1):
+		
+				
+		GHA_LOW  = GHA_edges[i]
+		GHA_HIGH = GHA_edges[i+1]
+		
+		print(str(GHA_LOW) + ' ' + str(GHA_HIGH))
+		
+		p1 = p[(GHA>=GHA_LOW) & (GHA<GHA_HIGH),:]
+		r1 = r[(GHA>=GHA_LOW) & (GHA<GHA_HIGH),:]
+		w1 = w[(GHA>=GHA_LOW) & (GHA<GHA_HIGH),:]
+		m1 = m[(GHA>=GHA_LOW) & (GHA<GHA_HIGH),:]
+		
+		avp        = np.mean(p1, axis=0)
+		
+		#for i in range(len(r1[:,0])):
+			#print(str(i) + ' ' + str(len(r1[:,0])))
+			
+			#if i == 0:
+				#avr_temp = r1[i,:]
+				#avw_temp = w1[i,:]
+			
+			#elif i > 0:
+				#avr_array = np.array([avr_temp, r1[i,:]])
+				#avw_array = np.array([avw_temp, w1[i,:]])
+				
+				#avr_temp, avw_temp   = ba.weighted_mean(avr_array, avw_array)
+	
+		avr, avw   = ba.weighted_mean(r1, w1)
+		avr[(f>136.7) & (f<137.7)] = 0
+		avw[(f>136.7) & (f<137.7)] = 0
+		
+		avr_no_rfi, avw_no_rfi = rfi.cleaning_sweep(f, avr, avw, window_width_MHz=5, Npolyterms_block=3, N_choice=20, N_sigma=3)
+	
+	
+	
+		fbx, rbx, wbx = ba.spectral_binning_number_of_samples(f, avr_no_rfi, avw_no_rfi)
+		
+		model      = ba.model_evaluate('LINLOG', avp, fbx/200)
+		tbx = model + rbx
+		
+		fb = fbx[(fbx>=F_LOW) & (fbx<=F_HIGH)]
+		tb = tbx[(fbx>=F_LOW) & (fbx<=F_HIGH)]
+		wb = wbx[(fbx>=F_LOW) & (fbx<=F_HIGH)]
+		
+		
+		tb[wb==0] = 0
+		
+		
+		gha_center = GHA_LOW + (GHA_HIGH - GHA_LOW)/2
+		
+		if i == 0:
+			gha_all = np.array([gha_center])
+			tb_all  = np.copy(tb)
+			wb_all  = np.copy(wb)
+			
+		elif i > 0:
+			gha_all = np.append(gha_all, gha_center)
+			tb_all = np.vstack((tb_all, tb))
+			wb_all = np.vstack((wb_all, wb))
+			
+	
+	# Formatting output data		
+	dataT = np.array([fb, tb_all[0,:], wb_all[0,:]])
+	for i in range(len(tb_all[:,0])-1):
+		dataT = np.vstack((dataT, tb_all[i+1,:], wb_all[i+1,:]))
+		
+	data = dataT.T
+		
+			
+			
+	np.savetxt(save_path + 'gha_' + save_name + '.txt', gha_all, header='Center GHA of integrated spectra [hr]')
+	np.savetxt(save_path + 'data_' + save_name + '.txt', data, header='Frequency [MHz],\t Temperature [K],\t Weights')
+	
+	
+		
+	return gha_all, data
+
+
+
+
+
+
 
 
 
@@ -2128,37 +2233,6 @@ def level2_to_level3_old(band, year_day, save='no', save_folder='', save_flag=''
 
 
 
-
-
-
-
-def basic_test(ff, tt, ww, m, FLOW, FHIGH, Nfit):
-	
-	f = ff[(ff>=FLOW) & (ff<=FHIGH)]
-	t = tt[:, (ff>=FLOW) & (ff<=FHIGH)]
-	w = ww[:, (ff>=FLOW) & (ff<=FHIGH)]
-	
-	
-	
-	avt = np.mean(t, axis=0)
-	
-	tc1, wc1 = rfi.excision_raw_frequency(f, avt, np.ones(len(f)))
-	tc2, wc2 = rfi.cleaning_sweep(f, tc1, wc1, window_width_MHz=4, Npolyterms_block=4, N_choice=20, N_sigma=3.0)
-	
-	
-	p = ba.fit_polynomial_fourier('LINLOG', f, tc2, Nfit, Weights=wc2)
-	
-	fb, rb, wb = ba.spectral_binning_number_of_samples(f, tc2-p[1], wc2)
-	
-	
-	
-	plt.plot(fb[wb>0], rb[wb>0])
-	
-	
-	
-	
-	
-	return 0
 
 
 

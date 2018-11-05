@@ -511,8 +511,8 @@ def cleaning_sweep(f, d, w, window_width_MHz=4, Npolyterms_block=4, N_choice=20,
 
 
 	# From the initial section remove peaks larger than N_sigma x STD of noise
-	d_out[np.abs(r_start_block) - (N_sigma * r_std) > 0] = 0
-	w_out[np.abs(r_start_block) - (N_sigma * r_std) > 0] = 0
+	#d_out[np.abs(r_start_block) - (N_sigma * r_std) > 0] = 0
+	#w_out[np.abs(r_start_block) - (N_sigma * r_std) > 0] = 0
 
 
 
