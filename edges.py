@@ -1393,7 +1393,7 @@ def rms_filter(amb_hum_max=90):
 	
 	# Loading data
 	# ------------
-	for i in range(len(new_list)):   # range(8): 
+	for i in range(len(new_list)): # range(8): 
 		print(new_list[i])
 		
 		f, t, p, r, w, rms, m = level3read(path_files + new_list[i])
@@ -1470,7 +1470,18 @@ def rms_filter(amb_hum_max=90):
 			par   = np.polyfit(GHA_x[W>0], RMS_x[W>0], Npar-1)
 			model = np.polyval(par, GHA_x)
 			res   = RMS_x - model
-			std   = np.std(res[W>0])
+			
+			std = 1e10
+			Nrep = 100
+			Nsample = 100
+			for j in range(100):
+				sample = np.random.choice(res, Nsample)
+				std_rep = np.std(sample)
+				if std_rep < std:
+					std = np.copy(std_rep)
+				
+			
+			#std   = np.std(res[W>0])
 			
 			IN_x_bad = IN_x[np.abs(res) > Nsigma*std]
 			W[np.abs(res) > Nsigma*std] = 0
@@ -1813,7 +1824,7 @@ def daily_residuals_LST(file_name, LST_boundaries=np.arange(0,25,2), FLOW=60, FH
 
 
 
-def plot_daily_residuals_LST(f, r, w, list_names, DY=2, FLOW=50, FHIGH=180, XTICKS=np.arange(60, 180+1, 20), XTEXT=160, YLABEL='ylabel', TITLE='hello', save='no', figure_path='/home/raul/Desktop/', figure_name='2018_150_00'):
+def plot_residuals(f, r, w, list_names, DY=2, FLOW=50, FHIGH=180, XTICKS=np.arange(60, 180+1, 20), XTEXT=160, YLABEL='ylabel', TITLE='hello', save='no', figure_path='/home/raul/Desktop/', figure_name='2018_150_00'):
 	
 	# Nspectra_column=35,
 	#Ncol_real = len(r[:,0])/Nspectra_columns
