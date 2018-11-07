@@ -582,7 +582,7 @@ def cleaning_sweep(f, d, w, window_width_MHz=4, Npolyterms_block=4, N_choice=20,
 
 
 
-def cleaning_polynomial(fin, tin, win, Nterms_fg=10, Nterms_std=3, Nstd=5):
+def cleaning_polynomial(fin, tin, win, model_type='loglog', Nterms_fg=10, Nterms_std=3, Nstd=5):
 
 	"""
 
@@ -593,15 +593,9 @@ def cleaning_polynomial(fin, tin, win, Nterms_fg=10, Nterms_std=3, Nstd=5):
 
 	"""
 
-
-
 	f = np.copy(fin)
 	t = np.copy(tin)
 	w = np.copy(win)
-
-
-
-
 
 	sum_RFI     = 2
 	sum_RFI_old = 1
@@ -613,25 +607,32 @@ def cleaning_polynomial(fin, tin, win, Nterms_fg=10, Nterms_std=3, Nstd=5):
 		tt = t[(t > 0) & (w > 0) & (np.isnan(t) == False) & (np.isinf(t) == False)]
 		ww = w[(t > 0) & (w > 0) & (np.isnan(t) == False) & (np.isinf(t) == False)]
 
-		# Log of frequency and temperature, for data with non-zero weights
-		log_f = np.log10(ff/200)
-		log_t = np.log10(tt)
-
-		# Remove points with Log_t equal to NaN and +/- Inf
-		log_ff = log_f[(np.isnan(log_t) == False) & (np.isinf(log_t) == False)]
-		log_tt = log_t[(np.isnan(log_t) == False) & (np.isinf(log_t) == False)]
 
 
+		if model_type == 'loglog':
 
 
+			# Log of frequency and temperature, for data with non-zero weights
+			log_f = np.log10(ff/200)
+			log_t = np.log10(tt)
+	
+			# Remove points with Log_t equal to NaN and +/- Inf
+			log_ff = log_f[(np.isnan(log_t) == False) & (np.isinf(log_t) == False)]
+			log_tt = log_t[(np.isnan(log_t) == False) & (np.isinf(log_t) == False)]
+	
+			par   = np.polyfit(log_ff, log_tt, Nterms_fg-1)
+			log_model = np.polyval(par, np.log10(f/200))
+			model = 10**log_model
+	
+			#par    = fit_polynomial_fourier('EDGES_polynomial', f/90, t, Nterms_fg, Weights=w)
+			#model  = par[1]
+			
+			
+		elif model_type == 'poly':
+			
+			par   = np.polyfit(ff, tt, Nterms_fg-1)
+			model = np.polyval(par, f)
 
-
-		par   = np.polyfit(log_ff, log_tt, Nterms_fg-1)
-		log_model = np.polyval(par, np.log10(f/200))
-		model = 10**log_model
-
-		#par    = fit_polynomial_fourier('EDGES_polynomial', f/90, t, Nterms_fg, Weights=w)
-		#model  = par[1]
 
 
 		res = t - model

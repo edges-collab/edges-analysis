@@ -1380,24 +1380,39 @@ def data_selection(m, GHA_or_LST='GHA', TIME_1=0, TIME_2=24, sun_el_max=90, moon
 
 
 
-def rms_filter(amb_hum_max=90):
+
+
+
+def rms_filter_computation(save_parameters='no'):
 	"""
+
+	Last modification:  2018-11-07
+	
+	Computation of the RMS filter for mid-band data
+	
 	"""
 	
-	# Listing files to be processed
-	# -----------------------------
+	
+	
+	
+	# Listing files available
+	# ------------------------
 	path_files = data_folder + '/nominal_60_160MHz_fullcal/'
 	new_list   = listdir(path_files)
 	new_list.sort()
 	
 	
-	# Loading data
-	# ------------
-	for i in range(len(new_list)): # range(8): 
+	# Loading data used to compute filter
+	# -----------------------------------
+	N_files = 8                  # Only using the first "N_files" to compute the filter
+	for i in range(N_files):     # range(len(new_list)):
 		print(new_list[i])
 		
+		# Loading data
 		f, t, p, r, w, rms, m = level3read(path_files + new_list[i])
 		
+		# Filtering out high humidity
+		amb_hum_max=90
 		IX = data_selection(m, GHA_or_LST='GHA', TIME_1=0, TIME_2=24, sun_el_max=90, moon_el_max=90, amb_hum_max=amb_hum_max, min_receiver_temp=0, max_receiver_temp=100)
 		
 		tx   = t[IX,:]
@@ -1407,7 +1422,7 @@ def rms_filter(amb_hum_max=90):
 		rmsx = rms[IX,:]
 		mx   = m[IX,:]
 		
-		
+		# Accumulating data
 		if i == 0:
 			p_all   = np.copy(px)
 			r_all   = np.copy(rx)
@@ -1422,42 +1437,43 @@ def rms_filter(amb_hum_max=90):
 			rms_all = np.vstack((rms_all, rmsx))
 			m_all   = np.vstack((m_all, mx))
 	
-	
-	
-	
-	
-	
-	
-	
-	
-	# Necessary for analysis
-	# ----------------------
+
+		
+	# Columns necessary for analysis
+	# ------------------------------
 	GHA        = m_all[:,4]
 	GHA[GHA<0] = GHA[GHA<0] + 24	
 
-	RMS1 = rms_all[:,0]
-	RMS2 = rms_all[:,1]
+	RMS1       = rms_all[:,0]
+	RMS2       = rms_all[:,1]
 	
-	IN   = np.arange(0,len(GHA))
+	IN         = np.arange(0,len(GHA))
 	
-	Npar   = 3
+	
+	
+	# Number of polynomial terms used to fit each 1-hour bins
+	# and number of sigma threshold
+	# -------------------------------------------------------
+	Npoly  = 3
 	Nsigma = 3
-	
 	
 	
 	
 	# Analysis for low-frequency half of the spectrum
 	# -----------------------------------------------
+	
+	# Identification of bad data, within 1-hour "bins", across 24 hours
+	# -----------------------------------------------------------------
 	for i in range(24):
-		GHA_x  = GHA[(GHA>=i) & (GHA<(i+1))]
-		RMS_x  = RMS1[(GHA>=i) & (GHA<(i+1))]
-		IN_x   = IN[(GHA>=i) & (GHA<(i+1))]
+		GHA_x   =  GHA[(GHA>=i) & (GHA<(i+1))]
+		RMS_x   = RMS1[(GHA>=i) & (GHA<(i+1))]
+		IN_x    =   IN[(GHA>=i) & (GHA<(i+1))]
 		
-		W       = np.ones(len(GHA_x))
-		bad_old = -1
-		bad     =  0
+		W         =  np.ones(len(GHA_x))
+		bad_old   = -1
+		bad       =  0		
+		iteration =  0
 		
-		iteration = 0
 		while bad > bad_old:
 
 			iteration = iteration + 1
@@ -1467,22 +1483,11 @@ def rms_filter(amb_hum_max=90):
 			print('GHA: ' + str(i) + '-' + str(i+1) + 'hr')
 			print('Iteration: ' + str(iteration))
 		
-			par   = np.polyfit(GHA_x[W>0], RMS_x[W>0], Npar-1)
+			par   = np.polyfit(GHA_x[W>0], RMS_x[W>0], Npoly-1)
 			model = np.polyval(par, GHA_x)
-			res   = RMS_x - model
-			
-			std = 1e10
-			Nrep = 100
-			Nsample = 100
-			for j in range(100):
-				sample = np.random.choice(res, Nsample)
-				std_rep = np.std(sample)
-				if std_rep < std:
-					std = np.copy(std_rep)
-				
-			
-			#std   = np.std(res[W>0])
-			
+			res   = RMS_x - model			
+			std   = np.std(res[W>0])
+					
 			IN_x_bad = IN_x[np.abs(res) > Nsigma*std]
 			W[np.abs(res) > Nsigma*std] = 0
 			
@@ -1493,7 +1498,8 @@ def rms_filter(amb_hum_max=90):
 			print('Number of bad points excised: ' + str(bad))
 
 
-
+		# Indices of bad data points
+		# --------------------------
 		if i == 0:
 			IN1_bad = np.copy(IN_x_bad)
 
@@ -1506,16 +1512,19 @@ def rms_filter(amb_hum_max=90):
 	
 	# Analysis for high-frequency half of the spectrum
 	# ------------------------------------------------
+	
+	# Identification of bad data, within 1-hour "bins", across 24 hours
+	# -----------------------------------------------------------------
 	for i in range(24):
-		GHA_x  = GHA[(GHA>=i) & (GHA<(i+1))]
+		GHA_x  =  GHA[(GHA>=i) & (GHA<(i+1))]
 		RMS_x  = RMS2[(GHA>=i) & (GHA<(i+1))]
-		IN_x   = IN[(GHA>=i) & (GHA<(i+1))]
+		IN_x   =   IN[(GHA>=i) & (GHA<(i+1))]
 		
-		W       = np.ones(len(GHA_x))
-		bad_old = -1
-		bad     =  0
+		W         =  np.ones(len(GHA_x))
+		bad_old   = -1
+		bad       =  0	
+		iteration =  0
 		
-		iteration = 0
 		while bad > bad_old:
 
 			iteration = iteration + 1
@@ -1525,7 +1534,7 @@ def rms_filter(amb_hum_max=90):
 			print('GHA: ' + str(i) + '-' + str(i+1) + 'hr')
 			print('Iteration: ' + str(iteration))
 		
-			par   = np.polyfit(GHA_x[W>0], RMS_x[W>0], Npar-1)
+			par   = np.polyfit(GHA_x[W>0], RMS_x[W>0], Npoly-1)
 			model = np.polyval(par, GHA_x)
 			res   = RMS_x - model
 			std   = np.std(res[W>0])
@@ -1540,7 +1549,8 @@ def rms_filter(amb_hum_max=90):
 			print('Number of bad points excised: ' + str(bad))
 
 
-
+		# Indices of bad data points
+		# --------------------------
 		if i == 0:
 			IN2_bad = np.copy(IN_x_bad)
 
@@ -1549,16 +1559,55 @@ def rms_filter(amb_hum_max=90):
 
 
 
-	# All bad spectra
-	# ---------------
-	IN_bad = np.union1d(IN1_bad, IN2_bad)
+	# All bad/good spectra indices
+	# ----------------------------
+	#IN_bad = np.union1d(IN1_bad, IN2_bad)
+	#IN_good  = np.setdiff1d(IN, IN_bad)
 
 
+		
+	# Indices of good spectra
+	# -----------------------
+	IN1_good = np.setdiff1d(IN, IN1_bad)
+	IN2_good = np.setdiff1d(IN, IN2_bad)
+	
+	
+	# Number of terms for the polynomial fit of the RMS across 24 hours
+	# and number of terms for the polynomial fit of the standard deviation across 24 hours
+	# ------------------------------------------------------------------------------------
+	Nterms = 16
+	Nstd   = 6
+	
+	
+	# Parameters and models from the RMS and STD polynomial fits
+	# ----------------------------------------------------------
+	par1       = np.polyfit(GHA[IN1_good], RMS1[IN1_good], Nterms-1)
+	model1     = np.polyval(par1, GHA)
+	abs_res1   = np.abs(RMS1-model1)
+	par1_std   = np.polyfit(GHA[IN1_good], abs_res1[IN1_good], Nstd-1)
+	model1_std = np.polyval(par1_std, GHA)
+	
 
+	par2       = np.polyfit(GHA[IN2_good], RMS2[IN2_good], Nterms-1)
+	model2     = np.polyval(par2, GHA)
+	abs_res2   = np.abs(RMS2-model2)
+	par2_std   = np.polyfit(GHA[IN2_good], abs_res2[IN2_good], Nstd-1)
+	model2_std = np.polyval(par2_std, GHA)
+	
+	
+	par        = np.array([par1, par2])
+	par_std    = np.array([par1_std, par2_std])
+	
 
-					
+	# Saving polynomial parameters
+	# ----------------------------
+	if save_parameters == 'yes':
+		np.savetxt(data_folder + 'rms_polynomial_parameters.txt', par)
+		np.savetxt(data_folder + 'rms_std_polynomial_parameters.txt', par_std)
+	
+				
 			
-	return GHA, RMS1, RMS2, IN1_bad, IN2_bad, IN_bad, f, p_all, r_all, w_all, m_all
+	return GHA, RMS1, RMS2, IN1_good, IN2_good, model1, model2, abs_res1, abs_res2, model1_std, model2_std
 
 
 
