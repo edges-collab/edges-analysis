@@ -1405,7 +1405,7 @@ def rms_filter_computation(save_parameters='no'):
 	# Loading data used to compute filter
 	# -----------------------------------
 	N_files = 8                  # Only using the first "N_files" to compute the filter
-	for i in range(N_files):     # range(len(new_list)):
+	for i in range(N_files):     # 
 		print(new_list[i])
 		
 		# Loading data
@@ -1613,22 +1613,78 @@ def rms_filter_computation(save_parameters='no'):
 
 
 
-
-
-
-
-def integrated_spectra(f, p_all, r_all, w_all, m_all, index_bad, GHA_edges, F_LOW, F_HIGH, save_path, save_name):
+def rms_filter(gx, rms):
 	
+	file_path = data_folder
 	
-	index = np.arange(len(r_all[:,0]))
+	p    = np.genfromtxt(file_path + 'rms_polynomial_parameters.txt')
+	ps   = np.genfromtxt(file_path + 'rms_std_polynomial_parameters.txt')	
 	
-	index_good = np.setdiff1d(index, index_bad)
-	
-	p = p_all[index_good,:]
-	r = r_all[index_good,:]
-	w = w_all[index_good,:]
-	m = m_all[index_good,:]
+	rms1 = rms[:,0]
+	rms2 = rms[:,1]
 		
+	m1   = np.polyval(p[0,:], gx)
+	m2   = np.polyval(p[1,:], gx)
+	
+	ms1  = np.polyval(ps[0,:], gx)
+	ms2  = np.polyval(ps[1,:], gx)
+	
+	index = len(rms1)
+	
+	diff1 = np.abs(rms1 - m1)
+	diff2 = np.abs(rms2 - m2)
+	
+	index_good_1   = index[diff1 <= Nsigma*ms1]
+	index_good_2   = index[diff2 <= Nsigma*ms2]
+	
+	index_good = np.intersect1d(index_good_1, index_good_2)
+	
+	return index_good_1, index_good_2, index_good
+
+
+
+
+
+
+def integrated_spectra(GHA_edges, F_LOW, F_HIGH, save_path, save_name):
+	
+	# Listing files available
+	# ------------------------
+	path_files = data_folder + '/nominal_60_160MHz_fullcal/'
+	new_list   = listdir(path_files)
+	new_list.sort()
+
+	
+	# Loading and cleaning data
+	# -------------------------
+	for i in range(len(new_list)):
+		
+		# Loading data
+		f, tx, px, rx, wx, rms, mx = level3read(path_files + new_list[i])
+		
+		
+		# Finding index of clean data
+		gx         = mx[:,4]
+		gx[gx<0]   = gx[gx<0] + 24
+		index_good = rms_filter(gx, rms)
+		
+		
+		# Accumulating good data
+		if i == 0:
+			p = px[index_good,:]
+			r = rx[index_good,:]
+			w = wx[index_good,:]
+			m = mx[index_good,:]
+				
+		elif i > 0:
+			p = np.vstack((p, px[index_good,:]))
+			r = np.vstack((r, rx[index_good,:]))
+			w = np.vstack((w, wx[index_good,:]))
+			m = np.vstack((m, mx[index_good,:]))
+			
+		
+		
+	
 	GHA        = m[:,4]
 	GHA[GHA<0] = GHA[GHA<0] + 24
 	
@@ -1647,20 +1703,6 @@ def integrated_spectra(f, p_all, r_all, w_all, m_all, index_bad, GHA_edges, F_LO
 		m1 = m[(GHA>=GHA_LOW) & (GHA<GHA_HIGH),:]
 		
 		avp        = np.mean(p1, axis=0)
-		
-		#for i in range(len(r1[:,0])):
-			#print(str(i) + ' ' + str(len(r1[:,0])))
-			
-			#if i == 0:
-				#avr_temp = r1[i,:]
-				#avw_temp = w1[i,:]
-			
-			#elif i > 0:
-				#avr_array = np.array([avr_temp, r1[i,:]])
-				#avw_array = np.array([avw_temp, w1[i,:]])
-				
-				#avr_temp, avw_temp   = ba.weighted_mean(avr_array, avw_array)
-	
 		avr, avw   = ba.weighted_mean(r1, w1)
 
 
