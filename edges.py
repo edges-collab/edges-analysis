@@ -1368,7 +1368,7 @@ def data_selection(m, GHA_or_LST='GHA', TIME_1=0, TIME_2=24, sun_el_max=90, moon
 	index4    = np.intersect1d(index3, index_Trec)
 	index_all = np.intersect1d(index1, index4)
 
-	print('NUMBER OF TRACES: ' + str(len(index_all)))
+	#print('NUMBER OF TRACES: ' + str(len(index_all)))
 
 
 
@@ -1613,7 +1613,7 @@ def rms_filter_computation(save_parameters='no'):
 
 
 
-def rms_filter(gx, rms):
+def rms_filter(gx, rms, Nsigma):
 	
 	file_path = data_folder
 	
@@ -1629,7 +1629,7 @@ def rms_filter(gx, rms):
 	ms1  = np.polyval(ps[0,:], gx)
 	ms2  = np.polyval(ps[1,:], gx)
 	
-	index = len(rms1)
+	index = np.arange(0, len(rms1))
 	
 	diff1 = np.abs(rms1 - m1)
 	diff2 = np.abs(rms2 - m2)
@@ -1639,14 +1639,15 @@ def rms_filter(gx, rms):
 	
 	index_good = np.intersect1d(index_good_1, index_good_2)
 	
-	return index_good_1, index_good_2, index_good
+	return index_good, index_good_1, index_good_2
 
 
 
 
 
 
-def integrated_spectra(GHA_edges, F_LOW, F_HIGH, save_path, save_name):
+
+def integrated_spectra(GHA_edges, save_path, save_name):
 	
 	# Listing files available
 	# ------------------------
@@ -1657,115 +1658,174 @@ def integrated_spectra(GHA_edges, F_LOW, F_HIGH, save_path, save_name):
 	
 	# Loading and cleaning data
 	# -------------------------
-	for i in range(len(new_list)):
+	flag = -1
+	for i in range(34,36): #range(len(new_list)):   # 
+		
+		flag = flag + 1
 		
 		# Loading data
-		f, tx, px, rx, wx, rms, mx = level3read(path_files + new_list[i])
+		f, ty, py, ry, wy, rmsy, my = level3read(path_files + new_list[i])
+		print('----------------------------------------------')
+		
+		
+		# Filtering out high humidity
+		amb_hum_max = 90
+		IX          = data_selection(my, GHA_or_LST='GHA', TIME_1=0, TIME_2=24, sun_el_max=90, moon_el_max=90, amb_hum_max=amb_hum_max, min_receiver_temp=0, max_receiver_temp=100)
+		
+		px   = py[IX,:]
+		rx   = ry[IX,:]
+		wx   = wy[IX,:]
+		rmsx = rmsy[IX,:]
+		mx   = my[IX,:]	
 		
 		
 		# Finding index of clean data
 		gx         = mx[:,4]
 		gx[gx<0]   = gx[gx<0] + 24
-		index_good = rms_filter(gx, rms)
 		
+		Nsigma     = 3
+		index_good, i1, i2 = rms_filter(gx, rmsx, Nsigma)
 		
-		# Accumulating good data
-		if i == 0:
-			p = px[index_good,:]
-			r = rx[index_good,:]
-			w = wx[index_good,:]
-			m = mx[index_good,:]
 				
-		elif i > 0:
-			p = np.vstack((p, px[index_good,:]))
-			r = np.vstack((r, rx[index_good,:]))
-			w = np.vstack((w, wx[index_good,:]))
-			m = np.vstack((m, mx[index_good,:]))
+		# Selecting good data
+		p   = px[index_good,:]
+		r   = rx[index_good,:]
+		w   = wx[index_good,:]
+		rms = rmsx[index_good,:]
+		m   = mx[index_good,:]
 			
+		GHA        = m[:,4]
+		GHA[GHA<0] = GHA[GHA<0] + 24
 		
+		AT = np.vstack((gx, rmsx.T))
+		BT = np.vstack((GHA, rms.T))
 		
-	
-	GHA        = m[:,4]
-	GHA[GHA<0] = GHA[GHA<0] + 24
+		A = AT.T
+		B = BT.T
+		
+		if flag == 0:
+			avp_all = np.zeros((len(new_list), len(GHA_edges)-1, len(p[0,:])))
+			avr_all = np.zeros((len(new_list), len(GHA_edges)-1, len(r[0,:])))
+			avw_all = np.zeros((len(new_list), len(GHA_edges)-1, len(w[0,:])))
+			
+			grx_all = np.copy(A)
+			gr_all  = np.copy(B)
+			
+		if flag > 0:
+			grx_all = np.vstack((grx_all, A))
+			gr_all  = np.vstack((gr_all, B))
 	
 
+
+		# Averaging data within each GHA bin
+		for j in range(len(GHA_edges)-1):			
+					
+			GHA_LOW  = GHA_edges[j]
+			GHA_HIGH = GHA_edges[j+1]
+							
+			p1 = p[(GHA>=GHA_LOW) & (GHA<GHA_HIGH),:]
+			r1 = r[(GHA>=GHA_LOW) & (GHA<GHA_HIGH),:]
+			w1 = w[(GHA>=GHA_LOW) & (GHA<GHA_HIGH),:]
+			m1 = m[(GHA>=GHA_LOW) & (GHA<GHA_HIGH),:]
+			
+			print(str(new_list[i]) + '. GHA: ' + str(GHA_LOW) + '-' + str(GHA_HIGH) + ' hr. Number of spectra: ' + str(len(r1)))
+		
+		
+		
+			#if len(r1) == 1:
+				
+				#avp = p1
+				#avr = r1)
+				#avw = np.copy(w1)
+		
+				
+			if len(r1) > 0:
+				
+				avp        = np.mean(p1, axis=0)
+				avr, avw   = ba.weighted_mean(r1, w1)
+				
+				
+			# Final RFI cleaning
+			#print(avr)
+			
+			avr[(f>130) & (f<130.4)]   = 0
+			avw[(f>130) & (f<130.4)]   = 0
+		
+			avr[(f>136.1) & (f<138.2)] = 0
+			avw[(f>136.1) & (f<138.2)] = 0
+		
+			avr[(f>145.5) & (f<146)]   = 0
+			avw[(f>145.5) & (f<146)]   = 0
+			
+			avr[(f>149.8) & (f<150.3)] = 0
+			avw[(f>149.8) & (f<150.3)] = 0					
+				
+			
+			# Storing averages	
+			avp_all[i,j,:] = avp
+			avr_all[i,j,:] = avr
+			avw_all[i,j,:] = avw
+
+
+
+	print()
+	print()
+
+		
+		
 	for i in range(len(GHA_edges)-1):
 		
-				
-		GHA_LOW  = GHA_edges[i]
-		GHA_HIGH = GHA_edges[i+1]
+		print('GHA bin ' + str(i+1) + ' of ' + str(len(GHA_edges)-1))
 		
-		print(str(GHA_LOW) + ' ' + str(GHA_HIGH))
 		
-		p1 = p[(GHA>=GHA_LOW) & (GHA<GHA_HIGH),:]
-		r1 = r[(GHA>=GHA_LOW) & (GHA<GHA_HIGH),:]
-		w1 = w[(GHA>=GHA_LOW) & (GHA<GHA_HIGH),:]
-		m1 = m[(GHA>=GHA_LOW) & (GHA<GHA_HIGH),:]
+		zp = np.mean(avp_all[:,i,:], axis=0)
 		
-		avp        = np.mean(p1, axis=0)
-		avr, avw   = ba.weighted_mean(r1, w1)
-
-
-		# Final RFI cleaning
-		avr[(f>130) & (f<130.4)] = 0
-		avw[(f>130) & (f<130.4)] = 0
-
-		avr[(f>136.1) & (f<138.2)] = 0
-		avw[(f>136.1) & (f<138.2)] = 0
-
-		avr[(f>145.5) & (f<146)] = 0
-		avw[(f>145.5) & (f<146)] = 0
+		zr, zw = ba.weighted_mean(avr_all[:,i,:], avw_all[:,i,:])
 		
-		avr[(f>149.8) & (f<150.3)] = 0
-		avw[(f>149.8) & (f<150.3)] = 0		
-
-
 		
-		avr_no_rfi, avw_no_rfi = rfi.cleaning_sweep(f, avr, avw, window_width_MHz=5, Npolyterms_block=3, N_choice=20, N_sigma=3)
+		avr_no_rfi, avw_no_rfi = rfi.cleaning_sweep(f, zr, zw, window_width_MHz=5, Npolyterms_block=3, N_choice=20, N_sigma=3)
+		
+		
+		fb, rb, wb = ba.spectral_binning_number_of_samples(f, avr_no_rfi, avw_no_rfi)
+		model      = ba.model_evaluate('LINLOG', zp, fb/200)
+		tb         = model + rb
 	
-	
-	
-		fbx, rbx, wbx = ba.spectral_binning_number_of_samples(f, avr_no_rfi, avw_no_rfi)
-		
-		model      = ba.model_evaluate('LINLOG', avp, fbx/200)
-		tbx = model + rbx
-		
-		fb = fbx[(fbx>=F_LOW) & (fbx<=F_HIGH)]
-		tb = tbx[(fbx>=F_LOW) & (fbx<=F_HIGH)]
-		wb = wbx[(fbx>=F_LOW) & (fbx<=F_HIGH)]
-		
-		
-		tb[wb==0] = 0
-		
-		
-		gha_center = GHA_LOW + (GHA_HIGH - GHA_LOW)/2
+		tb[wb==0]  = 0
 		
 		if i == 0:
-			gha_all = np.array([gha_center])
-			tb_all  = np.copy(tb)
-			wb_all  = np.copy(wb)
-			
-		elif i > 0:
-			gha_all = np.append(gha_all, gha_center)
-			tb_all = np.vstack((tb_all, tb))
-			wb_all = np.vstack((wb_all, wb))
-			
-	
-	# Formatting output data		
-	dataT = np.array([fb, tb_all[0,:], wb_all[0,:]])
-	for i in range(len(tb_all[:,0])-1):
-		dataT = np.vstack((dataT, tb_all[i+1,:], wb_all[i+1,:]))
-		
-	data = dataT.T
-		
+			tb_all = np.zeros((len(GHA_edges)-1, len(tb)))
+			wb_all = np.zeros((len(GHA_edges)-1, len(wb)))
 			
 			
-	np.savetxt(save_path + 'gha_' + save_name + '.txt', gha_all, header='Center GHA of integrated spectra [hr]')
-	np.savetxt(save_path + 'data_' + save_name + '.txt', data, header='Frequency [MHz],\t Temperature [K],\t Weights')
+		tb_all[i,:] = tb
+		wb_all[i,:] = wb
+
+
+
+
 	
 	
+
+
+
+
+			
+	
+	## Formatting output data		
+	#dataT = np.array([fb, tb_all[0,:], wb_all[0,:]])
+	#for i in range(len(tb_all[:,0])-1):
+		#dataT = np.vstack((dataT, tb_all[i+1,:], wb_all[i+1,:]))
 		
-	return gha_all, data   # f, avr_no_rfi, avw_no_rfi #
+	#data = dataT.T
+		
+			
+			
+	#np.savetxt(save_path + 'gha_' + save_name + '.txt', gha_all, header='Center GHA of integrated spectra [hr]')
+	#np.savetxt(save_path + 'data_' + save_name + '.txt', data, header='Frequency [MHz],\t Temperature [K],\t Weights')
+	
+	
+		
+	return fb, tb_all, wb_all #grx_all, gr_all, f, avp_all, avr_all, avw_all
 
 
 
