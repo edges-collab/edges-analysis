@@ -1180,8 +1180,65 @@ def batch_plot_daily_residuals_LST():
 
 
 
+def plot_residuals_GHA_1hr_bin(f, r, w):
+	
+	
+	# Settings
+	# ----------------------------------
+
+	LST_centers = list(np.arange(0.5,24))
+	LST_text    = ['GHA=' + str(LST_centers[i]) + ' hr' for i in range(len(LST_centers))]
+	DY          =  0.5
+	FLOW_plot   =  35
+	FHIGH_plot  = 165
+	XTICKS      = np.arange(60, 161, 20)
+	XTEXT       =  38
+	YLABEL      =  str(DY) + ' K per division'
+	TITLE       = '4 LINLOG terms, 62-120 MHz'
+	figure_path = '/home/raul/Desktop/'
+	figure_name = 'CASE1_linlog_4terms_62-120MHz'
+	
+	
+	# Plotting
+	x = eg.plot_residuals(f, r, w, LST_text, DY=DY, FLOW=FLOW_plot, FHIGH=FHIGH_plot, XTICKS=XTICKS, XTEXT=XTEXT, YLABEL=YLABEL, TITLE=TITLE, save='yes', figure_path=figure_path, figure_name=figure_name)
+	
+	
+	
+	return 0
 
 
+
+
+
+
+def plot_residuals_GHA_Xhr_bin(f, r, w):
+	
+	
+	# Settings
+	# ----------------------------------
+
+	LST_centers = list(np.arange(0.5,24))
+	LST_text    = ['GHA=0-5 hr', 'GHA=5-11 hr', 'GHA=11-18 hr', 'GHA=18-24 hr']
+	DY          =  0.5
+	FLOW_plot   =  35
+	FHIGH_plot  = 165
+	XTICKS      = np.arange(60, 161, 20)
+	XTEXT       =  38
+	YLABEL      =  str(DY) + ' K per division'
+	TITLE       = '4 LINLOG terms, 62-120 MHz'
+	figure_path = '/home/raul/Desktop/'
+	figure_name = 'CASE2_linlog_4terms_62-120MHz'
+	FIG_SX      = 8
+	FIG_SY      = 7
+	
+	
+	
+	# Plotting
+	x = eg.plot_residuals(f, r, w, LST_text, FIG_SX=FIG_SX, FIG_SY=FIG_SY, DY=DY, FLOW=FLOW_plot, FHIGH=FHIGH_plot, XTICKS=XTICKS, XTEXT=XTEXT, YLABEL=YLABEL, TITLE=TITLE, save='yes', figure_path=figure_path, figure_name=figure_name)
+	
+	
+	
+	return 0
 
 
 

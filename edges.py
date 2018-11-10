@@ -88,7 +88,7 @@ def auxiliary_data(weather_file, thermlog_file, band, year, day):
 				amb_temp  = 0
 
 			try:
-				amb_hum   = float(line1[88:93])
+				amb_hum   = float(line1[87:93])
 			except ValueError:
 				amb_hum   = 0
 
@@ -1659,7 +1659,7 @@ def integrated_spectra(GHA_edges, save_path, save_name):
 	# Loading and cleaning data
 	# -------------------------
 	flag = -1
-	for i in range(34,36): #range(len(new_list)):   # 
+	for i in range(len(new_list)):   # range(0,20): #
 		
 		flag = flag + 1
 		
@@ -1730,14 +1730,6 @@ def integrated_spectra(GHA_edges, save_path, save_name):
 			
 			print(str(new_list[i]) + '. GHA: ' + str(GHA_LOW) + '-' + str(GHA_HIGH) + ' hr. Number of spectra: ' + str(len(r1)))
 		
-		
-		
-			#if len(r1) == 1:
-				
-				#avp = p1
-				#avr = r1)
-				#avw = np.copy(w1)
-		
 				
 			if len(r1) > 0:
 				
@@ -1746,8 +1738,6 @@ def integrated_spectra(GHA_edges, save_path, save_name):
 				
 				
 			# Final RFI cleaning
-			#print(avr)
-			
 			avr[(f>130) & (f<130.4)]   = 0
 			avw[(f>130) & (f<130.4)]   = 0
 		
@@ -1806,26 +1796,21 @@ def integrated_spectra(GHA_edges, save_path, save_name):
 	
 	
 
-
-
-
-			
+	# Formatting output data
+	gha_edges_column = np.reshape(GHA_edges, -1, 1)
 	
-	## Formatting output data		
-	#dataT = np.array([fb, tb_all[0,:], wb_all[0,:]])
-	#for i in range(len(tb_all[:,0])-1):
-		#dataT = np.vstack((dataT, tb_all[i+1,:], wb_all[i+1,:]))
+	dataT = np.array([fb, tb_all[0,:], wb_all[0,:]])
+	for i in range(len(tb_all[:,0])-1):
+		dataT = np.vstack((dataT, tb_all[i+1,:], wb_all[i+1,:]))
 		
-	#data = dataT.T
-		
-			
-			
-	#np.savetxt(save_path + 'gha_' + save_name + '.txt', gha_all, header='Center GHA of integrated spectra [hr]')
-	#np.savetxt(save_path + 'data_' + save_name + '.txt', data, header='Frequency [MHz],\t Temperature [K],\t Weights')
+	data = dataT.T
+					
+	np.savetxt(save_path + save_name + '_gha_edges' + '.txt', gha_edges_column,  header = 'GHA edges of integrated spectra [hr]')
+	np.savetxt(save_path + save_name + '_data' + '.txt',      data,              header = 'Frequency [MHz],\t Temperature [K],\t Weights')
 	
 	
 		
-	return fb, tb_all, wb_all #grx_all, gr_all, f, avp_all, avr_all, avw_all
+	return fb, tb_all, wb_all, grx_all, gr_all  #, f, avp_all, avr_all, avw_all
 
 
 
@@ -1838,14 +1823,13 @@ def integrated_spectra(GHA_edges, save_path, save_name):
 
 
 
-def integrated_residuals_GHA(file_gha, file_data, flow, fhigh, Nfg):
+def integrated_residuals_GHA(file_data, flow, fhigh, Nfg):
 	
-	g = np.genfromtxt(file_gha)
 	d = np.genfromtxt(file_data)
 	
 	fx = d[:,0]
 	
-	for i in range(len(g)):
+	for i in range(int((len(d[0,:])-1)/2)):
 		index_t = 2*(i+1)-1
 		index_w = 2*(i+1)
 		tx = d[:,index_t]
@@ -1873,7 +1857,7 @@ def integrated_residuals_GHA(file_gha, file_data, flow, fhigh, Nfg):
 		
 		
 		
-	return f, r_all, w_all, g
+	return f, r_all, w_all
 
 
 
@@ -1975,7 +1959,7 @@ def daily_residuals_LST(file_name, LST_boundaries=np.arange(0,25,2), FLOW=60, FH
 
 
 
-def plot_residuals(f, r, w, list_names, DY=2, FLOW=50, FHIGH=180, XTICKS=np.arange(60, 180+1, 20), XTEXT=160, YLABEL='ylabel', TITLE='hello', save='no', figure_path='/home/raul/Desktop/', figure_name='2018_150_00'):
+def plot_residuals(f, r, w, list_names, FIG_SX=7, FIG_SY=12, DY=2, FLOW=50, FHIGH=180, XTICKS=np.arange(60, 180+1, 20), XTEXT=160, YLABEL='ylabel', TITLE='hello', save='no', figure_path='/home/raul/Desktop/', figure_name='2018_150_00'):
 	
 	# Nspectra_column=35,
 	#Ncol_real = len(r[:,0])/Nspectra_columns
@@ -1986,7 +1970,7 @@ def plot_residuals(f, r, w, list_names, DY=2, FLOW=50, FHIGH=180, XTICKS=np.aran
 		
 	plt.close()
 	plt.close()	
-	plt.figure(figsize=(7,12))
+	plt.figure(figsize=(FIG_SX, FIG_SY))
 	
 	for i in range(len(list_names)):
 		print(i)
@@ -2033,7 +2017,7 @@ def plot_residuals(f, r, w, list_names, DY=2, FLOW=50, FHIGH=180, XTICKS=np.aran
 
 	
 	if save == 'yes':		
-		plt.savefig(figure_path + figure_name + '.png', bbox_inches='tight')
+		plt.savefig(figure_path + figure_name + '.pdf', bbox_inches='tight')
 		plt.close()
 		plt.close()
 			
