@@ -333,30 +333,30 @@ def level1_to_level2(band, year, day_hour, low2_flag='_low2'):
 
 
 
-	# Sun/Moon coordinates
 	sun_moon_azel = ba.SUN_MOON_azel(EDGES_LAT, EDGES_LON, dd)				
+	# Sun/Moon coordinates
 
 
 
 
 	# Ambient temperature and humidity, and receiver temperature
-	if band == 'low_band3':
-		amb_rec = np.zeros((len(seconds_data), 4))
+	#if band == 'low_band3':
+		#amb_rec = np.zeros((len(seconds_data), 4))
 	
+	#else:
+	aux1, aux2   = auxiliary_data(weather_file, thermlog_file, band, year_int, day_int)
+
+	amb_temp_interp  = np.interp(seconds_data, aux1[:,0], aux1[:,1]) - 273.15
+	amb_hum_interp   = np.interp(seconds_data, aux1[:,0], aux1[:,2])
+	rec1_temp_interp = np.interp(seconds_data, aux1[:,0], aux1[:,3]) - 273.15
+	
+	if len(aux2) == 1:
+		rec2_temp_interp = 25*np.ones(len(seconds_data))
 	else:
-		aux1, aux2   = auxiliary_data(weather_file, thermlog_file, band, year_int, day_int)
-	
-		amb_temp_interp  = np.interp(seconds_data, aux1[:,0], aux1[:,1]) - 273.15
-		amb_hum_interp   = np.interp(seconds_data, aux1[:,0], aux1[:,2])
-		rec1_temp_interp = np.interp(seconds_data, aux1[:,0], aux1[:,3]) - 273.15
-		
-		if len(aux2) == 1:
-			rec2_temp_interp = 25*np.ones(len(seconds_data))
-		else:
-			rec2_temp_interp = np.interp(seconds_data, aux2[:,0], aux2[:,1])
-	
-		amb_rec = np.array([amb_temp_interp, amb_hum_interp, rec1_temp_interp, rec2_temp_interp])
-		amb_rec = amb_rec.T	
+		rec2_temp_interp = np.interp(seconds_data, aux2[:,0], aux2[:,1])
+
+	amb_rec = np.array([amb_temp_interp, amb_hum_interp, rec1_temp_interp, rec2_temp_interp])
+	amb_rec = amb_rec.T	
 
 
 
@@ -468,13 +468,21 @@ def models_antenna_s11_remove_delay(band, f_MHz, year=2018, day=145, delay_0=0.1
 
 
 	# Fitting data with delay applied
-	par_re_wd = np.polyfit(f_orig_MHz, re_wd, Nfit-1)
-	par_im_wd = np.polyfit(f_orig_MHz, im_wd, Nfit-1)
-	
-	
-	# Evaluating models at original frequency for evaluation
-	rX = np.polyval(par_re_wd, f_orig_MHz)
-	iX = np.polyval(par_im_wd, f_orig_MHz)
+	if model_type == 'polynomial':
+		par_re_wd = np.polyfit(f_orig_MHz, re_wd, Nfit-1)
+		par_im_wd = np.polyfit(f_orig_MHz, im_wd, Nfit-1)
+		
+		# Evaluating models at original frequency for evaluation
+		rX = np.polyval(par_re_wd, f_orig_MHz)
+		iX = np.polyval(par_im_wd, f_orig_MHz)
+		
+	#elif model_type == 'fourier':
+		#KK1 = ba.fit_polynomial_fourier('fourier', f_orig_MHz, re_wd, Nfit)
+		#KK2 = ba.fit_polynomial_fourier('fourier', f_orig_MHz, im_wd, Nfit)
+		
+		#rX = KK1[1]
+		#iX = KK2[1]
+
 
 	mX = rX + 1j*iX
 	rX = mX * np.exp(-1j*delay_0 * f_orig_MHz)
@@ -506,8 +514,16 @@ def models_antenna_s11_remove_delay(band, f_MHz, year=2018, day=145, delay_0=0.1
 	
 	
 	# Evaluating models at new input frequency
-	model_re_wd = np.polyval(par_re_wd, f_MHz)
-	model_im_wd = np.polyval(par_im_wd, f_MHz)
+	if model_type == 'polynomial':
+		model_re_wd = np.polyval(par_re_wd, f_MHz)
+		model_im_wd = np.polyval(par_im_wd, f_MHz)
+		
+	#elif model_type == 'fourier':
+		#model_re_wd = ba.model_evaluate('fourier', KK1[0], f_MHz)
+		#model_im_wd = ba.model_evaluate('fourier', KK2[0], f_MHz)
+		
+		
+		
 
 	model_s11_wd = model_re_wd + 1j*model_im_wd
 	ra    = model_s11_wd * np.exp(-1j*delay_0 * f_MHz)
@@ -1613,9 +1629,9 @@ def rms_filter_computation(save_parameters='no'):
 
 
 
-def rms_filter(gx, rms, Nsigma):
+def rms_filter(gx, rms, Nsigma, file_path):
 	
-	file_path = data_folder
+	#file_path = data_folder
 	
 	p    = np.genfromtxt(file_path + 'rms_polynomial_parameters.txt')
 	ps   = np.genfromtxt(file_path + 'rms_std_polynomial_parameters.txt')	
@@ -1647,19 +1663,37 @@ def rms_filter(gx, rms, Nsigma):
 
 
 
-def integrated_spectra(GHA_edges, save_path, save_name):
+def one_hour_integrated_spectra(case, filter_files_path, figure_save_path, data_save_path, data_save_name):
+	
+	
+	# One-hour bins
+	# -------------
+	GHA_edges = np.arange(0, 25, 1)
+	
+	
 	
 	# Listing files available
 	# ------------------------
-	path_files = data_folder + '/nominal_60_160MHz_fullcal/'
+	if case == 1:
+		path_files = data_folder + '/nominal_60_160MHz_case1/'
+		
+	if case == 2:
+		path_files = data_folder + '/nominal_60_160MHz_case2/'	
+		
+		
+		
 	new_list   = listdir(path_files)
 	new_list.sort()
+	
+	#index_new_list = np.arange(0,10)
+	#index_new_list = index_new_list.astype('int') # [0,1]  # for testing purposes
+	index_new_list = range(len(new_list))
 
 	
 	# Loading and cleaning data
 	# -------------------------
 	flag = -1
-	for i in range(len(new_list)):   # range(0,20): #
+	for i in index_new_list:  
 		
 		flag = flag + 1
 		
@@ -1684,7 +1718,7 @@ def integrated_spectra(GHA_edges, save_path, save_name):
 		gx[gx<0]   = gx[gx<0] + 24
 		
 		Nsigma     = 3
-		index_good, i1, i2 = rms_filter(gx, rmsx, Nsigma)
+		index_good, i1, i2 = rms_filter(gx, rmsx, Nsigma, filter_files_path)
 		
 				
 		# Selecting good data
@@ -1693,7 +1727,14 @@ def integrated_spectra(GHA_edges, save_path, save_name):
 		w   = wx[index_good,:]
 		rms = rmsx[index_good,:]
 		m   = mx[index_good,:]
-			
+		
+		
+		
+		
+		
+		
+		
+		# Storing GHA and rms of good data
 		GHA        = m[:,4]
 		GHA[GHA<0] = GHA[GHA<0] + 24
 		
@@ -1717,6 +1758,10 @@ def integrated_spectra(GHA_edges, save_path, save_name):
 	
 
 
+
+
+
+
 		# Averaging data within each GHA bin
 		for j in range(len(GHA_edges)-1):			
 					
@@ -1737,33 +1782,115 @@ def integrated_spectra(GHA_edges, save_path, save_name):
 				avr, avw   = ba.weighted_mean(r1, w1)
 				
 				
-			# Final RFI cleaning
-			avr[(f>130) & (f<130.4)]   = 0
-			avw[(f>130) & (f<130.4)]   = 0
-		
-			avr[(f>136.1) & (f<138.2)] = 0
-			avw[(f>136.1) & (f<138.2)] = 0
-		
-			avr[(f>145.5) & (f<146)]   = 0
-			avw[(f>145.5) & (f<146)]   = 0
+				# Final RFI cleaning
+				avr[(f>130) & (f<130.4)]   = 0
+				avw[(f>130) & (f<130.4)]   = 0
 			
-			avr[(f>149.8) & (f<150.3)] = 0
-			avw[(f>149.8) & (f<150.3)] = 0					
+				avr[(f>136.1) & (f<138.2)] = 0
+				avw[(f>136.1) & (f<138.2)] = 0
+			
+				avr[(f>145.5) & (f<146)]   = 0
+				avw[(f>145.5) & (f<146)]   = 0
+				
+				avr[(f>149.8) & (f<150.3)] = 0
+				avw[(f>149.8) & (f<150.3)] = 0					
 				
 			
-			# Storing averages	
-			avp_all[i,j,:] = avp
-			avr_all[i,j,:] = avr
-			avw_all[i,j,:] = avw
-
+				# Storing averages	
+				avp_all[i,j,:] = avp
+				avr_all[i,j,:] = avr
+				avw_all[i,j,:] = avw
+			
 
 
 	print()
 	print()
 
+
+
+	
+	
+	# Producing plots with daily residuals
+	# ------------------------------------
+	Ngha = len(GHA_edges)-1
+	
+	# Loop over days
+	for i in index_new_list:
 		
+		# Loop over number of foreground terms
+		for Nfg in [3,4,5]:
+			
+			# Residuals for each day
+			for j in range(Ngha):
+				
+				print('Nfg: ' + str(Nfg) + '. GHA: ' + str(GHA_edges[i]) + '-' + str(GHA_edges[i+1]) + ' hr')
+				
+				yp = avp_all[i,j,:]
+				yr = avr_all[i,j,:]
+				yw = avw_all[i,j,:]
+							
+				fb, yrb, ywb = ba.spectral_binning_number_of_samples(f, yr, yw)
+				
+				
+				# Creating arrays with residuals to plot
+				if j == 0:
+					qrb_all = np.zeros((Ngha, len(fb)))
+					qwb_all = np.zeros((Ngha, len(fb)))					
+					
+				
+				if np.sum(yw>0):
+					
+					model        = ba.model_evaluate('LINLOG', yp, fb/200)
+					ytb          = model + yrb
+					
+					ytb[ywb==0]  = 0
+									
+					par  = ba.fit_polynomial_fourier('LINLOG', fb/200, ytb, Nfg, Weights=ywb)
+					qrb  = ytb - par[1]
+					
+					qrb_all[j,:] = qrb
+					qwb_all[j,:] = ywb
+			
+			
+					
+			# Plotting residuals for each day
+			
+			# Settings
+			# ----------------------------------
+			LST_text    = ['GHA=' + str(GHA_edges[k]) + '-' + str(GHA_edges[k+1]) + ' hr' for k in range(Ngha)]
+			DY          =   5
+			FLOW_plot   =  35
+			FHIGH_plot  = 165
+			XTICKS      = np.arange(60, 161, 20)
+			XTEXT       =  36
+			YLABEL      = str(DY) + ' K per division'
+			TITLE       = str(Nfg) + ' LINLOG terms'
+			
+			
+			# Creating folder
+			figure_save_path_subfolder = figure_save_path + '/Nfg_' + str(Nfg) + '/'
+			if not exists(figure_save_path_subfolder):
+				makedirs(figure_save_path_subfolder)
+			
+			figure_save_name = new_list[i][:-5]
+			
+			
+			# Plotting
+			x = plot_residuals(fb, qrb_all, qwb_all, LST_text, DY=DY, FLOW=FLOW_plot, FHIGH=FHIGH_plot, XTICKS=XTICKS, XTEXT=XTEXT, YLABEL=YLABEL, TITLE=TITLE, save='yes', figure_path=figure_save_path_subfolder, figure_name=figure_save_name)
+			
+						
+			
+	
+	
+	
+	
 		
-	for i in range(len(GHA_edges)-1):
+	
+	
+	
+	
+	# Producing total integrated average
+	for i in range(Ngha):
 		
 		print('GHA bin ' + str(i+1) + ' of ' + str(len(GHA_edges)-1))
 		
@@ -1772,7 +1899,7 @@ def integrated_spectra(GHA_edges, save_path, save_name):
 		
 		zr, zw = ba.weighted_mean(avr_all[:,i,:], avw_all[:,i,:])
 		
-		
+		print(np.sum(zw))
 		avr_no_rfi, avw_no_rfi = rfi.cleaning_sweep(f, zr, zw, window_width_MHz=5, Npolyterms_block=3, N_choice=20, N_sigma=3)
 		
 		
@@ -1805,8 +1932,8 @@ def integrated_spectra(GHA_edges, save_path, save_name):
 		
 	data = dataT.T
 					
-	np.savetxt(save_path + save_name + '_gha_edges' + '.txt', gha_edges_column,  header = 'GHA edges of integrated spectra [hr]')
-	np.savetxt(save_path + save_name + '_data' + '.txt',      data,              header = 'Frequency [MHz],\t Temperature [K],\t Weights')
+	np.savetxt(data_save_path + data_save_name + '_gha_edges' + '.txt', gha_edges_column,  header = 'GHA edges of integrated spectra [hr]')
+	np.savetxt(data_save_path + data_save_name + '_data' + '.txt',      data,              header = 'Frequency [MHz],\t Temperature [K],\t Weights')
 	
 	
 		
@@ -2017,7 +2144,7 @@ def plot_residuals(f, r, w, list_names, FIG_SX=7, FIG_SY=12, DY=2, FLOW=50, FHIG
 
 	
 	if save == 'yes':		
-		plt.savefig(figure_path + figure_name + '.pdf', bbox_inches='tight')
+		plt.savefig(figure_path + figure_name + '.png', bbox_inches='tight')
 		plt.close()
 		plt.close()
 			

@@ -1045,24 +1045,134 @@ def batch_low_band2_level1_to_level2(set_number):
 
 
 
+def batch_mid_band_level1_to_level2():
+
+	# Listing files to be processed
+	path_files = home_folder + '/EDGES/spectra/level1/mid_band/300_350/'
+	new_list   = listdir(path_files)
+	new_list.sort()
+	
+	for i in range(26,len(new_list)):
+		
+		
+	
+		day = new_list[i][12:18]
+		#print(i)
+		print(day)
+		
+		if (int(day[0:3]) <= 170) or (int(day[0:3]) >= 174):  # files in this range have problems
+			
+			o   = eg.level1_to_level2('mid_band', '2018', day)
+					
+	return 1
+
+
+
+
+
+
+
+def batch_low_band3_level1_to_level2():
+
+	# Listing files to be processed
+	path_files = home_folder + '/EDGES/spectra/level1/low_band3/300_350/'
+	new_list   = listdir(path_files)
+	new_list.sort()
+	
+	for i in range(len(new_list)):      #range(26, len(new_list)):
+	
+		year = new_list[i][7:11]
+		day  = new_list[i][12:15]
+		
+		
+		if (int(year) == 2018) and (int(day) == 225):  # files in this range have problems
+			print(year + ' ' + day + ': bad file')
+		
+		else:
+			print(year + ' ' + day)
+			o = eg.level1_to_level2('low_band3', year, day)
+					
+	return 1
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 def batch_mid_band_level2_to_level3(case):
 
 
 	# Case selection
 	if case == 1:
-		flag_folder       = 'nominal_60_160MHz'
+		flag_folder       = 'nominal_60_160MHz_case1'
 		receiver_cal_file = 1
 		antenna_s11_day   = 147
 		antenna_s11_Nfit  = 14
 		FLOW  = 60
 		FHIGH = 160
 		Nfg   = 7
+
 		
-	
+		
 	# Case selection
 	if case == 2:
-		flag_folder       = 'nominal_60_160MHz_rcvcal2'
+		flag_folder       = 'nominal_60_160MHz_case2'
+		receiver_cal_file = 1
+		antenna_s11_day   = 147
+		antenna_s11_Nfit  = 22
+		FLOW  = 60
+		FHIGH = 160
+		Nfg   = 7		
+	
+		
+		
+	# Case selection
+	if case == 3:
+		flag_folder       = 'nominal_60_160MHz_case3'
+		receiver_cal_file = 1
+		antenna_s11_day   = 222
+		antenna_s11_Nfit  = 14
+		FLOW  = 60
+		FHIGH = 160
+		Nfg   = 7
+		
+		print(antenna_s11_Nfit)
+		
+		
+
+	# Case selection
+	if case == 4:
+		flag_folder       = 'nominal_60_160MHz_case4'
+		receiver_cal_file = 1
+		antenna_s11_day   = 222
+		antenna_s11_Nfit  = 22
+		FLOW  = 60
+		FHIGH = 160
+		Nfg   = 7
+
+	
+	
+	# Case selection
+	if case == 5:
+		flag_folder       = 'nominal_60_160MHz_case5'
 		receiver_cal_file = 2
 		antenna_s11_day   = 147
 		antenna_s11_Nfit  = 14
@@ -1070,19 +1180,6 @@ def batch_mid_band_level2_to_level3(case):
 		FHIGH = 160
 		Nfg   = 7
 	
-
-
-	# Case selection
-	if case == 3:
-		flag_folder       = 'nominal_60_160MHz_fullcal'
-		receiver_cal_file = 1
-		antenna_s11_day   = 147
-		antenna_s11_Nfit  = 14
-		FLOW  = 60
-		FHIGH = 160
-		Nfg   = 7
-
-
 
 
 
