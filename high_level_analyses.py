@@ -1283,21 +1283,21 @@ def plot_residuals_GHA_1hr_bin(f, r, w):
 	# Settings
 	# ----------------------------------
 
-	LST_centers = list(np.arange(0.5,24))
-	LST_text    = ['GHA=' + str(LST_centers[i]) + ' hr' for i in range(len(LST_centers))]
-	DY          =  0.5
-	FLOW_plot   =  35
-	FHIGH_plot  = 165
-	XTICKS      = np.arange(60, 161, 20)
-	XTEXT       =  38
-	YLABEL      =  str(DY) + ' K per division'
-	TITLE       = '4 LINLOG terms, 62-120 MHz'
+	GHA_edges   = list(np.arange(0,25))
+	GHA_text    = ['GHA=' + str(GHA_edges[i]) + '-' + str(GHA_edges[i+1]) + ' hr' for i in range(len(GHA_edges)-1)]
+	DY          = 0.4
+	FLOW_plot   = 40
+	FHIGH_plot  = 125
+	XTICKS      = np.arange(60, 121, 20)
+	XTEXT       = 42
+	YLABEL      = str(DY) + ' K per division'
+	TITLE       = '5 LINLOG terms, 60-120 MHz'
 	figure_path = '/home/raul/Desktop/'
-	figure_name = 'CASE1_linlog_4terms_62-120MHz'
+	figure_name = 'linlog_5terms_60-120MHz'
 	
 	
 	# Plotting
-	x = eg.plot_residuals(f, r, w, LST_text, DY=DY, FLOW=FLOW_plot, FHIGH=FHIGH_plot, XTICKS=XTICKS, XTEXT=XTEXT, YLABEL=YLABEL, TITLE=TITLE, save='yes', figure_path=figure_path, figure_name=figure_name)
+	x = eg.plot_residuals(f, r, w, GHA_text, DY=DY, FLOW=FLOW_plot, FHIGH=FHIGH_plot, XTICKS=XTICKS, XTEXT=XTEXT, YLABEL=YLABEL, TITLE=TITLE, save='yes', figure_path=figure_path, figure_name=figure_name)
 	
 	
 	

@@ -2033,8 +2033,421 @@ def level4read(path_file):
 
 
 
+def one_hour_filter(year, day, gha):
+	
+	bad = np.array([
+	        [2018, 151, 9],
+	        [2018, 157, 7],
+	        [2018, 159, 4],
+	        [2018, 159, 7],
+	        [2018, 159, 8],
+	        [2018, 159, 9],
+	        [2018, 164, 19],
+	        [2018, 170, 16],
+	        [2018, 170, 17],
+	        [2018, 170, 23],
+	        [2018, 184, 11],
+	        [2018, 184, 12],
+	        [2018, 184, 13],
+	        [2018, 184, 14],
+	        [2018, 184, 15],
+	        [2018, 184, 16],
+	        [2018, 184, 17],
+	        [2018, 185, 0],
+	        [2018, 185, 1],
+	        [2018, 185, 2],
+	        [2018, 185, 6],
+	        [2018, 185, 7],
+	        [2018, 185, 8],
+	        [2018, 185, 13],
+	        [2018, 185, 14],
+	        [2018, 185, 15],
+	        [2018, 186, 9],
+	        [2018, 186, 10],
+	        [2018, 186, 11],
+	        [2018, 186, 12],
+	        [2018, 186, 13],
+	        [2018, 186, 14],
+	        [2018, 186, 15],
+	        [2018, 186, 16],
+	        [2018, 186, 17],
+	        [2018, 190, 11],
+	        [2018, 190, 12],
+	        [2018, 190, 13],
+	        [2018, 190, 14],
+	        [2018, 190, 15],
+	        [2018, 190, 16],
+	        [2018, 190, 17],
+	        [2018, 191, 8],
+	        [2018, 191, 9],
+	        [2018, 191, 10],
+	        [2018, 191, 11],
+	        [2018, 191, 12],
+	        [2018, 191, 13],
+	        [2018, 191, 14],
+	        [2018, 191, 15],
+	        [2018, 191, 16],
+	        [2018, 192, 10],
+	        [2018, 192, 11],
+	        [2018, 192, 12],
+	        [2018, 192, 13],
+	        [2018, 192, 14],
+	        [2018, 192, 15],
+	        [2018, 192, 16],
+	        [2018, 192, 17],
+	        [2018, 192, 18],
+	        [2018, 192, 10],
+	        [2018, 195, 6],
+	        [2018, 195, 7],
+	        [2018, 195, 8],
+	        [2018, 195, 9],
+	        [2018, 195, 10],
+	        [2018, 195, 11],
+	        [2018, 195, 12],
+	        [2018, 195, 13],
+	        [2018, 196,  8],
+	        [2018, 196,  9],
+	        [2018, 196,  10],
+	        [2018, 196,  11],
+	        [2018, 196,  12],
+	        [2018, 196,  13],
+	        [2018, 196,  14],
+	        [2018, 196,  15],
+	        [2018, 196,  16],
+	        [2018, 196,  17],
+	        [2018, 199,  14],
+	        [2018, 204,  5],
+	        [2018, 204,  6],
+	        [2018, 204,  7],
+	        [2018, 204,  8],
+	        [2018, 204,  9],
+	        [2018, 204,  10],
+	        [2018, 204,  11],
+	        [2018, 204,  12],
+	        [2018, 208,  13],
+	        [2018, 208,  14],
+	        [2018, 208,  15],
+	        [2018, 209,  12],
+	        [2018, 209,  13],
+	        [2018, 209,  14],
+	        [2018, 209,  15],
+	        [2018, 209,  16],
+	        [2018, 209,  17],
+	        [2018, 209,  18],
+	        [2018, 211,  20],
+	        [2018, 212,  17],
+	        [2018, 213,  0],
+	        [2018, 213,  1],
+	        [2018, 213,  2],
+	        [2018, 213,  3],
+	        [2018, 213,  4],
+	        [2018, 213,  5],
+	        [2018, 213,  6],
+	        [2018, 213,  7],
+	        [2018, 213,  8],
+	        [2018, 213,  9],
+	        [2018, 213,  10],
+	        [2018, 213,  11],
+	        [2018, 213,  12],
+	        [2018, 213,  13],
+	        [2018, 213,  14],
+	        [2018, 213,  15],
+	        [2018, 213,  16],
+	        [2018, 213,  17],
+	        [2018, 213,  18],
+	        [2018, 213,  19],
+	        [2018, 213,  20],
+	        [2018, 213,  21],
+	        [2018, 213,  22],
+	        [2018, 213,  23],
+	        [2018, 214,  13],
+	        [2018, 214,  14],
+	        [2018, 214,  15],
+	        [2018, 214,  16],
+	        [2018, 214,  17],
+	        [2018, 214,  18],
+	        [2018, 215,  0],
+	        [2018, 215,  1],
+	        [2018, 215,  2],
+	        [2018, 215,  3],	        
+	        [2018, 215,  21],
+	        [2018, 215,  22],
+	        [2018, 215,  23],	        	        
+	        [2018, 216,  9],
+	        [2018, 216,  10],
+	        [2018, 216,  11],
+	        [2018, 216,  12],
+	        [2018, 216,  13],
+	        [2018, 216,  14],
+	        [2018, 216,  15],	        
+	        [2018, 219,  15],
+	        [2018, 219,  16],
+	        [2018, 219,  17],
+	        [2018, 219,  18],
+	        [2018, 219,  19],	
+	        [2018, 221,  0],
+	        [2018, 221,  1],
+	        [2018, 221,  2],
+	        [2018, 221,  3],
+	        [2018, 221,  4],
+	        [2018, 221,  5],
+	        [2018, 221,  6],
+	        [2018, 221,  7],
+	        [2018, 221,  8],
+	        [2018, 221,  9],
+	        [2018, 221,  10],
+	        [2018, 221,  11],
+	        [2018, 221,  12],
+	        [2018, 221,  13],
+	        [2018, 221,  14],
+	        [2018, 221,  15],
+	        [2018, 221,  16],
+	        [2018, 221,  17],
+	        [2018, 221,  18],
+	        [2018, 221,  19],
+	        [2018, 221,  20],
+	        [2018, 221,  21],
+	        [2018, 221,  22],
+	        [2018, 221,  23],	
+	        [2018, 222,  0],
+	        [2018, 222,  1],
+	        [2018, 222,  2],
+	        [2018, 222,  3],
+	        [2018, 222,  4],
+	        [2018, 222,  5],
+	        [2018, 222,  6],
+	        [2018, 222,  7],
+	        [2018, 222,  8],
+	        [2018, 222,  9],
+	        [2018, 222,  10],
+	        [2018, 222,  11],
+	        [2018, 222,  12],
+	        [2018, 222,  13],
+	        [2018, 222,  14],
+	        [2018, 222,  15],
+	        [2018, 222,  16],
+	        [2018, 222,  17],
+	        [2018, 222,  18],
+	        [2018, 222,  19],
+	        [2018, 222,  20],
+	        [2018, 222,  21],
+	        [2018, 222,  22],
+	        [2018, 222,  23]	        
+	        
+	        ])
+	
+	
+	keep = 1
+	for i in range(len(bad)):
+		if (year == bad[i,0]) and (day == bad[i,1]) and (gha == bad[i,2]):
+			keep = 0
+			
+		
+	return keep
 
 
+
+
+
+
+
+
+def season_integrated_spectra_GHA(new_gha_edges=np.arange(0,25,2)):
+	
+	data_save_path = '/data5/raul/EDGES/spectra/level5/mid_band/case2/'
+	data_save_name = 'case2_24hr_average'
+	
+	
+	
+	# Loading level4 data
+	f, p_all, r_all, w_all, gha_edges, yd = level4read('/data5/raul/EDGES/spectra/level4/mid_band/case2/case2.hdf5')
+
+	pr_all = np.zeros((len(gha_edges)-1, len(p_all[0,0,:])))
+	rr_all = np.zeros((len(gha_edges)-1, len(f)))
+	wr_all = np.zeros((len(gha_edges)-1, len(f)))	
+
+
+	
+	# Looping over GHA
+	for j in range(len(gha_edges)-1):
+		
+		# Looping over day
+		counter = 0
+		for i in range(len(yd)):
+			
+			keep = one_hour_filter(yd[i,0], yd[i,1], gha_edges[j])
+			print(gha_edges[j])
+			
+			# Index of good spectra
+			if keep == 1:
+				if counter == 0:
+					index_good = np.array([i])
+					counter    = counter+1
+				
+				elif counter > 0:
+					index_good = np.append(index_good, i)
+		
+		
+		# Selecting good parameters and spectra		
+		pp  = p_all[index_good, j, :]
+		rr  = r_all[index_good, j, :]
+		ww  = w_all[index_good, j, :]
+		
+		
+		# Average parameters and spectra
+		avp      = np.mean(pp, axis=0)
+		avr, avw = ba.weighted_mean(rr, ww)
+		
+		
+		# RFI cleaning of average spectra
+		avr_no_rfi, avw_no_rfi = rfi.cleaning_sweep(f, avr, avw, window_width_MHz=5, Npolyterms_block=3, N_choice=20, N_sigma=3)
+		
+		
+		# Storing average spectra
+		pr_all[j,:] = avp			
+		rr_all[j,:] = avr_no_rfi
+		wr_all[j,:] = avw_no_rfi
+		
+		
+		## Frequency binning
+		#fb, rb, wb = ba.spectral_binning_number_of_samples(f, avr_no_rfi, avw_no_rfi)
+		#model      = ba.model_evaluate('LINLOG', avp, fb/200)
+		#tb         = model + rb
+		#tb[wb==0]  = 0
+		
+		
+		## Storing binned average spectra
+		#if j == 0:
+			#tb_all = np.zeros((len(gha_edges)-1, len(fb)))
+			#wb_all = np.zeros((len(gha_edges)-1, len(fb)))
+						
+		#tb_all[j,:] = tb
+		#wb_all[j,:] = wb			
+	
+	
+	
+	
+	
+	
+	
+	print('-------------------------------')
+		
+		
+	
+		#pry_all = np.zeros((len(new_gha_edges)-1, len(pr_all[0,:])))
+		#rry_all = np.zeros((len(new_gha_edges)-1, len(f)))
+		#wry_all = np.zeros((len(new_gha_edges)-1, len(f)))			
+		
+	
+	
+	
+		
+	for j in range(len(new_gha_edges)-1):
+		new_gha_start  = new_gha_edges[j]
+		new_gha_end    = new_gha_edges[j+1]
+		
+		print(str(new_gha_start) + ' ' + str(new_gha_end))
+		
+		counter = 0
+		for i in range(len(gha_edges)-1):
+			if (new_gha_start < new_gha_end):
+				if (gha_edges[i] >= new_gha_start) and (gha_edges[i] < new_gha_end):
+					
+					print(gha_edges[i])
+					if counter == 0:
+						px_all = pr_all[i,:]
+						rx_all = rr_all[i,:]
+						wx_all = wr_all[i,:]
+						counter = counter + 1
+					
+					elif counter > 0:
+						px_all = np.vstack((px_all, pr_all[i,:]))
+						rx_all = np.vstack((rx_all, rr_all[i,:]))
+						wx_all = np.vstack((wx_all, wr_all[i,:]))
+						
+			elif (new_gha_start > new_gha_end):
+				if (gha_edges[i] >= new_gha_start) or (gha_edges[i] < new_gha_end):
+					
+					print(gha_edges[i])
+					if counter == 0:
+						px_all = pr_all[i,:]
+						rx_all = rr_all[i,:]
+						wx_all = wr_all[i,:]
+						counter = counter + 1
+					
+					elif counter > 0:
+						px_all = np.vstack((px_all, pr_all[i,:]))
+						rx_all = np.vstack((rx_all, rr_all[i,:]))
+						wx_all = np.vstack((wx_all, wr_all[i,:]))
+
+
+					
+		
+					
+		avpx       = np.mean(px_all, axis=0)		
+		avrx, avwx = ba.weighted_mean(rx_all, wx_all)
+		
+		avrx_no_rfi, avwx_no_rfi = rfi.cleaning_sweep(f, avrx, avwx, window_width_MHz=5, Npolyterms_block=3, N_choice=20, N_sigma=3)
+				
+				
+		## Storing average spectra
+		#pry_all[j,:] = avpx		
+		#rry_all[j,:] = avrx_no_rfi
+		#wry_all[j,:] = avwx_no_rfi
+		
+		
+		
+		
+		# Frequency binning
+		fb, rbx, wbx = ba.spectral_binning_number_of_samples(f, avrx_no_rfi, avwx_no_rfi)
+		modelx       = ba.model_evaluate('LINLOG', avpx, fb/200)
+		tbx          = modelx + rbx
+		tbx[wbx==0]  = 0
+		
+		
+		# Storing binned average spectra
+		if j == 0:
+			tbx_all = np.zeros((len(new_gha_edges)-1, len(fb)))
+			wbx_all = np.zeros((len(new_gha_edges)-1, len(fb)))
+						
+		tbx_all[j,:] = tbx
+		wbx_all[j,:] = wbx			
+				
+
+
+
+
+
+		# Formatting output data
+		new_gha_edges_column = np.reshape(new_gha_edges, -1, 1)
+		
+		dataT = np.array([fb, tbx_all[0,:], wbx_all[0,:]])
+		for i in range(len(tbx_all[:,0])-1):
+			dataT = np.vstack((dataT, tbx_all[i+1,:], wbx_all[i+1,:]))
+			
+		data = dataT.T
+		
+		
+		# Saving data				
+		np.savetxt(data_save_path + data_save_name + '_gha_edges' + '.txt', new_gha_edges_column,  header = 'GHA edges of integrated spectra [hr]')
+		np.savetxt(data_save_path + data_save_name + '_data' + '.txt',      data,                  header = 'Frequency [MHz],\t Temperature [K],\t Weights')
+		
+
+
+
+			
+	
+	
+	
+	
+
+
+	
+		
+
+	
+
+	return fb, tbx_all, wbx_all   #f, pr_all, rr_all, wr_all, pry_all, rry_all, wry_all
 
 
 
@@ -2248,7 +2661,7 @@ def plot_residuals(f, r, w, list_names, FIG_SX=7, FIG_SY=12, DY=2, FLOW=50, FHIG
 
 	
 	if save == 'yes':		
-		plt.savefig(figure_path + figure_name + '.png', bbox_inches='tight')
+		plt.savefig(figure_path + figure_name + '.pdf', bbox_inches='tight')
 		plt.close()
 		plt.close()
 			
