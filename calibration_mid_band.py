@@ -6,6 +6,10 @@ import time  as tt
 import edges as eg
 import datetime as dt
 
+
+import basic as ba
+
+
 import scipy.io as sio
 import scipy.interpolate as spi
 
@@ -33,8 +37,9 @@ from astropy.io import fits
 # Determining home folder
 home_folder = expanduser("~")
 
-
-
+import os
+edges_folder       = os.environ['EDGES']
+print('EDGES Folder: ' + edges_folder)
 
 
 
@@ -1512,8 +1517,8 @@ def antenna_beam_factor(name_save, beam_file=1, rotation_from_north=90, band_deg
 
 
 	# Data paths
-	path_data = home_folder + '/DATA/EDGES/calibration/sky/'
-	path_save = home_folder + '/DATA/EDGES/calibration/beam_factors/' + band + '/'
+	path_data = edges_folder + 'sky_models/'
+	path_save = edges_folder + band + '/calibration/beam_factors/raw/'
 
 
 	# Loading beam	
@@ -1606,7 +1611,7 @@ def antenna_beam_factor(name_save, beam_file=1, rotation_from_north=90, band_deg
 	for i in range(len(LST)): # range(1):
 
 
-		print(name_save + '. LST: ' + str(i) + ' out of 72')
+		print(name_save + '. LST: ' + str(i+1) + ' out of 72')
 
 
 		# Advancing time ( 19:57 minutes UTC correspond to 20 minutes LST )
@@ -1619,7 +1624,7 @@ def antenna_beam_factor(name_save, beam_file=1, rotation_from_north=90, band_deg
 
 
 		# LST 
-		LST[i] = eg.utc2lst(Time_iter, EDGES_lon_deg)
+		LST[i] = ba.utc2lst(Time_iter, EDGES_lon_deg)
 
 
 

@@ -29,8 +29,11 @@ import os, sys
 edges_code_folder = os.environ['EDGES_CODE']
 sys.path.insert(0, edges_code_folder)
 
-data_folder       = os.environ['EDGES_DATA']
-print('EDGES Data Folder: ' + data_folder)
+edges_folder       = os.environ['EDGES']
+print('EDGES Folder: ' + edges_folder)
+
+
+
 
 
 
@@ -71,7 +74,7 @@ def auxiliary_data(weather_file, thermlog_file, band, year, day):
 	line1         = lines_all_1[i1]
 	year_iter_1   = int(line1[0:4])
 	day_of_year_1 = int(line1[5:8])
-	
+
 
 	while (day_of_year_1 <= day) and (year_iter_1 <= year):
 
@@ -103,7 +106,7 @@ def auxiliary_data(weather_file, thermlog_file, band, year, day):
 			array1       = np.append(array1, array1_temp2, axis=0)
 
 			print('weather time: ' + date_time)
-			
+
 
 		i1            = i1+1
 		print(i1)
@@ -111,7 +114,7 @@ def auxiliary_data(weather_file, thermlog_file, band, year, day):
 			line1         = lines_all_1[i1]
 			year_iter_1   = int(line1[0:4])
 			day_of_year_1 = int(line1[5:8])
-			
+
 
 
 
@@ -120,7 +123,7 @@ def auxiliary_data(weather_file, thermlog_file, band, year, day):
 	lines_all_2   = f2.readlines()
 
 	array2        = np.zeros((0,2))
-	
+
 
 	if (band == 'high_band') and (year == 2015):
 		i2 = 24000    # ~ day 108
@@ -160,11 +163,11 @@ def auxiliary_data(weather_file, thermlog_file, band, year, day):
 	year_iter_2   = int(line2[0:4])
 	day_of_year_2 = int(line2[5:8])
 
-	
+
 
 	while (day_of_year_2 <= day) and (year_iter_2 <= year):
-		
-		
+
+
 		if day_of_year_2 == day:
 			#print(line2[0:17] + ' ' + line2[48:53])
 
@@ -216,12 +219,12 @@ def level1_to_level2(band, year, day_hour, low2_flag='_low2'):
 	if band == 'low_band2':
 		#level1_file      = path_level1 + 'level1_' + year + '_' + day_hour + '_300_350.mat'
 		level1_file      = path_level1 + 'level1_' + year + '_' + day_hour + low2_flag + '_300_350.mat'
-		
+
 	elif band == 'low_band3':
 		#level1_file      = path_level1 + 'level1_' + year + '_' + day_hour + '_low3_backendB_test.acq_300_350.mat'
 		#level1_file      = path_level1 + 'level1_' + year + '_' + day_hour + '_low3_backendB_test2_300_350.mat'
 		level1_file      = path_level1 + 'level1_' + year + '_' + day_hour + '_low3_300_350.mat'
-		
+
 	elif band == 'mid_band':
 		level1_file      = path_level1 + 'level1_' + year + '_' + day_hour + '_mid_300_350.mat'	
 
@@ -232,7 +235,7 @@ def level1_to_level2(band, year, day_hour, low2_flag='_low2'):
 
 	if (int(year) < 2017) or ((int(year)==2017) and (int(day_hour[0:3])<330)):
 		weather_file     = path_logs   + '/weather_upto_20171125.txt'
-		
+
 	if (int(year) == 2018) or ((int(year)==2017) and (int(day_hour[0:3])>331)):
 		weather_file     = path_logs   + '/weather2.txt'
 
@@ -268,7 +271,7 @@ def level1_to_level2(band, year, day_hour, low2_flag='_low2'):
 	elif band == 'low_band2':
 		flow  = 50
 		fhigh = 199
-		
+
 	elif band == 'low_band3':
 		flow  = 50
 		fhigh = 199			
@@ -276,11 +279,11 @@ def level1_to_level2(band, year, day_hour, low2_flag='_low2'):
 	elif band == 'mid_band':
 		flow  = 50
 		fhigh = 199
-		
+
 	elif band == 'high_band':
 		flow  = 65
 		fhigh = 195
-	
+
 
 
 	ff, il, ih = ba.frequency_edges(flow, fhigh)
@@ -310,17 +313,17 @@ def level1_to_level2(band, year, day_hour, low2_flag='_low2'):
 	# Year and day
 	year_int        = int(year)
 	day_int         = int(day_hour[0:3])
-	
+
 	year_column     = year_int * np.ones((len(LST),1))
 	day_column      = day_int * np.ones((len(LST),1))
-	
+
 	if len(day_hour) > 3:
 		fraction_int    = int(day_hour[4::])
 	elif len(day_hour) == 3:
 		fraction_int    = 0
-	
+
 	fraction_column = fraction_int * np.ones((len(LST),1))	
-		
+
 
 
 	# Galactic Hour Angle
@@ -342,14 +345,14 @@ def level1_to_level2(band, year, day_hour, low2_flag='_low2'):
 	# Ambient temperature and humidity, and receiver temperature
 	#if band == 'low_band3':
 		#amb_rec = np.zeros((len(seconds_data), 4))
-	
+
 	#else:
 	aux1, aux2   = auxiliary_data(weather_file, thermlog_file, band, year_int, day_int)
 
 	amb_temp_interp  = np.interp(seconds_data, aux1[:,0], aux1[:,1]) - 273.15
 	amb_hum_interp   = np.interp(seconds_data, aux1[:,0], aux1[:,2])
 	rec1_temp_interp = np.interp(seconds_data, aux1[:,0], aux1[:,3]) - 273.15
-	
+
 	if len(aux2) == 1:
 		rec2_temp_interp = 25*np.ones(len(seconds_data))
 	else:
@@ -375,6 +378,7 @@ def level1_to_level2(band, year, day_hour, low2_flag='_low2'):
 
 
 	return fe, tt, ww, meta
+
 
 
 
@@ -422,7 +426,7 @@ def models_antenna_s11_remove_delay(band, f_MHz, year=2018, day=145, delay_0=0.1
 
 
 	# Paths
-	path_data = home_folder + '/EDGES/calibration/antenna_s11/' + band + '/corrected/' + str(year) + '_' + str(day) + '/' 
+	path_data = edges_folder + band + '/calibration/antenna_s11/corrected/' + str(year) + '_' + str(day) + '/' 
 
 	
 	# Mid-Band
@@ -937,7 +941,7 @@ def antenna_beam_factor_interpolation(band, lst_hires, fnew):
 	# Mid-Band
 	if band == 'mid_band':
 
-		file_path = home_folder + '/EDGES/calibration/beam_factors/mid_band/'
+		file_path = edges_folder + 'mid_band/calibration/beam_factors/raw/'
 		bf_old  = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.62_reffreq_100MHz_data.txt')
 		freq    = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.62_reffreq_100MHz_freq.txt')
 		lst_old = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.62_reffreq_100MHz_LST.txt')
@@ -991,7 +995,7 @@ def antenna_beam_factor_interpolation(band, lst_hires, fnew):
 
 
 
-def beam_factor_table(f, N_lst, file_name_hdf5):
+def beam_factor_table_computation(f, N_lst, file_name_hdf5):
 
 
 	# Produce the beam factor at high resolution
@@ -1006,7 +1010,7 @@ def beam_factor_table(f, N_lst, file_name_hdf5):
 	
 	# Save
 	# ----
-	file_path = home_folder + '/EDGES/calibration/beam_factors/mid_band/'
+	file_path = edges_folder + '/mid_band/calibration/beam_factors/raw/'
 	with h5py.File(file_path + file_name_hdf5, 'w') as hf:
 		hf.create_dataset('frequency',           data = f)
 		hf.create_dataset('lst',                 data = lst_hires)
@@ -1083,7 +1087,7 @@ def beam_factor_table_evaluate(f_table, lst_table, bf_table, lst_in):
 
 
 
-def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=1, antenna_s11_year=2018, antenna_s11_day=145, antenna_s11_Nfit=13, FLOW=50, FHIGH=130, Nfg=5):
+def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=1, antenna_s11_year=2018, antenna_s11_day=145, antenna_s11_Nfit=13, beam_correction=1, FLOW=50, FHIGH=130, Nfg=5):
 	
 	"""
 
@@ -1098,7 +1102,7 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 
 	# Load daily data
 	# ---------------
-	path_data = home_folder + '/EDGES/spectra/level2/' + band + '/'
+	path_data = edges_folder + band + '/spectra/level2/'
 	filename  = path_data + year_day_hdf5
 	fin_X, t_2D_X, m_2D, w_2D_X = level2read(filename)	
 	
@@ -1120,9 +1124,15 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 		
 		# Beam factor
 		# -----------
-		f_table, lst_table, bf_table = beam_factor_table_read('/data5/raul/EDGES/calibration/beam_factors/mid_band/beam_factor_table_hires.hdf5') 
-		#lst_in                 = np.arange(0, 24, 24/144)
-		bf = beam_factor_table_evaluate(f_table, lst_table, bf_table, m_2D[:,3])
+		# No beam correction
+		if beam_correction == 0:
+			bf = 1
+			
+		if beam_correction == 1:
+			f_table, lst_table, bf_table = beam_factor_table_read(edges_folder + band + '/calibration/beam_factors/table_hires_mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.62_reffreq_100MHz.hdf5')
+			bf = beam_factor_table_evaluate(f_table, lst_table, bf_table, m_2D[:,3])
+			
+			
 		
 		
 			
@@ -1143,11 +1153,11 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 		# -------------------------------
 		if receiver_cal_file == 1:
 			print('Receiver calibration FILE 1')
-			rcv_file = home_folder + '/EDGES/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_mid_band_cfit6_wfit14.txt'
+			rcv_file = edges_folder + band + '/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_mid_band_cfit6_wfit14.txt'
 		
 		elif receiver_cal_file == 2:
 			print('Receiver calibration FILE 2')
-			rcv_file = home_folder + '/EDGES/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_mid_band_cfit10_wfit14.txt'
+			rcv_file = edges_folder + band + '/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_mid_band_cfit10_wfit14.txt'
 		
 		rcv = np.genfromtxt(rcv_file)
 	
@@ -1202,7 +1212,7 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 		p_all   = np.random.rand(lt, Nfg)
 		r_all   = np.random.rand(lt, len(fin))
 		w_all   = np.random.rand(lt, len(fin))
-		rms_all = np.random.rand(lt, 2)
+		rms_all = np.random.rand(lt, 3)
 		
 		
 		
@@ -1233,6 +1243,8 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 			rri   = tti - model_i
 			
 			
+			
+							
 			# RMS for two halfs of the spectrum
 			# ---------------------------------
 			IX = int(np.floor(len(fin)/2))
@@ -1247,6 +1259,41 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 			
 			RMS1 = np.sqrt(np.sum((R1[W1>0])**2)/len(F1[W1>0]))
 			RMS2 = np.sqrt(np.sum((R2[W2>0])**2)/len(F2[W2>0]))
+		
+		
+		
+		
+
+
+
+			# We also compute residuals for 4 terms as an additiobal filter
+			# Fitting foreground model to binned version of spectra
+			# -----------------------------------------------------			
+			par_fg_4t = ba.fit_polynomial_fourier('LINLOG', fbi/200, tbi, 3, Weights=wbi)
+		
+		
+			# Evaluating foreground model at raw resolution
+			# ---------------------------------------------			
+			model_i_4t = ba.model_evaluate('LINLOG', par_fg_4t[0], fin/200)
+		
+		
+			# Residuals
+			# ---------
+			rri_4t   = tti - model_i_4t
+			
+			
+			# RMS
+			# ---
+			RMS3 = np.sqrt(np.sum((rri_4t[wwi>0])**2)/len(fin[wwi>0]))
+		
+		
+		
+		
+		
+		
+		
+		
+		
 			
 			
 			# Store
@@ -1257,16 +1304,17 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 			w_all[i,:]    = wwi
 			rms_all[i,0]  = RMS1
 			rms_all[i,1]  = RMS2
+			rms_all[i,2]  = RMS3
 			
 			
-			print(year_day_hdf5 + ': Spectrum number: ' + str(i+1) + ': RMS: ' + str(RMS1) + ', ' + str(RMS2))
+			print(year_day_hdf5 + ': Spectrum number: ' + str(i+1) + ': RMS: ' + str(RMS1) + ', ' + str(RMS2) + ', ' + str(RMS3))
 	
 
 
 
 	# Save
 	# ----
-	save_folder = home_folder + '/EDGES/spectra/level3/' + band + '/' + flag_folder + '/'
+	save_folder = edges_folder + band + '/spectra/level3/' + flag_folder + '/'
 	if not exists(save_folder):
 		makedirs(save_folder)
 
