@@ -13,6 +13,8 @@ import datetime as dt
 import astropy.time as apt
 import ephem as eph	# to install, at the bash terminal type $ conda install ephem
 
+import calibration_mid_band as cmb
+
 import h5py
 
 from os import makedirs, listdir
@@ -929,59 +931,23 @@ def antenna_efficiency(band, f):
 
 
 
-def antenna_beam_factor_interpolation(band, lst_hires, fnew):
 
-	"""
 
 
-	"""
 
 
 
-	# Mid-Band
-	if band == 'mid_band':
 
-		file_path = edges_folder + 'mid_band/calibration/beam_factors/raw/'
-		bf_old  = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.62_reffreq_100MHz_data.txt')
-		freq    = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.62_reffreq_100MHz_freq.txt')
-		lst_old = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.62_reffreq_100MHz_LST.txt')
 
-	
 
 
-	# Wrap beam factor and LST for 24-hr interpolation 
-	bf   = np.vstack((bf_old[-1,:], bf_old, bf_old[0,:]))
-	lst0 = np.append(lst_old[-1]-24, lst_old)
-	lst  = np.append(lst0, lst_old[0]+24)
 
-	# Arranging original arrays in preparation for interpolation
-	freq_array        = np.tile(freq, len(lst))
-	lst_array         = np.repeat(lst, len(freq))
-	bf_array          = bf.reshape(1,-1)[0]
-	freq_lst_original = np.array([freq_array, lst_array]).T
 
-	# Producing high-resolution array of LSTs (frequencies are the same as the original)
-	freq_hires       = np.copy(freq)
-	freq_hires_array = np.tile(freq_hires, len(lst_hires))
-	lst_hires_array  = np.repeat(lst_hires, len(freq_hires)) 
-	freq_lst_hires   = np.array([freq_hires_array, lst_hires_array]).T
 
-	# Interpolating beam factor to high LST resolution
-	bf_hires_array = spi.griddata(freq_lst_original, bf_array, freq_lst_hires, method='cubic')	
-	bf_2D          = bf_hires_array.reshape(len(lst_hires), len(freq_hires))
 
-	# Interpolating beam factor to high frequency resolution
-	for i in range(len(bf_2D[:,0])):
-		par       = np.polyfit(freq_hires, bf_2D[i,:], 11)
-		bf_single = np.polyval(par, fnew)
 
-		if i == 0:
-			bf_2D_hires = np.copy(bf_single)
-		elif i > 0:
-			bf_2D_hires = np.vstack((bf_2D_hires, bf_single))
 
 
-	return bf_2D_hires   #beam_factor_model  #, freq_hires, bf_lst_average
 
 
 
@@ -990,104 +956,7 @@ def antenna_beam_factor_interpolation(band, lst_hires, fnew):
 
 
 
-
-
-
-
-
-def beam_factor_table_computation(f, N_lst, file_name_hdf5):
-
-
-	# Produce the beam factor at high resolution
-	# ------------------------------------------
-	#N_lst = 6000   # number of LST points within 24 hours
-	
-	
-	lst_hires = np.arange(0,24,24/N_lst)
-	bf        = antenna_beam_factor_interpolation('mid_band', lst_hires, f)
-	
-	
-	
-	# Save
-	# ----
-	file_path = edges_folder + '/mid_band/calibration/beam_factors/raw/'
-	with h5py.File(file_path + file_name_hdf5, 'w') as hf:
-		hf.create_dataset('frequency',           data = f)
-		hf.create_dataset('lst',                 data = lst_hires)
-		hf.create_dataset('beam_factor',         data = bf)		
-		
-	return 0
-
-
-
-
-
-
-def beam_factor_table_read(path_file):
-
-	# path_file = home_folder + '/EDGES/calibration/beam_factors/mid_band/file.hdf5'
-
-	# Show keys (array names inside HDF5 file)
-	with h5py.File(path_file,'r') as hf:
-
-		hf_freq  = hf.get('frequency')
-		f        = np.array(hf_freq)
-
-		hf_lst   = hf.get('lst')
-		lst      = np.array(hf_lst)
-
-		hf_bf    = hf.get('beam_factor')
-		bf       = np.array(hf_bf)
-
-	return f, lst, bf	
-
-
-
-
-
-
-def beam_factor_table_evaluate(f_table, lst_table, bf_table, lst_in):
-	
-	# f_table, lst_table, bf_table = eg.beam_factor_table_read('/data5/raul/EDGES/calibration/beam_factors/mid_band/beam_factor_table_hires.hdf5')
-	
-	beam_factor = np.zeros((len(lst_in), len(f_table)))
-	
-	for i in range(len(lst_in)):
-		d = np.abs(lst_table - lst_in[i])
-		
-		index = np.argsort(d)
-		IX = index[0]
-		
-		beam_factor[i,:] = bf_table[IX,:]
-				
-	return beam_factor
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=1, antenna_s11_year=2018, antenna_s11_day=145, antenna_s11_Nfit=13, beam_correction=1, FLOW=50, FHIGH=130, Nfg=5):
+def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=1, antenna_s11_year=2018, antenna_s11_day=145, antenna_s11_Nfit=13, beam_correction=1, balun_correction=1, FLOW=50, FHIGH=130, Nfg=5):
 	
 	"""
 
@@ -1127,10 +996,11 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 		# No beam correction
 		if beam_correction == 0:
 			bf = 1
+			print('NO BEAM CORRECTION')
 			
 		if beam_correction == 1:
-			f_table, lst_table, bf_table = beam_factor_table_read(edges_folder + band + '/calibration/beam_factors/table_hires_mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.62_reffreq_100MHz.hdf5')
-			bf = beam_factor_table_evaluate(f_table, lst_table, bf_table, m_2D[:,3])
+			f_table, lst_table, bf_table = cmb.beam_factor_table_read(edges_folder + band + '/calibration/beam_factors/table/table_hires_mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.62_reffreq_100MHz.hdf5')
+			bf                           = cmb.beam_factor_table_evaluate(f_table, lst_table, bf_table, m_2D[:,3])
 			
 			
 		
@@ -1144,8 +1014,13 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 		
 		# Balun+Connector Loss
 		# --------------------
-		Gb, Gc = balun_and_connector_loss(fin, s11_ant)
-		G      = Gb*Gc
+		if balun_correction == 0:
+			G = 1
+			print('NO BALUN CORRECTION')
+			
+		if balun_correction == 1:
+			Gb, Gc = balun_and_connector_loss(fin, s11_ant)
+			G      = Gb*Gc
 
 		
 		
@@ -1461,18 +1336,15 @@ def rms_filter_computation(case, save_parameters='no'):
 	
 	# Listing files available
 	# ------------------------
-	if case == 1:
-		path_files = data_folder + '/nominal_60_160MHz_case1/'
-		save_folder = '/data5/raul/EDGES/filters/mid_band/case1/'
+	if case == 0:
+		path_files  = edges_folder + '/mid_band/spectra/level3/case0/'
+		save_folder = edges_folder + '/mid_band/rms_filters/case0/'
 	
-	if case == 2:
-		path_files = data_folder + '/nominal_60_160MHz_case2/'
-		save_folder = '/data5/raul/EDGES/filters/mid_band/case2/'
-		
-	if case == 3:
-		path_files = data_folder + '/nominal_60_160MHz_case3/'
-		save_folder = '/data5/raul/EDGES/filters/mid_band/case3/'
-		
+	if case == 1:
+		path_files  = edges_folder + '/mid_band/spectra/level3/case1/'
+		save_folder = edges_folder + '/mid_band/rms_filters/case1/'
+	
+
 		
 		
 	new_list   = listdir(path_files)
@@ -1489,7 +1361,7 @@ def rms_filter_computation(case, save_parameters='no'):
 		f, t, p, r, w, rms, m = level3read(path_files + new_list[i])
 		
 		# Filtering out high humidity
-		amb_hum_max=90
+		amb_hum_max = 50
 		IX = data_selection(m, GHA_or_LST='GHA', TIME_1=0, TIME_2=24, sun_el_max=90, moon_el_max=90, amb_hum_max=amb_hum_max, min_receiver_temp=0, max_receiver_temp=100)
 		
 		tx   = t[IX,:]
@@ -1523,6 +1395,7 @@ def rms_filter_computation(case, save_parameters='no'):
 
 	RMS1       = rms_all[:,0]
 	RMS2       = rms_all[:,1]
+	RMS3       = rms_all[:,2]
 	
 	IN         = np.arange(0,len(GHA))
 	
@@ -1533,6 +1406,11 @@ def rms_filter_computation(case, save_parameters='no'):
 	# -------------------------------------------------------
 	Npoly  = 3
 	Nsigma = 3
+	
+	
+	
+	
+	
 	
 	
 	
@@ -1584,6 +1462,10 @@ def rms_filter_computation(case, save_parameters='no'):
 			IN1_bad = np.append(IN1_bad, IN_x_bad)
 	
 	
+
+
+
+
 	
 	
 	
@@ -1636,6 +1518,66 @@ def rms_filter_computation(case, save_parameters='no'):
 
 
 
+
+
+
+	# Analysis for 3-term residuals
+	# ------------------------------------------------
+	
+	# Identification of bad data, within 1-hour "bins", across 24 hours
+	# -----------------------------------------------------------------
+	for i in range(24):
+		GHA_x  =  GHA[(GHA>=i) & (GHA<(i+1))]
+		RMS_x  = RMS3[(GHA>=i) & (GHA<(i+1))]
+		IN_x   =   IN[(GHA>=i) & (GHA<(i+1))]
+		
+		W         =  np.ones(len(GHA_x))
+		bad_old   = -1
+		bad       =  0	
+		iteration =  0
+		
+		while bad > bad_old:
+
+			iteration = iteration + 1
+
+			print(' ')
+			print('------------')
+			print('GHA: ' + str(i) + '-' + str(i+1) + 'hr')
+			print('Iteration: ' + str(iteration))
+			
+			par   = np.polyfit(GHA_x[W>0], RMS_x[W>0], Npoly-1)
+			model = np.polyval(par, GHA_x)
+			res   = RMS_x - model
+			std   = np.std(res[W>0])
+			
+			IN_x_bad = IN_x[np.abs(res) > Nsigma*std]
+			W[np.abs(res) > Nsigma*std] = 0
+			
+			bad_old = np.copy(bad)
+			bad     = len(IN_x_bad)
+			
+			print('STD: ' + str(np.round(std,3)) + ' K')
+			print('Number of bad points excised: ' + str(bad))
+
+
+		# Indices of bad data points
+		# --------------------------
+		if i == 0:
+			IN3_bad = np.copy(IN_x_bad)
+
+		else:
+			IN3_bad = np.append(IN3_bad, IN_x_bad)	
+
+
+
+
+
+
+
+
+
+
+
 	# All bad/good spectra indices
 	# ----------------------------
 	#IN_bad = np.union1d(IN1_bad, IN2_bad)
@@ -1647,6 +1589,7 @@ def rms_filter_computation(case, save_parameters='no'):
 	# -----------------------
 	IN1_good = np.setdiff1d(IN, IN1_bad)
 	IN2_good = np.setdiff1d(IN, IN2_bad)
+	IN3_good = np.setdiff1d(IN, IN3_bad)
 	
 	
 	# Number of terms for the polynomial fit of the RMS across 24 hours
@@ -1672,8 +1615,16 @@ def rms_filter_computation(case, save_parameters='no'):
 	model2_std = np.polyval(par2_std, GHA)
 	
 	
-	par        = np.array([par1, par2])
-	par_std    = np.array([par1_std, par2_std])
+	par3       = np.polyfit(GHA[IN3_good], RMS3[IN3_good], Nterms-1)
+	model3     = np.polyval(par3, GHA)
+	abs_res3   = np.abs(RMS3-model3)
+	par3_std   = np.polyfit(GHA[IN3_good], abs_res3[IN3_good], Nstd-1)
+	model3_std = np.polyval(par3_std, GHA)	
+	
+	
+	
+	par        = np.array([par1, par2, par3])
+	par_std    = np.array([par1_std, par2_std, par3_std])
 	
 
 	# Saving polynomial parameters
@@ -1684,7 +1635,7 @@ def rms_filter_computation(case, save_parameters='no'):
 	
 				
 			
-	return GHA, RMS1, RMS2, IN1_good, IN2_good, model1, model2, abs_res1, abs_res2, model1_std, model2_std
+	return GHA, RMS1, RMS2, RMS3, IN1_good, IN2_good, IN3_good, model1, model2, model3, abs_res1, abs_res2, abs_res3, model1_std, model2_std, model3_std
 
 
 
@@ -1697,14 +1648,11 @@ def rms_filter_computation(case, save_parameters='no'):
 
 def rms_filter(case, gx, rms, Nsigma):
 	
+	if case == 0:
+		file_path = edges_folder + 'mid_band/rms_filters/case0/'	
+	
 	if case == 1:
-		file_path = '/data5/raul/EDGES/filters/mid_band/case1/'
-
-	if case == 2:
-		file_path = '/data5/raul/EDGES/filters/mid_band/case2/'
-
-	if case == 3:
-		file_path = '/data5/raul/EDGES/filters/mid_band/case3/'
+		file_path = edges_folder + 'mid_band/rms_filters/case1/'
 
 
 	p    = np.genfromtxt(file_path + 'rms_polynomial_parameters.txt')
@@ -1712,24 +1660,30 @@ def rms_filter(case, gx, rms, Nsigma):
 	
 	rms1 = rms[:,0]
 	rms2 = rms[:,1]
+	rms3 = rms[:,2]
 		
 	m1   = np.polyval(p[0,:], gx)
 	m2   = np.polyval(p[1,:], gx)
+	m3   = np.polyval(p[2,:], gx)
 	
 	ms1  = np.polyval(ps[0,:], gx)
 	ms2  = np.polyval(ps[1,:], gx)
+	ms3  = np.polyval(ps[2,:], gx)
 	
 	index = np.arange(0, len(rms1))
 	
 	diff1 = np.abs(rms1 - m1)
 	diff2 = np.abs(rms2 - m2)
+	diff3 = np.abs(rms3 - m3)
 	
 	index_good_1   = index[diff1 <= Nsigma*ms1]
 	index_good_2   = index[diff2 <= Nsigma*ms2]
+	index_good_3   = index[diff3 <= Nsigma*ms3]
 	
-	index_good = np.intersect1d(index_good_1, index_good_2)
+	index_good_A = np.intersect1d(index_good_1, index_good_2)
+	index_good   = np.intersect1d(index_good_A, index_good_3)
 	
-	return index_good, index_good_1, index_good_2
+	return index_good, index_good_1, index_good_2, index_good_3
 
 
 
@@ -1750,27 +1704,24 @@ def level3_to_level4(case):
 	
 	# Listing files available
 	# ------------------------
+	if case == 0:
+		path_files             = edges_folder + 'mid_band/spectra/level3/case0/'
+		save_folder            = edges_folder + 'mid_band/spectra/level4/case0/'
+		output_file_name_hdf5  = 'case0.hdf5'
+			
 	if case == 1:
-		path_files             = home_folder + '/EDGES/spectra/level3/mid_band/nominal_60_160MHz_case1/'
-		save_folder            = home_folder + '/EDGES/spectra/level4/mid_band/case1/'
+		path_files             = edges_folder + 'mid_band/spectra/level3/case1/'
+		save_folder            = edges_folder + 'mid_band/spectra/level4/case1/'
 		output_file_name_hdf5  = 'case1.hdf5'
 		
-	if case == 2:
-		path_files             = home_folder + '/EDGES/spectra/level3/mid_band/nominal_60_160MHz_case2/'
-		save_folder            = home_folder + '/EDGES/spectra/level4/mid_band/case2/'
-		output_file_name_hdf5  = 'case2.hdf5'
 
-	if case == 3:
-		path_files             = home_folder + '/EDGES/spectra/level3/mid_band/nominal_60_160MHz_case3/'
-		save_folder            = home_folder + '/EDGES/spectra/level4/mid_band/case3/'
-		output_file_name_hdf5  = 'case3.hdf5'
 
 		
 		
 	new_list   = listdir(path_files)
 	new_list.sort()
 	
-	#index_new_list = np.arange(0,3)
+	#index_new_list = np.arange(0,5)
 	#index_new_list = index_new_list.astype('int') # [0,1]  # for testing purposes
 	index_new_list = range(len(new_list))
 
@@ -1802,7 +1753,7 @@ def level3_to_level4(case):
 		
 		
 		# Filtering out high humidity
-		amb_hum_max = 90
+		amb_hum_max = 50
 		IX          = data_selection(my, GHA_or_LST='GHA', TIME_1=0, TIME_2=24, sun_el_max=90, moon_el_max=90, amb_hum_max=amb_hum_max, min_receiver_temp=0, max_receiver_temp=100)
 		
 		px   = py[IX,:]
@@ -1817,7 +1768,7 @@ def level3_to_level4(case):
 		gx[gx<0]   = gx[gx<0] + 24
 		
 		Nsigma     = 3
-		index_good, i1, i2 = rms_filter(case, gx, rmsx, Nsigma)
+		index_good, i1, i2, i3 = rms_filter(case, gx, rmsx, Nsigma)
 		
 				
 		# Selecting good data
@@ -1919,7 +1870,7 @@ def level3_to_level4(case):
 		# Loop over number of foreground terms
 		for Nfg in [3,4,5]:
 			
-			# Residuals for each day
+			# Loop over GHA
 			for j in range(Ngha):
 				
 				print('Nfg: ' + str(Nfg) + '. GHA: ' + str(GHA_edges[j]) + '-' + str(GHA_edges[j+1]) + ' hr')
@@ -1957,13 +1908,23 @@ def level3_to_level4(case):
 			# Settings
 			# ----------------------------------
 			LST_text    = ['GHA=' + str(GHA_edges[k]) + '-' + str(GHA_edges[k+1]) + ' hr' for k in range(Ngha)]
-			DY          =   5
+			
+			if Nfg == 3:
+				DY = 8
+				
+			elif Nfg == 4:
+				DY = 4
+				
+			elif Nfg == 5:
+				DY = 3
+			
 			FLOW_plot   =  30
 			FHIGH_plot  = 165
 			XTICKS      = np.arange(60, 161, 20)
 			XTEXT       =  32
-			YLABEL      = str(DY) + ' K per division'
+			YLABEL      = str(DY)  + ' K per division'
 			TITLE       = str(Nfg) + ' LINLOG terms'
+			FIGURE_FORMAT = 'png'
 			
 			
 			# Creating folder
@@ -1975,7 +1936,7 @@ def level3_to_level4(case):
 			
 			
 			# Plotting
-			x = plot_residuals(fb, qrb_all, qwb_all, LST_text, DY=DY, FLOW=FLOW_plot, FHIGH=FHIGH_plot, XTICKS=XTICKS, XTEXT=XTEXT, YLABEL=YLABEL, TITLE=TITLE, save='yes', figure_path=figure_save_path_subfolder, figure_name=figure_save_name)
+			x = plot_residuals(fb, qrb_all, qwb_all, LST_text, DY=DY, FLOW=FLOW_plot, FHIGH=FHIGH_plot, XTICKS=XTICKS, XTEXT=XTEXT, YLABEL=YLABEL, TITLE=TITLE, save='yes', figure_path=figure_save_path_subfolder, figure_name=figure_save_name, figure_format=FIGURE_FORMAT)
 			
 						
 			
@@ -2144,7 +2105,7 @@ def one_hour_filter(year, day, gha):
 	        [2018, 192, 16],
 	        [2018, 192, 17],
 	        [2018, 192, 18],
-	        [2018, 192, 10],
+	        [2018, 192, 19],
 	        [2018, 195, 6],
 	        [2018, 195, 7],
 	        [2018, 195, 8],
@@ -2565,6 +2526,43 @@ def integrated_residuals_GHA(file_data, flow, fhigh, Nfg):
 
 
 
+def spectra_to_residuals(fx, tx_2D, wx_2D, flow, fhigh, Nfg):
+	
+	f    = fx[(fx>=flow) & (fx<=fhigh)]
+	t_2D = tx_2D[:, (fx>=flow) & (fx<=fhigh)]
+	w_2D = wx_2D[:, (fx>=flow) & (fx<=fhigh)]	
+
+	
+	for i in range(len(t_2D[:, 0])):
+		t = t_2D[i, :]
+		w = w_2D[i, :]
+		
+		par = ba.fit_polynomial_fourier('LINLOG', f/200, t, Nfg, Weights=w)
+		
+		r = t - par[1]
+		
+		if i == 0:
+			r_all = np.copy(r)
+			w_all = np.copy(w)
+			
+		elif i > 0:
+			r_all = np.vstack((r_all, r))
+			w_all = np.vstack((w_all, w))
+		
+		
+	return f, r_all, w_all
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2651,7 +2649,7 @@ def daily_residuals_LST(file_name, LST_boundaries=np.arange(0,25,2), FLOW=60, FH
 
 
 
-def plot_residuals(f, r, w, list_names, FIG_SX=7, FIG_SY=12, DY=2, FLOW=50, FHIGH=180, XTICKS=np.arange(60, 180+1, 20), XTEXT=160, YLABEL='ylabel', TITLE='hello', save='no', figure_path='/home/raul/Desktop/', figure_name='2018_150_00'):
+def plot_residuals(f, r, w, list_names, FIG_SX=7, FIG_SY=12, DY=2, FLOW=50, FHIGH=180, XTICKS=np.arange(60, 180+1, 20), XTEXT=160, YLABEL='ylabel', TITLE='hello', save='no', figure_path='/home/raul/Desktop/', figure_name='2018_150_00', figure_format='png'):
 	
 	# Nspectra_column=35,
 	#Ncol_real = len(r[:,0])/Nspectra_columns
@@ -2709,7 +2707,7 @@ def plot_residuals(f, r, w, list_names, FIG_SX=7, FIG_SY=12, DY=2, FLOW=50, FHIG
 
 	
 	if save == 'yes':		
-		plt.savefig(figure_path + figure_name + '.pdf', bbox_inches='tight')
+		plt.savefig(figure_path + figure_name + '.' + figure_format, bbox_inches='tight')
 		plt.close()
 		plt.close()
 			
@@ -3117,9 +3115,6 @@ def level2_to_level3_old(band, year_day, save='no', save_folder='', save_flag=''
 
 
 	return fin, tc_with_loss_and_beam, w_2D, m_2D          #fin, tc, w_2D, m_2D
-
-
-
 
 
 

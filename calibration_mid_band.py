@@ -1468,6 +1468,7 @@ def FEKO_mid_band_blade_beam(beam_file=1, frequency_interpolation='no', frequenc
 
 	# Shifting beam relative to true AZ (referenced at due North)
 	# Due to angle of orientation of excited antenna panels relative to due North
+	print('AZ_antenna_axis = ' + str(AZ_antenna_axis) + ' deg')
 	if AZ_antenna_axis < 0:
 		AZ_index          = -AZ_antenna_axis
 		bm1               = beam_maps[:,:,AZ_index::]
@@ -1608,7 +1609,7 @@ def antenna_beam_factor(name_save, beam_file=1, rotation_from_north=90, band_deg
 
 
 	#for i in range(len(LST)):
-	for i in range(len(LST)): # range(1):
+	for i in range(len(LST)):  # range(1):   #
 
 
 		print(name_save + '. LST: ' + str(i+1) + ' out of 72')
@@ -1726,22 +1727,22 @@ def antenna_beam_factor(name_save, beam_file=1, rotation_from_north=90, band_deg
 
 
 
-
-def antenna_beam_factor_interpolation(lst_hires, fnew):
-
-	"""
-
+def antenna_beam_factor_interpolation(band, lst_hires, fnew):
 
 	"""
 
 
+	"""
 
-	file_path = '/DATA/EDGES/calibration/beam_factors/mid_band/'
 
-	# Low-Band 1, NIVEDITA, Extended Ground Plane
-	bf_old  = np.genfromtxt(home_folder + file_path + 'mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.62_reffreq_100MHz_data.txt')
-	freq    = np.genfromtxt(home_folder + file_path + 'mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.62_reffreq_100MHz_freq.txt')
-	lst_old = np.genfromtxt(home_folder + file_path + 'mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.62_reffreq_100MHz_LST.txt')
+
+	# Mid-Band
+	if band == 'mid_band':
+
+		file_path = edges_folder + 'mid_band/calibration/beam_factors/raw/'
+		bf_old  = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.62_reffreq_100MHz_data.txt')
+		freq    = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.62_reffreq_100MHz_freq.txt')
+		lst_old = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.62_reffreq_100MHz_LST.txt')
 
 	
 
@@ -1779,6 +1780,102 @@ def antenna_beam_factor_interpolation(lst_hires, fnew):
 
 
 	return bf_2D_hires   #beam_factor_model  #, freq_hires, bf_lst_average
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def beam_factor_table_computation(f, N_lst, file_name_hdf5):
+
+
+	# Produce the beam factor at high resolution
+	# ------------------------------------------
+	#N_lst = 6000   # number of LST points within 24 hours
+	
+	
+	lst_hires = np.arange(0,24,24/N_lst)
+	bf        = antenna_beam_factor_interpolation('mid_band', lst_hires, f)
+	
+	
+	
+	# Save
+	# ----
+	file_path = edges_folder + '/mid_band/calibration/beam_factors/raw/'
+	with h5py.File(file_path + file_name_hdf5, 'w') as hf:
+		hf.create_dataset('frequency',           data = f)
+		hf.create_dataset('lst',                 data = lst_hires)
+		hf.create_dataset('beam_factor',         data = bf)		
+		
+	return 0
+
+
+
+
+
+
+
+
+
+def beam_factor_table_read(path_file):
+
+	# path_file = home_folder + '/EDGES/calibration/beam_factors/mid_band/file.hdf5'
+
+	# Show keys (array names inside HDF5 file)
+	with h5py.File(path_file,'r') as hf:
+
+		hf_freq  = hf.get('frequency')
+		f        = np.array(hf_freq)
+
+		hf_lst   = hf.get('lst')
+		lst      = np.array(hf_lst)
+
+		hf_bf    = hf.get('beam_factor')
+		bf       = np.array(hf_bf)
+
+	return f, lst, bf	
+
+
+
+
+
+
+
+
+
+def beam_factor_table_evaluate(f_table, lst_table, bf_table, lst_in):
+	
+	# f_table, lst_table, bf_table = eg.beam_factor_table_read('/data5/raul/EDGES/calibration/beam_factors/mid_band/beam_factor_table_hires.hdf5')
+	
+	beam_factor = np.zeros((len(lst_in), len(f_table)))
+	
+	for i in range(len(lst_in)):
+		d = np.abs(lst_table - lst_in[i])
+		
+		index = np.argsort(d)
+		IX = index[0]
+		
+		beam_factor[i,:] = bf_table[IX,:]
+				
+	return beam_factor
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1895,6 +1992,20 @@ def corrected_antenna_s11(day, save_name_flag):
 	np.savetxt(path_save + 'antenna_s11_2018_' + str(day) + save_name_flag + '.txt', ra, header='freq [MHz]   real(s11)   imag(s11)')
 	
 	return ra, a_all
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

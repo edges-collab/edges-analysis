@@ -7,7 +7,10 @@ import edges as eg
 from os import listdir
 
 
-home_folder = '/data5/raul'
+import os, sys
+edges_folder       = os.environ['EDGES']
+print('EDGES Folder: ' + edges_folder)
+
 
 
 
@@ -1121,75 +1124,108 @@ def batch_mid_band_level2_to_level3(case):
 
 
 	# Case selection
+	if case == 0:
+		flag_folder       = 'case0'
+		receiver_cal_file = 1
+		antenna_s11_day   = 147
+		antenna_s11_Nfit  = 14
+		beam_correction   = 0
+		balun_correction  = 0
+		FLOW  = 60
+		FHIGH = 160
+		Nfg   = 7
+	
+	
 	if case == 1:
-		flag_folder       = 'nominal_60_160MHz_case1'
+		flag_folder       = 'case1'
 		receiver_cal_file = 1
 		antenna_s11_day   = 147
 		antenna_s11_Nfit  = 14
+		beam_correction   = 0
+		balun_correction  = 1
 		FLOW  = 60
 		FHIGH = 160
 		Nfg   = 7
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	#if case == 1:
+		#flag_folder       = 'nominal_60_160MHz_case1'
+		#receiver_cal_file = 1
+		#antenna_s11_day   = 147
+		#antenna_s11_Nfit  = 14
+		#FLOW  = 60
+		#FHIGH = 160
+		#Nfg   = 7
 
 		
 		
-	# Case selection
-	if case == 2:
-		flag_folder       = 'nominal_60_160MHz_case2'
-		receiver_cal_file = 1
-		antenna_s11_day   = 147
-		antenna_s11_Nfit  = 22
-		FLOW  = 60
-		FHIGH = 160
-		Nfg   = 7		
+	## Case selection
+	#if case == 2:
+		#flag_folder       = 'nominal_60_160MHz_case2'
+		#receiver_cal_file = 1
+		#antenna_s11_day   = 147
+		#antenna_s11_Nfit  = 22
+		#FLOW  = 60
+		#FHIGH = 160
+		#Nfg   = 7		
 	
 		
 		
-	# Case selection
-	if case == 3:
-		flag_folder       = 'nominal_60_160MHz_case3'
-		receiver_cal_file = 1
-		antenna_s11_day   = 222
-		antenna_s11_Nfit  = 14
-		FLOW  = 60
-		FHIGH = 160
-		Nfg   = 7
+	## Case selection
+	#if case == 3:
+		#flag_folder       = 'nominal_60_160MHz_case3'
+		#receiver_cal_file = 1
+		#antenna_s11_day   = 222
+		#antenna_s11_Nfit  = 14
+		#FLOW  = 60
+		#FHIGH = 160
+		#Nfg   = 7
 		
-		print(antenna_s11_Nfit)
+		#print(antenna_s11_Nfit)
 		
 		
 
-	# Case selection
-	if case == 4:
-		flag_folder       = 'nominal_60_160MHz_case4'
-		receiver_cal_file = 1
-		antenna_s11_day   = 222
-		antenna_s11_Nfit  = 22
-		FLOW  = 60
-		FHIGH = 160
-		Nfg   = 7
+	## Case selection
+	#if case == 4:
+		#flag_folder       = 'nominal_60_160MHz_case4'
+		#receiver_cal_file = 1
+		#antenna_s11_day   = 222
+		#antenna_s11_Nfit  = 22
+		#FLOW  = 60
+		#FHIGH = 160
+		#Nfg   = 7
 
 	
 	
-	# Case selection
-	if case == 5:
-		flag_folder       = 'nominal_60_160MHz_case5'
-		receiver_cal_file = 2
-		antenna_s11_day   = 147
-		antenna_s11_Nfit  = 14
-		FLOW  = 60
-		FHIGH = 160
-		Nfg   = 7
+	## Case selection
+	#if case == 5:
+		#flag_folder       = 'nominal_60_160MHz_case5'
+		#receiver_cal_file = 2
+		#antenna_s11_day   = 147
+		#antenna_s11_Nfit  = 14
+		#FLOW  = 60
+		#FHIGH = 160
+		#Nfg   = 7
 	
 
 
 
 
 	# Listing files to be processed
-	path_files = home_folder + '/EDGES/spectra/level2/mid_band/'
+	path_files = edges_folder + 'mid_band/spectra/level2/'
 	old_list   = listdir(path_files)
 	old_list.sort()
 	
-	bad_files = ['2018_153_00.hdf5', '2018_154_00.hdf5', '2018_155_00.hdf5', '2018_156_00.hdf5', '2018_158_00.hdf5', '2018_168_00.hdf5', '2018_183_00.hdf5', '2018_194_00.hdf5', '2018_202_00.hdf5', '2018_203_00.hdf5', '2018_206_00.hdf5', '2018_207_00.hdf5']
+	bad_files = ['2018_153_00.hdf5', '2018_154_00.hdf5', '2018_155_00.hdf5', '2018_156_00.hdf5', '2018_158_00.hdf5', '2018_168_00.hdf5', '2018_183_00.hdf5', '2018_194_00.hdf5', '2018_202_00.hdf5', '2018_203_00.hdf5', '2018_206_00.hdf5', '2018_207_00.hdf5', '2018_213_00.hdf5', '2018_221_00.hdf5', '2018_222_00.hdf5']
 	
 	new_list = []
 	for i in range(len(old_list)):
@@ -1201,10 +1237,59 @@ def batch_mid_band_level2_to_level3(case):
 	# Processing files
 	for i in range(len(new_list)):
 	
-		o = eg.level2_to_level3('mid_band', new_list[i], flag_folder=flag_folder, receiver_cal_file=receiver_cal_file, antenna_s11_year=2018, antenna_s11_day=antenna_s11_day, antenna_s11_Nfit=antenna_s11_Nfit, FLOW=FLOW, FHIGH=FHIGH, Nfg=Nfg)
+		o = eg.level2_to_level3('mid_band', new_list[i], flag_folder=flag_folder, receiver_cal_file=receiver_cal_file, antenna_s11_year=2018, antenna_s11_day=antenna_s11_day, antenna_s11_Nfit=antenna_s11_Nfit, beam_correction=beam_correction, balun_correction=balun_correction, FLOW=FLOW, FHIGH=FHIGH, Nfg=Nfg)
 		
 
 	return new_list #0
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def temporary_two_calibrations():
+	
+	x = batch_mid_band_level2_to_level3(0)
+	x = batch_mid_band_level2_to_level3(1)
+	
+	return 0
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1480,6 +1565,73 @@ def plots_for_midband_verification_paper(antenna_reflection_loss='no', beam_fact
 	
 		
 	return 0
+
+
+
+
+
+
+
+
+
+
+def plot_residuals_simulated_antenna_temperature(model, title):
+	
+	if model == 1:
+		t   = np.genfromtxt(edges_folder + 'mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.62_reffreq_100MHz_tant.txt')
+		lst = np.genfromtxt(edges_folder + 'mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.62_reffreq_100MHz_LST.txt')
+		f   = np.genfromtxt(edges_folder + 'mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.62_reffreq_100MHz_freq.txt')
+		
+	if model == 2:
+		t   = np.genfromtxt(edges_folder + 'mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.5_reffreq_80MHz_tant.txt')
+		lst = np.genfromtxt(edges_folder + 'mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.5_reffreq_80MHz_LST.txt')
+		f   = np.genfromtxt(edges_folder + 'mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.5_reffreq_80MHz_freq.txt')	
+	
+	
+	
+	
+	# Converting LST to GHA
+	gha          = lst - 17.76
+	gha[gha < 0] = gha[gha < 0] + 24
+	
+	IX  = np.argsort(gha)
+	gha = gha[IX]
+	t   = t[IX,:]
+	
+
+	t1 = np.zeros((24, len(f)))
+	for i in range(24):
+		tb   = t[(gha>=i) & (gha<=i+1),:]
+		print(gha[(gha>=i) & (gha<=i+1)])
+		avtb = np.mean(tb, axis=0)
+		t1[i,:] = avtb
+		
+	
+	w   = np.ones((len(t1[:,0]), len(t[0,:])))
+	fx, rx, wx = eg.spectra_to_residuals(f, t1, w, 60, 160, 5)
+	index      = np.arange(0,24,1)
+	
+	
+	plt.figure()
+	o = eg.plot_residuals(fx, rx[index,:], wx[index,:], np.arange(len(index)), FIG_SX=7, FIG_SY=12, DY=3, FLOW=30, FHIGH=165, XTICKS=np.arange(60, 160+1, 20), XTEXT=55, YLABEL='3 K per division', TITLE=title, save='no')
+
+	
+	return 0
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
