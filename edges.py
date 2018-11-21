@@ -1843,13 +1843,20 @@ def level3_to_level4(case):
 				avw[(f>145.5) & (f<146)]   = 0
 				
 				avr[(f>149.8) & (f<150.3)] = 0
-				avw[(f>149.8) & (f<150.3)] = 0					
+				avw[(f>149.8) & (f<150.3)] = 0
+
+
+
+				## RFI cleaning of average spectra
+				#avr_no_rfi, avw_no_rfi = rfi.cleaning_sweep(f, avr, avw, window_width_MHz=3, Npolyterms_block=2, N_choice=20, N_sigma=3)				
+				
+				
 				
 			
 				# Storing averages	
 				avp_all[i,j,:] = avp
-				avr_all[i,j,:] = avr
-				avw_all[i,j,:] = avw
+				avr_all[i,j,:] = avr #_no_rfi
+				avw_all[i,j,:] = avw #_no_rfi
 			
 
 
@@ -2261,30 +2268,40 @@ def one_hour_filter(year, day, gha):
 
 
 
-def season_integrated_spectra_GHA(new_gha_edges=np.arange(0,25,2)):
+def season_integrated_spectra_GHA(band, case, new_gha_edges=np.arange(0,25,2), data_save_name = 'caseX_1hr_average'):
 	
-	data_save_path = '/data5/raul/EDGES/spectra/level5/mid_band/case2/'
-	data_save_name = 'case2_24hr_average'
 	
+	if case == 0:
+		case_str = 'case0'
+	
+	if case == 1:
+		case_str = 'case1'
+
+
+	data_save_path = edges_folder + band + '/spectra/level5/' + case_str + '/'
 	
 	
 	# Loading level4 data
-	f, p_all, r_all, w_all, gha_edges, yd = level4read('/data5/raul/EDGES/spectra/level4/mid_band/case2/case2.hdf5')
+	f, p_all, r_all, w_all, gha_edges, yd = level4read(edges_folder + band + '/spectra/level4/' + case_str + '/' + case_str + '.hdf5')
 
+
+	# Creating intermediate 1hr-average arrays
 	pr_all = np.zeros((len(gha_edges)-1, len(p_all[0,0,:])))
 	rr_all = np.zeros((len(gha_edges)-1, len(f)))
 	wr_all = np.zeros((len(gha_edges)-1, len(f)))	
 
 
 	
-	# Looping over GHA
+	# Looping over every 1hr GHA
 	for j in range(len(gha_edges)-1):
 		
 		# Looping over day
 		counter = 0
 		for i in range(len(yd)):
 			
+			# Returns a 1 if the 1hr average tested is good quality, and a 0 if it is not
 			keep = one_hour_filter(yd[i,0], yd[i,1], gha_edges[j])
+			print(yd[i,1])
 			print(gha_edges[j])
 			
 			# Index of good spectra
@@ -2309,31 +2326,15 @@ def season_integrated_spectra_GHA(new_gha_edges=np.arange(0,25,2)):
 		
 		
 		# RFI cleaning of average spectra
-		avr_no_rfi, avw_no_rfi = rfi.cleaning_sweep(f, avr, avw, window_width_MHz=5, Npolyterms_block=3, N_choice=20, N_sigma=3)
+		avr_no_rfi, avw_no_rfi = rfi.cleaning_sweep(f, avr, avw, window_width_MHz=3, Npolyterms_block=2, N_choice=20, N_sigma=3)
 		
 		
-		# Storing average spectra
+		# Storing season 1hr-average spectra
 		pr_all[j,:] = avp			
 		rr_all[j,:] = avr_no_rfi
 		wr_all[j,:] = avw_no_rfi
 		
 		
-		## Frequency binning
-		#fb, rb, wb = ba.spectral_binning_number_of_samples(f, avr_no_rfi, avw_no_rfi)
-		#model      = ba.model_evaluate('LINLOG', avp, fb/200)
-		#tb         = model + rb
-		#tb[wb==0]  = 0
-		
-		
-		## Storing binned average spectra
-		#if j == 0:
-			#tb_all = np.zeros((len(gha_edges)-1, len(fb)))
-			#wb_all = np.zeros((len(gha_edges)-1, len(fb)))
-						
-		#tb_all[j,:] = tb
-		#wb_all[j,:] = wb			
-	
-	
 	
 	
 	
@@ -2343,14 +2344,7 @@ def season_integrated_spectra_GHA(new_gha_edges=np.arange(0,25,2)):
 		
 		
 	
-		#pry_all = np.zeros((len(new_gha_edges)-1, len(pr_all[0,:])))
-		#rry_all = np.zeros((len(new_gha_edges)-1, len(f)))
-		#wry_all = np.zeros((len(new_gha_edges)-1, len(f)))			
-		
-	
-	
-	
-		
+	# Averaging data within new gha edges
 	for j in range(len(new_gha_edges)-1):
 		new_gha_start  = new_gha_edges[j]
 		new_gha_end    = new_gha_edges[j+1]
@@ -2396,7 +2390,7 @@ def season_integrated_spectra_GHA(new_gha_edges=np.arange(0,25,2)):
 		avpx       = np.mean(px_all, axis=0)		
 		avrx, avwx = ba.weighted_mean(rx_all, wx_all)
 		
-		avrx_no_rfi, avwx_no_rfi = rfi.cleaning_sweep(f, avrx, avwx, window_width_MHz=5, Npolyterms_block=3, N_choice=20, N_sigma=3)
+		avrx_no_rfi, avwx_no_rfi = rfi.cleaning_sweep(f, avrx, avwx, window_width_MHz=3, Npolyterms_block=2, N_choice=20, N_sigma=3)
 				
 				
 		## Storing average spectra
@@ -2427,36 +2421,26 @@ def season_integrated_spectra_GHA(new_gha_edges=np.arange(0,25,2)):
 
 
 
-		# Formatting output data
-		new_gha_edges_column = np.reshape(new_gha_edges, -1, 1)
+		## Formatting output data
+		#new_gha_edges_column = np.reshape(new_gha_edges, -1, 1)
 		
-		dataT = np.array([fb, tbx_all[0,:], wbx_all[0,:]])
-		for i in range(len(tbx_all[:,0])-1):
-			dataT = np.vstack((dataT, tbx_all[i+1,:], wbx_all[i+1,:]))
+		#dataT = np.array([fb, tbx_all[0,:], wbx_all[0,:]])
+		#for i in range(len(tbx_all[:,0])-1):
+			#dataT = np.vstack((dataT, tbx_all[i+1,:], wbx_all[i+1,:]))
 			
-		data = dataT.T
+		#data = dataT.T
 		
 		
 		# Saving data				
-		np.savetxt(data_save_path + data_save_name + '_gha_edges' + '.txt', new_gha_edges_column,  header = 'GHA edges of integrated spectra [hr]')
-		np.savetxt(data_save_path + data_save_name + '_data' + '.txt',      data,                  header = 'Frequency [MHz],\t Temperature [K],\t Weights')
+		np.savetxt(data_save_path + data_save_name + '_gha_edges.txt',    new_gha_edges,  header = 'GHA edges of integrated spectra [hr].')
+		np.savetxt(data_save_path + data_save_name + '_frequency.txt',    fb,             header = 'Frequency [MHz].')
+		np.savetxt(data_save_path + data_save_name + '_temperature.txt',  tbx_all,        header = 'Rows correspond to different GHAs. Columns correspond to frequency.')
+		np.savetxt(data_save_path + data_save_name + '_weights.txt',      wbx_all,        header = 'Rows correspond to different GHAs. Columns correspond to frequency.')
 		
 
 
 
-			
-	
-	
-	
-	
-
-
-	
-		
-
-	
-
-	return fb, tbx_all, wbx_all   #f, pr_all, rr_all, wr_all, pry_all, rry_all, wry_all
+	return fb, tbx_all, wbx_all
 
 
 
