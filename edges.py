@@ -1021,7 +1021,7 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 		if balun_correction == 1:
 			Gb, Gc = balun_and_connector_loss(fin, s11_ant)
 			G      = Gb*Gc
-
+		
 		
 		
 		# Receiver calibration quantities
@@ -1847,16 +1847,16 @@ def level3_to_level4(case):
 
 
 
-				## RFI cleaning of average spectra
-				#avr_no_rfi, avw_no_rfi = rfi.cleaning_sweep(f, avr, avw, window_width_MHz=3, Npolyterms_block=2, N_choice=20, N_sigma=3)				
+				# RFI cleaning of average spectra
+				avr_no_rfi, avw_no_rfi = rfi.cleaning_sweep(f, avr, avw, window_width_MHz=3, Npolyterms_block=2, N_choice=20, N_sigma=3)				
 				
 				
 				
 			
 				# Storing averages	
 				avp_all[i,j,:] = avp
-				avr_all[i,j,:] = avr #_no_rfi
-				avw_all[i,j,:] = avw #_no_rfi
+				avr_all[i,j,:] = avr_no_rfi
+				avw_all[i,j,:] = avw_no_rfi
 			
 
 
@@ -2325,7 +2325,7 @@ def season_integrated_spectra_GHA(band, case, new_gha_edges=np.arange(0,25,2), d
 		avr, avw = ba.weighted_mean(rr, ww)
 		
 		
-		# RFI cleaning of average spectra
+		# RFI cleaning of 1-hr season average spectra
 		avr_no_rfi, avw_no_rfi = rfi.cleaning_sweep(f, avr, avw, window_width_MHz=3, Npolyterms_block=2, N_choice=20, N_sigma=3)
 		
 		

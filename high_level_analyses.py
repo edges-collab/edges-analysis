@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 import edges as eg
+import basic as ba
 
 from os import listdir
 
@@ -1608,12 +1609,15 @@ def plot_residuals_simulated_antenna_temperature(model, title):
 		
 	
 	w   = np.ones((len(t1[:,0]), len(t[0,:])))
-	fx, rx, wx = eg.spectra_to_residuals(f, t1, w, 60, 160, 5)
+	fx, rx, wx = eg.spectra_to_residuals(f, t1, w, 61, 159, 5)
 	index      = np.arange(0,24,1)
+	
+	ar     = np.arange(0,25,1)
+	str_ar = ['GHA=' + str(ar[i]) + '-' + str(ar[i+1]) + ' hr' for i in range(len(ar)-1)]	
 	
 	
 	plt.figure()
-	o = eg.plot_residuals(fx, rx[index,:], wx[index,:], np.arange(len(index)), FIG_SX=7, FIG_SY=12, DY=3, FLOW=30, FHIGH=165, XTICKS=np.arange(60, 160+1, 20), XTEXT=55, YLABEL='3 K per division', TITLE=title, save='no')
+	o = eg.plot_residuals(fx, rx[index,:], wx[index,:], str_ar, FIG_SX=7, FIG_SY=12, DY=1.5, FLOW=30, FHIGH=165, XTICKS=np.arange(60, 160+1, 20), XTEXT=32, YLABEL='1.5 K per division', TITLE=title, save='yes', figure_name='simulation', figure_format='pdf')
 
 	
 	return 0
@@ -1625,12 +1629,66 @@ def plot_residuals_simulated_antenna_temperature(model, title):
 
 
 
+def plot_residuals_averages_2hr_gha():
+	
+	fb = np.genfromtxt('/home/raul/DATA/EDGES/mid_band/spectra/level5/case1/case1_2hr_average_frequency.txt')
+	ty = np.genfromtxt('/home/raul/DATA/EDGES/mid_band/spectra/level5/case1/case1_2hr_average_temperature.txt')
+	wy = np.genfromtxt('/home/raul/DATA/EDGES/mid_band/spectra/level5/case1/case1_2hr_average_weights.txt')
+	
+	ff, rr, ww = eg.spectra_to_residuals(fb, ty, wy, 61, 159, 5) 
+	
+	ar     = np.arange(0,25,2)
+	str_ar = ['GHA=' + str(ar[i]) + '-' + str(ar[i+1]) + ' hr' for i in range(len(ar)-1)]
+	
+	o = eg.plot_residuals(ff, rr, ww, str_ar, FIG_SX=7, FIG_SY=12, DY=1.5, FLOW=30, FHIGH=165, XTICKS=np.arange(60, 160+1, 20), XTEXT=32, YLABEL='1.5 K per division', TITLE='No Beam Correction, Residuals to 5 LINLOG terms, 61-159 MHz', save='yes', figure_name='mid_band', figure_format='pdf')
+	
+	return 0
 
 
 
 
 
 
+def beam_correction_check(FLOW, FHIGH, SP, Nfg):
+	
+	tt  = np.genfromtxt(edges_folder + 'mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.5_reffreq_80MHz_tant.txt')
+	bb  = np.genfromtxt(edges_folder + 'mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.5_reffreq_80MHz_data.txt')
+	ff  = np.genfromtxt(edges_folder + 'mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.5_reffreq_80MHz_freq.txt')
+	lst = np.genfromtxt(edges_folder + 'mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.5_reffreq_80MHz_LST.txt')
+	
+	t = tt[:,(ff>=FLOW) & (ff<=FHIGH)]
+	b = bb[:,(ff>=FLOW) & (ff<=FHIGH)]
+	f = ff[(ff>=FLOW) & (ff<=FHIGH)]
+	
+	
+	plt.figure(1);plt.imshow(b, interpolation='none', aspect='auto', vmin=0.99, vmax=1.01); plt.colorbar()
+	
+	
+	
+	
+	#tc = t/b
+	
+	#p1 = ba.fit_polynomial_fourier('LINLOG', f/80, t[SP,:], Nfg)
+	
+	#p2 = ba.fit_polynomial_fourier('LINLOG', f/80, tc[SP,:], Nfg)
+	
+	#plt.plot(f, t[SP,:] - p1[1])
+	#plt.plot(f, tc[SP,:] - p2[1])
+	
+	
+	
+	
+	
+	f_t, lst_t, bf_t = cmb.beam_factor_table_read(edges_folder + 'mid_band/calibration/beam_factors/table/table_hires_mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.62_reffreq_100MHz.hdf5')
+	
+	plt.figure(2);plt.imshow(bf_t, interpolation='none', aspect='auto', vmin=0.99, vmax=1.01); plt.colorbar()
+	
+	
+	
+	
+	
+		
+	return f, lst, b
 
 
 

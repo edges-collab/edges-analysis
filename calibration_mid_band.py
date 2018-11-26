@@ -19,6 +19,7 @@ import astropy.units as apu
 import astropy.time as apt
 import astropy.coordinates as apc
 
+import h5py
 
 
 

@@ -23,18 +23,18 @@ src = ares.sources.SynthesisModel(source_Z=0.024, source_sed='eldridge2009')
 
 
 def model_mirocha2016(theta):
-	
+
 	"""
-	
+
 	Usage:
-	
+
 	z, t = model_mirocha2016([np.log10(1e-2), np.log10(1e4), np.log10(1e-2), np.log10(1e40), 20, -0.5])
-	
+
 	"""
 
 
 
-	
+
 
 	# Assign new values to list
 	theta_list = \
@@ -64,25 +64,25 @@ def model_mirocha2016(theta):
 
 	# New list of parameter values
 	updates = {}
-	
+
 	# Go parameter by parameter, and copy new value to list
 	for parameter in theta_list.keys():
-		
+
 		# Copy new value in log or linear  scale
 		if is_log[parameter]:
-			
+
 			# New value of parameter in log scale
 			value_log = theta_list[parameter]			
-			
+
 			# Store parameter in linear scale
 			updates[parameter] = 10**(value_log)
-			
-			
+
+
 		else:
-			
+
 			# New value of parameter in linear scale
 			value_linear = theta_list[parameter]			
-			
+
 			# Store parameter in linear scale
 			updates[parameter] = value_linear
 
@@ -92,7 +92,7 @@ def model_mirocha2016(theta):
 
 	# Create new parameter object
 	p = pars.copy()
-	
+
 
 	# Assign star properties (loaded at the top of the file, IS THIS NECESSARY???????, or can we DO IT ONLY AT THE TOP)
 	p['hmf_instance']     = hmf
@@ -101,18 +101,18 @@ def model_mirocha2016(theta):
 
 	# Assign input values to parameter object
 	p.update(updates)
-	
+
 
 	# Run simulation
 	sim = ares.simulations.Global21cm(**p)
 	sim.run()
-	
-	
+
+
 	# Extracting brightness temperature and redshift
 	hist = sim.history
 	t    = hist['dTb']
 	z    = hist['z']
-	
+
 	return z, t
 
 
@@ -130,25 +130,25 @@ def model_mirocha2016(theta):
 
 ## This is for doing sweeps
 #ranges = \
-        #{
-                #'pop_Z{0}': (1e-3, 0.04),
-                #'pop_Tmin{0}': (500., 5e5),
-                #'pop_fesc{0}': (1e-3, 0.5),
-                #'pop_rad_yield{1}': (1e38, 1e42),
-                #'pop_logN{1}': (17., 23.),
-                #'pop_rad_yield_Z_index{1}': (-1., 0.),
-        #}
+	#{
+		#'pop_Z{0}': (1e-3, 0.04),
+		#'pop_Tmin{0}': (500., 5e5),
+		#'pop_fesc{0}': (1e-3, 0.5),
+		#'pop_rad_yield{1}': (1e38, 1e42),
+		#'pop_logN{1}': (17., 23.),
+		#'pop_rad_yield_Z_index{1}': (-1., 0.),
+	#}
 
 
 #is_log = \
-        #{
-                #'pop_Z{0}': True,
-                #'pop_Tmin{0}': True,
-                #'pop_fesc{0}': True,
-                #'pop_rad_yield{1}': True,
-                #'pop_logN{1}': False,
-                #'pop_rad_yield_Z_index{1}': False,
-        #}
+	#{
+		#'pop_Z{0}': True,
+		#'pop_Tmin{0}': True,
+		#'pop_fesc{0}': True,
+		#'pop_rad_yield{1}': True,
+		#'pop_logN{1}': False,
+		#'pop_rad_yield_Z_index{1}': False,
+	#}
 
 
 
@@ -174,7 +174,7 @@ def model_mirocha2016(theta):
 	## Run & plot result
 	#sim = ares.simulations.Global21cm(**p)
 	#sim.run()
-	
+
 
 
 
