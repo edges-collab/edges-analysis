@@ -884,3 +884,41 @@ def uncalibrated_antenna_temperature(Td, rd, rl, sca, off, TU, TC, TS, Tamb_inte
 
 
 
+
+
+
+def frequency2redshift(fe):
+	"""
+
+	"""
+	# Constants and definitions
+	c    = 299792458	# wikipedia, m/s
+	f21  = 1420.40575177e6  # wikipedia,    
+	l21  = c / f21          # frequency to wavelength, as emitted 
+	l    = c / (fe * 1e6)   # frequency to wavelength, observed. fe comes in MHz but it has to be converted to Hertz
+	z    = (l - l21) / l21  # wavelegth to redshift	
+
+	return z
+
+
+
+
+
+def redshift2frequency(z):
+	"""
+
+	"""
+	# Constants and definitions
+	c    = 299792458	# wikipedia, m/s
+	f21  = 1420.40575177e6  # wikipedia,    
+	l21  = c / f21          # frequency to wavelength, as emitted
+	l    = l21 * (1 + z)
+	f    = c / (l * 1e6)
+	return f
+
+
+
+
+
+
+

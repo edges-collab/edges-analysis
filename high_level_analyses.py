@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 import edges as eg
 import basic as ba
 
+import calibration_mid_band as cmb
+
 from os import listdir
 
 
@@ -1149,7 +1151,17 @@ def batch_mid_band_level2_to_level3(case):
 		Nfg   = 7
 	
 	
-	
+	if case == 2:
+		flag_folder       = 'case2'
+		receiver_cal_file = 1
+		antenna_s11_day   = 147
+		antenna_s11_Nfit  = 14
+		beam_correction   = 1
+		balun_correction  = 1
+		FLOW  = 60
+		FHIGH = 160
+		Nfg   = 7
+
 	
 	
 	
@@ -1236,7 +1248,10 @@ def batch_mid_band_level2_to_level3(case):
 		
 
 	# Processing files
-	for i in range(len(new_list)):
+	#for i in range(len(new_list)):
+	for i in range(10, len(new_list)):
+		print(i)
+		print(new_list[i])
 	
 		o = eg.level2_to_level3('mid_band', new_list[i], flag_folder=flag_folder, receiver_cal_file=receiver_cal_file, antenna_s11_year=2018, antenna_s11_day=antenna_s11_day, antenna_s11_Nfit=antenna_s11_Nfit, beam_correction=beam_correction, balun_correction=balun_correction, FLOW=FLOW, FHIGH=FHIGH, Nfg=Nfg)
 		
@@ -1651,10 +1666,17 @@ def plot_residuals_averages_2hr_gha():
 
 def beam_correction_check(FLOW, FHIGH, SP, Nfg):
 	
-	tt  = np.genfromtxt(edges_folder + 'mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.5_reffreq_80MHz_tant.txt')
-	bb  = np.genfromtxt(edges_folder + 'mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.5_reffreq_80MHz_data.txt')
-	ff  = np.genfromtxt(edges_folder + 'mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.5_reffreq_80MHz_freq.txt')
-	lst = np.genfromtxt(edges_folder + 'mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.5_reffreq_80MHz_LST.txt')
+	#tt  = np.genfromtxt(edges_folder + 'mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.5_reffreq_80MHz_tant.txt')
+	#bb  = np.genfromtxt(edges_folder + 'mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.5_reffreq_80MHz_data.txt')
+	#ff  = np.genfromtxt(edges_folder + 'mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.5_reffreq_80MHz_freq.txt')
+	#lst = np.genfromtxt(edges_folder + 'mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.5_reffreq_80MHz_LST.txt')
+	
+	tt  = np.genfromtxt(edges_folder + 'mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.62_reffreq_100MHz_tant.txt')
+	bb  = np.genfromtxt(edges_folder + 'mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.62_reffreq_100MHz_data.txt')
+	ff  = np.genfromtxt(edges_folder + 'mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.62_reffreq_100MHz_freq.txt')
+	lst = np.genfromtxt(edges_folder + 'mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.62_reffreq_100MHz_LST.txt')	
+	
+	
 	
 	t = tt[:,(ff>=FLOW) & (ff<=FHIGH)]
 	b = bb[:,(ff>=FLOW) & (ff<=FHIGH)]
@@ -1680,15 +1702,105 @@ def beam_correction_check(FLOW, FHIGH, SP, Nfg):
 	
 	
 	f_t, lst_t, bf_t = cmb.beam_factor_table_read(edges_folder + 'mid_band/calibration/beam_factors/table/table_hires_mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.62_reffreq_100MHz.hdf5')
+	#f_t, lst_t, bf_t = cmb.beam_factor_table_read(edges_folder + 'mid_band/calibration/beam_factors/table/table_hires_mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.5_reffreq_80MHz.hdf5')
 	
 	plt.figure(2);plt.imshow(bf_t, interpolation='none', aspect='auto', vmin=0.99, vmax=1.01); plt.colorbar()
 	
 	
 	
 	
+	lin = np.arange(0,24,1)
+	bf  = cmb.beam_factor_table_evaluate(f_t, lst_t, bf_t, lin)
+	
+	plt.figure(3);plt.imshow(bf, interpolation='none', aspect='auto', vmin=0.99, vmax=1.01); plt.colorbar()
+	
+	
+	
+	
+	
 	
 		
-	return f, lst, b
+	return f, f_t
+
+
+
+
+
+
+def plot_mid_band_for_talk():
+	
+	f = np.genfromtxt('/home/raul/DATA/EDGES/mid_band/spectra/level5/case2/case2_2hr_average_2.5_frequency.txt')
+	t = np.genfromtxt('/home/raul/DATA/EDGES/mid_band/spectra/level5/case2/case2_2hr_average_2.5_temperature.txt')
+	w = np.genfromtxt('/home/raul/DATA/EDGES/mid_band/spectra/level5/case2/case2_2hr_average_2.5_weights.txt')
+	
+	
+	ff1, rr1, ww1 = eg.spectra_to_residuals(f, t, w, 61, 159, 3)
+	ff2, rr2, ww2 = eg.spectra_to_residuals(f, t, w, 61, 159, 4)
+	
+	X=7; 
+	
+	
+	#h1, = plt.plot(ff2[ww2[X,:]>0], rr2[X,ww2[X,:]>0])
+	#h2, = plt.plot(ff1[ww1[X,:]>0], rr1[X,ww1[X,:]>0])
+	#h3, = plt.plot(ff2[ww2[X,:]>0], rr2[X,ww2[X,:]>0], 'b')
+	#h4, = plt.plot([78, 78],[-5, 5], 'g--', linewidth=2)
+	#plt.ylim([-3,2])
+	
+	#plt.ylabel('brightness temperature [K]')
+	#plt.xlabel('frequency [MHz]') 
+	
+	
+	#plt.legend([h2, h3, h4], ['3 foreground terms','4 foreground terms', '78 MHz'])
+	
+	
+	
+	
+	
+	
+	fig, ax = plt.subplots()
+	z = ba.frequency2redshift(ff1)
+		
+	h1, = ax.plot(ff2[ww2[X,:]>0], rr2[X,ww2[X,:]>0])
+	h2, = ax.plot(ff1[ww1[X,:]>0], rr1[X,ww1[X,:]>0])
+	h3, = ax.plot(ff2[ww2[X,:]>0], rr2[X,ww2[X,:]>0], 'b')
+	h4, = ax.plot([78, 78],[-5, 5], 'g--', linewidth=2)
+	
+	xlow  = 55
+	xhigh = 165
+	ax.set_xlim([xlow, xhigh])
+	
+	ax2 = ax.twiny()
+	
+	# Fix these lines showing the redshift
+	#ax2.set_xticks(np.array((101-90, 118-90, 142-90, 178-90, ))/len(ff))
+	#ax2.set_xticklabels([int(z[101-90]), int(z[118-90]), int(z[142-90]), int(z[177-90])])
+	
+	
+	
+	
+	
+	ax.set_ylim([-3,2])
+	ax.set_ylabel('brightness temperature [K]')
+	ax2.set_xlabel('redshift')
+	ax.set_xlabel('frequency [MHz]') 
+	
+	plt.legend([h2, h3, h4], ['3 foreground terms','4 foreground terms', '78 MHz'], loc=4)
+	
+	
+	return 0
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

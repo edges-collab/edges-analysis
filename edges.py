@@ -1344,6 +1344,9 @@ def rms_filter_computation(case, save_parameters='no'):
 		path_files  = edges_folder + '/mid_band/spectra/level3/case1/'
 		save_folder = edges_folder + '/mid_band/rms_filters/case1/'
 	
+	if case == 2:
+		path_files  = edges_folder + '/mid_band/spectra/level3/case2/'
+		save_folder = edges_folder + '/mid_band/rms_filters/case2/'	
 
 		
 		
@@ -1653,6 +1656,9 @@ def rms_filter(case, gx, rms, Nsigma):
 	
 	if case == 1:
 		file_path = edges_folder + 'mid_band/rms_filters/case1/'
+		
+	if case == 2:
+		file_path = edges_folder + 'mid_band/rms_filters/case2/'
 
 
 	p    = np.genfromtxt(file_path + 'rms_polynomial_parameters.txt')
@@ -1713,6 +1719,11 @@ def level3_to_level4(case):
 		path_files             = edges_folder + 'mid_band/spectra/level3/case1/'
 		save_folder            = edges_folder + 'mid_band/spectra/level4/case1/'
 		output_file_name_hdf5  = 'case1.hdf5'
+		
+	if case == 2:
+		path_files             = edges_folder + 'mid_band/spectra/level3/case2/'
+		save_folder            = edges_folder + 'mid_band/spectra/level4/case2/'
+		output_file_name_hdf5  = 'case2.hdf5'
 		
 
 
@@ -2052,6 +2063,11 @@ def level4read(path_file):
 def one_hour_filter(year, day, gha):
 	
 	bad = np.array([
+	        [2018, 146, 6],
+	        [2018, 146, 7],
+	        [2018, 146, 8],
+	        [2018, 146, 9],
+	        [2018, 146, 10],
 	        [2018, 151, 9],
 	        [2018, 157, 7],
 	        [2018, 159, 4],
@@ -2276,6 +2292,10 @@ def season_integrated_spectra_GHA(band, case, new_gha_edges=np.arange(0,25,2), d
 	
 	if case == 1:
 		case_str = 'case1'
+		
+	if case == 2:
+		case_str = 'case2'
+
 
 
 	data_save_path = edges_folder + band + '/spectra/level5/' + case_str + '/'
@@ -2326,7 +2346,7 @@ def season_integrated_spectra_GHA(band, case, new_gha_edges=np.arange(0,25,2), d
 		
 		
 		# RFI cleaning of 1-hr season average spectra
-		avr_no_rfi, avw_no_rfi = rfi.cleaning_sweep(f, avr, avw, window_width_MHz=3, Npolyterms_block=2, N_choice=20, N_sigma=3)
+		avr_no_rfi, avw_no_rfi = rfi.cleaning_sweep(f, avr, avw, window_width_MHz=3, Npolyterms_block=2, N_choice=20, N_sigma=2.5) # 3
 		
 		
 		# Storing season 1hr-average spectra
@@ -2390,7 +2410,7 @@ def season_integrated_spectra_GHA(band, case, new_gha_edges=np.arange(0,25,2), d
 		avpx       = np.mean(px_all, axis=0)		
 		avrx, avwx = ba.weighted_mean(rx_all, wx_all)
 		
-		avrx_no_rfi, avwx_no_rfi = rfi.cleaning_sweep(f, avrx, avwx, window_width_MHz=3, Npolyterms_block=2, N_choice=20, N_sigma=3)
+		avrx_no_rfi, avwx_no_rfi = rfi.cleaning_sweep(f, avrx, avwx, window_width_MHz=3, Npolyterms_block=2, N_choice=20, N_sigma=2.5)  # 3
 				
 				
 		## Storing average spectra
