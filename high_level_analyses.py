@@ -1644,20 +1644,62 @@ def plot_residuals_simulated_antenna_temperature(model, title):
 
 
 
-def plot_residuals_averages_2hr_gha():
+def plot_residuals_averages_2hr_gha(case=1, Nfg=3, DDY=1.5, TITLE='No Beam Correction, Residuals to 5 LINLOG terms, 61-159 MHz', figure_name='no_beam_correction'):
 	
-	fb = np.genfromtxt('/home/raul/DATA/EDGES/mid_band/spectra/level5/case1/case1_2hr_average_frequency.txt')
-	ty = np.genfromtxt('/home/raul/DATA/EDGES/mid_band/spectra/level5/case1/case1_2hr_average_temperature.txt')
-	wy = np.genfromtxt('/home/raul/DATA/EDGES/mid_band/spectra/level5/case1/case1_2hr_average_weights.txt')
+	if case == 1:
+		fb = np.genfromtxt('/home/raul/DATA/EDGES/mid_band/spectra/level5/case1/case1_2hr_average_frequency.txt')
+		ty = np.genfromtxt('/home/raul/DATA/EDGES/mid_band/spectra/level5/case1/case1_2hr_average_temperature.txt')
+		wy = np.genfromtxt('/home/raul/DATA/EDGES/mid_band/spectra/level5/case1/case1_2hr_average_weights.txt')
+		
+	if case == 2:
+		fb = np.genfromtxt('/home/raul/DATA/EDGES/mid_band/spectra/level5/case2/case2_2hr_average_frequency.txt')
+		ty = np.genfromtxt('/home/raul/DATA/EDGES/mid_band/spectra/level5/case2/case2_2hr_average_temperature.txt')
+		wy = np.genfromtxt('/home/raul/DATA/EDGES/mid_band/spectra/level5/case2/case2_2hr_average_weights.txt')	
+
+
+		
+		
+		
 	
-	ff, rr, ww = eg.spectra_to_residuals(fb, ty, wy, 61, 159, 5) 
+	ff, rr, ww = eg.spectra_to_residuals(fb, ty, wy, 61, 159, Nfg) 
 	
 	ar     = np.arange(0,25,2)
 	str_ar = ['GHA=' + str(ar[i]) + '-' + str(ar[i+1]) + ' hr' for i in range(len(ar)-1)]
 	
-	o = eg.plot_residuals(ff, rr, ww, str_ar, FIG_SX=7, FIG_SY=12, DY=1.5, FLOW=30, FHIGH=165, XTICKS=np.arange(60, 160+1, 20), XTEXT=32, YLABEL='1.5 K per division', TITLE='No Beam Correction, Residuals to 5 LINLOG terms, 61-159 MHz', save='yes', figure_name='mid_band', figure_format='pdf')
+	o = eg.plot_residuals(ff, rr, ww, str_ar, FIG_SX=7, FIG_SY=12, DY=DDY, FLOW=30, FHIGH=165, XTICKS=np.arange(60, 160+1, 20), XTEXT=32, YLABEL=str(DDY) + ' K per division', TITLE=TITLE, save='yes', figure_name=figure_name, figure_format='pdf')
 	
 	return 0
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1772,17 +1814,20 @@ def plot_mid_band_for_talk():
 	ax2 = ax.twiny()
 	
 	# Fix these lines showing the redshift
-	#ax2.set_xticks(np.array((101-90, 118-90, 142-90, 178-90, ))/len(ff))
-	#ax2.set_xticklabels([int(z[101-90]), int(z[118-90]), int(z[142-90]), int(z[177-90])])
+	#ax2.set_xticks(np.array((60-xlow, 80-xlow, 100-xlow, 120-xlow, 140-xlow, 160-xlow))/len(ff1))
+	ax2.set_xticks(np.array([(59.2-xlow), 78.9-xlow, 101.5-xlow, 129.1-xlow, 157.8-xlow])/(165-55))
+	ax2.set_xticklabels([23, 17, 13, 10, 8])
+	
+	ax.set_yticks([-2, -1, 0, 1, 2])
 	
 	
 	
 	
 	
-	ax.set_ylim([-3,2])
-	ax.set_ylabel('brightness temperature [K]')
-	ax2.set_xlabel('redshift')
-	ax.set_xlabel('frequency [MHz]') 
+	ax.set_ylim([-2.5,2])
+	ax.set_ylabel('brightness temperature [K]', fontsize=12)
+	ax2.set_xlabel('redshift', fontsize=12)
+	ax.set_xlabel('frequency [MHz]', fontsize=12) 
 	
 	plt.legend([h2, h3, h4], ['3 foreground terms','4 foreground terms', '78 MHz'], loc=4)
 	
