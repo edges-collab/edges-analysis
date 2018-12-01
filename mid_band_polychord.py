@@ -3,7 +3,13 @@
 import sys
 import numpy as np
 import scipy as sp
-import matplotlib.pyplot as plt
+import PyPolyChord
+from PyPolyChord.settings import PolyChordSettings
+
+#import matplotlib.pyplot as plt
+
+
+
 
 N21 = int(sys.argv[1])
 Nfg = int(sys.argv[2])
@@ -21,13 +27,22 @@ model_fg = 'LINLOG'
 
 simulated_noise_at_v0_std = 0.03 # K
 
+# Prior limits
+pl = np.zeros((Nparameters, 2))
+pl[:,0] = pl[:,0] + -1e4  # lower limit
+pl[:,1] = pl[:,1] +  1e4  # upper limit
 
+pl[0,0] = 950   # lower limit of first parameter, temperature at 100 MHz
+pl[0,1] = 1050  # upper limit of first parameter, temperature at 100 MHz  
 
+print(pl)
 
 
 v = np.arange(50,101)
 
 
+save_folder = '/home/raul/Desktop/'
+save_file_name = 'test'
 
 
 
@@ -59,7 +74,7 @@ def full_model(theta):
 	model_fg = 0
 	for i in range(Nfg):
 		j = N21 + i
-		print(i)
+		#print(i)
 		model_fg = model_fg      +     theta[j] * ((v/v0)**(-2.5)) * ((np.log(v/v0))**i)
 
 	model = model_21 + model_fg
@@ -135,13 +150,87 @@ def loglikelihood(theta):
 
 
 
+
+
+def prior(cube):
+
+	"""
+
+	A function defining the transform between the parameterisation in the unit hypercube to the true parameters.
+
+	Args: cube (array, list): a list containing the parameters as drawn from a unit hypercube.
+
+	Returns:
+	list: the transformed parameters.
+
+	"""
+
+	theta = np.zeros(len(cube))
+
+
+	for i in range(len(cube)):
+		theta[i] = cube[i] * (pl[i,1] - pl[i,0]) + pl[i,0] 
+
+	return theta
+
+
+
+
+
+
+
+
+def dumper(live, dead, logweights, logZ, logZerr):
+	print(dead[-1])
+
+
+
+
+
+
+
+def run():
+
+	# in python, or ipython >>  
+
+
+	settings               = PolyChordSettings(Nparameters, Nderived)
+	settings.base_dir      = save_folder
+	settings.file_root     = save_file_name 
+	settings.do_clustering = True
+	settings.read_resume   = False
+	output                 = PyPolyChord.run_polychord(loglikelihood, Nparameters, Nderived, settings, prior, dumper)
+
+	return 0
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #
 t, sigma, inv_sigma, det_sigma = simulated_data([1000, 1, 1, -1, 4])  # power law
 #plt.plot(v, t)
 #plt.show()
 
 
-logL = loglikelihood([1000, 1, 1, -1, 40])
+run()
+
+
+
 #print(logL)
 
 
