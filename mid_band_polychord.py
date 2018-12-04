@@ -3,46 +3,48 @@
 import sys
 import numpy as np
 import scipy as sp
+import data_models as dm
+
 import PyPolyChord
 from PyPolyChord.settings import PolyChordSettings
 
-#import matplotlib.pyplot as plt
+
 
 
 
 
 N21 = int(sys.argv[1])
 Nfg = int(sys.argv[2])
+save_file_name = sys.argv[3]
 
 
 
 # Constants
 # -----------------------
-v0          = 100
+v  = np.arange(50, 101, 0.4)
+v0 = 75
+
 Nparameters = N21+Nfg
 Nderived    = 0
 
-model_21 = 'flattened_gaussian'
-model_fg = 'LINLOG'
+#model_21 = 'flattened_gaussian'
+foreground_model = 'exp'
 
-simulated_noise_at_v0_std = 0.03 # K
+save_folder = '/home/raul/Desktop/'
+
+
+
+
 
 # Prior limits
 pl = np.zeros((Nparameters, 2))
 pl[:,0] = pl[:,0] + -1e4  # lower limit
 pl[:,1] = pl[:,1] +  1e4  # upper limit
 
-pl[0,0] = 950   # lower limit of first parameter, temperature at 100 MHz
-pl[0,1] = 1050  # upper limit of first parameter, temperature at 100 MHz  
+pl[0,0] = 1450   # lower limit of first parameter, temperature at 100 MHz
+pl[0,1] = 1550  # upper limit of first parameter, temperature at 100 MHz  
 
 print(pl)
-
-
-v = np.arange(50,101)
-
-
-save_folder = '/home/raul/Desktop/'
-save_file_name = 'test'
 
 
 
@@ -63,19 +65,16 @@ def full_model(theta):
 
 	# 21-cm model
 	model_21 = 0
-	if N21 == 4:
-		model_21 = model_eor_flattened_gaussian(model_type=1, T21=theta[0], vr=theta[1], dv=theta[2], tau0=theta[3], tilt=0)
+	#if N21 == 4:
+		#model_21 = model_eor_flattened_gaussian(model_type=1, T21=theta[0], vr=theta[1], dv=theta[2], tau0=theta[3], tilt=0)
 
-	elif N21 == 5:
-		model_21 = model_eor_flattened_gaussian(model_type=1, T21=theta[0], vr=theta[1], dv=theta[2], tau0=theta[3], tilt=theta[4])
+	#elif N21 == 5:
+		#model_21 = model_eor_flattened_gaussian(model_type=1, T21=theta[0], vr=theta[1], dv=theta[2], tau0=theta[3], tilt=theta[4])
 	
 	
 	# Foreground model
-	model_fg = 0
-	for i in range(Nfg):
-		j = N21 + i
-		#print(i)
-		model_fg = model_fg      +     theta[j] * ((v/v0)**(-2.5)) * ((np.log(v/v0))**i)
+	model_fg = dm.foreground_model(foreground_model, theta, v, v0, ion_abs_coeff=0, ion_emi_coeff=0)
+
 
 	model = model_21 + model_fg
 
@@ -85,7 +84,7 @@ def full_model(theta):
 
 
 
-def simulated_data(theta):
+def simulated_data(theta, noise_std_at_v0):
 
 	#v          = np.arange(50, 101, 1)
 	#T75        = 1500
@@ -95,8 +94,8 @@ def simulated_data(theta):
 	#noise   = np.random.normal(0, std_dev, size=len(v))
 	
 	
-	std_dev_vec   = simulated_noise_at_v0_std*(v/v0)**(-2.5)
-	#std_dev_vec   = 0.05*np.ones(len(v))
+	std_dev_vec   = noise_std_at_v0*(v/v0)**(-2.5)
+	#std_dev_vec   = noise_std_at_v0*np.ones(len(v))
 	
 	
 	sigma         = np.diag(std_dev_vec**2)     # uncertainty covariance matrix
@@ -222,7 +221,7 @@ def run():
 
 
 #
-t, sigma, inv_sigma, det_sigma = simulated_data([1000, 1, 1, -1, 4])  # power law
+t, sigma, inv_sigma, det_sigma = simulated_data([1500, -2.5], 0.02)  # power law
 #plt.plot(v, t)
 #plt.show()
 
