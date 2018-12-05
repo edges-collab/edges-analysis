@@ -48,11 +48,9 @@ pl[2,1] =  1e3
 pl[3,0] = -1e3
 pl[3,1] =  1e3
 
-pl[4,0] = -0.2
-pl[4,1] =  0.0
+pl[4,0] = -1e3
+pl[4,1] =  1e3
 
-pl[5,0] = 0
-pl[5,1] = 4000
 
 
 
@@ -87,7 +85,7 @@ def full_model(theta):
 	
 	
 	# Foreground model
-	model_fg = dm.foreground_model(foreground_model, theta, v, v0, ion_abs_coeff='free', ion_emi_coeff='free')
+	model_fg = dm.foreground_model(foreground_model, theta, v, v0, ion_abs_coeff=0, ion_emi_coeff=0)
 
 
 	model = model_21 + model_fg
@@ -235,7 +233,7 @@ def run():
 
 
 #
-t, sigma, inv_sigma, det_sigma = simulated_data([1500, -2.5, 0.1, -4, -0.05, 800], 0.02)  # power law
+t, sigma, inv_sigma, det_sigma = simulated_data([1500, -2.5, 0.1, -4, -0.05], 0.02)  # power law
 #plt.plot(v, t)
 #plt.show()
 
