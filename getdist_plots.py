@@ -20,8 +20,12 @@ def load_samples(input_textfile, label_names=[]):
 	# Loading data
 	d = np.genfromtxt(input_textfile)
 
-	ww = d[:,0]    # Weights
-	ll = d[:,1]/2  # Minus Log Likelihood
+	#ww = d[:,0]    # Weights
+	#ll = d[:,1]/2  # Minus Log Likelihood
+	
+	ww = d[:,1]    # Weights
+	ll = d[:,0]/2  # Minus Log Likelihood
+		
 	ss = d[:,2::]  # Parameter samples
 	
 	
@@ -51,7 +55,7 @@ def load_samples(input_textfile, label_names=[]):
 
 
 
-	return getdist_samples, best_fit, covariance_matrix
+	return getdist_samples, ww, ll, best_fit, covariance_matrix
 
 
 
@@ -64,7 +68,7 @@ def load_samples(input_textfile, label_names=[]):
 
 
 
-def triangle_plot(getdist_samples, output_pdf, legend_FS=10, label_FS=10, axes_FS=10):
+def triangle_plot(getdist_samples, output_pdf_filename, legend_FS=10, label_FS=10, axes_FS=10):
 
 	g = plots.getSubplotPlotter(subplot_size=1.5)
 
@@ -73,7 +77,7 @@ def triangle_plot(getdist_samples, output_pdf, legend_FS=10, label_FS=10, axes_F
 	g.settings.axes_fontsize   = axes_FS
 
 	g.triangle_plot([getdist_samples], filled=True) #, param_limits={'x1':[1498, 1502], 'x2':[-2.504, -2.496]}, filled=True, legend_loc='upper right')
-	g.export(output_pdf)
+	g.export(output_pdf_filename)
 	plt.close()
 	plt.close()
 

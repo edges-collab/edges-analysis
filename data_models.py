@@ -3,7 +3,11 @@ import numpy as np
 
 
 
-def foreground_model(model_type, theta_fg, f, fr, ion_abs_coeff='free', ion_emi_coeff='free'):
+
+
+
+
+def foreground_model(model_type, theta_fg, v, vr, ion_abs_coeff='free', ion_emi_coeff='free'):
 
 
 	number_of_parameters = len(theta_fg)
@@ -26,9 +30,9 @@ def foreground_model(model_type, theta_fg, f, fr, ion_abs_coeff='free', ion_emi_
 			
 		astro_exponent = 0
 		for i in range(number_astro_parameters-1):
-			astro_exponent = astro_exponent + theta_fg[i+1] * ((np.log(f/fr))**i)
+			astro_exponent = astro_exponent + theta_fg[i+1] * ((np.log(v/vr))**i)
 
-		astro_fg = theta_fg[0] * ((f/fr) ** astro_exponent)
+		astro_fg = theta_fg[0] * ((v/vr) ** astro_exponent)
 
 		
 		
@@ -37,7 +41,7 @@ def foreground_model(model_type, theta_fg, f, fr, ion_abs_coeff='free', ion_emi_
 			IAC = theta_fg[-2]
 		else:
 			IAC = ion_abs_coeff			
-		ionos_abs = np.exp(IAC*((f/fr)**(-2)))
+		ionos_abs = np.exp(IAC*((v/vr)**(-2)))
 		
 		
 		# Ionospheric emission
@@ -59,7 +63,7 @@ def foreground_model(model_type, theta_fg, f, fr, ion_abs_coeff='free', ion_emi_
 	# ########################
 	if model_type == 'linlog':
 		for i in range(number_of_parameters):
-			model_fg = model_fg      +     theta_fg[i] * ((f/fr)**(-2.5)) * ((np.log(f/fr))**i)
+			model_fg = model_fg      +     theta_fg[i] * ((v/vr)**(-2.5)) * ((np.log(v/vr))**i)
 
 	return model_fg
 
@@ -68,6 +72,122 @@ def foreground_model(model_type, theta_fg, f, fr, ion_abs_coeff='free', ion_emi_
 
 
 
+
+
+
+
+
+
+
+
+def signal_model(model_type, theta, v):
+	
+	# Parameter assignment
+	T21   = theta[0]
+	vr    = theta[1]
+	dv    = theta[2]
+	tau0  = theta[3]
+	
+	if len(theta) == 4:
+		tilt = 0
+		
+	elif len(theta) == 5:
+		tilt  = theta[4]
+
+
+
+	# Memo 220 and 226
+	if model_type == 'exp':
+		b  = -np.log(-np.log( (1 + np.exp(-tau0))/2 )/tau0)
+		K1 = T21 * (1 - np.exp( -tau0 * np.exp( (-b*(v-vr)**2) / ((dv**2)/4))))
+		K2 = 1 + (tilt * (v - vr) / dv)
+		K3 = 1 - np.exp(-tau0)
+		T  = K1 * K2 / K3
+
+
+	# Memo 226
+	if model_type == 'tanh':
+		K1 = np.tanh( (1/(v + dv/2) - 1/vr) / (dv/(tau0*(vr**2))) )
+		K2 = np.tanh( (1/(v - dv/2) - 1/vr) / (dv/(tau0*(vr**2))) )
+		T  = -(T21/2) * (K1 - K2) 
+
+	return T   # The amplitude is equal to T21, not to -T21
+
+
+
+
+
+
+
+
+
+
+
+
+
+def full_model(theta, v, vr, model_type_signal='exp', model_type_foreground='exp', N21par=4, NFGpar=5):
+
+
+	# Signal model
+	if N21par == 0:
+		model_21 = 0
+
+	elif N21par > 0:
+		model_21 = signal_model(model_type_signal, theta[0:N21par], v)
+
+
+
+	# Foreground model
+	model_fg = foreground_model(model_type_foreground, theta[N21par::], v, vr, ion_abs_coeff=0, ion_emi_coeff=0)
+
+
+
+	# Full model
+	model = model_21 + model_fg
+
+
+	return model
+
+
+
+
+
+
+
+
+
+
+
+
+def simulated_data(theta, v, vr, noise_std_at_vr, model_type_signal='exp', model_type_foreground='exp', N21par=4, NFGpar=5):
+
+	#v          = np.arange(50, 101, 1)
+	#T75        = 1500
+	#beta       = -2.5
+	#std_dev_vec  = 2*np.ones(len(v))   # frequency dependent or independent
+	#std_dev = 1
+	#noise   = np.random.normal(0, std_dev, size=len(v))
+
+
+	std_dev_vec   = noise_std_at_vr * (v/vr)**(-2.5)
+	#std_dev_vec   = noise_std_at_v0*np.ones(len(v))
+
+
+	sigma         = np.diag(std_dev_vec**2)     # uncertainty covariance matrix
+	inv_sigma     = np.linalg.inv(sigma)
+	det_sigma     = np.linalg.det(sigma)
+
+	noise         = np.random.multivariate_normal(np.zeros(len(v)), sigma)
+
+
+
+	d_no_noise    = full_model(theta, v, vr, model_type_signal=model_type_signal, model_type_foreground=model_type_foreground, N21par=N21par, NFGpar=NFGpar)
+	d             = d_no_noise + noise
+
+	N             = len(v)
+
+
+	return d, sigma, inv_sigma, det_sigma
 
 
 
