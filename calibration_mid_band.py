@@ -5,6 +5,7 @@ import reflection_coefficient as rc
 import time  as tt
 import edges as eg
 import datetime as dt
+import receiver_calibration as rcv
 
 
 import basic as ba
@@ -1341,7 +1342,7 @@ def calibration_file_computation(FMIN, FMAX, cterms, wterms, save='no', save_fla
 	
 	# Calibration quantities
 	Tamb_internal = 300
-	C1, C2, TU, TC, TS = eg.calibration_quantities('nothing', fn, Tae, The, Toe, Tse, rl, ra, rh, ro, rs, Ta, Thd, To, Ts, Tamb_internal, cterms, wterms)
+	C1, C2, TU, TC, TS = rcv.calibration_quantities('nothing', fn, Tae, The, Toe, Tse, rl, ra, rh, ro, rs, Ta, Thd, To, Ts, Tamb_internal, cterms, wterms)
 
 
 
