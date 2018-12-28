@@ -922,3 +922,182 @@ def redshift2frequency(z):
 
 
 
+
+def level1_MAT(file_name, plot='no'):
+	"""
+	Last modification: May 24, 2015.
+
+	This function loads the antenna temperature and date/time from MAT files produced by the MATLAB function acq2level1.m
+
+	Definition:
+	ds, dd = level1_MAT(file_name, plot='no')
+
+	Input parameters:
+	file_name: path and name of MAT file
+	plot: flag for plotting spectrum data. Use plot='yes' for plotting
+
+	Output parameters:
+	ds: 2D spectra array
+	dd: Nx6 date/time array
+
+	Usage:
+	ds, dd = level1_MAT('/file.MAT', plot='yes')
+	"""
+
+
+	# loading data and extracting main array
+	d = sio.loadmat(file_name)
+	darray = d['array']
+
+	# extracting spectra and date/time
+	ds = darray[0,0]
+	dd = darray[0,1]
+
+	# plotting ?
+	if plot == 'yes':
+		plt.imshow(ds, aspect = 'auto', vmin = 0, vmax = 2000)
+		plt.xlabel('frequency channels')
+		plt.ylabel('trace')
+		plt.colorbar()
+		plt.show()
+
+	return ds, dd
+
+
+
+
+
+
+
+
+def temperature_thermistor_oven_industries_TR136_170(R, unit):
+
+	# Steinhart-Hart coefficients
+	a1 = 1.03514e-3
+	a2 = 2.33825e-4
+	a3 = 7.92467e-8
+
+
+	# TK in Kelvin
+	TK = 1/(a1 + a2*np.log(R) + a3*(np.log(R))**3)
+
+	# Kelvin or Celsius
+	if unit == 'K':
+		T = TK
+	if unit == 'C':
+		T = TK - 273.15
+
+	return T
+
+
+
+
+
+
+
+
+
+
+
+def average_calibration_spectrum(spectrum_files, resistance_file, start_percent=0, plot='no'):
+	"""
+	Last modification: May 24, 2015.
+
+	This function loads and averages (in time) calibration data (ambient, hot, open, shorted, simulators, etc.) in MAT format produced by the "acq2level1.m" MATLAB program. It also returns the average physical temperature of the corresponding calibrator, measured with an Oven Industries TR136-170 thermistor.
+
+	Definition:
+	av_ta, av_temp = average_calibration_spectrum(spectrum_files, resistance_file, start_percentage=0, plot='no')
+
+	Input parameters:
+	spectrum_files: string, or list of strings, with the paths and names of spectrum files to process
+	resistance_file: string, or list, with the path and name of resistance file to process
+	start_percent: percentage of initial data to dismiss, for both, spectra and resistance
+	plot: flag for plotting representative data cuts. Use plot='yes' for plotting
+
+	Output parameters:
+	av_ta: average spectrum at raw frequency resolution, starting at 0 Hz
+	av_temp: average physical temperature
+
+	Usage:
+	spec_file1 = '/file1.mat'
+	spec_file2 = '/file2.mat'
+	spec_files = [spec_file1, spec_file2]
+	res_file = 'res_file.txt'
+	av_ta, av_temp = average_calibration_spectrum(spec_files, res_file, start_percentage=10, plot='yes')
+	"""
+
+
+
+	# spectra
+	for i in range(len(spectrum_files)):
+		tai, xxx = level1_MAT(spectrum_files[i], plot='no')
+		if i == 0:
+			ta = tai
+		elif i > 0:
+			ta = np.concatenate((ta, tai), axis=0)
+
+	index_start_spectra = int((start_percent/100)*len(ta[:,0]))
+	ta_sel = ta[index_start_spectra::,:]
+	av_ta = np.mean(ta_sel, axis=0)
+
+
+
+	# temperature
+	if isinstance(resistance_file, list):
+		for i in range(len(resistance_file)):
+			if i == 0:
+				R = np.genfromtxt(resistance_file[i])
+			else:	
+				R = np.concatenate((R, np.genfromtxt(resistance_file[i])), axis=0)
+	else:
+		R = np.genfromtxt(resistance_file)
+
+
+	temp = temperature_thermistor_oven_industries_TR136_170(R, 'K')
+	index_start_temp = int((start_percent/100)*len(temp))
+	temp_sel = temp[index_start_temp::]
+	av_temp = np.mean(temp_sel)
+
+
+
+
+	# plot
+	if plot == 'yes':
+		plt.close()
+		plt.subplot(2,2,1)
+		plt.plot(ta[:,30000],'r')
+		plt.plot([index_start_spectra, index_start_spectra],[min(ta[:,30000])-5, max(ta[:,30000])+5], 'k--')
+		plt.ylabel('spectral temperature')
+		plt.ylim([min(ta[:,30000])-5, max(ta[:,30000])+5])
+
+		plt.subplot(2,2,2)
+		plt.plot(ta_sel[:,30000],'r')
+		plt.ylim([min(ta[:,30000])-5, max(ta[:,30000])+5])
+
+		plt.subplot(2,2,3)
+		plt.plot(temp,'r')
+		plt.plot([index_start_temp, index_start_temp],[min(temp)-5, max(temp)+5], 'k--')
+		plt.xlabel('sample')
+		plt.ylabel('physical temperature')
+		plt.ylim([min(temp)-5, max(temp)+5])
+
+		plt.subplot(2,2,4)
+		plt.plot(temp_sel,'r')
+		plt.xlabel('sample')
+		plt.ylim([min(temp)-5, max(temp)+5])
+
+	return av_ta, av_temp
+
+
+
+
+
+
+
+
+
+
+
+
+
+

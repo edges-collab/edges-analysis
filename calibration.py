@@ -2,6 +2,7 @@
 
 import numpy as np
 import scipy as sp
+import matplotlib.pyplot as plt
 import basic as ba
 import reflection_coefficient as rc
 
@@ -866,7 +867,7 @@ def calibration_quantities(fn, Tae, The, Toe, Tse, rl, ra, rh, ro, rs, Ta, Th, T
 
 
 	
-def models_antenna_s11_remove_delay(band, f_MHz, year=2018, day=145, delay_0=0.17, model_type='polynomial', Nfit=10, plot_fit_residuals='no', MC_mag='no', MC_ang='no', sigma_mag=0.0001, sigma_ang_deg=0.1):	
+def models_antenna_s11_remove_delay(band, f_MHz, year=2018, day=145, delay_0=0.17, model_type='polynomial', Nfit=10, plot_fit_residuals='no'):	
 
 
 	
@@ -1111,6 +1112,103 @@ def balun_and_connector_loss(band, f, ra, MC=[0,0,0,0,0,0,0,0]):
 
 
 
+
+
+	# This loss is the same as for the Low-Band 1 system of 2015. It is the same balun/connector
+	if band == 'low_band3':
+
+		# Angular frequency
+		w = 2 * np.pi * f * 1e6   
+	
+		# Inch-to-meters conversion
+		inch2m = 1/39.370
+	
+		# Conductivity of copper
+		sigma_copper0 = 5.96 * 10**7     # Pozar 3rd edition. Alan uses a different number. What is his source??  5.813
+
+
+
+
+		# These are valid for the low-band 1 antenna
+		balun_length     = 43.6 # inches
+		connector_length = 0.8 # inch
+		
+		
+
+		# Information from memos 166 and 181
+		# -------------------------------------------------------------------
+
+
+		# Balun dimensions 
+		ric_b  = ((5/16)*inch2m)/2  # radius of outer wall of inner conductor
+		if MC[0] == 1:
+			ric_b = ric_b + 0.03*ric_b*np.random.normal()	# 1-sigma of 3%, about 0.04 mm
+
+		roc_b  = ((3/4)*inch2m)/2  # radius of inner wall of outer conductor
+		if MC[1] == 1:
+			roc_b = roc_b + 0.03*roc_b*np.random.normal()	# 1-sigma of 3%, about 0.08 mm 
+
+		l_b    = balun_length*inch2m    # length in meters
+		if MC[2] == 1:
+			l_b = l_b + 0.001*np.random.normal()	# 1-sigma of 1 mm
+
+
+		# Connector dimensions
+		ric_c  = (0.05*inch2m)/2  # radius of outer wall of inner conductor
+		if MC[3] == 1:
+			ric_c = ric_c + 0.03*ric_c*np.random.normal()	# 1-sigma of 3%, about < 0.04 mm
+
+		roc_c  = (0.16*inch2m)/2  # radius of inner wall of outer conductor
+		if MC[4] == 1:
+			roc_c = roc_c + 0.03*roc_c*np.random.normal()	# 1-sigma of 3%, about 0.04 mm	
+
+		l_c    = connector_length*inch2m  # length
+		if MC[5] == 1:
+			l_c = l_c + 0.0001*np.random.normal()	# 1-sigma of 0.1 mm
+
+
+		# Metal conductivity
+		sigma_copper   = 1     * sigma_copper0
+		sigma_brass    = 0.24  * sigma_copper0
+
+		sigma_xx_inner = 0.24  * sigma_copper0
+		sigma_xx_outer = 0.024 * sigma_copper0
+
+		if MC[6] == 1:
+			sigma_copper   = sigma_copper   + 0.01*sigma_copper   * np.random.normal()   # 1-sigma of 1% of value
+			sigma_brass    = sigma_brass    + 0.01*sigma_brass    * np.random.normal()   # 1-sigma of 1% of value
+			sigma_xx_inner = sigma_xx_inner + 0.01*sigma_xx_inner * np.random.normal()   # 1-sigma of 1% of value
+			sigma_xx_outer = sigma_xx_outer + 0.01*sigma_xx_outer * np.random.normal()   # 1-sigma of 1% of value
+
+
+
+		# Permeability
+		u0        = 4*np.pi*10**(-7)  # permeability of free space (same for copper, brass, etc., all nonmagnetic materials)
+
+		ur_air    = 1 # relative permeability of air
+		u_air     = u0 * ur_air
+
+		ur_teflon = 1 # relative permeability of teflon
+		u_teflon  = u0 * ur_teflon
+
+
+
+		# Permittivity
+		c          = 299792458       # speed of light
+		e0         = 1/(u0 * c**2)   # permittivity of free space
+
+		er_air           = 1.07 # why Alan???? shouldn't it be closer to 1 ?
+		ep_air           = e0 * er_air
+		tan_delta_air    = 0 
+		epp_air          = ep_air    * tan_delta_air
+
+		er_teflon        = 2.05 # why Alan????   	
+		ep_teflon        = e0 * er_teflon
+		tan_delta_teflon = 0.0002 # http://www.kayelaby.npl.co.uk/general_physics/2_6/2_6_5.html
+		epp_teflon       = ep_teflon * tan_delta_teflon
+
+		if MC[7] == 1:
+			epp_teflon = epp_teflon + 0.01*epp_teflon * np.random.normal()	# 1-sigma of 1%
 
 
 
@@ -1452,5 +1550,663 @@ def error_propagation(case):
 	
 	
 	return f, rl_all, C1_all, C2_all, TU_all, TC_all, TS_all, rant_all, G_all
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def FEKO_blade_beam(band, beam_file, frequency_interpolation='no', frequency=np.array([0]), AZ_antenna_axis=0):
+
+	"""
+
+	AZ_antenna_axis = 0    #  Angle of orientation (in integer degrees) of excited antenna panels relative to due North. Best value is around X ???
+
+	"""
+
+
+	if band == 'mid_band':
+
+		data_folder = edges_folder + '/mid_band/calibration/beam/alan/'
+	
+	
+		# Loading beam
+	
+		if beam_file == 1:		
+			# FROM ALAN, 50-200 MHz
+			print('BEAM MODEL #1 FROM ALAN')
+			ff         = data_folder + 'azelq_blade9mid0.78.txt'
+			f_original = np.arange(50,201,2)   #between 50 and 200 MHz in steps of 2 MHz
+	
+		if beam_file == 2:
+			# FROM ALAN, 50-200 MHz
+			print('BEAM MODEL #2 FROM ALAN')
+			ff         = data_folder + 'azelq_blade9perf7mid.txt'
+			f_original = np.arange(50,201,2)   #between 50 and 200 MHz in steps of 2 MHz
+	
+		if beam_file == 3:
+			# FROM NIVEDITA, 60-200 MHz
+			print('BEAM MODEL FROM NIVEDITA')
+			ff         = data_folder + 'FEKO_midband_realgnd_Simple-blade_niv.txt'
+			f_original = np.arange(60,201,2)   #between 60 and 200 MHz in steps of 2 MHz
+			
+			
+			
+			
+			
+			
+	if band == 'low_band3':
+
+		data_folder = edges_folder + '/low_band3/calibration/beam/alan/'
+	
+	
+		# Loading beam
+	
+		if beam_file == 1:		
+			# FROM ALAN, 50-200 MHz
+			print('BEAM MODEL #1 FROM ALAN')
+			ff         = data_folder + 'azelq_low3.txt'
+			f_original = np.arange(50,121,2)   #between 50 and 120 MHz in steps of 2 MHz			
+			
+			
+			
+			
+
+
+
+	data = np.genfromtxt(ff)
+
+
+
+
+	# Loading data and convert to linear representation
+	beam_maps = np.zeros((len(f_original),91,360))
+	for i in range(len(f_original)):
+		beam_maps[i,:,:] = (10**(data[(i*360):((i+1)*360),2::]/10)).T
+
+
+
+	# Frequency interpolation
+	if frequency_interpolation == 'yes':
+
+		interp_beam = np.zeros((len(frequency), len(beam_maps[0,:,0]), len(beam_maps[0,0,:])))
+		for j in range(len(beam_maps[0,:,0])):
+			for i in range(len(beam_maps[0,0,:])):
+				#print('Elevation: ' + str(j) + ', Azimuth: ' + str(i))
+				par   = np.polyfit(f_original/200, beam_maps[:,j,i], 13)
+				model = np.polyval(par, frequency/200)
+				interp_beam[:,j,i] = model
+
+		beam_maps = np.copy(interp_beam)
+
+
+
+
+	# Shifting beam relative to true AZ (referenced at due North)
+	# Due to angle of orientation of excited antenna panels relative to due North
+	print('AZ_antenna_axis = ' + str(AZ_antenna_axis) + ' deg')
+	if AZ_antenna_axis < 0:
+		AZ_index          = -AZ_antenna_axis
+		bm1               = beam_maps[:,:,AZ_index::]
+		bm2               = beam_maps[:,:,0:AZ_index]
+		beam_maps_shifted = np.append(bm1, bm2, axis=2)
+
+	elif AZ_antenna_axis > 0:
+		AZ_index          = AZ_antenna_axis
+		bm1               = beam_maps[:,:,0:(-AZ_index)]
+		bm2               = beam_maps[:,:,(360-AZ_index)::]
+		beam_maps_shifted = np.append(bm2, bm1, axis=2)
+
+	elif AZ_antenna_axis == 0:
+		beam_maps_shifted = np.copy(beam_maps)
+
+
+
+	return beam_maps_shifted
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def antenna_beam_factor(name_save, beam_file=1, rotation_from_north=90, band_deg=10, index_inband=2.5, index_outband=2.62, reference_frequency=100):
+
+
+
+#(band, antenna, name_save, file_high_band_blade_FEKO=1, file_low_band_blade_FEKO=1, reference_frequency=140, rotation_from_north=-5, sky_model='guzman_haslam', band_deg=10, index_inband=2.5, index_outband=2.57):
+
+
+	band      = 'mid_band'
+	sky_model = 'haslam'
+	
+
+
+	# Data paths
+	path_data = edges_folder + 'sky_models/'
+	path_save = edges_folder + band + '/calibration/beam_factors/raw/'
+
+
+	# Loading beam	
+	AZ_beam  = np.arange(0, 360)
+	EL_beam  = np.arange(0, 91)
+
+
+
+	# FEKO blade beam
+	
+	# Fixing rotation angle due to diferent rotation (by 90deg) in Nivedita's map
+	if beam_file == 3:
+		rotation_from_north = rotation_from_north - 90
+		
+	beam_all = FEKO_mid_band_blade_beam(beam_file=beam_file, AZ_antenna_axis=rotation_from_north)
+
+
+
+	# Frequency array
+	if beam_file == 1:
+		# ALAN #1
+		freq_array = np.arange(50, 201, 2, dtype='uint32')  
+
+	elif beam_file == 2:
+		# ALAN #2
+		freq_array = np.arange(50, 201, 2, dtype='uint32')  
+
+	elif beam_file == 3:
+		# NIVEDITA
+		freq_array = np.arange(60, 201, 2, dtype='uint32')  
+		
+		
+	# Index of reference frequency
+	index_freq_array = np.arange(len(freq_array))
+	irf = index_freq_array[freq_array == reference_frequency]
+	print('Reference frequency: ' + str(freq_array[irf][0]) + ' MHz')
+
+
+
+	if sky_model == 'haslam':
+
+		# Loading galactic coordinates (the Haslam map is in NESTED Galactic Coordinates)
+		coord              = fits.open(path_data + 'coordinate_maps/pixel_coords_map_nested_galactic_res9.fits')
+		coord_array        = coord[1].data
+		lon                = coord_array['LONGITUDE']
+		lat                = coord_array['LATITUDE']
+		GALAC_COORD_object = apc.SkyCoord(lon, lat, frame='galactic', unit='deg')  # defaults to ICRS frame
+
+		# Loading Haslam map
+		haslam_map = fits.open(path_data + 'haslam_map/lambda_haslam408_dsds.fits')
+		haslam408  = (haslam_map[1].data)['temperature']
+
+		# Scaling Haslam map (the map contains the CMB, which has to be removed at 408 MHz, and then added back)
+		Tcmb   = 2.725
+		T408   = haslam408 - Tcmb
+		b0     = band_deg          # default 10 degrees, galactic elevation threshold for different spectral index
+
+
+		haslam = np.zeros((len(T408), len(freq_array)))
+		for i in range(len(freq_array)):
+
+			# Band of the Galactic center, using spectral index
+			haslam[(lat >= -b0) & (lat <= b0), i] = T408[(lat >= -b0) & (lat <= b0)] * (freq_array[i]/408)**(-index_inband) + Tcmb
+
+			# Range outside the Galactic center, using second spectral index
+			haslam[(lat < -b0) | (lat > b0), i]   = T408[(lat < -b0) | (lat > b0)] * (freq_array[i]/408)**(-index_outband) + Tcmb
+
+
+
+	# EDGES location	
+	EDGES_lat_deg  = -26.714778
+	EDGES_lon_deg  = 116.605528 
+	EDGES_location = apc.EarthLocation(lat=EDGES_lat_deg*apu.deg, lon=EDGES_lon_deg*apu.deg)
+
+
+	# Reference UTC observation time. At this time, the LST is 0.1666 (00:10 Hrs LST) at the EDGES location (it was wrong before, now it is correct)
+	Time_iter    = np.array([2014, 1, 1, 9, 39, 42])     
+	Time_iter_dt = dt.datetime(Time_iter[0], Time_iter[1], Time_iter[2], Time_iter[3], Time_iter[4], Time_iter[5]) 
+
+
+	# Looping over LST
+	LST             = np.zeros(72)
+	convolution_ref = np.zeros((len(LST), len(beam_all[:,0,0])))
+	convolution     = np.zeros((len(LST), len(beam_all[:,0,0])))	
+	numerator       = np.zeros((len(LST), len(beam_all[:,0,0])))
+	denominator     = np.zeros((len(LST), len(beam_all[:,0,0])))
+
+
+	#for i in range(len(LST)):
+	for i in range(len(LST)):  # range(1):   #
+
+
+		print(name_save + '. LST: ' + str(i+1) + ' out of 72')
+
+
+		# Advancing time ( 19:57 minutes UTC correspond to 20 minutes LST )
+		minutes_offset = 19
+		seconds_offset = 57
+		if i > 0:
+			Time_iter_dt = Time_iter_dt + dt.timedelta(minutes = minutes_offset, seconds = seconds_offset)
+			Time_iter    = np.array([Time_iter_dt.year, Time_iter_dt.month, Time_iter_dt.day, Time_iter_dt.hour, Time_iter_dt.minute, Time_iter_dt.second]) 
+
+
+
+		# LST 
+		LST[i] = ba.utc2lst(Time_iter, EDGES_lon_deg)
+
+
+
+		# Transforming Galactic coordinates of Sky to Local coordinates		
+		altaz          = GALAC_COORD_object.transform_to(apc.AltAz(location=EDGES_location, obstime=apt.Time(Time_iter_dt, format='datetime')))
+		AZ             = np.asarray(altaz.az)
+		EL             = np.asarray(altaz.alt)
+
+
+
+		# Selecting coordinates and sky data above the horizon
+		AZ_above_horizon         = AZ[EL>=0]
+		EL_above_horizon         = EL[EL>=0]
+
+
+		if sky_model == 'haslam':
+			haslam_above_horizon     = haslam[EL>=0,:]
+			haslam_ref_above_horizon = haslam_above_horizon[:, irf].flatten()
+
+
+
+
+
+
+
+		# Arranging AZ and EL arrays corresponding to beam model
+		az_array   = np.tile(AZ_beam,91)
+		el_array   = np.repeat(EL_beam,360)
+		az_el_original      = np.array([az_array, el_array]).T
+		az_el_above_horizon = np.array([AZ_above_horizon, EL_above_horizon]).T
+
+
+
+		# Precomputation of beam at reference frequency for normalization
+		beam_array_v0         = beam_all[irf,:,:].reshape(1,-1)[0]
+		beam_above_horizon_v0 = spi.griddata(az_el_original, beam_array_v0, az_el_above_horizon, method='cubic')  # interpolated beam
+
+
+
+
+		# Loop over frequency
+		for j in range(len(freq_array)):
+
+			print(name_save + ', Freq: ' + str(j) + ' out of ' + str(len(beam_all[:,0,0])))
+
+			beam_array         = beam_all[j,:,:].reshape(1,-1)[0]
+			beam_above_horizon = spi.griddata(az_el_original, beam_array, az_el_above_horizon, method='cubic')  # interpolated beam
+
+
+			no_nan_array = np.ones(len(AZ_above_horizon)) - np.isnan(beam_above_horizon)
+			index_no_nan = np.nonzero(no_nan_array)[0]
+
+	
+			if sky_model == 'haslam':				
+				convolution_ref[i, j]   = np.sum(beam_above_horizon[index_no_nan]*haslam_ref_above_horizon[index_no_nan])/np.sum(beam_above_horizon[index_no_nan])
+
+				# Antenna temperature
+				haslam_above_horizon_ff = haslam_above_horizon[:, j].flatten()
+				convolution[i, j]       = np.sum(beam_above_horizon[index_no_nan]*haslam_above_horizon_ff[index_no_nan])/np.sum(beam_above_horizon[index_no_nan])
+
+
+
+	if sky_model == 'haslam':
+		beam_factor_T = convolution_ref.T/convolution_ref[:,irf].T
+		beam_factor   = beam_factor_T.T
+
+
+
+	# Saving beam factor
+	np.savetxt(path_save + name_save + '_tant.txt', convolution)
+	np.savetxt(path_save + name_save + '_data.txt', beam_factor)
+	np.savetxt(path_save + name_save + '_LST.txt',  LST)
+	np.savetxt(path_save + name_save + '_freq.txt', freq_array)
+
+
+
+	return freq_array, LST, convolution, beam_factor
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def antenna_beam_factor_interpolation(band, lst_hires, fnew):
+
+	"""
+
+
+	"""
+
+
+
+	# Mid-Band
+	if band == 'mid_band':
+
+		file_path = edges_folder + 'mid_band/calibration/beam_factors/raw/'
+		bf_old  = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.62_reffreq_100MHz_data.txt')
+		freq    = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.62_reffreq_100MHz_freq.txt')
+		lst_old = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.62_reffreq_100MHz_LST.txt')
+
+	
+
+
+	# Wrap beam factor and LST for 24-hr interpolation 
+	bf   = np.vstack((bf_old[-1,:], bf_old, bf_old[0,:]))
+	lst0 = np.append(lst_old[-1]-24, lst_old)
+	lst  = np.append(lst0, lst_old[0]+24)
+
+	# Arranging original arrays in preparation for interpolation
+	freq_array        = np.tile(freq, len(lst))
+	lst_array         = np.repeat(lst, len(freq))
+	bf_array          = bf.reshape(1,-1)[0]
+	freq_lst_original = np.array([freq_array, lst_array]).T
+
+	# Producing high-resolution array of LSTs (frequencies are the same as the original)
+	freq_hires       = np.copy(freq)
+	freq_hires_array = np.tile(freq_hires, len(lst_hires))
+	lst_hires_array  = np.repeat(lst_hires, len(freq_hires)) 
+	freq_lst_hires   = np.array([freq_hires_array, lst_hires_array]).T
+
+	# Interpolating beam factor to high LST resolution
+	bf_hires_array = spi.griddata(freq_lst_original, bf_array, freq_lst_hires, method='cubic')	
+	bf_2D          = bf_hires_array.reshape(len(lst_hires), len(freq_hires))
+
+	# Interpolating beam factor to high frequency resolution
+	for i in range(len(bf_2D[:,0])):
+		par       = np.polyfit(freq_hires, bf_2D[i,:], 11)
+		bf_single = np.polyval(par, fnew)
+
+		if i == 0:
+			bf_2D_hires = np.copy(bf_single)
+		elif i > 0:
+			bf_2D_hires = np.vstack((bf_2D_hires, bf_single))
+
+
+	return bf_2D_hires   #beam_factor_model  #, freq_hires, bf_lst_average
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def beam_factor_table_computation(f, N_lst, file_name_hdf5):
+
+
+	# Produce the beam factor at high resolution
+	# ------------------------------------------
+	#N_lst = 6000   # number of LST points within 24 hours
+	
+	
+	lst_hires = np.arange(0,24,24/N_lst)
+	bf        = antenna_beam_factor_interpolation('mid_band', lst_hires, f)
+	
+	
+	
+	# Save
+	# ----
+	file_path = edges_folder + '/mid_band/calibration/beam_factors/raw/'
+	with h5py.File(file_path + file_name_hdf5, 'w') as hf:
+		hf.create_dataset('frequency',           data = f)
+		hf.create_dataset('lst',                 data = lst_hires)
+		hf.create_dataset('beam_factor',         data = bf)		
+		
+	return 0
+
+
+
+
+
+
+
+
+
+def beam_factor_table_read(path_file):
+
+	# path_file = home_folder + '/EDGES/calibration/beam_factors/mid_band/file.hdf5'
+
+	# Show keys (array names inside HDF5 file)
+	with h5py.File(path_file,'r') as hf:
+
+		hf_freq  = hf.get('frequency')
+		f        = np.array(hf_freq)
+
+		hf_lst   = hf.get('lst')
+		lst      = np.array(hf_lst)
+
+		hf_bf    = hf.get('beam_factor')
+		bf       = np.array(hf_bf)
+
+	return f, lst, bf	
+
+
+
+
+
+
+
+
+
+def beam_factor_table_evaluate(f_table, lst_table, bf_table, lst_in):
+	
+	# f_table, lst_table, bf_table = eg.beam_factor_table_read('/data5/raul/EDGES/calibration/beam_factors/mid_band/beam_factor_table_hires.hdf5')
+	
+	beam_factor = np.zeros((len(lst_in), len(f_table)))
+	
+	for i in range(len(lst_in)):
+		d = np.abs(lst_table - lst_in[i])
+		
+		index = np.argsort(d)
+		IX = index[0]
+		
+		beam_factor[i,:] = bf_table[IX,:]
+				
+	return beam_factor
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def corrected_antenna_s11(day, save_name_flag):
+	
+	# Creating folder if necessary
+	path_save = home_folder + '/DATA/EDGES/calibration/antenna_s11/mid_band/s11/corrected/2018_' + str(day) + '/'
+	if not exists(path_save):
+		makedirs(path_save)	
+	
+
+
+
+
+
+	
+	# Mid-Band
+	if day == 145:
+		path_antenna_s11 = '/home/ramo7131/DATA/EDGES/calibration/antenna_s11/mid_band/s11/raw/mid-recv1-20180525/'	
+		date_all = ['145_08_28_27', '145_08_28_27']
+	
+	
+	# Mid-Band
+	if day == 147:
+		path_antenna_s11 = '/home/ramo7131/DATA/EDGES/calibration/antenna_s11/mid_band/s11/raw/mid-rcv1-20180527/'	
+		date_all = ['147_17_03_25', '147_17_03_25']
+		
+		
+	# Mid-Band
+	if day == 222:
+		path_antenna_s11 = '/home/ramo7131/DATA/EDGES/calibration/antenna_s11/mid_band/s11/raw/mid_20180809/'
+		date_all = ['222_05_41_09', '222_05_43_53', '222_05_45_58', '222_05_48_06']
+	
+			
+	# Alan's noise source + 6dB attenuator
+	if day == 223:
+		path_antenna_s11 = '/home/ramo7131/DATA/EDGES/calibration/antenna_s11/mid_band/s11/raw/mid_20180812_ans1_6db/'
+		date_all = ['223_22_40_15', '223_22_41_22', '223_22_42_44']  # Leaving the first one out: '223_22_38_08'
+
+
+	# Low-Band 3 (Receiver 1, Low-Band 1 antenna, High-Band ground plane with wings)
+	if day == 225:  
+		path_antenna_s11 = '/home/ramo7131/DATA/EDGES/calibration/antenna_s11/low_band3/s11/raw/low3_20180813_rcv1/'
+		date_all = ['225_12_17_56', '225_12_19_22', '225_12_20_39', '225_12_21_47']
+		
+
+
+
+
+
+
+
+
+
+	# Load and correct individual measurements
+	for i in range(len(date_all)):
+
+		# Four measurements
+		o_m, f_m  = rc.s1p_read(path_antenna_s11 + '2018_' + date_all[i] + '_input1.s1p')
+		s_m, f_m  = rc.s1p_read(path_antenna_s11 + '2018_' + date_all[i] + '_input2.s1p')
+		l_m, f_m  = rc.s1p_read(path_antenna_s11 + '2018_' + date_all[i] + '_input3.s1p')
+		a_m, f_m  = rc.s1p_read(path_antenna_s11 + '2018_' + date_all[i] + '_input4.s1p')
+
+	
+		# Standards assumed at the switch
+		o_sw =  1 * np.ones(len(f_m))
+		s_sw = -1 * np.ones(len(f_m))
+		l_sw =  0 * np.ones(len(f_m))
+		
+		
+		# Correction at switch
+		a_sw_c, x1, x2, x3  = rc.de_embed(o_sw, s_sw, l_sw, o_m, s_m, l_m, a_m)
+		
+		
+		# Correction at receiver input
+		a = switch_correction_mid_band_2018_01_25C(a_sw_c, f_in = f_m)
+		
+		if i == 0:
+			a_all = np.copy(a[0])
+		
+		elif i > 0:
+			a_all = np.vstack((a_all, a[0]))
+			
+			
+			
+			
+			
+	# Average measurement	
+	f  = f_m/1e6
+	av = np.mean(a_all, axis=0)			
+		
+		
+	# Output array
+	ra_T = np.array([f, np.real(av), np.imag(av)])
+	ra   = ra_T.T
+
+
+
+
+		
+	
+	# Save
+	np.savetxt(path_save + 'antenna_s11_2018_' + str(day) + save_name_flag + '.txt', ra, header='freq [MHz]   real(s11)   imag(s11)')
+	
+	return ra, a_all
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
