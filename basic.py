@@ -826,67 +826,6 @@ def SUN_MOON_azel(LAT, LON, UTC_array):
 
 
 
-def calibrated_antenna_temperature(Tde, rd, rl, sca, off, TU, TC, TS, Tamb_internal=300):
-
-	# S11 quantities
-	Fd = np.sqrt( 1 - np.abs(rl) ** 2 ) / ( 1 - rd*rl )	
-	PHId = np.angle( rd*Fd )
-	G = 1 - np.abs(rl) ** 2
-	K1d = (1 - np.abs(rd) **2) * np.abs(Fd) ** 2 / G
-	K2d = (np.abs(rd) ** 2) * (np.abs(Fd) ** 2) / G
-	K3d = (np.abs(rd) * np.abs(Fd) / G) * np.cos(PHId)
-	K4d = (np.abs(rd) * np.abs(Fd) / G) * np.sin(PHId)
-
-
-	# Applying scale and offset to raw spectrum
-	Tde_corrected = (Tde - Tamb_internal)*sca + Tamb_internal - off
-
-	# Noise wave contribution
-	NWPd = TU*K2d + TC*K3d + TS*K4d
-
-	# Antenna temperature
-	Td = (Tde_corrected - NWPd) / K1d
-
-	return Td
-
-
-
-
-
-def uncalibrated_antenna_temperature(Td, rd, rl, sca, off, TU, TC, TS, Tamb_internal=300):
-
-	# S11 quantities
-	Fd = np.sqrt( 1 - np.abs(rl) ** 2 ) / ( 1 - rd*rl )
-	PHId = np.angle( rd*Fd )
-	G = 1 - np.abs(rl) ** 2
-	K1d = (1 - np.abs(rd) **2) * np.abs(Fd) ** 2 / G
-	K2d = (np.abs(rd) ** 2) * (np.abs(Fd) ** 2) / G
-	K3d = (np.abs(rd) * np.abs(Fd) / G) * np.cos(PHId)
-	K4d = (np.abs(rd) * np.abs(Fd) / G) * np.sin(PHId)	
-
-
-	# Noise wave contribution
-	NWPd = TU*K2d + TC*K3d + TS*K4d	
-
-	# Scaled and offset spectrum 
-	Tde_corrected = Td*K1d + NWPd
-
-	# Removing scale and offset
-	Tde = Tamb_internal + (Tde_corrected - Tamb_internal + off) / sca
-
-	return Tde
-
-
-
-
-
-
-
-
-
-
-
-
 def frequency2redshift(fe):
 	"""
 
@@ -915,54 +854,6 @@ def redshift2frequency(z):
 	l    = l21 * (1 + z)
 	f    = c / (l * 1e6)
 	return f
-
-
-
-
-
-
-
-
-def level1_MAT(file_name, plot='no'):
-	"""
-	Last modification: May 24, 2015.
-
-	This function loads the antenna temperature and date/time from MAT files produced by the MATLAB function acq2level1.m
-
-	Definition:
-	ds, dd = level1_MAT(file_name, plot='no')
-
-	Input parameters:
-	file_name: path and name of MAT file
-	plot: flag for plotting spectrum data. Use plot='yes' for plotting
-
-	Output parameters:
-	ds: 2D spectra array
-	dd: Nx6 date/time array
-
-	Usage:
-	ds, dd = level1_MAT('/file.MAT', plot='yes')
-	"""
-
-
-	# loading data and extracting main array
-	d = sio.loadmat(file_name)
-	darray = d['array']
-
-	# extracting spectra and date/time
-	ds = darray[0,0]
-	dd = darray[0,1]
-
-	# plotting ?
-	if plot == 'yes':
-		plt.imshow(ds, aspect = 'auto', vmin = 0, vmax = 2000)
-		plt.xlabel('frequency channels')
-		plt.ylabel('trace')
-		plt.colorbar()
-		plt.show()
-
-	return ds, dd
-
 
 
 

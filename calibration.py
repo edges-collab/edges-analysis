@@ -7,6 +7,17 @@ import basic as ba
 import reflection_coefficient as rc
 
 
+import astropy.units as apu
+import astropy.time as apt
+import astropy.coordinates as apc
+
+import h5py
+import datetime as dt
+import scipy.interpolate as spi
+
+from astropy.io import fits
+
+
 
 # Determining home folder
 from os.path import expanduser
@@ -862,6 +873,83 @@ def calibration_quantities(fn, Tae, The, Toe, Tse, rl, ra, rh, ro, rs, Ta, Th, T
 
 
 
+def calibrated_antenna_temperature(Tde, rd, rl, sca, off, TU, TC, TS, Tamb_internal=300):
+
+	# S11 quantities
+	Fd = np.sqrt( 1 - np.abs(rl) ** 2 ) / ( 1 - rd*rl )	
+	PHId = np.angle( rd*Fd )
+	G = 1 - np.abs(rl) ** 2
+	K1d = (1 - np.abs(rd) **2) * np.abs(Fd) ** 2 / G
+	K2d = (np.abs(rd) ** 2) * (np.abs(Fd) ** 2) / G
+	K3d = (np.abs(rd) * np.abs(Fd) / G) * np.cos(PHId)
+	K4d = (np.abs(rd) * np.abs(Fd) / G) * np.sin(PHId)
+
+
+	# Applying scale and offset to raw spectrum
+	Tde_corrected = (Tde - Tamb_internal)*sca + Tamb_internal - off
+
+	# Noise wave contribution
+	NWPd = TU*K2d + TC*K3d + TS*K4d
+
+	# Antenna temperature
+	Td = (Tde_corrected - NWPd) / K1d
+
+	return Td
+
+
+
+
+
+
+
+
+
+
+def uncalibrated_antenna_temperature(Td, rd, rl, sca, off, TU, TC, TS, Tamb_internal=300):
+
+	# S11 quantities
+	Fd = np.sqrt( 1 - np.abs(rl) ** 2 ) / ( 1 - rd*rl )
+	PHId = np.angle( rd*Fd )
+	G = 1 - np.abs(rl) ** 2
+	K1d = (1 - np.abs(rd) **2) * np.abs(Fd) ** 2 / G
+	K2d = (np.abs(rd) ** 2) * (np.abs(Fd) ** 2) / G
+	K3d = (np.abs(rd) * np.abs(Fd) / G) * np.cos(PHId)
+	K4d = (np.abs(rd) * np.abs(Fd) / G) * np.sin(PHId)	
+
+
+	# Noise wave contribution
+	NWPd = TU*K2d + TC*K3d + TS*K4d	
+
+	# Scaled and offset spectrum 
+	Tde_corrected = Td*K1d + NWPd
+
+	# Removing scale and offset
+	Tde = Tamb_internal + (Tde_corrected - Tamb_internal + off) / sca
+
+	return Tde
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1116,6 +1204,8 @@ def balun_and_connector_loss(band, f, ra, MC=[0,0,0,0,0,0,0,0]):
 
 	# This loss is the same as for the Low-Band 1 system of 2015. It is the same balun/connector
 	if band == 'low_band3':
+		
+		print('Balun loss model: ' + band)
 
 		# Angular frequency
 		w = 2 * np.pi * f * 1e6   
@@ -1617,7 +1707,7 @@ def FEKO_blade_beam(band, beam_file, frequency_interpolation='no', frequency=np.
 		# Loading beam
 	
 		if beam_file == 1:		
-			# FROM ALAN, 50-200 MHz
+			# FROM ALAN, 50-120 MHz
 			print('BEAM MODEL #1 FROM ALAN')
 			ff         = data_folder + 'azelq_low3.txt'
 			f_original = np.arange(50,121,2)   #between 50 and 120 MHz in steps of 2 MHz			
@@ -1695,14 +1785,14 @@ def FEKO_blade_beam(band, beam_file, frequency_interpolation='no', frequency=np.
 
 
 
-def antenna_beam_factor(name_save, beam_file=1, rotation_from_north=90, band_deg=10, index_inband=2.5, index_outband=2.62, reference_frequency=100):
+def antenna_beam_factor(band, name_save, beam_file=1, rotation_from_north=90, band_deg=10, index_inband=2.5, index_outband=2.62, reference_frequency=100):
 
 
 
 #(band, antenna, name_save, file_high_band_blade_FEKO=1, file_low_band_blade_FEKO=1, reference_frequency=140, rotation_from_north=-5, sky_model='guzman_haslam', band_deg=10, index_inband=2.5, index_outband=2.57):
 
 
-	band      = 'mid_band'
+	#band      = 'mid_band'
 	sky_model = 'haslam'
 	
 
@@ -1721,25 +1811,31 @@ def antenna_beam_factor(name_save, beam_file=1, rotation_from_north=90, band_deg
 	# FEKO blade beam
 	
 	# Fixing rotation angle due to diferent rotation (by 90deg) in Nivedita's map
-	if beam_file == 3:
+	if (band == 'mid_band') and (beam_file == 3):
 		rotation_from_north = rotation_from_north - 90
 		
-	beam_all = FEKO_mid_band_blade_beam(beam_file=beam_file, AZ_antenna_axis=rotation_from_north)
+	beam_all = FEKO_blade_beam(band, beam_file, AZ_antenna_axis=rotation_from_north)
 
 
 
 	# Frequency array
-	if beam_file == 1:
-		# ALAN #1
-		freq_array = np.arange(50, 201, 2, dtype='uint32')  
-
-	elif beam_file == 2:
-		# ALAN #2
-		freq_array = np.arange(50, 201, 2, dtype='uint32')  
-
-	elif beam_file == 3:
-		# NIVEDITA
-		freq_array = np.arange(60, 201, 2, dtype='uint32')  
+	if band == 'mid_band':
+		if beam_file == 1:
+			# ALAN #1
+			freq_array = np.arange(50, 201, 2, dtype='uint32')  
+	
+		elif beam_file == 2:
+			# ALAN #2
+			freq_array = np.arange(50, 201, 2, dtype='uint32')  
+	
+		elif beam_file == 3:
+			# NIVEDITA
+			freq_array = np.arange(60, 201, 2, dtype='uint32')
+			
+	elif band == 'low_band3':
+		if beam_file == 1:
+			freq_array = np.arange(50, 121, 2, dtype='uint32')		
+			
 		
 		
 	# Index of reference frequency
@@ -1799,7 +1895,7 @@ def antenna_beam_factor(name_save, beam_file=1, rotation_from_north=90, band_deg
 
 
 	#for i in range(len(LST)):
-	for i in range(len(LST)):  # range(1):   #
+	for i in range(len(LST)):  # range(1):   # 
 
 
 		print(name_save + '. LST: ' + str(i+1) + ' out of 72')
@@ -1925,14 +2021,22 @@ def antenna_beam_factor_interpolation(band, lst_hires, fnew):
 	"""
 
 
-
-	# Mid-Band
 	if band == 'mid_band':
-
 		file_path = edges_folder + 'mid_band/calibration/beam_factors/raw/'
+		
 		bf_old  = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.62_reffreq_100MHz_data.txt')
 		freq    = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.62_reffreq_100MHz_freq.txt')
 		lst_old = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.62_reffreq_100MHz_LST.txt')
+
+
+		
+	elif band == 'low_band3':
+		file_path = edges_folder + 'low_band3/calibration/beam_factors/raw/'
+		
+		bf_old  = np.genfromtxt(file_path + 'low_band3_50-120MHz_85deg_alan_haslam_2.5_2.62_reffreq_76MHz_data.txt')
+		freq    = np.genfromtxt(file_path + 'low_band3_50-120MHz_85deg_alan_haslam_2.5_2.62_reffreq_76MHz_freq.txt')
+		lst_old = np.genfromtxt(file_path + 'low_band3_50-120MHz_85deg_alan_haslam_2.5_2.62_reffreq_76MHz_LST.txt')		
+		
 
 	
 
@@ -1984,7 +2088,7 @@ def antenna_beam_factor_interpolation(band, lst_hires, fnew):
 
 
 
-def beam_factor_table_computation(f, N_lst, file_name_hdf5):
+def beam_factor_table_computation(band, f, N_lst, file_name_hdf5):
 
 
 	# Produce the beam factor at high resolution
@@ -1993,13 +2097,13 @@ def beam_factor_table_computation(f, N_lst, file_name_hdf5):
 	
 	
 	lst_hires = np.arange(0,24,24/N_lst)
-	bf        = antenna_beam_factor_interpolation('mid_band', lst_hires, f)
+	bf        = antenna_beam_factor_interpolation(band, lst_hires, f)
 	
 	
 	
 	# Save
 	# ----
-	file_path = edges_folder + '/mid_band/calibration/beam_factors/raw/'
+	file_path = edges_folder + band + '/calibration/beam_factors/table/'
 	with h5py.File(file_path + file_name_hdf5, 'w') as hf:
 		hf.create_dataset('frequency',           data = f)
 		hf.create_dataset('lst',                 data = lst_hires)

@@ -13,7 +13,7 @@ import datetime as dt
 import astropy.time as apt
 import ephem as eph	# to install, at the bash terminal type $ conda install ephem
 
-import calibration_mid_band as cmb
+import calibration as cal
 
 import h5py
 
@@ -506,8 +506,14 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 			print('NO BEAM CORRECTION')
 			
 		if beam_correction == 1:
-			f_table, lst_table, bf_table = cmb.beam_factor_table_read(edges_folder + band + '/calibration/beam_factors/table/table_hires_mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.62_reffreq_100MHz.hdf5')
-			bf                           = cmb.beam_factor_table_evaluate(f_table, lst_table, bf_table, m_2D[:,3])
+			if band == 'mid_band':
+				beam_factor_filename = 'table_hires_mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.62_reffreq_100MHz.hdf5'
+				
+			elif band == 'low_band3':
+				beam_factor_filename = 'table_hires_low_band3_50-120MHz_85deg_alan_haslam_2.5_2.62_reffreq_76MHz.hdf5'
+				
+			f_table, lst_table, bf_table = cal.beam_factor_table_read(edges_folder + band + '/calibration/beam_factors/table/' + beam_factor_filename)
+			bf                           = cal.beam_factor_table_evaluate(f_table, lst_table, bf_table, m_2D[:,3])
 			
 			
 		
@@ -515,7 +521,7 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 			
 		# Antenna S11
 		# -----------
-		s11_ant = models_antenna_s11_remove_delay(band, fin, year=antenna_s11_year, day=antenna_s11_day, delay_0=0.17, model_type='polynomial', Nfit=antenna_s11_Nfit, plot_fit_residuals='no')
+		s11_ant = cal.models_antenna_s11_remove_delay(band, fin, year=antenna_s11_year, day=antenna_s11_day, delay_0=0.17, model_type='polynomial', Nfit=antenna_s11_Nfit, plot_fit_residuals='no')
 		
 		
 		
@@ -526,20 +532,24 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 			print('NO BALUN CORRECTION')
 			
 		if balun_correction == 1:
-			Gb, Gc = balun_and_connector_loss(fin, s11_ant)
+			Gb, Gc = cal.balun_and_connector_loss(band, fin, s11_ant)
 			G      = Gb*Gc
 		
 		
 		
 		# Receiver calibration quantities
 		# -------------------------------
-		if receiver_cal_file == 1:
-			print('Receiver calibration FILE 1')
-			rcv_file = edges_folder + band + '/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_mid_band_cfit6_wfit14.txt'
+		if (band == 'mid_band') or (band == 'low_band3'):
+			
+			if receiver_cal_file == 1:
+				print('Receiver calibration FILE 1')
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_mid_band_cfit6_wfit14.txt'
+			
+			elif receiver_cal_file == 2:
+				print('Receiver calibration FILE 2')
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_mid_band_cfit10_wfit14.txt'
 		
-		elif receiver_cal_file == 2:
-			print('Receiver calibration FILE 2')
-			rcv_file = edges_folder + band + '/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_mid_band_cfit10_wfit14.txt'
+		
 		
 		rcv = np.genfromtxt(rcv_file)
 	
@@ -556,8 +566,7 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 	
 		# Calibrated antenna temperature with losses and beam chromaticity
 		# ----------------------------------------------------------------
-		#tc_with_loss_and_beam = ba.calibrated_antenna_temperature(t_2D, s11_ant, s11_LNA, C1, C2, TU, TC, TS)
-		tc_with_loss_and_beam = ba.calibrated_antenna_temperature(t_2D, s11_ant, s11_LNA, C1, C2, TU, TC, TS)
+		tc_with_loss_and_beam = cal.calibrated_antenna_temperature(t_2D, s11_ant, s11_LNA, C1, C2, TU, TC, TS)
 		
 		
 		
@@ -622,7 +631,7 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 			
 			# Residuals
 			# ---------
-			rri   = tti - model_i
+			rri   =   tti - model_i
 			
 			
 			
@@ -716,6 +725,7 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 
 
 
+	
 
 
 
@@ -2510,122 +2520,6 @@ def average_level3_mid_band(case, LST_1=0, LST_2=24, sun_el_max=90, moon_el_max=
 
 
 
-
-
-
-
-
-def level2_to_level3_old(band, year_day, save='no', save_folder='', save_flag='', LST_1=0, LST_2=24, sun_el_max=-10, moon_el_max=90, amb_hum_max=90, min_receiver_temp=23.4, max_receiver_temp=27.4, FLOW=50, FHIGH=120, antenna_s11_year=2018, antenna_s11_day=225, antenna_s11_Nfit=10, fgl=1, glt='value', glp=0.5, fal=1, fbcl=1, receiver_temperature=25, receiver_cal_file=1, beam_correction='yes'):
-
-	"""
-
-	"""
-
-
-	fin  = 0
-	tc   = 0
-	w_2D = 0
-	m_2D = 0
-
-	# Load daily data
-	# ---------------	
-	fin_X, t_2D_X, w_2D_X, m_2D = data_selection_single_day(band, year_day, LST_1=LST_1, LST_2=LST_2, sun_el_max=sun_el_max, moon_el_max=moon_el_max, amb_hum_max=amb_hum_max, min_receiver_temp=min_receiver_temp, max_receiver_temp=max_receiver_temp)
-
-
-
-	
-	# Continue if there are data available
-	# ------------------------------------
-	if np.sum(t_2D_X) > 0:
-		
-		
-		# Cut the frequency range
-		# -----------------------
-		fin  = fin_X[(fin_X>=FLOW) & (fin_X<=FHIGH)]
-		t_2D = t_2D_X[:, (fin_X>=FLOW) & (fin_X<=FHIGH)]
-		w_2D = w_2D_X[:, (fin_X>=FLOW) & (fin_X<=FHIGH)]
-		
-		
-		
-
-		# Chromaticity factor, recomputed for every day because the LSTs are different 
-		# ----------------------------------------------------------------------------
-		if beam_correction != 'no':
-			cf = np.zeros((len(m_2D[:,0]), len(fin)))
-			for j in range(len(m_2D[:,0])):
-				print('Beam correction LST: ' + str(j))
-				cf[j,:] = antenna_beam_factor_interpolation(band, np.array([m_2D[j,3]]), fin)
-
-		# Antenna S11
-		# -----------
-		s11_ant = models_antenna_s11_remove_delay(band, fin, year=antenna_s11_year, day=antenna_s11_day, delay_0=0.17, model_type='polynomial', Nfit=antenna_s11_Nfit, plot_fit_residuals='no')
-		
-	
-	
-	
-		# Receiver calibration quantities
-		# -------------------------------
-		print('Receiver calibration')
-		rcv_file = home_folder + '/EDGES/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_mid_band_cfit6_wfit14.txt'
-		#rcv_file = home_folder + '/EDGES/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_mid_band_cfit10_wfit14.txt'
-		rcv = np.genfromtxt(rcv_file)
-		
-		fX   = rcv[:,0]
-		rcv2 = rcv[(fX>=FLOW) & (fX<=FHIGH),:]
-		s11_LNA = rcv2[:,1] + 1j*rcv2[:,2]
-		C1 = rcv2[:,3]
-		C2 = rcv2[:,4]
-		TU = rcv2[:,5]
-		TC = rcv2[:,6]
-		TS = rcv2[:,7]
-		
-
-
-
-		# Calibrated antenna temperature with losses and beam chromaticity
-		# ----------------------------------------------------------------
-		tc_with_loss_and_beam = ba.calibrated_antenna_temperature(t_2D, s11_ant, s11_LNA, C1, C2, TU, TC, TS)
-
-
-
-
-		## Removing loss
-		## -------------
-		#print('Loss correction')
-
-		## Combined gain (loss), computed only once, at the beginning, same for all days
-		## -----------------------------------------------------------------------------
-		#cg = combined_gain(band, fin, antenna_s11_day=ant_s11, antenna_s11_Nfit=ant_s11_Nfit, flag_ground_loss=fgl, ground_loss_type=glt, ground_loss_percent=glp, flag_antenna_loss=fal, flag_balun_connector_loss=fbcl)
-		ant_eff = antenna_efficiency(band, fin)
-
-		Tambient = 273.15 + 25 #m_2D[i,9]		
-		tc_with_beam = (tc_with_loss_and_beam - Tambient*(1-ant_eff))/ant_eff
-
-
-		# Removing beam chromaticity
-		# --------------------------
-		if beam_correction == 'no':
-			print('NO beam correction')
-			tc = np.copy(tc_with_beam)
-		else:
-			print('Beam correction')
-			tc = tc_with_beam/cf
-
-		## Save
-		## --------------
-		#if save =='yes':
-			#path_save = home_folder + '/DATA/EDGES/spectra/level3/' + band + '/' + save_folder + '/'
-			#save_file = path_save + year_day + save_flag + '.hdf5'	
-
-			#with h5py.File(save_file, 'w') as hf:
-				#hf.create_dataset('frequency',            data = fin)
-				#hf.create_dataset('antenna_temperature',  data = tc)
-				#hf.create_dataset('weights',              data = w_2D)
-				#hf.create_dataset('meta_data',            data = m_2D)
-
-
-
-	return fin, tc_with_loss_and_beam, w_2D, m_2D          #fin, tc, w_2D, m_2D
 
 
 

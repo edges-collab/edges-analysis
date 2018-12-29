@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import edges as eg
 import basic as ba
 
-import calibration_mid_band as cmb
+import calibration as cal
 
 from os import listdir
 
@@ -1166,70 +1166,6 @@ def batch_mid_band_level2_to_level3(case):
 	
 	
 	
-	
-	
-	
-	
-	#if case == 1:
-		#flag_folder       = 'nominal_60_160MHz_case1'
-		#receiver_cal_file = 1
-		#antenna_s11_day   = 147
-		#antenna_s11_Nfit  = 14
-		#FLOW  = 60
-		#FHIGH = 160
-		#Nfg   = 7
-
-		
-		
-	## Case selection
-	#if case == 2:
-		#flag_folder       = 'nominal_60_160MHz_case2'
-		#receiver_cal_file = 1
-		#antenna_s11_day   = 147
-		#antenna_s11_Nfit  = 22
-		#FLOW  = 60
-		#FHIGH = 160
-		#Nfg   = 7		
-	
-		
-		
-	## Case selection
-	#if case == 3:
-		#flag_folder       = 'nominal_60_160MHz_case3'
-		#receiver_cal_file = 1
-		#antenna_s11_day   = 222
-		#antenna_s11_Nfit  = 14
-		#FLOW  = 60
-		#FHIGH = 160
-		#Nfg   = 7
-		
-		#print(antenna_s11_Nfit)
-		
-		
-
-	## Case selection
-	#if case == 4:
-		#flag_folder       = 'nominal_60_160MHz_case4'
-		#receiver_cal_file = 1
-		#antenna_s11_day   = 222
-		#antenna_s11_Nfit  = 22
-		#FLOW  = 60
-		#FHIGH = 160
-		#Nfg   = 7
-
-	
-	
-	## Case selection
-	#if case == 5:
-		#flag_folder       = 'nominal_60_160MHz_case5'
-		#receiver_cal_file = 2
-		#antenna_s11_day   = 147
-		#antenna_s11_Nfit  = 14
-		#FLOW  = 60
-		#FHIGH = 160
-		#Nfg   = 7
-	
-
 
 
 
@@ -1257,6 +1193,97 @@ def batch_mid_band_level2_to_level3(case):
 		
 
 	return new_list #0
+
+
+
+
+
+
+
+
+
+
+def batch_low_band3_level2_to_level3(case):
+
+
+	# Case selection
+	#if case == 0:
+		#flag_folder       = 'case0'
+		#receiver_cal_file = 1
+		#antenna_s11_day   = 147
+		#antenna_s11_Nfit  = 14
+		#beam_correction   = 0
+		#balun_correction  = 0
+		#FLOW  = 60
+		#FHIGH = 160
+		#Nfg   = 7
+	
+	
+	#if case == 1:
+		#flag_folder       = 'case1'
+		#receiver_cal_file = 1
+		#antenna_s11_day   = 147
+		#antenna_s11_Nfit  = 14
+		#beam_correction   = 0
+		#balun_correction  = 1
+		#FLOW  = 60
+		#FHIGH = 160
+		#Nfg   = 7
+	
+	
+	if case == 2:
+		flag_folder       = 'case2'
+		receiver_cal_file = 1
+		antenna_s11_day   = 227
+		antenna_s11_Nfit  = 14
+		beam_correction   = 1
+		balun_correction  = 1
+		FLOW  = 50
+		FHIGH = 120
+		Nfg   = 7
+
+	
+
+	# Listing files to be processed
+	path_files = edges_folder + 'low_band3/spectra/level2/'
+	new_list   = listdir(path_files)
+	new_list.sort()
+		
+
+	# Processing files
+	#for i in range(len(new_list)):
+	#for i in range(10, len(new_list)):
+	for i in range(0, 13):	
+		print(i)
+		print(new_list[i])
+	
+		o = eg.level2_to_level3('low_band3', new_list[i], flag_folder=flag_folder, receiver_cal_file=receiver_cal_file, antenna_s11_year=2018, antenna_s11_day=antenna_s11_day, antenna_s11_Nfit=antenna_s11_Nfit, beam_correction=beam_correction, balun_correction=balun_correction, FLOW=FLOW, FHIGH=FHIGH, Nfg=Nfg)
+		
+
+	return new_list #0
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
