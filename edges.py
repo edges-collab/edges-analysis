@@ -1266,7 +1266,7 @@ def level3_to_level4(band, case):
 		
 		if case == 2:
 			path_files             = '/media/raul/EXTERNAL_2TB/low_band3/spectra/level3/case2/'
-			save_folder            = '/media/raul/EXTERNAL_2TB/low_band3/spectra/level4/case2/'
+			save_folder            = edges_folder + 'low_band3/spectra/level4/case2/'
 			output_file_name_hdf5  = 'case2.hdf5'	
 		
 
