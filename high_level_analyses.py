@@ -1253,7 +1253,9 @@ def batch_low_band3_level2_to_level3(case):
 	# Processing files
 	#for i in range(len(new_list)):
 	#for i in range(10, len(new_list)):
-	for i in range(0, 13):	
+	#for i in range(0, 13):
+	for i in range(len(new_list)):
+		
 		print(i)
 		print(new_list[i])
 	

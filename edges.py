@@ -705,9 +705,16 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 
 	# Save
 	# ----
-	save_folder = edges_folder + band + '/spectra/level3/' + flag_folder + '/'
-	if not exists(save_folder):
-		makedirs(save_folder)
+	
+	if band == 'mid_band':
+		save_folder = edges_folder + band + '/spectra/level3/' + flag_folder + '/'
+		if not exists(save_folder):
+			makedirs(save_folder)
+			
+	elif band == 'low_band3':
+		save_folder = '/media/raul/EXTERNAL_2TB/low_band3/spectra/level3/' + flag_folder + '/'
+		if not exists(save_folder):
+			makedirs(save_folder)		
 
 	with h5py.File(save_folder + year_day_hdf5, 'w') as hf:
 		hf.create_dataset('frequency',           data = fin)
@@ -839,12 +846,12 @@ def data_selection(m, GHA_or_LST='GHA', TIME_1=0, TIME_2=24, sun_el_max=90, moon
 
 
 
-def rms_filter_computation(case, save_parameters='no'):
+def rms_filter_computation(band, case, save_parameters='no'):
 	"""
 
-	Last modification:  2018-11-07
+	Last modification:  2019-01-01
 	
-	Computation of the RMS filter for mid-band data
+	Computation of the RMS filte
 	
 	"""
 	
@@ -853,19 +860,28 @@ def rms_filter_computation(case, save_parameters='no'):
 	
 	# Listing files available
 	# ------------------------
-	if case == 0:
-		path_files  = edges_folder + '/mid_band/spectra/level3/case0/'
-		save_folder = edges_folder + '/mid_band/rms_filters/case0/'
-	
-	if case == 1:
-		path_files  = edges_folder + '/mid_band/spectra/level3/case1/'
-		save_folder = edges_folder + '/mid_band/rms_filters/case1/'
-	
-	if case == 2:
-		path_files  = edges_folder + '/mid_band/spectra/level3/case2/'
-		save_folder = edges_folder + '/mid_band/rms_filters/case2/'	
-
+	if band == 'mid_band':
+		if case == 0:
+			path_files  = edges_folder + '/mid_band/spectra/level3/case0/'
+			save_folder = edges_folder + '/mid_band/rms_filters/case0/'
 		
+		if case == 1:
+			path_files  = edges_folder + '/mid_band/spectra/level3/case1/'
+			save_folder = edges_folder + '/mid_band/rms_filters/case1/'
+		
+		if case == 2:
+			path_files  = edges_folder + '/mid_band/spectra/level3/case2/'
+			save_folder = edges_folder + '/mid_band/rms_filters/case2/'
+			
+	
+
+	if band == 'low_band3':
+		if case == 2:
+			path_files  = '/media/raul/EXTERNAL_2TB/low_band3/spectra/level3/case2/'
+			save_folder = edges_folder + '/low_band3/rms_filters/case2/'
+
+
+
 		
 	new_list   = listdir(path_files)
 	new_list.sort()
@@ -1166,16 +1182,16 @@ def rms_filter_computation(case, save_parameters='no'):
 
 
 
-def rms_filter(case, gx, rms, Nsigma):
+def rms_filter(band, case, gx, rms, Nsigma):
 	
 	if case == 0:
-		file_path = edges_folder + 'mid_band/rms_filters/case0/'	
+		file_path = edges_folder + band + '/rms_filters/case0/'	
 	
 	if case == 1:
-		file_path = edges_folder + 'mid_band/rms_filters/case1/'
+		file_path = edges_folder + band + '/rms_filters/case1/'
 		
 	if case == 2:
-		file_path = edges_folder + 'mid_band/rms_filters/case2/'
+		file_path = edges_folder + band + '/rms_filters/case2/'
 
 
 	p    = np.genfromtxt(file_path + 'rms_polynomial_parameters.txt')
@@ -1216,7 +1232,7 @@ def rms_filter(case, gx, rms, Nsigma):
 
 
 
-def level3_to_level4(case):
+def level3_to_level4(band, case):
 	
 	
 	# One-hour bins
@@ -1227,20 +1243,31 @@ def level3_to_level4(case):
 	
 	# Listing files available
 	# ------------------------
-	if case == 0:
-		path_files             = edges_folder + 'mid_band/spectra/level3/case0/'
-		save_folder            = edges_folder + 'mid_band/spectra/level4/case0/'
-		output_file_name_hdf5  = 'case0.hdf5'
-			
-	if case == 1:
-		path_files             = edges_folder + 'mid_band/spectra/level3/case1/'
-		save_folder            = edges_folder + 'mid_band/spectra/level4/case1/'
-		output_file_name_hdf5  = 'case1.hdf5'
+	if band == 'mid_band':
 		
-	if case == 2:
-		path_files             = edges_folder + 'mid_band/spectra/level3/case2/'
-		save_folder            = edges_folder + 'mid_band/spectra/level4/case2/'
-		output_file_name_hdf5  = 'case2.hdf5'
+		if case == 0:
+			path_files             = edges_folder + 'mid_band/spectra/level3/case0/'
+			save_folder            = edges_folder + 'mid_band/spectra/level4/case0/'
+			output_file_name_hdf5  = 'case0.hdf5'
+				
+		if case == 1:
+			path_files             = edges_folder + 'mid_band/spectra/level3/case1/'
+			save_folder            = edges_folder + 'mid_band/spectra/level4/case1/'
+			output_file_name_hdf5  = 'case1.hdf5'
+			
+		if case == 2:
+			path_files             = edges_folder + 'mid_band/spectra/level3/case2/'
+			save_folder            = edges_folder + 'mid_band/spectra/level4/case2/'
+			output_file_name_hdf5  = 'case2.hdf5'
+		
+		
+			
+	if band == 'low_band3':
+		
+		if case == 2:
+			path_files             = '/media/raul/EXTERNAL_2TB/low_band3/spectra/level3/case2/'
+			save_folder            = '/media/raul/EXTERNAL_2TB/low_band3/spectra/level4/case2/'
+			output_file_name_hdf5  = 'case2.hdf5'	
 		
 
 
@@ -1296,7 +1323,7 @@ def level3_to_level4(case):
 		gx[gx<0]   = gx[gx<0] + 24
 		
 		Nsigma     = 3
-		index_good, i1, i2, i3 = rms_filter(case, gx, rmsx, Nsigma)
+		index_good, i1, i2, i3 = rms_filter(band, case, gx, rmsx, Nsigma)
 		
 				
 		# Selecting good data
@@ -1454,9 +1481,9 @@ def level3_to_level4(case):
 				DY = 3
 			
 			FLOW_plot   =  30
-			FHIGH_plot  = 165
-			XTICKS      = np.arange(60, 161, 20)
-			XTEXT       =  32
+			FHIGH_plot  = 125
+			XTICKS      = np.arange(50, 121, 10)
+			XTEXT       =  31
 			YLABEL      = str(DY)  + ' K per division'
 			TITLE       = str(Nfg) + ' LINLOG terms'
 			FIGURE_FORMAT = 'png'
@@ -1479,49 +1506,7 @@ def level3_to_level4(case):
 
 		
 	
-	
-	## Producing total integrated average
-	#for i in range(Ngha):
-		
-		#print('GHA bin ' + str(i+1) + ' of ' + str(len(GHA_edges)-1))
-		
-		
-		#zp = np.mean(avp_all[:,i,:], axis=0)
-		
-		#zr, zw = ba.weighted_mean(avr_all[:,i,:], avw_all[:,i,:])
-		
-		#print(np.sum(zw))
-		#avr_no_rfi, avw_no_rfi = rfi.cleaning_sweep(f, zr, zw, window_width_MHz=5, Npolyterms_block=3, N_choice=20, N_sigma=3)
-		
-		
-		#fb, rb, wb = ba.spectral_binning_number_of_samples(f, avr_no_rfi, avw_no_rfi)
-		#model      = ba.model_evaluate('LINLOG', zp, fb/200)
-		#tb         = model + rb
-	
-		#tb[wb==0]  = 0
-		
-		#if i == 0:
-			#tb_all = np.zeros((len(GHA_edges)-1, len(tb)))
-			#wb_all = np.zeros((len(GHA_edges)-1, len(wb)))
-			
-			
-		#tb_all[i,:] = tb
-		#wb_all[i,:] = wb
 
-
-	## Formatting output data
-	#gha_edges_column = np.reshape(GHA_edges, -1, 1)
-	
-	#dataT = np.array([fb, tb_all[0,:], wb_all[0,:]])
-	#for i in range(len(tb_all[:,0])-1):
-		#dataT = np.vstack((dataT, tb_all[i+1,:], wb_all[i+1,:]))
-		
-	#data = dataT.T
-					
-	#np.savetxt(data_save_path + data_save_name + '_gha_edges' + '.txt', gha_edges_column,  header = 'GHA edges of integrated spectra [hr]')
-	#np.savetxt(data_save_path + data_save_name + '_data' + '.txt',      data,              header = 'Frequency [MHz],\t Temperature [K],\t Weights')
-	
-	
 	
 	
 	# Save
@@ -1535,6 +1520,56 @@ def level3_to_level4(case):
 		hf.create_dataset('weights',      data = avw_all)
 		hf.create_dataset('gha_edges',    data = GHA_edges)
 		hf.create_dataset('year_day',     data = year_day_all)
+
+
+
+
+
+
+		
+		## Producing total integrated average
+		#for i in range(Ngha):
+			
+			#print('GHA bin ' + str(i+1) + ' of ' + str(len(GHA_edges)-1))
+			
+			
+			#zp = np.mean(avp_all[:,i,:], axis=0)
+			
+			#zr, zw = ba.weighted_mean(avr_all[:,i,:], avw_all[:,i,:])
+			
+			#print(np.sum(zw))
+			#avr_no_rfi, avw_no_rfi = rfi.cleaning_sweep(f, zr, zw, window_width_MHz=5, Npolyterms_block=3, N_choice=20, N_sigma=3)
+			
+			
+			#fb, rb, wb = ba.spectral_binning_number_of_samples(f, avr_no_rfi, avw_no_rfi)
+			#model      = ba.model_evaluate('LINLOG', zp, fb/200)
+			#tb         = model + rb
+		
+			#tb[wb==0]  = 0
+			
+			#if i == 0:
+				#tb_all = np.zeros((len(GHA_edges)-1, len(tb)))
+				#wb_all = np.zeros((len(GHA_edges)-1, len(wb)))
+				
+				
+			#tb_all[i,:] = tb
+			#wb_all[i,:] = wb
+	
+	
+		## Formatting output data
+		#gha_edges_column = np.reshape(GHA_edges, -1, 1)
+		
+		#dataT = np.array([fb, tb_all[0,:], wb_all[0,:]])
+		#for i in range(len(tb_all[:,0])-1):
+			#dataT = np.vstack((dataT, tb_all[i+1,:], wb_all[i+1,:]))
+			
+		#data = dataT.T
+						
+		#np.savetxt(data_save_path + data_save_name + '_gha_edges' + '.txt', gha_edges_column,  header = 'GHA edges of integrated spectra [hr]')
+		#np.savetxt(data_save_path + data_save_name + '_data' + '.txt',      data,              header = 'Frequency [MHz],\t Temperature [K],\t Weights')
+		
+		
+
 		
 		
 	return f, avp_all, avr_all, avw_all, GHA_edges, year_day_all  #, f, avp_all, avr_all, avw_all
