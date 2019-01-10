@@ -1807,6 +1807,7 @@ def plot_mid_band_for_talk():
 	
 	ff1, rr1, ww1 = eg.spectra_to_residuals(f, t, w, 61, 159, 3)
 	ff2, rr2, ww2 = eg.spectra_to_residuals(f, t, w, 61, 159, 4)
+	ff3, rr3, ww3 = eg.spectra_to_residuals(f, t, w, 61, 159, 5)
 	
 	X=7; 
 	
@@ -1833,8 +1834,9 @@ def plot_mid_band_for_talk():
 		
 	h1, = ax.plot(ff2[ww2[X,:]>0], rr2[X,ww2[X,:]>0])
 	h2, = ax.plot(ff1[ww1[X,:]>0], rr1[X,ww1[X,:]>0])
-	h3, = ax.plot(ff2[ww2[X,:]>0], rr2[X,ww2[X,:]>0], 'b')
-	h4, = ax.plot([78, 78],[-5, 5], 'g--', linewidth=2)
+	h3, = ax.plot(ff2[ww2[X,:]>0], rr2[X,ww2[X,:]>0], 'k', linewidth=1.5)
+	h4, = ax.plot(ff3[ww3[X,:]>0], rr3[X,ww3[X,:]>0], 'r--', linewidth=0.7)
+	h5, = ax.plot([78, 78],[-5, 5], 'g--', linewidth=2)
 	
 	xlow  = 55
 	xhigh = 165
@@ -1844,7 +1846,7 @@ def plot_mid_band_for_talk():
 	
 	# Fix these lines showing the redshift
 	#ax2.set_xticks(np.array((60-xlow, 80-xlow, 100-xlow, 120-xlow, 140-xlow, 160-xlow))/len(ff1))
-	ax2.set_xticks(np.array([(59.2-xlow), 78.9-xlow, 101.5-xlow, 129.1-xlow, 157.8-xlow])/(165-55))
+	ax2.set_xticks(np.array([(59.2-xlow), (78.9-xlow), (101.5-xlow), (129.1-xlow), (157.8-xlow)])/(165-55))
 	ax2.set_xticklabels([23, 17, 13, 10, 8])
 	
 	ax.set_yticks([-2, -1, 0, 1, 2])
@@ -1858,7 +1860,7 @@ def plot_mid_band_for_talk():
 	ax2.set_xlabel('redshift', fontsize=12)
 	ax.set_xlabel('frequency [MHz]', fontsize=12) 
 	
-	plt.legend([h2, h3, h4], ['3 foreground terms','4 foreground terms', '78 MHz'], loc=4)
+	plt.legend([h2, h3, h4, h5], ['3 foreground terms','4 foreground terms', '5 foreground terms', '78 MHz'], loc=4)
 	
 	
 	return 0
@@ -1866,6 +1868,76 @@ def plot_mid_band_for_talk():
 
 
 
+
+
+def plot_low_band3_for_talk():
+	
+	f = np.genfromtxt('/home/raul/DATA/EDGES/low_band3/spectra/level5/case2/case2_preliminary_frequency.txt')
+	t = np.genfromtxt('/home/raul/DATA/EDGES/low_band3/spectra/level5/case2/case2_preliminary_temperature.txt')
+	w = np.genfromtxt('/home/raul/DATA/EDGES/low_band3/spectra/level5/case2/case2_preliminary_weights.txt')
+	
+	
+	model_type1 = 'LINLOG'
+	model_type2 = 'EDGES_polynomial'
+	ff1, rr1, ww1 = eg.spectra_to_residuals(f, t, w, 61, 101, 3, model_type=model_type1)
+	ff2, rr2, ww2 = eg.spectra_to_residuals(f, t, w, 62, 102, 4, model_type=model_type1)
+	ff3, rr3, ww3 = eg.spectra_to_residuals(f, t, w, 62, 102, 5, model_type=model_type2)
+	
+	X=1; 
+	
+	
+	#h1, = plt.plot(ff2[ww2[X,:]>0], rr2[X,ww2[X,:]>0])
+	#h2, = plt.plot(ff1[ww1[X,:]>0], rr1[X,ww1[X,:]>0])
+	#h3, = plt.plot(ff2[ww2[X,:]>0], rr2[X,ww2[X,:]>0], 'b')
+	#h4, = plt.plot([78, 78],[-5, 5], 'g--', linewidth=2)
+	#plt.ylim([-3,2])
+	
+	#plt.ylabel('brightness temperature [K]')
+	#plt.xlabel('frequency [MHz]') 
+	
+	
+	#plt.legend([h2, h3, h4], ['3 foreground terms','4 foreground terms', '78 MHz'])
+	
+	
+	
+	
+	
+	
+	fig, ax = plt.subplots()
+	z = ba.frequency2redshift(ff1)
+		
+	#h1, = ax.plot(ff2[ww2[X,:]>0], rr2[X,ww2[X,:]>0])
+	#h2, = ax.plot(ff1[ww1[X,:]>0], rr1[X,ww1[X,:]>0])
+	h3, = ax.plot(ff2[ww2[X,:]>0], rr2[X,ww2[X,:]>0], 'b')
+	h4, = ax.plot(ff3[ww3[X,:]>0], rr3[X,ww3[X,:]>0]-0.5, 'r')
+	h5, = ax.plot([78, 78],[-5, 5], 'g--', linewidth=2)
+	
+	xlow  = 58
+	xhigh = 110
+	ax.set_xlim([xlow, xhigh])
+	
+	ax2 = ax.twiny()
+	
+	# Fix these lines showing the redshift
+	#ax2.set_xticks(np.array((60-xlow, 80-xlow, 100-xlow, 120-xlow, 140-xlow, 160-xlow))/len(ff1))
+	ax2.set_xticks(np.array([(59.2-xlow), (67.6-xlow), 78.9-xlow, 88.77-xlow, 101.5-xlow])/(xhigh-xlow)) # , 129.1-xlow, 157.8-xlow
+	ax2.set_xticklabels([23, 20, 17, 15, 13])  # , 10, 8
+	
+	ax.set_yticks([-1.0, -0.5, 0, 0.5])
+	
+	
+	
+	
+	
+	ax.set_ylim([-1.1, 0.5])
+	ax.set_ylabel('brightness temperature [K]', fontsize=12)
+	ax2.set_xlabel('redshift', fontsize=12)
+	ax.set_xlabel('frequency [MHz]', fontsize=12) 
+	
+	plt.legend([h3, h4, h5], ['4 foreground terms', '5 foreground terms', '78 MHz'], loc=4)
+	
+	
+	return 0
 
 
 
