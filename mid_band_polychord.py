@@ -4,7 +4,7 @@
 
 how to run:
 
-$ python mid_band_polychord 0 4 test
+$ python mid_band_polychord.py 0 5 test
 
 
 '''
@@ -30,9 +30,6 @@ save_file_name = sys.argv[3]
 
 # Constants
 # -----------------------
-v  = np.arange(61, 159, 0.39)
-v0 = 100
-
 Nparameters = N21+Nfg
 Nderived    = 0
 
@@ -41,20 +38,30 @@ model_type_foreground = 'exp'
 
 data = 'simulated'   # it could be 'real' or 'simulated'
 
-save_folder = '/home/raul/Desktop/'
+save_folder = '/home/raul/Desktop/cuec/'
 
 
 
 
+# Data
 
+# Choose to work either with simulated or real data
+if data == 'simulated':
+	v  = np.arange(61, 159, 0.39)
+	v0 = 100	
 
+	#t, sigma, inv_sigma, det_sigma = dm.simulated_data([-0.5, 78, 19, 7, 1000, -2.5, -0.1, 1, 1], v, v0, 0.02, model_type_signal='exp', model_type_foreground='exp', N21par=4, NFGpar=5)
+	t, sigma, inv_sigma, det_sigma = dm.simulated_data([1000, -2.5, -0.1, 1, 1], v, v0, 0.02, model_type_signal='exp', model_type_foreground='exp', N21par=0, NFGpar=5)
 
+elif data == 'real':
+	t, sigma, inv_sigma, det_sigma = real_data() 
+	
 
 
 def prior_list(N21, Nfg, model_type_signal, model_type_foreground):
 	
 
-	pl      = np.zeros((Npar, 2))
+	pl      = np.zeros((Nparameters, 2))
 	pl[:,0] = -1e4
 	pl[:,1] = +1e4
 	
@@ -107,7 +114,7 @@ def loglikelihood(theta):
 	N = len(v)
 
 	# Evaluating model
-	m = dm.full_model(theta,  model_type_signal='exp', model_type_foreground='exp', N21par=4, NFGpar=5)
+	m = dm.full_model(theta, v, v0, model_type_signal='exp', model_type_foreground='exp', N21par=0, NFGpar=5)
 
 
 	# Log-likelihood
@@ -154,7 +161,7 @@ def prior(cube):
 
 	theta = np.zeros(len(cube))
 
-	pl = prior_list() 
+	pl = prior_list(N21, Nfg, model_type_signal, model_type_foreground) 
 
 	for i in range(len(cube)):
 		theta[i] = cube[i] * (pl[i,1] - pl[i,0]) + pl[i,0] 
@@ -194,31 +201,6 @@ def run():
 	return 0
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# Choose to work either with simulated or real data
-if data == 'simulated':	
-	t, sigma, inv_sigma, det_sigma = simulated_data(4, [-0.5, 78, 19, 7, 1000, -2.5, 0.1, -4, -0.05], 0.02)  # power law
-
-elif data == 'real':
-	t, sigma, inv_sigma, det_sigma = real_data() 
-	
-	
 
 
 run()

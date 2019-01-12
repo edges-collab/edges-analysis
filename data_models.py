@@ -8,6 +8,8 @@ import numpy as np
 
 
 def foreground_model(model_type, theta_fg, v, vr, ion_abs_coeff='free', ion_emi_coeff='free'):
+	
+	#print(theta_fg)
 
 
 	number_of_parameters = len(theta_fg)
