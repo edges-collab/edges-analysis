@@ -35,14 +35,17 @@ Nderived    = 0
 model_type_signal     = 'exp'
 model_type_foreground = 'exp'
 
-data = 'simulated'   # it could be 'real' or 'simulated'
-
 save_folder = '/home/raul/Desktop/cuec2/'
 
+data = 'real'   # it could be 'real' or 'simulated'
 
+FLOW  =  61
+FHIGH = 159
 
+GHA_index = 5
 
-
+v0 = 100
+noise_std_at_v0 = 0.04
 
 
 
@@ -51,13 +54,13 @@ save_folder = '/home/raul/Desktop/cuec2/'
 # Choose to work either with simulated or real data
 if data == 'simulated':
 	v  = np.arange(61, 159, 0.39)
-	v0 = 100	
+		
 
 	#t, sigma, inv_sigma, det_sigma = dm.simulated_data([-0.5, 78, 19, 7, 1000, -2.5, -0.1, 1, 1], v, v0, 0.02, model_type_signal='exp', model_type_foreground='exp', N21par=4, NFGpar=5)
 	t, sigma, inv_sigma, det_sigma = dm.simulated_data([1000, -2.5, -0.1, 1, 1], v, v0, 0.01, model_type_signal='exp', model_type_foreground='exp', N21par=0, NFGpar=5)
 
 elif data == 'real':
-	t, sigma, inv_sigma, det_sigma = dm.real_data(FLOW, FHIGH, index=GHA_index) 
+	v, t, w, sigma, inv_sigma, det_sigma = dm.real_data(FLOW, FHIGH, v0, noise_std_at_v0, index=GHA_index) 
 	
 
 
