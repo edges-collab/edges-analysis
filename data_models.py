@@ -171,8 +171,8 @@ def simulated_data(theta, v, vr, noise_std_at_vr, model_type_signal='exp', model
 	#noise   = np.random.normal(0, std_dev, size=len(v))
 
 
-	std_dev_vec   = noise_std_at_vr * (v/vr)**(-2.5)
-	#std_dev_vec   = noise_std_at_v0*np.ones(len(v))
+	#std_dev_vec   = noise_std_at_vr * (v/vr)**(-2.5)
+	std_dev_vec   = noise_std_at_vr*np.ones(len(v))
 
 
 	sigma         = np.diag(std_dev_vec**2)     # uncertainty covariance matrix
@@ -195,4 +195,25 @@ def simulated_data(theta, v, vr, noise_std_at_vr, model_type_signal='exp', model
 
 
 
+
+
+
+
+
+def real_data(FLOW, FHIGH, index=4):
+	
+	vv = np.genfromtxt('/home/raul/DATA/EDGES/mid_band/spectra/level5/case2/case2_2hr_average_2.5_frequency.txt')
+	tt = np.genfromtxt('/home/raul/DATA/EDGES/mid_band/spectra/level5/case2/case2_2hr_average_2.5_temperature.txt')
+	ww = np.genfromtxt('/home/raul/DATA/EDGES/mid_band/spectra/level5/case2/case2_2hr_average_2.5_weights.txt')
+	
+	
+	
+	v  = vv[(vv>=FLOW) & (vv<=FHIGH)]
+	tp = tt[:,(vv>=FLOW) & (vv<=FHIGH)]
+	wp = ww[:,(vv>=FLOW) & (vv<=FHIGH)]
+	
+	t = tp[index,:]
+	w = wp[index,:]
+	
+	return v, t, w 
 

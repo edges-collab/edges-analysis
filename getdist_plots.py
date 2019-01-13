@@ -14,22 +14,19 @@ from getdist import MCSamples, plots
 
 
 
-def load_samples(input_textfile, label_names=[]):
+def load_samples(input_textfile, index_good, label_names=[]):
 	
 	
 	# Loading data
-	d = np.genfromtxt(input_textfile)
+	dd = np.genfromtxt(input_textfile)
+	d = dd[index_good::,:]
 
-	#ww = d[:,0]    # Weights
-	#ll = d[:,1]/2  # Minus Log Likelihood
-	
-	ww = d[:,1]    # Weights
-	ll = d[:,0]/2  # Minus Log Likelihood
-		
+	ww = d[:,0]    # Weights
+	ll = d[:,1]/2  # Minus Log Likelihood	
 	ss = d[:,2::]  # Parameter samples
 	
 	
-	
+
 	# Parameter names and labels
 	Npar = len(ss[0,:])
 	names = ['x'+str(i+1) for i in range(Npar)]
