@@ -32,8 +32,8 @@ save_file_name = sys.argv[3]
 Nparameters = N21+Nfg
 Nderived    = 0
 
-model_type_signal     = 'exp'
-model_type_foreground = 'exp'
+model_type_signal     = 'tanh' #'exp', 'tanh'
+model_type_foreground = 'exp'  #'exp', 'linlog'
 
 save_folder = '/home/raul/Desktop/cuec2/'
 
@@ -80,7 +80,7 @@ def prior_list(N21, Nfg, model_type_signal, model_type_foreground):
 	
 	
 	# Signal model
-	if (model_type_signal == 'exp') and (N21>=4):
+	if ((model_type_signal == 'exp') or (model_type_signal == 'tanh')) and (N21>=4):
 		
 		# Amplitude
 		pl[0, 0] = -5
@@ -96,7 +96,7 @@ def prior_list(N21, Nfg, model_type_signal, model_type_foreground):
 		
 		# Tau
 		pl[3, 0] =  0.01
-		pl[3, 1] =  20
+		pl[3, 1] =  40
 		
 		
 		
@@ -110,6 +110,14 @@ def prior_list(N21, Nfg, model_type_signal, model_type_foreground):
 		# Spectral index
 		pl[N21+1, 0] =  -2.0
 		pl[N21+1, 1] =  -3.0
+		
+
+		
+	elif model_type_foreground == 'linlog':
+	
+		# Temperature at reference frequency
+		pl[N21,   0] =   100   # lower limit of first parameter, temperature at 100 MHz
+		pl[N21,   1] = 10000   # upper limit of first parameter, temperature at 100 MHz
 		
 
 	return pl
@@ -127,7 +135,7 @@ def loglikelihood(theta):
 	N = len(v)
 
 	# Evaluating model
-	m = dm.full_model(theta, v, v0, model_type_signal='exp', model_type_foreground='exp', N21par=N21, NFGpar=Nfg)
+	m = dm.full_model(theta, v, v0, model_type_signal=model_type_signal, model_type_foreground=model_type_foreground, N21par=N21, NFGpar=Nfg)
 
 
 	# Log-likelihood
