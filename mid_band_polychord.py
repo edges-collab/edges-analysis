@@ -40,12 +40,12 @@ save_folder = '/home/raul/Desktop/cuec2/'
 data = 'real'   # it could be 'real' or 'simulated'
 
 FLOW  =  61
-FHIGH = 159
+FHIGH = 120 #159
 
-GHA_index = 5
+GHA_index = 7
 
 v0 = 100
-noise_std_at_v0 = 0.04
+
 
 
 
@@ -55,12 +55,12 @@ noise_std_at_v0 = 0.04
 if data == 'simulated':
 	v  = np.arange(61, 159, 0.39)
 		
-
 	#t, sigma, inv_sigma, det_sigma = dm.simulated_data([-0.5, 78, 19, 7, 1000, -2.5, -0.1, 1, 1], v, v0, 0.02, model_type_signal='exp', model_type_foreground='exp', N21par=4, NFGpar=5)
 	t, sigma, inv_sigma, det_sigma = dm.simulated_data([1000, -2.5, -0.1, 1, 1], v, v0, 0.01, model_type_signal='exp', model_type_foreground='exp', N21par=0, NFGpar=5)
 
+
 elif data == 'real':
-	v, t, w, sigma, inv_sigma, det_sigma = dm.real_data(FLOW, FHIGH, v0, noise_std_at_v0, index=GHA_index) 
+	v, t, w, sigma, inv_sigma, det_sigma = dm.real_data(FLOW, FHIGH, index=GHA_index) 
 	
 
 
@@ -79,37 +79,37 @@ def prior_list(N21, Nfg, model_type_signal, model_type_foreground):
 	pl[:,1] = +1e4
 	
 	
-	## Signal model
-	#if (model_type_signal == 'exp') and (N21>=4):
+	# Signal model
+	if (model_type_signal == 'exp') and (N21>=4):
 		
-		## Amplitude
-		#pl[0, 0] =  -5
-		#pl[0, 1] =   5
+		# Amplitude
+		pl[0, 0] = -5
+		pl[0, 1] =  5
 
-		## Center
-		#pl[1, 0] =  61
-		#pl[1, 1] = 159		
+		# Center
+		pl[1, 0] = 65
+		pl[1, 1] = 95		
 	
-		## Width
-		#pl[2, 0] =   2
-		#pl[2, 1] =  60
+		# Width
+		pl[2, 0] =  2
+		pl[2, 1] = 30
 		
-		## Tau
-		#pl[3, 0] =   0.01
-		#pl[3, 1] =  30
+		# Tau
+		pl[3, 0] =  0.01
+		pl[3, 1] =  20
 		
 		
 		
-	## Foreground model
-	#if model_type_foreground == 'exp':
+	# Foreground model
+	if model_type_foreground == 'exp':
 	
-		## Temperature at reference frequency
-		#pl[N21,   0] =   100   # lower limit of first parameter, temperature at 100 MHz
-		#pl[N21,   1] = 10000   # upper limit of first parameter, temperature at 100 MHz
+		# Temperature at reference frequency
+		pl[N21,   0] =   100   # lower limit of first parameter, temperature at 100 MHz
+		pl[N21,   1] = 10000   # upper limit of first parameter, temperature at 100 MHz
 		
-		## Spectral index
-		#pl[N21+1, 0] =  -2.0
-		#pl[N21+1, 1] =  -3.0
+		# Spectral index
+		pl[N21+1, 0] =  -2.0
+		pl[N21+1, 1] =  -3.0
 		
 
 	return pl

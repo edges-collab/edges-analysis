@@ -200,7 +200,7 @@ def simulated_data(theta, v, vr, noise_std_at_vr, model_type_signal='exp', model
 
 
 
-def real_data(FLOW, FHIGH, vr, noise_std_at_vr, index=4):
+def real_data(FLOW, FHIGH, index=4):
 	
 	vv = np.genfromtxt('/home/raul/DATA/EDGES/mid_band/spectra/level5/case2/case2_2hr_average_2.5_frequency.txt')
 	tt = np.genfromtxt('/home/raul/DATA/EDGES/mid_band/spectra/level5/case2/case2_2hr_average_2.5_temperature.txt')
@@ -222,8 +222,10 @@ def real_data(FLOW, FHIGH, vr, noise_std_at_vr, index=4):
 	
 	
 	
-	std_dev_vec   = noise_std_at_vr * (v/vr)**(-2.5)
-	#std_dev_vec   = noise_std_at_vr*np.ones(len(v))
+	#std_dev_vec   = noise_std_at_vr * (v/vr)**(-2.5)
+	std_dev_vec = np.ones(len(v))
+	std_dev_vec[v <= 100] = 0.040 * std_dev_vec[v <= 100]
+	std_dev_vec[v  > 100] = 0.015 * std_dev_vec[v  > 100]
 
 	sigma         = np.diag(std_dev_vec**2)     # uncertainty covariance matrix
 	inv_sigma     = np.linalg.inv(sigma)
