@@ -2000,7 +2000,7 @@ def one_hour_filter(band, year, day, gha):
 
 
 
-def season_integrated_spectra_GHA(band, case, new_gha_edges=np.arange(0,25,2), data_save_name = 'caseX_1hr_average'):
+def season_integrated_spectra_GHA(band, case, new_gha_edges=np.arange(0,25,2), data_save_name_flag='2hr'):
 	
 	if case == 0:
 		case_str = 'case0'
@@ -2032,7 +2032,7 @@ def season_integrated_spectra_GHA(band, case, new_gha_edges=np.arange(0,25,2), d
 		
 		# Looping over day
 		counter = 0
-		for i in range(10):  # range(len(yd)): # range(38): 
+		for i in range(len(yd)): # range(38): range(10):
 			
 			# Returns a 1 if the 1hr average tested is good quality, and a 0 if it is not
 			keep = one_hour_filter(band, yd[i,0], yd[i,1], gha_edges[j])
@@ -2069,6 +2069,41 @@ def season_integrated_spectra_GHA(band, case, new_gha_edges=np.arange(0,25,2), d
 		rr_all[j,:] = avr_no_rfi
 		wr_all[j,:] = avw_no_rfi
 		
+		
+		
+		
+		
+		
+		
+		# Frequency binning
+		fb, rb, wb  = ba.spectral_binning_number_of_samples(f, avr_no_rfi, avw_no_rfi)
+		mb          = ba.model_evaluate('LINLOG', avp, fb/200)
+		tb          = mb + rb
+		tb[wb==0]   = 0
+		
+		
+		# Storing binned average spectra
+		if j == 0:
+			tb_all = np.zeros((len(gha_edges)-1, len(fb)))
+			wb_all = np.zeros((len(gha_edges)-1, len(fb)))
+						
+		tb_all[j,:] = tb
+		wb_all[j,:] = wb		
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
 		
 	
 	
@@ -2155,27 +2190,21 @@ def season_integrated_spectra_GHA(band, case, new_gha_edges=np.arange(0,25,2), d
 
 
 
-
-		## Formatting output data
-		#new_gha_edges_column = np.reshape(new_gha_edges, -1, 1)
-		
-		#dataT = np.array([fb, tbx_all[0,:], wbx_all[0,:]])
-		#for i in range(len(tbx_all[:,0])-1):
-			#dataT = np.vstack((dataT, tbx_all[i+1,:], wbx_all[i+1,:]))
-			
-		#data = dataT.T
 		
 		
 		# Saving data				
-		np.savetxt(data_save_path + data_save_name + '_gha_edges.txt',    new_gha_edges,  header = 'GHA edges of integrated spectra [hr].')
-		np.savetxt(data_save_path + data_save_name + '_frequency.txt',    fb,             header = 'Frequency [MHz].')
-		np.savetxt(data_save_path + data_save_name + '_temperature.txt',  tbx_all,        header = 'Rows correspond to different GHAs. Columns correspond to frequency.')
-		np.savetxt(data_save_path + data_save_name + '_weights.txt',      wbx_all,        header = 'Rows correspond to different GHAs. Columns correspond to frequency.')
+		np.savetxt(data_save_path + case_str + '_frequency.txt',        fb,         header = 'Frequency [MHz].')
+		np.savetxt(data_save_path + case_str + '_1hr_gha_edges.txt',    gha_edges,  header = 'GHA edges of integrated spectra from 0hr to 23hr in steps of 1hr [hr].')
+		np.savetxt(data_save_path + case_str + '_1hr_temperature.txt',  tb_all,     header = 'Rows correspond to different GHAs from 0hr to 23hr in steps of 1hr. Columns correspond to frequency.')
+		np.savetxt(data_save_path + case_str + '_1hr_weights.txt',      wb_all,     header = 'Rows correspond to different GHAs from 0hr to 23hr in steps of 1hr. Columns correspond to frequency.')
+		np.savetxt(data_save_path + case_str + '_' + data_save_name_flag + '_gha_edges.txt',   new_gha_edges,  header = 'GHA edges of integrated spectra [hr].')
+		np.savetxt(data_save_path + case_str + '_' + data_save_name_flag + '_temperature.txt', tbx_all,        header = 'Rows correspond to different GHAs. Columns correspond to frequency.')
+		np.savetxt(data_save_path + case_str + '_' + data_save_name_flag + '_weights.txt',     wbx_all,        header = 'Rows correspond to different GHAs. Columns correspond to frequency.')
 		
 
 
 
-	return fb, tbx_all, wbx_all
+	return fb, tb_all, wb_all, tbx_all, wbx_all
 
 
 

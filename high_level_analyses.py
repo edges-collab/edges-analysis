@@ -1673,29 +1673,41 @@ def plot_residuals_simulated_antenna_temperature(model, title):
 
 
 
-def plot_residuals_averages_2hr_gha(case=1, Nfg=3, DDY=1.5, TITLE='No Beam Correction, Residuals to 5 LINLOG terms, 61-159 MHz', figure_name='no_beam_correction'):
+def plot_season_average_residuals(case, Nfg=3, DDY=1.5, TITLE='No Beam Correction, Residuals to 5 LINLOG terms, 61-159 MHz', figure_name='no_beam_correction'):
 	
-	if case == 1:
-		fb = np.genfromtxt('/home/raul/DATA/EDGES/mid_band/spectra/level5/case1/case1_2hr_average_frequency.txt')
-		ty = np.genfromtxt('/home/raul/DATA/EDGES/mid_band/spectra/level5/case1/case1_2hr_average_temperature.txt')
-		wy = np.genfromtxt('/home/raul/DATA/EDGES/mid_band/spectra/level5/case1/case1_2hr_average_weights.txt')
-		
-	if case == 2:
-		fb = np.genfromtxt('/home/raul/DATA/EDGES/mid_band/spectra/level5/case2/case2_2hr_average_frequency.txt')
-		ty = np.genfromtxt('/home/raul/DATA/EDGES/mid_band/spectra/level5/case2/case2_2hr_average_temperature.txt')
-		wy = np.genfromtxt('/home/raul/DATA/EDGES/mid_band/spectra/level5/case2/case2_2hr_average_weights.txt')	
-
-
-		
-		
+	if case == 'a':
+		delta_HR = 1
+		fb = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_frequency.txt')
+		ty = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_1hr_temperature.txt')
+		wy = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_1hr_weights.txt')
+			
 		
 	
-	ff, rr, ww = eg.spectra_to_residuals(fb, ty, wy, 61, 159, Nfg) 
+		ff, rr, ww = eg.spectra_to_residuals(fb, ty, wy, 61, 159, Nfg) 
+		
+		ar     = np.arange(0, 25, delta_HR)
+		str_ar = ['GHA=' + str(ar[i]) + '-' + str(ar[i+1]) + ' hr' for i in range(len(ar)-1)]
+		
+		o = eg.plot_residuals(ff, rr, ww, str_ar, FIG_SX=7, FIG_SY=12, DY=DDY, FLOW=30, FHIGH=165, XTICKS=np.arange(60, 160+1, 20), XTEXT=32, YLABEL=str(DDY) + ' K per division', TITLE=TITLE, save='yes', figure_name=figure_name, figure_format='pdf')
+		
+		
+		
+		
+	if case == 'b':
+		delta_HR = 1
+		fb = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_frequency.txt')
+		ty = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_1hr_temperature.txt')
+		wy = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_1hr_weights.txt')
+			
+		
 	
-	ar     = np.arange(0,25,2)
-	str_ar = ['GHA=' + str(ar[i]) + '-' + str(ar[i+1]) + ' hr' for i in range(len(ar)-1)]
-	
-	o = eg.plot_residuals(ff, rr, ww, str_ar, FIG_SX=7, FIG_SY=12, DY=DDY, FLOW=30, FHIGH=165, XTICKS=np.arange(60, 160+1, 20), XTEXT=32, YLABEL=str(DDY) + ' K per division', TITLE=TITLE, save='yes', figure_name=figure_name, figure_format='pdf')
+		ff, rr, ww = eg.spectra_to_residuals(fb, ty, wy, 61, 136, Nfg) 
+		
+		ar     = np.arange(0, 25, delta_HR)
+		str_ar = ['GHA=' + str(ar[i]) + '-' + str(ar[i+1]) + ' hr' for i in range(len(ar)-1)]
+		
+		o = eg.plot_residuals(ff, rr, ww, str_ar, FIG_SX=6, FIG_SY=12, DY=DDY, FLOW=30, FHIGH=145, XTICKS=np.arange(60, 140+1, 20), XTEXT=32, YLABEL=str(DDY) + ' K per division', TITLE=TITLE, save='yes', figure_name=figure_name, figure_format='pdf')		
+		
 	
 	return 0
 

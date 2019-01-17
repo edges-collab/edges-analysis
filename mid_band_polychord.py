@@ -39,10 +39,9 @@ save_folder = '/home/raul/Desktop/cuec2/'
 
 data = 'real'   # it could be 'real' or 'simulated'
 
-FLOW  =  61
-FHIGH = 120 #159
-
-GHA_index = 7
+FLOW      =  61
+FHIGH     = 136 #159
+GHA_index = 1
 
 v0 = 100
 
@@ -87,16 +86,29 @@ def prior_list(N21, Nfg, model_type_signal, model_type_foreground):
 		pl[0, 1] =  5
 
 		# Center
-		pl[1, 0] = 65
+		pl[1, 0] = 61
 		pl[1, 1] = 95		
 	
 		# Width
 		pl[2, 0] =  2
-		pl[2, 1] = 30
+		pl[2, 1] = 40
 		
 		# Tau
 		pl[3, 0] =  0.01
 		pl[3, 1] =  40
+		
+		if (model_type_signal == 'exp') and (N21 == 5):
+			
+			# Tau
+			pl[4, 0] =  -10
+			pl[4, 1] =   10			
+		
+		
+		if (model_type_signal == 'tanh') and (N21 == 5):
+			
+			# Tau
+			pl[4, 0] =  0.01
+			pl[4, 1] =  40			
 		
 		
 		

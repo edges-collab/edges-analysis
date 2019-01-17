@@ -1,7 +1,9 @@
 
 import numpy as np
+import os, sys
 
-
+edges_folder       = os.environ['EDGES']
+print('EDGES Folder: ' + edges_folder)
 
 
 
@@ -90,16 +92,18 @@ def signal_model(model_type, theta, v):
 	dv    = theta[2]
 	tau0  = theta[3]
 	
-	if len(theta) == 4:
-		tilt = 0
-		
-	elif len(theta) == 5:
-		tilt  = theta[4]
-
+	
 
 
 	# Memo 220 and 226
 	if model_type == 'exp':
+		
+		if len(theta) == 4:
+			tilt = 0
+			
+		elif len(theta) == 5:
+			tilt  = theta[4]		
+		
 		b  = -np.log(-np.log( (1 + np.exp(-tau0))/2 )/tau0)
 		K1 = T21 * (1 - np.exp( -tau0 * np.exp( (-b*(v-vr)**2) / ((dv**2)/4))))
 		K2 = 1 + (tilt * (v - vr) / dv)
@@ -109,8 +113,13 @@ def signal_model(model_type, theta, v):
 
 	# Memo 226
 	if model_type == 'tanh':
+		if len(theta) == 4:
+			tau1 = np.copy(tau0)
+		elif len(theta) == 5:
+			tau1 = theta[4]
+		
 		K1 = np.tanh( (1/(v + dv/2) - 1/vr) / (dv/(tau0*(vr**2))) )
-		K2 = np.tanh( (1/(v - dv/2) - 1/vr) / (dv/(tau0*(vr**2))) )
+		K2 = np.tanh( (1/(v - dv/2) - 1/vr) / (dv/(tau1*(vr**2))) )
 		T  = -(T21/2) * (K1 - K2) 
 
 	return T   # The amplitude is equal to T21, not to -T21
@@ -200,11 +209,19 @@ def simulated_data(theta, v, vr, noise_std_at_vr, model_type_signal='exp', model
 
 
 
-def real_data(FLOW, FHIGH, index=4):
+def real_data(case, FLOW, FHIGH, index=1):
 	
-	vv = np.genfromtxt('/home/raul/DATA/EDGES/mid_band/spectra/level5/case2/case2_2hr_average_2.5_frequency.txt')
-	tt = np.genfromtxt('/home/raul/DATA/EDGES/mid_band/spectra/level5/case2/case2_2hr_average_2.5_temperature.txt')
-	ww = np.genfromtxt('/home/raul/DATA/EDGES/mid_band/spectra/level5/case2/case2_2hr_average_2.5_weights.txt')
+	
+	if case == 'a':
+		vv = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_frequency.txt')
+		tt = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_12hr_temperature.txt')
+		ww = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_12hr_weights.txt')
+		
+	if case == 'b':
+		vv = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_frequency.txt')
+		tt = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_8hr_temperature.txt')
+		ww = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_8hr_weights.txt')		
+		
 	
 	
 	
@@ -215,17 +232,31 @@ def real_data(FLOW, FHIGH, index=4):
 	tp  = tpp[index,:]
 	wp  = wpp[index,:]
 	
+	
+	
+	
+	#vk = vp[wp>0]
+	#tk = tp[wp>0]
+	#wk = wp[wp>0]
+	
+	#v = vk[(vk<65) | ((vk>94.7) & (vk<104)) | (vk>112)]
+	#t = tk[(vk<65) | ((vk>94.7) & (vk<104)) | (vk>112)]
+	#w = wk[(vk<65) | ((vk>94.7) & (vk<104)) | (vk>112)]
+	
+	
+	
+	
 	v = vp[wp>0]
 	t = tp[wp>0]
-	w = wp[wp>0]
+	w = wp[wp>0]	
 	
 	
 	
 	
 	#std_dev_vec   = noise_std_at_vr * (v/vr)**(-2.5)
 	std_dev_vec = np.ones(len(v))
-	std_dev_vec[v <= 100] = 0.040 * std_dev_vec[v <= 100]
-	std_dev_vec[v  > 100] = 0.015 * std_dev_vec[v  > 100]
+	std_dev_vec[v <= 100] = 0.015 * std_dev_vec[v <= 100]
+	std_dev_vec[v  > 100] = 0.010 * std_dev_vec[v  > 100]
 
 	sigma         = np.diag(std_dev_vec**2)     # uncertainty covariance matrix
 	inv_sigma     = np.linalg.inv(sigma)
