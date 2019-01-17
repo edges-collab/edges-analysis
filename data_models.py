@@ -211,18 +211,49 @@ def simulated_data(theta, v, vr, noise_std_at_vr, model_type_signal='exp', model
 
 def real_data(case, FLOW, FHIGH, index=1):
 	
-	
-	if case == 'a':
+	if case == '1hr':
+		vv = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_frequency.txt')
+		tt = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_1hr_temperature.txt')
+		ww = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_1hr_weights.txt')
+		g  = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_1hr_gha_edges.txt')
+		
+	if case == '2hr':
+		vv = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_frequency.txt')
+		tt = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_2hr_temperature.txt')
+		ww = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_2hr_weights.txt')
+		g  = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_2hr_gha_edges.txt')
+
+	if case == '3hr':
+		vv = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_frequency.txt')
+		tt = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_3hr_temperature.txt')
+		ww = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_3hr_weights.txt')
+		g  = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_3hr_gha_edges.txt')
+		
+	if case == '4hr':
+		vv = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_frequency.txt')
+		tt = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_4hr_temperature.txt')
+		ww = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_4hr_weights.txt')
+		g  = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_4hr_gha_edges.txt')
+		
+	if case == '6hr':
+		vv = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_frequency.txt')
+		tt = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_6hr_temperature.txt')
+		ww = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_6hr_weights.txt')
+		g  = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_6hr_gha_edges.txt')
+		
+	if case == '8hr':
+		vv = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_frequency.txt')
+		tt = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_8hr_temperature.txt')
+		ww = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_8hr_weights.txt')
+		g  = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_8hr_gha_edges.txt')
+				
+	if case == '12hr':
 		vv = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_frequency.txt')
 		tt = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_12hr_temperature.txt')
 		ww = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_12hr_weights.txt')
-		
-	if case == 'b':
-		vv = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_frequency.txt')
-		tt = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_8hr_temperature.txt')
-		ww = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_8hr_weights.txt')		
-		
-	
+		g  = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_12hr_gha_edges.txt')
+
+
 	
 	
 	vp  = vv[(vv>=FLOW) & (vv<=FHIGH)]
@@ -264,5 +295,5 @@ def real_data(case, FLOW, FHIGH, index=1):
 
 	
 		
-	return v, t, w, sigma, inv_sigma, det_sigma 
+	return v, t, w, g, sigma, inv_sigma, det_sigma 
 
