@@ -12,6 +12,7 @@ import astropy.time as apt
 import astropy.coordinates as apc
 
 import h5py
+import healpy as hp
 import datetime as dt
 import scipy.interpolate as spi
 
@@ -1776,6 +1777,141 @@ def FEKO_blade_beam(band, beam_file, frequency_interpolation='no', frequency=np.
 
 
 
+def haslam_408MHz_map():
+
+	'''
+	
+	This function will return the Haslam map in NESTED Galactic Coordinates
+	
+	'''
+
+
+	# Loading NESTED galactic coordinates
+	# -----------------------------------
+	coord              = fits.open(edges_folder + '/sky_models/coordinate_maps/pixel_coords_map_nested_galactic_res9.fits')
+	coord_array        = coord[1].data
+	lon                = coord_array['LONGITUDE']
+	lat                = coord_array['LATITUDE']
+	GALAC_COORD_object = apc.SkyCoord(lon, lat, frame='galactic', unit='deg')  # defaults to ICRS frame
+	
+	
+	
+	# Loading Haslam map
+	# ------------------
+	haslam_map = fits.open(edges_folder + '/sky_models/haslam_map/lambda_haslam408_dsds.fits')
+	haslam408  = (haslam_map[1].data)['temperature']
+
+
+	print('HASLAM 408MHz MAP')
+
+	return haslam408, lon, lat, GALAC_COORD_object
+
+
+
+
+
+
+
+
+def LW_150MHz_map():
+	
+	'''
+	
+	This function will return the Haslam map in NESTED Galactic Coordinates
+	
+	'''
+	
+	# Loading NESTED galactic coordinates
+	# -----------------------------------
+	coord              = fits.open(edges_folder + '/sky_models/coordinate_maps/pixel_coords_map_nested_galactic_res8.fits')
+	coord_array        = coord[1].data
+	lon                = coord_array['LONGITUDE']
+	lat                = coord_array['LATITUDE']
+	GALAC_COORD_object = apc.SkyCoord(lon, lat, frame='galactic', unit='deg')  # defaults to ICRS frame
+	
+	
+	
+	# Loading LW map
+	# --------------
+	LW150 = np.genfromtxt(edges_folder + '/sky_models/LW_150MHz_map/150_healpix_gal_nested_R8.txt')   # Here we use the raw map, without destriping
+
+
+	print('LW 150MHz MAP')
+
+	return LW150, lon, lat, GALAC_COORD_object
+
+
+
+
+
+
+
+
+def guzman_45MHz_map():
+
+	'''
+	
+	This function will return the Guzman map in NESTED Galactic Coordinates
+	
+	'''
+	
+	# Loading NESTED galactic coordinates
+	# -----------------------------------
+	coord              = fits.open(edges_folder + '/sky_models/coordinate_maps/pixel_coords_map_nested_galactic_res9.fits')
+	coord_array        = coord[1].data
+	lon_raw            = coord_array['LONGITUDE']
+	lat_raw            = coord_array['LATITUDE']
+	GALAC_COORD_object = apc.SkyCoord(lon_raw, lat_raw, frame='galactic', unit='deg')  # defaults to ICRS frame	
+
+
+
+	
+	# 45-MHz map. The map is in Plate Caree projection (unprojected, see https://en.wikipedia.org/wiki/Equirectangular_projection)
+	# ----------------------------------------------------------------------------------------------------------------------------
+	map45_fit = fits.open(edges_folder + '/sky_models/map_45MHz/wlb45.fits')	
+	map45     = map45_fit[0].data
+	map45_1D  = map45.flatten() 
+
+	# Coordinate grid
+	lat    = np.arange(-90,90.25,0.25)
+	lon    = np.arange(180,-180.25,-0.25)
+	lat_2D = np.tile(lat.reshape(-1,1), len(map45[0,:]))
+	lon_2D = np.tile(lon.reshape(-1,1), len(map45[:,0]))
+	lon_2D = lon_2D.T
+
+	# Converting to Healpix Nside=128
+	hp_pix_2D = hp.ang2pix(128, (np.pi/180)*(90-lat_2D), (np.pi/180)*lon_2D)
+	hp_pix    = hp_pix_2D.flatten()
+
+	# Index for pixels with data, in the format Healpix Nside=128
+	unique_hp_pix, unique_hp_pix_index = np.unique(hp_pix, return_index=True)
+
+	# Map in format Healpix Nside=128
+	map45_hp = np.zeros(12*128**2)
+	map45_hp[unique_hp_pix]   = map45_1D[unique_hp_pix_index]
+	map45_hp[map45_hp < 3300] = hp.UNSEEN   # assigning a characteristic value to the hole at high declinations
+
+	# Converting map to format Healpix Nside=512 (same as Haslam map)
+	map45_512  = hp.pixelfunc.ud_grade(map45_hp, nside_out=512)
+	
+	# Converting map from RING to NESTED
+	m = hp.reorder(map45_512, r2n=True)
+	
+
+
+	# Loading celestial coordinates to fill in the temperature hole around the north pole
+	coord              = fits.open(edges_folder + '/sky_models/coordinate_maps/pixel_coords_map_nested_celestial_res9.fits')
+	coord_array        = coord[1].data
+	RA                 = coord_array['LONGITUDE']
+	DEC                = coord_array['LATITUDE']
+
+	# Filling the hole
+	m[DEC>68] = np.mean(m[(DEC>60) & (DEC<68)])
+	
+	
+	print('GUZMAN 45MHz MAP')
+	
+	return m, lon_raw, lat_raw, GALAC_COORD_object
 
 
 
@@ -1785,15 +1921,20 @@ def FEKO_blade_beam(band, beam_file, frequency_interpolation='no', frequency=np.
 
 
 
-def antenna_beam_factor(band, name_save, beam_file=1, rotation_from_north=90, band_deg=10, index_inband=2.5, index_outband=2.62, reference_frequency=100):
 
 
 
-#(band, antenna, name_save, file_high_band_blade_FEKO=1, file_low_band_blade_FEKO=1, reference_frequency=140, rotation_from_north=-5, sky_model='guzman_haslam', band_deg=10, index_inband=2.5, index_outband=2.57):
+
+
+
+
+
+def antenna_beam_factor(band, name_save, beam_file=1, sky_model='haslam', rotation_from_north=90, band_deg=10, index_inband=2.5, index_outband=2.62, reference_frequency=100):
+
 
 
 	#band      = 'mid_band'
-	sky_model = 'haslam'
+	#sky_model = 'haslam', 'LW', 'guzman'
 	
 
 
@@ -1802,20 +1943,22 @@ def antenna_beam_factor(band, name_save, beam_file=1, rotation_from_north=90, ba
 	path_save = edges_folder + band + '/calibration/beam_factors/raw/'
 
 
-	# Loading beam	
+
+
+
+
+	# Antenna beam
+	# ---------------------------------------------------------------------------
 	AZ_beam  = np.arange(0, 360)
 	EL_beam  = np.arange(0, 91)
 
 
-
-	# FEKO blade beam
-	
+	# FEKO blade beam	
 	# Fixing rotation angle due to diferent rotation (by 90deg) in Nivedita's map
 	if (band == 'mid_band') and (beam_file == 3):
 		rotation_from_north = rotation_from_north - 90
 		
 	beam_all = FEKO_blade_beam(band, beam_file, AZ_antenna_axis=rotation_from_north)
-
 
 
 	# Frequency array
@@ -1836,8 +1979,7 @@ def antenna_beam_factor(band, name_save, beam_file=1, rotation_from_north=90, ba
 		if beam_file == 1:
 			freq_array = np.arange(50, 121, 2, dtype='uint32')		
 			
-		
-		
+					
 	# Index of reference frequency
 	index_freq_array = np.arange(len(freq_array))
 	irf = index_freq_array[freq_array == reference_frequency]
@@ -1845,35 +1987,63 @@ def antenna_beam_factor(band, name_save, beam_file=1, rotation_from_north=90, ba
 
 
 
+
+
+
+
+	# Sky model
+	# ------------------------------------------------------------------
 	if sky_model == 'haslam':
 
-		# Loading galactic coordinates (the Haslam map is in NESTED Galactic Coordinates)
-		coord              = fits.open(path_data + 'coordinate_maps/pixel_coords_map_nested_galactic_res9.fits')
-		coord_array        = coord[1].data
-		lon                = coord_array['LONGITUDE']
-		lat                = coord_array['LATITUDE']
-		GALAC_COORD_object = apc.SkyCoord(lon, lat, frame='galactic', unit='deg')  # defaults to ICRS frame
-
 		# Loading Haslam map
-		haslam_map = fits.open(path_data + 'haslam_map/lambda_haslam408_dsds.fits')
-		haslam408  = (haslam_map[1].data)['temperature']
+		map_orig, lon, lat, GALAC_COORD_object = haslam_408MHz_map()
+		v0 = 408
+		
+		
+	elif sky_model == 'LW': 
+	
+		# Loading LW map
+		map_orig, lon, lat, GALAC_COORD_object = LW_150MHz_map()
+		v0 = 150
+		
+		
+	elif sky_model == 'guzman':
+		
+		# Loading Guzman map
+		map_orig, lon, lat, GALAC_COORD_object = guzman_45MHz_map()
+		v0 = 45
+		
 
-		# Scaling Haslam map (the map contains the CMB, which has to be removed at 408 MHz, and then added back)
-		Tcmb   = 2.725
-		T408   = haslam408 - Tcmb
-		b0     = band_deg          # default 10 degrees, galactic elevation threshold for different spectral index
+	print(v0)
 
 
-		haslam = np.zeros((len(T408), len(freq_array)))
-		for i in range(len(freq_array)):
+	# Scaling Haslam map (the map contains the CMB, which has to be removed at 408 MHz, and then added back)
+	Tcmb    = 2.725
+	
 
-			# Band of the Galactic center, using spectral index
-			haslam[(lat >= -b0) & (lat <= b0), i] = T408[(lat >= -b0) & (lat <= b0)] * (freq_array[i]/408)**(-index_inband) + Tcmb
+	
+	
+	sky_map = np.zeros((len(map_orig), len(freq_array)))
+	
+	print(map_orig.shape)
+	print(sky_map.shape)
+	
+	
+	for i in range(len(freq_array)):
 
-			# Range outside the Galactic center, using second spectral index
-			haslam[(lat < -b0) | (lat > b0), i]   = T408[(lat < -b0) | (lat > b0)] * (freq_array[i]/408)**(-index_outband) + Tcmb
+		# Band of the Galactic center, using spectral index
+		sky_map[(lat >= -band_deg) & (lat <= band_deg), i] = (map_orig - Tcmb)[(lat >= -band_deg) & (lat <= band_deg)] * (freq_array[i]/v0)**(-index_inband) + Tcmb
+
+		# Range outside the Galactic center, using second spectral index
+		sky_map[(lat < -band_deg) | (lat > band_deg), i]   = (map_orig - Tcmb)[(lat < -band_deg) | (lat > band_deg)] * (freq_array[i]/v0)**(-index_outband) + Tcmb
+		
+			
 
 
+
+
+	# Calculation 
+	# --------------------------------------------------------------------------------------
 
 	# EDGES location	
 	EDGES_lat_deg  = -26.714778
@@ -1895,7 +2065,7 @@ def antenna_beam_factor(band, name_save, beam_file=1, rotation_from_north=90, ba
 
 
 	#for i in range(len(LST)):
-	for i in range(len(LST)):  # range(1):   # 
+	for i in range(len(LST)):
 
 
 		print(name_save + '. LST: ' + str(i+1) + ' out of 72')
@@ -1922,18 +2092,15 @@ def antenna_beam_factor(band, name_save, beam_file=1, rotation_from_north=90, ba
 
 
 
-		# Selecting coordinates and sky data above the horizon
+		# Selecting coordinates above the horizon
 		AZ_above_horizon         = AZ[EL>=0]
 		EL_above_horizon         = EL[EL>=0]
 
 
-		if sky_model == 'haslam':
-			haslam_above_horizon     = haslam[EL>=0,:]
-			haslam_ref_above_horizon = haslam_above_horizon[:, irf].flatten()
 
-
-
-
+		# Selecting sky data above the horizon
+		sky_above_horizon     = sky_map[EL>=0,:]	
+		sky_ref_above_horizon = sky_above_horizon[:, irf].flatten()
 
 
 
@@ -1942,13 +2109,6 @@ def antenna_beam_factor(band, name_save, beam_file=1, rotation_from_north=90, ba
 		el_array   = np.repeat(EL_beam,360)
 		az_el_original      = np.array([az_array, el_array]).T
 		az_el_above_horizon = np.array([AZ_above_horizon, EL_above_horizon]).T
-
-
-
-		# Precomputation of beam at reference frequency for normalization
-		beam_array_v0         = beam_all[irf,:,:].reshape(1,-1)[0]
-		beam_above_horizon_v0 = spi.griddata(az_el_original, beam_array_v0, az_el_above_horizon, method='cubic')  # interpolated beam
-
 
 
 
@@ -1965,22 +2125,26 @@ def antenna_beam_factor(band, name_save, beam_file=1, rotation_from_north=90, ba
 			index_no_nan = np.nonzero(no_nan_array)[0]
 
 	
-			if sky_model == 'haslam':				
-				convolution_ref[i, j]   = np.sum(beam_above_horizon[index_no_nan]*haslam_ref_above_horizon[index_no_nan])/np.sum(beam_above_horizon[index_no_nan])
-
-				# Antenna temperature
-				haslam_above_horizon_ff = haslam_above_horizon[:, j].flatten()
-				convolution[i, j]       = np.sum(beam_above_horizon[index_no_nan]*haslam_above_horizon_ff[index_no_nan])/np.sum(beam_above_horizon[index_no_nan])
+			# Convolution between (beam at all frequencies) and (sky at reference frequency)
+			convolution_ref[i, j]   = np.sum(beam_above_horizon[index_no_nan]*sky_ref_above_horizon[index_no_nan])/np.sum(beam_above_horizon[index_no_nan])
 
 
-
-	if sky_model == 'haslam':
-		beam_factor_T = convolution_ref.T/convolution_ref[:,irf].T
-		beam_factor   = beam_factor_T.T
+			# Antenna temperature, i.e., Convolution between (beam at all frequencies) and (sky at all frequencies)
+			sky_above_horizon_ff    = sky_above_horizon[:, j].flatten()
+			convolution[i, j]       = np.sum(beam_above_horizon[index_no_nan]*sky_above_horizon_ff[index_no_nan])/np.sum(beam_above_horizon[index_no_nan])
 
 
 
-	# Saving beam factor
+	
+	beam_factor_T = convolution_ref.T/convolution_ref[:,irf].T
+	beam_factor   = beam_factor_T.T
+
+
+
+
+
+	# Saving
+	# ---------------------------------------------------------
 	np.savetxt(path_save + name_save + '_tant.txt', convolution)
 	np.savetxt(path_save + name_save + '_data.txt', beam_factor)
 	np.savetxt(path_save + name_save + '_LST.txt',  LST)
@@ -2013,7 +2177,7 @@ def antenna_beam_factor(band, name_save, beam_file=1, rotation_from_north=90, ba
 
 
 
-def antenna_beam_factor_interpolation(band, lst_hires, fnew):
+def antenna_beam_factor_interpolation(band, case, lst_hires, fnew):
 
 	"""
 
@@ -2024,11 +2188,35 @@ def antenna_beam_factor_interpolation(band, lst_hires, fnew):
 	if band == 'mid_band':
 		file_path = edges_folder + 'mid_band/calibration/beam_factors/raw/'
 		
-		bf_old  = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.62_reffreq_100MHz_data.txt')
-		freq    = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.62_reffreq_100MHz_freq.txt')
-		lst_old = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.62_reffreq_100MHz_LST.txt')
+		if case == 1:
+			bf_old  = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.62_reffreq_100MHz_data.txt')
+			freq    = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.62_reffreq_100MHz_freq.txt')
+			lst_old = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.62_reffreq_100MHz_LST.txt')
+			
+		elif case == 2:
+			bf_old  = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_haslam_2.55_reffreq_100MHz_data.txt')
+			freq    = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_haslam_2.55_reffreq_100MHz_freq.txt')
+			lst_old = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_haslam_2.55_reffreq_100MHz_LST.txt')
+			
+		elif case == 3:
+			bf_old  = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_LW_2.55_reffreq_100MHz_data.txt')
+			freq    = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_LW_2.55_reffreq_100MHz_freq.txt')
+			lst_old = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_LW_2.55_reffreq_100MHz_LST.txt')
+			
+		elif case == 4:
+			bf_old  = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_guzman_2.55_reffreq_100MHz_data.txt')
+			freq    = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_guzman_2.55_reffreq_100MHz_freq.txt')
+			lst_old = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_guzman_2.55_reffreq_100MHz_LST.txt')	
 
 
+		
+		
+		
+		
+		
+		
+		
+		
 		
 	elif band == 'low_band3':
 		file_path = edges_folder + 'low_band3/calibration/beam_factors/raw/'
@@ -2088,7 +2276,7 @@ def antenna_beam_factor_interpolation(band, lst_hires, fnew):
 
 
 
-def beam_factor_table_computation(band, f, N_lst, file_name_hdf5):
+def beam_factor_table_computation(band, case, f, N_lst, file_name_hdf5):
 
 
 	# Produce the beam factor at high resolution
@@ -2097,7 +2285,7 @@ def beam_factor_table_computation(band, f, N_lst, file_name_hdf5):
 	
 	
 	lst_hires = np.arange(0,24,24/N_lst)
-	bf        = antenna_beam_factor_interpolation(band, lst_hires, f)
+	bf        = antenna_beam_factor_interpolation(band, case, lst_hires, f)
 	
 	
 	
