@@ -253,6 +253,12 @@ def real_data(case, FLOW, FHIGH, index=1):
 		ww = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_12hr_weights.txt')
 		g  = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_12hr_gha_edges.txt')
 
+	if case == '10-15hr':
+		vv = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_frequency.txt')
+		tt = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_10-15hr_temperature.txt')
+		ww = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_10-15hr_weights.txt')
+		g  = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_10-15hr_gha_edges.txt')
+
 
 	
 	
@@ -286,8 +292,8 @@ def real_data(case, FLOW, FHIGH, index=1):
 	
 	#std_dev_vec   = noise_std_at_vr * (v/vr)**(-2.5)
 	std_dev_vec = np.ones(len(v))
-	std_dev_vec[v <= 100] = 0.015 * std_dev_vec[v <= 100]
-	std_dev_vec[v  > 100] = 0.010 * std_dev_vec[v  > 100]
+	std_dev_vec[v <= 100] = 0.030 * std_dev_vec[v <= 100]
+	std_dev_vec[v  > 100] = 0.020 * std_dev_vec[v  > 100]
 
 	sigma         = np.diag(std_dev_vec**2)     # uncertainty covariance matrix
 	inv_sigma     = np.linalg.inv(sigma)

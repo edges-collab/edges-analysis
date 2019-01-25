@@ -1190,7 +1190,7 @@ def rms_filter(band, case, gx, rms, Nsigma):
 	if case == 1:
 		file_path = edges_folder + band + '/rms_filters/case1/'
 		
-	if case == 2:
+	if (case == 2) or (case == 22):
 		file_path = edges_folder + band + '/rms_filters/case2/'
 
 
@@ -1232,12 +1232,18 @@ def rms_filter(band, case, gx, rms, Nsigma):
 
 
 
-def level3_to_level4(band, case):
+def level3_to_level4(band, case, GHA_edges):
 	
 	
-	# One-hour bins
-	# -------------
-	GHA_edges = np.arange(0, 25, 1)
+	'''
+	For instance: One-hour bins -> GHA_edges = np.arange(0, 25, 1)
+
+	or
+	
+	GHA_edges = np.arange(0.5, 24, 1)
+	GHA_edges = np.insert(GHA_edges,0,23.5)
+	
+	'''
 	
 	
 	
@@ -1260,6 +1266,13 @@ def level3_to_level4(band, case):
 			save_folder            = edges_folder + 'mid_band/spectra/level4/case2/'
 			output_file_name_hdf5  = 'case2.hdf5'
 		
+		if case == 22:
+			path_files             = edges_folder + 'mid_band/spectra/level3/case2/'
+			save_folder            = edges_folder + 'mid_band/spectra/level4/case22/'
+			output_file_name_hdf5  = 'case22.hdf5'
+
+
+
 		
 			
 	if band == 'low_band3':
@@ -1288,7 +1301,7 @@ def level3_to_level4(band, case):
 	year_day_all = np.zeros((len(index_new_list), 2))
 	
 	
-	for i in index_new_list: 
+	for i in range(3): #index_new_list: 
 		
 		year_day_all[i,0] = float(new_list[i][0:4])
 		
@@ -1372,11 +1385,20 @@ def level3_to_level4(band, case):
 					
 			GHA_LOW  = GHA_edges[j]
 			GHA_HIGH = GHA_edges[j+1]
-							
-			p1 = p[(GHA>=GHA_LOW) & (GHA<GHA_HIGH),:]
-			r1 = r[(GHA>=GHA_LOW) & (GHA<GHA_HIGH),:]
-			w1 = w[(GHA>=GHA_LOW) & (GHA<GHA_HIGH),:]
-			m1 = m[(GHA>=GHA_LOW) & (GHA<GHA_HIGH),:]
+						
+			if GHA_LOW < GHA_HIGH:	
+				p1 = p[(GHA>=GHA_LOW) & (GHA<GHA_HIGH),:]
+				r1 = r[(GHA>=GHA_LOW) & (GHA<GHA_HIGH),:]
+				w1 = w[(GHA>=GHA_LOW) & (GHA<GHA_HIGH),:]
+				m1 = m[(GHA>=GHA_LOW) & (GHA<GHA_HIGH),:]
+			
+			elif GHA_LOW > GHA_HIGH:
+				p1 = p[(GHA>=GHA_LOW) | (GHA<GHA_HIGH),:]
+				r1 = r[(GHA>=GHA_LOW) | (GHA<GHA_HIGH),:]
+				w1 = w[(GHA>=GHA_LOW) | (GHA<GHA_HIGH),:]
+				m1 = m[(GHA>=GHA_LOW) | (GHA<GHA_HIGH),:]				
+
+			
 			
 			print(str(new_list[i]) + '. GHA: ' + str(GHA_LOW) + '-' + str(GHA_HIGH) + ' hr. Number of spectra: ' + str(len(r1)))
 		
@@ -1427,7 +1449,7 @@ def level3_to_level4(band, case):
 	Ngha = len(GHA_edges)-1
 	
 	# Loop over days
-	for i in index_new_list:
+	for i in range(3): #index_new_list:
 		
 		# Loop over number of foreground terms
 		for Nfg in [3,4,5]:

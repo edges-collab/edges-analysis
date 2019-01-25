@@ -16,6 +16,12 @@ from getdist import MCSamples, plots
 
 def load_samples(input_textfile, index_good, label_names=[]):
 	
+	'''
+
+	label_names=[r'A\;[K]', r'\nu_0\;[MHz]', r'w\;[MHz]', r'\tau_1', r'\tau_2', r'T_{100}\;[K]', r'\beta', r'\gamma', r'\eta', r'\phi']
+	
+	'''
+	
 	
 	# Loading data
 	dd = np.genfromtxt(input_textfile)

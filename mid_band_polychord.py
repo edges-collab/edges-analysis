@@ -35,13 +35,13 @@ Nderived    = 0
 model_type_signal     = 'tanh' #'exp', 'tanh'
 model_type_foreground = 'exp'  #'exp', 'linlog'
 
-save_folder = '/home/raul/Desktop/cuec2/'
+save_folder = '/home/raul/Desktop/cuec3/'
 
-data = 'real'   # it could be 'real' or 'simulated'
-
+data      = 'real'   # it could be 'real' or 'simulated'
+case      = '1hr'
 FLOW      =  61
-FHIGH     = 136 #159
-GHA_index = 1
+FHIGH     = 119 #159
+GHA_index =  15   # 7, 14, 15, 16
 
 v0 = 100
 
@@ -59,7 +59,7 @@ if data == 'simulated':
 
 
 elif data == 'real':
-	v, t, w, sigma, inv_sigma, det_sigma = dm.real_data(FLOW, FHIGH, index=GHA_index) 
+	v, t, w, g, sigma, inv_sigma, det_sigma = dm.real_data(case, FLOW, FHIGH, index=GHA_index) 
 	
 
 
@@ -87,7 +87,7 @@ def prior_list(N21, Nfg, model_type_signal, model_type_foreground):
 
 		# Center
 		pl[1, 0] = 61
-		pl[1, 1] = 95		
+		pl[1, 1] = 105		
 	
 		# Width
 		pl[2, 0] =  2
@@ -95,7 +95,7 @@ def prior_list(N21, Nfg, model_type_signal, model_type_foreground):
 		
 		# Tau
 		pl[3, 0] =  0.01
-		pl[3, 1] =  40
+		pl[3, 1] =  20
 		
 		if (model_type_signal == 'exp') and (N21 == 5):
 			
@@ -108,7 +108,7 @@ def prior_list(N21, Nfg, model_type_signal, model_type_foreground):
 			
 			# Tau
 			pl[4, 0] =  0.01
-			pl[4, 1] =  40			
+			pl[4, 1] =  20			
 		
 		
 		
