@@ -21,7 +21,7 @@ import astropy.time as apt
 import astropy.coordinates as apc
 
 import ephem as eph	# to install, at the bash terminal type $ conda install ephem
-import emcee as ec
+#import emcee as ec
 import healpy as hp
 import pickle
 
@@ -32,7 +32,7 @@ from astropy.io import fits
 from scipy import stats
 
 import h5py
-import corner
+#import corner
 import re
 
 import matplotlib.colors as colors
@@ -50126,7 +50126,7 @@ def likelihood_xHI(model_xHI59, model_xHI708, model_xHI754):
 
 
 	# Constraint at z=7.08 from Greig et al. 2017. We use the Small EoR morphology
-	d = np.genfromtxt(home_folder + '/DATA/EDGES/global_21cm_models/greig_ULASJ1120_NFPDF/ULASJ1120_NFPDF.txt')
+	d = np.genfromtxt(home_folder + '/DATA/EDGES_old/global_21cm_models/greig_ULASJ1120_NFPDF/ULASJ1120_NFPDF.txt')
 	
 	par       = np.polyfit(d[:,0], d[:,1], 6)
 	L_xHI708  = np.polyval(par, model_xHI708)
@@ -50141,7 +50141,7 @@ def likelihood_xHI(model_xHI59, model_xHI708, model_xHI754):
 	
 	
 	# DIRECT Constraint from arXiv:1712.01860 (Banados et al.)
-	d = np.genfromtxt(home_folder + '/DATA/EDGES/global_21cm_models/banados/banados2017_fig3_xHIpdf_dist.dat')
+	d = np.genfromtxt(home_folder + '/DATA/EDGES_old/global_21cm_models/banados/banados2017_fig3_xHIpdf_dist.dat')
 	raw_xHI754_N   = d[:,0] #np.append(d[:,0], 1)
 	raw_L_xHI754_N = d[:,1]
 	
@@ -50198,7 +50198,7 @@ def likelihood_xHI_mason2018(model_xHI):
 	Sept 25, 2018
 	"""
 	
-	d = np.genfromtxt(home_folder + '/DATA/EDGES/global_21cm_models/mason2018_pdf/Mason2018_xHI_z7_pentericci14_N67.txt')
+	d = np.genfromtxt(home_folder + '/DATA/EDGES_old/global_21cm_models/mason2018_pdf/Mason2018_xHI_z7_pentericci14_N67.txt')
 	raw_xHI   = d[:,0]
 	raw_L_xHI = d[:,1]
 	Norm      = np.max(raw_L_xHI)
@@ -50354,8 +50354,32 @@ def read_likelihood_fialkov(file_name, version='v6'):
 		x      = hf.get('parameters_fg')
 		par_fg = np.array(x)
 		
+		
+		
+	# Reordering of 21cm parameters
+	Xpar_21 = np.copy(par_21)
+	Xpar_21[:,0] = np.copy(par_21[:,1])  # vc
+	Xpar_21[:,1] = np.copy(par_21[:,0])  # f*
+	Xpar_21[:,2] = np.copy(par_21[:,2])  # fx
+	Xpar_21[:,3] = np.copy(par_21[:,4])  # alpha
+	Xpar_21[:,4] = np.copy(par_21[:,5])  # vmin
+	Xpar_21[:,5] = np.copy(par_21[:,3])  # tau
+	Xpar_21[:,6] = np.copy(par_21[:,6])  # Rmfp
+	
+	
+	Xp1 = np.copy(p2)
+	Xp2 = np.copy(p1)
+	Xp3 = np.copy(p3)
+	Xp4 = np.copy(p5)
+	Xp5 = np.copy(p6)
+	Xp6 = np.copy(p4)
+	Xp7 = np.copy(p7)
+	
+	
+	
+		
 			
-	return v, signals, par_21, p1, p2, p3, p4, p5, p6, p7, flags, xHI59, xHI708, xHI754, Zeta, L, chi_sq, par_fg  # L_xHI59, L_xHI754, L_Zeta, 
+	return v, signals, Xpar_21, Xp1, Xp2, Xp3, Xp4, Xp5, Xp6, Xp7, flags, xHI59, xHI708, xHI754, Zeta, L, chi_sq, par_fg  # L_xHI59, L_xHI754, L_Zeta, 
 
 
 
@@ -51745,23 +51769,23 @@ def fialkov_probabilities_hires_5par(file_name, fifth_parameter='Rmfp'):
 		
 		
 	if fifth_parameter == 'Rmfp':
-		par_list = [p1x, p2x, p3x, p4x, p7x]
-		parameters_21cm = par_21[:,[0,1,2,3,6]]
+		par_list = [p1x, p2x, p3x, p6x, p7x]
+		parameters_21cm = par_21[:,[0,1,2,5,6]]
 		
 		p1 = np.copy(p1x)
 		p2 = np.copy(p2x)
 		p3 = np.copy(p3x)
-		p4 = np.copy(p4x)
+		p4 = np.copy(p6x)
 		p5 = np.copy(p7x)
 		
 	elif fifth_parameter == 'vmin':
-		par_list = [p1x, p2x, p3x, p4x, p6x]
-		parameters_21cm = par_21[:,[0,1,2,3,5]]
+		par_list = [p1x, p2x, p3x, p5x, p6x]
+		parameters_21cm = par_21[:,[0,1,2,4,5]]
 		
 		p1 = np.copy(p1x)
 		p2 = np.copy(p2x)
 		p3 = np.copy(p3x)
-		p4 = np.copy(p4x)
+		p4 = np.copy(p5x)
 		p5 = np.copy(p6x)
 	
 		
@@ -51793,9 +51817,9 @@ def fialkov_probabilities_hires_5par(file_name, fifth_parameter='Rmfp'):
 	# --------------------------------------------------------------
 	L_xHI59, L_xHI708, L_xHI754_N, L_xHI754_C  = likelihood_xHI(xHI59, xHI708, xHI754)
 	L_xHI_mason                                = likelihood_xHI_mason2018(xHI708)
-	L_Zeta                                     = likelihood_Zeta(Zeta, par_21[:,0])
-	#L_tau_planck                               = likelihood_tau_planck(par_21[:,3], tau0=0.058, sigma=0.012)  # Planck 2016
-	L_tau_planck                               = likelihood_tau_planck(par_21[:,3], tau0=0.056, sigma=0.007)  # Planck 2018 
+	L_Zeta                                     = likelihood_Zeta(Zeta, par_21[:,1])
+	#L_tau_planck                               = likelihood_tau_planck(par_21[:,5], tau0=0.058, sigma=0.012)  # Planck 2016
+	L_tau_planck                               = likelihood_tau_planck(par_21[:,5], tau0=0.056, sigma=0.007)  # Planck 2018 
 	
 	
 	
@@ -51824,8 +51848,9 @@ def fialkov_probabilities_hires_5par(file_name, fifth_parameter='Rmfp'):
 	#L = L_xHI708 * L_xHI754_C
 	#L = L_xHI59 * L_xHI708 * L_xHI754_C
 	#L = L_xHI59 * L_xHI708 * L_xHI754_C * L_xHI_mason
-	L = L_xHI59 * L_xHI708 * L_xHI754_C * L_xHI_mason * L_tau_planck
-	#L = L_xHI59 * L_xHI708 * L_xHI754_C * L_xHI_mason * L_tau_planck * LE
+	
+	#L = L_xHI59 * L_xHI708 * L_xHI754_C * L_xHI_mason * L_tau_planck	
+	L = L_xHI59 * L_xHI708 * L_xHI754_C * L_xHI_mason * L_tau_planck * LE
 	
 	
 	
@@ -51906,6 +51931,7 @@ def fialkov_probabilities_hires_5par(file_name, fifth_parameter='Rmfp'):
 
 
 			print((ka, kb))
+			print(pb)
 
 			# Log to linear and back
 			## Edges of the pixels
@@ -53477,28 +53503,28 @@ def fialkov_triangle_plot_V2_Npar5(case, plot_file_name, plot_save='no'):
 	
 	
 
-	path_plot_save  = home_folder + '/DATA/EDGES/results/plots/20180925/'
+	path_plot_save  = home_folder + '/DATA/EDGES_old/results/plots/20190128/'
 	
 	
 	if case == 10:
-		filename        = '/home/ramo7131/DATA/EDGES/global_21cm_models/fialkov/Global21cmV5/results/Npar5_tau_0.055-0.090/results_Npar5_Npix20_90-190MHz.hdf5'
+		filename        = home_folder + '/DATA/EDGES_old/global_21cm_models/fialkov/Global21cmV5/results/Npar5_tau_0.055-0.090/results_Npar5_Npix20_90-190MHz.hdf5'
 		fifth_parameter = 'Rmfp'
 	if case == 11:
-		filename        = '/home/ramo7131/DATA/EDGES/global_21cm_models/fialkov/Global21cmV5/results/Npar5_tau_0.055-0.090/simulations/results_Npar5_Npix20_simulation_just_noise_FIRST_REPETITION.hdf5'
+		filename        = home_folder + '/DATA/EDGES_old/global_21cm_models/fialkov/Global21cmV5/results/Npar5_tau_0.055-0.090/simulations/results_Npar5_Npix20_simulation_just_noise_FIRST_REPETITION.hdf5'
 		fifth_parameter = 'Rmfp'		
 	if case == 12:
-		filename        = '/home/ramo7131/DATA/EDGES/global_21cm_models/fialkov/Global21cmV5/results/Npar5_tau_0.055-0.090_simulations/results_Npar5_Npix20_simulation_just_noise_SECOND_REPETITION.hdf5'
+		filename        = home_folder + '/DATA/EDGES_old/global_21cm_models/fialkov/Global21cmV5/results/Npar5_tau_0.055-0.090_simulations/results_Npar5_Npix20_simulation_just_noise_SECOND_REPETITION.hdf5'
 		fifth_parameter = 'Rmfp'		
 	if case == 13:
-		filename        = '/home/ramo7131/DATA/EDGES/global_21cm_models/fialkov/Global21cmV5/results/Npar5_tau_0.055-0.090_simulations/results_Npar5_Npix20_simulation_above_125MHz.hdf5'
+		filename        = home_folder + '/DATA/EDGES_old/global_21cm_models/fialkov/Global21cmV5/results/Npar5_tau_0.055-0.090_simulations/results_Npar5_Npix20_simulation_above_125MHz.hdf5'
 		fifth_parameter = 'Rmfp'
 	if case == 14:
-		filename        = '/home/ramo7131/DATA/EDGES/global_21cm_models/fialkov/Global21cmV5/results/Npar5_tau_0.055-0.090_simulations/results_Npar5_Npix20_simulation_above_145MHz.hdf5'
+		filename        = home_folder + '/DATA/EDGES_old/global_21cm_models/fialkov/Global21cmV5/results/Npar5_tau_0.055-0.090_simulations/results_Npar5_Npix20_simulation_above_145MHz.hdf5'
 		fifth_parameter = 'Rmfp'
 
 	# NOMINAL 2
 	if case == 15:
-		filename        = '/home/ramo7131/DATA/EDGES/global_21cm_models/fialkov/Global21cmV6/results/results_Npar5_Npix20_Rmfp_xHI708_tau_0.055_0.090.hdf5'
+		filename        = home_folder + '/DATA/EDGES_old/global_21cm_models/fialkov/Global21cmV6/results/results_Npar5_Npix20_Rmfp_xHI708_tau_0.055_0.090.hdf5'
 		fifth_parameter = 'Rmfp'
 
 
@@ -53509,20 +53535,28 @@ def fialkov_triangle_plot_V2_Npar5(case, plot_file_name, plot_save='no'):
 		# fifth_parameter = 'vmin'
 
 	if case == 20:
-		filename        = '/home/ramo7131/DATA/EDGES/global_21cm_models/fialkov/Global21cmV5/results/Npar5_vmin_instead_of_Rmfp_tau_0.055-0.090/results_Npar5_Npix20_90-190MHz.hdf5'
+		filename        = home_folder + '/DATA/EDGES_old/global_21cm_models/fialkov/Global21cmV5/results/Npar5_vmin_instead_of_Rmfp_tau_0.055-0.090/results_Npar5_Npix20_90-190MHz.hdf5'
 		fifth_parameter = 'vmin'
 	
 	# NOMINAL 1
 	if case == 21:		
-		filename        = '/home/ramo7131/DATA/EDGES/global_21cm_models/fialkov/Global21cmV6/results/results_Npar5_Npix20_vmin_xHI708_tau_0.055_0.090.hdf5'
+		filename        = home_folder + '/DATA/EDGES_old/global_21cm_models/fialkov/Global21cmV6/results/results_Npar5_Npix20_vmin_xHI708_tau_0.055_0.090.hdf5'
 		fifth_parameter = 'vmin'
 
 	if case == 22:		
-		filename        = '/home/ramo7131/DATA/EDGES/global_21cm_models/fialkov/Global21cmV6/results/results_Npar5_Npix20_vmin_xHI708_tau_0.055_0.090_Physical_model.hdf5'
+		filename        = home_folder + '/DATA/EDGES_old/global_21cm_models/fialkov/Global21cmV6/results/results_Npar5_Npix20_vmin_xHI708_tau_0.055_0.090_Physical_model.hdf5'
 		fifth_parameter = 'vmin'		
 
 
 	p1, p2, p3, p4, p5, pix_all, Prob_all, Prob_limits_all, Prob_par1_all, Prob_par2_all, Prob_par3_all, Prob_par4_all, Prob_par5_all = fialkov_probabilities_hires_5par(filename, fifth_parameter=fifth_parameter)
+	
+
+	
+	
+
+
+
+	
 	
 
 
@@ -53626,6 +53660,17 @@ def fialkov_triangle_plot_V2_Npar5(case, plot_file_name, plot_save='no'):
 
 
 
+
+
+
+
+
+
+
+
+
+
+
 	f1 = plt.figure(1)
 
 		
@@ -53685,7 +53730,7 @@ def fialkov_triangle_plot_V2_Npar5(case, plot_file_name, plot_save='no'):
 	ax11.set_xticklabels('')
 	ax11.set_yticklabels('')
 	#ax11.set_title(r'$\log_{10}$($f_{\bigstar}$)', fontsize=FS)
-	ax11.set_title(r'$f_{\rm *}$', fontsize=FS)
+	ax11.set_title(r'$V_{\rm c}$ [km $\rm s^{-1}$]', fontsize=FS)  # [km/s]
 
 
 
@@ -53703,15 +53748,14 @@ def fialkov_triangle_plot_V2_Npar5(case, plot_file_name, plot_save='no'):
 	ax12.set_yticks(yt)
 	
 	ax12.set_xticklabels('')
-	ax12.set_yticklabels(np.round(10**np.array(yt),1), rotation=45)
+	ax12.set_yticklabels(np.round(10**np.array(yt),3), rotation=45)
 	
 	X10 = 0.1*(lp1[imax]-lp1[0])
 	Y10 = 0.1*(lp2[imax]-lp2[0])
 	ax12.set_xlim(lp1[0]-X10, lp1[imax]+X10)
 	ax12.set_ylim(lp2[0]-Y10, lp2[imax]+Y10)
-
-	ax12.set_ylabel(r'$V_{\rm c}$ [km $\rm s^{-1}$]', fontsize=FS)  # [km/s]
-
+	
+	ax12.set_ylabel(r'$f_{\rm *}$', fontsize=FS)
 
 
 
@@ -53752,7 +53796,6 @@ def fialkov_triangle_plot_V2_Npar5(case, plot_file_name, plot_save='no'):
 	
 	#ax14.set_xticklabels(np.round(xt,2), rotation=45)
 	ax14.set_xticklabels('')
-	ax14.set_yticklabels(np.round(yt,3), rotation=45)
 	
 	X10 = 0.1*(lp1[imax]-lp1[0])
 	Y10 = 0.1*(p4[imax]-p4[0])
@@ -53760,7 +53803,20 @@ def fialkov_triangle_plot_V2_Npar5(case, plot_file_name, plot_save='no'):
 	ax14.set_ylim(p4[0]-Y10, p4[imax]+Y10)	        ###################################################
 	
 	#ax14.set_xlabel(r'$\log_{10}$($f_{\bigstar}$)', fontsize=FS)
-	ax14.set_ylabel(r'$\tau_{\rm e}$', fontsize=FS)
+	
+	if case < 20:
+		ax14.set_ylabel(r'$\tau_{\rm e}$', fontsize=FS)
+		ax14.set_yticklabels(np.round(yt,3), rotation=45)
+		
+	elif case >= 20:
+		ax14.set_ylabel(r'$\nu_{\rm min}$ [keV]', fontsize=FS)
+		ax14.set_yticklabels(np.round(yt,2), rotation=45)
+
+
+
+	
+	
+	
 
 
 
@@ -53774,8 +53830,7 @@ def fialkov_triangle_plot_V2_Npar5(case, plot_file_name, plot_save='no'):
 	ax15.set_xticks(xt)
 	ax15.set_yticks(yt)
 	
-	ax15.set_xticklabels(np.round(10**np.array(xt),3), rotation=45)
-	ax15.set_yticklabels(np.round(yt,2), rotation=45)
+	ax15.set_xticklabels(np.round(10**np.array(xt),1), rotation=45)
 	
 	X10 = 0.1*(lp1[imax]-lp1[0])
 	Y10 = 0.1*(p5[imax]-p5[0])
@@ -53783,17 +53838,15 @@ def fialkov_triangle_plot_V2_Npar5(case, plot_file_name, plot_save='no'):
 	ax15.set_ylim(p5[0]-Y10, p5[imax]+Y10)	
 	
 	#ax15.set_xlabel(r'$\log_{10}$($f_{\bigstar}$)', fontsize=FS)
-	ax15.set_xlabel(r'$f_{\rm *}$', fontsize=FS)
+	ax15.set_xlabel(r'$V_{\rm c}$ [km $\rm s^{-1}$]', fontsize=FS)
 	
 	if case < 20:
 		ax15.set_ylabel(r'$R_{\rm mfp}$ [Mpc]', fontsize=FS)
+		ax15.set_yticklabels(np.round(yt,1), rotation=45)
 		
 	elif case >= 20:
-		ax15.set_ylabel(r'$\nu_{\rm min}$ [keV]', fontsize=FS)
-
-
-
-
+		ax15.set_ylabel(r'$\tau_{\rm e}$', fontsize=FS)
+		ax15.set_yticklabels(np.round(yt,3), rotation=45)
 
 
 
@@ -53864,7 +53917,7 @@ def fialkov_triangle_plot_V2_Npar5(case, plot_file_name, plot_save='no'):
 	ax22.set_xticklabels('')
 	ax22.set_yticklabels('')
 	
-	ax22.set_title(r'$V_{\rm c}$ [km $\rm s^{-1}$]', fontsize=FS)
+	ax22.set_title(r'$f_{\rm *}$', fontsize=FS)
 	
 	
 
@@ -53923,12 +53976,12 @@ def fialkov_triangle_plot_V2_Npar5(case, plot_file_name, plot_save='no'):
 	
 	#xt = [lp2[0], (1/4)*(lp2[-1]-lp2[0])+lp2[0], (2/4)*(lp2[-1]-lp2[0])+lp2[0], (3/4)*(lp2[-1]-lp2[0])+lp2[0], lp2[-1]]
 	#yt = [p5[0], (1/4)*(p5[-1]-p4[0])+p5[0], (2/4)*(p5[-1]-p5[0])+p5[0], (3/4)*(p5[-1]-p5[0])+p5[0], p5[-1]]
-	yt = [p5[0], (1/3)*(p5[-1]-p4[0])+p5[0], (2/3)*(p5[-1]-p5[0])+p5[0], p5[-1]]
+	yt = [p5[0], (1/3)*(p5[-1]-p5[0])+p5[0], (2/3)*(p5[-1]-p5[0])+p5[0], p5[-1]]
 
 	ax25.set_xticks(xt)
 	ax25.set_yticks(yt)
 	
-	ax25.set_xticklabels(np.round(10**np.array(xt),1), rotation=45)
+	ax25.set_xticklabels(np.round(10**np.array(xt),3), rotation=45)
 	ax25.set_yticklabels('') #np.round(yt,2), rotation=45)	
 
 	X10 = 0.1*(lp2[imax]-lp2[0])
@@ -53936,7 +53989,7 @@ def fialkov_triangle_plot_V2_Npar5(case, plot_file_name, plot_save='no'):
 	ax25.set_xlim(lp2[0]-X10, lp2[imax]+X10)
 	ax25.set_ylim(p5[0]-Y10,  p5[imax]+Y10)	
 
-	ax25.set_xlabel(r'$V_{\rm c}$ [km $\rm s^{-1}$]', fontsize=FS)
+	ax25.set_xlabel(r'$f_{\rm *}$', fontsize=FS)
 	ax25.set_ylabel('')
 	
 	
@@ -54134,9 +54187,18 @@ def fialkov_triangle_plot_V2_Npar5(case, plot_file_name, plot_save='no'):
 	ax44.set_xticklabels('') #np.round(xt,2), rotation=45)
 	ax44.set_yticklabels('')
 	
-	ax44.set_title(r'$\tau_{\rm e}$', fontsize=FS)
-	
-	
+	if case < 20:
+		ax44.set_title(r'$\tau_{\rm e}$', fontsize=FS)
+		
+	elif case >= 20:
+		ax44.set_title(r'$\nu_{\rm min}$ [keV]', fontsize=FS)		
+
+
+
+
+
+
+
 
 
 	ax45.imshow(np.flipud(Prob_all[9]/np.max(Prob_all[9])), interpolation=INTERP, aspect=(p4[4]-p4[0])/(p5[4]-p5[0]), extent=E45, cmap=color_map, vmin=min_prob, vmax=max_prob)  #
@@ -54149,7 +54211,6 @@ def fialkov_triangle_plot_V2_Npar5(case, plot_file_name, plot_save='no'):
 	ax45.set_xticks(xt)
 	ax45.set_yticks(yt)
 	
-	ax45.set_xticklabels(np.round(xt,3), rotation=45)
 	ax45.set_yticklabels('') #np.round(yt,2), rotation=45)	
 
 	X10 = 0.1*(p4[imax] -p4[0])
@@ -54157,10 +54218,15 @@ def fialkov_triangle_plot_V2_Npar5(case, plot_file_name, plot_save='no'):
 	ax45.set_xlim(p4[0]-X10, p4[imax]+X10)
 	ax45.set_ylim(p5[0]-Y10, p5[imax]+Y10)	
 
-	ax45.set_xlabel(r'$\tau_{\rm e}$', fontsize=FS)
 	ax45.set_ylabel('')
 	
-
+	if case < 20:
+		ax45.set_xlabel(r'$\tau_{\rm e}$', fontsize=FS)
+		ax45.set_xticklabels(np.round(xt,3), rotation=45)
+		
+	elif case >= 20:
+		ax45.set_xlabel(r'$\nu_{\rm min}$ [keV]', fontsize=FS)
+		ax45.set_xticklabels(np.round(xt,2), rotation=45)
 
 
 
@@ -54221,16 +54287,17 @@ def fialkov_triangle_plot_V2_Npar5(case, plot_file_name, plot_save='no'):
 	ax55.set_xlim(p5[0]-X10, p5[imax]+X10)
 	ax55.set_ylim(0, max_1D)
 
-	ax55.set_xticklabels(np.round(xt,2), rotation=45)
 	ax55.set_yticklabels('')
 	
 	if case < 20:
 		ax55.set_xlabel(r'$R_{\rm mfp}$ [Mpc]', fontsize=FS)
 		ax55.set_title(r'$R_{\rm mfp}$ [Mpc]', fontsize=FS)
+		ax55.set_xticklabels(np.round(xt,1), rotation=45)
 		
 	elif case >= 20:
-		ax55.set_xlabel(r'$\nu_{\rm min}$ [keV]', fontsize=FS)
-		ax55.set_title(r'$\nu_{\rm min}$ [keV]', fontsize=FS)		
+		ax55.set_xlabel(r'$\tau_{\rm e}$', fontsize=FS)
+		ax55.set_title(r'$\tau_{\rm e}$', fontsize=FS)
+		ax55.set_xticklabels(np.round(xt,3), rotation=45)
 	
 	
 	
@@ -54371,7 +54438,7 @@ def fialkov_paper_signal_figure_one(save='no'):
 	freq  = redshift2frequency(z_raw)
 
 
-	file_name     = home_folder + '/DATA/EDGES/global_21cm_models/fialkov/Global21cmV5/signals_for_figure/signals_for_figure.mat'
+	file_name     = home_folder + '/DATA/EDGES_old/global_21cm_models/fialkov/Global21cmV5/signals_for_figure/signals_for_figure.mat'
 	mat           = sio.loadmat(file_name)
 	model_nominal = mat['sn'][0]  # in mK
 	model_p1      = mat['s1']     # in mK
@@ -54422,31 +54489,11 @@ def fialkov_paper_signal_figure_one(save='no'):
 	cc = 'r'
 
 	
+
+	
 	
 	
 	ax   = fig.add_axes([x0, 1.4*1.7*y0+2*dy, dx, dy])	
-	ax.plot(freq, model_nominal, color=cc)
-	for i in range(20):
-		ax.plot(freq, model_p1[i,:], color=[(i/25), (i/25), (i/25)])
-	ax.plot(freq, model_nominal, color=cc)
-	#ax.plot([90, 90], [-300, 100], '--c')
-	#ax.plot([190, 190], [-300, 100], '--c')
-	ax.set_xlim([40, 200])
-	ax.set_ylim([-250, 20])
-	ax.set_yticks([-200, -100, 0])
-	ax.set_ylabel('brightness\n temperature [mK]', fontsize=FS_labels)
-	plt.text(50, -210, r'$f_*$', fontsize=16)
-
-	ax2 = ax.twiny()
-	ax2.set_xlabel(r'$z$', fontsize=FS_labels+2)
-	z0 = frequency2redshift(40)
-	ax2.set_xticks(np.array((np.abs(redshift2frequency(30)-40), np.abs(redshift2frequency(22)-40), np.abs(redshift2frequency(17)-40), np.abs(redshift2frequency(14)-40), np.abs(redshift2frequency(12)-40), np.abs(redshift2frequency(10)-40), np.abs(redshift2frequency(9)-40), np.abs(redshift2frequency(8)-40), np.abs(redshift2frequency(7)-40), np.abs(202-40))))
-	ax2.set_xticklabels(['30', '22', '17', '14', '12', '10', '9', '8', '7', '6'])
-	
-		
-	
-	
-	ax   = fig.add_axes([x0, 1.7*y0+1*dy, dx, dy])	
 	ax.plot(freq, model_nominal, color=cc)
 	for i in range(20):
 		ax.plot(freq, model_p2[i,:], color=[(i/25), (i/25), (i/25)])
@@ -54460,9 +54507,16 @@ def fialkov_paper_signal_figure_one(save='no'):
 	plt.text(50, -210, r'$\rm V_{\rm c}$', fontsize=16)
 	
 
-
+	ax2 = ax.twiny()
+	ax2.set_xlabel(r'$z$', fontsize=FS_labels+2)
+	z0 = frequency2redshift(40)
+	ax2.set_xticks(np.array((np.abs(redshift2frequency(30)-40), np.abs(redshift2frequency(22)-40), np.abs(redshift2frequency(17)-40), np.abs(redshift2frequency(14)-40), np.abs(redshift2frequency(12)-40), np.abs(redshift2frequency(10)-40), np.abs(redshift2frequency(9)-40), np.abs(redshift2frequency(8)-40), np.abs(redshift2frequency(7)-40), np.abs(202-40))))
+	ax2.set_xticklabels(['30', '22', '17', '14', '12', '10', '9', '8', '7', '6'])
+	
 		
-	ax   = fig.add_axes([x0, y0, dx, dy])
+	
+	
+	ax   = fig.add_axes([x0, 1.7*y0+1*dy, dx, dy])	
 	ax.plot(freq, model_nominal, color=cc)
 	for i in range(20):
 		ax.plot(freq, model_p3[i,:], color=[(i/25), (i/25), (i/25)])
@@ -54472,12 +54526,27 @@ def fialkov_paper_signal_figure_one(save='no'):
 	ax.set_xlim([40, 200])
 	ax.set_ylim([-250, 20])
 	ax.set_yticks([-200, -100, 0])
-	plt.text(50, -210, r'$f_{\rm X}$', fontsize=16)
 	ax.set_ylabel('brightness\n temperature [mK]', fontsize=FS_labels)
-	ax.set_xlabel('frequency [MHz]', fontsize=FS_labels)
-
+	plt.text(50, -210, r'$f_{\rm X}$', fontsize=16)
 	
 
+
+		
+	ax   = fig.add_axes([x0, y0, dx, dy])
+	ax.plot(freq, model_nominal, color=cc)
+	for i in range(20):
+		ax.plot(freq, model_p4[i,:], color=[(i/25), (i/25), (i/25)])
+	ax.plot(freq, model_nominal, color=cc)
+	#ax.plot([90, 90], [-300, 100], '--c')
+	#ax.plot([190, 190], [-300, 100], '--c')
+	ax.set_xlim([40, 200])
+	ax.set_ylim([-250, 20])
+	ax.set_yticks([-200, -100, 0])	
+	ax.set_ylabel('brightness\n temperature [mK]', fontsize=FS_labels)
+	ax.set_xlabel('frequency [MHz]', fontsize=FS_labels)
+	plt.text(50, -210, r'$\tau_{\rm e}$', fontsize=16)
+	
+# 
 
 
 
@@ -54488,7 +54557,7 @@ def fialkov_paper_signal_figure_one(save='no'):
 	ax   = fig.add_axes([1.4*x0+dx, 1.4*1.7*y0+2*dy, dx, dy])
 	ax.plot(freq, model_nominal, color=cc)
 	for i in range(20):
-		ax.plot(freq, model_p4[i,:], color=[(i/25), (i/25), (i/25)])
+		ax.plot(freq, model_p1[i,:], color=[(i/25), (i/25), (i/25)])
 	ax.plot(freq, model_nominal, color=cc)
 	#ax.plot([90, 90], [-300, 100], '--c')
 	#ax.plot([190, 190], [-300, 100], '--c')
@@ -54496,7 +54565,7 @@ def fialkov_paper_signal_figure_one(save='no'):
 	ax.set_ylim([-250, 20])
 	ax.set_yticks([-200, -100, 0])
 	ax.set_yticklabels(['','',''])
-	plt.text(50, -210, r'$\tau_{\rm e}$', fontsize=16)
+	plt.text(50, -210, r'$f_*$', fontsize=16)
 	
 	ax2 = ax.twiny()
 	ax2.set_xlabel(r'$z$', fontsize=FS_labels+2)
@@ -54542,7 +54611,7 @@ def fialkov_paper_signal_figure_one(save='no'):
 
 
 	if save == 'yes':
-		plt.savefig(home_folder + '/DATA/EDGES/results/plots/20180925/fialkov_models_sample_cuec.pdf', bbox_inches='tight')
+		plt.savefig(home_folder + '/DATA/EDGES_old/results/plots/20190128/fialkov_models_sample_cuec.pdf', bbox_inches='tight')
 		plt.close()
 
 	return 0

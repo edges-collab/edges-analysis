@@ -1667,7 +1667,7 @@ def one_hour_filter(band, case, year, day, gha):
 	
 	if band == 'mid_band':
 		
-		if (case == '0') or (case == '1') or (case == '2'):
+		if (case == 0) or (case == 1) or (case == 2):
 			bad = np.array([
 				[2018, 146, 6],
 				[2018, 146, 7],
@@ -1875,7 +1875,7 @@ def one_hour_filter(band, case, year, day, gha):
 				])
 
 
-		elif case == '22':
+		elif case == 22:
 			bad = np.array([
 				[2018, 146, 6],
 				[2018, 146, 7],
@@ -2248,15 +2248,15 @@ def season_integrated_spectra_GHA(band, case, new_gha_edges=np.arange(0,25,2), d
 
 
 	
-	# Looping over every 1hr GHA
+	# Looping over every original GHA edges
 	for j in range(len(gha_edges)-1):
 		
 		# Looping over day
 		counter = 0
-		for i in range(len(yd)): # range(38): range(10):
+		for i in range(len(yd)): # range(38): range(4): #
 			
 			# Returns a 1 if the 1hr average tested is good quality, and a 0 if it is not
-			keep = one_hour_filter(band, yd[i,0], yd[i,1], gha_edges[j])
+			keep = one_hour_filter(band, case, yd[i,0], yd[i,1], gha_edges[j])
 			print(yd[i,1])
 			print(gha_edges[j])
 			
@@ -2335,7 +2335,7 @@ def season_integrated_spectra_GHA(band, case, new_gha_edges=np.arange(0,25,2), d
 		
 		
 	
-	# Averaging data within new gha edges
+	# Averaging data within new GHA edges
 	for j in range(len(new_gha_edges)-1):
 		new_gha_start  = new_gha_edges[j]
 		new_gha_end    = new_gha_edges[j+1]
@@ -2361,7 +2361,7 @@ def season_integrated_spectra_GHA(band, case, new_gha_edges=np.arange(0,25,2), d
 						
 			elif (new_gha_start > new_gha_end):
 				if (gha_edges[i] >= new_gha_start) or (gha_edges[i] < new_gha_end):
-					
+					print('xxx')
 					print(gha_edges[i])
 					if counter == 0:
 						px_all = pr_all[i,:]
@@ -2375,11 +2375,15 @@ def season_integrated_spectra_GHA(band, case, new_gha_edges=np.arange(0,25,2), d
 						wx_all = np.vstack((wx_all, wr_all[i,:]))
 
 
-					
+		if len(px_all.shape) == 1:
+			avpx = np.copy(px_all)
+			avrx = np.copy(rx_all)
+			avwx = np.copy(wx_all)
+			
 		
-					
-		avpx       = np.mean(px_all, axis=0)		
-		avrx, avwx = ba.weighted_mean(rx_all, wx_all)
+		elif len(px_all.shape) == 2:			
+			avpx       = np.mean(px_all, axis=0)		
+			avrx, avwx = ba.weighted_mean(rx_all, wx_all)
 		
 		avrx_no_rfi, avwx_no_rfi = rfi.cleaning_sweep(f, avrx, avwx, window_width_MHz=3, Npolyterms_block=2, N_choice=20, N_sigma=2.5)  # 3
 				

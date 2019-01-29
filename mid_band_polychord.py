@@ -32,16 +32,17 @@ save_file_name = sys.argv[3]
 Nparameters = N21+Nfg
 Nderived    = 0
 
-model_type_signal     = 'tanh' #'exp', 'tanh'
+model_type_signal     = 'exp'  #'tanh' #, 'tanh'
 model_type_foreground = 'exp'  #'exp', 'linlog'
 
-save_folder = '/home/raul/Desktop/cuec3/'
+save_folder = '/home/raul/Desktop/cuec4/'
 
-data      = 'real'   # it could be 'real' or 'simulated'
-case      = '1hr'
-FLOW      =  61
-FHIGH     = 119 #159
-GHA_index =  15   # 7, 14, 15, 16
+data        = 'real'   # it could be 'real' or 'simulated'
+case        =  22
+integration = '1hr'
+FLOW        =  61
+FHIGH       = 131 #159
+GHA_index   =  18   # 7, 14, 15, 16
 
 v0 = 100
 
@@ -59,7 +60,7 @@ if data == 'simulated':
 
 
 elif data == 'real':
-	v, t, w, g, sigma, inv_sigma, det_sigma = dm.real_data(case, FLOW, FHIGH, index=GHA_index) 
+	v, t, w, g, sigma, inv_sigma, det_sigma = dm.real_data(case, integration, FLOW, FHIGH, index=GHA_index) 
 	
 
 
