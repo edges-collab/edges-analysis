@@ -1190,7 +1190,7 @@ def rms_filter(band, case, gx, rms, Nsigma):
 	if case == 1:
 		file_path = edges_folder + band + '/rms_filters/case1/'
 		
-	if (case == 2) or (case == 22) or (case == 3):
+	if (case == 2) or (case == 22) or (case == 23) or (case == 3):
 		file_path = edges_folder + band + '/rms_filters/case2/'
 
 
@@ -1270,6 +1270,11 @@ def level3_to_level4(band, case, GHA_edges):
 			path_files             = edges_folder + 'mid_band/spectra/level3/case2/'
 			save_folder            = edges_folder + 'mid_band/spectra/level4/case22/'
 			output_file_name_hdf5  = 'case22.hdf5'
+			
+		if case == 23:
+			path_files             = edges_folder + 'mid_band/spectra/level3/case2/'
+			save_folder            = edges_folder + 'mid_band/spectra/level4/case23/'
+			output_file_name_hdf5  = 'case23.hdf5'		
 
 		if case == 3:
 			path_files             = edges_folder + 'mid_band/spectra/level3/case3/'
@@ -1304,7 +1309,7 @@ def level3_to_level4(band, case, GHA_edges):
 	year_day_all = np.zeros((len(index_new_list), 2))
 	
 	
-	for i in index_new_list: # range(2):#
+	for i in index_new_list: # range(3):#
 		
 		year_day_all[i,0] = float(new_list[i][0:4])
 		
@@ -1324,7 +1329,7 @@ def level3_to_level4(band, case, GHA_edges):
 		
 		
 		# Filtering out high humidity
-		amb_hum_max = 50
+		amb_hum_max = 40
 		IX          = data_selection(my, GHA_or_LST='GHA', TIME_1=0, TIME_2=24, sun_el_max=90, moon_el_max=90, amb_hum_max=amb_hum_max, min_receiver_temp=0, max_receiver_temp=100)
 		
 		px   = py[IX,:]
@@ -1428,7 +1433,7 @@ def level3_to_level4(band, case, GHA_edges):
 
 
 				# RFI cleaning of average spectra
-				avr_no_rfi, avw_no_rfi = rfi.cleaning_sweep(f, avr, avw, window_width_MHz=3, Npolyterms_block=2, N_choice=20, N_sigma=3)				
+				avr_no_rfi, avw_no_rfi = rfi.cleaning_sweep(f, avr, avw, window_width_MHz=3, Npolyterms_block=2, N_choice=20, N_sigma=2.5)				
 				
 				
 				
@@ -1452,7 +1457,7 @@ def level3_to_level4(band, case, GHA_edges):
 	Ngha = len(GHA_edges)-1
 	
 	# Loop over days
-	for i in index_new_list: # range(2):#i
+	for i in index_new_list: #range(3):
 		
 		# Loop over number of foreground terms
 		for Nfg in [3,4,5]:
@@ -1506,7 +1511,9 @@ def level3_to_level4(band, case, GHA_edges):
 					
 				elif Nfg == 5:
 					DY = 3
-				
+					
+				FIG_SX      =   7
+				FIG_SY      =  20
 				FLOW_plot   =  20
 				FHIGH_plot  = 165
 				XTICKS      = np.arange(60, 161, 20)
@@ -1529,6 +1536,8 @@ def level3_to_level4(band, case, GHA_edges):
 				elif Nfg == 5:
 					DY = 3
 				
+				FIG_SX      =   7
+				FIG_SY      =  20				
 				FLOW_plot   =  30
 				FHIGH_plot  = 125
 				XTICKS      = np.arange(50, 121, 10)
@@ -1549,7 +1558,7 @@ def level3_to_level4(band, case, GHA_edges):
 			
 			
 			# Plotting
-			x = plot_residuals(fb, qrb_all, qwb_all, LST_text, DY=DY, FLOW=FLOW_plot, FHIGH=FHIGH_plot, XTICKS=XTICKS, XTEXT=XTEXT, YLABEL=YLABEL, TITLE=TITLE, save='yes', figure_path=figure_save_path_subfolder, figure_name=figure_save_name, figure_format=FIGURE_FORMAT)
+			x = plot_residuals(fb, qrb_all, qwb_all, LST_text, FIG_SX=FIG_SX, FIG_SY=FIG_SY, DY=DY, FLOW=FLOW_plot, FHIGH=FHIGH_plot, XTICKS=XTICKS, XTEXT=XTEXT, YLABEL=YLABEL, TITLE=TITLE, save='yes', figure_path=figure_save_path_subfolder, figure_name=figure_save_name, figure_format=FIGURE_FORMAT)
 			
 						
 			

@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 
 import edges as eg
 import basic as ba
+import rfi as rfi
 
 import calibration as cal
 
@@ -2230,10 +2231,83 @@ def plot_low_band3_for_talk():
 
 
 
+def plot_level4(GHA_start=13.5):
+	
+	f, p_all, r_all, w_all, gha, yd = eg.level4read('/home/raul/DATA/EDGES/mid_band/spectra/level4/case23/case23.hdf5')
+	
+	index = np.arange(0,len(gha))
+	IX = int(index[gha==GHA_start])
+	
+	
+	p = p_all[:,IX,:]
+	r = r_all[:,IX,:]
+	w = w_all[:,IX,:]
+	
+	day  = yd[:,1]
+	flag = 0
+	if GHA_start == 12.0:	
+		discarded_days = [146, 147, 170, 175, 176, 193, 195, 204, 205, 220]
+	if GHA_start == 12.5:
+		discarded_days = [146, 170, 176, 185, 195, 198, 204, 220]
+	if GHA_start == 13.0: 
+		discarded_days = [152, 174, 176, 182, 185, 195, 204, 208, 214]
+	if GHA_start == 13.5: 
+		discarded_days = [151, 163, 164, 176, 185, 187, 189, 192, 195, 200, 208, 215, 219]
+	if GHA_start == 14:
+		discarded_days = [176, 184, 185, 193, 199, 208, 210]
+	if GHA_start == 14.5:
+		discarded_days = [166, 174, 177, 185, 199, 200, 201, 208]
+	if GHA_start == 15:
+		discarded_days = [150, 157, 1178, 182, 185, 187, 198, 208] #, 210, 215, 217, 218, 219]
+	if GHA_start == 15.5:
+		discarded_days = [185]
+		
+	
+	for i in range(len(p[:,0])):
+				
+		if (np.sum(w[i,:])>0) and (day[i] not in discarded_days):
+			
+			print(day[i])
+			
+			m          = ba.model_evaluate('LINLOG', p[i,:], f/200) + r[i,:]
+			par        = ba.fit_polynomial_fourier('LINLOG', f/200, m, 4, Weights=w[i,:])
+			r_raw      = m-par[1]
+			w_raw      = w[i,:] 
+			
+			
+				
+			fb, rb, wb = ba.spectral_binning_number_of_samples(f, r_raw, w_raw)
+				
+			
+			if flag == 0:
+				rr_all = np.copy(r_raw)
+				wr_all = np.copy(w_raw)
+				pr_all = np.copy(par[0])
+				
+				rb_all = np.copy(rb)
+				wb_all = np.copy(wb)
+				d_all = np.copy(day[i])
+				flag = 1
+				
+			elif flag > 0:
+				rr_all = np.vstack((rr_all, r_raw))
+				wr_all = np.vstack((wr_all, w_raw))
+				pr_all = np.vstack((pr_all, par[0]))
+				
+				rb_all = np.vstack((rb_all, rb))
+				wb_all = np.vstack((wb_all, wb))
+				d_all = np.append(d_all, day[i])
+				
+	avr, avw     = ba.spectral_averaging(rr_all, wr_all)
+	avrn, avwn   = rfi.cleaning_sweep(f, avr, avw, window_width_MHz=3, Npolyterms_block=2, N_choice=20, N_sigma=2.5)
+	fb, rbn, wbn = ba.spectral_binning_number_of_samples(f, avrn, avwn)
+	
+	avp = np.mean(pr_all, axis=0)
+	tbn = ba.model_evaluate('LINLOG', avp, fb/200) + rbn
+				
+	return fb, rb_all, wb_all, d_all, f, rr_all, wr_all, tbn, wbn #avr, avw #, rbn, wbn
 
 
-
-
-
-
-
+				
+			
+	

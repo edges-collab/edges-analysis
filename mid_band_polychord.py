@@ -32,17 +32,19 @@ save_file_name = sys.argv[3]
 Nparameters = N21+Nfg
 Nderived    = 0
 
-model_type_signal     = 'exp'  #'tanh' #, 'tanh'
+model_type_signal     = 'tanh'  #'tanh' #, 'tanh'
 model_type_foreground = 'exp'  #'exp', 'linlog'
 
-save_folder = '/home/raul/Desktop/cuec4/'
+save_folder = '/home/raul/Desktop/cuec3/'
 
 data        = 'real'   # it could be 'real' or 'simulated'
-case        =  22
-integration = '1hr'
+case        =  2 #22
+integration = '2hr'
+GHA_index   =  7 #, 14, 15, 16
+
 FLOW        =  61
-FHIGH       = 131 #159
-GHA_index   =  18   # 7, 14, 15, 16
+FHIGH       = 151 #159
+
 
 v0 = 100
 
@@ -88,11 +90,11 @@ def prior_list(N21, Nfg, model_type_signal, model_type_foreground):
 
 		# Center
 		pl[1, 0] = 61
-		pl[1, 1] = 105		
+		pl[1, 1] = 151		
 	
 		# Width
 		pl[2, 0] =  2
-		pl[2, 1] = 40
+		pl[2, 1] = 45
 		
 		# Tau
 		pl[3, 0] =  0.01
@@ -109,7 +111,9 @@ def prior_list(N21, Nfg, model_type_signal, model_type_foreground):
 			
 			# Tau
 			pl[4, 0] =  0.01
-			pl[4, 1] =  20			
+			pl[4, 1] =  20
+			
+			#print('hola !!')
 		
 		
 		

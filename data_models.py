@@ -121,6 +121,8 @@ def signal_model(model_type, theta, v):
 		K1 = np.tanh( (1/(v + dv/2) - 1/vr) / (dv/(tau0*(vr**2))) )
 		K2 = np.tanh( (1/(v - dv/2) - 1/vr) / (dv/(tau1*(vr**2))) )
 		T  = -(T21/2) * (K1 - K2) 
+		
+		#print('tanh !!!')
 
 	return T   # The amplitude is equal to T21, not to -T21
 
@@ -267,8 +269,14 @@ def real_data(case, integration, FLOW, FHIGH, index=1):
 			vv = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case22/case22_frequency.txt')
 			tt = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case22/case22_1hr_temperature.txt')
 			ww = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case22/case22_1hr_weights.txt')
-			g  = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case22/case22_1hr_gha_edges.txt')		
-	
+			g  = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case22/case22_1hr_gha_edges.txt')
+			
+		if integration == '13.5hr-15.5hr':
+			vv = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case22/case22_frequency.txt')
+			tt = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case22/case22_13.5hr-15.5hr_temperature.txt')
+			ww = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case22/case22_13.5hr-15.5hr_weights.txt')
+			g  = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case22/case22_13.5hr-15.5hr_gha_edges.txt')
+
 
 	
 	
@@ -302,8 +310,8 @@ def real_data(case, integration, FLOW, FHIGH, index=1):
 	
 	#std_dev_vec   = noise_std_at_vr * (v/vr)**(-2.5)
 	std_dev_vec = np.ones(len(v))
-	std_dev_vec[v <= 100] = 0.030 * std_dev_vec[v <= 100]
-	std_dev_vec[v  > 100] = 0.020 * std_dev_vec[v  > 100]
+	std_dev_vec[v <= 100] = 0.025 * std_dev_vec[v <= 100]
+	std_dev_vec[v  > 100] = 0.025 * std_dev_vec[v  > 100]
 
 	sigma         = np.diag(std_dev_vec**2)     # uncertainty covariance matrix
 	inv_sigma     = np.linalg.inv(sigma)
