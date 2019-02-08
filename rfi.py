@@ -549,23 +549,25 @@ def cleaning_sweep(f, d, w, window_width_MHz=4, Npolyterms_block=4, N_choice=20,
 
 
 		# Computing residuals within window
-		par     = np.polyfit(f_block[w_block>0], d_block[w_block>0], Npolyterms_block-1)
-		m_block = np.polyval(par, f_block)
-		r_block = d_block - m_block
-
-
-		# Delete new point if it falls outside N_sigma x previous STD of noise
-		if np.abs(r_block[-1]) > (N_sigma * r_std):
-			w_block[-1] = 0
-
-			d_out[i_block[-1]] = 0
-			w_out[i_block[-1]] = 0
-
-
-		# Compute STD for the current window using only good data
-		r_std = np.std(r_block[w_block > 0])
-
-
+		# print(np.sum(w_block))
+		if np.sum(w_block) > 0:
+			par     = np.polyfit(f_block[w_block>0], d_block[w_block>0], Npolyterms_block-1)
+			m_block = np.polyval(par, f_block)
+			r_block = d_block - m_block
+	
+	
+			# Delete new point if it falls outside N_sigma x previous STD of noise
+			if np.abs(r_block[-1]) > (N_sigma * r_std):
+				w_block[-1] = 0
+	
+				d_out[i_block[-1]] = 0
+				w_out[i_block[-1]] = 0
+	
+	
+			# Compute STD for the current window using only good data
+			r_std = np.std(r_block[w_block > 0])
+	
+	
 		# Update loop counter
 		# print(count)
 		count = count+1
