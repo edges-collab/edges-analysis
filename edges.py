@@ -2277,20 +2277,70 @@ def integrated_half_hour_level4(band, case, GHA_start=13.5):
 				discarded_days = [146, 151, 152, 157, 159, 163, 185]
 			if GHA_start == 9.5:	
 				discarded_days = [146, 157, 159, 167, 196]
-				w[:, (f>105.5) & (f<108.5)] = 0
+				#print(w)
+				#w[day==149, (f>105.5) & (f<108.5)] = 0
+				w[day==149, (f>104.5) & (f<110)] = 0
+				w[day==150, (f>104.5) & (f<110)] = 0
+				w[day==152, (f>104.5) & (f<110)] = 0
+				w[day==163, (f>104.5) & (f<110)] = 0
+				w[day==176, (f>104.5) & (f<110)] = 0
+				w[day==185, (f>104.5) & (f<110)] = 0
+				w[day==187, (f>104.5) & (f<110)] = 0
+				w[day==189, (f>104.5) & (f<110)] = 0
+				w[day==193, (f>104.5) & (f<110)] = 0
+				w[day==198, (f>104.5) & (f<110)] = 0
+				w[day==201, (f>104.5) & (f<110)] = 0
+				w[day==211, (f>104.5) & (f<110)] = 0
+				
+				w[day==150, (f>129.0) & (f<135)] = 0
+				w[day==160, (f>129.0) & (f<135)] = 0
+				w[day==161, (f>129.0) & (f<135)] = 0
+				w[day==162, (f>129.0) & (f<135)] = 0
+				w[day==166, (f>129.0) & (f<135)] = 0
+				w[day==175, (f>129.0) & (f<135)] = 0
+				w[day==179, (f>129.0) & (f<135)] = 0
+				w[day==180, (f>129.0) & (f<135)] = 0
+				w[day==193, (f>129.0) & (f<135)] = 0
+				w[day==198, (f>129.0) & (f<135)] = 0
+				w[day==199, (f>129.0) & (f<135)] = 0
+				w[day==211, (f>129.0) & (f<135)] = 0
+				
+				w[day==177, (f>143.0) & (f<148)] = 0
+				
 				w[:, (f>134.5) & (f<140.5)] = 0
+				
 				
 			if GHA_start == 10.0:	
 				discarded_days = [152, 157, 166, 159, 196]#, 176, 180, 181, 185]
-				w[:, (f>132.0) & (f<133.0)] = 0
-				w[:, (f>135.5) & (f<136.5)] = 0
-				w[:, (f>146.5) & (f<148.0)] = 0
+				
+				w[day==175, (f>143.0) & (f<150.0)] = 0
+				w[day==176, (f>143.0) & (f<150.0)] = 0
+				w[day==180, (f>143.0) & (f<150.0)] = 0
+				w[day==181, (f>143.0) & (f<150.0)] = 0
+				w[day==185, (f>143.0) & (f<150.0)] = 0
+				
+				
+				
+				
+				
 				
 			if GHA_start == 10.5:	
 				discarded_days = [174, 176, 204, 218]  # , 151, 162, 189, 210
-				w[:, (f>111.7) & (f<115.2)] = 0
+				w[:, (f>101.52) & (f<101.53)] = 0
+				w[:, (f>102.50) & (f<102.53)] = 0
+				w[:, (f>153.02) & (f<153.04)] = 0
+				
+				w[:, (f>111.7) & (f<115.4)] = 0
+				w[:, (f>121.47) & (f<121.55)] = 0
 				w[:, (f>146.5) & (f<148.0)] = 0
 				w[:, (f>150) & (f<150.5)] = 0
+				
+				w[:, (f>105.72) & (f<105.74)] = 0
+				w[:, (f>106.05) & (f<106.15)] = 0
+				w[:, (f>106.42) & (f<106.55)] = 0				
+				
+				
+				
 				
 			if GHA_start == 11.0:	
 				discarded_days = [149, 165, 176, 204]
@@ -2307,6 +2357,16 @@ def integrated_half_hour_level4(band, case, GHA_start=13.5):
 				w[day==193, (f>146.5) & (f<148.0)] = 0
 				w[day==197, (f>146.5) & (f<148.0)] = 0
 				w[day==198, (f>146.5) & (f<148.0)] = 0
+				
+				w[:, (f>109) & (f<114.2)] = 0
+				
+				w[:, (f>105.72) & (f<105.74)] = 0
+				w[:, (f>106.05) & (f<106.15)] = 0
+				w[:, (f>106.42) & (f<106.55)] = 0
+				
+				w[:, (f>138) & (f<138.4)] = 0
+				
+				
 				
 			if GHA_start == 11.5:	
 				discarded_days = [175, 176, 177, 200, 204, 216]
@@ -2340,9 +2400,9 @@ def integrated_half_hour_level4(band, case, GHA_start=13.5):
 			
 			print(day[i])
 			
-			m          = ba.model_evaluate('LINLOG', p[i,:], f/200) + r[i,:]
-			par        = ba.fit_polynomial_fourier('LINLOG', f/200, m, 4, Weights=w[i,:])
-			r_raw      = m-par[1]
+			t          = ba.model_evaluate('LINLOG', p[i,:], f/200) + r[i,:]
+			par        = ba.fit_polynomial_fourier('LINLOG', f/200, t, 4, Weights=w[i,:])
+			r_raw      = t-par[1]
 			w_raw      = w[i,:] 
 			
 			
@@ -2369,12 +2429,18 @@ def integrated_half_hour_level4(band, case, GHA_start=13.5):
 				wb_all = np.vstack((wb_all, wb))
 				d_all  = np.append(d_all, day[i])
 				
-	avr, avw    = ba.spectral_averaging(rr_all, wr_all)
-	avrn, avwn  = rfi.cleaning_sweep(f, avr, avw, window_width_MHz=3, Npolyterms_block=2, N_choice=20, N_sigma=2.5)
+	avrn, avwn   = ba.spectral_averaging(rr_all, wr_all)
+	avp        = np.mean(pr_all, axis=0)
+	
+	# For the 10.5 and 11 averages, DO NOT USE THIS CLEANING. ONLY use the 2.5sigma filter in the INTEGRATED 10.5-11.5 spectrum, AFTER integration
+	#avrn, avwn = rfi.cleaning_sweep(f, avr, avw, window_width_MHz=3, Npolyterms_block=2, N_choice=20, N_sigma=3.0)
+	
+	avtn = ba.model_evaluate('LINLOG', avp, f/200) + avrn
+		
 	#avrn, avwn = rfi.cleaning_sweep(f, avrn, avwn, window_width_MHz=5, Npolyterms_block=2, N_choice=20, N_sigma=2)
 	fb, rbn, wbn = ba.spectral_binning_number_of_samples(f, avrn, avwn)
 	
-	avp = np.mean(pr_all, axis=0)
+	
 	tbn = ba.model_evaluate('LINLOG', avp, fb/200) + rbn
 	
 	
@@ -2386,12 +2452,58 @@ def integrated_half_hour_level4(band, case, GHA_start=13.5):
 	
 	# par = ba.fit_polynomial_fourier('LINLOG', fc, tc, 4, Weights=wc); plt.plot(fc, tc-par[1])
 
-	
-	
-				
-	return fb, rb_all, wb_all, d_all, f, rr_all, wr_all, tbn, wbn, avrn, avwn # avr, avw, 
+					
+	return fb, rb_all, wb_all, d_all, tbn, wbn, f, rr_all, wr_all, avrn, avwn, avp, avtn # avr, avw, 
 
 				
+
+
+
+
+
+
+
+def integrated_half_hour_level4_many(band, case, GHA_start=[13.5, 14.0]):
+	
+	
+	for i in range(len(GHA_start)):
+	
+		print('------------------------------- ' + str(GHA_start[i]) )
+		fb, rb_all, wb_all, d_all, tbn, wbn, f, rr_all, wr_all, avr, avw, avp, avt = integrated_half_hour_level4('mid_band', 23, GHA_start=GHA_start[i])
+		
+		if i == 0:
+			avr_all = np.copy(avr)
+			avw_all = np.copy(avw)
+			avp_all = np.copy(avp)
+			
+		elif i > 0:
+			avr_all = np.vstack((avr_all, avr))
+			avw_all = np.vstack((avw_all, avw))
+			avp_all = np.vstack((avp_all, avp))
+			
+			
+		
+	avr, avw = ba.spectral_averaging(avr_all, avw_all)
+	avp      = np.mean(avp_all, axis=0)
+	avt      = ba.model_evaluate('LINLOG', avp, f/200) + avr
+	
+	avrn, avwn   = rfi.cleaning_sweep(f, avr, avw, window_width_MHz=3, Npolyterms_block=2, N_choice=20, N_sigma=2.5)
+	fb, rb, wb   = ba.spectral_binning_number_of_samples(f, avrn, avwn)
+	tb  = ba.model_evaluate('LINLOG', avp, fb/200) + rb
+	
+	
+	
+	
+
+	return f, avr, avw, avt, avp, fb, tb, wb
+
+
+
+
+
+
+
+
 
 
 
