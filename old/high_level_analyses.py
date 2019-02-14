@@ -5,7 +5,7 @@ import edges as eg
 import reflection_coefficient as rc
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mpt
-import emcee as emcee
+#import emcee as emcee
 import astropy.coordinates as apc
 import scipy.io as sio
 import scipy.interpolate as sci
@@ -17,7 +17,7 @@ from os.path import expanduser
 from matplotlib import cm
 
 import h5py
-import corner
+#import corner
 
 import healpy as hp
 from scipy import stats
@@ -58774,6 +58774,36 @@ def low2_ans2_6dB_attenuator_s11_calibration():
 
 
 
+
+
+
+
+def likelihood_edges(fixed='Rmfp'):
+	
+	if fixed == 'Rmfp':
+		filename = '/home/raul/DATA/EDGES_old/global_21cm_models/fialkov/Global21cmV6/results/results_Npar5_Npix20_vmin_xHI708_tau_0.055_0.090.hdf5'
+		
+		v, signals, par_21, p1x, p2x, p3x, p4x, p5x, p6x, p7x, flags, xHI59, xHI708, xHI754, Zeta, LE, chi_sq, par_fg = eg.read_likelihood_fialkov(filename, version='v6')
+		
+		X = np.reshape(LE, (-1,1))
+		W = np.hstack((par_21, X))
+		
+		np.savetxt('/home/raul/Desktop/fixed_Rmfp.txt', W)
+		
+	
+
+	elif fixed == 'vmin':
+		filename = '/home/raul/DATA/EDGES_old/global_21cm_models/fialkov/Global21cmV6/results/results_Npar5_Npix20_Rmfp_xHI708_tau_0.055_0.090.hdf5'
+		
+		v, signals, par_21, p1x, p2x, p3x, p4x, p5x, p6x, p7x, flags, xHI59, xHI708, xHI754, Zeta, LE, chi_sq, par_fg = eg.read_likelihood_fialkov(filename, version='v6')
+		
+		X = np.reshape(LE, (-1,1))
+		W = np.hstack((par_21, X))
+		
+		np.savetxt('/home/raul/Desktop/fixed_vmin.txt', W)
+	
+		
+	return W
 
 
 

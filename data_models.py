@@ -1,4 +1,5 @@
 
+import basic as ba
 import numpy as np
 import os, sys
 
@@ -276,11 +277,32 @@ def real_data(case, integration, FLOW, FHIGH, index=1):
 			tt = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case22/case22_13.5hr-15.5hr_temperature.txt')
 			ww = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case22/case22_13.5hr-15.5hr_weights.txt')
 			g  = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case22/case22_13.5hr-15.5hr_gha_edges.txt')
+			
+			#std_dev_vec   = noise_std_at_vr * (v/vr)**(-2.5)
+			std_dev_vec = np.ones(len(v))
+			std_dev_vec[v <= 100] = 0.025 * std_dev_vec[v <= 100]
+			std_dev_vec[v  > 100] = 0.025 * std_dev_vec[v  > 100]			
+
+			
+	if case == 23:
+		if integration == '10.5-11.5hr':
+			d  = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case23/integrated_spectrum_GHA_10.5-11.5.txt')
+			vv = d[:,0]
+			tt = np.array([d[:,1]])
+			ww = np.array([d[:,2]])
+			g  = [10.5, 11.5]
+			
+			v0 = 100
+			A  = 10
+			ss = A*(1/np.sqrt(ww[0,:]))*(vv/v0)**(-2.5)
+			
+			print(ss)
 
 
 	
 	
-	vp  = vv[(vv>=FLOW) & (vv<=FHIGH)]
+	vp  = vv[(vv>=FLOW)   & (vv<=FHIGH)]
+	sp  = ss[(vv>=FLOW)   & (vv<=FHIGH)]
 	tpp = tt[:,(vv>=FLOW) & (vv<=FHIGH)]
 	wpp = ww[:,(vv>=FLOW) & (vv<=FHIGH)]
 	
@@ -303,15 +325,11 @@ def real_data(case, integration, FLOW, FHIGH, index=1):
 	
 	v = vp[wp>0]
 	t = tp[wp>0]
-	w = wp[wp>0]	
+	w = wp[wp>0]
+	std_dev_vec = sp[wp>0]
 	
 	
 	
-	
-	#std_dev_vec   = noise_std_at_vr * (v/vr)**(-2.5)
-	std_dev_vec = np.ones(len(v))
-	std_dev_vec[v <= 100] = 0.025 * std_dev_vec[v <= 100]
-	std_dev_vec[v  > 100] = 0.025 * std_dev_vec[v  > 100]
 
 	sigma         = np.diag(std_dev_vec**2)     # uncertainty covariance matrix
 	inv_sigma     = np.linalg.inv(sigma)
@@ -320,4 +338,55 @@ def real_data(case, integration, FLOW, FHIGH, index=1):
 	
 		
 	return v, t, w, g, sigma, inv_sigma, det_sigma 
+
+
+
+
+
+
+
+
+def spectrum_channel_to_channel_difference(f, t, w, FLOW, FHIGH, noise_of_residuals='yes', Nfg=5):
+	
+	fc  = f[(f>=FLOW) & (f<=FHIGH)]; tc = t[(f>=FLOW) & (f<=FHIGH)]; wc = w[(f>=FLOW) & (f<=FHIGH)]
+	
+	par = ba.fit_polynomial_fourier('LINLOG', fc, tc, Nfg, Weights=wc)
+	
+	rc  = (tc-par[1])
+	
+	x1  = np.arange(0,len(rc),2)
+	x2  = np.arange(1,len(rc),2)
+	print(x1)
+	print(x2)
+	print(len(rc))
+	
+	r1 = rc[x1]
+	r2 = rc[x2]
+	
+	print(len(r1))
+	print(len(r2))
+	if len(r1) > len(r2):
+		
+		r1 = r1[0:len(r1)]
+	
+	diff = rc[x2] - rc[x1]
+	
+	
+	
+	
+	
+	
+	
+	return diff
+
+
+
+
+
+
+
+
+
+
+
 

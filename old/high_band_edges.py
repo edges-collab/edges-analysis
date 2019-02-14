@@ -3,7 +3,7 @@ import edges as eg
 import numpy as np
 import matplotlib.pyplot as plt
 import h5py
-import emcee as ec
+#import emcee as ec
 import time
 
 

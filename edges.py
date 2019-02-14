@@ -2463,7 +2463,7 @@ def integrated_half_hour_level4(band, case, GHA_start=13.5):
 
 
 
-def integrated_half_hour_level4_many(band, case, GHA_start=[13.5, 14.0]):
+def integrated_half_hour_level4_many(band, case, GHA_start=[13.5, 14.0], save='no', filename='test.txt'):
 	
 	
 	for i in range(len(GHA_start)):
@@ -2493,6 +2493,10 @@ def integrated_half_hour_level4_many(band, case, GHA_start=[13.5, 14.0]):
 	
 	
 	
+	if save  == 'yes':
+		dataT = np.array([fb, tb, wb])
+		data  = dataT.T 
+		np.savetxt('/home/raul/Desktop/' + filename, data)
 	
 
 	return f, avr, avw, avt, avp, fb, tb, wb
