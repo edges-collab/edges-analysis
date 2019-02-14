@@ -170,6 +170,7 @@ def models_calibration_s11(case, f, MC_s11_syst=np.zeros(16), Npar_max=15):
 
 	# ----- Make these input parameters ??
 	RMS_expec_mag = 0.0001
+	print('hola')
 	RMS_expec_ang = 0.1*(np.pi/180)
 	
 	
@@ -1430,6 +1431,7 @@ def balun_and_connector_loss(band, f, ra, MC=[0,0,0,0,0,0,0,0]):
 	ra_b, S11b, S12S21b, S22b = rc.de_embed(Ropen, Rshort, Rmatch, Rin_b_open, Rin_b_short, Rin_b_match, ra_c) # Reflection of antenna only, at the input of balun
 	
 	
+	
 	# Inverting S11 and S22
 	S11b_rev = S22b
 	S22b_rev = S11b
@@ -1502,145 +1504,226 @@ def balun_and_connector_loss(band, f, ra, MC=[0,0,0,0,0,0,0,0]):
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-def error_propagation(case):
+def MC_receiver(band, MC_spectra_noise = np.ones(4), MC_s11_syst = np.ones(16), MC_temp = np.ones(4)):
 	
 	# Settings
-	if case == 1:
-		case_models   = 1  # mid band 2018
-		s11_Npar_max  = 14
-		
-		band          = 'mid_band'
-		
-		fx, il, ih    = ba.frequency_edges(60,160)
-		f             = fx[il:(ih+1)]
-		fn            = (f-120)/60
-
-		Tamb_internal = 300
-		
-		G_Npar_max    = 10
-
-		
-		# MC flags
-		MC_spectra_noise = np.ones(4)
-		MC_s11_syst      = np.ones(16)
-		MC_temp          = np.ones(4)
-		
-		cterms = 14
-		wterms = 14
-		
+	case_models   = 1  # mid band 2018
+	s11_Npar_max  = 14
 	
+	#band          = 'mid_band'
+	
+	fx, il, ih    = ba.frequency_edges(60,160)
+	f             = fx[il:(ih+1)]
+	fn            = (f-120)/60
+
+	Tamb_internal = 300
+	
+	# MC flags
+	
+	
+	
+	cterms = 6
+	wterms = 14
 	
 
+	# Computing "Perturbed" receiver spectra, reflection coefficients, and physical temperatures
+	ms = models_calibration_spectra(case_models, f, MC_spectra_noise=MC_spectra_noise)
+	mr = models_calibration_s11(case_models, f, MC_s11_syst=MC_s11_syst, Npar_max=s11_Npar_max)
+	mt = models_calibration_physical_temperature(case_models, f, s_parameters=[mr[2], mr[5], mr[6], mr[7]], MC_temp=MC_temp)
+	
+	Tae = ms[0]
+	The = ms[1]
+	Toe = ms[2]
+	Tse = ms[3]
+	
+	rl  = mr[0]
+	ra  = mr[1]
+	rh  = mr[2]
+	ro  = mr[3]
+	rs  = mr[4]
+	
+	Ta  = mt[0]
+	Thd = mt[1]
+	To  = mt[2]
+	Ts  = mt[3]
 	
 
-	# MC Calibration quantities	
-	N_MC = 10000
+	# Computing receiver calibration quantities
+	C1, C2, TU, TC, TS = calibration_quantities(fn, Tae, The, Toe, Tse, rl, ra, rh, ro, rs, Ta, Thd, To, Ts, Tamb_internal, cterms, wterms)
 	
-	rl_all   = np.random.normal(0, 1, size=(N_MC, len(f))) + 0*1j
-	rant_all = np.random.normal(0, 1, size=(N_MC, len(f))) + 0*1j
 	
-	C1_all = np.random.normal(0, 1, size=(N_MC, len(f)))
-	C2_all = np.random.normal(0, 1, size=(N_MC, len(f)))
-	TU_all = np.random.normal(0, 1, size=(N_MC, len(f)))
-	TC_all = np.random.normal(0, 1, size=(N_MC, len(f)))
-	TS_all = np.random.normal(0, 1, size=(N_MC, len(f)))
-	
-	G_all  = np.random.normal(0, 1, size=(N_MC, len(f)))
+	return f, rl, C1, C2, TU, TC, TS
 	
 	
 	
-	for i in range(30):
-		
-		# Computing "Perturbed" receiver spectra, reflection coefficients, and physical temperatures
-		ms = models_calibration_spectra(case_models, f, MC_spectra_noise=MC_spectra_noise)
-		mr = models_calibration_s11(case_models, f, MC_s11_syst=MC_s11_syst, Npar_max=s11_Npar_max)
-		mt = models_calibration_physical_temperature(case_models, f, s_parameters=[mr[2], mr[5], mr[6], mr[7]], MC_temp=MC_temp)
-		
-		Tae = ms[0]
-		The = ms[1]
-		Toe = ms[2]
-		Tse = ms[3]
-		
-		rl  = mr[0]
-		ra  = mr[1]
-		rh  = mr[2]
-		ro  = mr[3]
-		rs  = mr[4]
-		
-		Ta  = mt[0]
-		Thd = mt[1]
-		To  = mt[2]
-		Ts  = mt[3]
-		
-		
+	
+	
 
-		# Computing receiver calibration quantities
-		print(' ')
-		print('----- Calibration quantities: ' + str(i+1) + ' -----')
-		C1, C2, TU, TC, TS = calibration_quantities(fn, Tae, The, Toe, Tse, rl, ra, rh, ro, rs, Ta, Thd, To, Ts, Tamb_internal, cterms, wterms)
-		
-		rl_all[i, :] = rl
-		C1_all[i, :] = C1
-		C2_all[i, :] = C2
-		TU_all[i, :] = TU
-		TC_all[i, :] = TC
-		TS_all[i, :] = TS
-		
-		print('-------------------------------------')
-		
-		
-		# Producing perturbed antenna reflection coefficient
-		rant = models_antenna_s11_remove_delay(band, f, year=2018, day=147, delay_0=0.17, model_type='polynomial', Nfit=14, plot_fit_residuals='no')
 
-		RMS_mag  = 0.0001
-		RMS_ang  = 0.1*(np.pi/180) 
-		pert_mag = random_signal_perturbation(f, RMS_mag, s11_Npar_max)
-		pert_ang = random_signal_perturbation(f, RMS_ang, s11_Npar_max)
-		rant_mag_MC = np.abs(rant) + pert_mag
-		rant_ang_MC = np.unwrap(np.angle(rant)) + pert_ang
-		
-		rant_MC     = rant_mag_MC * (np.cos(rant_ang_MC) + 1j*np.sin(rant_ang_MC))
-		
-		rant_all[i, :] = rant_MC
-		
-		
-		# Producing perturbed balun and connector loss
-		Gb, Gc = balun_and_connector_loss(band, f, rant_MC)
-		G = Gb*Gc
-		RMS_G = 0.00025  # 5% of typical (i.e. 0.5%)
+def MC_antenna_s11(f, band): #, rant):
 	
-		flag=1
-		while flag==1:
-			pert_G = random_signal_perturbation(f, RMS_G, G_Npar_max)
-			if np.max(np.abs(pert_G)) <= 6*RMS_G:     # 6 sigma = 0.0015, forcing the loss to stay within reason
-				flag=0
-		
-		G_MC = G + pert_G
-		G_all[i, :] = G_MC
-		
-		
+	s11_Npar_max  = 14
+
+	# Producing perturbed antenna reflection coefficient
+	rant = models_antenna_s11_remove_delay(band, f, year=2018, day=147, delay_0=0.17, model_type='polynomial', Nfit=14, plot_fit_residuals='no')
+
+	RMS_mag  = 0.0001
+	RMS_ang  = 0.1*(np.pi/180) 
 	
-	# Save to HDF5
-	# -----------------
+	pert_mag = random_signal_perturbation(f, RMS_mag, s11_Npar_max)
+	pert_ang = random_signal_perturbation(f, RMS_ang, s11_Npar_max)
+	
+	rant_mag_MC = np.abs(rant)              + pert_mag
+	rant_ang_MC = np.unwrap(np.angle(rant)) + pert_ang
+	
+	rant_MC     = rant_mag_MC * (np.cos(rant_ang_MC) + 1j*np.sin(rant_ang_MC))
+	
+	return rant_MC
 	
 	
+
+
+
+
+
+def MC_antenna_loss(f):
+
+	"""
+		
+	Output:  dG
+	Perturbed MC loss: G_nominal + dG
 	
-	return f, rl_all, C1_all, C2_all, TU_all, TC_all, TS_all, rant_all, G_all
+	where:
+	Gb, Gc = balun_and_connector_loss(band, f, rant_MC)
+	G_nominal = Gb*Gc  # balun loss x connector loss
+	
+	"""
+
+
+	G_Npar_max  = 10
+	RMS_G       = 0.00025  # 5% of typical (i.e., of 0.5%)
+
+	flag=1
+	while flag==1:
+		dG = random_signal_perturbation(f, RMS_G, G_Npar_max)
+		if np.max(np.abs(dG)) <= 6*RMS_G:     # 6 sigma = 0.0015, forcing the loss to stay within reason
+			flag=0
+	
+	return dG
+
+
+
+
+
+
+
+
+
+
+
+def MC_error_propagation():
+	
+	band  = 'mid_band'
+	FLOW  =  61
+	FHIGH = 121
+	
+	
+	
+	
+	#rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_mid_band_cfit6_wfit14.txt'
+	#rcv      = np.genfromtxt(rcv_file)
+	#fX       = rcv[:,0]
+	#rcv2     = rcv[(fX>=FLOW) & (fX<=FHIGH),:]
+	
+	#f   = rcv2[:,0]
+	#rl  = rcv2[:,1] + 1j*rcv2[:,2]
+	#C1  = rcv2[:,3]
+	#C2  = rcv2[:,4]
+	#TU  = rcv2[:,5]
+	#TC  = rcv2[:,6]
+	#TS  = rcv2[:,7]
+	
+
+	ff, rl_Y, C1_Y, C2_Y, TU_Y, TC_Y, TS_Y = MC_receiver(band, MC_spectra_noise = np.zeros(4), MC_s11_syst = np.zeros(16), MC_temp = np.zeros(4))
+
+	f  = ff[(ff>=FLOW) & (ff<=FHIGH)]
+	rl = rl_Y[(ff>=FLOW) & (ff<=FHIGH)]
+	C1 = C1_Y[(ff>=FLOW) & (ff<=FHIGH)]
+	C2 = C2_Y[(ff>=FLOW) & (ff<=FHIGH)]
+	TU = TU_Y[(ff>=FLOW) & (ff<=FHIGH)]
+	TC = TC_Y[(ff>=FLOW) & (ff<=FHIGH)]
+	TS = TS_Y[(ff>=FLOW) & (ff<=FHIGH)]
+
+
+
+	rant1 = models_antenna_s11_remove_delay('mid_band', f, year=2018, day=147, delay_0=0.17, model_type='polynomial', Nfit=14, plot_fit_residuals='no')
+	rant2 = models_antenna_s11_remove_delay('low_band3', f, year=2018, day=227, delay_0=0.17, model_type='polynomial', Nfit=14, plot_fit_residuals='no')
+	
+	#rant = models_antenna_s11_remove_delay(band, f, year=2018, day=147, delay_0=0.17, model_type='polynomial', Nfit=14, plot_fit_residuals='no')
+	
+	tsky = 1000*(f/100)**(-2.5)
+	
+	tunc1 = uncalibrated_antenna_temperature(tsky, rant1, rl, C1, C2, TU, TC, TS, Tamb_internal=300)
+	tunc2 = uncalibrated_antenna_temperature(tsky, rant2, rl, C1, C2, TU, TC, TS, Tamb_internal=300)
+	
+	
+	
+	
+	
+	
+	ff, rl_Y, C1_Y, C2_Y, TU_Y, TC_Y, TS_Y = MC_receiver(band, MC_spectra_noise = np.ones(4), MC_s11_syst = np.ones(16), MC_temp = np.ones(4))
+
+	rl_MC = rl_Y[(ff>=FLOW) & (ff<=FHIGH)]
+	C1_MC = C1_Y[(ff>=FLOW) & (ff<=FHIGH)]
+	C2_MC = C2_Y[(ff>=FLOW) & (ff<=FHIGH)]
+	TU_MC = TU_Y[(ff>=FLOW) & (ff<=FHIGH)]
+	TC_MC = TC_Y[(ff>=FLOW) & (ff<=FHIGH)]
+	TS_MC = TS_Y[(ff>=FLOW) & (ff<=FHIGH)]
+	
+	#rant_MC = MC_antenna_s11(f, band)
+	
+	tcal1 = calibrated_antenna_temperature(tunc1, rant1, rl_MC, C1_MC, C2_MC, TU_MC, TC_MC, TS_MC, Tamb_internal=300)
+	#tcal1 = calibrated_antenna_temperature(tunc1, rant1, rl, C1, C2, TU, TC, TS, Tamb_internal=300)
+	tcal2 = calibrated_antenna_temperature(tunc2, rant2, rl_MC, C1_MC, C2_MC, TU_MC, TC_MC, TS_MC, Tamb_internal=300)
+	#tcal2 = calibrated_antenna_temperature(tunc2, rant2, rl, C1, C2, TU, TC, TS, Tamb_internal=300)
+	
+	
+	par0 = ba.fit_polynomial_fourier('LINLOG', f, tsky, 5)
+	par1 = ba.fit_polynomial_fourier('LINLOG', f, tcal1, 5)
+	par2 = ba.fit_polynomial_fourier('LINLOG', f, tcal2, 5)
+	
+	#plt.plot(f, tsky-par0[1]); plt.ylim([-0.5, 0.5])
+	plt.plot(f, tcal1-par1[1]); plt.ylim([-0.5, 0.5])
+	plt.plot(f, tcal2-par2[1]); plt.ylim([-0.5, 0.5])
+	
+	
+	
+	
+	
+	
+	# f, tsky, tunc, tcal = cal.MC_error_propagation()
+	
+	return f, tsky, tunc1, tcal1
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2464,7 +2547,6 @@ def corrected_antenna_s11(day, save_name_flag):
 	# Output array
 	ra_T = np.array([f, np.real(av), np.imag(av)])
 	ra   = ra_T.T
-
 
 
 

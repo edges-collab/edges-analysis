@@ -35,15 +35,15 @@ Nderived    = 0
 model_type_signal     = 'tanh'  #'tanh' #, 'tanh'
 model_type_foreground = 'exp'  #'exp', 'linlog'
 
-save_folder = '/home/raul/Desktop/cuec3/'
+save_folder = '/home/raul/Desktop/test/'
 
 data        = 'real'   # it could be 'real' or 'simulated'
-case        =  2 #22
-integration = '2hr'
-GHA_index   =  7 #, 14, 15, 16
+case        =  23 #2 #22
+integration = '10.5-11.5hr'
+GHA_index   =  0 #, 14, 15, 16
 
 FLOW        =  61
-FHIGH       = 151 #159
+FHIGH       = 141 #159
 
 
 v0 = 100
@@ -86,15 +86,15 @@ def prior_list(N21, Nfg, model_type_signal, model_type_foreground):
 		
 		# Amplitude
 		pl[0, 0] = -5
-		pl[0, 1] =  5
+		pl[0, 1] =  0 #5
 
 		# Center
 		pl[1, 0] = 61
-		pl[1, 1] = 151		
+		pl[1, 1] = 100		
 	
 		# Width
 		pl[2, 0] =  2
-		pl[2, 1] = 45
+		pl[2, 1] = 40
 		
 		# Tau
 		pl[3, 0] =  0.01
