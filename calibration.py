@@ -1661,11 +1661,14 @@ def MC_error_propagation():
 	
 	#rant = models_antenna_s11_remove_delay(band, f, year=2018, day=147, delay_0=0.17, model_type='polynomial', Nfit=14, plot_fit_residuals='no')
 	
-	tsky = 1000*(f/100)**(-2.5)
+	tsky1 = 1000*(f/100)**(-2.5)
+	tsky2 = 3000*(f/100)**(-2.5)
 	
-	tunc1 = uncalibrated_antenna_temperature(tsky, rant1, rl, C1, C2, TU, TC, TS, Tamb_internal=300)
-	tunc2 = uncalibrated_antenna_temperature(tsky, rant2, rl, C1, C2, TU, TC, TS, Tamb_internal=300)
+	tunc1 = uncalibrated_antenna_temperature(tsky1, rant1, rl, C1, C2, TU, TC, TS, Tamb_internal=300)
+	tunc2 = uncalibrated_antenna_temperature(tsky1, rant2, rl, C1, C2, TU, TC, TS, Tamb_internal=300)
 	
+	tunc3 = uncalibrated_antenna_temperature(tsky2, rant1, rl, C1, C2, TU, TC, TS, Tamb_internal=300)
+	tunc4 = uncalibrated_antenna_temperature(tsky2, rant2, rl, C1, C2, TU, TC, TS, Tamb_internal=300)	
 	
 	
 	
@@ -1683,27 +1686,37 @@ def MC_error_propagation():
 	#rant_MC = MC_antenna_s11(f, band)
 	
 	tcal1 = calibrated_antenna_temperature(tunc1, rant1, rl_MC, C1_MC, C2_MC, TU_MC, TC_MC, TS_MC, Tamb_internal=300)
-	#tcal1 = calibrated_antenna_temperature(tunc1, rant1, rl, C1, C2, TU, TC, TS, Tamb_internal=300)
 	tcal2 = calibrated_antenna_temperature(tunc2, rant2, rl_MC, C1_MC, C2_MC, TU_MC, TC_MC, TS_MC, Tamb_internal=300)
+	
+	tcal3 = calibrated_antenna_temperature(tunc3, rant1, rl_MC, C1_MC, C2_MC, TU_MC, TC_MC, TS_MC, Tamb_internal=300)
+	tcal4 = calibrated_antenna_temperature(tunc4, rant2, rl_MC, C1_MC, C2_MC, TU_MC, TC_MC, TS_MC, Tamb_internal=300)
+
+
+	
+	#tcal1 = calibrated_antenna_temperature(tunc1, rant1, rl, C1, C2, TU, TC, TS, Tamb_internal=300)
+	
 	#tcal2 = calibrated_antenna_temperature(tunc2, rant2, rl, C1, C2, TU, TC, TS, Tamb_internal=300)
 	
 	
-	par0 = ba.fit_polynomial_fourier('LINLOG', f, tsky, 5)
+	#par0 = ba.fit_polynomial_fourier('LINLOG', f, tsky, 5)
 	par1 = ba.fit_polynomial_fourier('LINLOG', f, tcal1, 5)
 	par2 = ba.fit_polynomial_fourier('LINLOG', f, tcal2, 5)
 	
-	#plt.plot(f, tsky-par0[1]); plt.ylim([-0.5, 0.5])
-	plt.plot(f, tcal1-par1[1]); plt.ylim([-0.5, 0.5])
-	plt.plot(f, tcal2-par2[1]); plt.ylim([-0.5, 0.5])
+	par3 = ba.fit_polynomial_fourier('LINLOG', f, tcal3, 5)
+	par4 = ba.fit_polynomial_fourier('LINLOG', f, tcal4, 5)
 	
 	
 	
+	# plt.plot(f, tsky-par0[1]); plt.ylim([-0.5, 0.5])
+	# plt.plot(f, tcal1-par1[1]); plt.ylim([-0.5, 0.5])
+	# plt.plot(f, tcal2-par2[1]); plt.ylim([-0.5, 0.5])
 	
 	
 	
+
 	# f, tsky, tunc, tcal = cal.MC_error_propagation()
 	
-	return f, tsky, tunc1, tcal1
+	return f, rant1, rant2, tcal1, tcal2, tcal3, tcal4, par1[1], par2[1], par3[1], par4[1]
 
 
 
