@@ -177,4 +177,7 @@ def model_mirocha2016(theta):
 
 
 
+for i in range(10):
+	print(i)
+	z, t = model_mirocha2016([np.log10(1e-2), np.log10(1e4), np.log10(1e-2), np.log10(1e40), 20, -0.6])
 

@@ -1560,12 +1560,11 @@ def MC_receiver(band, MC_spectra_noise = np.ones(4), MC_s11_syst = np.ones(16), 
 	
 
 
-def MC_antenna_s11(f, band): #, rant):
-	
-	s11_Npar_max  = 14
+def MC_antenna_s11(f, rant, s11_Npar_max=14):	
+
+	# rant = models_antenna_s11_remove_delay(band, f, year=2018, day=147, delay_0=0.17, model_type='polynomial', Nfit=14, plot_fit_residuals='no')
 
 	# Producing perturbed antenna reflection coefficient
-	rant = models_antenna_s11_remove_delay(band, f, year=2018, day=147, delay_0=0.17, model_type='polynomial', Nfit=14, plot_fit_residuals='no')
 
 	RMS_mag  = 0.0001
 	RMS_ang  = 0.1*(np.pi/180) 
@@ -1586,7 +1585,7 @@ def MC_antenna_s11(f, band): #, rant):
 
 
 
-def MC_antenna_loss(f):
+def MC_antenna_loss(f, G_Npar_max=10):
 
 	"""
 		
@@ -1600,7 +1599,7 @@ def MC_antenna_loss(f):
 	"""
 
 
-	G_Npar_max  = 10
+	
 	RMS_G       = 0.00025  # 5% of typical (i.e., of 0.5%)
 
 	flag=1
@@ -1644,38 +1643,99 @@ def MC_error_propagation():
 	#TS  = rcv2[:,7]
 	
 
-	ff, rl_Y, C1_Y, C2_Y, TU_Y, TC_Y, TS_Y = MC_receiver(band, MC_spectra_noise = np.zeros(4), MC_s11_syst = np.zeros(16), MC_temp = np.zeros(4))
+	ff, rl_X, C1_X, C2_X, TU_X, TC_X, TS_X = MC_receiver(band, MC_spectra_noise = np.zeros(4), MC_s11_syst = np.zeros(16), MC_temp = np.zeros(4))
+	
+	rant1_X = models_antenna_s11_remove_delay('mid_band', ff, year=2018, day=147, delay_0=0.17, model_type='polynomial', Nfit=14, plot_fit_residuals='no')
+	rant2_X = models_antenna_s11_remove_delay('low_band3', ff, year=2018, day=227, delay_0=0.17, model_type='polynomial', Nfit=14, plot_fit_residuals='no')
+	
+	Gb, Gc = balun_and_connector_loss('mid_band', ff, rant1_X)
+	G1_X   = Gb*Gc
+	
+	Gb, Gc = balun_and_connector_loss('low_band3', ff, rant1_X)
+	G2_X   = Gb*Gc	
+	
+	
+	
+	
 
-	f  = ff[(ff>=FLOW) & (ff<=FHIGH)]
-	rl = rl_Y[(ff>=FLOW) & (ff<=FHIGH)]
-	C1 = C1_Y[(ff>=FLOW) & (ff<=FHIGH)]
-	C2 = C2_Y[(ff>=FLOW) & (ff<=FHIGH)]
-	TU = TU_Y[(ff>=FLOW) & (ff<=FHIGH)]
-	TC = TC_Y[(ff>=FLOW) & (ff<=FHIGH)]
-	TS = TS_Y[(ff>=FLOW) & (ff<=FHIGH)]
+	f     = ff[(ff>=FLOW) & (ff<=FHIGH)]
+	rl    = rl_X[(ff>=FLOW) & (ff<=FHIGH)]
+	C1    = C1_X[(ff>=FLOW) & (ff<=FHIGH)]
+	C2    = C2_X[(ff>=FLOW) & (ff<=FHIGH)]
+	TU    = TU_X[(ff>=FLOW) & (ff<=FHIGH)]
+	TC    = TC_X[(ff>=FLOW) & (ff<=FHIGH)]
+	TS    = TS_X[(ff>=FLOW) & (ff<=FHIGH)]
 
-
-
-	rant1 = models_antenna_s11_remove_delay('mid_band', f, year=2018, day=147, delay_0=0.17, model_type='polynomial', Nfit=14, plot_fit_residuals='no')
-	rant2 = models_antenna_s11_remove_delay('low_band3', f, year=2018, day=227, delay_0=0.17, model_type='polynomial', Nfit=14, plot_fit_residuals='no')
+	rant1 = rant1_X[(ff>=FLOW) & (ff<=FHIGH)]
+	rant2 = rant2_X[(ff>=FLOW) & (ff<=FHIGH)]
+	
+	G1    = G1_X[(ff>=FLOW) & (ff<=FHIGH)]
+	G2    = G2_X[(ff>=FLOW) & (ff<=FHIGH)]
+	
+	
+	
+	
 	
 	#rant = models_antenna_s11_remove_delay(band, f, year=2018, day=147, delay_0=0.17, model_type='polynomial', Nfit=14, plot_fit_residuals='no')
 	
 	tsky1 = 1000*(f/100)**(-2.5)
 	tsky2 = 3000*(f/100)**(-2.5)
 	
-	tunc1 = uncalibrated_antenna_temperature(tsky1, rant1, rl, C1, C2, TU, TC, TS, Tamb_internal=300)
-	tunc2 = uncalibrated_antenna_temperature(tsky1, rant2, rl, C1, C2, TU, TC, TS, Tamb_internal=300)
+	Tamb  = 273+25
 	
-	tunc3 = uncalibrated_antenna_temperature(tsky2, rant1, rl, C1, C2, TU, TC, TS, Tamb_internal=300)
-	tunc4 = uncalibrated_antenna_temperature(tsky2, rant2, rl, C1, C2, TU, TC, TS, Tamb_internal=300)	
+	tsky1L1 = tsky1*G1 + Tamb*(1-G1)
+	tsky2L1 = tsky2*G1 + Tamb*(1-G1)
+	
+	tsky1L2 = tsky1*G2 + Tamb*(1-G2)
+	tsky2L2 = tsky2*G2 + Tamb*(1-G2)
 	
 	
 	
+	tunc1 = uncalibrated_antenna_temperature(tsky1L1, rant1, rl, C1, C2, TU, TC, TS, Tamb_internal=300)
+	tunc2 = uncalibrated_antenna_temperature(tsky1L2, rant2, rl, C1, C2, TU, TC, TS, Tamb_internal=300)
 	
-	
-	ff, rl_Y, C1_Y, C2_Y, TU_Y, TC_Y, TS_Y = MC_receiver(band, MC_spectra_noise = np.ones(4), MC_s11_syst = np.ones(16), MC_temp = np.ones(4))
+	tunc3 = uncalibrated_antenna_temperature(tsky2L1, rant1, rl, C1, C2, TU, TC, TS, Tamb_internal=300)
+	tunc4 = uncalibrated_antenna_temperature(tsky2L2, rant2, rl, C1, C2, TU, TC, TS, Tamb_internal=300)
 
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	ff, rl_Y, C1_Y, C2_Y, TU_Y, TC_Y, TS_Y = MC_receiver(band, MC_spectra_noise = np.zeros(4), MC_s11_syst = np.zeros(16), MC_temp = np.zeros(4))
+
+	rant1_Y  = MC_antenna_s11(ff, rant1_X, s11_Npar_max=14)
+	rant2_Y  = MC_antenna_s11(ff, rant2_X, s11_Npar_max=14)
+
+	dG1_Y = MC_antenna_loss(ff, G_Npar_max=10)
+	dG2_Y = MC_antenna_loss(ff, G_Npar_max=10)
+	
+	G1_Y = G1_X + dG1_Y
+	G2_Y = G2_X + dG2_Y
+	
+	
+
+	
 	rl_MC = rl_Y[(ff>=FLOW) & (ff<=FHIGH)]
 	C1_MC = C1_Y[(ff>=FLOW) & (ff<=FHIGH)]
 	C2_MC = C2_Y[(ff>=FLOW) & (ff<=FHIGH)]
@@ -1683,13 +1743,36 @@ def MC_error_propagation():
 	TC_MC = TC_Y[(ff>=FLOW) & (ff<=FHIGH)]
 	TS_MC = TS_Y[(ff>=FLOW) & (ff<=FHIGH)]
 	
+	rant1_MC = rant1_Y[(ff>=FLOW) & (ff<=FHIGH)]
+	rant2_MC = rant2_Y[(ff>=FLOW) & (ff<=FHIGH)]	
+	
+	G1_MC = G1_Y[(ff>=FLOW) & (ff<=FHIGH)]
+	G2_MC = G2_Y[(ff>=FLOW) & (ff<=FHIGH)]		
+	
+	
+	
+	
 	#rant_MC = MC_antenna_s11(f, band)
 	
-	tcal1 = calibrated_antenna_temperature(tunc1, rant1, rl_MC, C1_MC, C2_MC, TU_MC, TC_MC, TS_MC, Tamb_internal=300)
-	tcal2 = calibrated_antenna_temperature(tunc2, rant2, rl_MC, C1_MC, C2_MC, TU_MC, TC_MC, TS_MC, Tamb_internal=300)
+	tcal1L1 = calibrated_antenna_temperature(tunc1, rant1_MC, rl_MC, C1_MC, C2_MC, TU_MC, TC_MC, TS_MC, Tamb_internal=300)
+	tcal1L2 = calibrated_antenna_temperature(tunc2, rant2_MC, rl_MC, C1_MC, C2_MC, TU_MC, TC_MC, TS_MC, Tamb_internal=300)
 	
-	tcal3 = calibrated_antenna_temperature(tunc3, rant1, rl_MC, C1_MC, C2_MC, TU_MC, TC_MC, TS_MC, Tamb_internal=300)
-	tcal4 = calibrated_antenna_temperature(tunc4, rant2, rl_MC, C1_MC, C2_MC, TU_MC, TC_MC, TS_MC, Tamb_internal=300)
+	tcal2L1 = calibrated_antenna_temperature(tunc3, rant1_MC, rl_MC, C1_MC, C2_MC, TU_MC, TC_MC, TS_MC, Tamb_internal=300)
+	tcal2L2 = calibrated_antenna_temperature(tunc4, rant2_MC, rl_MC, C1_MC, C2_MC, TU_MC, TC_MC, TS_MC, Tamb_internal=300)
+
+
+	
+	
+
+
+
+	tcal1  = (tcal1L1 - Tamb * (1-G1_MC)) / G1_MC
+	tcal2  = (tcal1L2 - Tamb * (1-G2_MC)) / G2_MC
+	
+	tcal3  = (tcal2L1 - Tamb * (1-G1_MC)) / G1_MC
+	tcal4  = (tcal2L2 - Tamb * (1-G2_MC)) / G2_MC
+		
+
 
 
 	
@@ -1699,11 +1782,13 @@ def MC_error_propagation():
 	
 	
 	#par0 = ba.fit_polynomial_fourier('LINLOG', f, tsky, 5)
-	par1 = ba.fit_polynomial_fourier('LINLOG', f, tcal1, 5)
-	par2 = ba.fit_polynomial_fourier('LINLOG', f, tcal2, 5)
 	
-	par3 = ba.fit_polynomial_fourier('LINLOG', f, tcal3, 5)
-	par4 = ba.fit_polynomial_fourier('LINLOG', f, tcal4, 5)
+	Nfg = 1
+	par1 = ba.fit_polynomial_fourier('LINLOG', f, tcal1, Nfg)
+	par2 = ba.fit_polynomial_fourier('LINLOG', f, tcal2, Nfg)
+
+	par3 = ba.fit_polynomial_fourier('LINLOG', f, tcal3, Nfg)
+	par4 = ba.fit_polynomial_fourier('LINLOG', f, tcal4, Nfg)
 	
 	
 	

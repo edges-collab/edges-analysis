@@ -8,6 +8,8 @@ import rfi as rfi
 
 import calibration as cal
 
+import reflection_coefficient as rc
+
 from os import listdir
 
 
@@ -2335,4 +2337,34 @@ def plot_MC_receiver():
 
 	return 0
 			
+	
+	
+	
+	
+	
+def capacitance_to_reflection(L): #f, L):
+	
+	f = np.arange(0, 100e6, 1e6)
+	#L = 1e-6
+	
+	
+	XL = (2 * np.pi * L * f)
+	
+	Z = 70 + 1j * XL
+	
+	
+	
+	r = rc.impedance2gamma(Z,50)
+	
+	
+	
+	
+	return f, Z, r
+	
+	
+	
+	
+	
+	
+	
 	
