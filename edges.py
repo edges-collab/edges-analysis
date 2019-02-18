@@ -513,37 +513,29 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 				beam_factor_filename = 'table_hires_low_band3_50-120MHz_85deg_alan_haslam_2.5_2.62_reffreq_76MHz.hdf5'
 				
 			f_table, lst_table, bf_table = cal.beam_factor_table_read(edges_folder + band + '/calibration/beam_factors/table/' + beam_factor_filename)
-			bf                           = cal.beam_factor_table_evaluate(f_table, lst_table, bf_table, m_2D[:,3])
+			bfX                          = cal.beam_factor_table_evaluate(f_table, lst_table, bf_table, m_2D[:,3])
+			
+			bf = bfX[:,((f_table>=FLOW) & (f_table<=FHIGH))]
 			
 			
-		
-		
 			
-		# Antenna S11
-		# -----------
-		s11_ant = cal.models_antenna_s11_remove_delay(band, fin, year=antenna_s11_year, day=antenna_s11_day, delay_0=0.17, model_type='polynomial', Nfit=antenna_s11_Nfit, plot_fit_residuals='no')
-		
-		
-		
-		# Balun+Connector Loss
-		# --------------------
-		if balun_correction == 0:
-			G = 1
-			print('NO BALUN CORRECTION')
 			
-		if balun_correction == 1:
-			Gb, Gc = cal.balun_and_connector_loss(band, fin, s11_ant)
-			G      = Gb*Gc
-		
 		
 		
 		# Receiver calibration quantities
 		# -------------------------------
 		if (band == 'mid_band') or (band == 'low_band3'):
 			
+			if receiver_cal_file == 0:
+				print('Receiver calibration FILE 0')
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_mid_band_cfit6_wfit14.txt'
+				
 			if receiver_cal_file == 1:
 				print('Receiver calibration FILE 1')
-				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_mid_band_cfit6_wfit14.txt'
+				#rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/using_50.12ohms/calibration_files/calibration_file_receiver1_using_50.12ohms_50-86MHz_cfit6_wfit6.txt'
+				#rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/using_50.12ohms/calibration_files/calibration_file_receiver1_using_50.12ohms_50-86MHz_cfit7_wfit7.txt'
+				#rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/using_50.12ohms/calibration_files/calibration_file_receiver1_using_50.12ohms_50-120MHz_cfit11_wfit11.txt'
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/using_50.12ohms/calibration_files/calibration_file_receiver1_using_50.12ohms_50-180MHz_cfit15_wfit15.txt'
 			
 			elif receiver_cal_file == 2:
 				print('Receiver calibration FILE 2')
@@ -562,6 +554,29 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 		TC      = rcv2[:,6]
 		TS      = rcv2[:,7]
 
+				
+				
+			
+		# Antenna S11
+		# -----------
+		s11_ant = cal.models_antenna_s11_remove_delay(band, fin, year=antenna_s11_year, day=antenna_s11_day, case=5, delay_0=0.17, model_type='polynomial', Nfit=antenna_s11_Nfit, plot_fit_residuals='no')
+		
+		
+		
+		# Balun+Connector Loss
+		# --------------------
+		if balun_correction == 0:
+			G = 1
+			print('NO BALUN CORRECTION')
+			
+		if balun_correction == 1:
+			Gb, Gc = cal.balun_and_connector_loss(band, fin, s11_ant)
+			G      = Gb*Gc
+						
+				
+				
+				
+				
 				
 	
 		# Calibrated antenna temperature with losses and beam chromaticity

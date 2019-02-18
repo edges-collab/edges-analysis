@@ -5,11 +5,11 @@ import reflection_coefficient as rc
 import time  as tt
 import edges as eg
 import datetime as dt
-import receiver_calibration as rcv
+#import receiver_calibration as rcv
 
 
 import basic as ba
-
+import calibration as cal
 
 import scipy.io as sio
 import scipy.interpolate as spi
@@ -58,14 +58,19 @@ print('EDGES Folder: ' + edges_folder)
 
 
 
-def switch_correction_mid_band_2018_01_25C(ant_s11, f_in = np.zeros([0,1]), case = 1):  
+def switch_correction_receiver1_2018_01_25C(ant_s11, f_in = np.zeros([0,1]), case = 1):  
 
 
 	"""
 	
 	Aug 13, 2018
 	
-	The characterization of the 4-position switch was done using the male standard of Phil's kit
+	WRONG!!!!:The characterization of the 4-position switch was done using the male standard of Phil's kit
+	
+	
+	Feb 16, 2019
+	
+	The characterization of the 4-position switch was done using the EDGES Keysight 85033E Male
 	
 	"""
 
@@ -76,9 +81,9 @@ def switch_correction_mid_band_2018_01_25C(ant_s11, f_in = np.zeros([0,1]), case
 
 	# Loading measurements
 	if case == 1:
-		path_folder     = home_folder + '/DATA/EDGES/calibration/receiver_calibration/mid_band/2018_01_25C/data/s11/raw/InternalSwitch/'
+		path_folder     = home_folder + '/DATA/EDGES/mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/data/s11/raw/InternalSwitch/'
 		
-		resistance_of_match = 50.027 # male
+		resistance_of_match = 50.12 # EDGES Keysight 85033E Male
 		
 		o_in, f = rc.s1p_read(path_folder + 'Open01.s1p')
 		s_in, f = rc.s1p_read(path_folder + 'Short01.s1p')
@@ -86,15 +91,13 @@ def switch_correction_mid_band_2018_01_25C(ant_s11, f_in = np.zeros([0,1]), case
 	
 		o_ex, f = rc.s1p_read(path_folder + 'ExternalOpen01.s1p')
 		s_ex, f = rc.s1p_read(path_folder + 'ExternalShort01.s1p')
-		l_ex, f = rc.s1p_read(path_folder + 'ExternalMatch01.s1p')
-
-
-
-
+		l_ex, f = rc.s1p_read(path_folder + 'ExternalMatch01.s1p')	
+	
+	
 	if case == 2:
-		path_folder     = home_folder + '/DATA/EDGES/calibration/receiver_calibration/mid_band/2018_01_25C/data/s11/raw/InternalSwitch/'
+		path_folder     = home_folder + '/DATA/EDGES/mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/data/s11/raw/InternalSwitch/'
 		
-		resistance_of_match = 50.027 # male
+		resistance_of_match = 50.12 # EDGES Keysight 85033E Male
 		
 		o_in, f = rc.s1p_read(path_folder + 'Open02.s1p')
 		s_in, f = rc.s1p_read(path_folder + 'Short02.s1p')
@@ -102,7 +105,41 @@ def switch_correction_mid_band_2018_01_25C(ant_s11, f_in = np.zeros([0,1]), case
 	
 		o_ex, f = rc.s1p_read(path_folder + 'ExternalOpen02.s1p')
 		s_ex, f = rc.s1p_read(path_folder + 'ExternalShort02.s1p')
-		l_ex, f = rc.s1p_read(path_folder + 'ExternalMatch02.s1p')
+		l_ex, f = rc.s1p_read(path_folder + 'ExternalMatch02.s1p')	
+
+
+
+
+
+	
+	#if case == 1:
+		#path_folder     = home_folder + '/DATA/EDGES/calibration/receiver_calibration/mid_band/2018_01_25C/data/s11/raw/InternalSwitch/'
+		
+		#resistance_of_match = 50.027 # male
+		
+		#o_in, f = rc.s1p_read(path_folder + 'Open01.s1p')
+		#s_in, f = rc.s1p_read(path_folder + 'Short01.s1p')
+		#l_in, f = rc.s1p_read(path_folder + 'Match01.s1p')
+	
+		#o_ex, f = rc.s1p_read(path_folder + 'ExternalOpen01.s1p')
+		#s_ex, f = rc.s1p_read(path_folder + 'ExternalShort01.s1p')
+		#l_ex, f = rc.s1p_read(path_folder + 'ExternalMatch01.s1p')
+
+
+
+
+	#if case == 2:
+		#path_folder     = home_folder + '/DATA/EDGES/calibration/receiver_calibration/mid_band/2018_01_25C/data/s11/raw/InternalSwitch/'
+		
+		#resistance_of_match = 50.027 # male
+		
+		#o_in, f = rc.s1p_read(path_folder + 'Open02.s1p')
+		#s_in, f = rc.s1p_read(path_folder + 'Short02.s1p')
+		#l_in, f = rc.s1p_read(path_folder + 'Match02.s1p')
+	
+		#o_ex, f = rc.s1p_read(path_folder + 'ExternalOpen02.s1p')
+		#s_ex, f = rc.s1p_read(path_folder + 'ExternalShort02.s1p')
+		#l_ex, f = rc.s1p_read(path_folder + 'ExternalMatch02.s1p')
 
 
 
@@ -302,7 +339,7 @@ def s11_calibration_measurements_mid_band_2018_01_25C(flow=40, fhigh=200, save='
 
 
 	# Data paths
-	main_path    = home_folder + '/DATA/EDGES/calibration/receiver_calibration/mid_band/2018_01_25C/data/s11/raw/'
+	main_path    = home_folder + '/DATA/EDGES/mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/data/s11/raw/'
 
 
 	path_LNA     = main_path + 'ReceiverReading03/'    # seems slightly better than the others
@@ -364,7 +401,7 @@ def s11_calibration_measurements_mid_band_2018_01_25C(flow=40, fhigh=200, save='
 
 
 	# Correction at receiver input
-	out = switch_correction_mid_band_2018_01_25C(a_sw_c, f_in = f_a)
+	out = switch_correction_receiver1_2018_01_25C(a_sw_c, f_in = f_a)
 	a_c = out[0]
 
 
@@ -396,7 +433,7 @@ def s11_calibration_measurements_mid_band_2018_01_25C(flow=40, fhigh=200, save='
 
 
 	# Correction at receiver input
-	out = switch_correction_mid_band_2018_01_25C(h_sw_c, f_in = f_h)
+	out = switch_correction_receiver1_2018_01_25C(h_sw_c, f_in = f_h)
 	h_c = out[0]
 
 
@@ -430,7 +467,7 @@ def s11_calibration_measurements_mid_band_2018_01_25C(flow=40, fhigh=200, save='
 
 
 	# Correction at receiver input
-	out = switch_correction_mid_band_2018_01_25C(oc_sw_c, f_in = f_o)
+	out = switch_correction_receiver1_2018_01_25C(oc_sw_c, f_in = f_o)
 	o_c = out[0]
 
 
@@ -462,7 +499,7 @@ def s11_calibration_measurements_mid_band_2018_01_25C(flow=40, fhigh=200, save='
 
 
 	# Correction at receiver input
-	out = switch_correction_mid_band_2018_01_25C(sc_sw_c, f_in = f_s)
+	out = switch_correction_receiver1_2018_01_25C(sc_sw_c, f_in = f_s)
 	s_c = out[0]	
 
 
@@ -491,7 +528,7 @@ def s11_calibration_measurements_mid_band_2018_01_25C(flow=40, fhigh=200, save='
 
 
 	# Correction at receiver input
-	out  = switch_correction_mid_band_2018_01_25C(q_sw_c, f_in = f_q)
+	out  = switch_correction_receiver1_2018_01_25C(q_sw_c, f_in = f_q)
 	q_c  = out[0]	
 	
 
@@ -505,7 +542,7 @@ def s11_calibration_measurements_mid_band_2018_01_25C(flow=40, fhigh=200, save='
 
 	# S-parameters of semi-rigid cable 
 	# ---------------------------------
-	d = np.genfromtxt(home_folder + '/DATA/EDGES/calibration/receiver_calibration/high_band1/2015_03_25C/data/S11/corrected_original/semi_rigid_s_parameters.txt')
+	d = np.genfromtxt(home_folder + '/DATA/EDGES_old/calibration/receiver_calibration/high_band1/2015_03_25C/data/S11/corrected_original/semi_rigid_s_parameters.txt')
 			
 	Nterms = 17	
 	
@@ -567,7 +604,7 @@ def s11_calibration_measurements_mid_band_2018_01_25C(flow=40, fhigh=200, save='
 	# Saving
 	if save == 'yes':
 
-		save_path       = home_folder + '/DATA/EDGES/calibration/receiver_calibration/mid_band/2018_01_25C/data/s11/corrected/'
+		save_path       = home_folder + '/DATA/EDGES/mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/data/s11/corrected/'
 		temperature_LNA = '25degC'
 		output_file_str = save_path + 's11_calibration_mid_band_LNA' + temperature_LNA + '_' + tt.strftime('%Y-%m-%d-%H-%M-%S') + flag + '.txt'
 		np.savetxt(output_file_str, kk)
@@ -599,7 +636,7 @@ def calibration_processing_mid_band_2018_01_25C(flow=50, fhigh=180, save='no', s
 
 	"""
 	
-	Modification: Aug 3, 2018.
+	Modification: Feb 16, 2019.
 
 	"""	
 
@@ -607,7 +644,7 @@ def calibration_processing_mid_band_2018_01_25C(flow=50, fhigh=180, save='no', s
 
 
 	# Main folder
-	main_folder     = home_folder + '/DATA/EDGES/calibration/receiver_calibration/mid_band/2018_01_25C/'
+	main_folder     = home_folder + '/DATA/EDGES/mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/'
 
 
 	# Paths for source data
@@ -702,11 +739,11 @@ def calibration_processing_mid_band_2018_01_25C(flow=50, fhigh=180, save='no', s
 	# Average calibration spectra / physical temperature
 	# Percentage of initial data to leave out
 	percent = 5 # 5%
-	ssa,    phys_temp_ambient  = average_calibration_spectrum(spec_ambient, res_ambient, 1*percent, plot='no')
-	ssh,    phys_temp_hot      = average_calibration_spectrum(spec_hot,     res_hot,     2*percent, plot='no')
-	sso,    phys_temp_open     = average_calibration_spectrum(spec_open,    res_open,    1*percent, plot='no')
-	sss,    phys_temp_shorted  = average_calibration_spectrum(spec_shorted, res_shorted, 1*percent, plot='no')
-	sss1,   phys_temp_sim      = average_calibration_spectrum(spec_sim,     res_sim,     1*percent, plot='no')
+	ssa,    phys_temp_ambient  = ba.average_calibration_spectrum(spec_ambient, res_ambient, 1*percent, plot='no')
+	ssh,    phys_temp_hot      = ba.average_calibration_spectrum(spec_hot,     res_hot,     2*percent, plot='no')
+	sso,    phys_temp_open     = ba.average_calibration_spectrum(spec_open,    res_open,    1*percent, plot='no')
+	sss,    phys_temp_shorted  = ba.average_calibration_spectrum(spec_shorted, res_shorted, 1*percent, plot='no')
+	sss1,   phys_temp_sim      = ba.average_calibration_spectrum(spec_sim,     res_sim,     1*percent, plot='no')
 
 
 
@@ -721,7 +758,7 @@ def calibration_processing_mid_band_2018_01_25C(flow=50, fhigh=180, save='no', s
 
 
 	# Select frequency range
-	ff, ilow, ihigh = frequency_edges(flow, fhigh)
+	ff, ilow, ihigh = ba.frequency_edges(flow, fhigh)
 	fe    = ff[ilow:ihigh+1]
 	sa    = ssa[ilow:ihigh+1]
 	sh    = ssh[ilow:ihigh+1]
@@ -739,22 +776,23 @@ def calibration_processing_mid_band_2018_01_25C(flow=50, fhigh=180, save='no', s
 	# Spectra modeling
 	fen = (fe-120)/60
 
-	fit_spec_ambient    = fit_polynomial_fourier('fourier',    fen, sa,     17,  plot='no')
-	fit_spec_hot        = fit_polynomial_fourier('fourier',    fen, sh,     17,  plot='no')
-	fit_spec_open       = fit_polynomial_fourier('fourier',    fen, so,    121,  plot='no')
-	fit_spec_shorted    = fit_polynomial_fourier('fourier',    fen, ss,    121,  plot='no')
-	fit_spec_sim        = fit_polynomial_fourier('fourier',    fen, ss1,    37,  plot='no')
+	fit_spec_ambient    = ba.fit_polynomial_fourier('fourier',    fen, sa,     17,  plot='no')
+	fit_spec_hot        = ba.fit_polynomial_fourier('fourier',    fen, sh,     17,  plot='no')
+	fit_spec_open       = ba.fit_polynomial_fourier('fourier',    fen, so,    121,  plot='no')
+	fit_spec_shorted    = ba.fit_polynomial_fourier('fourier',    fen, ss,    121,  plot='no')
+	fit_spec_sim        = ba.fit_polynomial_fourier('fourier',    fen, ss1,    37,  plot='no')
 
-	model_spec_ambient  = model_evaluate('fourier', fit_spec_ambient[0],    fen)
-	model_spec_hot      = model_evaluate('fourier', fit_spec_hot[0],        fen)
-	model_spec_open     = model_evaluate('fourier', fit_spec_open[0],       fen)
-	model_spec_shorted  = model_evaluate('fourier', fit_spec_shorted[0],    fen)
-	model_spec_sim      = model_evaluate('fourier', fit_spec_sim[0],        fen)
+	model_spec_ambient  = ba.model_evaluate('fourier', fit_spec_ambient[0],    fen)
+	model_spec_hot      = ba.model_evaluate('fourier', fit_spec_hot[0],        fen)
+	model_spec_open     = ba.model_evaluate('fourier', fit_spec_open[0],       fen)
+	model_spec_shorted  = ba.model_evaluate('fourier', fit_spec_shorted[0],    fen)
+	model_spec_sim      = ba.model_evaluate('fourier', fit_spec_sim[0],        fen)
 
 
 
 	# Loading S11 data
-	s11_all = np.genfromtxt(path_s11 + 's11_calibration_mid_band_LNA25degC_2018-08-13-22-05-34.txt')
+	#s11_all = np.genfromtxt(path_s11 + 's11_calibration_mid_band_LNA25degC_2018-08-13-22-05-34.txt')
+	s11_all = np.genfromtxt(path_s11 + 's11_calibration_mid_band_LNA25degC_2019-02-16-22-45-49.txt')
 	s11     = s11_all[(s11_all[:,0]>=flow) & (s11_all[:,0]<=fhigh), :]
 	
 	
@@ -831,32 +869,32 @@ def calibration_processing_mid_band_2018_01_25C(flow=50, fhigh=180, save='no', s
 
 	f_s11n = (f_s11-120)/60
 
-	fit_s11_LNA_mag     = fit_polynomial_fourier('polynomial', f_s11n, s11_LNA_mag,     19, plot='no')  # 
-	fit_s11_LNA_ang     = fit_polynomial_fourier('polynomial', f_s11n, s11_LNA_ang,     19, plot='no')  # 
+	fit_s11_LNA_mag     = ba.fit_polynomial_fourier('polynomial', f_s11n, s11_LNA_mag,     19, plot='no')  # 
+	fit_s11_LNA_ang     = ba.fit_polynomial_fourier('polynomial', f_s11n, s11_LNA_ang,     19, plot='no')  # 
 
-	fit_s11_amb_mag     = fit_polynomial_fourier('fourier',    f_s11n, s11_amb_mag,     27, plot='no')  # 
-	fit_s11_amb_ang     = fit_polynomial_fourier('fourier',    f_s11n, s11_amb_ang,     27, plot='no')  # 
+	fit_s11_amb_mag     = ba.fit_polynomial_fourier('fourier',    f_s11n, s11_amb_mag,     27, plot='no')  # 
+	fit_s11_amb_ang     = ba.fit_polynomial_fourier('fourier',    f_s11n, s11_amb_ang,     27, plot='no')  # 
 
-	fit_s11_hot_mag     = fit_polynomial_fourier('fourier',    f_s11n, s11_hot_mag,     27, plot='no')  #  
-	fit_s11_hot_ang     = fit_polynomial_fourier('fourier',    f_s11n, s11_hot_ang,     27, plot='no')  # 
+	fit_s11_hot_mag     = ba.fit_polynomial_fourier('fourier',    f_s11n, s11_hot_mag,     27, plot='no')  #  
+	fit_s11_hot_ang     = ba.fit_polynomial_fourier('fourier',    f_s11n, s11_hot_ang,     27, plot='no')  # 
 
-	fit_s11_open_mag    = fit_polynomial_fourier('fourier',    f_s11n, s11_open_mag,    85, plot='no')  # 27
-	fit_s11_open_ang    = fit_polynomial_fourier('fourier',    f_s11n, s11_open_ang,    85, plot='no')  # 27
+	fit_s11_open_mag    = ba.fit_polynomial_fourier('fourier',    f_s11n, s11_open_mag,    85, plot='no')  # 27
+	fit_s11_open_ang    = ba.fit_polynomial_fourier('fourier',    f_s11n, s11_open_ang,    85, plot='no')  # 27
 
-	fit_s11_shorted_mag = fit_polynomial_fourier('fourier',    f_s11n, s11_shorted_mag, 85, plot='no')  # 27
-	fit_s11_shorted_ang = fit_polynomial_fourier('fourier',    f_s11n, s11_shorted_ang, 85, plot='no')  # 27
+	fit_s11_shorted_mag = ba.fit_polynomial_fourier('fourier',    f_s11n, s11_shorted_mag, 85, plot='no')  # 27
+	fit_s11_shorted_ang = ba.fit_polynomial_fourier('fourier',    f_s11n, s11_shorted_ang, 85, plot='no')  # 27
 
-	fit_s11_sr_mag      = fit_polynomial_fourier('polynomial', f_s11n, s11_sr_mag,      17, plot='no')  # 
-	fit_s11_sr_ang      = fit_polynomial_fourier('polynomial', f_s11n, s11_sr_ang,      17, plot='no')  # 
+	fit_s11_sr_mag      = ba.fit_polynomial_fourier('polynomial', f_s11n, s11_sr_mag,      17, plot='no')  # 
+	fit_s11_sr_ang      = ba.fit_polynomial_fourier('polynomial', f_s11n, s11_sr_ang,      17, plot='no')  # 
 
-	fit_s12s21_sr_mag   = fit_polynomial_fourier('polynomial', f_s11n, s12s21_sr_mag,   17, plot='no')  # 
-	fit_s12s21_sr_ang   = fit_polynomial_fourier('polynomial', f_s11n, s12s21_sr_ang,   17, plot='no')  # 
+	fit_s12s21_sr_mag   = ba.fit_polynomial_fourier('polynomial', f_s11n, s12s21_sr_mag,   17, plot='no')  # 
+	fit_s12s21_sr_ang   = ba.fit_polynomial_fourier('polynomial', f_s11n, s12s21_sr_ang,   17, plot='no')  # 
 
-	fit_s22_sr_mag      = fit_polynomial_fourier('polynomial', f_s11n, s22_sr_mag,      17, plot='no')  # 
-	fit_s22_sr_ang      = fit_polynomial_fourier('polynomial', f_s11n, s22_sr_ang,      17, plot='no')  # 
+	fit_s22_sr_mag      = ba.fit_polynomial_fourier('polynomial', f_s11n, s22_sr_mag,      17, plot='no')  # 
+	fit_s22_sr_ang      = ba.fit_polynomial_fourier('polynomial', f_s11n, s22_sr_ang,      17, plot='no')  # 
 
-	fit_s11_simu_mag    = fit_polynomial_fourier('polynomial', f_s11n, s11_simu_mag,    35, plot='no')  # 7
-	fit_s11_simu_ang    = fit_polynomial_fourier('polynomial', f_s11n, s11_simu_ang,    35, plot='no')  # 7
+	fit_s11_simu_mag    = ba.fit_polynomial_fourier('polynomial', f_s11n, s11_simu_mag,    35, plot='no')  # 7
+	fit_s11_simu_ang    = ba.fit_polynomial_fourier('polynomial', f_s11n, s11_simu_ang,    35, plot='no')  # 7
 
 
 	r1  = fit_s11_LNA_mag[1]  - s11_LNA_mag
@@ -1010,7 +1048,7 @@ def calibration_processing_mid_band_2018_01_25C(flow=50, fhigh=180, save='no', s
 
 
 	# f_s11, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, r16, r17, r18
-	return 0   #fe, sa, sh, so, ss, ss1
+	return f_s11, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, r16, r17, r18    #     0   #fe, sa, sh, so, ss, ss1
 
 
 
@@ -1025,15 +1063,22 @@ def calibration_processing_mid_band_2018_01_25C(flow=50, fhigh=180, save='no', s
 
 
 
-def calibration_file_computation(FMIN, FMAX, cterms, wterms, save='no', save_flag=''):
+def calibration_file_computation(folder, FMIN, FMAX, cterms_nominal, wterms_nominal, save_nominal='no', save_nominal_flag='', term_sweep='no'):
 	
-	path_save = '/home/ramo7131/DATA/EDGES/calibration/receiver_calibration/mid_band/2018_01_25C/results/nominal/calibration_files/'
+	"""
+	
+	folder: 'nominal', 'using_50.12ohms'
+	
+	"""
 	
 	
+	# Location of saved results
+	path_save = home_folder + '/DATA/EDGES/mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/' + folder + '/calibration_files/'
 	
 	
+		
 	# Spectra
-	Tunc = np.genfromtxt('/home/ramo7131/DATA/EDGES/calibration/receiver_calibration/mid_band/2018_01_25C/results/nominal/data/average_spectra_300_350.txt')
+	Tunc  = np.genfromtxt(home_folder + '/DATA/EDGES/mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/' + folder + '/data/average_spectra_300_350.txt')
 	ff    = Tunc[:,0]
 	TTae  = Tunc[:,1]
 	TThe  = Tunc[:,2]
@@ -1041,100 +1086,85 @@ def calibration_file_computation(FMIN, FMAX, cterms, wterms, save='no', save_fla
 	TTse  = Tunc[:,4]
 	TTsse = Tunc[:,5]
 	
-	
-	f    = ff[(ff>=FMIN) & (ff<=FMAX)]
-	Tae  = TTae[(ff>=FMIN) & (ff<=FMAX)]
-	The  = TThe[(ff>=FMIN) & (ff<=FMAX)]
-	Toe  = TToe[(ff>=FMIN) & (ff<=FMAX)]
-	Tse  = TTse[(ff>=FMIN) & (ff<=FMAX)]
-	Tsse = TTsse[(ff>=FMIN) & (ff<=FMAX)]
-	
-	
-	
-	
-	
+	f     = ff[(ff>=FMIN) & (ff<=FMAX)]
+	Tae   = TTae[(ff>=FMIN) & (ff<=FMAX)]
+	The   = TThe[(ff>=FMIN) & (ff<=FMAX)]
+	Toe   = TToe[(ff>=FMIN) & (ff<=FMAX)]
+	Tse   = TTse[(ff>=FMIN) & (ff<=FMAX)]
+	Tsse  = TTsse[(ff>=FMIN) & (ff<=FMAX)]
 	
 	
 	
 	# Physical temperature
-	Tphys = np.genfromtxt('/home/ramo7131/DATA/EDGES/calibration/receiver_calibration/mid_band/2018_01_25C/results/nominal/temp/physical_temperatures.txt')
-	Ta   = Tphys[0]
-	Th   = Tphys[1]
-	To   = Tphys[2]
-	Ts   = Tphys[3]
-	Tsim = Tphys[4]
+	Tphys = np.genfromtxt(home_folder + '/DATA/EDGES/mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/' + folder + '/temp/physical_temperatures.txt')
+	Ta    = Tphys[0]
+	Th    = Tphys[1]
+	To    = Tphys[2]
+	Ts    = Tphys[3]
+	Tsim  = Tphys[4]
 	
 	
 	
-	
-	
-	path_s11 = '/home/ramo7131/DATA/EDGES/calibration/receiver_calibration/mid_band/2018_01_25C/results/nominal/s11/'
+	# S11
+	path_s11 = home_folder + '/DATA/EDGES/mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/' + folder + '/s11/'
 	fn  = (f-120)/60
 	
 	par     = np.genfromtxt(path_s11 + 'par_s11_LNA_mag.txt')	
-	rl_mag  = model_evaluate('polynomial', par, fn)
+	rl_mag  = ba.model_evaluate('polynomial', par, fn)
 	par     = np.genfromtxt(path_s11 + 'par_s11_LNA_ang.txt')
-	rl_ang  = model_evaluate('polynomial', par, fn)	
+	rl_ang  = ba.model_evaluate('polynomial', par, fn)	
 	rl      = rl_mag * (np.cos(rl_ang) + 1j*np.sin(rl_ang))
-
 	
 	par     = np.genfromtxt(path_s11 + 'par_s11_amb_mag.txt')
-	ra_mag  = model_evaluate('fourier', par, fn)	
+	ra_mag  = ba.model_evaluate('fourier', par, fn)	
 	par     = np.genfromtxt(path_s11 + 'par_s11_amb_ang.txt')
-	ra_ang  = model_evaluate('fourier', par, fn)
+	ra_ang  = ba.model_evaluate('fourier', par, fn)
 	ra      = ra_mag * (np.cos(ra_ang) + 1j*np.sin(ra_ang))
-	
-	
+		
 	par     = np.genfromtxt(path_s11 + 'par_s11_hot_mag.txt')
-	rh_mag  = model_evaluate('fourier', par, fn)
+	rh_mag  = ba.model_evaluate('fourier', par, fn)
 	par     = np.genfromtxt(path_s11 + 'par_s11_hot_ang.txt')
-	rh_ang  = model_evaluate('fourier', par, fn)
+	rh_ang  = ba.model_evaluate('fourier', par, fn)
 	rh      = rh_mag * (np.cos(rh_ang) + 1j*np.sin(rh_ang))
-	
-	
+		
 	par     = np.genfromtxt(path_s11 + 'par_s11_open_mag.txt')
-	ro_mag  = model_evaluate('fourier', par, fn)	
+	ro_mag  = ba.model_evaluate('fourier', par, fn)	
 	par     = np.genfromtxt(path_s11 + 'par_s11_open_ang.txt')
-	ro_ang  = model_evaluate('fourier', par, fn)
+	ro_ang  = ba.model_evaluate('fourier', par, fn)
 	ro      = ro_mag * (np.cos(ro_ang) + 1j*np.sin(ro_ang))
-	
-	
+		
 	par     = np.genfromtxt(path_s11 + 'par_s11_shorted_mag.txt')
-	rs_mag  = model_evaluate('fourier', par, fn)	
+	rs_mag  = ba.model_evaluate('fourier', par, fn)	
 	par     = np.genfromtxt(path_s11 + 'par_s11_shorted_ang.txt')
-	rs_ang  = model_evaluate('fourier', par, fn)		
+	rs_ang  = ba.model_evaluate('fourier', par, fn)		
 	rs      = rs_mag * (np.cos(rs_ang) + 1j*np.sin(rs_ang))
 	
 	
-	
-	
+		
 	par         = np.genfromtxt(path_s11 + 'par_s11_sr_mag.txt')
-	s11_sr_mag  = model_evaluate('polynomial', par, fn)
+	s11_sr_mag  = ba.model_evaluate('polynomial', par, fn)
 	par         = np.genfromtxt(path_s11 + 'par_s11_sr_ang.txt')
-	s11_sr_ang  = model_evaluate('polynomial', par, fn)
+	s11_sr_ang  = ba.model_evaluate('polynomial', par, fn)
 	s11_sr      = s11_sr_mag * (np.cos(s11_sr_ang) + 1j*np.sin(s11_sr_ang))
-	
-	
+		
 	par            = np.genfromtxt(path_s11 + 'par_s12s21_sr_mag.txt')
-	s12s21_sr_mag  = model_evaluate('polynomial', par, fn)	
+	s12s21_sr_mag  = ba.model_evaluate('polynomial', par, fn)	
 	par            = np.genfromtxt(path_s11 + 'par_s12s21_sr_ang.txt')
-	s12s21_sr_ang  = model_evaluate('polynomial', par, fn)
+	s12s21_sr_ang  = ba.model_evaluate('polynomial', par, fn)
 	s12s21_sr      = s12s21_sr_mag * (np.cos(s12s21_sr_ang) + 1j*np.sin(s12s21_sr_ang))
-	
-	
+		
 	par         = np.genfromtxt(path_s11 + 'par_s22_sr_mag.txt')
-	s22_sr_mag  = model_evaluate('polynomial', par, fn)
+	s22_sr_mag  = ba.model_evaluate('polynomial', par, fn)
 	par         = np.genfromtxt(path_s11 + 'par_s22_sr_ang.txt')
-	s22_sr_ang  = model_evaluate('polynomial', par, fn)
+	s22_sr_ang  = ba.model_evaluate('polynomial', par, fn)
 	s22_sr      = s22_sr_mag * (np.cos(s22_sr_ang) + 1j*np.sin(s22_sr_ang))
 	
 	
 	
-
 	par        = np.genfromtxt(path_s11 + 'par_s11_simu_mag.txt')
-	rsimu_mag  = model_evaluate('polynomial', par, fn)
+	rsimu_mag  = ba.model_evaluate('polynomial', par, fn)
 	par        = np.genfromtxt(path_s11 + 'par_s11_simu_ang.txt')
-	rsimu_ang  = model_evaluate('polynomial', par, fn)
+	rsimu_ang  = ba.model_evaluate('polynomial', par, fn)
 	rsimu      = rsimu_mag * (np.cos(rsimu_ang) + 1j*np.sin(rsimu_ang))
 
 
@@ -1163,47 +1193,106 @@ def calibration_file_computation(FMIN, FMAX, cterms, wterms, save='no', save_fla
 
 
 
-
-
 	
-	
-	
-	# Calibration quantities
+		
+	# Sweeping parameters and computing RMS
 	Tamb_internal = 300
-	C1, C2, TU, TC, TS = rcv.calibration_quantities('nothing', fn, Tae, The, Toe, Tse, rl, ra, rh, ro, rs, Ta, Thd, To, Ts, Tamb_internal, cterms, wterms)
-
-
-
-
+	index_cterms = np.arange(1,16,1)
+	index_wterms = np.arange(1,16,1)
+	
+	if term_sweep == 'yes':
+		RMS = np.zeros((4,15,15))
+		for j in range(len(index_cterms)):
+			for i in range(len(index_wterms)):
+				C1, C2, TU, TC, TS = cal.calibration_quantities(fn, Tae, The, Toe, Tse, rl, ra, rh, ro, rs, Ta, Thd, To, Ts, Tamb_internal, j+1, i+1)
+				
+				print('---------------------------------------------------')
+				print(j+1)
+				print(i+1)
+	
+	
+				# Cross-check	
+				Tac         = cal.calibrated_antenna_temperature(Tae,  ra,  rl, C1, C2, TU, TC, TS, Tamb_internal=Tamb_internal)
+				fb, tab, wb = ba.spectral_binning_number_of_samples(f, Tac, np.ones(len(f)), nsamples=64)
+			
+				Thc         = cal.calibrated_antenna_temperature(The,  rh,  rl, C1, C2, TU, TC, TS, Tamb_internal=Tamb_internal)
+				Thhc        = (Thc - (1-G)*Ta)/G
+				fb, thb, wb = ba.spectral_binning_number_of_samples(f, Thhc, np.ones(len(f)), nsamples=64)
+			
+				Toc         = cal.calibrated_antenna_temperature(Toe,  ro,  rl, C1, C2, TU, TC, TS, Tamb_internal=Tamb_internal)
+				fb, tob, wb = ba.spectral_binning_number_of_samples(f, Toc, np.ones(len(f)), nsamples=64)
+			
+				Tsc         = cal.calibrated_antenna_temperature(Tse,  rs,  rl, C1, C2, TU, TC, TS, Tamb_internal=Tamb_internal)
+				fb, tsb, wb = ba.spectral_binning_number_of_samples(f, Tsc, np.ones(len(f)), nsamples=64)
+			
+				
+			
+				Tsimuc         = cal.calibrated_antenna_temperature(Tsse,  rsimu,  rl, C1, C2, TU, TC, TS, Tamb_internal=Tamb_internal)
+				fb, tsimub, wb = ba.spectral_binning_number_of_samples(f, Tsimuc, np.ones(len(f)), nsamples=64)
+				
+				
+				RMS[0, i, j] = np.std(tab-Ta)
+				RMS[1, i, j] = np.std(thb-Th)
+				RMS[2, i, j] = np.std(tob-To)
+				RMS[3, i, j] = np.std(tsb-Ts)
+				
+				
+				# Save figure
+				plt.close()
+				plt.close()
+				plt.close()
+				plt.close()
+				plt.figure(1, figsize=[6,6])
+				plt.subplot(4,1,1); plt.plot(fb, tab); plt.plot(fb, Ta*np.ones(len(fb))); plt.xticks(np.arange(FMIN, FMAX+1, 10), labels=[]); plt.ylabel('Tamb\nRMS=' + str(round(np.std(tab-Ta),3))+'K'); plt.title('CTerms='+str(index_cterms[j])+', WTerms='+str(index_wterms[i]))
+				plt.subplot(4,1,2); plt.plot(fb, thb); plt.plot(fb, Th*np.ones(len(fb))); plt.xticks(np.arange(FMIN, FMAX+1, 10), labels=[]); plt.ylabel('Thot\nRMS=' + str(round(np.std(thb-Th),3))+'K')
+				plt.subplot(4,1,3); plt.plot(fb, tob); plt.plot(fb, To*np.ones(len(fb))); plt.xticks(np.arange(FMIN, FMAX+1, 10), labels=[]); plt.ylabel('Topen\nRMS=' + str(round(np.std(tob-To),2))+'K')
+				plt.subplot(4,1,4); plt.plot(fb, tsb); plt.plot(fb, Ts*np.ones(len(fb))); plt.xticks(np.arange(FMIN, FMAX+1, 10)); plt.ylabel('Tshorted\nRMS=' + str(round(np.std(tsb-Ts),2))+'K')
+				plt.xlabel('frequency [MHz]')
+				
+				# Creating folder if necessary
+				path_save_term_sweep = path_save + '/calibration_term_sweep_'+str(FMIN)+'_'+str(FMAX)+'MHz/'
+				if not exists(path_save_term_sweep):
+					makedirs(path_save_term_sweep)					
+				plt.savefig(path_save_term_sweep + 'calibration_term_sweep_'+str(FMIN)+'_'+str(FMAX)+'MHz_cterms'+str(index_cterms[j])+'_wterms'+str(index_wterms[i])+'.png', bbox_inches='tight')
+				plt.close()
+				
+				
+		# Save
+		with h5py.File(path_save_term_sweep + 'calibration_term_sweep_'+str(FMIN)+'_'+str(FMAX)+'MHz.hdf5', 'w') as hf:
+			hf.create_dataset('RMS',          data = RMS)
+			hf.create_dataset('index_cterms', data = index_cterms)
+			hf.create_dataset('index_wterms', data = index_wterms)
+			
+			
+	
+	
+	
+	# Saving nominal case
+	C1, C2, TU, TC, TS = cal.calibration_quantities(fn, Tae, The, Toe, Tse, rl, ra, rh, ro, rs, Ta, Thd, To, Ts, Tamb_internal, cterms_nominal, wterms_nominal)
+	
 	# Cross-check	
-	Tac         = eg.calibrated_antenna_temperature(Tae,  ra,  rl, C1, C2, TU, TC, TS, Tamb_internal=300)
-	fb, tab, wb = eg.spectral_binning_number_of_samples(f, Tac, np.ones(len(f)), nsamples=64)
+	Tac         = cal.calibrated_antenna_temperature(Tae,  ra,  rl, C1, C2, TU, TC, TS, Tamb_internal=Tamb_internal)
+	fb, tab, wb = ba.spectral_binning_number_of_samples(f, Tac, np.ones(len(f)), nsamples=64)
 
-	Thc         = eg.calibrated_antenna_temperature(The,  rh,  rl, C1, C2, TU, TC, TS, Tamb_internal=300)
-	fb, thb, wb = eg.spectral_binning_number_of_samples(f, Thc, np.ones(len(f)), nsamples=64)
+	Thc         = cal.calibrated_antenna_temperature(The,  rh,  rl, C1, C2, TU, TC, TS, Tamb_internal=Tamb_internal)
+	Thhc        = (Thc - (1-G)*Ta)/G
+	fb, thb, wb = ba.spectral_binning_number_of_samples(f, Thhc, np.ones(len(f)), nsamples=64)
 
-	Toc         = eg.calibrated_antenna_temperature(Toe,  ro,  rl, C1, C2, TU, TC, TS, Tamb_internal=300)
-	fb, tob, wb = eg.spectral_binning_number_of_samples(f, Toc, np.ones(len(f)), nsamples=64)
+	Toc         = cal.calibrated_antenna_temperature(Toe,  ro,  rl, C1, C2, TU, TC, TS, Tamb_internal=Tamb_internal)
+	fb, tob, wb = ba.spectral_binning_number_of_samples(f, Toc, np.ones(len(f)), nsamples=64)
 
-	Tsc         = eg.calibrated_antenna_temperature(Tse,  rs,  rl, C1, C2, TU, TC, TS, Tamb_internal=300)
-	fb, tsb, wb = eg.spectral_binning_number_of_samples(f, Tsc, np.ones(len(f)), nsamples=64)
-
-	Tsc         = eg.calibrated_antenna_temperature(Tse,  rs,  rl, C1, C2, TU, TC, TS, Tamb_internal=300)
-	fb, tsb, wb = eg.spectral_binning_number_of_samples(f, Tsc, np.ones(len(f)), nsamples=64)
-
-
-	Tsimuc         = eg.calibrated_antenna_temperature(Tsse,  rsimu,  rl, C1, C2, TU, TC, TS, Tamb_internal=300)
-	fb, tsimub, wb = eg.spectral_binning_number_of_samples(f, Tsimuc, np.ones(len(f)), nsamples=64)
-
-
+	Tsc         = cal.calibrated_antenna_temperature(Tse,  rs,  rl, C1, C2, TU, TC, TS, Tamb_internal=Tamb_internal)
+	fb, tsb, wb = ba.spectral_binning_number_of_samples(f, Tsc, np.ones(len(f)), nsamples=64)	
 	# Why do I NOT get 32 degC for the Ant Sim 3 ???
+	
+	Tsimuc         = cal.calibrated_antenna_temperature(Tsse,  rsimu,  rl, C1, C2, TU, TC, TS, Tamb_internal=Tamb_internal)
+	fb, tsimub, wb = ba.spectral_binning_number_of_samples(f, Tsimuc, np.ones(len(f)), nsamples=64)	
 
-
-
-	if save == 'yes':
+	# Saving results
+	if save_nominal == 'yes':
 
 		# Array
-		save_array = np.zeros((len(f), 8))
+		save_array      = np.zeros((len(f), 8))
 		save_array[:,0] = f
 		save_array[:,1] = np.real(rl)
 		save_array[:,2] = np.imag(rl)
@@ -1214,16 +1303,35 @@ def calibration_file_computation(FMIN, FMAX, cterms, wterms, save='no', save_fla
 		save_array[:,7] = TS
 
 		# Save
-		np.savetxt(path_save + 'calibration_file_mid_band' + save_flag + '.txt', save_array, fmt='%1.8f')
+		np.savetxt(path_save + 'calibration_file_receiver1' + save_nominal_flag + '.txt', save_array, fmt='%1.8f')
 
 
 
 
 
-	return f, Ta, Thd, To, Ts, Tsim, fb, tab, thb, tob, tsb, tsimub
+	return f, Ta, Th, To, Ts, Tsim, fb, tab, thb, tob, tsb, tsimub
 
 
 
 
 
+
+
+
+
+def calibration_RMS_read(path_file):
+
+	with h5py.File(path_file,'r') as hf:
+
+		hfX    = hf.get('RMS')
+		RMS    = np.array(hfX)
+
+		hfX    = hf.get('index_cterms')
+		cterms = np.array(hfX)
+
+		hfX    = hf.get('index_wterms')
+		wterms = np.array(hfX)
+
+
+	return RMS, cterms, wterms	
 

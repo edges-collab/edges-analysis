@@ -5,7 +5,7 @@ import scipy as sp
 import matplotlib.pyplot as plt
 import basic as ba
 import reflection_coefficient as rc
-
+import calibration_receiver1 as cr1
 
 import astropy.units as apu
 import astropy.time as apt
@@ -16,6 +16,8 @@ import healpy as hp
 import datetime as dt
 import scipy.interpolate as spi
 
+from os.path import exists
+from os import makedirs
 from astropy.io import fits
 
 
@@ -957,7 +959,7 @@ def uncalibrated_antenna_temperature(Td, rd, rl, sca, off, TU, TC, TS, Tamb_inte
 
 
 	
-def models_antenna_s11_remove_delay(band, f_MHz, year=2018, day=145, delay_0=0.17, model_type='polynomial', Nfit=10, plot_fit_residuals='no'):	
+def models_antenna_s11_remove_delay(band, f_MHz, year=2018, day=145, case=5, delay_0=0.17, model_type='polynomial', Nfit=10, plot_fit_residuals='no'):	
 
 
 	
@@ -973,7 +975,21 @@ def models_antenna_s11_remove_delay(band, f_MHz, year=2018, day=145, delay_0=0.1
 			d = np.genfromtxt(path_data + 'antenna_s11_mid_band_2018_145.txt'); print('Antenna S11: 2018-145')
 	
 		if (year == 2018) and (day == 147):
-			d = np.genfromtxt(path_data + 'antenna_s11_mid_band_2018_147.txt'); print('Antenna S11: 2018-147')
+			if case == 1:
+				d = np.genfromtxt(path_data + 'antenna_s11_2018_147_16_50_13.txt'); print('Antenna S11: 2018-147: 147_16_50_13')
+			if case == 2:
+				d = np.genfromtxt(path_data + 'antenna_s11_2018_147_16_51_33.txt'); print('Antenna S11: 2018-147: 147_16_51_33')
+			if case == 3:
+				d = np.genfromtxt(path_data + 'antenna_s11_2018_147_16_52_34.txt'); print('Antenna S11: 2018-147: 147_16_52_34')			
+			if case == 4:
+				d = np.genfromtxt(path_data + 'antenna_s11_2018_147_17_03_25.txt'); print('Antenna S11: 2018-147: 147_17_03_25')			
+			if case == 5:
+				d = np.genfromtxt(path_data + 'antenna_s11_2018_147_17_04_33.txt'); print('Antenna S11: 2018-147: 147_17_04_33')			
+			
+			
+			
+			
+			
 	
 		if (year == 2018) and (day == 222):
 			d = np.genfromtxt(path_data + 'antenna_s11_mid_band_2018_222.txt'); print('Antenna S11: 2018-222')
@@ -2553,10 +2569,10 @@ def beam_factor_table_evaluate(f_table, lst_table, bf_table, lst_in):
 
 
 
-def corrected_antenna_s11(day, save_name_flag):
+def corrected_antenna_s11(day, case, save_name_flag):
 	
 	# Creating folder if necessary
-	path_save = home_folder + '/DATA/EDGES/calibration/antenna_s11/mid_band/s11/corrected/2018_' + str(day) + '/'
+	path_save = home_folder + '/DATA/EDGES/mid_band/calibration/antenna_s11/corrected/2018_' + str(day) + '/'
 	if not exists(path_save):
 		makedirs(path_save)	
 	
@@ -2568,31 +2584,47 @@ def corrected_antenna_s11(day, save_name_flag):
 	
 	# Mid-Band
 	if day == 145:
-		path_antenna_s11 = '/home/ramo7131/DATA/EDGES/calibration/antenna_s11/mid_band/s11/raw/mid-recv1-20180525/'	
+		path_antenna_s11 = home_folder + '/DATA/EDGES/mid_band/calibration/antenna_s11/raw/mid-recv1-20180525/'	
 		date_all = ['145_08_28_27', '145_08_28_27']
 	
 	
 	# Mid-Band
 	if day == 147:
-		path_antenna_s11 = '/home/ramo7131/DATA/EDGES/calibration/antenna_s11/mid_band/s11/raw/mid-rcv1-20180527/'	
-		date_all = ['147_17_03_25', '147_17_03_25']
+		path_antenna_s11 = home_folder + '/DATA/EDGES/mid_band/calibration/antenna_s11/raw/mid-rcv1-20180527/'
+
+		if case == 1:
+			date_all = ['147_16_50_13', '147_16_50_13']
+
+		if case == 2:
+			date_all = ['147_16_51_33', '147_16_51_33']
+			
+		if case == 3:
+			date_all = ['147_16_52_34', '147_16_52_34']
+			
+		if case == 4:
+			date_all = ['147_17_03_25', '147_17_03_25']
+		
+		if case == 5:
+			date_all = ['147_17_04_33', '147_17_04_33']
+			
+			
 		
 		
 	# Mid-Band
 	if day == 222:
-		path_antenna_s11 = '/home/ramo7131/DATA/EDGES/calibration/antenna_s11/mid_band/s11/raw/mid_20180809/'
+		path_antenna_s11 = home_folder + '/DATA/EDGES/mid_band/calibration/antenna_s11/raw/mid_20180809/'
 		date_all = ['222_05_41_09', '222_05_43_53', '222_05_45_58', '222_05_48_06']
 	
 			
 	# Alan's noise source + 6dB attenuator
 	if day == 223:
-		path_antenna_s11 = '/home/ramo7131/DATA/EDGES/calibration/antenna_s11/mid_band/s11/raw/mid_20180812_ans1_6db/'
+		path_antenna_s11 = home_folder + '/DATA/EDGES/mid_band/calibration/antenna_s11/raw/mid_20180812_ans1_6db/'
 		date_all = ['223_22_40_15', '223_22_41_22', '223_22_42_44']  # Leaving the first one out: '223_22_38_08'
 
 
 	# Low-Band 3 (Receiver 1, Low-Band 1 antenna, High-Band ground plane with wings)
 	if day == 225:  
-		path_antenna_s11 = '/home/ramo7131/DATA/EDGES/calibration/antenna_s11/low_band3/s11/raw/low3_20180813_rcv1/'
+		path_antenna_s11 = home_folder + '/DATA/EDGES/mid_band/calibration/antenna_s11/raw/low3_20180813_rcv1/'
 		date_all = ['225_12_17_56', '225_12_19_22', '225_12_20_39', '225_12_21_47']
 		
 
@@ -2625,7 +2657,7 @@ def corrected_antenna_s11(day, save_name_flag):
 		
 		
 		# Correction at receiver input
-		a = switch_correction_mid_band_2018_01_25C(a_sw_c, f_in = f_m)
+		a = cr1.switch_correction_receiver1_2018_01_25C(a_sw_c, f_in = f_m)
 		
 		if i == 0:
 			a_all = np.copy(a[0])
