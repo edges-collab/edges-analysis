@@ -975,6 +975,12 @@ def models_antenna_s11_remove_delay(band, f_MHz, year=2018, day=145, case=5, del
 			d = np.genfromtxt(path_data + 'antenna_s11_mid_band_2018_145.txt'); print('Antenna S11: 2018-145')
 	
 		if (year == 2018) and (day == 147):
+			
+			# Using 50.027ohm
+			if case == 0:
+				d = np.genfromtxt(path_data + 'antenna_s11_mid_band_2018_147.txt'); print('Antenna S11: 2018-147: using 50.027ohm')			
+			
+			# Assuming 50.12ohm for receiver calibration load
 			if case == 1:
 				d = np.genfromtxt(path_data + 'antenna_s11_2018_147_16_50_13.txt'); print('Antenna S11: 2018-147: 147_16_50_13')
 			if case == 2:

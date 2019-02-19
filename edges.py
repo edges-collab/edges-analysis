@@ -463,7 +463,7 @@ def antenna_efficiency(band, f):
 
 
 
-def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=1, antenna_s11_year=2018, antenna_s11_day=145, antenna_s11_Nfit=13, beam_correction=1, balun_correction=1, FLOW=50, FHIGH=130, Nfg=5):
+def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=1, antenna_s11_year=2018, antenna_s11_day=145, antenna_s11_case=4, antenna_s11_Nfit=13, beam_correction=1, balun_correction=1, FLOW=50, FHIGH=130, Nfg=5):
 	
 	"""
 
@@ -559,7 +559,7 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 			
 		# Antenna S11
 		# -----------
-		s11_ant = cal.models_antenna_s11_remove_delay(band, fin, year=antenna_s11_year, day=antenna_s11_day, case=4, delay_0=0.17, model_type='polynomial', Nfit=antenna_s11_Nfit, plot_fit_residuals='no')
+		s11_ant = cal.models_antenna_s11_remove_delay(band, fin, year=antenna_s11_year, day=antenna_s11_day, case=antenna_s11_case, delay_0=0.17, model_type='polynomial', Nfit=antenna_s11_Nfit, plot_fit_residuals='no')
 		
 		
 		
