@@ -559,7 +559,7 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 			
 		# Antenna S11
 		# -----------
-		s11_ant = cal.models_antenna_s11_remove_delay(band, fin, year=antenna_s11_year, day=antenna_s11_day, case=5, delay_0=0.17, model_type='polynomial', Nfit=antenna_s11_Nfit, plot_fit_residuals='no')
+		s11_ant = cal.models_antenna_s11_remove_delay(band, fin, year=antenna_s11_year, day=antenna_s11_day, case=4, delay_0=0.17, model_type='polynomial', Nfit=antenna_s11_Nfit, plot_fit_residuals='no')
 		
 		
 		

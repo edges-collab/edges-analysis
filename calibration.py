@@ -2152,7 +2152,7 @@ def antenna_beam_factor(band, name_save, beam_file=1, sky_model='haslam', rotati
 
 	# FEKO blade beam	
 	# Fixing rotation angle due to diferent rotation (by 90deg) in Nivedita's map
-	if (band == 'mid_band') and (beam_file == 3):
+	if (band == 'mid_band') and (beam_file == 0):
 		rotation_from_north = rotation_from_north - 90
 		
 	beam_all = FEKO_blade_beam(band, beam_file, AZ_antenna_axis=rotation_from_north)
@@ -2160,7 +2160,11 @@ def antenna_beam_factor(band, name_save, beam_file=1, sky_model='haslam', rotati
 
 	# Frequency array
 	if band == 'mid_band':
-		if beam_file == 1:
+		if beam_file == 0:
+			# NIVEDITA
+			freq_array = np.arange(60, 201, 2, dtype='uint32')		
+		
+		elif beam_file == 1:
 			# ALAN #1
 			freq_array = np.arange(50, 201, 2, dtype='uint32')  
 	
@@ -2168,9 +2172,10 @@ def antenna_beam_factor(band, name_save, beam_file=1, sky_model='haslam', rotati
 			# ALAN #2
 			freq_array = np.arange(50, 201, 2, dtype='uint32')  
 	
-		elif beam_file == 3:
-			# NIVEDITA
-			freq_array = np.arange(60, 201, 2, dtype='uint32')
+	
+	
+	
+
 			
 	elif band == 'low_band3':
 		if beam_file == 1:
@@ -2374,10 +2379,11 @@ def antenna_beam_factor(band, name_save, beam_file=1, sky_model='haslam', rotati
 
 
 
-def antenna_beam_factor_interpolation(band, case, lst_hires, fnew):
+def antenna_beam_factor_interpolation(band, case, lst_hires, fnew, Npar_freq=15):
 
 	"""
 
+	For Mid-Band, over 50-200MHz, we have to use Npar_freq=15 
 
 	"""
 
@@ -2449,7 +2455,7 @@ def antenna_beam_factor_interpolation(band, case, lst_hires, fnew):
 
 	# Interpolating beam factor to high frequency resolution
 	for i in range(len(bf_2D[:,0])):
-		par       = np.polyfit(freq_hires, bf_2D[i,:], 11)
+		par       = np.polyfit(freq_hires, bf_2D[i,:], Npar_freq-1)
 		bf_single = np.polyval(par, fnew)
 
 		if i == 0:
@@ -2458,7 +2464,7 @@ def antenna_beam_factor_interpolation(band, case, lst_hires, fnew):
 			bf_2D_hires = np.vstack((bf_2D_hires, bf_single))
 
 
-	return bf_2D_hires   #beam_factor_model  #, freq_hires, bf_lst_average
+	return bf_2D_hires, bf_2D   #beam_factor_model  #, freq_hires, bf_lst_average
 
 
 
@@ -2481,8 +2487,8 @@ def beam_factor_table_computation(band, case, f, N_lst, file_name_hdf5):
 	#N_lst = 6000   # number of LST points within 24 hours
 	
 	
-	lst_hires = np.arange(0,24,24/N_lst)
-	bf        = antenna_beam_factor_interpolation(band, case, lst_hires, f)
+	lst_hires    = np.arange(0,24,24/N_lst)
+	bf, bf_orig  = antenna_beam_factor_interpolation(band, case, lst_hires, f)
 	
 	
 	
