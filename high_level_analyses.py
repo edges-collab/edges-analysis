@@ -2342,29 +2342,156 @@ def plot_MC_receiver():
 	
 	
 	
-def capacitance_to_reflection(L): #f, L):
+def receiver1_switch_crosscheck():
 	
-	f = np.arange(0, 100e6, 1e6)
-	#L = 1e-6
-	
-	
-	XL = (2 * np.pi * L * f)
-	
-	Z = 70 + 1j * XL
+	path15 = '/home/raul/DATA/EDGES_old/calibration/receiver_calibration/low_band1/2015_08_25C/data/s11/raw/20150903/switch25degC/'
 	
 	
-	
-	r = rc.impedance2gamma(Z,50)
-	
-	
-	
-	
-	return f, Z, r
+	# Measurements at 25degC 
+	o_sw_m15, fd  = rc.s1p_read(path15 + 'open.S1P')
+	s_sw_m15, fd  = rc.s1p_read(path15 + 'short.S1P')
+	l_sw_m15, fd  = rc.s1p_read(path15 + 'load.S1P')
+
+	o_sw_in15, fd = rc.s1p_read(path15 + 'open_input.S1P')
+	s_sw_in15, fd = rc.s1p_read(path15 + 'short_input.S1P')
+	l_sw_in15, fd = rc.s1p_read(path15 + 'load_input.S1P')
 	
 	
 	
+	# Standards assumed at the switch
+	o_sw =  1 * np.ones(len(fd))
+	s_sw = -1 * np.ones(len(fd))
+	l_sw =  0 * np.ones(len(fd))	
+
+
+
+	# Correction at the switch -- 25degC
+	om15, xx1, xx2, xx3 = rc.de_embed(o_sw, s_sw, l_sw, o_sw_m15, s_sw_m15, l_sw_m15, o_sw_in15)
+	sm15, xx1, xx2, xx3 = rc.de_embed(o_sw, s_sw, l_sw, o_sw_m15, s_sw_m15, l_sw_m15, s_sw_in15)
+	lm15, xx1, xx2, xx3 = rc.de_embed(o_sw, s_sw, l_sw, o_sw_m15, s_sw_m15, l_sw_m15, l_sw_in15)
 	
 	
+	
+	
+	
+	# Loading measurements
+	path18     = '/home/raul/DATA/EDGES/mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/data/s11/raw/InternalSwitch/'
+	
+	o_sw_m18, f = rc.s1p_read(path18 + 'Open01.s1p')
+	s_sw_m18, f = rc.s1p_read(path18 + 'Short01.s1p')
+	l_sw_m18, f = rc.s1p_read(path18 + 'Match01.s1p')
+
+	o_sw_in18, f = rc.s1p_read(path18 + 'ExternalOpen01.s1p')
+	s_sw_in18, f = rc.s1p_read(path18 + 'ExternalShort01.s1p')
+	l_sw_in18, f = rc.s1p_read(path18 + 'ExternalMatch01.s1p')		
+
+	
+	# Standards assumed at the switch
+	o_sw =  1 * np.ones(len(f))
+	s_sw = -1 * np.ones(len(f))
+	l_sw =  0 * np.ones(len(f))	
+
+
+	# Correction at the switch
+	om18, xx1, xx2, xx3 = rc.de_embed(o_sw, s_sw, l_sw, o_sw_m18, s_sw_m18, l_sw_m18, o_sw_in18)
+	sm18, xx1, xx2, xx3 = rc.de_embed(o_sw, s_sw, l_sw, o_sw_m18, s_sw_m18, l_sw_m18, s_sw_in18)
+	lm18, xx1, xx2, xx3 = rc.de_embed(o_sw, s_sw, l_sw, o_sw_m18, s_sw_m18, l_sw_m18, l_sw_in18)
+
+
+	
+	
+	
+	
+	
+	# Plot
+	
+	plt.figure(1)
+	plt.subplot(2,3,1)
+	plt.plot(fd/1e6, 20*np.log10(np.abs(om15)),'k')
+	plt.plot(f/1e6, 20*np.log10(np.abs(om18)), 'r--')
+	plt.plot(fd/1e6, 20*np.log10(np.abs(om15)),'k')
+	plt.ylabel('magnitude [dB]')
+	plt.title('Open Standard at the Receiver Input\n(Measured from the Switch)')
+	
+	plt.subplot(2,3,4)
+	plt.plot(fd/1e6, (180/np.pi)*np.unwrap(np.angle(om15)),'k')
+	plt.plot(f/1e6, (180/np.pi)*np.unwrap(np.angle(om18)), 'r--')
+	plt.plot(fd/1e6, (180/np.pi)*np.unwrap(np.angle(om15)),'k')
+	plt.ylabel('phase [deg]')
+	plt.xlabel('frequency [MHz]')
+	
+	
+
+
+	plt.subplot(2,3,2)
+	plt.plot(fd/1e6, 20*np.log10(np.abs(sm15)),'k')
+	plt.plot(f/1e6, 20*np.log10(np.abs(sm18)), 'r--')
+	plt.plot(fd/1e6, 20*np.log10(np.abs(sm15)),'k')
+	plt.title('Short Standard at the Receiver Input\n(Measured from the Switch)')
+	
+	plt.subplot(2,3,5)
+	plt.plot(fd/1e6, (180/np.pi)*np.unwrap(np.angle(sm15)),'k')
+	plt.plot(f/1e6, (180/np.pi)*np.unwrap(np.angle(sm18)), 'r--')
+	plt.plot(fd/1e6, (180/np.pi)*np.unwrap(np.angle(sm15)),'k')
+	plt.xlabel('frequency [MHz]')
+	
+	
+	
+
+	plt.subplot(2,3,3)
+	plt.plot(fd/1e6, 20*np.log10(np.abs(lm15)),'k')
+	plt.plot(f/1e6, 20*np.log10(np.abs(lm18)), 'r--')
+	plt.plot(fd/1e6, 20*np.log10(np.abs(lm15)),'k')
+	plt.title('50-ohm Load Standard at the Receiver Input\n(Measured from the Switch)')
+	plt.legend(['September 2015','February 2018'])
+	
+	plt.subplot(2,3,6)
+	plt.plot(fd/1e6, (180/np.pi)*np.unwrap(np.angle(lm15)),'k')
+	plt.plot(f/1e6, (180/np.pi)*np.unwrap(np.angle(lm18)), 'r--')
+	plt.plot(fd/1e6, (180/np.pi)*np.unwrap(np.angle(lm15)),'k')
+	plt.xlabel('frequency [MHz]')
+	
+	
+	
+	
+	
+	plt.figure(2)
+	z15 = rc.gamma2impedance(lm15,50)
+	z18 = rc.gamma2impedance(lm18,50)
+	
+	plt.subplot(1,2,1)
+	plt.plot(fd/1e6, np.real(z15), 'k')
+	plt.plot(f/1e6, np.real(z18), 'r--')
+	plt.plot(fd/1e6, np.real(z15), 'k')
+	
+	plt.ylabel(r'real(Z$_{50}$) [ohm]')
+	plt.xlabel('frequency [MHz]')
+	
+	
+	plt.subplot(1,2,2)
+	plt.plot(fd/1e6, np.imag(z15), 'k')
+	plt.plot(f/1e6, np.imag(z18), 'r--')
+	plt.plot(fd/1e6, np.imag(z15), 'k')
+	
+	plt.ylabel(r'imag(Z$_{50}$) [ohm]')
+	plt.xlabel('frequency [MHz]')
+	plt.legend(['September 2015','February 2018'])
+	
+	
+
+	
+		
+	return fd, om15, sm15, lm15, f, om18, sm18, lm18
+	
+	
+	
+	
+
+
+
+
+
+
 	
 	
 	
