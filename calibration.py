@@ -959,7 +959,7 @@ def uncalibrated_antenna_temperature(Td, rd, rl, sca, off, TU, TC, TS, Tamb_inte
 
 
 	
-def models_antenna_s11_remove_delay(band, f_MHz, year=2018, day=145, case=5, delay_0=0.17, model_type='polynomial', Nfit=10, plot_fit_residuals='no'):	
+def models_antenna_s11_remove_delay(band, f_MHz, year=2018, day=147, case=5, delay_0=0.17, model_type='polynomial', Nfit=10, plot_fit_residuals='no'):	
 
 
 	
@@ -976,11 +976,14 @@ def models_antenna_s11_remove_delay(band, f_MHz, year=2018, day=145, case=5, del
 	
 		if (year == 2018) and (day == 147):
 			
-			# Using 50.027ohm
-			if case == 0:
-				d = np.genfromtxt(path_data + 'antenna_s11_mid_band_2018_147.txt'); print('Antenna S11: 2018-147: using 50.027ohm')			
+			## Using 50.027ohm
+			#if case == 0:
+				#d = np.genfromtxt(path_data + 'antenna_s11_mid_band_2018_147.txt'); print('Antenna S11: 2018-147: using 50.027ohm')			
 			
-			# Assuming 50.12ohm for receiver calibration load
+			## Assuming 50.12ohm for receiver calibration load
+			
+			
+			
 			if case == 1:
 				d = np.genfromtxt(path_data + 'antenna_s11_2018_147_16_50_13.txt'); print('Antenna S11: 2018-147: 147_16_50_13')
 			if case == 2:
@@ -1879,20 +1882,25 @@ def FEKO_blade_beam(band, beam_file, frequency_interpolation='no', frequency=np.
 	
 	
 		# Loading beam
-	
-		if beam_file == 1:		
+		if beam_file == 0:  # Perf ground plane, 1.9 inch		
 			# FROM ALAN, 50-200 MHz
+			print('BEAM MODEL #0 FROM ALAN')
+			ff         = data_folder + 'azelq_blade9perf7mid_1.9in.txt'
+			f_original = np.arange(50,201,2)   #between 50 and 200 MHz in steps of 2 MHz
+	
+		if beam_file == 1:  # Infinite ground plane
+			# FROM ALAN, 50-200 MHz    
 			print('BEAM MODEL #1 FROM ALAN')
 			ff         = data_folder + 'azelq_blade9mid0.78.txt'
 			f_original = np.arange(50,201,2)   #between 50 and 200 MHz in steps of 2 MHz
 	
-		if beam_file == 2:
+		if beam_file == 2:  # Perf ground plane, 3.2 cm
 			# FROM ALAN, 50-200 MHz
 			print('BEAM MODEL #2 FROM ALAN')
 			ff         = data_folder + 'azelq_blade9perf7mid.txt'
 			f_original = np.arange(50,201,2)   #between 50 and 200 MHz in steps of 2 MHz
 	
-		if beam_file == 3:
+		if beam_file == 100:
 			# FROM NIVEDITA, 60-200 MHz
 			print('BEAM MODEL FROM NIVEDITA')
 			ff         = data_folder + 'FEKO_midband_realgnd_Simple-blade_niv.txt'
@@ -2132,7 +2140,7 @@ def guzman_45MHz_map():
 
 
 
-def antenna_beam_factor(band, name_save, beam_file=1, sky_model='haslam', rotation_from_north=90, band_deg=10, index_inband=2.5, index_outband=2.62, reference_frequency=100):
+def antenna_beam_factor(band, name_save, beam_file=0, sky_model='haslam', rotation_from_north=90, band_deg=10, index_inband=2.5, index_outband=2.62, reference_frequency=100):
 
 
 
@@ -2158,7 +2166,7 @@ def antenna_beam_factor(band, name_save, beam_file=1, sky_model='haslam', rotati
 
 	# FEKO blade beam	
 	# Fixing rotation angle due to diferent rotation (by 90deg) in Nivedita's map
-	if (band == 'mid_band') and (beam_file == 0):
+	if (band == 'mid_band') and (beam_file == 100):
 		rotation_from_north = rotation_from_north - 90
 		
 	beam_all = FEKO_blade_beam(band, beam_file, AZ_antenna_axis=rotation_from_north)
@@ -2166,9 +2174,9 @@ def antenna_beam_factor(band, name_save, beam_file=1, sky_model='haslam', rotati
 
 	# Frequency array
 	if band == 'mid_band':
-		if beam_file == 0:
-			# NIVEDITA
-			freq_array = np.arange(60, 201, 2, dtype='uint32')		
+		if beam_file == 0:  # Best case, Feb 20, 2019
+			# ALAN #0
+			freq_array = np.arange(50, 201, 2, dtype='uint32') 		
 		
 		elif beam_file == 1:
 			# ALAN #1
@@ -2178,9 +2186,11 @@ def antenna_beam_factor(band, name_save, beam_file=1, sky_model='haslam', rotati
 			# ALAN #2
 			freq_array = np.arange(50, 201, 2, dtype='uint32')  
 	
-	
-	
-	
+		elif beam_file == 100:
+			# NIVEDITA
+			freq_array = np.arange(60, 201, 2, dtype='uint32')	
+
+
 
 			
 	elif band == 'low_band3':
@@ -2396,8 +2406,13 @@ def antenna_beam_factor_interpolation(band, case, lst_hires, fnew, Npar_freq=15)
 
 	if band == 'mid_band':
 		file_path = edges_folder + 'mid_band/calibration/beam_factors/raw/'
+
+		if case == 0:
+			bf_old  = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan0_haslam_2.5_2.6_reffreq_100MHz_data.txt')
+			freq    = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan0_haslam_2.5_2.6_reffreq_100MHz_freq.txt')
+			lst_old = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan0_haslam_2.5_2.6_reffreq_100MHz_LST.txt')
 		
-		if case == 1:
+		elif case == 1:
 			bf_old  = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.62_reffreq_100MHz_data.txt')
 			freq    = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.62_reffreq_100MHz_freq.txt')
 			lst_old = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.62_reffreq_100MHz_LST.txt')
@@ -2709,19 +2724,25 @@ def corrected_antenna_s11(day, case, save_name_flag):
 
 
 
+def ground_loss(band, f_MHz):
 
-
-
-
-
-
-
-
-
-
-
-
-
+	"""
+	
+	f_MHz: frequency in MHz between 50 and 150 MHz
+	
+	"""
+	
+	
+	gr = np.genfromtxt(home_folder + '/DATA/EDGES/mid_band/calibration/ground_loss/loss_column.txt')
+	
+	fr = gr[:,0]
+	dr = gr[:,1]
+	
+	par   = np.polyfit(fr, dr, 8)  # 7 terms are sufficient
+	model = np.polyval(par, f_MHz)
+	
+	
+	return 1-model
 
 
 

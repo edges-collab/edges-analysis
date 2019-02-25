@@ -463,7 +463,7 @@ def antenna_efficiency(band, f):
 
 
 
-def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=1, antenna_s11_year=2018, antenna_s11_day=145, antenna_s11_case=4, antenna_s11_Nfit=13, beam_correction=1, balun_correction=1, FLOW=50, FHIGH=130, Nfg=5):
+def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=1, antenna_s11_year=2018, antenna_s11_day=147, antenna_s11_case=5, antenna_s11_Nfit=15, balun_correction=1, ground_correction=1, beam_correction=1, FLOW=50, FHIGH=150, Nfg=7):
 	
 	"""
 
@@ -497,28 +497,7 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 		w_2D = w_2D_X[:, (fin_X>=FLOW) & (fin_X<=FHIGH)]
 		
 		
-		
-		# Beam factor
-		# -----------
-		# No beam correction
-		if beam_correction == 0:
-			bf = 1
-			print('NO BEAM CORRECTION')
-			
-		if beam_correction == 1:
-			if band == 'mid_band':
-				beam_factor_filename = 'table_hires_mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.62_reffreq_100MHz.hdf5'
-				
-			elif band == 'low_band3':
-				beam_factor_filename = 'table_hires_low_band3_50-120MHz_85deg_alan_haslam_2.5_2.62_reffreq_76MHz.hdf5'
-				
-			f_table, lst_table, bf_table = cal.beam_factor_table_read(edges_folder + band + '/calibration/beam_factors/table/' + beam_factor_filename)
-			bfX                          = cal.beam_factor_table_evaluate(f_table, lst_table, bf_table, m_2D[:,3])
-			
-			bf = bfX[:,((f_table>=FLOW) & (f_table<=FHIGH))]
-			
-			
-			
+
 			
 		
 		
@@ -526,20 +505,29 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 		# -------------------------------
 		if (band == 'mid_band') or (band == 'low_band3'):
 			
-			if receiver_cal_file == 0:
-				print('Receiver calibration FILE 0')
-				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_mid_band_cfit6_wfit14.txt'
-				
 			if receiver_cal_file == 1:
 				print('Receiver calibration FILE 1')
-				#rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/using_50.12ohms/calibration_files/calibration_file_receiver1_using_50.12ohms_50-86MHz_cfit6_wfit6.txt'
-				#rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/using_50.12ohms/calibration_files/calibration_file_receiver1_using_50.12ohms_50-86MHz_cfit7_wfit7.txt'
-				#rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/using_50.12ohms/calibration_files/calibration_file_receiver1_using_50.12ohms_50-120MHz_cfit11_wfit11.txt'
-				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/using_50.12ohms/calibration_files/calibration_file_receiver1_using_50.12ohms_50-180MHz_cfit15_wfit15.txt'
-			
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_receiver1_50_150MHz_cterms9_wterms9.txt'
+
 			elif receiver_cal_file == 2:
-				print('Receiver calibration FILE 2')
-				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_mid_band_cfit10_wfit14.txt'
+				print('Receiver calibration FILE 1')
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_receiver1_50_150MHz_cterms10_wterms10.txt'
+
+
+				
+			
+			#elif receiver_cal_file == 1:
+				#print('Receiver calibration FILE X')
+				##rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/using_50.12ohms/calibration_files/calibration_file_receiver1_using_50.12ohms_50-86MHz_cfit6_wfit6.txt'
+				##rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/using_50.12ohms/calibration_files/calibration_file_receiver1_using_50.12ohms_50-86MHz_cfit7_wfit7.txt'
+				##rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/using_50.12ohms/calibration_files/calibration_file_receiver1_using_50.12ohms_50-120MHz_cfit11_wfit11.txt'
+				#rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/using_50.12ohms/calibration_files/calibration_file_receiver1_using_50.12ohms_50-180MHz_cfit15_wfit15.txt'
+			
+			#elif receiver_cal_file == 2:
+				#print('Receiver calibration FILE X2')
+				#rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_mid_band_cfit10_wfit14.txt'
+				
+
 		
 		
 		
@@ -561,37 +549,75 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 		# -----------
 		s11_ant = cal.models_antenna_s11_remove_delay(band, fin, year=antenna_s11_year, day=antenna_s11_day, case=antenna_s11_case, delay_0=0.17, model_type='polynomial', Nfit=antenna_s11_Nfit, plot_fit_residuals='no')
 		
+
+
+		# Calibrated antenna temperature with losses and beam chromaticity
+		# ----------------------------------------------------------------
+		tc_with_loss_and_beam = cal.calibrated_antenna_temperature(t_2D, s11_ant, s11_LNA, C1, C2, TU, TC, TS)
+
+		
 		
 		
 		# Balun+Connector Loss
 		# --------------------
 		if balun_correction == 0:
-			G = 1
+			Gbc = 1
 			print('NO BALUN CORRECTION')
 			
 		if balun_correction == 1:
 			Gb, Gc = cal.balun_and_connector_loss(band, fin, s11_ant)
-			G      = Gb*Gc
+			Gbc    = Gb*Gc
 						
-				
-				
-				
-				
-				
+		
+		
+		# Ground Loss
+		# -----------
+		if ground_correction == 0:
+			Gg = 1
+			print('NO GROUND CORRECTION')
+			
+		if ground_correction == 1:
+			Gg = cal.ground_loss(band, fin)
 	
-		# Calibrated antenna temperature with losses and beam chromaticity
-		# ----------------------------------------------------------------
-		tc_with_loss_and_beam = cal.calibrated_antenna_temperature(t_2D, s11_ant, s11_LNA, C1, C2, TU, TC, TS)
-		
-		
-		
+	
+	
+		# Total loss
+		# ----------
+		G = Gbc * Gg
+	
+	
+	
 		# Removing loss
 		# -------------
-		Tamb_2D = np.reshape(273.15 + m_2D[:,9], (-1, 1))
-		G_2D    = np.repeat(np.reshape(G, (1, -1)), len(m_2D[:,9]), axis=0)
+		Tamb_2D       =  np.reshape(273.15 + m_2D[:,9], (-1, 1))
+		G_2D          =  np.repeat(np.reshape(G, (1, -1)), len(m_2D[:,9]), axis=0)
+		tc_with_beam  =  (tc_with_loss_and_beam - Tamb_2D * (1-G_2D)) / G_2D	
 		
-		tc_with_beam = (tc_with_loss_and_beam - Tamb_2D * (1-G_2D)) / G_2D
+
+
+
 		
+		# Beam factor
+		# -----------
+		# No beam correction
+		if beam_correction == 0:
+			bf = 1
+			print('NO BEAM CORRECTION')
+			
+		if beam_correction == 1:
+			if band == 'mid_band':
+				beam_factor_filename = 'table_hires_mid_band_50-200MHz_90deg_alan0_haslam_2.5_2.6_reffreq_100MHz.hdf5'
+				
+			elif band == 'low_band3':
+				beam_factor_filename = 'table_hires_low_band3_50-120MHz_85deg_alan_haslam_2.5_2.62_reffreq_76MHz.hdf5'
+				
+			f_table, lst_table, bf_table = cal.beam_factor_table_read(edges_folder + band + '/calibration/beam_factors/table/' + beam_factor_filename)
+			bfX                          = cal.beam_factor_table_evaluate(f_table, lst_table, bf_table, m_2D[:,3])
+			
+			bf = bfX[:,((f_table>=FLOW) & (f_table<=FHIGH))]
+
+
+
 		
 		
 		# Removing beam chromaticity
@@ -672,25 +698,25 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 
 
 
-			# We also compute residuals for 4 terms as an additiobal filter
+			# We also compute residuals for 3 terms as an additiobal filter
 			# Fitting foreground model to binned version of spectra
 			# -----------------------------------------------------			
-			par_fg_4t = ba.fit_polynomial_fourier('LINLOG', fbi/200, tbi, 3, Weights=wbi)
+			par_fg_Xt = ba.fit_polynomial_fourier('LINLOG', fbi/200, tbi, 3, Weights=wbi)
 		
 		
 			# Evaluating foreground model at raw resolution
 			# ---------------------------------------------			
-			model_i_4t = ba.model_evaluate('LINLOG', par_fg_4t[0], fin/200)
+			model_i_Xt = ba.model_evaluate('LINLOG', par_fg_Xt[0], fin/200)
 		
 		
 			# Residuals
 			# ---------
-			rri_4t   = tti - model_i_4t
+			rri_Xt   = tti - model_i_Xt
 			
 			
 			# RMS
 			# ---
-			RMS3 = np.sqrt(np.sum((rri_4t[wwi>0])**2)/len(fin[wwi>0]))
+			RMS3 = np.sqrt(np.sum((rri_Xt[wwi>0])**2)/len(fin[wwi>0]))
 		
 		
 		

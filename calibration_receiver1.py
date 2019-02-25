@@ -80,42 +80,10 @@ def switch_correction_receiver1_2018_01_25C(ant_s11, f_in = np.zeros([0,1]), cas
 	
 
 	# Loading measurements
-	if case == 1:
-		path_folder     = home_folder + '/DATA/EDGES/mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/data/s11/raw/InternalSwitch/'
-		
-		resistance_of_match = 50.12 # EDGES Keysight 85033E Male
-		
-		o_in, f = rc.s1p_read(path_folder + 'Open01.s1p')
-		s_in, f = rc.s1p_read(path_folder + 'Short01.s1p')
-		l_in, f = rc.s1p_read(path_folder + 'Match01.s1p')
-	
-		o_ex, f = rc.s1p_read(path_folder + 'ExternalOpen01.s1p')
-		s_ex, f = rc.s1p_read(path_folder + 'ExternalShort01.s1p')
-		l_ex, f = rc.s1p_read(path_folder + 'ExternalMatch01.s1p')	
-	
-	
-	if case == 2:
-		path_folder     = home_folder + '/DATA/EDGES/mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/data/s11/raw/InternalSwitch/'
-		
-		resistance_of_match = 50.12 # EDGES Keysight 85033E Male
-		
-		o_in, f = rc.s1p_read(path_folder + 'Open02.s1p')
-		s_in, f = rc.s1p_read(path_folder + 'Short02.s1p')
-		l_in, f = rc.s1p_read(path_folder + 'Match02.s1p')
-	
-		o_ex, f = rc.s1p_read(path_folder + 'ExternalOpen02.s1p')
-		s_ex, f = rc.s1p_read(path_folder + 'ExternalShort02.s1p')
-		l_ex, f = rc.s1p_read(path_folder + 'ExternalMatch02.s1p')	
-
-
-
-
-
-	
 	#if case == 1:
-		#path_folder     = home_folder + '/DATA/EDGES/calibration/receiver_calibration/mid_band/2018_01_25C/data/s11/raw/InternalSwitch/'
+		#path_folder     = home_folder + '/DATA/EDGES/mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/data/s11/raw/InternalSwitch/'
 		
-		#resistance_of_match = 50.027 # male
+		#resistance_of_match = 50.12 # EDGES Keysight 85033E Male
 		
 		#o_in, f = rc.s1p_read(path_folder + 'Open01.s1p')
 		#s_in, f = rc.s1p_read(path_folder + 'Short01.s1p')
@@ -123,15 +91,13 @@ def switch_correction_receiver1_2018_01_25C(ant_s11, f_in = np.zeros([0,1]), cas
 	
 		#o_ex, f = rc.s1p_read(path_folder + 'ExternalOpen01.s1p')
 		#s_ex, f = rc.s1p_read(path_folder + 'ExternalShort01.s1p')
-		#l_ex, f = rc.s1p_read(path_folder + 'ExternalMatch01.s1p')
-
-
-
-
+		#l_ex, f = rc.s1p_read(path_folder + 'ExternalMatch01.s1p')	
+	
+	
 	#if case == 2:
-		#path_folder     = home_folder + '/DATA/EDGES/calibration/receiver_calibration/mid_band/2018_01_25C/data/s11/raw/InternalSwitch/'
+		#path_folder     = home_folder + '/DATA/EDGES/mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/data/s11/raw/InternalSwitch/'
 		
-		#resistance_of_match = 50.027 # male
+		#resistance_of_match = 50.12 # EDGES Keysight 85033E Male
 		
 		#o_in, f = rc.s1p_read(path_folder + 'Open02.s1p')
 		#s_in, f = rc.s1p_read(path_folder + 'Short02.s1p')
@@ -139,7 +105,38 @@ def switch_correction_receiver1_2018_01_25C(ant_s11, f_in = np.zeros([0,1]), cas
 	
 		#o_ex, f = rc.s1p_read(path_folder + 'ExternalOpen02.s1p')
 		#s_ex, f = rc.s1p_read(path_folder + 'ExternalShort02.s1p')
-		#l_ex, f = rc.s1p_read(path_folder + 'ExternalMatch02.s1p')
+		#l_ex, f = rc.s1p_read(path_folder + 'ExternalMatch02.s1p')	
+
+
+	
+	if case == 1:
+		path_folder     = home_folder + '/DATA/EDGES/mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/data/s11/raw/InternalSwitch/'
+		
+		resistance_of_match = 50.027 # male
+		
+		o_in, f = rc.s1p_read(path_folder + 'Open01.s1p')
+		s_in, f = rc.s1p_read(path_folder + 'Short01.s1p')
+		l_in, f = rc.s1p_read(path_folder + 'Match01.s1p')
+	
+		o_ex, f = rc.s1p_read(path_folder + 'ExternalOpen01.s1p')
+		s_ex, f = rc.s1p_read(path_folder + 'ExternalShort01.s1p')
+		l_ex, f = rc.s1p_read(path_folder + 'ExternalMatch01.s1p')
+
+
+
+
+	if case == 2:
+		path_folder     = home_folder + '/DATA/EDGES/mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/data/s11/raw/InternalSwitch/'
+		
+		resistance_of_match = 50.027 # male
+		
+		o_in, f = rc.s1p_read(path_folder + 'Open02.s1p')
+		s_in, f = rc.s1p_read(path_folder + 'Short02.s1p')
+		l_in, f = rc.s1p_read(path_folder + 'Match02.s1p')
+	
+		o_ex, f = rc.s1p_read(path_folder + 'ExternalOpen02.s1p')
+		s_ex, f = rc.s1p_read(path_folder + 'ExternalShort02.s1p')
+		l_ex, f = rc.s1p_read(path_folder + 'ExternalMatch02.s1p')
 
 
 
@@ -1067,7 +1064,7 @@ def calibration_file_computation(folder, FMIN, FMAX, cterms_nominal, wterms_nomi
 	
 	"""
 	
-	folder: 'nominal', 'using_50.12ohms'
+	folder: 'nominal', or 'using_50.12ohms'
 	
 	"""
 	
@@ -1310,6 +1307,12 @@ def calibration_file_computation(folder, FMIN, FMAX, cterms_nominal, wterms_nomi
 
 
 	return f, Ta, Th, To, Ts, Tsim, fb, tab, thb, tob, tsb, tsimub
+
+
+
+
+
+
 
 
 
