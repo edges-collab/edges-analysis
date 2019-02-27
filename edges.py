@@ -892,7 +892,7 @@ def rms_filter_computation(band, case, save_parameters='no'):
 
 	Last modification:  2019-01-01
 	
-	Computation of the RMS filte
+	Computation of the RMS filter
 	
 	"""
 	
@@ -913,6 +913,11 @@ def rms_filter_computation(band, case, save_parameters='no'):
 		if case == 2:
 			path_files  = edges_folder + '/mid_band/spectra/level3/case2/'
 			save_folder = edges_folder + '/mid_band/rms_filters/case2/'
+			
+		if case == 4:
+			path_files  = edges_folder + '/mid_band/spectra/level3/case4/'
+			save_folder = edges_folder + '/mid_band/rms_filters/case4/'
+			print('CASE 4')
 			
 	
 
@@ -938,7 +943,7 @@ def rms_filter_computation(band, case, save_parameters='no'):
 		f, t, p, r, w, rms, m = level3read(path_files + new_list[i])
 		
 		# Filtering out high humidity
-		amb_hum_max = 50
+		amb_hum_max = 40
 		IX = data_selection(m, GHA_or_LST='GHA', TIME_1=0, TIME_2=24, sun_el_max=90, moon_el_max=90, amb_hum_max=amb_hum_max, min_receiver_temp=0, max_receiver_temp=100)
 		
 		tx   = t[IX,:]
@@ -1235,6 +1240,14 @@ def rms_filter(band, case, gx, rms, Nsigma):
 		file_path = edges_folder + band + '/rms_filters/case2/'
 
 
+	if case == 4:
+		file_path = edges_folder + band + '/rms_filters/case4/'
+
+
+
+
+
+
 	p    = np.genfromtxt(file_path + 'rms_polynomial_parameters.txt')
 	ps   = np.genfromtxt(file_path + 'rms_std_polynomial_parameters.txt')	
 	
@@ -1321,6 +1334,13 @@ def level3_to_level4(band, case, GHA_edges):
 			path_files             = edges_folder + 'mid_band/spectra/level3/case3/'
 			save_folder            = edges_folder + 'mid_band/spectra/level4/case3/'
 			output_file_name_hdf5  = 'case3.hdf5'
+			
+		if case == 4:
+			path_files             = edges_folder + 'mid_band/spectra/level3/case4/'
+			save_folder            = edges_folder + 'mid_band/spectra/level4/case4/'
+			output_file_name_hdf5  = 'case4.hdf5'			
+		
+			
 
 		
 			
@@ -1350,7 +1370,7 @@ def level3_to_level4(band, case, GHA_edges):
 	year_day_all = np.zeros((len(index_new_list), 2))
 	
 	
-	for i in index_new_list: # range(3):#
+	for i in index_new_list:   # range(3):  # 
 		
 		year_day_all[i,0] = float(new_list[i][0:4])
 		
@@ -1498,7 +1518,7 @@ def level3_to_level4(band, case, GHA_edges):
 	Ngha = len(GHA_edges)-1
 	
 	# Loop over days
-	for i in index_new_list: #range(3):
+	for i in index_new_list:   # range(3):  #
 		
 		# Loop over number of foreground terms
 		for Nfg in [3,4,5]:
@@ -1555,10 +1575,10 @@ def level3_to_level4(band, case, GHA_edges):
 					
 				FIG_SX      =   7
 				FIG_SY      =  20
-				FLOW_plot   =  20
-				FHIGH_plot  = 165
-				XTICKS      = np.arange(60, 161, 20)
-				XTEXT       =  22
+				FLOW_plot   =  15
+				FHIGH_plot  = 155
+				XTICKS      = np.arange(50, 151, 20)
+				XTEXT       =  17
 				YLABEL      = str(DY)  + ' K per division'
 				TITLE       = str(Nfg) + ' LINLOG terms'
 				FIGURE_FORMAT = 'png'			
@@ -2287,8 +2307,8 @@ def integrated_half_hour_level4(band, case, GHA_start=13.5):
 	"""
 	
 	if band == 'mid_band':
-		if case == 23:
-			f, p_all, r_all, w_all, gha, yd = level4read('/home/raul/DATA/EDGES/mid_band/spectra/level4/case23/case23.hdf5')
+		if case == 4:
+			f, p_all, r_all, w_all, gha, yd = level4read('/home/raul/DATA/EDGES/mid_band/spectra/level4/case4/case4.hdf5')
 	
 	
 			index = np.arange(0,len(gha))
@@ -2302,13 +2322,14 @@ def integrated_half_hour_level4(band, case, GHA_start=13.5):
 			day  = yd[:,1]
 			flag = 0
 
-			if GHA_start == 6.0:	
-				discarded_days = [146, 164, 167, 169]			
-			if GHA_start == 6.5:	
+			if GHA_start == 6.0:	# Looks good over 58-118 MHz
+				discarded_days = [146, 164, 167, 169]
+				#discarded_days = []
+			if GHA_start == 6.5:	# Looks good over 58-118 MHz
 				discarded_days = [146, 147, 174, 179, 181, 198, 211, 215]
-			if GHA_start == 7.0:	
+			if GHA_start == 7.0:	# Looks good over 58-118 MHz
 				discarded_days = [146, 147, 157, 166]			
-			if GHA_start == 7.5:	
+			if GHA_start == 7.5:	# Looks good up to 120 MHz
 				discarded_days = [146, 159]
 			if GHA_start == 8.0:	
 				discarded_days = [146, 151, 159]
@@ -2474,7 +2495,7 @@ def integrated_half_hour_level4(band, case, GHA_start=13.5):
 	avp        = np.mean(pr_all, axis=0)
 	
 	# For the 10.5 and 11 averages, DO NOT USE THIS CLEANING. ONLY use the 2.5sigma filter in the INTEGRATED 10.5-11.5 spectrum, AFTER integration
-	#avrn, avwn = rfi.cleaning_sweep(f, avr, avw, window_width_MHz=3, Npolyterms_block=2, N_choice=20, N_sigma=3.0)
+	avrn, avwn = rfi.cleaning_sweep(f, avrn, avwn, window_width_MHz=3, Npolyterms_block=2, N_choice=20, N_sigma=3.0)
 	
 	avtn = ba.model_evaluate('LINLOG', avp, f/200) + avrn
 		
@@ -2485,11 +2506,11 @@ def integrated_half_hour_level4(band, case, GHA_start=13.5):
 	tbn = ba.model_evaluate('LINLOG', avp, fb/200) + rbn
 	
 	
-	# fb, rb_all, wb_all, d_all, f, r_all, w_all, tb, wb = hl.plot_level4(GHA_start=12.0)
+	# fb, rb_all, wb_all, d_all, tbn, wbn, f, rr_all, wr_all, avrn, avwn, avp, avtn = eg.integrated_half_hour_level4(GHA_start=12.0)
 	
 	# o = eg.plot_residuals(fb, rb_all[0::,:], wb_all[0::,:], [int(d_all[i]) for i in range(len(d_all[0::]))], FIG_SX=7, FIG_SY=12, DY=2, FLOW=54, FHIGH=160, XTICKS=np.arange(60, 160+1, 20), XTEXT=54.5, YLABEL='2 K per division', TITLE='GHA = 12.0-12.5 hr, 4 LINLOG terms', save='yes', figure_path='/home/raul/Desktop/', figure_name='gha_12.0-12.5hr_4terms', figure_format='png')
 	
-	# FLOW=61; FHIGH=159; fc = fb[(fb>=FLOW) & (fb<=FHIGH)]; tc = tb[(fb>=FLOW) & (fb<=FHIGH)];wc = wb[(fb>=FLOW) & (fb<=FHIGH)]
+	# FLOW=61; FHIGH=159; fc = fb[(fb>=FLOW) & (fb<=FHIGH)]; tc = tbn[(fb>=FLOW) & (fb<=FHIGH)];wc = wbn[(fb>=FLOW) & (fb<=FHIGH)]
 	
 	# par = ba.fit_polynomial_fourier('LINLOG', fc, tc, 4, Weights=wc); plt.plot(fc, tc-par[1])
 
@@ -2510,7 +2531,7 @@ def integrated_half_hour_level4_many(band, case, GHA_start=[13.5, 14.0], save='n
 	for i in range(len(GHA_start)):
 	
 		print('------------------------------- ' + str(GHA_start[i]) )
-		fb, rb_all, wb_all, d_all, tbn, wbn, f, rr_all, wr_all, avr, avw, avp, avt = integrated_half_hour_level4('mid_band', 23, GHA_start=GHA_start[i])
+		fb, rb_all, wb_all, d_all, tbn, wbn, f, rr_all, wr_all, avr, avw, avp, avt = integrated_half_hour_level4(band, case, GHA_start=GHA_start[i])
 		
 		if i == 0:
 			avr_all = np.copy(avr)
@@ -2529,8 +2550,8 @@ def integrated_half_hour_level4_many(band, case, GHA_start=[13.5, 14.0], save='n
 	avt      = ba.model_evaluate('LINLOG', avp, f/200) + avr
 	
 	avrn, avwn   = rfi.cleaning_sweep(f, avr, avw, window_width_MHz=3, Npolyterms_block=2, N_choice=20, N_sigma=2.5)
-	fb, rb, wb   = ba.spectral_binning_number_of_samples(f, avrn, avwn)
-	tb  = ba.model_evaluate('LINLOG', avp, fb/200) + rb
+	fb, rb, wbn   = ba.spectral_binning_number_of_samples(f, avrn, avwn)
+	tbn  = ba.model_evaluate('LINLOG', avp, fb/200) + rb
 	
 	
 	
@@ -2540,7 +2561,7 @@ def integrated_half_hour_level4_many(band, case, GHA_start=[13.5, 14.0], save='n
 		np.savetxt('/home/raul/Desktop/' + filename, data)
 	
 
-	return f, avr, avw, avt, avp, fb, tb, wb
+	return f, avr, avw, avt, avp, fb, tbn, wbn
 
 
 
