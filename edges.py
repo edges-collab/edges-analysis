@@ -507,10 +507,18 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 			
 			if receiver_cal_file == 1:
 				print('Receiver calibration FILE 1')
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_receiver1_50_150MHz_cterms7_wterms7.txt'
+
+			if receiver_cal_file == 2:
+				print('Receiver calibration FILE 2')
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_receiver1_50_150MHz_cterms8_wterms8.txt'
+			
+			if receiver_cal_file == 3:
+				print('Receiver calibration FILE 3')
 				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_receiver1_50_150MHz_cterms9_wterms9.txt'
 
-			elif receiver_cal_file == 2:
-				print('Receiver calibration FILE 1')
+			if receiver_cal_file == 4:
+				print('Receiver calibration FILE 4')
 				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_receiver1_50_150MHz_cterms10_wterms10.txt'
 
 
@@ -919,6 +927,11 @@ def rms_filter_computation(band, case, save_parameters='no'):
 			save_folder = edges_folder + '/mid_band/rms_filters/case4/'
 			print('CASE 4')
 			
+		if case == 41:
+			path_files  = edges_folder + '/mid_band/spectra/level3/case41/'
+			save_folder = edges_folder + '/mid_band/rms_filters/case41/'
+			print('CASE 41')
+
 	
 
 	if band == 'low_band3':
@@ -1243,7 +1256,8 @@ def rms_filter(band, case, gx, rms, Nsigma):
 	if case == 4:
 		file_path = edges_folder + band + '/rms_filters/case4/'
 
-
+	if case == 41:
+		file_path = edges_folder + band + '/rms_filters/case41/'
 
 
 
@@ -1338,8 +1352,13 @@ def level3_to_level4(band, case, GHA_edges):
 		if case == 4:
 			path_files             = edges_folder + 'mid_band/spectra/level3/case4/'
 			save_folder            = edges_folder + 'mid_band/spectra/level4/case4/'
-			output_file_name_hdf5  = 'case4.hdf5'			
-		
+			output_file_name_hdf5  = 'case4.hdf5'	
+			
+		if case == 41:
+			path_files             = edges_folder + 'mid_band/spectra/level3/case41/'
+			save_folder            = edges_folder + 'mid_band/spectra/level4/case41/'
+			output_file_name_hdf5  = 'case41.hdf5'	
+	
 			
 
 		
@@ -2299,7 +2318,7 @@ def one_hour_filter(band, case, year, day, gha):
 
 
 
-def integrated_half_hour_level4(band, case, GHA_start=13.5):
+def integrated_half_hour_level4(band, case, first_day, last_day, GHA_start=13.5):
 	
 	"""
 	Feb 6, 2019
@@ -2309,190 +2328,205 @@ def integrated_half_hour_level4(band, case, GHA_start=13.5):
 	if band == 'mid_band':
 		if case == 4:
 			f, p_all, r_all, w_all, gha, yd = level4read('/home/raul/DATA/EDGES/mid_band/spectra/level4/case4/case4.hdf5')
+			
+		if case == 41:
+			f, p_all, r_all, w_all, gha, yd = level4read('/home/raul/DATA/EDGES/mid_band/spectra/level4/case41/case41.hdf5')			
 	
 	
-			index = np.arange(0,len(gha))
-			IX    = int(index[gha==GHA_start])
-			
-			
-			p = p_all[:,IX,:]
-			r = r_all[:,IX,:]
-			w = w_all[:,IX,:]
-			
-			day  = yd[:,1]
-			flag = 0
-
-			if GHA_start == 6.0:	# Looks good over 58-118 MHz
-				discarded_days = [146, 164, 167, 169]
-				#discarded_days = []
-			if GHA_start == 6.5:	# Looks good over 58-118 MHz
-				discarded_days = [146, 147, 174, 179, 181, 198, 211, 215]
-			if GHA_start == 7.0:	# Looks good over 58-118 MHz
-				discarded_days = [146, 147, 157, 166]			
-			if GHA_start == 7.5:	# Looks good up to 120 MHz
-				discarded_days = [146, 159]
-			if GHA_start == 8.0:	
-				discarded_days = [146, 151, 159]
-			if GHA_start == 8.5:	
-				discarded_days = [146, 159]
-			if GHA_start == 9.0:	
-				discarded_days = [146, 151, 152, 157, 159, 163, 185]
-			if GHA_start == 9.5:	
-				discarded_days = [146, 157, 159, 167, 196]
-				#print(w)
-				#w[day==149, (f>105.5) & (f<108.5)] = 0
-				w[day==149, (f>104.5) & (f<110)] = 0
-				w[day==150, (f>104.5) & (f<110)] = 0
-				w[day==152, (f>104.5) & (f<110)] = 0
-				w[day==163, (f>104.5) & (f<110)] = 0
-				w[day==176, (f>104.5) & (f<110)] = 0
-				w[day==185, (f>104.5) & (f<110)] = 0
-				w[day==187, (f>104.5) & (f<110)] = 0
-				w[day==189, (f>104.5) & (f<110)] = 0
-				w[day==193, (f>104.5) & (f<110)] = 0
-				w[day==198, (f>104.5) & (f<110)] = 0
-				w[day==201, (f>104.5) & (f<110)] = 0
-				w[day==211, (f>104.5) & (f<110)] = 0
-				
-				w[day==150, (f>129.0) & (f<135)] = 0
-				w[day==160, (f>129.0) & (f<135)] = 0
-				w[day==161, (f>129.0) & (f<135)] = 0
-				w[day==162, (f>129.0) & (f<135)] = 0
-				w[day==166, (f>129.0) & (f<135)] = 0
-				w[day==175, (f>129.0) & (f<135)] = 0
-				w[day==179, (f>129.0) & (f<135)] = 0
-				w[day==180, (f>129.0) & (f<135)] = 0
-				w[day==193, (f>129.0) & (f<135)] = 0
-				w[day==198, (f>129.0) & (f<135)] = 0
-				w[day==199, (f>129.0) & (f<135)] = 0
-				w[day==211, (f>129.0) & (f<135)] = 0
-				
-				w[day==177, (f>143.0) & (f<148)] = 0
-				
-				w[:, (f>134.5) & (f<140.5)] = 0
-				
-				
-			if GHA_start == 10.0:	
-				discarded_days = [152, 157, 166, 159, 196]#, 176, 180, 181, 185]
-				
-				w[day==175, (f>143.0) & (f<150.0)] = 0
-				w[day==176, (f>143.0) & (f<150.0)] = 0
-				w[day==180, (f>143.0) & (f<150.0)] = 0
-				w[day==181, (f>143.0) & (f<150.0)] = 0
-				w[day==185, (f>143.0) & (f<150.0)] = 0
-				
-				
-				
-				
-				
-				
-			if GHA_start == 10.5:	
-				discarded_days = [174, 176, 204, 218]  # , 151, 162, 189, 210
-				w[:, (f>101.52) & (f<101.53)] = 0
-				w[:, (f>102.50) & (f<102.53)] = 0
-				w[:, (f>153.02) & (f<153.04)] = 0
-				
-				w[:, (f>111.7) & (f<115.4)] = 0
-				w[:, (f>121.47) & (f<121.55)] = 0
-				w[:, (f>146.5) & (f<148.0)] = 0
-				w[:, (f>150) & (f<150.5)] = 0
-				
-				w[:, (f>105.72) & (f<105.74)] = 0
-				w[:, (f>106.05) & (f<106.15)] = 0
-				w[:, (f>106.42) & (f<106.55)] = 0				
-				
-				
-				
-				
-			if GHA_start == 11.0:	
-				discarded_days = [149, 165, 176, 204]
-				
-				# This is the right way of doing it!				
-				w[day==151, (f>129.0) & (f<135.0)] = 0
-				w[day==161, (f>129.0) & (f<135.0)] = 0
-				w[day==177, (f>129.0) & (f<135.0)] = 0
-				w[day==181, (f>129.0) & (f<135.0)] = 0
-				w[day==187, (f>129.0) & (f<135.0)] = 0
-				w[day==211, (f>129.0) & (f<135.0)] = 0
-				
-				w[day==188, (f>146.5) & (f<148.0)] = 0
-				w[day==193, (f>146.5) & (f<148.0)] = 0
-				w[day==197, (f>146.5) & (f<148.0)] = 0
-				w[day==198, (f>146.5) & (f<148.0)] = 0
-				
-				w[:, (f>109) & (f<114.2)] = 0
-				
-				w[:, (f>105.72) & (f<105.74)] = 0
-				w[:, (f>106.05) & (f<106.15)] = 0
-				w[:, (f>106.42) & (f<106.55)] = 0
-				
-				w[:, (f>138) & (f<138.4)] = 0
-				
-				
-				
-			if GHA_start == 11.5:	
-				discarded_days = [175, 176, 177, 200, 204, 216]
-				w[day==149, (f>110.0) & (f<118.0)] = 0
-				w[day==179, (f>100.0) & (f<103.0)] = 0
-				w[day==201, (f>146.5) & (f<148.0)] = 0
-				
-				w[:, (f>137.0) & (f<140.0)] = 0
-				
-			if GHA_start == 12.0:	
-				discarded_days = [146, 147, 170, 175, 176, 193, 195, 204, 205, 220]
-			if GHA_start == 12.5:
-				discarded_days = [146, 170, 176, 185, 195, 198, 204, 220]
-			if GHA_start == 13.0: 
-				discarded_days = [152, 174, 176, 182, 185, 195, 204, 208, 214]
-			if GHA_start == 13.5: 
-				discarded_days = [151, 163, 164, 176, 185, 187, 189, 192, 195, 200, 208, 215, 219]
-			if GHA_start == 14:
-				discarded_days = [176, 184, 185, 193, 199, 208, 210]
-			if GHA_start == 14.5:
-				discarded_days = [166, 174, 177, 185, 199, 200, 201, 208]
-			if GHA_start == 15:
-				discarded_days = [150, 157, 1178, 182, 185, 187, 198, 208] #, 210, 215, 217, 218, 219]
-			if GHA_start == 15.5:
-				discarded_days = [185]
+		index = np.arange(0,len(gha))
+		IX    = int(index[gha==GHA_start])
 		
+		
+		p = p_all[:,IX,:]
+		r = r_all[:,IX,:]
+		w = w_all[:,IX,:]
+		
+		day  = yd[:,1]
+		flag = 0
+
+		if GHA_start == 6.0:	# Looks good over 58-118 MHz
+			discarded_days = [146, 164, 167, 169]
+			#discarded_days = []
+		if GHA_start == 6.5:	# Looks good over 58-118 MHz
+			discarded_days = [146, 147, 174, 179, 181, 198, 211, 215]
+		if GHA_start == 7.0:	# Looks good over 58-118 MHz
+			discarded_days = [146, 147, 157, 166]			
+		if GHA_start == 7.5:	# Looks good up to 120 MHz
+			discarded_days = [146, 159]
+		if GHA_start == 8.0:	
+			discarded_days = [146, 151, 159]
+		if GHA_start == 8.5:	
+			discarded_days = [146, 159]
+		if GHA_start == 9.0:	
+			discarded_days = [146, 151, 152, 157, 159, 163, 185]
+		if GHA_start == 9.5:	
+			discarded_days = [146, 157, 159, 167, 196]
+			w[day==149, (f>104.5) & (f<110)] = 0
+			w[day==150, (f>104.5) & (f<110)] = 0
+			w[day==152, (f>104.5) & (f<110)] = 0
+			w[day==163, (f>104.5) & (f<110)] = 0
+			#w[day==176, (f>104.5) & (f<110)] = 0
+			#w[day==185, (f>104.5) & (f<110)] = 0
+			#w[day==187, (f>104.5) & (f<110)] = 0
+			#w[day==189, (f>104.5) & (f<110)] = 0
+			#w[day==193, (f>104.5) & (f<110)] = 0
+			#w[day==198, (f>104.5) & (f<110)] = 0
+			#w[day==201, (f>104.5) & (f<110)] = 0
+			#w[day==211, (f>104.5) & (f<110)] = 0
+			
+			w[day==150, (f>129.0) & (f<135)] = 0
+			w[day==160, (f>129.0) & (f<135)] = 0
+			w[day==161, (f>129.0) & (f<135)] = 0
+			w[day==162, (f>129.0) & (f<135)] = 0
+			w[day==166, (f>129.0) & (f<135)] = 0
+			#w[day==175, (f>129.0) & (f<135)] = 0
+			#w[day==179, (f>129.0) & (f<135)] = 0
+			#w[day==180, (f>129.0) & (f<135)] = 0
+			#w[day==193, (f>129.0) & (f<135)] = 0
+			#w[day==198, (f>129.0) & (f<135)] = 0
+			#w[day==199, (f>129.0) & (f<135)] = 0
+			#w[day==211, (f>129.0) & (f<135)] = 0
+			
+			#w[day==177, (f>143.0) & (f<148)] = 0
+			
+			w[:, (f>134.5) & (f<140.5)] = 0
+			
+			
+		if GHA_start == 10.0:	
+			discarded_days = [152, 157, 166, 159, 196]#, 176, 180, 181, 185]
+			
+			#w[day==175, (f>143.0) & (f<150.0)] = 0
+			#w[day==176, (f>143.0) & (f<150.0)] = 0
+			#w[day==180, (f>143.0) & (f<150.0)] = 0
+			#w[day==181, (f>143.0) & (f<150.0)] = 0
+			#w[day==185, (f>143.0) & (f<150.0)] = 0
+			
+			
+			
+			
+			
+			
+		if GHA_start == 10.5:	
+			discarded_days = [174, 176, 204, 218]  # , 151, 162, 189, 210
+			w[:, (f>101.52) & (f<101.53)] = 0
+			w[:, (f>102.50) & (f<102.53)] = 0
+			w[:, (f>153.02) & (f<153.04)] = 0
+			
+			w[:, (f>111.7) & (f<115.4)] = 0
+			w[:, (f>121.47) & (f<121.55)] = 0
+			w[:, (f>146.5) & (f<148.0)] = 0
+			w[:, (f>150) & (f<150.5)] = 0
+			
+			w[:, (f>105.72) & (f<105.74)] = 0
+			w[:, (f>106.05) & (f<106.15)] = 0
+			w[:, (f>106.42) & (f<106.55)] = 0				
+			
+			
+			
+			
+		if GHA_start == 11.0:	
+			discarded_days = [149, 165, 176, 204]
+			
+			# This is the right way of doing it!				
+			w[day==151, (f>129.0) & (f<135.0)] = 0
+			w[day==161, (f>129.0) & (f<135.0)] = 0
+			#w[day==177, (f>129.0) & (f<135.0)] = 0
+			#w[day==181, (f>129.0) & (f<135.0)] = 0
+			#w[day==187, (f>129.0) & (f<135.0)] = 0
+			#w[day==211, (f>129.0) & (f<135.0)] = 0
+			
+			#w[day==188, (f>146.5) & (f<148.0)] = 0
+			#w[day==193, (f>146.5) & (f<148.0)] = 0
+			#w[day==197, (f>146.5) & (f<148.0)] = 0
+			#w[day==198, (f>146.5) & (f<148.0)] = 0
+			
+			w[:, (f>109) & (f<114.2)] = 0
+			
+			w[:, (f>105.72) & (f<105.74)] = 0
+			w[:, (f>106.05) & (f<106.15)] = 0
+			w[:, (f>106.42) & (f<106.55)] = 0
+			
+			w[:, (f>138) & (f<138.4)] = 0
+			
+			
+			
+		if GHA_start == 11.5:	
+			discarded_days = [175, 176, 177, 200, 204, 216]
+			w[day==149, (f>110.0) & (f<118.0)] = 0
+			#w[day==179, (f>100.0) & (f<103.0)] = 0
+			#w[day==201, (f>146.5) & (f<148.0)] = 0
+			
+			w[:, (f>137.0) & (f<140.0)] = 0
+			
+		if GHA_start == 12.0:	
+			discarded_days = [146, 147, 170, 175, 176, 193, 195, 204, 205, 220]
+		if GHA_start == 12.5:
+			discarded_days = [146, 170, 176, 185, 195, 198, 204, 220]
+		if GHA_start == 13.0: 
+			discarded_days = [152, 174, 176, 182, 185, 195, 204, 208, 214]
+		if GHA_start == 13.5: 
+			discarded_days = [151, 163, 164, 176, 185, 187, 189, 192, 195, 200, 208, 215, 219]
+		if GHA_start == 14:
+			discarded_days = [176, 184, 185, 193, 199, 208, 210]
+		if GHA_start == 14.5:
+			discarded_days = [166, 174, 177, 185, 199, 200, 201, 208]
+		if GHA_start == 15:
+			discarded_days = [150, 157, 1178, 182, 185, 187, 198, 208] #, 210, 215, 217, 218, 219]
+		if GHA_start == 15.5:
+			discarded_days = [185]
+		if GHA_start == 16.0:
+			discarded_days = [184]			
+		if GHA_start == 16.5:
+			discarded_days = [191, 192]
+		if GHA_start == 17.0:
+			discarded_days = [184, 186, 192, 216]				
+		if GHA_start == 17.5:
+			discarded_days = [186, 192, 196]
+		if GHA_start == 18.0:
+			discarded_days = [192, 197]		
+		if GHA_start == 18.5:
+			discarded_days = [192, 209, 211]
+
 	
 	for i in range(len(p[:,0])):
+		
+		if (day[i] >= first_day) & (day[i] <= last_day):
 				
-		if (np.sum(w[i,:])>0) and (day[i] not in discarded_days):
-			
-			print(day[i])
-			
-			t          = ba.model_evaluate('LINLOG', p[i,:], f/200) + r[i,:]
-			par        = ba.fit_polynomial_fourier('LINLOG', f/200, t, 4, Weights=w[i,:])
-			r_raw      = t-par[1]
-			w_raw      = w[i,:] 
-			
-			
+			if (np.sum(w[i,:])>0) and (day[i] not in discarded_days):
 				
-			fb, rb, wb = ba.spectral_binning_number_of_samples(f, r_raw, w_raw)
+				print(day[i])
 				
-			
-			if flag == 0:
-				rr_all = np.copy(r_raw)
-				wr_all = np.copy(w_raw)
-				pr_all = np.copy(par[0])
+				t          = ba.model_evaluate('LINLOG', p[i,:], f/200) + r[i,:]
+				par        = ba.fit_polynomial_fourier('LINLOG', f/200, t, 4, Weights=w[i,:])
+				r_raw      = t-par[1]
+				w_raw      = w[i,:] 
 				
-				rb_all = np.copy(rb)
-				wb_all = np.copy(wb)
-				d_all  = np.copy(day[i])
-				flag   = 1
 				
-			elif flag > 0:
-				rr_all = np.vstack((rr_all, r_raw))
-				wr_all = np.vstack((wr_all, w_raw))
-				pr_all = np.vstack((pr_all, par[0]))
+					
+				fb, rb, wb = ba.spectral_binning_number_of_samples(f, r_raw, w_raw)
+					
 				
-				rb_all = np.vstack((rb_all, rb))
-				wb_all = np.vstack((wb_all, wb))
-				d_all  = np.append(d_all, day[i])
+				if flag == 0:
+					rr_all = np.copy(r_raw)
+					wr_all = np.copy(w_raw)
+					pr_all = np.copy(par[0])
+					
+					rb_all = np.copy(rb)
+					wb_all = np.copy(wb)
+					d_all  = np.copy(day[i])
+					flag   = 1
+					
+				elif flag > 0:
+					rr_all = np.vstack((rr_all, r_raw))
+					wr_all = np.vstack((wr_all, w_raw))
+					pr_all = np.vstack((pr_all, par[0]))
+					
+					rb_all = np.vstack((rb_all, rb))
+					wb_all = np.vstack((wb_all, wb))
+					d_all  = np.append(d_all, day[i])
 				
 	avrn, avwn   = ba.spectral_averaging(rr_all, wr_all)
-	avp        = np.mean(pr_all, axis=0)
+	avp          = np.mean(pr_all, axis=0)
 	
 	# For the 10.5 and 11 averages, DO NOT USE THIS CLEANING. ONLY use the 2.5sigma filter in the INTEGRATED 10.5-11.5 spectrum, AFTER integration
 	avrn, avwn = rfi.cleaning_sweep(f, avrn, avwn, window_width_MHz=3, Npolyterms_block=2, N_choice=20, N_sigma=3.0)
@@ -2531,7 +2565,7 @@ def integrated_half_hour_level4_many(band, case, GHA_start=[13.5, 14.0], save='n
 	for i in range(len(GHA_start)):
 	
 		print('------------------------------- ' + str(GHA_start[i]) )
-		fb, rb_all, wb_all, d_all, tbn, wbn, f, rr_all, wr_all, avr, avw, avp, avt = integrated_half_hour_level4(band, case, GHA_start=GHA_start[i])
+		fb, rb_all, wb_all, d_all, tbn, wbn, f, rr_all, wr_all, avr, avw, avp, avt = integrated_half_hour_level4(band, case, 140, 170, GHA_start=GHA_start[i])
 		
 		if i == 0:
 			avr_all = np.copy(avr)
@@ -2562,6 +2596,293 @@ def integrated_half_hour_level4_many(band, case, GHA_start=[13.5, 14.0], save='n
 	
 
 	return f, avr, avw, avt, avp, fb, tbn, wbn
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def integrated_half_hour_level4(band, case, first_day, last_day, GHA_edges=[6, 18]):
+	
+	"""
+	Feb 6, 2019
+	
+	"""
+	
+	if band == 'mid_band':
+		if case == 4:
+			f, p_all, r_all, w_all, gha, yd = level4read('/home/raul/DATA/EDGES/mid_band/spectra/level4/case4/case4.hdf5')
+			
+		if case == 41:
+			f, p_all, r_all, w_all, gha, yd = level4read('/home/raul/DATA/EDGES/mid_band/spectra/level4/case41/case41.hdf5')			
+	
+			
+		
+		index = np.arange(0,len(gha))
+		IX    = int(index[gha==GHA_start])
+				
+	
+		for i in range(ld):
+			
+			for j in range(lg):
+				
+				p = p_all[i,j,:]
+				r = r_all[i,j,:]
+				w = w_all[i,j,:]			
+				
+
+
+				if flag == 0:
+					rr_all = np.copy(r_raw)
+					wr_all = np.copy(w_raw)
+					pr_all = np.copy(par[0])
+					
+					rb_all = np.copy(rb)
+					wb_all = np.copy(wb)
+					d_all  = np.copy(day[i])
+					flag   = 1
+					
+				elif flag > 0:
+					rr_all = np.vstack((rr_all, r_raw))
+					wr_all = np.vstack((wr_all, w_raw))
+					pr_all = np.vstack((pr_all, par[0]))
+					
+					rb_all = np.vstack((rb_all, rb))
+					wb_all = np.vstack((wb_all, wb))
+					d_all  = np.append(d_all, day[i])
+
+
+
+
+
+
+
+
+		
+				##day  = yd[:,1]
+				##flag = 0
+		
+		
+
+				#if GHA == 6.0:	# Looks good over 58-118 MHz
+					#discarded_days = [146, 164, 167, 169]
+					##discarded_days = []
+				#if GHA == 6.5:	# Looks good over 58-118 MHz
+					#discarded_days = [146, 147, 174, 179, 181, 198, 211, 215]
+				#if GHA == 7.0:	# Looks good over 58-118 MHz
+					#discarded_days = [146, 147, 157, 166]			
+				#if GHA == 7.5:	# Looks good up to 120 MHz
+					#discarded_days = [146, 159]
+				#if GHA == 8.0:	
+					#discarded_days = [146, 151, 159]
+				#if GHA == 8.5:	
+					#discarded_days = [146, 159]
+				#if GHA == 9.0:	
+					#discarded_days = [146, 151, 152, 157, 159, 163, 185]
+				#if GHA == 9.5:	
+					#discarded_days = [146, 157, 159, 167, 196]
+					#w[day==149, (f>104.5) & (f<110)] = 0
+					#w[day==150, (f>104.5) & (f<110)] = 0
+					#w[day==152, (f>104.5) & (f<110)] = 0
+					#w[day==163, (f>104.5) & (f<110)] = 0
+					##w[day==176, (f>104.5) & (f<110)] = 0
+					##w[day==185, (f>104.5) & (f<110)] = 0
+					##w[day==187, (f>104.5) & (f<110)] = 0
+					##w[day==189, (f>104.5) & (f<110)] = 0
+					##w[day==193, (f>104.5) & (f<110)] = 0
+					##w[day==198, (f>104.5) & (f<110)] = 0
+					##w[day==201, (f>104.5) & (f<110)] = 0
+					##w[day==211, (f>104.5) & (f<110)] = 0
+					
+					#w[day==150, (f>129.0) & (f<135)] = 0
+					#w[day==160, (f>129.0) & (f<135)] = 0
+					#w[day==161, (f>129.0) & (f<135)] = 0
+					#w[day==162, (f>129.0) & (f<135)] = 0
+					#w[day==166, (f>129.0) & (f<135)] = 0
+					##w[day==175, (f>129.0) & (f<135)] = 0
+					##w[day==179, (f>129.0) & (f<135)] = 0
+					##w[day==180, (f>129.0) & (f<135)] = 0
+					##w[day==193, (f>129.0) & (f<135)] = 0
+					##w[day==198, (f>129.0) & (f<135)] = 0
+					##w[day==199, (f>129.0) & (f<135)] = 0
+					##w[day==211, (f>129.0) & (f<135)] = 0
+					
+					##w[day==177, (f>143.0) & (f<148)] = 0
+					
+					#w[:, (f>134.5) & (f<140.5)] = 0
+					
+					
+				#if GHA == 10.0:	
+					#discarded_days = [152, 157, 166, 159, 196]#, 176, 180, 181, 185]
+					
+					##w[day==175, (f>143.0) & (f<150.0)] = 0
+					##w[day==176, (f>143.0) & (f<150.0)] = 0
+					##w[day==180, (f>143.0) & (f<150.0)] = 0
+					##w[day==181, (f>143.0) & (f<150.0)] = 0
+					##w[day==185, (f>143.0) & (f<150.0)] = 0
+					
+					
+					
+					
+					
+					
+				#if GHA == 10.5:	
+					#discarded_days = [174, 176, 204, 218]  # , 151, 162, 189, 210
+					#w[:, (f>101.52) & (f<101.53)] = 0
+					#w[:, (f>102.50) & (f<102.53)] = 0
+					#w[:, (f>153.02) & (f<153.04)] = 0
+					
+					#w[:, (f>111.7) & (f<115.4)] = 0
+					#w[:, (f>121.47) & (f<121.55)] = 0
+					#w[:, (f>146.5) & (f<148.0)] = 0
+					#w[:, (f>150) & (f<150.5)] = 0
+					
+					#w[:, (f>105.72) & (f<105.74)] = 0
+					#w[:, (f>106.05) & (f<106.15)] = 0
+					#w[:, (f>106.42) & (f<106.55)] = 0				
+					
+					
+					
+					
+				#if GHA == 11.0:	
+					#discarded_days = [149, 165, 176, 204]
+					
+					## This is the right way of doing it!				
+					#w[day==151, (f>129.0) & (f<135.0)] = 0
+					#w[day==161, (f>129.0) & (f<135.0)] = 0
+					##w[day==177, (f>129.0) & (f<135.0)] = 0
+					##w[day==181, (f>129.0) & (f<135.0)] = 0
+					##w[day==187, (f>129.0) & (f<135.0)] = 0
+					##w[day==211, (f>129.0) & (f<135.0)] = 0
+					
+					##w[day==188, (f>146.5) & (f<148.0)] = 0
+					##w[day==193, (f>146.5) & (f<148.0)] = 0
+					##w[day==197, (f>146.5) & (f<148.0)] = 0
+					##w[day==198, (f>146.5) & (f<148.0)] = 0
+					
+					#w[:, (f>109) & (f<114.2)] = 0
+					
+					#w[:, (f>105.72) & (f<105.74)] = 0
+					#w[:, (f>106.05) & (f<106.15)] = 0
+					#w[:, (f>106.42) & (f<106.55)] = 0
+					
+					#w[:, (f>138) & (f<138.4)] = 0
+					
+					
+					
+				#if GHA == 11.5:	
+					#discarded_days = [175, 176, 177, 200, 204, 216]
+					#w[day==149, (f>110.0) & (f<118.0)] = 0
+					##w[day==179, (f>100.0) & (f<103.0)] = 0
+					##w[day==201, (f>146.5) & (f<148.0)] = 0
+					
+					#w[:, (f>137.0) & (f<140.0)] = 0
+					
+				#if GHA == 12.0:	
+					#discarded_days = [146, 147, 170, 175, 176, 193, 195, 204, 205, 220]
+				#if GHA == 12.5:
+					#discarded_days = [146, 170, 176, 185, 195, 198, 204, 220]
+				#if GHA == 13.0: 
+					#discarded_days = [152, 174, 176, 182, 185, 195, 204, 208, 214]
+				#if GHA == 13.5: 
+					#discarded_days = [151, 163, 164, 176, 185, 187, 189, 192, 195, 200, 208, 215, 219]
+				#if GHA == 14:
+					#discarded_days = [176, 184, 185, 193, 199, 208, 210]
+				#if GHA == 14.5:
+					#discarded_days = [166, 174, 177, 185, 199, 200, 201, 208]
+				#if GHA == 15:
+					#discarded_days = [150, 157, 1178, 182, 185, 187, 198, 208] #, 210, 215, 217, 218, 219]
+				#if GHA == 15.5:
+					#discarded_days = [185]
+				#if GHA == 16.0:
+					#discarded_days = [184]			
+				#if GHA == 16.5:
+					#discarded_days = [191, 192]
+				#if GHA == 17.0:
+					#discarded_days = [184, 186, 192, 216]				
+				#if GHA == 17.5:
+					#discarded_days = [186, 192, 196]
+				#if GHA == 18.0:
+					#discarded_days = [192, 197]		
+				#if GHA == 18.5:
+					#discarded_days = [192, 209, 211]
+
+
+
+
+	
+	#for i in range(len(p[:,0])):
+		
+		#if (day[i] >= first_day) & (day[i] <= last_day):
+				
+			#if (np.sum(w[i,:])>0) and (day[i] not in discarded_days):
+				
+				
+				
+				
+				
+				
+				# print(day[i])
+				
+				t          = ba.model_evaluate('LINLOG', p[i,:], f/200) + r[i,:]
+				par        = ba.fit_polynomial_fourier('LINLOG', f/200, t, 4, Weights=w[i,:])
+				r_raw      = t-par[1]
+				w_raw      = w[i,:] 
+				
+				
+					
+				fb, rb, wb = ba.spectral_binning_number_of_samples(f, r_raw, w_raw)
+					
+				
+
+				
+	avrn, avwn   = ba.spectral_averaging(rr_all, wr_all)
+	avp          = np.mean(pr_all, axis=0)
+	
+	# For the 10.5 and 11 averages, DO NOT USE THIS CLEANING. ONLY use the 2.5sigma filter in the INTEGRATED 10.5-11.5 spectrum, AFTER integration
+	avrn, avwn = rfi.cleaning_sweep(f, avrn, avwn, window_width_MHz=3, Npolyterms_block=2, N_choice=20, N_sigma=3.0)
+	
+	avtn = ba.model_evaluate('LINLOG', avp, f/200) + avrn
+		
+	#avrn, avwn = rfi.cleaning_sweep(f, avrn, avwn, window_width_MHz=5, Npolyterms_block=2, N_choice=20, N_sigma=2)
+	fb, rbn, wbn = ba.spectral_binning_number_of_samples(f, avrn, avwn)
+	
+	
+	tbn = ba.model_evaluate('LINLOG', avp, fb/200) + rbn
+	
+	
+	# fb, rb_all, wb_all, d_all, tbn, wbn, f, rr_all, wr_all, avrn, avwn, avp, avtn = eg.integrated_half_hour_level4(GHA_start=12.0)
+	
+	# o = eg.plot_residuals(fb, rb_all[0::,:], wb_all[0::,:], [int(d_all[i]) for i in range(len(d_all[0::]))], FIG_SX=7, FIG_SY=12, DY=2, FLOW=54, FHIGH=160, XTICKS=np.arange(60, 160+1, 20), XTEXT=54.5, YLABEL='2 K per division', TITLE='GHA = 12.0-12.5 hr, 4 LINLOG terms', save='yes', figure_path='/home/raul/Desktop/', figure_name='gha_12.0-12.5hr_4terms', figure_format='png')
+	
+	# FLOW=61; FHIGH=159; fc = fb[(fb>=FLOW) & (fb<=FHIGH)]; tc = tbn[(fb>=FLOW) & (fb<=FHIGH)];wc = wbn[(fb>=FLOW) & (fb<=FHIGH)]
+	
+	# par = ba.fit_polynomial_fourier('LINLOG', fc, tc, 4, Weights=wc); plt.plot(fc, tc-par[1])
+
+					
+	return fb, rb_all, wb_all, d_all, tbn, wbn, f, rr_all, wr_all, avrn, avwn, avp, avtn # avr, avw, 
+
+				
+
+
+
+
+
+
+
+
 
 
 

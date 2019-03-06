@@ -1126,7 +1126,7 @@ def batch_low_band3_level1_to_level2():
 
 
 
-def batch_mid_band_level2_to_level3(case):
+def batch_mid_band_level2_to_level3(case, first_item, last_item):
 
 
 	# Case selection
@@ -1185,6 +1185,25 @@ def batch_mid_band_level2_to_level3(case):
 
 	
 	
+	if case == 41:
+		flag_folder       = 'case41'
+		
+		receiver_cal_file = 1
+		
+		antenna_s11_day   = 147
+		antenna_s11_case  = 4
+		antenna_s11_Nfit  = 14
+		
+		balun_correction  = 1
+		ground_correction = 1
+		beam_correction   = 1
+		
+		FLOW  = 55
+		FHIGH = 150
+		Nfg   = 7	
+	
+	
+	
 
 
 	# Listing files to be processed
@@ -1203,10 +1222,14 @@ def batch_mid_band_level2_to_level3(case):
 
 	# Processing files
 	for i in range(len(new_list)):
-		print(i)
-		print(new_list[i])
-	
-		o = eg.level2_to_level3('mid_band', new_list[i], flag_folder=flag_folder, receiver_cal_file=receiver_cal_file, antenna_s11_year=2018, antenna_s11_day=antenna_s11_day, antenna_s11_case=antenna_s11_case, antenna_s11_Nfit=antenna_s11_Nfit, balun_correction=balun_correction, ground_correction=ground_correction, beam_correction=beam_correction, FLOW=FLOW, FHIGH=FHIGH, Nfg=Nfg)
+		#print(i)
+		
+		day = int(new_list[i][5:8])
+		
+		if (day >= first_item) & (day <= last_item):
+			print(day)
+			
+			o = eg.level2_to_level3('mid_band', new_list[i], flag_folder=flag_folder, receiver_cal_file=receiver_cal_file, antenna_s11_year=2018, antenna_s11_day=antenna_s11_day, antenna_s11_case=antenna_s11_case, antenna_s11_Nfit=antenna_s11_Nfit, balun_correction=balun_correction, ground_correction=ground_correction, beam_correction=beam_correction, FLOW=FLOW, FHIGH=FHIGH, Nfg=Nfg)
 		
 	return 0  # new_list #
 
