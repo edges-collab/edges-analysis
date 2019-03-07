@@ -1130,79 +1130,31 @@ def batch_mid_band_level2_to_level3(case, first_item, last_item):
 
 
 	# Case selection
-	if case == 0:
-		flag_folder       = 'case0'
-		receiver_cal_file = 1
-		antenna_s11_day   = 147
-		antenna_s11_Nfit  = 14
-		beam_correction   = 0
-		balun_correction  = 0
-		FLOW  = 60
-		FHIGH = 160
-		Nfg   = 7
-	
-	
 	if case == 1:
 		flag_folder       = 'case1'
-		receiver_cal_file = 1
-		antenna_s11_day   = 147
-		antenna_s11_Nfit  = 14
-		beam_correction   = 0
-		balun_correction  = 1
-		FLOW  = 60
-		FHIGH = 160
-		Nfg   = 7
-	
-	
-	if case == 2:
-		flag_folder       = 'case2'
-		receiver_cal_file = 1
-		antenna_s11_day   = 147
-		antenna_s11_Nfit  = 14
-		beam_correction   = 1
-		balun_correction  = 1
-		FLOW  = 60
-		FHIGH = 160
-		Nfg   = 7
-
-
-	if case == 4:
-		flag_folder       = 'case4'
 		
-		receiver_cal_file = 1
+		receiver_cal_file = 4   # 10 terms over 50-150 MHz
 		
 		antenna_s11_day   = 147
 		antenna_s11_case  = 3
-		antenna_s11_Nfit  = 14
+		antenna_s11_Nfit  = 13  # 13 terms over 59-120 MHz
 		
 		balun_correction  = 1
 		ground_correction = 1
 		beam_correction   = 1
 		
-		FLOW  = 55
-		FHIGH = 150
-		Nfg   = 7
+		FLOW  = 59
+		FHIGH = 120
+		Nfg   = 5
 
-	
-	
-	if case == 41:
-		flag_folder       = 'case41'
-		
-		receiver_cal_file = 1
-		
-		antenna_s11_day   = 147
-		antenna_s11_case  = 4
-		antenna_s11_Nfit  = 14
-		
-		balun_correction  = 1
-		ground_correction = 1
-		beam_correction   = 1
-		
-		FLOW  = 55
-		FHIGH = 150
-		Nfg   = 7	
-	
-	
+
+
+
+
+
+
+
+
 	
 
 

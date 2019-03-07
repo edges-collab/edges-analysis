@@ -910,30 +910,11 @@ def rms_filter_computation(band, case, save_parameters='no'):
 	# Listing files available
 	# ------------------------
 	if band == 'mid_band':
-		if case == 0:
-			path_files  = edges_folder + '/mid_band/spectra/level3/case0/'
-			save_folder = edges_folder + '/mid_band/rms_filters/case0/'
-		
 		if case == 1:
 			path_files  = edges_folder + '/mid_band/spectra/level3/case1/'
 			save_folder = edges_folder + '/mid_band/rms_filters/case1/'
 		
-		if case == 2:
-			path_files  = edges_folder + '/mid_band/spectra/level3/case2/'
-			save_folder = edges_folder + '/mid_band/rms_filters/case2/'
-			
-		if case == 4:
-			path_files  = edges_folder + '/mid_band/spectra/level3/case4/'
-			save_folder = edges_folder + '/mid_band/rms_filters/case4/'
-			print('CASE 4')
-			
-		if case == 41:
-			path_files  = edges_folder + '/mid_band/spectra/level3/case41/'
-			save_folder = edges_folder + '/mid_band/rms_filters/case41/'
-			print('CASE 41')
-
 	
-
 	if band == 'low_band3':
 		if case == 2:
 			path_files  = '/media/raul/EXTERNAL_2TB/low_band3/spectra/level3/case2/'
@@ -1243,24 +1224,9 @@ def rms_filter_computation(band, case, save_parameters='no'):
 
 def rms_filter(band, case, gx, rms, Nsigma):
 	
-	if case == 0:
-		file_path = edges_folder + band + '/rms_filters/case0/'	
-	
 	if case == 1:
 		file_path = edges_folder + band + '/rms_filters/case1/'
 		
-	if (case == 2) or (case == 22) or (case == 23) or (case == 3):
-		file_path = edges_folder + band + '/rms_filters/case2/'
-
-
-	if case == 4:
-		file_path = edges_folder + band + '/rms_filters/case4/'
-
-	if case == 41:
-		file_path = edges_folder + band + '/rms_filters/case41/'
-
-
-
 
 	p    = np.genfromtxt(file_path + 'rms_polynomial_parameters.txt')
 	ps   = np.genfromtxt(file_path + 'rms_std_polynomial_parameters.txt')	
@@ -1319,49 +1285,13 @@ def level3_to_level4(band, case, GHA_edges):
 	# ------------------------
 	if band == 'mid_band':
 		
-		if case == 0:
-			path_files             = edges_folder + 'mid_band/spectra/level3/case0/'
-			save_folder            = edges_folder + 'mid_band/spectra/level4/case0/'
-			output_file_name_hdf5  = 'case0.hdf5'
-				
+
 		if case == 1:
 			path_files             = edges_folder + 'mid_band/spectra/level3/case1/'
 			save_folder            = edges_folder + 'mid_band/spectra/level4/case1/'
 			output_file_name_hdf5  = 'case1.hdf5'
 			
-		if case == 2:
-			path_files             = edges_folder + 'mid_band/spectra/level3/case2/'
-			save_folder            = edges_folder + 'mid_band/spectra/level4/case2/'
-			output_file_name_hdf5  = 'case2.hdf5'
-		
-		if case == 22:
-			path_files             = edges_folder + 'mid_band/spectra/level3/case2/'
-			save_folder            = edges_folder + 'mid_band/spectra/level4/case22/'
-			output_file_name_hdf5  = 'case22.hdf5'
-			
-		if case == 23:
-			path_files             = edges_folder + 'mid_band/spectra/level3/case2/'
-			save_folder            = edges_folder + 'mid_band/spectra/level4/case23/'
-			output_file_name_hdf5  = 'case23.hdf5'		
 
-		if case == 3:
-			path_files             = edges_folder + 'mid_band/spectra/level3/case3/'
-			save_folder            = edges_folder + 'mid_band/spectra/level4/case3/'
-			output_file_name_hdf5  = 'case3.hdf5'
-			
-		if case == 4:
-			path_files             = edges_folder + 'mid_band/spectra/level3/case4/'
-			save_folder            = edges_folder + 'mid_band/spectra/level4/case4/'
-			output_file_name_hdf5  = 'case4.hdf5'	
-			
-		if case == 41:
-			path_files             = edges_folder + 'mid_band/spectra/level3/case41/'
-			save_folder            = edges_folder + 'mid_band/spectra/level4/case41/'
-			output_file_name_hdf5  = 'case41.hdf5'	
-	
-			
-
-		
 			
 	if band == 'low_band3':
 		
@@ -1389,7 +1319,7 @@ def level3_to_level4(band, case, GHA_edges):
 	year_day_all = np.zeros((len(index_new_list), 2))
 	
 	
-	for i in index_new_list:   # range(3):  # 
+	for i in index_new_list:  # range(3):
 		
 		year_day_all[i,0] = float(new_list[i][0:4])
 		
@@ -1537,7 +1467,7 @@ def level3_to_level4(band, case, GHA_edges):
 	Ngha = len(GHA_edges)-1
 	
 	# Loop over days
-	for i in index_new_list:   # range(3):  #
+	for i in index_new_list:  # range(3):  # 
 		
 		# Loop over number of foreground terms
 		for Nfg in [3,4,5]:
@@ -1587,17 +1517,17 @@ def level3_to_level4(band, case, GHA_edges):
 					DY = 8
 					
 				elif Nfg == 4:
-					DY = 4
-					
-				elif Nfg == 5:
 					DY = 3
 					
+				elif Nfg == 5:
+					DY = 2
+					
 				FIG_SX      =   7
-				FIG_SY      =  20
-				FLOW_plot   =  15
-				FHIGH_plot  = 155
-				XTICKS      = np.arange(50, 151, 20)
-				XTEXT       =  17
+				FIG_SY      =   3
+				FLOW_plot   =  45
+				FHIGH_plot  = 120
+				XTICKS      = np.arange(60, 121, 10)
+				XTEXT       =  45.5
 				YLABEL      = str(DY)  + ' K per division'
 				TITLE       = str(Nfg) + ' LINLOG terms'
 				FIGURE_FORMAT = 'png'			
@@ -2471,7 +2401,7 @@ def integrated_half_hour_level4(band, case, first_day, last_day, GHA_start=13.5)
 		if GHA_start == 14.5:
 			discarded_days = [166, 174, 177, 185, 199, 200, 201, 208]
 		if GHA_start == 15:
-			discarded_days = [150, 157, 1178, 182, 185, 187, 198, 208] #, 210, 215, 217, 218, 219]
+			discarded_days = [150, 157, 178, 182, 185, 187, 198, 208] #, 210, 215, 217, 218, 219]
 		if GHA_start == 15.5:
 			discarded_days = [185]
 		if GHA_start == 16.0:
