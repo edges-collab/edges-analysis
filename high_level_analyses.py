@@ -2589,6 +2589,676 @@ def VNA_R60_test():
 
 
 
+
+
+
+
+
+
+
+
+
+def VNA_tektronix_test():
+	
+	
+	path_folder  = '/home/raul/Desktop/tektronix_test/'
+
+
+	o_R, f       = rc.s1p_read(path_folder + 'OPEN.s1p')
+	s_R, f       = rc.s1p_read(path_folder + 'SHORT.s1p')
+	m_R, f       = rc.s1p_read(path_folder + 'MATCH.s1p')
+	at3_R, f     = rc.s1p_read(path_folder + '3dB_ATTENUATOR.s1p')
+	at6_R, f     = rc.s1p_read(path_folder + '6dB_ATTENUATOR.s1p')
+	at10_R, f    = rc.s1p_read(path_folder + '10dB_ATTENUATOR.s1p')	
+	at15_R, f    = rc.s1p_read(path_folder + '15dB_ATTENUATOR.s1p')	
+
+
+#	o_T, f       = rc.s1p_read(path_folder + 'uncalibrated_Open01.s1p')
+#	s_T, f       = rc.s1p_read(path_folder + 'uncalibrated_Short01.s1p')
+#	m_T, f       = rc.s1p_read(path_folder + 'uncalibrated_Match01.s1p')
+#	at3_T, f     = rc.s1p_read(path_folder + 'uncalibrated_3dB_Measurment1.s1p')
+#	at6_T, f     = rc.s1p_read(path_folder + 'uncalibrated_6dB_Measurment1.s1p')
+#	at10_T, f    = rc.s1p_read(path_folder + 'uncalibrated_10dB_Measurment1.s1p')	
+#	at15_T, f    = rc.s1p_read(path_folder + 'uncalibrated_15dB_Measurment1.s1p')	
+
+	o_T, f       = rc.s1p_read(path_folder + 'uncalibrated_Open02.s1p')
+	s_T, f       = rc.s1p_read(path_folder + 'uncalibrated_Short02.s1p')
+	m_T, f       = rc.s1p_read(path_folder + 'uncalibrated_Match02.s1p')
+	at3_T, f     = rc.s1p_read(path_folder + 'uncalibrated_3dB_Measurment2.s1p')
+	at6_T, f     = rc.s1p_read(path_folder + 'uncalibrated_6dB_Measurment2.s1p')
+	at10_T, f    = rc.s1p_read(path_folder + 'uncalibrated_10dB_Measurment2.s1p')	
+	at15_T, f    = rc.s1p_read(path_folder + 'uncalibrated_15dB_Measurment2.s1p')	
+
+
+
+
+	o_K, f       = rc.s1p_read(path_folder + 'AGILENT_E5061A_OPEN.s1p')
+	s_K, f       = rc.s1p_read(path_folder + 'AGILENT_E5061A_SHORT.s1p')
+	m_K, f       = rc.s1p_read(path_folder + 'AGILENT_E5061A_MATCH.s1p')
+	at3_K, f     = rc.s1p_read(path_folder + 'AGILENT_E5061A_3dB_ATTENUATOR.s1p')
+	at6_K, f     = rc.s1p_read(path_folder + 'AGILENT_E5061A_6dB_ATTENUATOR.s1p')
+	at10_K, f    = rc.s1p_read(path_folder + 'AGILENT_E5061A_10dB_ATTENUATOR.s1p')	
+	at15_K, f    = rc.s1p_read(path_folder + 'AGILENT_E5061A_15dB_ATTENUATOR.s1p')	
+
+
+
+
+
+
+		
+	# Standard values assumed
+	#o_a =  1 * np.ones(len(f))
+	#s_a = -1 * np.ones(len(f))
+	#m_a =  0 * np.ones(len(f))	
+
+
+	xx  = rc.agilent_85033E(f, 50, m = 1, md_value_ps = 38)
+	o_a = xx[0]
+	s_a = xx[1]
+	m_a = xx[2]
+
+
+
+
+
+	# Correction 
+	at3_Rc, xx1, xx2, xx3  = rc.de_embed(o_a, s_a, m_a, o_R, s_R, m_R, at3_R)
+	at6_Rc, xx1, xx2, xx3  = rc.de_embed(o_a, s_a, m_a, o_R, s_R, m_R, at6_R)
+	at10_Rc, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_R, s_R, m_R, at10_R)
+	at15_Rc, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_R, s_R, m_R, at15_R)
+
+	at3_Tc, xx1, xx2, xx3  = rc.de_embed(o_a, s_a, m_a, o_T, s_T, m_T, at3_T)
+	at6_Tc, xx1, xx2, xx3  = rc.de_embed(o_a, s_a, m_a, o_T, s_T, m_T, at6_T)
+	at10_Tc, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_T, s_T, m_T, at10_T)
+	at15_Tc, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_T, s_T, m_T, at15_T)	
+	
+	at3_Kc, xx1, xx2, xx3  = rc.de_embed(o_a, s_a, m_a, o_K, s_K, m_K, at3_K)
+	at6_Kc, xx1, xx2, xx3  = rc.de_embed(o_a, s_a, m_a, o_K, s_K, m_K, at6_K)
+	at10_Kc, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_K, s_K, m_K, at10_K)
+	at15_Kc, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_K, s_K, m_K, at15_K)
+	
+
+
+
+
+
+	# Plot
+	
+	plt.figure(1)
+	
+	plt.subplot(4,2,1)
+	plt.plot(f/1e6, 20*np.log10(np.abs(at3_Kc)))
+	plt.plot(f/1e6, 20*np.log10(np.abs(at3_Rc)))
+	plt.plot(f/1e6, 20*np.log10(np.abs(at3_Tc)))
+	plt.ylabel('3-dB Attn [dB]')
+	plt.title('MAGNITUDE')
+
+	plt.subplot(4,2,2)
+	plt.plot(f/1e6, (180/np.pi)*np.unwrap(np.angle(at3_Rc)) - (180/np.pi)*np.unwrap(np.angle(at3_Kc)))
+	plt.plot(f/1e6, (180/np.pi)*np.unwrap(np.angle(at3_Rc)) - (180/np.pi)*np.unwrap(np.angle(at3_Kc)))
+	plt.plot(f/1e6, (180/np.pi)*np.unwrap(np.angle(at3_Tc)) - (180/np.pi)*np.unwrap(np.angle(at3_Kc)))
+	plt.ylabel('3-dB Attn [degrees]')
+	plt.title(r'$\Delta$ PHASE')
+
+
+	plt.subplot(4,2,3)
+	plt.plot(f/1e6, 20*np.log10(np.abs(at6_Kc)))
+	plt.plot(f/1e6, 20*np.log10(np.abs(at6_Rc)))
+	plt.plot(f/1e6, 20*np.log10(np.abs(at6_Tc)))
+	plt.ylabel('6-dB Attn [dB]')
+
+	plt.subplot(4,2,4)
+	plt.plot(f/1e6, (180/np.pi)*np.unwrap(np.angle(at6_Rc)) - (180/np.pi)*np.unwrap(np.angle(at6_Kc)))
+	plt.plot(f/1e6, (180/np.pi)*np.unwrap(np.angle(at6_Rc)) - (180/np.pi)*np.unwrap(np.angle(at6_Kc)))
+	plt.plot(f/1e6, (180/np.pi)*np.unwrap(np.angle(at6_Tc)) - (180/np.pi)*np.unwrap(np.angle(at6_Kc)))
+	plt.ylabel('6-dB Attn [degrees]')
+
+
+
+	plt.subplot(4,2,5)
+	plt.plot(f/1e6, 20*np.log10(np.abs(at10_Kc)))
+	plt.plot(f/1e6, 20*np.log10(np.abs(at10_Rc)))
+	plt.plot(f/1e6, 20*np.log10(np.abs(at10_Tc)))
+	plt.ylabel('10-dB Attn [dB]')
+
+	plt.subplot(4,2,6)
+	plt.plot(f/1e6, (180/np.pi)*np.unwrap(np.angle(at10_Rc)) - (180/np.pi)*np.unwrap(np.angle(at10_Kc)))
+	plt.plot(f/1e6, (180/np.pi)*np.unwrap(np.angle(at10_Rc)) - (180/np.pi)*np.unwrap(np.angle(at10_Kc)))
+	plt.plot(f/1e6, (180/np.pi)*np.unwrap(np.angle(at10_Tc)) - (180/np.pi)*np.unwrap(np.angle(at10_Kc)))
+	plt.ylabel('10-dB Attn [degrees]')
+	
+	
+
+	plt.subplot(4,2,7)
+	plt.plot(f/1e6, 20*np.log10(np.abs(at15_Kc)))
+	plt.plot(f/1e6, 20*np.log10(np.abs(at15_Rc)))
+	plt.plot(f/1e6, 20*np.log10(np.abs(at15_Tc)))
+	plt.xlabel('frequency [MHz]')
+	plt.ylabel('15-dB Attn [dB]')
+	plt.legend(['Keysight E5061A', 'R60', 'Tektronix'])
+
+	plt.subplot(4,2,8)
+	plt.plot(f/1e6, (180/np.pi)*np.unwrap(np.angle(at15_Rc)) - (180/np.pi)*np.unwrap(np.angle(at15_Kc)))
+	plt.plot(f/1e6, (180/np.pi)*np.unwrap(np.angle(at15_Rc)) - (180/np.pi)*np.unwrap(np.angle(at15_Kc)))
+	plt.plot(f/1e6, (180/np.pi)*np.unwrap(np.angle(at15_Tc)) - (180/np.pi)*np.unwrap(np.angle(at15_Kc)))	
+	plt.xlabel('frequency [MHz]')
+	plt.ylabel('15-dB Attn [degrees]')
+
+	return f, at3_K, at6_K, at10_K, at15_K, at3_Kc, at6_Kc, at10_Kc, at15_Kc, at3_R, at6_R, at10_R, at15_R, at3_Rc, at6_Rc, at10_Rc, at15_Rc
+
+	
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def midband_paper_plots(calibration_quantities='no', antenna1='no'):
+	
+	
+	
+	if calibration_quantities == 'yes':
+	
+
+		# Paths
+		path_plot_save = '/home/raul/Desktop/'
+
+
+		# Calibration parameters
+		rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_receiver1_50_150MHz_cterms7_wterms7.txt'
+
+		rcv = np.genfromtxt(rcv_file)
+	
+		FLOW  = 50
+		FHIGH = 150
+		
+		fX      = rcv[:,0]
+		rcv2    = rcv[(fX>=FLOW) & (fX<=FHIGH),:]
+		
+		fe      = rcv2[:,0]
+		rl      = rcv2[:,1] + 1j*rcv2[:,2]
+		sca     = rcv2[:,3]
+		off     = rcv2[:,4]
+		TU      = rcv2[:,5]
+		TC      = rcv2[:,6]
+		TS      = rcv2[:,7]
+
+
+
+
+		# Plot
+
+		size_x = 5
+		size_y = 6.5 #10.5
+		x0 = 0.15
+		y0 = 0.09
+		dx = 0.7
+		dy = 0.3
+
+
+		f1  = plt.figure(num=1, figsize=(size_x, size_y))		
+
+
+		ax     = f1.add_axes([x0, y0 + 2*dy, dx, dy])	
+		h1     = ax.plot(fe, 20*np.log10(np.abs(rl)), 'b', linewidth=2, label='$|\Gamma_{\mathrm{rec}}|$')
+		ax2    = ax.twinx()
+		h2     = ax2.plot(fe, (180/np.pi)*np.unwrap(np.angle(rl)), 'r--', linewidth=2, label=r'$\angle\/\Gamma_{\mathrm{rec}}$')
+		h      = h1 + h2
+		labels = [l.get_label() for l in h]
+		ax.legend(h, labels, loc=2, fontsize=13)
+
+		ax.set_ylim([-41, -25])
+		ax.set_xticklabels('')
+		ax.set_yticks(np.arange(-39,-26,3))
+		ax.set_ylabel('$|\Gamma_{\mathrm{rec}}|$ [dB]', fontsize=16)
+		ax.text(42, -39.6, '(a)', fontsize=20)
+
+		ax2.set_ylim([70, 130])
+		ax2.set_xticklabels('')
+		ax2.set_yticks(np.arange(80,121,10))		
+		ax2.set_ylabel(r'$\angle\/\Gamma_{\mathrm{rec}}$ [ $^\mathrm{o}$]', fontsize=16)
+
+		ax.set_xlim([40, 160])
+		ax.tick_params(axis='x', direction='in')
+		ax.set_xticks(np.arange(50, 151, 20))
+		
+		
+		
+		
+
+
+
+		ax     = f1.add_axes([x0, y0 + 1*dy, dx, dy])
+		h1     = ax.plot(fe, sca,'b',linewidth=2, label='$C_1$')
+		ax2    = ax.twinx()
+		h2     = ax2.plot(fe, off,'r--',linewidth=2, label='$C_2$')
+		h      = h1 + h2
+		labels = [l.get_label() for l in h]
+		ax.legend(h, labels, loc=0, fontsize=13)
+
+		ax.set_ylim([3, 5.5])
+		ax.set_xticklabels('')
+		ax.set_yticks(np.arange(3.5,5.1,0.5))
+		ax.set_ylabel('$C_1$', fontsize=16)
+		ax.text(42, 3.25, '(b)', fontsize=20)
+
+		ax2.set_ylim([-2.4, -1.8])
+		ax2.set_xticklabels('')
+		ax2.set_yticks(np.arange(-2.3, -1.85, 0.1))
+		ax2.set_ylabel('$C_2$ [K]', fontsize=16)
+
+		ax.set_xlim([40, 160])
+		ax.tick_params(axis='x', direction='in')
+		ax.set_xticks(np.arange(50, 151, 20))
+		
+		
+		
+		
+
+
+
+		ax     = f1.add_axes([x0, y0 + 0*dy, dx, dy])
+		h1     = ax.plot(fe, TU,'b', linewidth=2, label='$T_{\mathrm{unc}}$')
+		ax2    = ax.twinx()
+		h2     = ax2.plot(fe, TC,'r--', linewidth=2, label='$T_{\mathrm{cos}}$')
+		h3     = ax2.plot(fe, TS,'g--', linewidth=2, label='$T_{\mathrm{sin}}$')		
+
+		h      = h1 + h2 + h3
+		labels = [l.get_label() for l in h]
+		ax.legend(h, labels, loc=0, fontsize=13, ncol=3)
+
+		ax.set_ylim([178, 190])
+		ax.set_yticks(np.arange(180, 189, 2))
+		ax.set_ylabel('$T_{\mathrm{unc}}$ [K]', fontsize=16)
+		ax.set_xlabel('$\\nu$ [MHz]', fontsize=16)
+		ax.text(42, 179, '(c)', fontsize=20)
+
+		ax2.set_ylim([-60, 40])
+		ax2.set_yticks(np.arange(-40, 21, 20))
+		ax2.set_ylabel('$T_{\mathrm{cos}}, T_{\mathrm{sin}}$ [K]', fontsize=16)
+		
+		ax.set_xlim([40, 160])
+		ax.set_xticks(np.arange(50, 151, 20))
+
+
+		plt.savefig(path_plot_save + 'calibration_quantities.pdf', bbox_inches='tight')
+		plt.close()	
+		plt.close()
+		plt.close()
+		plt.close()
+
+
+
+
+
+
+
+
+
+
+	
+	
+	if antenna1 == 'yes':
+	
+
+		# Paths
+		path_plot_save = '/home/raul/Desktop/'
+
+
+		# Calibration parameters
+		rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_receiver1_50_150MHz_cterms7_wterms7.txt'
+
+		rcv = np.genfromtxt(rcv_file)
+	
+		FLOW  = 50
+		FHIGH = 150
+		
+		fX      = rcv[:,0]
+		rcv2    = rcv[(fX>=FLOW) & (fX<=FHIGH),:]
+		
+		fe      = rcv2[:,0]
+		rl      = rcv2[:,1] + 1j*rcv2[:,2]
+		sca     = rcv2[:,3]
+		off     = rcv2[:,4]
+		TU      = rcv2[:,5]
+		TC      = rcv2[:,6]
+		TS      = rcv2[:,7]
+
+
+
+
+		# Plot
+
+		size_x = 5
+		size_y = 13 #10.5
+		x0 = 0.15
+		y0 = 0.09
+		dx = 0.8
+		dy = 0.18
+
+
+		f1  = plt.figure(num=1, figsize=(size_x, size_y))		
+
+
+
+
+
+
+
+
+
+
+		# Frequency
+		f, il, ih = ba.frequency_edges(50, 150)
+		fe = f[il:ih+1]	
+
+
+		# Antenna S11
+		# -----------
+		ra = cal.models_antenna_s11_remove_delay('mid_band', fe, year=2018, day=147, case=5, delay_0=0.17, model_type='polynomial', Nfit=15, plot_fit_residuals='no')
+
+
+
+		ax     = f1.add_axes([x0, y0 + 5*dy, dx, dy])	
+		h      = ax.plot(fe, 20*np.log10(np.abs(ra)), 'b', linewidth=2, label='$|\Gamma_{\mathrm{ant}}|$')
+		#ax2    = ax.twinx()
+		#h2     = ax2.plot(fe, (180/np.pi)*np.unwrap(np.angle(ra)), 'r--', linewidth=2, label=r'$\angle\/\Gamma_{\mathrm{ant}}$')
+		#h      = h1 + h2
+		#labels = [l.get_label() for l in h]
+		#ax.legend(h, labels, loc=2, fontsize=13)
+
+		#ax.set_ylim([-41, -25])
+		ax.set_xticklabels('')
+		#
+		ax.set_ylabel('$|\Gamma_{\mathrm{ant}}|$ [dB]', fontsize=16)
+		#ax.text(42, -39.6, '(a)', fontsize=20)
+
+		
+		#
+		#		
+		#ax2.set_ylabel(r'$\angle\/\Gamma_{\mathrm{ant}}$ [ $^\mathrm{o}$]', fontsize=16)
+
+		ax.set_xlim([40, 160])
+		ax.set_ylim([-16, -4])
+		ax.set_yticks(np.arange(-14,-5,2))
+		#ax.set_xticklabels('')
+		ax.tick_params(axis='x', direction='in')
+		ax.set_xticks(np.arange(50, 151, 20))
+		
+
+
+
+
+
+
+
+
+
+
+
+
+
+		ax     = f1.add_axes([x0, y0 + 4*dy, dx, dy])	
+		h      = ax.plot(fe, (180/np.pi)*np.unwrap(np.angle(ra)), 'b', linewidth=2, label=r'$\angle\/\Gamma_{\mathrm{ant}}$')
+		#ax2    = ax.twinx()
+		#h2     = ax2.plot(fe, (180/np.pi)*np.unwrap(np.angle(rl)), 'r--', linewidth=2, label=r'$\angle\/\Gamma_{\mathrm{rec}}$')
+		#h      = h1 + h2
+		#labels = [l.get_label() for l in h]
+		#ax.legend(h, labels, loc=2, fontsize=13)
+
+		#ax.set_ylim([-41, -25])
+		ax.set_xticklabels('')
+		#ax.set_yticks(np.arange(-39,-26,3))
+		#ax.set_ylabel('$|\Gamma_{\mathrm{rec}}|$ [dB]', fontsize=16)
+		ax.set_ylabel(r'$\angle\/\Gamma_{\mathrm{ant}}$ [ $^\mathrm{o}$]', fontsize=16)
+		#ax.text(42, -39.6, '(a)', fontsize=20)
+
+		#ax2.set_ylim([70, 130])
+		#ax2.set_xticklabels('')
+		#ax2.set_yticks(np.arange(80,121,10))		
+		#ax2.set_ylabel(r'$\angle\/\Gamma_{\mathrm{rec}}$ [ $^\mathrm{o}$]', fontsize=16)
+
+		ax.set_xlim([40, 160])	
+		ax.tick_params(axis='x', direction='in')
+		ax.set_xticks(np.arange(50, 151, 20))
+		ax.set_ylim([-800, 400])
+		ax.set_yticks(np.arange(-600,201,200))			
+		
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		Gb, Gc = cal.balun_and_connector_loss('mid_band', fe, ra)
+		Gbc    = Gb*Gc
+
+
+
+
+
+
+
+
+
+
+		ax     = f1.add_axes([x0, y0 + 3*dy, dx, dy])	
+		h      = ax.plot(fe, (1-Gbc)*100, 'b', linewidth=2, label='antenna loss [%]')
+		#ax2    = ax.twinx()
+		#h2     = ax2.plot(fe, (180/np.pi)*np.unwrap(np.angle(rl)), 'r--', linewidth=2, label=r'$\angle\/\Gamma_{\mathrm{rec}}$')
+		#h      = h1 + h2
+		#labels = [l.get_label() for l in h]
+		#ax.legend(h, labels, loc=2, fontsize=13)
+
+		#ax.set_ylim([-41, -25])
+		ax.set_xticklabels('')
+		#ax.set_yticks(np.arange(-39,-26,3))
+		#ax.set_ylabel('$|\Gamma_{\mathrm{rec}}|$ [dB]', fontsize=16)
+		#ax.text(42, -39.6, '(a)', fontsize=20)
+		ax.set_ylabel(r'antenna loss [%]', fontsize=16)
+
+		#ax2.set_ylim([70, 130])
+		#ax2.set_xticklabels('')
+		#ax2.set_yticks(np.arange(80,121,10))		
+		#ax2.set_ylabel(r'$\angle\/\Gamma_{\mathrm{rec}}$ [ $^\mathrm{o}$]', fontsize=16)
+
+		ax.set_xlim([40, 160])
+		ax.tick_params(axis='x', direction='in')
+		ax.set_xticks(np.arange(50, 151, 20))
+		ax.set_ylim([0, 1])
+		ax.set_yticks(np.arange(0.2,0.9,0.2))		
+
+
+
+
+
+
+		Gg = cal.ground_loss('mid_band', fe)
+		
+		
+
+
+		ax     = f1.add_axes([x0, y0 + 2*dy, dx, dy])	
+		h      = ax.plot(fe, (1-Gg)*100, 'b', linewidth=2, label='ground loss [%]')
+		#ax2    = ax.twinx()
+		#h2     = ax2.plot(fe, (180/np.pi)*np.unwrap(np.angle(rl)), 'r--', linewidth=2, label=r'$\angle\/\Gamma_{\mathrm{rec}}$')
+		#h      = h1 + h2
+		#labels = [l.get_label() for l in h]
+		#ax.legend(h, labels, loc=2, fontsize=13)
+
+		#ax.set_ylim([-41, -25])
+		ax.set_xticklabels('')
+		#ax.set_yticks(np.arange(-39,-26,3))
+		#ax.set_ylabel('$|\Gamma_{\mathrm{rec}}|$ [dB]', fontsize=16)
+		#ax.text(42, -39.6, '(a)', fontsize=20)
+		ax.set_ylabel(r'ground loss [%]', fontsize=16)
+
+		#ax2.set_ylim([70, 130])
+		#ax2.set_xticklabels('')
+		#ax2.set_yticks(np.arange(80,121,10))		
+		#ax2.set_ylabel(r'$\angle\/\Gamma_{\mathrm{rec}}$ [ $^\mathrm{o}$]', fontsize=16)
+
+		ax.set_xlim([40, 160])
+		ax.tick_params(axis='x', direction='in')
+		ax.set_xticks(np.arange(50, 151, 20))
+		ax.set_ylim([0.1, 0.4])
+		ax.set_yticks(np.arange(0.15,0.36,0.05))		
+		
+		
+		
+
+
+
+
+		bm = cal.FEKO_blade_beam('mid_band', 0, frequency_interpolation='no', frequency=np.array([0]), AZ_antenna_axis=0)
+		ff = np.arange(50,201,2)
+		fe = ff[0:51]
+		
+		g_zenith = bm[:,90,0][0:51]
+		g_45_E   = bm[:,45,0][0:51]
+		g_45_H   = bm[:,45,90][0:51]
+		
+		
+		bm_inf = cal.FEKO_blade_beam('mid_band', 1, frequency_interpolation='no', frequency=np.array([0]), AZ_antenna_axis=0)
+		g_inf_zenith = bm_inf[:,90,0][0:51]
+		g_inf_45_E   = bm_inf[:,45,0][0:51]
+		g_inf_45_H   = bm_inf[:,45,90][0:51]
+		
+
+
+		ax     = f1.add_axes([x0, y0 + 1*dy, dx, dy])
+		h      = ax.plot(fe, g_zenith,'b',linewidth=2, label='zenith')
+		h      = ax.plot(fe, g_45_E,'r',linewidth=2, label='')
+		h      = ax.plot(fe, g_45_H,'g',linewidth=2, label='$C_1$')
+		
+		h      = ax.plot(fe, g_inf_zenith,'b',linewidth=1, label='zenith')
+		h      = ax.plot(fe, g_inf_45_E,'r',linewidth=1, label='')
+		h      = ax.plot(fe, g_inf_45_H,'g',linewidth=1, label='$C_1$')		
+		
+		#ax2    = ax.twinx()
+		#h2     = ax2.plot(fe, off,'r--',linewidth=2, label='$C_2$')
+		#h      = h1 + h2
+		#labels = [l.get_label() for l in h]
+		#ax.legend(h, labels, loc=0, fontsize=13)
+
+		#ax.set_ylim([3, 5.5])
+		ax.set_xticklabels('')
+		#ax.set_yticks(np.arange(3.5,5.1,0.5))
+		#ax.set_ylabel('$C_1$', fontsize=16)
+		#ax.text(42, 3.25, '(b)', fontsize=20)
+		ax.set_ylabel('gain [no units]', fontsize=16)
+
+		#ax2.set_ylim([-2.4, -1.8])
+		#ax2.set_xticklabels('')
+		#ax2.set_yticks(np.arange(-2.3, -1.85, 0.1))
+		#ax2.set_ylabel('$C_2$ [K]', fontsize=16)
+
+		ax.set_xlim([40, 160])
+		ax.tick_params(axis='x', direction='in')
+		ax.set_xticks(np.arange(50, 151, 20))
+		ax.set_ylim([0, 8])
+		ax.set_yticks(np.arange(1,7.1,1))		
+		
+		
+		
+		
+		p1 = np.polyfit(fe, g_zenith, 4)
+		p2 = np.polyfit(fe, g_45_E, 4)
+		p3 = np.polyfit(fe, g_45_H, 4)
+		
+		m1 = np.polyval(p1, fe)
+		m2 = np.polyval(p2, fe)
+		m3 = np.polyval(p3, fe)
+
+
+		pi1 = np.polyfit(fe, g_inf_zenith, 4)
+		pi2 = np.polyfit(fe, g_inf_45_E, 4)
+		pi3 = np.polyfit(fe, g_inf_45_H, 4)
+		
+		mi1 = np.polyval(pi1, fe)
+		mi2 = np.polyval(pi2, fe)
+		mi3 = np.polyval(pi3, fe)
+
+
+	
+		ax     = f1.add_axes([x0, y0 + 0*dy, dx, dy])
+		h      = ax.plot(fe, g_zenith-m1 + 0.1,'b', linewidth=2, label='$T_{\mathrm{unc}}$')
+		h      = ax.plot(fe, g_45_E-m2 + 0,'r', linewidth=2, label='$T_{\mathrm{unc}}$')
+		h      = ax.plot(fe, g_45_H-m3 - 0.1,'g', linewidth=2, label='$T_{\mathrm{unc}}$')
+		
+		h      = ax.plot(fe, g_inf_zenith-mi1 + 0.1,'b', linewidth=1, label='$T_{\mathrm{unc}}$')
+		h      = ax.plot(fe, g_inf_45_E-mi2 + 0,'r', linewidth=1, label='$T_{\mathrm{unc}}$')
+		h      = ax.plot(fe, g_inf_45_H-mi3 - 0.1,'g', linewidth=1, label='$T_{\mathrm{unc}}$')
+		
+		
+		#ax2    = ax.twinx()
+		#h2     = ax2.plot(fe, TC,'r--', linewidth=2, label='$T_{\mathrm{cos}}$')
+		#h3     = ax2.plot(fe, TS,'g--', linewidth=2, label='$T_{\mathrm{sin}}$')		
+
+		#h      = h1 + h2 + h3
+		#labels = [l.get_label() for l in h]
+		#ax.legend(h, labels, loc=0, fontsize=13, ncol=3)
+
+		#ax.set_ylim([178, 190])
+		#ax.set_yticks(np.arange(180, 189, 2))
+		#ax.set_ylabel('$T_{\mathrm{unc}}$ [K]', fontsize=16)
+		ax.set_xlabel('$\\nu$ [MHz]', fontsize=16)
+		#ax.text(42, 179, '(c)', fontsize=20)
+		ax.set_ylabel('residuals\n[0.05 per division]', fontsize=16)
+
+		#ax2.set_ylim([-60, 40])
+		#ax2.set_yticks(np.arange(-40, 21, 20))
+		
+		
+		ax.set_xlim([40, 160])
+		ax.set_xticks(np.arange(50, 151, 20))
+		ax.set_ylim([-0.175, 0.175])
+		yt = np.arange(-0.15,0.16,0.05)
+		ax.set_yticks(yt)
+		ax.set_yticklabels(['' for i in range(len(yt))])
+		
+
+
+		plt.savefig(path_plot_save + 'calibration_quantities_Z.pdf', bbox_inches='tight')
+		plt.close()	
+		plt.close()
+		plt.close()
+		plt.close()
+
+
+	
+	
+	
+	
+	
+	
+	
+	
+	return 0
+
+
+
 	
 	
 	
