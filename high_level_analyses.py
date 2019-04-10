@@ -14,9 +14,12 @@ from os import listdir
 
 
 import os, sys
-edges_folder       = os.environ['EDGES']
+edges_folder       = os.environ['EDGES_vol2']
 print('EDGES Folder: ' + edges_folder)
 
+sys.path.insert(0, "/home/raul/edges/old")
+
+import old_edges as oeg
 
 
 
@@ -2598,47 +2601,47 @@ def VNA_R60_test():
 
 
 
-def VNA_tektronix_test():
+def VNA_comparison():
 	
-	
-	path_folder  = '/home/raul/Desktop/tektronix_test/'
+	path_folder1  = edges_folder + 'others/vna_comparison/keysight_e5061a/'
+	path_folder2  = edges_folder + 'others/vna_comparison/copper_mountain_r60/'
+	path_folder3  = edges_folder + 'others/vna_comparison/tektronix_ttr506a/'
+	path_folder4  = edges_folder + 'others/vna_comparison/copper_mountain_tr1300/'
+
+	o_K, f       = rc.s1p_read(path_folder1 + 'AGILENT_E5061A_OPEN.s1p')
+	s_K, f       = rc.s1p_read(path_folder1 + 'AGILENT_E5061A_SHORT.s1p')
+	m_K, f       = rc.s1p_read(path_folder1 + 'AGILENT_E5061A_MATCH.s1p')
+	at3_K, f     = rc.s1p_read(path_folder1 + 'AGILENT_E5061A_3dB_ATTENUATOR.s1p')
+	at6_K, f     = rc.s1p_read(path_folder1 + 'AGILENT_E5061A_6dB_ATTENUATOR.s1p')
+	at10_K, f    = rc.s1p_read(path_folder1 + 'AGILENT_E5061A_10dB_ATTENUATOR.s1p')	
+	at15_K, f    = rc.s1p_read(path_folder1 + 'AGILENT_E5061A_15dB_ATTENUATOR.s1p')	
+
+	o_R, f       = rc.s1p_read(path_folder2 + 'OPEN.s1p')
+	s_R, f       = rc.s1p_read(path_folder2 + 'SHORT.s1p')
+	m_R, f       = rc.s1p_read(path_folder2 + 'MATCH.s1p')
+	at3_R, f     = rc.s1p_read(path_folder2 + '3dB_ATTENUATOR.s1p')
+	at6_R, f     = rc.s1p_read(path_folder2 + '6dB_ATTENUATOR.s1p')
+	at10_R, f    = rc.s1p_read(path_folder2 + '10dB_ATTENUATOR.s1p')	
+	at15_R, f    = rc.s1p_read(path_folder2 + '15dB_ATTENUATOR.s1p')	
+
+	o_T, f       = rc.s1p_read(path_folder3 + 'uncalibrated_Open02.s1p')
+	s_T, f       = rc.s1p_read(path_folder3 + 'uncalibrated_Short02.s1p')
+	m_T, f       = rc.s1p_read(path_folder3 + 'uncalibrated_Match02.s1p')
+	at3_T, f     = rc.s1p_read(path_folder3 + 'uncalibrated_3dB_Measurment2.s1p')
+	at6_T, f     = rc.s1p_read(path_folder3 + 'uncalibrated_6dB_Measurment2.s1p')
+	at10_T, f    = rc.s1p_read(path_folder3 + 'uncalibrated_10dB_Measurment2.s1p')	
+	at15_T, f    = rc.s1p_read(path_folder3 + 'uncalibrated_15dB_Measurment2.s1p')	
+
+	o_C, f       = rc.s1p_read(path_folder4 + 'Open_Measurment_01.s1p')
+	s_C, f       = rc.s1p_read(path_folder4 + 'Short_Measurment_01.s1p')
+	m_C, f       = rc.s1p_read(path_folder4 + 'Match_Measurment_01.s1p')
+	at3_C, f     = rc.s1p_read(path_folder4 + '3dB_Measurment_01.s1p')
+	at6_C, f     = rc.s1p_read(path_folder4 + '6dB_Measurment_01.s1p')
+	at10_C, f    = rc.s1p_read(path_folder4 + '10dB_Measurment_01.s1p')
+	at15_C, f    = rc.s1p_read(path_folder4 + '15dB_Measurment_01.s1p')
 
 
-	o_R, f       = rc.s1p_read(path_folder + 'OPEN.s1p')
-	s_R, f       = rc.s1p_read(path_folder + 'SHORT.s1p')
-	m_R, f       = rc.s1p_read(path_folder + 'MATCH.s1p')
-	at3_R, f     = rc.s1p_read(path_folder + '3dB_ATTENUATOR.s1p')
-	at6_R, f     = rc.s1p_read(path_folder + '6dB_ATTENUATOR.s1p')
-	at10_R, f    = rc.s1p_read(path_folder + '10dB_ATTENUATOR.s1p')	
-	at15_R, f    = rc.s1p_read(path_folder + '15dB_ATTENUATOR.s1p')	
 
-
-#	o_T, f       = rc.s1p_read(path_folder + 'uncalibrated_Open01.s1p')
-#	s_T, f       = rc.s1p_read(path_folder + 'uncalibrated_Short01.s1p')
-#	m_T, f       = rc.s1p_read(path_folder + 'uncalibrated_Match01.s1p')
-#	at3_T, f     = rc.s1p_read(path_folder + 'uncalibrated_3dB_Measurment1.s1p')
-#	at6_T, f     = rc.s1p_read(path_folder + 'uncalibrated_6dB_Measurment1.s1p')
-#	at10_T, f    = rc.s1p_read(path_folder + 'uncalibrated_10dB_Measurment1.s1p')	
-#	at15_T, f    = rc.s1p_read(path_folder + 'uncalibrated_15dB_Measurment1.s1p')	
-
-	o_T, f       = rc.s1p_read(path_folder + 'uncalibrated_Open02.s1p')
-	s_T, f       = rc.s1p_read(path_folder + 'uncalibrated_Short02.s1p')
-	m_T, f       = rc.s1p_read(path_folder + 'uncalibrated_Match02.s1p')
-	at3_T, f     = rc.s1p_read(path_folder + 'uncalibrated_3dB_Measurment2.s1p')
-	at6_T, f     = rc.s1p_read(path_folder + 'uncalibrated_6dB_Measurment2.s1p')
-	at10_T, f    = rc.s1p_read(path_folder + 'uncalibrated_10dB_Measurment2.s1p')	
-	at15_T, f    = rc.s1p_read(path_folder + 'uncalibrated_15dB_Measurment2.s1p')	
-
-
-
-
-	o_K, f       = rc.s1p_read(path_folder + 'AGILENT_E5061A_OPEN.s1p')
-	s_K, f       = rc.s1p_read(path_folder + 'AGILENT_E5061A_SHORT.s1p')
-	m_K, f       = rc.s1p_read(path_folder + 'AGILENT_E5061A_MATCH.s1p')
-	at3_K, f     = rc.s1p_read(path_folder + 'AGILENT_E5061A_3dB_ATTENUATOR.s1p')
-	at6_K, f     = rc.s1p_read(path_folder + 'AGILENT_E5061A_6dB_ATTENUATOR.s1p')
-	at10_K, f    = rc.s1p_read(path_folder + 'AGILENT_E5061A_10dB_ATTENUATOR.s1p')	
-	at15_K, f    = rc.s1p_read(path_folder + 'AGILENT_E5061A_15dB_ATTENUATOR.s1p')	
 
 
 
@@ -2677,7 +2680,10 @@ def VNA_tektronix_test():
 	at10_Kc, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_K, s_K, m_K, at10_K)
 	at15_Kc, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_K, s_K, m_K, at15_K)
 	
-
+	at3_Cc, xx1, xx2, xx3  = rc.de_embed(o_a, s_a, m_a, o_C, s_C, m_C, at3_C)
+	at6_Cc, xx1, xx2, xx3  = rc.de_embed(o_a, s_a, m_a, o_C, s_C, m_C, at6_C)
+	at10_Cc, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_C, s_C, m_C, at10_C)
+	at15_Cc, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_C, s_C, m_C, at15_C)
 
 
 
@@ -2690,27 +2696,39 @@ def VNA_tektronix_test():
 	plt.plot(f/1e6, 20*np.log10(np.abs(at3_Kc)))
 	plt.plot(f/1e6, 20*np.log10(np.abs(at3_Rc)))
 	plt.plot(f/1e6, 20*np.log10(np.abs(at3_Tc)))
+	plt.plot(f/1e6, 20*np.log10(np.abs(at3_Cc)))		
 	plt.ylabel('3-dB Attn [dB]')
 	plt.title('MAGNITUDE')
+	plt.legend(['Keysight E5061A', 'CM R60', 'Tektronix', 'CM TR1300'])
+
 
 	plt.subplot(4,2,2)
 	plt.plot(f/1e6, (180/np.pi)*np.unwrap(np.angle(at3_Rc)) - (180/np.pi)*np.unwrap(np.angle(at3_Kc)))
 	plt.plot(f/1e6, (180/np.pi)*np.unwrap(np.angle(at3_Rc)) - (180/np.pi)*np.unwrap(np.angle(at3_Kc)))
 	plt.plot(f/1e6, (180/np.pi)*np.unwrap(np.angle(at3_Tc)) - (180/np.pi)*np.unwrap(np.angle(at3_Kc)))
+	plt.plot(f/1e6, (180/np.pi)*np.unwrap(np.angle(at3_Cc)) - (180/np.pi)*np.unwrap(np.angle(at3_Kc)))
 	plt.ylabel('3-dB Attn [degrees]')
 	plt.title(r'$\Delta$ PHASE')
+
+
+
 
 
 	plt.subplot(4,2,3)
 	plt.plot(f/1e6, 20*np.log10(np.abs(at6_Kc)))
 	plt.plot(f/1e6, 20*np.log10(np.abs(at6_Rc)))
 	plt.plot(f/1e6, 20*np.log10(np.abs(at6_Tc)))
+	plt.plot(f/1e6, 20*np.log10(np.abs(at6_Cc)))
 	plt.ylabel('6-dB Attn [dB]')
+
+
+
 
 	plt.subplot(4,2,4)
 	plt.plot(f/1e6, (180/np.pi)*np.unwrap(np.angle(at6_Rc)) - (180/np.pi)*np.unwrap(np.angle(at6_Kc)))
 	plt.plot(f/1e6, (180/np.pi)*np.unwrap(np.angle(at6_Rc)) - (180/np.pi)*np.unwrap(np.angle(at6_Kc)))
 	plt.plot(f/1e6, (180/np.pi)*np.unwrap(np.angle(at6_Tc)) - (180/np.pi)*np.unwrap(np.angle(at6_Kc)))
+	plt.plot(f/1e6, (180/np.pi)*np.unwrap(np.angle(at6_Cc)) - (180/np.pi)*np.unwrap(np.angle(at6_Kc)))
 	plt.ylabel('6-dB Attn [degrees]')
 
 
@@ -2719,12 +2737,14 @@ def VNA_tektronix_test():
 	plt.plot(f/1e6, 20*np.log10(np.abs(at10_Kc)))
 	plt.plot(f/1e6, 20*np.log10(np.abs(at10_Rc)))
 	plt.plot(f/1e6, 20*np.log10(np.abs(at10_Tc)))
+	plt.plot(f/1e6, 20*np.log10(np.abs(at10_Cc)))
 	plt.ylabel('10-dB Attn [dB]')
 
 	plt.subplot(4,2,6)
 	plt.plot(f/1e6, (180/np.pi)*np.unwrap(np.angle(at10_Rc)) - (180/np.pi)*np.unwrap(np.angle(at10_Kc)))
 	plt.plot(f/1e6, (180/np.pi)*np.unwrap(np.angle(at10_Rc)) - (180/np.pi)*np.unwrap(np.angle(at10_Kc)))
 	plt.plot(f/1e6, (180/np.pi)*np.unwrap(np.angle(at10_Tc)) - (180/np.pi)*np.unwrap(np.angle(at10_Kc)))
+	plt.plot(f/1e6, (180/np.pi)*np.unwrap(np.angle(at10_Cc)) - (180/np.pi)*np.unwrap(np.angle(at10_Kc)))
 	plt.ylabel('10-dB Attn [degrees]')
 	
 	
@@ -2733,14 +2753,15 @@ def VNA_tektronix_test():
 	plt.plot(f/1e6, 20*np.log10(np.abs(at15_Kc)))
 	plt.plot(f/1e6, 20*np.log10(np.abs(at15_Rc)))
 	plt.plot(f/1e6, 20*np.log10(np.abs(at15_Tc)))
+	plt.plot(f/1e6, 20*np.log10(np.abs(at15_Cc)))
 	plt.xlabel('frequency [MHz]')
 	plt.ylabel('15-dB Attn [dB]')
-	plt.legend(['Keysight E5061A', 'R60', 'Tektronix'])
 
 	plt.subplot(4,2,8)
 	plt.plot(f/1e6, (180/np.pi)*np.unwrap(np.angle(at15_Rc)) - (180/np.pi)*np.unwrap(np.angle(at15_Kc)))
 	plt.plot(f/1e6, (180/np.pi)*np.unwrap(np.angle(at15_Rc)) - (180/np.pi)*np.unwrap(np.angle(at15_Kc)))
-	plt.plot(f/1e6, (180/np.pi)*np.unwrap(np.angle(at15_Tc)) - (180/np.pi)*np.unwrap(np.angle(at15_Kc)))	
+	plt.plot(f/1e6, (180/np.pi)*np.unwrap(np.angle(at15_Tc)) - (180/np.pi)*np.unwrap(np.angle(at15_Kc)))
+	plt.plot(f/1e6, (180/np.pi)*np.unwrap(np.angle(at15_Cc)) - (180/np.pi)*np.unwrap(np.angle(at15_Kc)))
 	plt.xlabel('frequency [MHz]')
 	plt.ylabel('15-dB Attn [degrees]')
 
@@ -2766,15 +2787,28 @@ def VNA_tektronix_test():
 
 
 
-def midband_paper_plots(calibration_quantities='no', antenna1='no'):
+
+
+
+
+
+
+
+
+
+
+
+
+
+def midband_paper_plots(plot_number):
 	
 	
-	
-	if calibration_quantities == 'yes':
+	# Receiver calibration parameters
+	if plot_number==1:
 	
 
 		# Paths
-		path_plot_save = '/home/raul/Desktop/'
+		path_plot_save = edges_folder + 'results/plots/20190407/'
 
 
 		# Calibration parameters
@@ -2894,7 +2928,7 @@ def midband_paper_plots(calibration_quantities='no', antenna1='no'):
 		ax.set_xticks(np.arange(50, 151, 20))
 
 
-		plt.savefig(path_plot_save + 'calibration_quantities.pdf', bbox_inches='tight')
+		plt.savefig(path_plot_save + 'receiver_calibration.pdf', bbox_inches='tight')
 		plt.close()	
 		plt.close()
 		plt.close()
@@ -2910,32 +2944,12 @@ def midband_paper_plots(calibration_quantities='no', antenna1='no'):
 
 
 	
-	
-	if antenna1 == 'yes':
+	# Antenna calibration parameters
+	if plot_number==2:
 	
 
 		# Paths
-		path_plot_save = '/home/raul/Desktop/'
-
-
-		# Calibration parameters
-		rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_receiver1_50_150MHz_cterms7_wterms7.txt'
-
-		rcv = np.genfromtxt(rcv_file)
-	
-		FLOW  = 50
-		FHIGH = 150
-		
-		fX      = rcv[:,0]
-		rcv2    = rcv[(fX>=FLOW) & (fX<=FHIGH),:]
-		
-		fe      = rcv2[:,0]
-		rl      = rcv2[:,1] + 1j*rcv2[:,2]
-		sca     = rcv2[:,3]
-		off     = rcv2[:,4]
-		TU      = rcv2[:,5]
-		TC      = rcv2[:,6]
-		TS      = rcv2[:,7]
+		path_plot_save = edges_folder + 'results/plots/20190409/'
 
 
 
@@ -2943,7 +2957,7 @@ def midband_paper_plots(calibration_quantities='no', antenna1='no'):
 		# Plot
 
 		size_x = 5
-		size_y = 13 #10.5
+		size_y = 11.0 #10.5
 		x0 = 0.15
 		y0 = 0.09
 		dx = 0.8
@@ -2970,33 +2984,47 @@ def midband_paper_plots(calibration_quantities='no', antenna1='no'):
 		# -----------
 		ra = cal.models_antenna_s11_remove_delay('mid_band', fe, year=2018, day=147, case=5, delay_0=0.17, model_type='polynomial', Nfit=15, plot_fit_residuals='no')
 
-
+		xlb1  = np.genfromtxt('/run/media/raul/SSD_4TB/EDGES_vol1/calibration/antenna_s11/low_band1/s11/corrected/2016_243/S11_blade_low_band_2016_243.txt')
+		flb1  = xlb1[:,0]/1e6
+		ralb1 = xlb1[:,1] + 1j*xlb1[:,2]
+		
+		xlb2  = np.genfromtxt('/run/media/raul/SSD_4TB/EDGES_vol1/calibration/antenna_s11/low_band2/s11/corrected/2017-06-29-low2-noshield_average/S11_blade_low_band_2017_180_NO_SHIELD.txt')		
+		flb2  = xlb2[:,0]/1e6
+		ralb2 = xlb2[:,1] + 1j*xlb2[:,2]		
+		
+		
 
 		ax     = f1.add_axes([x0, y0 + 5*dy, dx, dy])	
 		h      = ax.plot(fe, 20*np.log10(np.abs(ra)), 'b', linewidth=2, label='$|\Gamma_{\mathrm{ant}}|$')
+		h      = ax.plot(flb1[flb1<=110], 20*np.log10(np.abs(ralb1[flb1<=110])), 'r', linewidth=2, label='$|\Gamma_{\mathrm{ant}}|$')
+		h      = ax.plot(flb2[flb2<=110], 20*np.log10(np.abs(ralb2[flb2<=110])), 'g', linewidth=2, label='$|\Gamma_{\mathrm{ant}}|$')
+		
+		
+		
+		
 		#ax2    = ax.twinx()
 		#h2     = ax2.plot(fe, (180/np.pi)*np.unwrap(np.angle(ra)), 'r--', linewidth=2, label=r'$\angle\/\Gamma_{\mathrm{ant}}$')
 		#h      = h1 + h2
 		#labels = [l.get_label() for l in h]
-		#ax.legend(h, labels, loc=2, fontsize=13)
+		ax.legend(['mid-band','low-band 1','low-band 2'], fontsize=11)
 
 		#ax.set_ylim([-41, -25])
 		ax.set_xticklabels('')
 		#
-		ax.set_ylabel('$|\Gamma_{\mathrm{ant}}|$ [dB]', fontsize=16)
-		#ax.text(42, -39.6, '(a)', fontsize=20)
-
+		ax.set_ylabel('$|\Gamma_{\mathrm{ant}}|$ [dB]', fontsize=15)
 		
 		#
 		#		
 		#ax2.set_ylabel(r'$\angle\/\Gamma_{\mathrm{ant}}$ [ $^\mathrm{o}$]', fontsize=16)
 
-		ax.set_xlim([40, 160])
+		ax.set_xlim([45, 155])
 		ax.set_ylim([-16, -4])
 		ax.set_yticks(np.arange(-14,-5,2))
 		#ax.set_xticklabels('')
 		ax.tick_params(axis='x', direction='in')
 		ax.set_xticks(np.arange(50, 151, 20))
+		
+		ax.text(145, -15.5, '(a)', fontsize=18)
 		
 
 
@@ -3013,6 +3041,10 @@ def midband_paper_plots(calibration_quantities='no', antenna1='no'):
 
 		ax     = f1.add_axes([x0, y0 + 4*dy, dx, dy])	
 		h      = ax.plot(fe, (180/np.pi)*np.unwrap(np.angle(ra)), 'b', linewidth=2, label=r'$\angle\/\Gamma_{\mathrm{ant}}$')
+		h      = ax.plot(flb1[flb1<=110], (180/np.pi)*np.unwrap(np.angle(ralb1[flb1<=110])), 'r', linewidth=2, label=r'$\angle\/\Gamma_{\mathrm{ant}}$')
+		h      = ax.plot(flb2[flb2<=110], (180/np.pi)*np.unwrap(np.angle(ralb2[flb2<=110])), 'g', linewidth=2, label=r'$\angle\/\Gamma_{\mathrm{ant}}$')
+	
+		
 		#ax2    = ax.twinx()
 		#h2     = ax2.plot(fe, (180/np.pi)*np.unwrap(np.angle(rl)), 'r--', linewidth=2, label=r'$\angle\/\Gamma_{\mathrm{rec}}$')
 		#h      = h1 + h2
@@ -3023,7 +3055,7 @@ def midband_paper_plots(calibration_quantities='no', antenna1='no'):
 		ax.set_xticklabels('')
 		#ax.set_yticks(np.arange(-39,-26,3))
 		#ax.set_ylabel('$|\Gamma_{\mathrm{rec}}|$ [dB]', fontsize=16)
-		ax.set_ylabel(r'$\angle\/\Gamma_{\mathrm{ant}}$ [ $^\mathrm{o}$]', fontsize=16)
+		ax.set_ylabel(r'$\angle\/\Gamma_{\mathrm{ant}}$ [ $^\mathrm{o}$]', fontsize=15)
 		#ax.text(42, -39.6, '(a)', fontsize=20)
 
 		#ax2.set_ylim([70, 130])
@@ -3031,13 +3063,13 @@ def midband_paper_plots(calibration_quantities='no', antenna1='no'):
 		#ax2.set_yticks(np.arange(80,121,10))		
 		#ax2.set_ylabel(r'$\angle\/\Gamma_{\mathrm{rec}}$ [ $^\mathrm{o}$]', fontsize=16)
 
-		ax.set_xlim([40, 160])	
+		ax.set_xlim([45, 155])	
 		ax.tick_params(axis='x', direction='in')
 		ax.set_xticks(np.arange(50, 151, 20))
 		ax.set_ylim([-800, 400])
 		ax.set_yticks(np.arange(-600,201,200))			
 		
-
+		ax.text(145, -750, '(b)', fontsize=18)
 
 
 
@@ -3057,7 +3089,11 @@ def midband_paper_plots(calibration_quantities='no', antenna1='no'):
 
 
 
-
+		Gblb, Gclb = oeg.balun_and_connector_loss('low_band_2015', flb1, ralb1)
+		Gbclb   = Gblb*Gclb
+		
+		Gblb2, Gclb2 = oeg.balun_and_connector_loss('low_band2_2017', flb2, ralb2)
+		Gbclb2   = Gblb2*Gclb2
 
 
 
@@ -3065,6 +3101,8 @@ def midband_paper_plots(calibration_quantities='no', antenna1='no'):
 
 		ax     = f1.add_axes([x0, y0 + 3*dy, dx, dy])	
 		h      = ax.plot(fe, (1-Gbc)*100, 'b', linewidth=2, label='antenna loss [%]')
+		h      = ax.plot(flb1[flb1<=110], (1-Gbclb)[flb1<=110]*100, 'r', linewidth=2, label='antenna loss [%]')
+		h      = ax.plot(flb1[flb1<=110], (1-Gbclb2)[flb1<=110]*100, 'g', linewidth=2, label='antenna loss [%]')
 		#ax2    = ax.twinx()
 		#h2     = ax2.plot(fe, (180/np.pi)*np.unwrap(np.angle(rl)), 'r--', linewidth=2, label=r'$\angle\/\Gamma_{\mathrm{rec}}$')
 		#h      = h1 + h2
@@ -3076,31 +3114,34 @@ def midband_paper_plots(calibration_quantities='no', antenna1='no'):
 		#ax.set_yticks(np.arange(-39,-26,3))
 		#ax.set_ylabel('$|\Gamma_{\mathrm{rec}}|$ [dB]', fontsize=16)
 		#ax.text(42, -39.6, '(a)', fontsize=20)
-		ax.set_ylabel(r'antenna loss [%]', fontsize=16)
+		ax.set_ylabel(r'antenna loss [%]', fontsize=15)
 
 		#ax2.set_ylim([70, 130])
 		#ax2.set_xticklabels('')
 		#ax2.set_yticks(np.arange(80,121,10))		
 		#ax2.set_ylabel(r'$\angle\/\Gamma_{\mathrm{rec}}$ [ $^\mathrm{o}$]', fontsize=16)
 
-		ax.set_xlim([40, 160])
+		ax.set_xlim([45, 155])
 		ax.tick_params(axis='x', direction='in')
 		ax.set_xticks(np.arange(50, 151, 20))
 		ax.set_ylim([0, 1])
 		ax.set_yticks(np.arange(0.2,0.9,0.2))		
 
+		ax.text(145, 0.05, '(c)', fontsize=18)
 
 
 
 
-
-		Gg = cal.ground_loss('mid_band', fe)
+		Gg   = cal.ground_loss('mid_band', fe)
+		flb  = np.arange(50, 111, 1)
+		Gglb = cal.ground_loss('low_band', flb)
 		
 		
 
 
 		ax     = f1.add_axes([x0, y0 + 2*dy, dx, dy])	
 		h      = ax.plot(fe, (1-Gg)*100, 'b', linewidth=2, label='ground loss [%]')
+		h      = ax.plot(flb, (1-Gglb)*100, 'r', linewidth=2, label='ground loss [%]')
 		#ax2    = ax.twinx()
 		#h2     = ax2.plot(fe, (180/np.pi)*np.unwrap(np.angle(rl)), 'r--', linewidth=2, label=r'$\angle\/\Gamma_{\mathrm{rec}}$')
 		#h      = h1 + h2
@@ -3112,49 +3153,73 @@ def midband_paper_plots(calibration_quantities='no', antenna1='no'):
 		#ax.set_yticks(np.arange(-39,-26,3))
 		#ax.set_ylabel('$|\Gamma_{\mathrm{rec}}|$ [dB]', fontsize=16)
 		#ax.text(42, -39.6, '(a)', fontsize=20)
-		ax.set_ylabel(r'ground loss [%]', fontsize=16)
+		ax.set_ylabel(r'ground loss [%]', fontsize=15)
 
 		#ax2.set_ylim([70, 130])
 		#ax2.set_xticklabels('')
 		#ax2.set_yticks(np.arange(80,121,10))		
 		#ax2.set_ylabel(r'$\angle\/\Gamma_{\mathrm{rec}}$ [ $^\mathrm{o}$]', fontsize=16)
 
-		ax.set_xlim([40, 160])
+		ax.set_xlim([45, 155])
 		ax.tick_params(axis='x', direction='in')
 		ax.set_xticks(np.arange(50, 151, 20))
 		ax.set_ylim([0.1, 0.4])
 		ax.set_yticks(np.arange(0.15,0.36,0.05))		
 		
+		ax.text(145, 0.115, '(d)', fontsize=18)
 		
-		
+
+
+
+
+
 
 
 
 
 		bm = cal.FEKO_blade_beam('mid_band', 0, frequency_interpolation='no', frequency=np.array([0]), AZ_antenna_axis=0)
 		ff = np.arange(50,201,2)
-		fe = ff[0:51]
 		
-		g_zenith = bm[:,90,0][0:51]
-		g_45_E   = bm[:,45,0][0:51]
-		g_45_H   = bm[:,45,90][0:51]
+		imax = 51
+		fe = ff[0:imax]
 		
+		g_zenith = bm[:,90,0][0:imax]
+		g_45_E   = bm[:,45,0][0:imax]
+		g_45_H   = bm[:,45,90][0:imax]
+		
+	
 		
 		bm_inf = cal.FEKO_blade_beam('mid_band', 1, frequency_interpolation='no', frequency=np.array([0]), AZ_antenna_axis=0)
-		g_inf_zenith = bm_inf[:,90,0][0:51]
-		g_inf_45_E   = bm_inf[:,45,0][0:51]
-		g_inf_45_H   = bm_inf[:,45,90][0:51]
+		g_inf_zenith = bm_inf[:,90,0][0:imax]
+		g_inf_45_E   = bm_inf[:,45,0][0:imax]
+		g_inf_45_H   = bm_inf[:,45,90][0:imax]
 		
+
+
+		bm_lb = oeg.FEKO_low_band_blade_beam(beam_file=2, frequency_interpolation='no', frequency=np.array([0]), AZ_antenna_axis=0)
+		fcuec = np.arange(40,121,2)
+		flb   = fcuec[5:36]
+		
+		glb_zenith = bm_lb[:,90,0][5:36]
+		glb_45_E   = bm_lb[:,45,0][5:36]
+		glb_45_H   = bm_lb[:,45,90][5:36]		
+
+
 
 
 		ax     = f1.add_axes([x0, y0 + 1*dy, dx, dy])
-		h      = ax.plot(fe, g_zenith,'b',linewidth=2, label='zenith')
-		h      = ax.plot(fe, g_45_E,'r',linewidth=2, label='')
-		h      = ax.plot(fe, g_45_H,'g',linewidth=2, label='$C_1$')
+		h      = ax.plot(fe, g_zenith,'b',linewidth=2, label='')
+		h      = ax.plot(fe, g_45_E,'b',linewidth=2, label='')
+		h      = ax.plot(fe, g_45_H,'b',linewidth=2, label='')
+				
+		h      = ax.plot(fe, g_inf_zenith,'b',linewidth=1, label='')
+		h      = ax.plot(fe, g_inf_45_E,'b',linewidth=1, label='')
+		h      = ax.plot(fe, g_inf_45_H,'b',linewidth=1, label='')		
 		
-		h      = ax.plot(fe, g_inf_zenith,'b',linewidth=1, label='zenith')
-		h      = ax.plot(fe, g_inf_45_E,'r',linewidth=1, label='')
-		h      = ax.plot(fe, g_inf_45_H,'g',linewidth=1, label='$C_1$')		
+		h      = ax.plot(flb, glb_zenith,'r',linewidth=2, label='')
+		h      = ax.plot(flb, glb_45_E,'r',linewidth=2, label='')
+		h      = ax.plot(flb, glb_45_H,'r',linewidth=2, label='')
+		
 		
 		#ax2    = ax.twinx()
 		#h2     = ax2.plot(fe, off,'r--',linewidth=2, label='$C_2$')
@@ -3167,49 +3232,78 @@ def midband_paper_plots(calibration_quantities='no', antenna1='no'):
 		#ax.set_yticks(np.arange(3.5,5.1,0.5))
 		#ax.set_ylabel('$C_1$', fontsize=16)
 		#ax.text(42, 3.25, '(b)', fontsize=20)
-		ax.set_ylabel('gain [no units]', fontsize=16)
+		ax.set_ylabel('gain [no units]', fontsize=15)
 
 		#ax2.set_ylim([-2.4, -1.8])
 		#ax2.set_xticklabels('')
 		#ax2.set_yticks(np.arange(-2.3, -1.85, 0.1))
 		#ax2.set_ylabel('$C_2$ [K]', fontsize=16)
 
-		ax.set_xlim([40, 160])
+		ax.set_xlim([45, 155])
 		ax.tick_params(axis='x', direction='in')
 		ax.set_xticks(np.arange(50, 151, 20))
 		ax.set_ylim([0, 8])
 		ax.set_yticks(np.arange(1,7.1,1))		
 		
+		ax.text(145, 0.4, '(e)', fontsize=18)
 		
+		ax.text(50, 5.9, 'zenith', fontsize=12)
+		ax.text(50, 3.2, r'$\theta=45^{\circ}$, H-plane', fontsize=12)
+		ax.text(50, 1.2, r'$\theta=45^{\circ}$, E-plane', fontsize=12)
 		
-		
-		p1 = np.polyfit(fe, g_zenith, 4)
-		p2 = np.polyfit(fe, g_45_E, 4)
-		p3 = np.polyfit(fe, g_45_H, 4)
-		
-		m1 = np.polyval(p1, fe)
-		m2 = np.polyval(p2, fe)
-		m3 = np.polyval(p3, fe)
-
-
-		pi1 = np.polyfit(fe, g_inf_zenith, 4)
-		pi2 = np.polyfit(fe, g_inf_45_E, 4)
-		pi3 = np.polyfit(fe, g_inf_45_H, 4)
-		
-		mi1 = np.polyval(pi1, fe)
-		mi2 = np.polyval(pi2, fe)
-		mi3 = np.polyval(pi3, fe)
-
-
 	
-		ax     = f1.add_axes([x0, y0 + 0*dy, dx, dy])
-		h      = ax.plot(fe, g_zenith-m1 + 0.1,'b', linewidth=2, label='$T_{\mathrm{unc}}$')
-		h      = ax.plot(fe, g_45_E-m2 + 0,'r', linewidth=2, label='$T_{\mathrm{unc}}$')
-		h      = ax.plot(fe, g_45_H-m3 - 0.1,'g', linewidth=2, label='$T_{\mathrm{unc}}$')
+	
+	
+	
+	
+	
+	
 		
-		h      = ax.plot(fe, g_inf_zenith-mi1 + 0.1,'b', linewidth=1, label='$T_{\mathrm{unc}}$')
-		h      = ax.plot(fe, g_inf_45_E-mi2 + 0,'r', linewidth=1, label='$T_{\mathrm{unc}}$')
-		h      = ax.plot(fe, g_inf_45_H-mi3 - 0.1,'g', linewidth=1, label='$T_{\mathrm{unc}}$')
+		Nfg   = 3
+	
+		
+		imax2 = 31
+		p1 = np.polyfit(fe[0:imax2], g_zenith[0:imax2], Nfg)
+		p2 = np.polyfit(fe[0:imax2], g_45_E[0:imax2], Nfg)
+		p3 = np.polyfit(fe[0:imax2], g_45_H[0:imax2], Nfg)
+		
+		m1 = np.polyval(p1, fe[0:imax2])
+		m2 = np.polyval(p2, fe[0:imax2])
+		m3 = np.polyval(p3, fe[0:imax2])
+
+
+		pi1 = np.polyfit(fe[0:imax2], g_inf_zenith[0:imax2], Nfg)
+		pi2 = np.polyfit(fe[0:imax2], g_inf_45_E[0:imax2], Nfg)
+		pi3 = np.polyfit(fe[0:imax2], g_inf_45_H[0:imax2], Nfg)
+		
+		mi1 = np.polyval(pi1, fe[0:imax2])
+		mi2 = np.polyval(pi2, fe[0:imax2])
+		mi3 = np.polyval(pi3, fe[0:imax2])
+
+
+		p1 = np.polyfit(flb, glb_zenith, Nfg)
+		p2 = np.polyfit(flb, glb_45_E, Nfg)
+		p3 = np.polyfit(flb, glb_45_H, Nfg)
+		
+		mlb1 = np.polyval(p1, flb)
+		mlb2 = np.polyval(p2, flb)
+		mlb3 = np.polyval(p3, flb)
+		
+		
+		
+		ax     = f1.add_axes([x0, y0 + 0*dy, dx, dy])
+		
+		h      = ax.plot(fe[0:imax2], g_zenith[0:imax2]-m1 + 0.1,'b', linewidth=2, label='$T_{\mathrm{unc}}$')
+		h      = ax.plot(fe[0:imax2], g_45_E[0:imax2]-m2 - 0.1,'b', linewidth=2, label='$T_{\mathrm{unc}}$')
+		h      = ax.plot(fe[0:imax2], g_45_H[0:imax2]-m3 - 0.0,'b', linewidth=2, label='$T_{\mathrm{unc}}$')
+		
+		h      = ax.plot(fe[0:imax2], g_inf_zenith[0:imax2]-mi1 + 0.1,'b', linewidth=1, label='$T_{\mathrm{unc}}$')
+		h      = ax.plot(fe[0:imax2], g_inf_45_E[0:imax2]-mi2 - 0.1,'b', linewidth=1, label='$T_{\mathrm{unc}}$')
+		h      = ax.plot(fe[0:imax2], g_inf_45_H[0:imax2]-mi3 - 0.0,'b', linewidth=1, label='$T_{\mathrm{unc}}$')
+		
+		h      = ax.plot(flb, glb_zenith-mlb1 + 0.1,'r', linewidth=2, label='$T_{\mathrm{unc}}$')
+		h      = ax.plot(flb, glb_45_E-mlb2 - 0.1,'r', linewidth=2, label='$T_{\mathrm{unc}}$')
+		h      = ax.plot(flb, glb_45_H-mlb3 - 0.0,'r', linewidth=2, label='$T_{\mathrm{unc}}$')		
 		
 		
 		#ax2    = ax.twinx()
@@ -3223,24 +3317,35 @@ def midband_paper_plots(calibration_quantities='no', antenna1='no'):
 		#ax.set_ylim([178, 190])
 		#ax.set_yticks(np.arange(180, 189, 2))
 		#ax.set_ylabel('$T_{\mathrm{unc}}$ [K]', fontsize=16)
-		ax.set_xlabel('$\\nu$ [MHz]', fontsize=16)
+		ax.set_xlabel('$\\nu$ [MHz]', fontsize=15)
 		#ax.text(42, 179, '(c)', fontsize=20)
-		ax.set_ylabel('residuals\n[0.05 per division]', fontsize=16)
+		ax.set_ylabel('gain residuals\n[0.05 per division]', fontsize=15)
 
 		#ax2.set_ylim([-60, 40])
 		#ax2.set_yticks(np.arange(-40, 21, 20))
 		
 		
-		ax.set_xlim([40, 160])
-		ax.set_xticks(np.arange(50, 151, 20))
+		ax.set_xlim([45, 155])
+		xt = np.arange(50, 151, 20)
+		ax.set_xticks(xt)
+		#ax.set_xticklabels(['' for i in range(len(xt))], fontsize=15)
+		ax.set_xticklabels(xt, fontsize=10)
 		ax.set_ylim([-0.175, 0.175])
 		yt = np.arange(-0.15,0.16,0.05)
 		ax.set_yticks(yt)
 		ax.set_yticklabels(['' for i in range(len(yt))])
 		
+		ax.text(145, -0.156, '(f)', fontsize=18)
+
+		ax.text(113, 0.09, 'zenith', fontsize=12)
+		ax.text(113, -0.01, r'$\theta=45^{\circ}$, H-plane', fontsize=12)
+		ax.text(113, -0.11, r'$\theta=45^{\circ}$, E-plane', fontsize=12)
+		
 
 
-		plt.savefig(path_plot_save + 'calibration_quantities_Z.pdf', bbox_inches='tight')
+
+
+		plt.savefig(path_plot_save + 'antenna_calibration.pdf', bbox_inches='tight')
 		plt.close()	
 		plt.close()
 		plt.close()

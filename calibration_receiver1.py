@@ -40,9 +40,10 @@ from astropy.io import fits
 home_folder = expanduser("~")
 
 import os
-edges_folder       = os.environ['EDGES']
+edges_folder       = os.environ['EDGES_vol2']
 print('EDGES Folder: ' + edges_folder)
 
+edges_folder_v1       = os.environ['EDGES_vol1']
 
 
 
@@ -58,7 +59,8 @@ print('EDGES Folder: ' + edges_folder)
 
 
 
-def switch_correction_receiver1_2018_01_25C(ant_s11, f_in = np.zeros([0,1]), case = 1):  
+
+def switch_correction_receiver1(ant_s11, f_in = np.zeros([0,1]), case = 1):  
 
 
 	"""
@@ -71,6 +73,10 @@ def switch_correction_receiver1_2018_01_25C(ant_s11, f_in = np.zeros([0,1]), cas
 	Feb 16, 2019
 	
 	The characterization of the 4-position switch was done using the EDGES Keysight 85033E Male
+	
+	
+	March 2019
+	
 	
 	"""
 
@@ -110,7 +116,7 @@ def switch_correction_receiver1_2018_01_25C(ant_s11, f_in = np.zeros([0,1]), cas
 
 	
 	if case == 1:
-		path_folder     = home_folder + '/DATA/EDGES/mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/data/s11/raw/InternalSwitch/'
+		path_folder     = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/data/s11/raw/InternalSwitch/'
 		
 		resistance_of_match = 50.027 # male
 		
@@ -126,7 +132,7 @@ def switch_correction_receiver1_2018_01_25C(ant_s11, f_in = np.zeros([0,1]), cas
 
 
 	if case == 2:
-		path_folder     = home_folder + '/DATA/EDGES/mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/data/s11/raw/InternalSwitch/'
+		path_folder     = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/data/s11/raw/InternalSwitch/'
 		
 		resistance_of_match = 50.027 # male
 		
@@ -142,7 +148,7 @@ def switch_correction_receiver1_2018_01_25C(ant_s11, f_in = np.zeros([0,1]), cas
 
 
 	if case == 3:
-		path_folder     = home_folder + '/DATA/EDGES/calibration/receiver_calibration/mid_band/2018_01_15C/data/s11/raw/InternalSwitch/'
+		path_folder     = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_15C/data/s11/raw/InternalSwitch/'
 		
 		resistance_of_match = 50.099 # male
 		
@@ -157,7 +163,7 @@ def switch_correction_receiver1_2018_01_25C(ant_s11, f_in = np.zeros([0,1]), cas
 
 
 	if case == 4:
-		path_folder     = home_folder + '/DATA/EDGES/calibration/receiver_calibration/mid_band/2018_01_15C/data/s11/raw/InternalSwitch/'
+		path_folder     = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_15C/data/s11/raw/InternalSwitch/'
 		
 		resistance_of_match = 50.099 # male
 		
@@ -173,7 +179,7 @@ def switch_correction_receiver1_2018_01_25C(ant_s11, f_in = np.zeros([0,1]), cas
 
 
 	if case == 5:
-		path_folder     = home_folder + '/DATA/EDGES/calibration/receiver_calibration/mid_band/2018_01_35C/data/s11/raw/InternalSwitch/'
+		path_folder     = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_35C/data/s11/raw/InternalSwitch/'
 		
 		resistance_of_match = 50.002 # male
 		
@@ -187,27 +193,70 @@ def switch_correction_receiver1_2018_01_25C(ant_s11, f_in = np.zeros([0,1]), cas
 
 
 	
-	# THESE MEASUREMENTS ARE BAD. DO NOT USE CASE 6
-	# if case == 6:
-		# path_folder     = home_folder + '/DATA/EDGES/calibration/receiver_calibration/mid_band/2018_01_35C/data/s11/raw/InternalSwitch/'
-		
-		# resistance_of_match = 50.10 # male
-		
-		# o_in, f = rc.s1p_read(path_folder + 'Open02.s1p')
-		# s_in, f = rc.s1p_read(path_folder + 'Short02.s1p')
-		# l_in, f = rc.s1p_read(path_folder + 'Match02.s1p')
 	
-		# o_ex, f = rc.s1p_read(path_folder + 'ExternalOpen02.s1p')
-		# s_ex, f = rc.s1p_read(path_folder + 'ExternalShort02.s1p')
-		# l_ex, f = rc.s1p_read(path_folder + 'ExternalMatch02.s1p')
 
 
 
 
+	
 
+	# Calibration 2019-03
+	
+	# 4 repetitions of the same measurements 
+	# -------------------------------------------------------------
+	if case == 6:
+		path_folder     = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2019_03_25C/data/s11/raw/SwitchingState01/'
+		
+		resistance_of_match = 50.15 # male
+		
+		o_in, f = rc.s1p_read(path_folder + 'Open01.s1p')
+		s_in, f = rc.s1p_read(path_folder + 'Short01.s1p')
+		l_in, f = rc.s1p_read(path_folder + 'Match01.s1p')
+	
+		o_ex, f = rc.s1p_read(path_folder + 'ExternalOpen01.s1p')
+		s_ex, f = rc.s1p_read(path_folder + 'ExternalShort01.s1p')
+		l_ex, f = rc.s1p_read(path_folder + 'ExternalMatch01.s1p')
+		
+	if case == 7:
+		path_folder     = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2019_03_25C/data/s11/raw/SwitchingState01/'
+		
+		resistance_of_match = 50.15 # male
+		
+		o_in, f = rc.s1p_read(path_folder + 'Open02.s1p')
+		s_in, f = rc.s1p_read(path_folder + 'Short02.s1p')
+		l_in, f = rc.s1p_read(path_folder + 'Match02.s1p')
+	
+		o_ex, f = rc.s1p_read(path_folder + 'ExternalOpen02.s1p')
+		s_ex, f = rc.s1p_read(path_folder + 'ExternalShort02.s1p')
+		l_ex, f = rc.s1p_read(path_folder + 'ExternalMatch02.s1p')
 
+	if case == 8:
+		path_folder     = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2019_03_25C/data/s11/raw/SwitchingState02/'
+		
+		resistance_of_match = 50.15 # male
+		
+		o_in, f = rc.s1p_read(path_folder + 'Open01.s1p')
+		s_in, f = rc.s1p_read(path_folder + 'Short01.s1p')
+		l_in, f = rc.s1p_read(path_folder + 'Match01.s1p')
+	
+		o_ex, f = rc.s1p_read(path_folder + 'ExternalOpen01.s1p')
+		s_ex, f = rc.s1p_read(path_folder + 'ExternalShort01.s1p')
+		l_ex, f = rc.s1p_read(path_folder + 'ExternalMatch01.s1p')
 
-
+	if case == 9:
+		path_folder     = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2019_03_25C/data/s11/raw/SwitchingState02/'
+		
+		resistance_of_match = 50.15 # male
+		
+		o_in, f = rc.s1p_read(path_folder + 'Open02.s1p')
+		s_in, f = rc.s1p_read(path_folder + 'Short02.s1p')
+		l_in, f = rc.s1p_read(path_folder + 'Match02.s1p')
+	
+		o_ex, f = rc.s1p_read(path_folder + 'ExternalOpen02.s1p')
+		s_ex, f = rc.s1p_read(path_folder + 'ExternalShort02.s1p')
+		l_ex, f = rc.s1p_read(path_folder + 'ExternalMatch02.s1p')
+		
+	# -------------------------------------------------------------
 
 
 
@@ -309,6 +358,7 @@ def switch_correction_receiver1_2018_01_25C(ant_s11, f_in = np.zeros([0,1]), cas
 
 
 	return (corr_ant_s11, fit_s11, fit_s12s21, fit_s22)
+
 
 
 
@@ -610,6 +660,329 @@ def s11_calibration_measurements_mid_band_2018_01_25C(flow=40, fhigh=200, save='
 
 
 	return fr, LNAc, a_c, h_c, o_c, s_c, q_c, sr_s11r, sr_s11i, sr_s12s21r, sr_s12s21i, sr_s22r, sr_s22i, q_c
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def s11_calibration_measurements_mid_band_2019_03_25C(flow=40, fhigh=200, save='no', flag=''):
+
+
+
+
+	# Data paths
+	main_path    = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2019_03_25C/data/s11/raw/'
+
+
+	path_LNA     = main_path + 'ReceiverReading01/'    # seems slightly better than the others
+	path_ambient = main_path + 'Ambient/'
+	path_hot     = main_path + 'HotLoad/'
+	path_open    = main_path + 'LongCableOpen/'
+	path_shorted = main_path + 'LongCableShorted/'
+	path_sim     = main_path + 'AntSim2/'
+	
+	SWITCH_CASE = 7
+	
+
+
+
+	# Receiver reflection coefficient
+	# -------------------------------
+
+	# Reading measurements
+	o,   fr  = rc.s1p_read(path_LNA + 'Open01.s1p')
+	s,   fr  = rc.s1p_read(path_LNA + 'Short01.s1p')
+	l,   fr  = rc.s1p_read(path_LNA + 'Match01.s1p')
+	LNA0, fr = rc.s1p_read(path_LNA + 'ReceiverReading01.s1p')
+
+
+	# Models of standards
+	resistance_of_match = 49.99  # female
+	md = 1
+	oa, sa, la = rc.agilent_85033E(fr, resistance_of_match, md)
+
+
+	# Correction of measurements
+	LNAc, x1, x2, x3   = rc.de_embed(oa, sa, la, o, s, l, LNA0)
+
+
+
+
+
+
+	# Calibration loads
+	# -----------------
+
+
+
+	# -----------------------------------------------------------------------------------------
+	# Ambient load before
+	# -------------------
+	o_m,  f_a = rc.s1p_read(path_ambient + 'Open02.s1p')
+	s_m,  f_a = rc.s1p_read(path_ambient + 'Short02.s1p')
+	l_m,  f_a = rc.s1p_read(path_ambient + 'Match02.s1p')
+	a_m,  f_a = rc.s1p_read(path_ambient + 'External02.s1p')
+
+
+	# Standards assumed at the switch
+	o_sw =  1 * np.ones(len(f_a))
+	s_sw = -1 * np.ones(len(f_a))
+	l_sw =  0 * np.ones(len(f_a))
+
+
+	# Correction at switch
+	a_sw_c, x1, x2, x3  = rc.de_embed(o_sw, s_sw, l_sw, o_m, s_m, l_m, a_m)
+
+
+	# Correction at receiver input
+	out = switch_correction_receiver1(a_sw_c, f_in = f_a, case = SWITCH_CASE)
+	a_c = out[0]
+
+
+
+
+
+
+
+
+
+
+	# -----------------------------------------------------------------------------------------
+	# Hot load before
+	# -------------------
+	o_m, f_h = rc.s1p_read(path_hot + 'Open01.s1p')
+	s_m, f_h = rc.s1p_read(path_hot + 'Short01.s1p')
+	l_m, f_h = rc.s1p_read(path_hot + 'Match01.s1p')
+	h_m, f_h = rc.s1p_read(path_hot + 'External01.s1p')
+
+
+	# Standards assumed at the switch
+	o_sw =  1 * np.ones(len(f_h))
+	s_sw = -1 * np.ones(len(f_h))
+	l_sw =  0 * np.ones(len(f_h))
+
+
+	# Correction at switch
+	h_sw_c, x1, x2, x3  = rc.de_embed(o_sw, s_sw, l_sw, o_m, s_m, l_m, h_m)
+
+
+	# Correction at receiver input
+	out = switch_correction_receiver1(h_sw_c, f_in = f_a, case = SWITCH_CASE)
+	h_c = out[0]
+
+
+
+
+
+
+
+
+
+
+
+
+	# -----------------------------------------------------------------------------------------
+	# Open Cable before
+	# -------------------
+	o_m, f_o = rc.s1p_read(path_open  + 'Open02.s1p')
+	s_m, f_o = rc.s1p_read(path_open  + 'Short02.s1p')
+	l_m, f_o = rc.s1p_read(path_open  + 'Match02.s1p')
+	oc_m, f_o = rc.s1p_read(path_open + 'External02.s1p')
+
+
+	# Standards assumed at the switch
+	o_sw =  1 * np.ones(len(f_o))
+	s_sw = -1 * np.ones(len(f_o))
+	l_sw =  0 * np.ones(len(f_o))
+
+
+	# Correction at switch
+	oc_sw_c, x1, x2, x3  = rc.de_embed(o_sw, s_sw, l_sw, o_m, s_m, l_m, oc_m)
+
+
+	# Correction at receiver input
+	out = switch_correction_receiver1(oc_sw_c, f_in = f_a, case = SWITCH_CASE)
+	o_c = out[0]
+
+
+
+
+
+
+
+
+
+
+	# -----------------------------------------------------------------------------------------
+	# Short Cable before
+	# -------------------
+	o_m,  f_s = rc.s1p_read(path_shorted + 'Open02.s1p')
+	s_m,  f_s = rc.s1p_read(path_shorted + 'Short02.s1p')
+	l_m,  f_s = rc.s1p_read(path_shorted + 'Match02.s1p')
+	sc_m,  f_s = rc.s1p_read(path_shorted + 'External02.s1p')
+
+
+	# Standards assumed at the switch
+	o_sw =  1 * np.ones(len(f_s))
+	s_sw = -1 * np.ones(len(f_s))
+	l_sw =  0 * np.ones(len(f_s))
+
+
+	# Correction at switch
+	sc_sw_c, x1, x2, x3  = rc.de_embed(o_sw, s_sw, l_sw, o_m, s_m, l_m, sc_m)
+
+
+	# Correction at receiver input
+	out = switch_correction_receiver1(sc_sw_c, f_in = f_a, case = SWITCH_CASE)
+	s_c = out[0]	
+
+
+
+
+
+
+
+	# -----------------------------------------------------------------------------------------
+	# Antenna Simulator 2
+	# --------------------------
+	o_m, f_q = rc.s1p_read(path_sim + 'Open02.s1p')
+	s_m, f_q = rc.s1p_read(path_sim + 'Short02.s1p')
+	l_m, f_q = rc.s1p_read(path_sim + 'Match02.s1p')
+	q_m, f_q = rc.s1p_read(path_sim + 'External02.s1p')
+
+
+	# Standards assumed at the switch
+	o_sw =  1 * np.ones(len(f_q))
+	s_sw = -1 * np.ones(len(f_q))
+	l_sw =  0 * np.ones(len(f_q))
+
+
+	# Correction at switch
+	q_sw_c, x1, x2, x3  = rc.de_embed(o_sw, s_sw, l_sw, o_m, s_m, l_m, q_m)
+
+
+	# Correction at receiver input
+	out = switch_correction_receiver1(q_sw_c, f_in = f_a, case = SWITCH_CASE)
+	q_c  = out[0]	
+	
+
+
+
+
+
+
+
+
+
+	# S-parameters of semi-rigid cable 
+	# ---------------------------------
+	d = np.genfromtxt(edges_folder_v1 + 'calibration/receiver_calibration/high_band1/2015_03_25C/data/S11/corrected_original/semi_rigid_s_parameters.txt')
+			
+	Nterms = 17	
+	
+	column      = 1
+	p           = np.polyfit(d[:,0], d[:, column], Nterms-1)
+	sr_s11r     = np.polyval(p, fr/1e6)
+	
+	column      = 2
+	p           = np.polyfit(d[:,0], d[:, column], Nterms-1)
+	sr_s11i     = np.polyval(p, fr/1e6)
+	
+	column      = 3
+	p           = np.polyfit(d[:,0], d[:, column], Nterms-1)
+	sr_s12s21r  = np.polyval(p, fr/1e6)	
+	
+	column      = 4
+	p           = np.polyfit(d[:,0], d[:, column], Nterms-1)
+	sr_s12s21i  = np.polyval(p, fr/1e6)
+
+	column      = 5
+	p           = np.polyfit(d[:,0], d[:, column], Nterms-1)
+	sr_s22r     = np.polyval(p, fr/1e6)
+
+	column      = 6
+	p           = np.polyfit(d[:,0], d[:, column], Nterms-1)
+	sr_s22i     = np.polyval(p, fr/1e6)
+
+			
+			
+
+
+	# Output array
+	# ----------------------
+	tempT = np.array([ fr/1e6, 
+	np.real(LNAc),   np.imag(LNAc),
+	np.real(a_c),    np.imag(a_c),
+	np.real(h_c),    np.imag(h_c), 
+	np.real(o_c),    np.imag(o_c),
+	np.real(s_c),    np.imag(s_c),
+	sr_s11r,         sr_s11i,
+	sr_s12s21r,      sr_s12s21i,
+	sr_s22r,         sr_s22i,
+	np.real(q_c),    np.imag(q_c)])
+	
+	temp = tempT.T	
+	kk = temp[(fr/1e6 >= flow) & (fr/1e6 <= fhigh), :]
+
+
+
+
+
+
+
+
+
+
+
+	# -----------------------------------------------------------------------------------------
+	# Saving
+	if save == 'yes':
+
+		save_path       = home_folder + '/DATA/EDGES/mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/data/s11/corrected/'
+		temperature_LNA = '25degC'
+		output_file_str = save_path + 's11_calibration_mid_band_LNA' + temperature_LNA + '_' + tt.strftime('%Y-%m-%d-%H-%M-%S') + flag + '.txt'
+		np.savetxt(output_file_str, kk)
+
+		print('File saved to: ' + output_file_str)
+
+
+	return fr, LNAc, a_c, h_c, o_c, s_c, q_c, sr_s11r, sr_s11i, sr_s12s21r, sr_s12s21i, sr_s22r, sr_s22i
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

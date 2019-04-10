@@ -28,10 +28,10 @@ MRO_folder  = '/data5/edges/data/2014_February_Boolardy'
 
 
 import os, sys
-edges_code_folder = os.environ['EDGES_CODE']
-sys.path.insert(0, edges_code_folder)
+#edges_code_folder = os.environ['EDGES_CODE']
+#sys.path.insert(0, edges_code_folder)
 
-edges_folder       = os.environ['EDGES']
+edges_folder       = os.environ['EDGES_vol2']
 print('EDGES Folder: ' + edges_folder)
 
 
@@ -663,7 +663,7 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 			ti  = tt[i,:]
 			wi  = ww[i,:]
 			
-			tti, wwi = rfi.cleaning_polynomial(fin, ti, wi, Nterms_fg=Nfg, Nterms_std=5, Nstd=5)
+			tti, wwi = rfi.cleaning_polynomial(fin, ti, wi, Nterms_fg=Nfg, Nterms_std=5, Nstd=3.5)
 			
 			
 			# Fitting foreground model to binned version of spectra
@@ -752,27 +752,27 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 
 
 
-	# Save
-	# ----
+	## Save
+	## ----
 	
-	if band == 'mid_band':
-		save_folder = edges_folder + band + '/spectra/level3/' + flag_folder + '/'
-		if not exists(save_folder):
-			makedirs(save_folder)
+	#if band == 'mid_band':
+		#save_folder = edges_folder + band + '/spectra/level3/' + flag_folder + '/'
+		#if not exists(save_folder):
+			#makedirs(save_folder)
 			
-	elif band == 'low_band3':
-		save_folder = '/media/raul/EXTERNAL_2TB/low_band3/spectra/level3/' + flag_folder + '/'
-		if not exists(save_folder):
-			makedirs(save_folder)		
+	#elif band == 'low_band3':
+		#save_folder = '/media/raul/EXTERNAL_2TB/low_band3/spectra/level3/' + flag_folder + '/'
+		#if not exists(save_folder):
+			#makedirs(save_folder)		
 
-	with h5py.File(save_folder + year_day_hdf5, 'w') as hf:
-		hf.create_dataset('frequency',           data = fin)
-		hf.create_dataset('antenna_temperature', data = t_all)
-		hf.create_dataset('parameters',          data = p_all)
-		hf.create_dataset('residuals',           data = r_all)
-		hf.create_dataset('weights',             data = w_all)
-		hf.create_dataset('rms',                 data = rms_all)
-		hf.create_dataset('metadata',            data = m_2D)
+	#with h5py.File(save_folder + year_day_hdf5, 'w') as hf:
+		#hf.create_dataset('frequency',           data = fin)
+		#hf.create_dataset('antenna_temperature', data = t_all)
+		#hf.create_dataset('parameters',          data = p_all)
+		#hf.create_dataset('residuals',           data = r_all)
+		#hf.create_dataset('weights',             data = w_all)
+		#hf.create_dataset('rms',                 data = rms_all)
+		#hf.create_dataset('metadata',            data = m_2D)
 
 
 

@@ -5,7 +5,7 @@ import scipy as sp
 import time  as tt 
 import datetime as dt
 import multiprocessing as mp
-import reflection_coefficient as rc
+import old_reflection_coefficient as rc
 import numpy.linalg as nla
 
 import scipy.io as sio
@@ -45,7 +45,8 @@ from math import floor
 home_folder = expanduser("~")
 
 
-
+import os, sys
+edges_folder       = os.environ['EDGES_vol1']
 
 
 
@@ -14967,7 +14968,8 @@ def FEKO_low_band_blade_beam(beam_file=1, frequency_interpolation='no', frequenc
 
 	"""
 
-	data_folder = home_folder + '/DATA/EDGES/calibration/beam/alans_antenna_simulations/blade_low_band/'
+	data_folder_alan = edges_folder + 'calibration/beam/alan/blade_low_band/'
+	data_folder_nivedita = edges_folder + 'calibration/beam/nivedita/blade_low_band/'
 
 
 	# Loading beam
@@ -14976,18 +14978,18 @@ def FEKO_low_band_blade_beam(beam_file=1, frequency_interpolation='no', frequenc
 	# --------------------------------------------------------
 	if beam_file == 0:
 		# Extended ground plane, FROM NIVEDITA, 40-100 MHz
-		ff         = data_folder + 'newniv.txt'
+		ff         = data_folder_nivedita + 'newniv.txt'
 		f_original = np.arange(40,101,2)   #between 40 and 100 MHz in steps of 2 MHz
 		print('BEAM EXTENDED GROUND PLANE, FROM NIVEDITA')
 
 	if beam_file == 1:		
 		# Extended ground plane, 40-100 MHz
-		ff         = data_folder + 'alan_blade_beam_model_azelq_blade9perf7low_g4.txt'
+		ff         = data_folder_alan + 'alan_blade_beam_model_azelq_blade9perf7low_g4.txt'
 		f_original = np.arange(40,101,2)   #between 40 and 100 MHz in steps of 2 MHz
 
 	if beam_file == 2:
 		# Extended ground plane, 40-120 MHz
-		ff         = data_folder + 'azelq_blade9perf7low_g4w_40_120_MHz.txt'
+		ff         = data_folder_alan + 'azelq_blade9perf7low_g4w_40_120_MHz.txt'
 		f_original = np.arange(40,121,2)   #between 40 and 120 MHz in steps of 2 MHz
 
 
@@ -14995,18 +14997,18 @@ def FEKO_low_band_blade_beam(beam_file=1, frequency_interpolation='no', frequenc
 	# ---------------------------------------------------------
 	if beam_file == 3:
 		# Original ground plane, between 80 and 200 MHz in steps of 5 MHz
-		ff         = data_folder + 'azelq_blade11_3.5_2e-2_original_small_ground_plane_low_band1.txt'
+		ff         = data_folder_alan + 'azelq_blade11_3.5_2e-2_original_small_ground_plane_low_band1.txt'
 		f_original = np.arange(40,101,2.5)   # It can directly be scaled to 40-100 MHz
 
 	if beam_file == 4:
 		# Original ground plane, between 40 and 100 MHz in steps of 2 MHz, by NIVEDITA
-		ff         = data_folder + 'oldniv_original_10x10m_ground_plane_low_band1_from_nivedita.txt'
+		ff         = data_folder_nivedita + 'oldniv_original_10x10m_ground_plane_low_band1_from_nivedita.txt'
 		f_original = np.arange(40,101,2)
 		print('BEAM ORIGINAL GROUND PLANE, FROM NIVEDITA')
 
 	if beam_file == 5:
 		# Original ground plane, between 50 and 120 MHz in steps of 2 MHz, from Alan
-		ff         = data_folder + 'azelq_blade_10x10.txt'
+		ff         = data_folder_alan + 'azelq_blade_10x10.txt'
 		f_original = np.arange(50,121,2)
 		print('BEAM ORIGINAL GROUND PLANE, 50-120 MHz, FROM ALAN')		
 
@@ -46214,7 +46216,7 @@ def models_antenna_s11_remove_delay(band, antenna, f_MHz, antenna_s11_day = 87, 
 
 
 		# Paths
-		path_data = home_folder + '/DATA/EDGES/calibration/antenna_s11/high_band1/s11/corrected/'
+		path_data = edges_folder + 'calibration/antenna_s11/high_band1/s11/corrected/'
 
 		
 		# 2015
@@ -46288,7 +46290,7 @@ def models_antenna_s11_remove_delay(band, antenna, f_MHz, antenna_s11_day = 87, 
 
 
 		# Paths
-		path_data = home_folder + '/DATA/EDGES/calibration/antenna_s11/low_band1/s11/corrected/'
+		path_data = home_folder + 'calibration/antenna_s11/low_band1/s11/corrected/'
 
 
 		# Original Ground Plane

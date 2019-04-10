@@ -27,8 +27,10 @@ from os.path import expanduser
 home_folder = expanduser("~")
 
 import os
-edges_folder       = os.environ['EDGES']
+edges_folder       = os.environ['EDGES_vol2']
 print('EDGES Folder: ' + edges_folder)
+
+edges_folder_v1       = os.environ['EDGES_vol1']
 
 
 
@@ -2728,19 +2730,29 @@ def ground_loss(band, f_MHz):
 
 	"""
 	
-	f_MHz: frequency in MHz between 50 and 150 MHz
+	f_MHz: frequency in MHz. For mid-band (low-band), between 50 and 150 (120) MHz.
 	
 	"""
 	
-	
-	gr = np.genfromtxt(home_folder + '/DATA/EDGES/mid_band/calibration/ground_loss/loss_column.txt')
-	
-	fr = gr[:,0]
-	dr = gr[:,1]
-	
-	par   = np.polyfit(fr, dr, 8)  # 7 terms are sufficient
-	model = np.polyval(par, f_MHz)
-	
+	if band == 'low_band':
+		gr = np.genfromtxt(edges_folder_v1 + 'calibration/loss/low_band/ground_loss/lowband_loss_on_30x30m_two_columns.txt')
+		
+		fr = gr[:,0]
+		dr = gr[:,1]
+		
+		par   = np.polyfit(fr, dr, 8)  # 7 terms are sufficient
+		model = np.polyval(par, f_MHz)
+		
+		
+	elif band == 'mid_band':
+		gr = np.genfromtxt(edges_folder + 'mid_band/calibration/ground_loss/loss_column.txt')
+		
+		fr = gr[:,0]
+		dr = gr[:,1]
+		
+		par   = np.polyfit(fr, dr, 8)  # 7 terms are sufficient
+		model = np.polyval(par, f_MHz)	
+
 	
 	return 1-model
 
