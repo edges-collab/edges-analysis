@@ -1136,18 +1136,18 @@ def batch_mid_band_level2_to_level3(case, first_item, last_item):
 	if case == 1:
 		flag_folder       = 'case1'
 		
-		receiver_cal_file = 4   # 10 terms over 50-150 MHz
+		receiver_cal_file = 1   # 7 terms over 50-150 MHz
 		
 		antenna_s11_day   = 147
 		antenna_s11_case  = 3
-		antenna_s11_Nfit  = 13  # 13 terms over 59-120 MHz
+		antenna_s11_Nfit  = 13 # 13 terms over 59-121 MHz
 		
 		balun_correction  = 1
 		ground_correction = 1
 		beam_correction   = 1
 		
 		FLOW  = 59
-		FHIGH = 120
+		FHIGH = 121
 		Nfg   = 5
 
 
@@ -1391,6 +1391,39 @@ def batch_plot_daily_residuals_LST():
 	
 	
 	return 0
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2480,122 +2513,6 @@ def receiver1_switch_crosscheck():
 
 
 
-def VNA_R60_test():
-	
-	
-	path_folder  = '/home/raul/DATA/EDGES/others/R60_test/comparison/'
-	o_R, f       = rc.s1p_read(path_folder + 'OPEN.s1p')
-	s_R, f       = rc.s1p_read(path_folder + 'SHORT.s1p')
-	m_R, f       = rc.s1p_read(path_folder + 'MATCH.s1p')
-	at3_R, f     = rc.s1p_read(path_folder + '3dB_ATTENUATOR.s1p')
-	at6_R, f     = rc.s1p_read(path_folder + '6dB_ATTENUATOR.s1p')
-	at10_R, f    = rc.s1p_read(path_folder + '10dB_ATTENUATOR.s1p')	
-	at15_R, f    = rc.s1p_read(path_folder + '15dB_ATTENUATOR.s1p')	
-
-	o_K, f       = rc.s1p_read(path_folder + 'AGILENT_E5061A_OPEN.s1p')
-	s_K, f       = rc.s1p_read(path_folder + 'AGILENT_E5061A_SHORT.s1p')
-	m_K, f       = rc.s1p_read(path_folder + 'AGILENT_E5061A_MATCH.s1p')
-	at3_K, f     = rc.s1p_read(path_folder + 'AGILENT_E5061A_3dB_ATTENUATOR.s1p')
-	at6_K, f     = rc.s1p_read(path_folder + 'AGILENT_E5061A_6dB_ATTENUATOR.s1p')
-	at10_K, f    = rc.s1p_read(path_folder + 'AGILENT_E5061A_10dB_ATTENUATOR.s1p')	
-	at15_K, f    = rc.s1p_read(path_folder + 'AGILENT_E5061A_15dB_ATTENUATOR.s1p')	
-
-
-
-
-
-
-		
-	# Standard values assumed
-	#o_a =  1 * np.ones(len(f))
-	#s_a = -1 * np.ones(len(f))
-	#m_a =  0 * np.ones(len(f))	
-
-
-	xx  = rc.agilent_85033E(f, 50, m = 1, md_value_ps = 38)
-	o_a = xx[0]
-	s_a = xx[1]
-	m_a = xx[2]
-
-
-
-
-
-	# Correction 
-	at3_Rc, xx1, xx2, xx3  = rc.de_embed(o_a, s_a, m_a, o_R, s_R, m_R, at3_R)
-	at6_Rc, xx1, xx2, xx3  = rc.de_embed(o_a, s_a, m_a, o_R, s_R, m_R, at6_R)
-	at10_Rc, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_R, s_R, m_R, at10_R)
-	at15_Rc, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_R, s_R, m_R, at15_R)	
-	
-	at3_Kc, xx1, xx2, xx3  = rc.de_embed(o_a, s_a, m_a, o_K, s_K, m_K, at3_K)
-	at6_Kc, xx1, xx2, xx3  = rc.de_embed(o_a, s_a, m_a, o_K, s_K, m_K, at6_K)
-	at10_Kc, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_K, s_K, m_K, at10_K)
-	at15_Kc, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_K, s_K, m_K, at15_K)
-	
-
-
-
-
-
-	# Plot
-	
-	plt.figure(1)
-	
-	plt.subplot(4,2,1)
-	plt.plot(f/1e6, 20*np.log10(np.abs(at3_Kc)))
-	plt.plot(f/1e6, 20*np.log10(np.abs(at3_Rc)))
-	plt.ylabel('3-dB Attn [dB]')
-	plt.title('MAGNITUDE')
-
-	plt.subplot(4,2,2)
-	plt.plot(f/1e6, (180/np.pi)*np.unwrap(np.angle(at3_Rc)) - (180/np.pi)*np.unwrap(np.angle(at3_Kc)))
-	plt.ylabel('3-dB Attn [degrees]')
-	plt.title(r'$\Delta$ PHASE')
-
-
-	plt.subplot(4,2,3)
-	plt.plot(f/1e6, 20*np.log10(np.abs(at6_Kc)))
-	plt.plot(f/1e6, 20*np.log10(np.abs(at6_Rc)))
-	plt.ylabel('6-dB Attn [dB]')
-
-	plt.subplot(4,2,4)
-	plt.plot(f/1e6, (180/np.pi)*np.unwrap(np.angle(at6_Rc)) - (180/np.pi)*np.unwrap(np.angle(at6_Kc)))
-	plt.ylabel('6-dB Attn [degrees]')
-
-
-
-	plt.subplot(4,2,5)
-	plt.plot(f/1e6, 20*np.log10(np.abs(at10_Kc)))
-	plt.plot(f/1e6, 20*np.log10(np.abs(at10_Rc)))
-	plt.ylabel('10-dB Attn [dB]')
-
-	plt.subplot(4,2,6)
-	plt.plot(f/1e6, (180/np.pi)*np.unwrap(np.angle(at10_Rc)) - (180/np.pi)*np.unwrap(np.angle(at10_Kc)))
-	plt.ylabel('10-dB Attn [degrees]')
-	
-	
-
-	plt.subplot(4,2,7)
-	plt.plot(f/1e6, 20*np.log10(np.abs(at15_Kc)))
-	plt.plot(f/1e6, 20*np.log10(np.abs(at15_Rc)))
-	plt.xlabel('frequency [MHz]')
-	plt.ylabel('15-dB Attn [dB]')
-	plt.legend(['Keysight E5061A', 'R60'])
-
-	plt.subplot(4,2,8)
-	plt.plot(f/1e6, (180/np.pi)*np.unwrap(np.angle(at15_Rc)) - (180/np.pi)*np.unwrap(np.angle(at15_Kc)))	
-	plt.xlabel('frequency [MHz]')
-	plt.ylabel('15-dB Attn [degrees]')
-
-	return f, at3_K, at6_K, at10_K, at15_K, at3_Kc, at6_Kc, at10_Kc, at15_Kc, at3_R, at6_R, at10_R, at15_R, at3_Rc, at6_Rc, at10_Rc, at15_Rc
-
-
-
-
-
-
-
-
 
 
 
@@ -3364,6 +3281,98 @@ def midband_paper_plots(plot_number):
 
 
 
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+
+def plot_daily_residuals_nominal(f, rx, wx, ydx):
+	
+	
+	keep_index = eg.daily_nominal_filter('mid_band', 1, ydx)
+	r  = rx[keep_index==1]
+	w  = wx[keep_index==1]
+	yd = ydx[keep_index==1]
+
+
+
+
+
+
+	lr = len(r[:,0])
+	for i in range(lr):
+		fb, rb, wb = ba.spectral_binning_number_of_samples(f, r[i,:], w[i,:])
+		if i == 0:
+			rb_all = np.zeros((lr, len(fb)))
+			wb_all = np.zeros((lr, len(fb)))
+			
+		rb_all[i,:] = rb
+		wb_all[i,:] = wb
+		
+	
+
+	
+	
+	# Settings
+	# ----------------------------------
+
+	LST_centers = list(np.arange(0.5, lr))
+	LST_text    = [str(int(yd[i,1])) for i in range(lr)]#'GHA=0-5 hr', 'GHA=5-11 hr', 'GHA=11-18 hr', 'GHA=18-24 hr']
+	DY          =  0.7
+
+	FLOW_plot   =  53
+	FHIGH_plot  = 122
+
+	XTICKS      =  np.arange(60, 121, 20)
+	XTEXT       =  54
+	YLABEL      =  str(DY) + ' K per division'
+	TITLE       = ''#'59-121 MHz, GHA=6-18 hr'
+	
+	figure_path = '/home/raul/Desktop/'
+	figure_name = 'daily_residuals_nominal_59_121MHz_GHA_6_18hr'
+	
+	FIG_SX      = 6
+	FIG_SY      = 15
+	
+	
+	
+	# Plotting
+	x = eg.plot_residuals(fb, rb_all, wb_all, LST_text, FIG_SX=FIG_SX, FIG_SY=FIG_SY, DY=DY, FLOW=FLOW_plot, FHIGH=FHIGH_plot, XTICKS=XTICKS, XTEXT=XTEXT, YLABEL=YLABEL, TITLE=TITLE, save='yes', figure_path=figure_path, figure_name=figure_name)
+	
+	
+	
+	return 0
+
+
+
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
 	
 	
 	

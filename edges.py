@@ -752,27 +752,27 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 
 
 
-	## Save
-	## ----
+	# Save
+	# ----
 	
-	#if band == 'mid_band':
-		#save_folder = edges_folder + band + '/spectra/level3/' + flag_folder + '/'
-		#if not exists(save_folder):
-			#makedirs(save_folder)
+	if band == 'mid_band':
+		save_folder = edges_folder + band + '/spectra/level3/' + flag_folder + '/'
+		if not exists(save_folder):
+			makedirs(save_folder)
 			
-	#elif band == 'low_band3':
-		#save_folder = '/media/raul/EXTERNAL_2TB/low_band3/spectra/level3/' + flag_folder + '/'
-		#if not exists(save_folder):
-			#makedirs(save_folder)		
+	elif band == 'low_band3':
+		save_folder = '/media/raul/EXTERNAL_2TB/low_band3/spectra/level3/' + flag_folder + '/'
+		if not exists(save_folder):
+			makedirs(save_folder)		
 
-	#with h5py.File(save_folder + year_day_hdf5, 'w') as hf:
-		#hf.create_dataset('frequency',           data = fin)
-		#hf.create_dataset('antenna_temperature', data = t_all)
-		#hf.create_dataset('parameters',          data = p_all)
-		#hf.create_dataset('residuals',           data = r_all)
-		#hf.create_dataset('weights',             data = w_all)
-		#hf.create_dataset('rms',                 data = rms_all)
-		#hf.create_dataset('metadata',            data = m_2D)
+	with h5py.File(save_folder + year_day_hdf5, 'w') as hf:
+		hf.create_dataset('frequency',           data = fin)
+		hf.create_dataset('antenna_temperature', data = t_all)
+		hf.create_dataset('parameters',          data = p_all)
+		hf.create_dataset('residuals',           data = r_all)
+		hf.create_dataset('weights',             data = w_all)
+		hf.create_dataset('rms',                 data = rms_all)
+		hf.create_dataset('metadata',            data = m_2D)
 
 
 
@@ -782,6 +782,41 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 
 
 	
+
+
+
+
+def test():
+	
+	ff = fin[(fin>=55) & (fin<=125)];
+	avt, avw = ba.spectral_averaging(t_all[m_2D[:,3]<11.5,:], w_all[m_2D[:,3]<11.5,:])
+	avtt = avt[(fin>=55) & (fin<=125)]
+	avww = avw[(fin>=55) & (fin<=125)]
+	ttix, wwix = rfi.cleaning_polynomial(ff, avtt, avww, Nterms_fg=7, Nterms_std=5, Nstd=3.5)
+	pp = ba.fit_polynomial_fourier('LINLOG', ff, ttix, 5, Weights=wwix)
+	fb, rb, wb = ba.spectral_binning_number_of_samples(ff, ttix-pp[1], wwix)
+	plt.plot(fb[wb>0], rb[wb>0])
+	plt.ylim([-1.5, 1.5]); plt.xlim([50, 130])
+	
+	return 0
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1428,17 +1463,17 @@ def level3_to_level4(band, case, GHA_edges):
 				
 				
 				# Final RFI cleaning
-				avr[(f>130) & (f<130.4)]   = 0
-				avw[(f>130) & (f<130.4)]   = 0
+				#avr[(f>130) & (f<130.4)]   = 0
+				#avw[(f>130) & (f<130.4)]   = 0
 			
-				avr[(f>136.1) & (f<138.2)] = 0
-				avw[(f>136.1) & (f<138.2)] = 0
+				#avr[(f>136.1) & (f<138.2)] = 0
+				#avw[(f>136.1) & (f<138.2)] = 0
 			
-				avr[(f>145.5) & (f<146)]   = 0
-				avw[(f>145.5) & (f<146)]   = 0
+				#avr[(f>145.5) & (f<146)]   = 0
+				#avw[(f>145.5) & (f<146)]   = 0
 				
-				avr[(f>149.8) & (f<150.3)] = 0
-				avw[(f>149.8) & (f<150.3)] = 0
+				#avr[(f>149.8) & (f<150.3)] = 0
+				#avw[(f>149.8) & (f<150.3)] = 0
 
 
 
@@ -1676,6 +1711,120 @@ def level4read(path_file):
 
 
 	return f, p_all, r_all, w_all, gha, yd	
+
+
+
+
+
+
+
+def daily_nominal_filter(band, case, year_day_list):
+	
+	
+	l = len(year_day_list)
+	keep_all = np.zeros(l)
+	
+	if (band == 'mid_band') and (case == 1):
+		
+		bad = np.array([[2018, 149], [2018, 150], [2018, 151], [2018, 159], [2018, 162], [2018, 163], [2018, 164], [2018, 170], [2018, 176], [2018, 177], [2018, 184], [2018, 185], [2018, 186], [2018, 192], [2018, 193], [2018, 195], [2018, 196], [2018, 204], [2018, 208], [2018, 216]])
+		
+		for j in range(l):
+			keep = 1
+			for i in range(len(bad)):
+				if (year_day_list[j,0] == bad[i,0]) and (year_day_list[j,1] == bad[i,1]):
+					keep = 0
+					
+			keep_all[j] = keep
+
+	return keep_all
+
+
+
+
+
+
+
+
+def integrated_nominal_spectrum(FLOW, FHIGH, day_min1, day_max1, day_min2, day_max2):
+	
+		
+	f, px, rx, wx, gha, ydx = level4read(edges_folder + 'mid_band/spectra/level4/case1/case1.hdf5')
+	
+	keep_index = daily_nominal_filter('mid_band', 1, ydx)
+	
+	
+	p  = px[(keep_index==1) & (((ydx[:,1]>=day_min1) & (ydx[:,1]<=day_max1)) | ((ydx[:,1]>=day_min2) & (ydx[:,1]<=day_max2))), 0, :]
+	r  = rx[(keep_index==1) & (((ydx[:,1]>=day_min1) & (ydx[:,1]<=day_max1)) | ((ydx[:,1]>=day_min2) & (ydx[:,1]<=day_max2))), 0, :]
+	w  = wx[(keep_index==1) & (((ydx[:,1]>=day_min1) & (ydx[:,1]<=day_max1)) | ((ydx[:,1]>=day_min2) & (ydx[:,1]<=day_max2))), 0, :]
+	yd = ydx[(keep_index==1) & (((ydx[:,1]>=day_min1) & (ydx[:,1]<=day_max1)) | ((ydx[:,1]>=day_min2) & (ydx[:,1]<=day_max2))) ]
+	
+	avp = np.mean(p, axis=0)
+	m   = ba.model_evaluate('LINLOG', avp, f/200)
+	
+	
+	avr, avw = ba.spectral_averaging(r, w)
+	rr, wr   = rfi.cleaning_sweep(f, avr, avw, window_width_MHz=3, Npolyterms_block=2, N_choice=20, N_sigma=2.5) 
+	tr       = m + rr
+		
+	
+	ft = f[(f>=FLOW) & (f<=FHIGH)]
+	tt = tr[(f>=FLOW) & (f<=FHIGH)]
+	wt = wr[(f>=FLOW) & (f<=FHIGH)]
+
+	
+	pt = ba.fit_polynomial_fourier('LINLOG', ft/200, tt, 5, Weights=wt)
+	mt = ba.model_evaluate('LINLOG', pt[0], ft/200)
+	rt = tt-mt
+	
+	fb, rb, wb  = ba.spectral_binning_number_of_samples(ft, rt, wt)
+	
+	# Cleanning RFI spike
+	rb[(fb >=105.5) & (fb<=107.5)] = 0
+	wb[(fb >=105.5) & (fb<=107.5)] = 0
+
+
+	#plt.plot(ft, rt)
+	plt.figure(figsize=[14, 3.5])
+	plt.plot(fb[wb>0], rb[wb>0], 'b', linewidth=2)
+	plt.xlim([58, 121])
+	plt.ylim([-0.25, 0.25])
+	plt.xlabel('frequency [MHz]')
+	plt.ylabel('brightness temperature [K]')
+	plt.grid()
+			
+	plt.savefig('/home/raul/Desktop/average.pdf', bbox_inches='tight')
+	plt.close()
+	plt.close()	
+
+	
+	
+	return ft, tt, mt, wt
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
