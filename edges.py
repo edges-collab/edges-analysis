@@ -1259,7 +1259,7 @@ def rms_filter_computation(band, case, save_parameters='no'):
 
 def rms_filter(band, case, gx, rms, Nsigma):
 	
-	if case == 1:
+	if (case == 1) or (case == 2) or (case == 3):
 		file_path = edges_folder + band + '/rms_filters/case1/'
 		
 
@@ -1325,6 +1325,20 @@ def level3_to_level4(band, case, GHA_edges):
 			path_files             = edges_folder + 'mid_band/spectra/level3/case1/'
 			save_folder            = edges_folder + 'mid_band/spectra/level4/case1/'
 			output_file_name_hdf5  = 'case1.hdf5'
+			
+		if case == 2:
+			path_files             = edges_folder + 'mid_band/spectra/level3/case2/'
+			save_folder            = edges_folder + 'mid_band/spectra/level4/case2/'
+			output_file_name_hdf5  = 'case2.hdf5'	
+			
+
+		if case == 3:
+			path_files             = edges_folder + 'mid_band/spectra/level3/case3/'
+			save_folder            = edges_folder + 'mid_band/spectra/level4/case3/'
+			output_file_name_hdf5  = 'case3.hdf5'
+			
+			
+			
 			
 
 			
@@ -1748,7 +1762,7 @@ def daily_nominal_filter(band, case, year_day_list):
 def integrated_nominal_spectrum(FLOW, FHIGH, day_min1, day_max1, day_min2, day_max2):
 	
 		
-	f, px, rx, wx, gha, ydx = level4read(edges_folder + 'mid_band/spectra/level4/case1/case1.hdf5')
+	f, px, rx, wx, gha, ydx = level4read(edges_folder + 'mid_band/spectra/level4/case3/case3.hdf5')
 	
 	keep_index = daily_nominal_filter('mid_band', 1, ydx)
 	
@@ -1772,25 +1786,107 @@ def integrated_nominal_spectrum(FLOW, FHIGH, day_min1, day_max1, day_min2, day_m
 	wt = wr[(f>=FLOW) & (f<=FHIGH)]
 
 	
-	pt = ba.fit_polynomial_fourier('LINLOG', ft/200, tt, 5, Weights=wt)
-	mt = ba.model_evaluate('LINLOG', pt[0], ft/200)
-	rt = tt-mt
 	
-	fb, rb, wb  = ba.spectral_binning_number_of_samples(ft, rt, wt)
+
+
+
+
+
+	pt  = ba.fit_polynomial_fourier('LINLOG', ft/200, tt, 3, Weights=wt)
+	mt  = ba.model_evaluate('LINLOG', pt[0], ft/200)
+	rt3 = tt-mt
+	
+	pt  = ba.fit_polynomial_fourier('LINLOG', ft/200, tt, 4, Weights=wt)
+	mt  = ba.model_evaluate('LINLOG', pt[0], ft/200)
+	rt4 = tt-mt
+	
+	pt  = ba.fit_polynomial_fourier('LINLOG', ft/200, tt, 5, Weights=wt)
+	mt  = ba.model_evaluate('LINLOG', pt[0], ft/200)
+	rt5 = tt-mt
+	
+	
+	pl     = np.polyfit(np.log(ft[wt>0]/200), np.log(tt[wt>0]), 2)
+	log_ml = np.polyval(pl, np.log(ft/200))
+	ml     = np.exp(log_ml)
+	rl3    = tt - ml
+	
+	pl     = np.polyfit(np.log(ft[wt>0]/200), np.log(tt[wt>0]), 3)
+	log_ml = np.polyval(pl, np.log(ft/200))
+	ml     = np.exp(log_ml)
+	rl4    = tt - ml
+	
+	pl     = np.polyfit(np.log(ft[wt>0]/200), np.log(tt[wt>0]), 4)
+	log_ml = np.polyval(pl, np.log(ft/200))
+	ml     = np.exp(log_ml)
+	rl5    = tt - ml
+	
+	
+	
+	
+	
+	
+	fb, rb3, wb3  = ba.spectral_binning_number_of_samples(ft, rt3, wt)
+	fb, rb4, wb4  = ba.spectral_binning_number_of_samples(ft, rt4, wt)
+	fb, rb5, wb5  = ba.spectral_binning_number_of_samples(ft, rt5, wt)
+
+	fb, rbl3, wbl3  = ba.spectral_binning_number_of_samples(ft, rl3, wt)
+	fb, rbl4, wbl4  = ba.spectral_binning_number_of_samples(ft, rl4, wt)
+	fb, rbl5, wbl5  = ba.spectral_binning_number_of_samples(ft, rl5, wt)
+	
+
+
 	
 	# Cleanning RFI spike
-	rb[(fb >=105.5) & (fb<=107.5)] = 0
-	wb[(fb >=105.5) & (fb<=107.5)] = 0
+	rb3[(fb >=105.5) & (fb<=107.5)] = 0
+	wb3[(fb >=105.5) & (fb<=107.5)] = 0
+	
+	rb4[(fb >=105.5) & (fb<=107.5)] = 0
+	wb4[(fb >=105.5) & (fb<=107.5)] = 0
+
+	rb5[(fb >=105.5) & (fb<=107.5)] = 0
+	wb5[(fb >=105.5) & (fb<=107.5)] = 0
+
+
+	rbl3[(fb >=105.5) & (fb<=107.5)] = 0
+	wbl3[(fb >=105.5) & (fb<=107.5)] = 0
+
+	rbl4[(fb >=105.5) & (fb<=107.5)] = 0
+	wbl4[(fb >=105.5) & (fb<=107.5)] = 0
+	
+	rbl5[(fb >=105.5) & (fb<=107.5)] = 0
+	wbl5[(fb >=105.5) & (fb<=107.5)] = 0
+
 
 
 	#plt.plot(ft, rt)
-	plt.figure(figsize=[14, 3.5])
-	plt.plot(fb[wb>0], rb[wb>0], 'b', linewidth=2)
-	plt.xlim([58, 121])
-	plt.ylim([-0.25, 0.25])
+	plt.figure(figsize=[8, 9])
+	
+	plt.subplot(2,1,1)
+	plt.plot(fb[wb3>0], rb3[wb3>0], 'r', linewidth=2)
+	plt.plot(fb[wbl3>0], rbl3[wbl3>0], 'r--', linewidth=1)
+	plt.plot(fb[wb4>0], rb4[wb4>0], 'g', linewidth=2)
+	plt.plot(fb[wbl4>0], rbl4[wbl4>0], 'g--', linewidth=1)
+	plt.plot(fb[wb5>0], rb5[wb5>0], 'b', linewidth=2)
+	plt.plot(fb[wbl5>0], rbl5[wbl5>0], 'b--', linewidth=1)
+	plt.xlim([58, 120])
+	plt.ylim([-1, 1])
+	#plt.xlabel('frequency [MHz]')
+	plt.ylabel('brightness temperature [K]')
+	#plt.grid()
+	
+	
+	plt.subplot(2,1,2)
+	plt.plot(fb[wb5>0], rb5[wb5>0] + 0.2, 'b', linewidth=2)
+	plt.plot(fb[wbl5>0], rbl5[wbl5>0] - 0.2, 'b', linewidth=1)
+	plt.xlim([58, 120])
+	plt.ylim([-0.6, 0.6])
 	plt.xlabel('frequency [MHz]')
 	plt.ylabel('brightness temperature [K]')
-	plt.grid()
+	plt.legend(['LinLog','LogLog'])
+	#plt.grid()
+		
+		
+		
 			
 	plt.savefig('/home/raul/Desktop/average.pdf', bbox_inches='tight')
 	plt.close()

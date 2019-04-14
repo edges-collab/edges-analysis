@@ -1149,9 +1149,46 @@ def batch_mid_band_level2_to_level3(case, first_item, last_item):
 		FLOW  = 59
 		FHIGH = 121
 		Nfg   = 5
+		
+	
+		
+	# Relative to Case1, change in receiver calibration file (from 1 to 4)
+	if case == 2:   
+		flag_folder       = 'case2'
+		
+		receiver_cal_file = 4   # 10 terms over 50-150 MHz
+		
+		antenna_s11_day   = 147
+		antenna_s11_case  = 3
+		antenna_s11_Nfit  = 13 # 13 terms over 59-121 MHz
+		
+		balun_correction  = 1
+		ground_correction = 1
+		beam_correction   = 1
+		
+		FLOW  = 59
+		FHIGH = 121
+		Nfg   = 5
 
 
 
+	# Relative to Case1, change in antenna S11 file (case 3 to case 5)
+	if case == 3:   
+		flag_folder       = 'case3'
+		
+		receiver_cal_file = 1   # 7 terms over 50-150 MHz
+		
+		antenna_s11_day   = 147
+		antenna_s11_case  = 5
+		antenna_s11_Nfit  = 13 # 13 terms over 59-121 MHz
+		
+		balun_correction  = 1
+		ground_correction = 1
+		beam_correction   = 1
+		
+		FLOW  = 59
+		FHIGH = 121
+		Nfg   = 5
 
 
 
