@@ -2735,6 +2735,150 @@ def VNA_comparison():
 
 
 
+def VNA_comparison2():
+	
+	path_folder1  = edges_folder + 'others/vna_comparison/again/ks_e5061a/'
+	path_folder2  = edges_folder + 'others/vna_comparison/again/cm_tr1300/'
+
+
+	o_K1, f       = rc.s1p_read(path_folder1 + 'Open_Measurment_01.s1p')
+	s_K1, f       = rc.s1p_read(path_folder1 + 'Short_Measurment_01.s1p')
+	m_K1, f       = rc.s1p_read(path_folder1 + 'Match_Measurment_01.s1p')
+	at3_K1, f     = rc.s1p_read(path_folder1 + '3dB_Mearsurment_01.s1p')
+	at6_K1, f     = rc.s1p_read(path_folder1 + '6dB_Mearsurment_01.s1p')
+	at10_K1, f    = rc.s1p_read(path_folder1 + '10dB_Mearsurment_01.s1p')	
+	at15_K1, f    = rc.s1p_read(path_folder1 + '15dB_Mearsurment_01.s1p')
+
+	o_K2, f       = rc.s1p_read(path_folder1 + 'Open_Measurment_02.s1p')
+	s_K2, f       = rc.s1p_read(path_folder1 + 'Short_Measurment_02.s1p')
+	m_K2, f       = rc.s1p_read(path_folder1 + 'Match_Measurment_02.s1p')
+	at3_K2, f     = rc.s1p_read(path_folder1 + '3dB_Mearsurment_02.s1p')
+	at6_K2, f     = rc.s1p_read(path_folder1 + '6dB_Mearsurment_02.s1p')
+	at10_K2, f    = rc.s1p_read(path_folder1 + '10dB_Mearsurment_02.s1p')	
+	at15_K2, f    = rc.s1p_read(path_folder1 + '15dB_Mearsurment_02.s1p')	
+
+
+
+	o_C1, f       = rc.s1p_read(path_folder2 + 'Open_Measurment_01.s1p')
+	s_C1, f       = rc.s1p_read(path_folder2 + 'Short_Measurment_01.s1p')
+	m_C1, f       = rc.s1p_read(path_folder2 + 'Match_Measurment_01.s1p')
+	at3_C1, f     = rc.s1p_read(path_folder2 + '3dB_Measurment_01.s1p')
+	at6_C1, f     = rc.s1p_read(path_folder2 + '6dB_Measurment_01.s1p')
+	at10_C1, f    = rc.s1p_read(path_folder2 + '10dB_Measurment_01.s1p')
+	at15_C1, f    = rc.s1p_read(path_folder2 + '15dB_Measurment_01.s1p')
+
+	o_C2, f       = rc.s1p_read(path_folder2 + 'Open_Measurment_02.s1p')
+	s_C2, f       = rc.s1p_read(path_folder2 + 'Short_Measurment_02.s1p')
+	m_C2, f       = rc.s1p_read(path_folder2 + 'Match_Measurment_02.s1p')
+	at3_C2, f     = rc.s1p_read(path_folder2 + '3dB_Measurment_02.s1p')
+	at6_C2, f     = rc.s1p_read(path_folder2 + '6dB_Measurment_02.s1p')
+	at10_C2, f    = rc.s1p_read(path_folder2 + '10dB_Measurment_02.s1p')
+	at15_C2, f    = rc.s1p_read(path_folder2 + '15dB_Measurment_02.s1p')
+
+	
+
+	xx  = rc.agilent_85033E(f, 50, m = 1, md_value_ps = 38)
+	o_a = xx[0]
+	s_a = xx[1]
+	m_a = xx[2]
+
+
+
+
+
+	# Correction	
+	#at3_K1c, xx1, xx2, xx3  = rc.de_embed(o_a, s_a, m_a, o_K1, s_K1, m_K1, at3_K1)
+	#at6_K1c, xx1, xx2, xx3  = rc.de_embed(o_a, s_a, m_a, o_K1, s_K1, m_K1, at6_K1)
+	#at10_K1c, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_K1, s_K1, m_K1, at10_K1)
+	#at15_K1c, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_K1, s_K1, m_K1, at15_K1)
+	
+	#at3_C1c, xx1, xx2, xx3  = rc.de_embed(o_a, s_a, m_a, o_C1, s_C1, m_C1, at3_C1)
+	#at6_C1c, xx1, xx2, xx3  = rc.de_embed(o_a, s_a, m_a, o_C1, s_C1, m_C1, at6_C1)
+	#at10_C1c, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_C1, s_C1, m_C1, at10_C1)
+	#at15_C1c, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_C1, s_C1, m_C1, at15_C1)	
+	
+	
+	at3_Kc, xx1, xx2, xx3  = rc.de_embed(o_a, s_a, m_a, o_K2, s_K2, m_K2, at3_K2)
+	at6_Kc, xx1, xx2, xx3  = rc.de_embed(o_a, s_a, m_a, o_K2, s_K2, m_K2, at6_K2)
+	at10_Kc, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_K2, s_K2, m_K2, at10_K2)
+	at15_Kc, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_K2, s_K2, m_K2, at15_K2)
+
+	at3_Cc, xx1, xx2, xx3  = rc.de_embed(o_a, s_a, m_a, o_C2, s_C2, m_C2, at3_C2)
+	at6_Cc, xx1, xx2, xx3  = rc.de_embed(o_a, s_a, m_a, o_C2, s_C2, m_C2, at6_C2)
+	at10_Cc, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_C2, s_C2, m_C2, at10_C2)
+	at15_Cc, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_C2, s_C2, m_C2, at15_C2)
+
+
+
+	# Plot
+	
+	plt.figure(1, figsize=(15, 10))
+	
+	plt.subplot(4,2,1)
+	plt.plot(f/1e6, 20*np.log10(np.abs(at3_Kc)),'k')
+	plt.plot(f/1e6, 20*np.log10(np.abs(at3_Cc)),'r')
+	
+	
+	
+	plt.ylabel('3-dB Attn [dB]')
+	plt.title('MAGNITUDE')
+	plt.legend(['Keysight E5061A', 'CM TR1300'])
+
+	plt.subplot(4,2,2)
+	plt.plot(f/1e6, (180/np.pi)*np.unwrap(np.angle(at3_Cc)) - (180/np.pi)*np.unwrap(np.angle(at3_Kc)),'r')
+	plt.ylabel('3-dB Attn [degrees]')
+	plt.title(r'$\Delta$ PHASE')
+
+
+
+
+	plt.subplot(4,2,3)
+	plt.plot(f/1e6, 20*np.log10(np.abs(at6_Kc)),'k')
+	plt.plot(f/1e6, 20*np.log10(np.abs(at6_Cc)),'r')
+	plt.ylabel('6-dB Attn [dB]')
+
+	plt.subplot(4,2,4)
+	plt.plot(f/1e6, (180/np.pi)*np.unwrap(np.angle(at6_Cc)) - (180/np.pi)*np.unwrap(np.angle(at6_Kc)),'r')
+	plt.ylabel('6-dB Attn [degrees]')
+
+
+
+
+	plt.subplot(4,2,5)
+	plt.plot(f/1e6, 20*np.log10(np.abs(at10_Kc)),'k')
+	plt.plot(f/1e6, 20*np.log10(np.abs(at10_Cc)),'r')
+	plt.ylabel('10-dB Attn [dB]')
+
+	plt.subplot(4,2,6)
+	plt.plot(f/1e6, (180/np.pi)*np.unwrap(np.angle(at10_Cc)) - (180/np.pi)*np.unwrap(np.angle(at10_Kc)),'r')
+	plt.ylabel('10-dB Attn [degrees]')
+	
+	
+
+
+	plt.subplot(4,2,7)
+	plt.plot(f/1e6, 20*np.log10(np.abs(at15_Kc)),'k')
+	plt.plot(f/1e6, 20*np.log10(np.abs(at15_Cc)),'r')
+	plt.xlabel('frequency [MHz]')
+	plt.ylabel('15-dB Attn [dB]')
+
+	plt.subplot(4,2,8)
+	plt.plot(f/1e6, (180/np.pi)*np.unwrap(np.angle(at15_Cc)) - (180/np.pi)*np.unwrap(np.angle(at15_Kc)),'r')
+	plt.xlabel('frequency [MHz]')
+	plt.ylabel('15-dB Attn [degrees]')
+
+
+	plt.savefig(edges_folder + '/results/plots/20190415/vna_comparison.pdf', bbox_inches='tight')
+	plt.close()	
+	plt.close()
+	plt.close()
+	plt.close()
+
+
+
+	return 0
+
+	
 
 
 

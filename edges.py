@@ -1301,6 +1301,102 @@ def rms_filter(band, case, gx, rms, Nsigma):
 
 
 
+
+
+
+
+def tp_filter(GHA, tp):
+
+	IN     = np.arange(0,len(GHA))
+	Npoly  = 3
+	Nsigma = 3
+	
+	std_threshold = 1e5
+
+
+	# Identification of bad data, within 1-hour "bins", across 24 hours
+	# -----------------------------------------------------------------
+	for i in range(24):
+		GHA_x     = GHA[(GHA>=i) & (GHA<(i+1))]
+		tp_x      = tp[(GHA>=i) & (GHA<(i+1))]
+		IN_x      = IN[(GHA>=i) & (GHA<(i+1))]
+
+		W         =  np.ones(len(GHA_x))
+		bad_old   = -1
+		bad       =  0		
+		iteration =  0
+
+		while bad > bad_old:
+
+			iteration = iteration + 1
+
+			print(' ')
+			print('------------')
+			print('GHA: ' + str(i) + '-' + str(i+1) + 'hr')
+			print('Iteration: ' + str(iteration))
+
+			par   = np.polyfit(GHA_x[W>0], tp_x[W>0], Npoly-1)
+			model = np.polyval(par, GHA_x)
+			res   = tp_x - model			
+			std   = np.std(res[W>0])
+			
+			if std < std_threshold:
+				IN_x_bad = IN_x[(np.abs(res) > Nsigma*std)]
+				W[np.abs(res) > Nsigma*std] = 0
+			
+			elif std > std_threshold:
+				IN_x_bad = IN_x[(np.abs(res) > 1*std)]
+				W[np.abs(res) > 1*std] = 0
+			
+			
+			
+
+			bad_old = np.copy(bad)
+			bad     = len(IN_x_bad)
+
+			print('STD: ' + str(np.round(std,3)) + ' K')
+			print('Number of bad points excised: ' + str(bad))
+
+
+		# Indices of bad data points
+		# --------------------------
+		if i == 0:
+			IN_bad = np.copy(IN_x_bad)
+
+		else:
+			IN_bad = np.append(IN_bad, IN_x_bad)
+
+
+	# Indices of good data points
+	# ---------------------------
+	IN_good = np.setdiff1d(IN, IN_bad)
+
+
+	return IN_good
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 def level3_to_level4(band, case, GHA_edges):
 	
 	
@@ -1391,6 +1487,7 @@ def level3_to_level4(band, case, GHA_edges):
 		amb_hum_max = 40
 		IX          = data_selection(my, GHA_or_LST='GHA', TIME_1=0, TIME_2=24, sun_el_max=90, moon_el_max=90, amb_hum_max=amb_hum_max, min_receiver_temp=0, max_receiver_temp=100)
 		
+		tx   = ty[IX,:]
 		px   = py[IX,:]
 		rx   = ry[IX,:]
 		wx   = wy[IX,:]
@@ -1403,7 +1500,15 @@ def level3_to_level4(band, case, GHA_edges):
 		gx[gx<0]   = gx[gx<0] + 24
 		
 		Nsigma     = 3
-		index_good, i1, i2, i3 = rms_filter(band, case, gx, rmsx, Nsigma)
+		index_good_rms, i1, i2, i3 = rms_filter(band, case, gx, rmsx, Nsigma)
+		
+		# Applying total-power filter
+		index_good_total_power = tp_filter(gx, np.sum(tx, axis=1))
+		
+		
+		# Combined filters
+		index_good = np.intersect1d(index_good_rms, index_good_total_power)
+		
 		
 				
 		# Selecting good data
