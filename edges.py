@@ -875,14 +875,17 @@ def level3read(path_file, print_key='no'):
 		w      = np.array(hfX)		
 
 		hfX    = hf.get('rms')
-		rms    = np.array(hfX)		
+		rms    = np.array(hfX)	
+		
+		hfX    = hf.get('total_power')
+		tp     = np.array(hfX)	
 
 		hfX    = hf.get('metadata')
 		m      = np.array(hfX)
 
 
 
-	return f, t, p, r, w, rms, m	
+	return f, t, p, r, w, rms, tp, m	
 
 
 
