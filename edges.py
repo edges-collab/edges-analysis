@@ -663,6 +663,9 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 			ti  = tt[i,:]
 			wi  = ww[i,:]
 			
+			
+			# RFI cleaning
+			# ------------
 			tti, wwi = rfi.cleaning_polynomial(fin, ti, wi, Nterms_fg=Nfg, Nterms_std=5, Nstd=3.5)
 			
 			
@@ -684,6 +687,12 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 			
 			
 			
+			
+			
+			
+			
+			
+			
 							
 			# RMS for two halfs of the spectrum
 			# ---------------------------------
@@ -701,12 +710,7 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 			RMS2 = np.sqrt(np.sum((R2[W2>0])**2)/len(F2[W2>0]))
 		
 		
-		
-		
-
-
-
-			# We also compute residuals for 3 terms as an additiobal filter
+			# We also compute residuals for 3 terms as an additional filter
 			# Fitting foreground model to binned version of spectra
 			# -----------------------------------------------------			
 			par_fg_Xt = ba.fit_polynomial_fourier('LINLOG', fbi/200, tbi, 3, Weights=wbi)
@@ -727,13 +731,11 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 			RMS3 = np.sqrt(np.sum((rri_Xt[wwi>0])**2)/len(fin[wwi>0]))
 		
 		
-		
-		
-		
-		
-		
-		
-		
+
+
+
+
+
 			
 			
 			# Store
@@ -748,7 +750,26 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 			
 			
 			print(year_day_hdf5 + ': Spectrum number: ' + str(i+1) + ': RMS: ' + str(RMS1) + ', ' + str(RMS2) + ', ' + str(RMS3))
+			
+		
 	
+	
+	# Total power computation
+	# -----------------------
+	t1  = t_all[:, (fin>=60) & (fin<=90)]
+	t2  = t_all[:, (fin>=90) & (fin<=120)]	
+	t3  = t_all[:, (fin>=60) & (fin<=120)]
+	
+	tp1 = np.sum(t1, axis=1)
+	tp2 = np.sum(t2, axis=1)
+	tp3 = np.sum(t3, axis=1)
+	
+	tp_all      = np.zeros((lt, 3))
+	tp_all[:,0] = tp1
+	tp_all[:,1] = tp2
+	tp_all[:,2] = tp3
+	
+
 
 
 
@@ -772,6 +793,7 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 		hf.create_dataset('residuals',           data = r_all)
 		hf.create_dataset('weights',             data = w_all)
 		hf.create_dataset('rms',                 data = rms_all)
+		hf.create_dataset('total_power',         data = tp_all)
 		hf.create_dataset('metadata',            data = m_2D)
 
 

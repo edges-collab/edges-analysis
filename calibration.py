@@ -948,7 +948,38 @@ def uncalibrated_antenna_temperature(Td, rd, rl, sca, off, TU, TC, TS, Tamb_inte
 
 
 
-
+def average_of_midband_antenna_s11_2018_147():
+	
+	"""
+	2019-04-16
+	
+	"""
+	
+	path_data = edges_folder + '/mid_band/calibration/antenna_s11/corrected/2018_147/'
+	
+	d3 = np.genfromtxt(path_data + 'antenna_s11_2018_147_16_52_34.txt'); print('Antenna S11: 2018-147: 147_16_52_34')
+	d5 = np.genfromtxt(path_data + 'antenna_s11_2018_147_17_04_33.txt'); print('Antenna S11: 2018-147: 147_17_04_33')
+	
+	
+	f   = d3[:,0]
+	rd3 = d3[:,1]
+	id3 = d3[:,2]
+	dd3 = rd3 + 1j*id3
+	
+	rd5 = d5[:,1]	
+	id5 = d5[:,2]
+	dd5 = rd5 + 1j*id5
+	
+	avr = np.mean(np.array([rd3, rd5]), axis=0)
+	avi = np.mean(np.array([id3, id5]), axis=0)
+	av   = avr + 1j*avi
+	
+	outT = np.array([f, avr, avi])
+	out  = outT.T
+	
+	np.savetxt(path_data + '/antenna_s11_mid_band_2018_147.txt', out)
+	
+	return f, av, dd3, dd5  
 
 
 
@@ -978,14 +1009,6 @@ def models_antenna_s11_remove_delay(band, f_MHz, year=2018, day=147, case=5, del
 	
 		if (year == 2018) and (day == 147):
 			
-			## Using 50.027ohm
-			#if case == 0:
-				#d = np.genfromtxt(path_data + 'antenna_s11_mid_band_2018_147.txt'); print('Antenna S11: 2018-147: using 50.027ohm')			
-			
-			## Assuming 50.12ohm for receiver calibration load
-			
-			
-			
 			if case == 1:
 				d = np.genfromtxt(path_data + 'antenna_s11_2018_147_16_50_13.txt'); print('Antenna S11: 2018-147: 147_16_50_13')
 			if case == 2:
@@ -997,7 +1020,9 @@ def models_antenna_s11_remove_delay(band, f_MHz, year=2018, day=147, case=5, del
 			if case == 5:
 				d = np.genfromtxt(path_data + 'antenna_s11_2018_147_17_04_33.txt'); print('Antenna S11: 2018-147: 147_17_04_33')			
 			
-			
+			# Average of Case 3 and Case 5 using function "average_of_midband_antenna_s11_2018_147"
+			if case == 6:
+				d = np.genfromtxt(path_data + 'antenna_s11_mid_band_2018_147.txt'); print('Antenna S11: 2018-147: average of Case 3 and Case 5')
 			
 			
 			
@@ -2142,12 +2167,29 @@ def guzman_45MHz_map():
 
 
 
-def antenna_beam_factor(band, name_save, beam_file=0, sky_model='haslam', rotation_from_north=90, band_deg=10, index_inband=2.5, index_outband=2.62, reference_frequency=100):
+def antenna_beam_factor(band, name_save, beam_file=0, sky_model='haslam', rotation_from_north=90, index_model='gaussian', sigma_deg=5, index_center=2.4, index_pole=2.6, band_deg=10, index_inband=2.5, index_outband=2.6, reference_frequency=100):
+
+	"""
+	2019-04-16
+	
+	band                      : 'mid_band'
+	sky_model                 : 'haslam', 'LW', 'guzman'
+	
+	index_model               : 'gaussian' (default), or 'step'
+	parameters for 'gaussian' :  sigma_deg=5, index_center=2.4, index_pole=2.6
+	parameters for 'step'     :  band_deg=10, index_inband=2.5, index_outband=2.6
+	
+	Example:
+	
+	
+	[101] :   o = cal.antenna_beam_factor('mid_band', 'mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.6_sigma_deg_5_reffreq_100MHz', beam_file=0, sky_model='haslam', rotation_from_north=90, index_model='gaussian', sigma_deg=5, index_center=2.4, index_pole=2.6, reference_frequency=100) 
+	
+	"""
 
 
 
-	#band      = 'mid_band'
-	#sky_model = 'haslam', 'LW', 'guzman'
+
+
 	
 
 
@@ -2170,7 +2212,8 @@ def antenna_beam_factor(band, name_save, beam_file=0, sky_model='haslam', rotati
 	# Fixing rotation angle due to diferent rotation (by 90deg) in Nivedita's map
 	if (band == 'mid_band') and (beam_file == 100):
 		rotation_from_north = rotation_from_north - 90
-		
+	
+	# Best case, Feb 20, 2019
 	beam_all = FEKO_blade_beam(band, beam_file, AZ_antenna_axis=rotation_from_north)
 
 
@@ -2211,7 +2254,7 @@ def antenna_beam_factor(band, name_save, beam_file=0, sky_model='haslam', rotati
 
 
 
-	# Sky model
+	# Sky map
 	# ------------------------------------------------------------------
 	if sky_model == 'haslam':
 
@@ -2237,27 +2280,37 @@ def antenna_beam_factor(band, name_save, beam_file=0, sky_model='haslam', rotati
 	print(v0)
 
 
-	# Scaling Haslam map (the map contains the CMB, which has to be removed at 408 MHz, and then added back)
+
+
+	# Scaling sky map (the map contains the CMB, which has to be removed and then added back)
+	# ---------------------------------------------------------------------------------------
+	if index_model == 'gaussian':
+		index = index_pole - (index_pole-index_center) * np.exp(-(1/2)*(np.abs(lat)/sigma_deg)**2)	
+	
+	
+	if index_model == 'step':
+		index = np.zeros(len(lat))
+		index[np.abs(lat) <= band_deg] = index_inband
+		index[np.abs(lat) > band_deg]  = index_outband
+				
+
 	Tcmb    = 2.725
-	
-
-	
-	
 	sky_map = np.zeros((len(map_orig), len(freq_array)))
-	
-	print(map_orig.shape)
-	print(sky_map.shape)
-	
-	
 	for i in range(len(freq_array)):
+		sky_map[:, i] = (map_orig - Tcmb) * (freq_array[i]/v0)**(-index)    + Tcmb
 
-		# Band of the Galactic center, using spectral index
-		sky_map[(lat >= -band_deg) & (lat <= band_deg), i] = (map_orig - Tcmb)[(lat >= -band_deg) & (lat <= band_deg)] * (freq_array[i]/v0)**(-index_inband) + Tcmb
-
-		# Range outside the Galactic center, using second spectral index
-		sky_map[(lat < -band_deg) | (lat > band_deg), i]   = (map_orig - Tcmb)[(lat < -band_deg) | (lat > band_deg)] * (freq_array[i]/v0)**(-index_outband) + Tcmb
 		
-			
+		
+	#for i in range(len(freq_array)):
+
+		## Band of the Galactic center, using spectral index
+		#sky_map[(lat >= -band_deg) & (lat <= band_deg), i] = (map_orig - Tcmb)[(lat >= -band_deg) & (lat <= band_deg)] * (freq_array[i]/v0)**(-index_inband) + Tcmb
+
+		## Range outside the Galactic center, using second spectral index
+		#sky_map[(lat < -band_deg) | (lat > band_deg), i]   = (map_orig - Tcmb)[(lat < -band_deg) | (lat > band_deg)] * (freq_array[i]/v0)**(-index_outband) + Tcmb
+	
+
+	
 
 
 
@@ -2284,7 +2337,7 @@ def antenna_beam_factor(band, name_save, beam_file=0, sky_model='haslam', rotati
 	denominator     = np.zeros((len(LST), len(beam_all[:,0,0])))
 
 
-	#for i in range(len(LST)):
+	#for i in range(2):
 	for i in range(len(LST)):
 
 
