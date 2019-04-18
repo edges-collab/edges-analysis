@@ -1129,66 +1129,30 @@ def batch_low_band3_level1_to_level2():
 
 
 
-def batch_mid_band_level2_to_level3(case, first_item, last_item):
+def batch_mid_band_level2_to_level3(case, first_day, last_day):
 
 
 	# Case selection
-	if case == 1:
-		flag_folder       = 'case1'
+
+	if case == 0:
+		flag_folder       = 'case0'
 		
-		receiver_cal_file = 1   # 7 terms over 50-150 MHz
+		receiver_cal_file = 2   # 8 terms over 50-150 MHz
 		
 		antenna_s11_day   = 147
-		antenna_s11_case  = 3
-		antenna_s11_Nfit  = 13 # 13 terms over 59-121 MHz
+		antenna_s11_case  = 6   # average between cases 3 and 6
+		antenna_s11_Nfit  = 13  # 13 terms over 55-120 MHz
 		
 		balun_correction  = 1
 		ground_correction = 1
 		beam_correction   = 1
+		bf_case           = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
 		
-		FLOW  = 59
-		FHIGH = 121
-		Nfg   = 5
-		
-	
-		
-	# Relative to Case1, change in receiver calibration file (from 1 to 4)
-	if case == 2:   
-		flag_folder       = 'case2'
-		
-		receiver_cal_file = 4   # 10 terms over 50-150 MHz
-		
-		antenna_s11_day   = 147
-		antenna_s11_case  = 3
-		antenna_s11_Nfit  = 13 # 13 terms over 59-121 MHz
-		
-		balun_correction  = 1
-		ground_correction = 1
-		beam_correction   = 1
-		
-		FLOW  = 59
-		FHIGH = 121
+		FLOW  = 55
+		FHIGH = 120
 		Nfg   = 5
 
 
-
-	# Relative to Case1, change in antenna S11 file (case 3 to case 5)
-	if case == 3:   
-		flag_folder       = 'case3'
-		
-		receiver_cal_file = 1   # 7 terms over 50-150 MHz
-		
-		antenna_s11_day   = 147
-		antenna_s11_case  = 5
-		antenna_s11_Nfit  = 13 # 13 terms over 59-121 MHz
-		
-		balun_correction  = 1
-		ground_correction = 1
-		beam_correction   = 1
-		
-		FLOW  = 59
-		FHIGH = 121
-		Nfg   = 5
 
 
 
@@ -1218,7 +1182,7 @@ def batch_mid_band_level2_to_level3(case, first_item, last_item):
 		
 		day = int(new_list[i][5:8])
 		
-		if (day >= first_item) & (day <= last_item):
+		if (day >= first_day) & (day <= last_day):
 			print(day)
 			
 			o = eg.level2_to_level3('mid_band', new_list[i], flag_folder=flag_folder, receiver_cal_file=receiver_cal_file, antenna_s11_year=2018, antenna_s11_day=antenna_s11_day, antenna_s11_case=antenna_s11_case, antenna_s11_Nfit=antenna_s11_Nfit, balun_correction=balun_correction, ground_correction=ground_correction, beam_correction=beam_correction, FLOW=FLOW, FHIGH=FHIGH, Nfg=Nfg)
@@ -2898,7 +2862,7 @@ def VNA_comparison2():
 
 
 
-def midband_paper_plots(plot_number):
+def plots_midband_paper(plot_number):
 	
 	
 	# Receiver calibration parameters
@@ -3450,11 +3414,481 @@ def midband_paper_plots(plot_number):
 		plt.close()
 
 
+
 	
+
+
+
+	if plot_number == 3:
+		
+		# Plot
+
+		size_x = 4.7
+		size_y = 12
+		
+		x0   = 0.13
+		y0   = 0.035
+		dx   = 0.67
+		dy   = 0.187
+		yoff = 0.006
+		
+		dxc = 0.03
+		xoffc = 0.03
+		
+		panel_letter_x = 35
+		panel_letter_y = 3
+
+
+
+
+		beam_factor_filename = 'table_lores_mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.6_sigma_deg_5_reffreq_100MHz.hdf5'
+		f, lst, bf           = cal.beam_factor_table_read('/home/raul/DATA2/EDGES_vol2/mid_band/calibration/beam_factors/table/' + beam_factor_filename)
+		gha = lst + (24-17.76)
+		gha[gha>=24] = gha[gha>=24] - 24
+		IX = np.argsort(gha)
+		bx1 = bf[IX]
+
+
+		beam_factor_filename = 'table_lores_mid_band_50-200MHz_90deg_alan1_haslam_gaussian_index_2.4_2.6_sigma_deg_5_reffreq_100MHz.hdf5'
+		f, lst, bf           = cal.beam_factor_table_read('/home/raul/DATA2/EDGES_vol2/mid_band/calibration/beam_factors/table/' + beam_factor_filename)
+		bx2 = bf[IX]
+
+
+
+		beam_factor_filename = 'table_lores_mid_band_50-200MHz_90deg_alan0_haslam_step_index_2.5_2.6_band_deg_10_reffreq_100MHz.hdf5'
+		f, lst, bf           = cal.beam_factor_table_read('/home/raul/DATA2/EDGES_vol2/mid_band/calibration/beam_factors/table/' + beam_factor_filename)
+		bx3 = bf[IX]
+
+
+		beam_factor_filename = 'table_lores_mid_band_50-200MHz_90deg_alan0_LW_gaussian_index_2.4_2.6_sigma_deg_5_reffreq_100MHz.hdf5'
+		f, lst, bf           = cal.beam_factor_table_read('/home/raul/DATA2/EDGES_vol2/mid_band/calibration/beam_factors/table/' + beam_factor_filename)
+		bx4 = bf[IX]
+		
+		beam_factor_filename = 'table_lores_mid_band_50-200MHz_90deg_alan0_guzman_gaussian_index_2.4_2.6_sigma_deg_5_reffreq_100MHz.hdf5'
+		f, lst, bf           = cal.beam_factor_table_read('/home/raul/DATA2/EDGES_vol2/mid_band/calibration/beam_factors/table/' + beam_factor_filename)
+		bx5 = bf[IX]
+
+
+
+		plt.close()
+		plt.close()
+		plt.close()
+		f1   = plt.figure(num=1, figsize=(size_x, size_y))		
+
+
+
+		ax     = f1.add_axes([x0 + 0*dx, y0 + 4*(yoff+dy), dx, dy])
+		im = ax.imshow(bx1, interpolation='none', extent=[50, 200, 24, 0], aspect='auto', vmin=0.979, vmax=1.021)#, cmap='jet')
+		
+		cax    = f1.add_axes([x0 + 1*dx + xoffc, y0 + 4*(yoff+dy), dxc, dy])
+		f1.colorbar(im, cax=cax, orientation='vertical', ticks=[0.98, 0.99, 1, 1.01, 1.02])
+		
+		ax.set_xlim([50, 120])
+		ax.set_xticklabels('')
+		ax.set_yticks(np.arange(0,22,3))
+		ax.set_ylabel('GHA [hr]')	
+		ax.text(panel_letter_x, panel_letter_y,  '(a)', fontsize=18)
+		
+		
+		
+		
+ 		
+		
+		ax     = f1.add_axes([x0 + 0*dx, y0 + 3*(yoff+dy), dx, dy])
+		im = ax.imshow(bx2-bx1, interpolation='none', extent=[50, 200, 24, 0], aspect='auto', vmin=-0.0043, vmax=0.0043)#, cmap='jet')
+		
+		cax    = f1.add_axes([x0 + 1*dx + xoffc, y0 + 1.5*(yoff+dy), dxc, dy])
+		f1.colorbar(im, cax=cax, orientation='vertical', ticks=[-0.004, -0.002, 0, 0.002, 0.004])
+		
+		ax.set_xlim([50, 120])
+		ax.set_xticklabels('')
+		ax.set_yticks(np.arange(0,22,3))
+		ax.set_ylabel('GHA [hr]')
+		ax.text(panel_letter_x, panel_letter_y,  '(b)', fontsize=18)
+		
+		
+		
+		
+		
+		
+		ax     = f1.add_axes([x0 + 0*dx, y0 + 2*(yoff+dy), dx, dy])
+		im = ax.imshow(bx3-bx1, interpolation='none', extent=[50, 200, 24, 0], aspect='auto', vmin=-0.0043, vmax=0.0043)#, cmap='jet')
+
+		#cax    = f1.add_axes([x0 + 1*dx + xoffc, y0 + 2*(yoff+dy), dxc, dy])
+		#f1.colorbar(im, cax=cax, orientation='vertical')
+
+		ax.set_xlim([50, 120])
+		ax.set_xticklabels('')
+		ax.set_yticks(np.arange(0,22,3))
+		ax.set_ylabel('GHA [hr]')
+		ax.text(panel_letter_x, panel_letter_y,  '(c)', fontsize=18)
+		
+		
+		
+		
+		
+		ax     = f1.add_axes([x0 + 0*dx, y0 + 1*(yoff+dy), dx, dy])
+		im = ax.imshow(bx4-bx1, interpolation='none', extent=[50, 200, 24, 0], aspect='auto', vmin=-0.0043, vmax=0.0043)#, cmap='jet')
+
+		#cax    = f1.add_axes([x0 + 1*dx + xoffc, y0 + 1*(yoff+dy), dxc, dy])
+		#f1.colorbar(im, cax=cax, orientation='vertical')
+		
+		ax.set_xlim([50, 120])
+		ax.set_xticklabels('')
+		ax.set_yticks(np.arange(0,22,3))
+		ax.set_ylabel('GHA [hr]')
+		ax.text(panel_letter_x, panel_letter_y,  '(d)', fontsize=18)
+
+
+
+
+
+		
+		ax     = f1.add_axes([x0 + 0*dx, y0 + 0*(yoff+dy), dx, dy])
+		im = ax.imshow(bx5-bx1, interpolation='none', extent=[50, 200, 24, 0], aspect='auto', vmin=-0.0043, vmax=0.0043)#, cmap='jet')
+
+		#cax    = f1.add_axes([x0 + 1*dx + xoffc, y0 + 0*(yoff+dy), dxc, dy])
+		#f1.colorbar(im, cax=cax, orientation='vertical')
+		
+		ax.set_xlim([50, 120])
+		ax.set_xlabel('frequency [MHz]')
+		ax.set_yticks(np.arange(0,22,3))
+		ax.set_ylabel('GHA [hr]')
+		ax.text(panel_letter_x, panel_letter_y,  '(e)', fontsize=18)
+		
+		
+		
+		
+		
+		# Saving plot
+		path_plot_save = edges_folder + 'results/plots/20190417/'
+		
+
+		plt.savefig(path_plot_save + 'beam_chromaticity_correction.pdf', bbox_inches='tight')
+		plt.close()	
+		plt.close()
+		plt.close()
+		plt.close()
+
+
+		
+		
+		#h      = ax.plot(fe, 20*np.log10(np.abs(ra)), 'b', linewidth=2, label='$|\Gamma_{\mathrm{ant}}|$')
+		#h      = ax.plot(flb1[flb1<=110], 20*np.log10(np.abs(ralb1[flb1<=110])), 'r', linewidth=2, label='$|\Gamma_{\mathrm{ant}}|$')
+		#h      = ax.plot(flb2[flb2<=110], 20*np.log10(np.abs(ralb2[flb2<=110])), 'g', linewidth=2, label='$|\Gamma_{\mathrm{ant}}|$')
 	
+
+
+
+
+
+
+
+
+
+
+
+		## Frequency
+		#f, il, ih = ba.frequency_edges(50, 150)
+		#fe = f[il:ih+1]	
+
+
+		## Antenna S11
+		## -----------
+		#ra = cal.models_antenna_s11_remove_delay('mid_band', fe, year=2018, day=147, case=5, delay_0=0.17, model_type='polynomial', Nfit=15, plot_fit_residuals='no')
+
+		#xlb1  = np.genfromtxt('/run/media/raul/SSD_4TB/EDGES_vol1/calibration/antenna_s11/low_band1/s11/corrected/2016_243/S11_blade_low_band_2016_243.txt')
+		#flb1  = xlb1[:,0]/1e6
+		#ralb1 = xlb1[:,1] + 1j*xlb1[:,2]
+		
+		#xlb2  = np.genfromtxt('/run/media/raul/SSD_4TB/EDGES_vol1/calibration/antenna_s11/low_band2/s11/corrected/2017-06-29-low2-noshield_average/S11_blade_low_band_2017_180_NO_SHIELD.txt')		
+		#flb2  = xlb2[:,0]/1e6
+		#ralb2 = xlb2[:,1] + 1j*xlb2[:,2]		
+		
+		
+
 	
+		
+		##ax2    = ax.twinx()
+		##h2     = ax2.plot(fe, (180/np.pi)*np.unwrap(np.angle(ra)), 'r--', linewidth=2, label=r'$\angle\/\Gamma_{\mathrm{ant}}$')
+		##h      = h1 + h2
+		##labels = [l.get_label() for l in h]
+		#ax.legend(['mid-band','low-band 1','low-band 2'], fontsize=11)
+
+		##ax.set_ylim([-41, -25])
+		#ax.set_xticklabels('')
+		##
+		#ax.set_ylabel('$|\Gamma_{\mathrm{ant}}|$ [dB]', fontsize=15)
+		
+		##
+		##		
+		##ax2.set_ylabel(r'$\angle\/\Gamma_{\mathrm{ant}}$ [ $^\mathrm{o}$]', fontsize=16)
+
+		#ax.set_xlim([45, 155])
+		#ax.set_ylim([-16, -4])
+		#ax.set_yticks(np.arange(-14,-5,2))
+		##ax.set_xticklabels('')
+		#ax.tick_params(axis='x', direction='in')
+		#ax.set_xticks(np.arange(50, 151, 20))
+		
+		#ax.text(145, -15.5, '(a)', fontsize=18)
+			
 	
-	
+	if plot_number == 4:
+		
+		bm_all = cal.FEKO_blade_beam('mid_band', 0, frequency_interpolation='no', AZ_antenna_axis=90)
+		f  = np.arange(50,201,2)
+		
+		el             = np.arange(0,91) 
+		sin_theta      = np.sin((90-el)*(np.pi/180)) 
+		sin_theta_2D_T = np.tile(sin_theta, (360, 1))
+		sin_theta_2D   = sin_theta_2D_T.T		
+		
+		
+		
+		#normalization  = 1		
+
+		sm = np.zeros(len(f))
+		for i in range(len(f)):
+			
+			
+			bm = bm_all[i,:,:]
+			normalization  = np.max(np.max(bm))
+			
+			nb             = bm/normalization
+
+			s_sq_deg       = np.sum(nb * sin_theta_2D) 
+			sm[i]          = s_sq_deg/((180/np.pi)**2) 
+			
+			
+			
+			
+		bm_all = cal.FEKO_blade_beam('mid_band', 1, frequency_interpolation='no', AZ_antenna_axis=90)
+		f  = np.arange(50,201,2)
+		
+		el             = np.arange(0,91) 
+		sin_theta      = np.sin((90-el)*(np.pi/180)) 
+		sin_theta_2D_T = np.tile(sin_theta, (360, 1))
+		sin_theta_2D   = sin_theta_2D_T.T		
+		
+		
+		
+		#normalization  = 1		
+
+		smi = np.zeros(len(f))
+		for i in range(len(f)):
+			
+			
+			bm = bm_all[i,:,:]
+			normalization  = np.max(np.max(bm))
+			
+			nb             = bm/normalization
+
+			s_sq_deg       = np.sum(nb * sin_theta_2D) 
+			smi[i]          = s_sq_deg/((180/np.pi)**2) 		
+		
+		
+
+
+
+
+
+		bmlb_all = oeg.FEKO_low_band_blade_beam(beam_file=2, frequency_interpolation='no', AZ_antenna_axis=0)
+		fl       = np.arange(40,121,2)
+		
+		sl = np.zeros(len(fl))
+		for i in range(len(fl)):
+			
+			
+			bmlb = bmlb_all[i,:,:]
+			normalization  = np.max(np.max(bmlb))
+			
+			nb             = bmlb/normalization
+
+			s_sq_deg       = np.sum(nb * sin_theta_2D) 
+			sl[i]          = s_sq_deg/((180/np.pi)**2) 
+			
+		
+		
+		
+		
+		
+		
+		
+		
+			
+			
+		fx  = f[(f>=50) & (f<=110)] 
+		smx = sm[(f>=50) & (f<=110)]
+		smix = smi[(f>=50) & (f<=110)]
+		slx = sl[(fl>=50) & (fl<=110)]
+		
+		pm = np.polyfit(fx, smx,4)
+		mm = np.polyval(pm, fx)
+		
+		pmi = np.polyfit(fx, smix,4)
+		mmi = np.polyval(pmi, fx)		
+		
+		pl = np.polyfit(fx, slx,4)
+		ml = np.polyval(pl, fx)
+		
+		
+		plt.close()
+		plt.figure(1)
+		
+		plt.subplot(2,1,1)
+		plt.plot(fx, smx)
+		plt.plot(fx, smix, ':')
+		plt.plot(fx, slx, '--')
+		plt.ylabel('solid angle of\n beam above horizon [sr]')
+		plt.legend(['Mid-Band 30mx30m ground plane','Mid-Band infinite ground plane','Low-Band 30mx30m ground plane'])
+		
+		plt.subplot(2,1,2)
+		plt.plot(fx, smx - mm)
+		plt.plot(fx, smix - mmi, ':')
+		plt.plot(fx, slx - ml, '--')
+		plt.ylabel('residuals to\n 5-term polynomial [sr]')
+		plt.xlabel('frequency [MHz]')
+		
+
+
+
+
+
+
+
+
+
+
+		bm_all = cal.FEKO_blade_beam('mid_band', 0, frequency_interpolation='no', AZ_antenna_axis=90)
+		f  = np.arange(50,201,2)
+		
+		el             = np.arange(0,91) 
+		sin_theta      = np.sin((90-el)*(np.pi/180)) 
+		sin_theta_2D_T = np.tile(sin_theta, (360, 1))
+		sin_theta_2D   = sin_theta_2D_T.T		
+		
+		
+		
+		#normalization  = 1		
+
+		sm = np.zeros(len(f))
+		for i in range(len(f)):
+			
+			
+			bm = bm_all[i,:,:]
+			normalization  = 1#np.max(np.max(bm))
+			
+			nb             = bm/normalization
+
+			s_sq_deg       = np.sum(nb * sin_theta_2D) 
+			sm[i]          = s_sq_deg/((180/np.pi)**2) 
+			
+			
+			
+			
+		bm_all = cal.FEKO_blade_beam('mid_band', 1, frequency_interpolation='no', AZ_antenna_axis=90)
+		f  = np.arange(50,201,2)
+		
+		el             = np.arange(0,91) 
+		sin_theta      = np.sin((90-el)*(np.pi/180)) 
+		sin_theta_2D_T = np.tile(sin_theta, (360, 1))
+		sin_theta_2D   = sin_theta_2D_T.T		
+		
+		
+		
+		#normalization  = 1		
+
+		smi = np.zeros(len(f))
+		for i in range(len(f)):
+			
+			
+			bm = bm_all[i,:,:]
+			normalization  = 1#np.max(np.max(bm))
+			
+			nb             = bm/normalization
+
+			s_sq_deg       = np.sum(nb * sin_theta_2D) 
+			smi[i]          = s_sq_deg/((180/np.pi)**2) 		
+		
+		
+
+
+
+
+
+		bmlb_all = oeg.FEKO_low_band_blade_beam(beam_file=2, frequency_interpolation='no', AZ_antenna_axis=0)
+		fl       = np.arange(40,121,2)
+		
+		sl = np.zeros(len(fl))
+		for i in range(len(fl)):
+			
+			
+			bmlb = bmlb_all[i,:,:]
+			normalization  = 1#np.max(np.max(bmlb))
+			
+			nb             = bmlb/normalization
+
+			s_sq_deg       = np.sum(nb * sin_theta_2D) 
+			sl[i]          = s_sq_deg/((180/np.pi)**2) 
+			
+		
+		
+		
+		
+		
+		
+		
+		
+			
+			
+		fx  = f[(f>=50) & (f<=110)] 
+		smx = sm[(f>=50) & (f<=110)]
+		smix = smi[(f>=50) & (f<=110)]
+		slx = sl[(fl>=50) & (fl<=110)]
+		
+		# normalized total radiated power
+		smx  = smx/(4*np.pi)
+		smix = smix/(4*np.pi)
+		slx  = slx/(4*np.pi)
+		
+		
+		
+		pm = np.polyfit(fx, smx,4)
+		mm = np.polyval(pm, fx)
+		
+		pmi = np.polyfit(fx, smix,4)
+		mmi = np.polyval(pmi, fx)		
+		
+		pl = np.polyfit(fx, slx,4)
+		ml = np.polyval(pl, fx)
+		
+		
+		#plt.close()
+		plt.figure(2)
+		
+		plt.subplot(2,1,1)
+		plt.plot(fx, smx)
+		plt.plot(fx, smix, ':')
+		plt.plot(fx, slx, '--')
+		plt.ylabel('normalized total radiated power\n above horizon [fraction of 4pi]')
+		plt.legend(['Mid-Band 30mx30m ground plane','Mid-Band infinite ground plane','Low-Band 30mx30m ground plane'])
+		
+		plt.subplot(2,1,2)
+		plt.plot(fx, smx - mm)
+		plt.plot(fx, smix - mmi, ':')
+		plt.plot(fx, slx - ml, '--')
+		plt.ylabel('residuals to 5-term polynomial\n [fraction of 4pi]')
+		plt.xlabel('frequency [MHz]')
+
+
+
+
+
+
+
+
+
 	
 	
 	

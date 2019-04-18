@@ -463,7 +463,7 @@ def antenna_efficiency(band, f):
 
 
 
-def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=1, antenna_s11_year=2018, antenna_s11_day=147, antenna_s11_case=5, antenna_s11_Nfit=15, balun_correction=1, ground_correction=1, beam_correction=1, FLOW=50, FHIGH=150, Nfg=7):
+def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=1, antenna_s11_year=2018, antenna_s11_day=147, antenna_s11_case=5, antenna_s11_Nfit=15, balun_correction=1, ground_correction=1, beam_correction=1, bf_case=0, FLOW=50, FHIGH=150, Nfg=7):
 	
 	"""
 
@@ -614,10 +614,16 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 			
 		if beam_correction == 1:
 			if band == 'mid_band':
-				beam_factor_filename = 'table_hires_mid_band_50-200MHz_90deg_alan0_haslam_2.5_2.6_reffreq_100MHz.hdf5'
+				#beam_factor_filename = 'table_hires_mid_band_50-200MHz_90deg_alan0_haslam_2.5_2.6_reffreq_100MHz.hdf5'
+				
+				if bf_case == 0:
+					beam_factor_filename = 'table_hires_mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.6_sigma_deg_5_reffreq_100MHz.hdf5'
+
 				
 			elif band == 'low_band3':
 				beam_factor_filename = 'table_hires_low_band3_50-120MHz_85deg_alan_haslam_2.5_2.62_reffreq_76MHz.hdf5'
+				
+
 				
 			f_table, lst_table, bf_table = cal.beam_factor_table_read(edges_folder + band + '/calibration/beam_factors/table/' + beam_factor_filename)
 			bfX                          = cal.beam_factor_table_evaluate(f_table, lst_table, bf_table, m_2D[:,3])
@@ -970,9 +976,9 @@ def rms_filter_computation(band, case, save_parameters='no'):
 	# Listing files available
 	# ------------------------
 	if band == 'mid_band':
-		if case == 1:
-			path_files  = edges_folder + '/mid_band/spectra/level3/case1/'
-			save_folder = edges_folder + '/mid_band/rms_filters/case1/'
+		if case == 0:
+			path_files  = edges_folder + '/mid_band/spectra/level3/case0/'
+			save_folder = edges_folder + '/mid_band/rms_filters/case0/'
 		
 	
 	if band == 'low_band3':
@@ -994,7 +1000,7 @@ def rms_filter_computation(band, case, save_parameters='no'):
 		print(new_list[i])
 		
 		# Loading data
-		f, t, p, r, w, rms, m = level3read(path_files + new_list[i])
+		f, t, p, r, w, rms, tp, m = level3read(path_files + new_list[i])
 		
 		# Filtering out high humidity
 		amb_hum_max = 40
@@ -1284,8 +1290,8 @@ def rms_filter_computation(band, case, save_parameters='no'):
 
 def rms_filter(band, case, gx, rms, Nsigma):
 	
-	if (case == 1) or (case == 2) or (case == 3):
-		file_path = edges_folder + band + '/rms_filters/case1/'
+	if (case == 0):
+		file_path = edges_folder + band + '/rms_filters/case0/'
 		
 
 	p    = np.genfromtxt(file_path + 'rms_polynomial_parameters.txt')
@@ -1330,74 +1336,113 @@ def rms_filter(band, case, gx, rms, Nsigma):
 
 
 
-def tp_filter(GHA, tp):
+def tp_filter(band, GHA, tp):
 
 	IN     = np.arange(0,len(GHA))
 	Npoly  = 3
 	Nsigma = 3
 	
-	std_threshold = 1e5
+	
 
 
 	# Identification of bad data, within 1-hour "bins", across 24 hours
 	# -----------------------------------------------------------------
-	for i in range(24):
-		GHA_x     = GHA[(GHA>=i) & (GHA<(i+1))]
-		tp_x      = tp[(GHA>=i) & (GHA<(i+1))]
-		IN_x      = IN[(GHA>=i) & (GHA<(i+1))]
-
-		W         =  np.ones(len(GHA_x))
-		bad_old   = -1
-		bad       =  0		
-		iteration =  0
-
-		while bad > bad_old:
-
-			iteration = iteration + 1
-
-			print(' ')
-			print('------------')
-			print('GHA: ' + str(i) + '-' + str(i+1) + 'hr')
-			print('Iteration: ' + str(iteration))
-
-			par   = np.polyfit(GHA_x[W>0], tp_x[W>0], Npoly-1)
-			model = np.polyval(par, GHA_x)
-			res   = tp_x - model			
-			std   = np.std(res[W>0])
+	for j in range(3):
+		
+		if j == 0:
+			std_threshold = 5e4  # 60-90 MHz
 			
-			if std < std_threshold:
-				IN_x_bad = IN_x[(np.abs(res) > Nsigma*std)]
-				W[np.abs(res) > Nsigma*std] = 0
+		elif j == 1:
+			std_threshold = 2e4  # 90-120 MHz
 			
-			elif std > std_threshold:
-				IN_x_bad = IN_x[(np.abs(res) > 1*std)]
-				W[np.abs(res) > 1*std] = 0
+		elif j == 2:
+			std_threshold = 1e5  # 60-120 MHz
 			
 			
+		flag = 0
+		for i in range(24):
+			GHA_x     = GHA[(GHA>=i) & (GHA<(i+1))]
+			tp_x      = tp[(GHA>=i) & (GHA<(i+1)), j]   # one of the three tps (60-90, 90-120, 60-120 MHz)
+			IN_x      = IN[(GHA>=i) & (GHA<(i+1))]
 			
+			
+			# If enough data points available per hour
+			if len(tp_x) > 10:
+				W         =  np.ones(len(GHA_x))
+				bad_old   = -1
+				bad       =  0		
+				iteration =  0
+		
+				while bad > bad_old:
+		
+					iteration = iteration + 1
+		
+					print(' ')
+					print('------------')
+					print('GHA: ' + str(i) + '-' + str(i+1) + 'hr')
+					print('Iteration: ' + str(iteration))
+		
+					par   = np.polyfit(GHA_x[W>0], tp_x[W>0], Npoly-1)
+					model = np.polyval(par, GHA_x)
+					res   = tp_x - model			
+					std   = np.std(res[W>0])
+					
+					if std < std_threshold:
+						IN_x_bad = IN_x[(np.abs(res) > Nsigma*std)]
+						W[np.abs(res) > Nsigma*std] = 0
+					
+					elif std > std_threshold:
+						IN_x_bad = IN_x[(np.abs(res) > 1*std)]
+						W[np.abs(res) > 1*std] = 0
+					
+					
+					
+		
+					bad_old = np.copy(bad)
+					bad     = len(IN_x_bad)
+		
+					print('STD: ' + str(np.round(std,3)) + ' K')
+					print('Number of bad points excised: ' + str(bad))
+		
+		
+				# Indices of bad data points
+				# --------------------------
+				if flag == 0:
+					IN_bad = np.copy(IN_x_bad)
+					flag   = 1
+		
+				elif flag == 1:
+					IN_bad = np.append(IN_bad, IN_x_bad)
+				
 
-			bad_old = np.copy(bad)
-			bad     = len(IN_x_bad)
-
-			print('STD: ' + str(np.round(std,3)) + ' K')
-			print('Number of bad points excised: ' + str(bad))
-
-
-		# Indices of bad data points
-		# --------------------------
-		if i == 0:
-			IN_bad = np.copy(IN_x_bad)
-
-		else:
-			IN_bad = np.append(IN_bad, IN_x_bad)
-
-
-	# Indices of good data points
-	# ---------------------------
-	IN_good = np.setdiff1d(IN, IN_bad)
+		if j == 0:
+			IN_bad1  = np.copy(IN_bad)
+			IN_good1 = np.setdiff1d(IN, IN_bad1)
+			
+		elif j == 1:
+			IN_bad2  = np.copy(IN_bad)
+			IN_good2 = np.setdiff1d(IN, IN_bad2)
+			
+		elif j == 2:
+			IN_bad3  = np.copy(IN_bad)
+			IN_good3 = np.setdiff1d(IN, IN_bad3)
+					
+				
+				
 
 
-	return IN_good
+	# Combined index of good data points
+	# ----------------------------------
+	IG_A     = np.intersect1d(IN_good1, IN_good2)
+	IN_good  = np.intersect1d(IG_A, IN_good3)
+	
+	
+	
+	
+	
+
+
+	return IN_good, IN_good1, IN_good2, IN_good3
 
 
 
@@ -1442,25 +1487,14 @@ def level3_to_level4(band, case, GHA_edges):
 	if band == 'mid_band':
 		
 
-		if case == 1:
-			path_files             = edges_folder + 'mid_band/spectra/level3/case1/'
-			save_folder            = edges_folder + 'mid_band/spectra/level4/case1/'
-			output_file_name_hdf5  = 'case1.hdf5'
-			
-		if case == 2:
-			path_files             = edges_folder + 'mid_band/spectra/level3/case2/'
-			save_folder            = edges_folder + 'mid_band/spectra/level4/case2/'
-			output_file_name_hdf5  = 'case2.hdf5'	
-			
+		if case == 0:
+			path_files             = edges_folder + 'mid_band/spectra/level3/case0/'
+			save_folder            = edges_folder + 'mid_band/spectra/level4/case0/'
+			output_file_name_hdf5  = 'case0.hdf5'
 
-		if case == 3:
-			path_files             = edges_folder + 'mid_band/spectra/level3/case3/'
-			save_folder            = edges_folder + 'mid_band/spectra/level4/case3/'
-			output_file_name_hdf5  = 'case3.hdf5'
-			
-			
-			
-			
+
+
+
 
 			
 	if band == 'low_band3':
@@ -1489,7 +1523,7 @@ def level3_to_level4(band, case, GHA_edges):
 	year_day_all = np.zeros((len(index_new_list), 2))
 	
 	
-	for i in index_new_list:  # range(3):
+	for i in index_new_list:  # range(4):  #
 		
 		year_day_all[i,0] = float(new_list[i][0:4])
 		
@@ -1504,7 +1538,7 @@ def level3_to_level4(band, case, GHA_edges):
 		flag = flag + 1
 		
 		# Loading data
-		f, ty, py, ry, wy, rmsy, my = level3read(path_files + new_list[i])
+		f, ty, py, ry, wy, rmsy, tpy, my = level3read(path_files + new_list[i])
 		print('----------------------------------------------')
 		
 		
@@ -1517,18 +1551,19 @@ def level3_to_level4(band, case, GHA_edges):
 		rx   = ry[IX,:]
 		wx   = wy[IX,:]
 		rmsx = rmsy[IX,:]
+		tpx  = tpy[IX,:]	
 		mx   = my[IX,:]	
 		
 		
 		# Finding index of clean data
-		gx         = mx[:,4]
+		gx         = np.copy(mx[:,4])
 		gx[gx<0]   = gx[gx<0] + 24
 		
 		Nsigma     = 3
 		index_good_rms, i1, i2, i3 = rms_filter(band, case, gx, rmsx, Nsigma)
 		
 		# Applying total-power filter
-		index_good_total_power = tp_filter(gx, np.sum(tx, axis=1))
+		index_good_total_power, i1, i2, i3 = tp_filter(band, gx, tpx) 
 		
 		
 		# Combined filters
@@ -1646,7 +1681,7 @@ def level3_to_level4(band, case, GHA_edges):
 	Ngha = len(GHA_edges)-1
 	
 	# Loop over days
-	for i in index_new_list:  # range(3):  # 
+	for i in index_new_list:  # range(4):  # 
 		
 		# Loop over number of foreground terms
 		for Nfg in [3,4,5]:

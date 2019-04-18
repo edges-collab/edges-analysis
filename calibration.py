@@ -2455,6 +2455,8 @@ def antenna_beam_factor_interpolation(band, case, lst_hires, fnew, Npar_freq=15)
 	"""
 
 	For Mid-Band, over 50-200MHz, we have to use Npar_freq=15 
+	
+	Here, "case" is not the same as in the FEKO... function
 
 	"""
 
@@ -2463,33 +2465,31 @@ def antenna_beam_factor_interpolation(band, case, lst_hires, fnew, Npar_freq=15)
 		file_path = edges_folder + 'mid_band/calibration/beam_factors/raw/'
 
 		if case == 0:
-			bf_old  = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan0_haslam_2.5_2.6_reffreq_100MHz_data.txt')
-			freq    = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan0_haslam_2.5_2.6_reffreq_100MHz_freq.txt')
-			lst_old = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan0_haslam_2.5_2.6_reffreq_100MHz_LST.txt')
-		
+			bf_old  = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.6_sigma_deg_5_reffreq_100MHz_data.txt')
+			freq    = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.6_sigma_deg_5_reffreq_100MHz_freq.txt')
+			lst_old = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.6_sigma_deg_5_reffreq_100MHz_LST.txt')
+
 		elif case == 1:
-			bf_old  = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.62_reffreq_100MHz_data.txt')
-			freq    = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.62_reffreq_100MHz_freq.txt')
-			lst_old = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_haslam_2.5_2.62_reffreq_100MHz_LST.txt')
+			bf_old  = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan0_haslam_step_index_2.5_2.6_band_deg_10_reffreq_100MHz_data.txt')
+			freq    = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan0_haslam_step_index_2.5_2.6_band_deg_10_reffreq_100MHz_freq.txt')
+			lst_old = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan0_haslam_step_index_2.5_2.6_band_deg_10_reffreq_100MHz_LST.txt')
 			
 		elif case == 2:
-			bf_old  = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_haslam_2.55_reffreq_100MHz_data.txt')
-			freq    = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_haslam_2.55_reffreq_100MHz_freq.txt')
-			lst_old = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_haslam_2.55_reffreq_100MHz_LST.txt')
-			
+			bf_old  = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan0_LW_gaussian_index_2.4_2.6_sigma_deg_5_reffreq_100MHz_data.txt')
+			freq    = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan0_LW_gaussian_index_2.4_2.6_sigma_deg_5_reffreq_100MHz_freq.txt')
+			lst_old = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan0_LW_gaussian_index_2.4_2.6_sigma_deg_5_reffreq_100MHz_LST.txt')
+
 		elif case == 3:
-			bf_old  = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_LW_2.55_reffreq_100MHz_data.txt')
-			freq    = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_LW_2.55_reffreq_100MHz_freq.txt')
-			lst_old = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_LW_2.55_reffreq_100MHz_LST.txt')
+			bf_old  = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan0_guzman_gaussian_index_2.4_2.6_sigma_deg_5_reffreq_100MHz_data.txt')
+			freq    = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan0_guzman_gaussian_index_2.4_2.6_sigma_deg_5_reffreq_100MHz_freq.txt')
+			lst_old = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan0_guzman_gaussian_index_2.4_2.6_sigma_deg_5_reffreq_100MHz_LST.txt')
 			
 		elif case == 4:
-			bf_old  = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_guzman_2.55_reffreq_100MHz_data.txt')
-			freq    = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_guzman_2.55_reffreq_100MHz_freq.txt')
-			lst_old = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_guzman_2.55_reffreq_100MHz_LST.txt')	
+			bf_old  = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_haslam_gaussian_index_2.4_2.6_sigma_deg_5_reffreq_100MHz_data.txt')
+			freq    = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_haslam_gaussian_index_2.4_2.6_sigma_deg_5_reffreq_100MHz_freq.txt')
+			lst_old = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_haslam_gaussian_index_2.4_2.6_sigma_deg_5_reffreq_100MHz_LST.txt')
+			
 
-
-		
-		
 		
 		
 		
