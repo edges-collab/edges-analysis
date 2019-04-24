@@ -1882,7 +1882,7 @@ def level4read(path_file):
 		w_all  = np.array(hfX)		
 
 		hfX    = hf.get('gha_edges')
-		gha    = np.array(hfX)		
+		gha    = np.array(hfX)	
 
 		hfX    = hf.get('year_day')
 		yd     = np.array(hfX)
@@ -1903,9 +1903,9 @@ def daily_nominal_filter(band, case, year_day_list):
 	l = len(year_day_list)
 	keep_all = np.zeros(l)
 	
-	if (band == 'mid_band') and (case == 1):
+	if (band == 'mid_band') and (case == 0):
 		
-		bad = np.array([[2018, 149], [2018, 150], [2018, 151], [2018, 159], [2018, 162], [2018, 163], [2018, 164], [2018, 170], [2018, 176], [2018, 177], [2018, 184], [2018, 185], [2018, 186], [2018, 192], [2018, 193], [2018, 195], [2018, 196], [2018, 204], [2018, 208], [2018, 216]])
+		bad = np.array([[2018, 150], [2018, 159], [2018, 161], [2018, 164], [2018, 182], [2018, 184], [2018, 185], [2018, 186], [2018, 192], [2018, 195], [2018, 196], [2018, 204], [2018, 208], [2018, 216], [2018, 220]])
 		
 		for j in range(l):
 			keep = 1
@@ -1916,6 +1916,138 @@ def daily_nominal_filter(band, case, year_day_list):
 			keep_all[j] = keep
 
 	return keep_all
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def plot_level4(index_GHA, good_bad, model, FLOW, FHIGH, K_per_division, file_name):
+
+	"""
+	model: 'LINLOG', 'LOGLOG'
+	
+	"""
+	
+	
+	f, px, rx, wx, gha, yx = level4read('/home/raul/DATA2/EDGES_vol2/mid_band/spectra/level4/case0/case0.hdf5')
+	
+	
+	
+	
+	kk = daily_nominal_filter('mid_band', 0, yx)
+	
+	if good_bad == 'good':
+		p_all = px[kk==1,:]
+		r_all = rx[kk==1,:]
+		w_all = wx[kk==1,:]
+		yd    = yx[kk==1]
+		
+	elif good_bad == 'bad':
+		p_all = px[kk==0,:]
+		r_all = rx[kk==0,:]
+		w_all = wx[kk==0,:]
+		yd    = yx[kk==0]		
+	
+		
+	
+	
+	
+	#index = np.arange(len(yd))
+	
+	plt.close()
+	plt.close()
+	plt.close()
+	plt.close()
+	plt.close()
+	
+	plt.figure(1, figsize=[5, 11])
+	plt.ylabel('[' + str(K_per_division) + ' K per division]\n  \n  ')
+	
+	#for i in range(2):
+	for i in range(len(yd)):
+		
+		print(i)
+		
+		avp   = p_all[i,index_GHA,:]
+		avr   = r_all[i,index_GHA,:]
+		avw   = w_all[i,index_GHA,:]
+		
+		
+		rr, wr   = rfi.cleaning_sweep(f, avr, avw, window_width_MHz=3, Npolyterms_block=2, N_choice=20, N_sigma=2.5)
+		
+		m        = ba.model_evaluate('LINLOG', avp, f/200)
+		tr       = m + rr
+			
+		
+		ft = f[(f>=FLOW) & (f<=FHIGH)]
+		tt = tr[(f>=FLOW) & (f<=FHIGH)]
+		wt = wr[(f>=FLOW) & (f<=FHIGH)]
+	
+		
+		if model == 'LINLOG':
+			pt = ba.fit_polynomial_fourier('LINLOG', ft/200, tt, 5, Weights=wt)
+			mt = ba.model_evaluate('LINLOG', pt[0], ft/200)
+			rt = tt - mt
+		
+			fb, rb, wb = ba.spectral_binning_number_of_samples(ft, rt, wt)
+			
+		
+		if model == 'LOGLOG':
+			pl     = np.polyfit(np.log(ft[wt>0]/200), np.log(tt[wt>0]), 4)
+			log_ml = np.polyval(pl, np.log(ft/200))
+			ml     = np.exp(log_ml)
+			rl     = tt - ml	
+		
+			fb, rb, wb = ba.spectral_binning_number_of_samples(ft, rl, wt)
+		
+		
+		if i%2 == 0:
+			plt.plot(fb[wb>0], rb[wb>0]-i*K_per_division, 'b')
+		else:
+			plt.plot(fb[wb>0], rb[wb>0]-i*K_per_division, 'r')
+			
+		plt.text(55, -i*K_per_division-(1/6)*K_per_division, str(int(yd[i,1])))
+		
+	plt.xlim([60, 120])
+	plt.xlabel('frequency [MHz]')
+	plt.ylim([-len(yd)*K_per_division, K_per_division])
+	plt.yticks([10], labels=[''])
+	
+
+
+	plt.savefig('/home/raul/Desktop/' + file_name + '.pdf', bbox_inches='tight')
+	plt.close()	
+	plt.close()
+	plt.close()
+	plt.close()
+	
+		
+	return fb, rb, wb
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2060,13 +2192,6 @@ def integrated_nominal_spectrum(FLOW, FHIGH, day_min1, day_max1, day_min2, day_m
 	
 	
 	return ft, tt, mt, wt
-
-
-
-
-
-
-
 
 
 

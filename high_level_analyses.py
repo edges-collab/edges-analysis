@@ -3011,15 +3011,15 @@ def plots_midband_paper(plot_number):
 	
 
 		# Paths
-		path_plot_save = edges_folder + 'results/plots/20190409/'
+		path_plot_save = edges_folder + 'results/plots/20190422/'
 
 
 
 
 		# Plot
 
-		size_x = 5
-		size_y = 11.0 #10.5
+		size_x = 3.5
+		size_y = 9.0 #10.5
 		x0 = 0.15
 		y0 = 0.09
 		dx = 0.8
@@ -3056,10 +3056,10 @@ def plots_midband_paper(plot_number):
 		
 		
 
-		ax     = f1.add_axes([x0, y0 + 5*dy, dx, dy])	
-		h      = ax.plot(fe, 20*np.log10(np.abs(ra)), 'b', linewidth=2, label='$|\Gamma_{\mathrm{ant}}|$')
-		h      = ax.plot(flb1[flb1<=110], 20*np.log10(np.abs(ralb1[flb1<=110])), 'r', linewidth=2, label='$|\Gamma_{\mathrm{ant}}|$')
-		h      = ax.plot(flb2[flb2<=110], 20*np.log10(np.abs(ralb2[flb2<=110])), 'g', linewidth=2, label='$|\Gamma_{\mathrm{ant}}|$')
+		ax     = f1.add_axes([x0, y0 + 3*dy, dx, dy])	
+		h      = ax.plot(fe, 20*np.log10(np.abs(ra)), 'b', linewidth=1.5, label='$|\Gamma_{\mathrm{ant}}|$')
+		h      = ax.plot(flb1[flb1<=110], 20*np.log10(np.abs(ralb1[flb1<=110])), 'r', linewidth=1.5, label='$|\Gamma_{\mathrm{ant}}|$')
+		h      = ax.plot(flb2[flb2<=110], 20*np.log10(np.abs(ralb2[flb2<=110])), 'g', linewidth=1.5, label='$|\Gamma_{\mathrm{ant}}|$')
 		
 		
 		
@@ -3068,12 +3068,12 @@ def plots_midband_paper(plot_number):
 		#h2     = ax2.plot(fe, (180/np.pi)*np.unwrap(np.angle(ra)), 'r--', linewidth=2, label=r'$\angle\/\Gamma_{\mathrm{ant}}$')
 		#h      = h1 + h2
 		#labels = [l.get_label() for l in h]
-		ax.legend(['mid-band','low-band 1','low-band 2'], fontsize=11)
+		ax.legend(['mid-band','low-band 1','low-band 2'], fontsize=9)
 
 		#ax.set_ylim([-41, -25])
 		ax.set_xticklabels('')
 		#
-		ax.set_ylabel('$|\Gamma_{\mathrm{ant}}|$ [dB]', fontsize=15)
+		ax.set_ylabel('$|\Gamma_{\mathrm{ant}}|$ [dB]') #, fontsize=15)
 		
 		#
 		#		
@@ -3086,7 +3086,7 @@ def plots_midband_paper(plot_number):
 		ax.tick_params(axis='x', direction='in')
 		ax.set_xticks(np.arange(50, 151, 20))
 		
-		ax.text(145, -15.5, '(a)', fontsize=18)
+		ax.text(144, -15.3, '(a)', fontsize=14)
 		
 
 
@@ -3101,10 +3101,10 @@ def plots_midband_paper(plot_number):
 
 
 
-		ax     = f1.add_axes([x0, y0 + 4*dy, dx, dy])	
-		h      = ax.plot(fe, (180/np.pi)*np.unwrap(np.angle(ra)), 'b', linewidth=2, label=r'$\angle\/\Gamma_{\mathrm{ant}}$')
-		h      = ax.plot(flb1[flb1<=110], (180/np.pi)*np.unwrap(np.angle(ralb1[flb1<=110])), 'r', linewidth=2, label=r'$\angle\/\Gamma_{\mathrm{ant}}$')
-		h      = ax.plot(flb2[flb2<=110], (180/np.pi)*np.unwrap(np.angle(ralb2[flb2<=110])), 'g', linewidth=2, label=r'$\angle\/\Gamma_{\mathrm{ant}}$')
+		ax     = f1.add_axes([x0, y0 + 2*dy, dx, dy])	
+		h      = ax.plot(fe, (180/np.pi)*np.unwrap(np.angle(ra)), 'b', linewidth=1.5, label=r'$\angle\/\Gamma_{\mathrm{ant}}$')
+		h      = ax.plot(flb1[flb1<=110], (180/np.pi)*np.unwrap(np.angle(ralb1[flb1<=110])), 'r', linewidth=1.5, label=r'$\angle\/\Gamma_{\mathrm{ant}}$')
+		h      = ax.plot(flb2[flb2<=110], (180/np.pi)*np.unwrap(np.angle(ralb2[flb2<=110])), 'g', linewidth=1.5, label=r'$\angle\/\Gamma_{\mathrm{ant}}$')
 	
 		
 		#ax2    = ax.twinx()
@@ -3114,10 +3114,10 @@ def plots_midband_paper(plot_number):
 		#ax.legend(h, labels, loc=2, fontsize=13)
 
 		#ax.set_ylim([-41, -25])
-		ax.set_xticklabels('')
+		#ax.set_xticklabels('')
 		#ax.set_yticks(np.arange(-39,-26,3))
 		#ax.set_ylabel('$|\Gamma_{\mathrm{rec}}|$ [dB]', fontsize=16)
-		ax.set_ylabel(r'$\angle\/\Gamma_{\mathrm{ant}}$ [ $^\mathrm{o}$]', fontsize=15)
+		ax.set_ylabel(r'$\angle\/\Gamma_{\mathrm{ant}}$ [ $^\mathrm{o}$]') #, fontsize=15)
 		#ax.text(42, -39.6, '(a)', fontsize=20)
 
 		#ax2.set_ylim([70, 130])
@@ -3131,7 +3131,7 @@ def plots_midband_paper(plot_number):
 		ax.set_ylim([-800, 400])
 		ax.set_yticks(np.arange(-600,201,200))			
 		
-		ax.text(145, -750, '(b)', fontsize=18)
+		ax.text(144, -730, '(b)', fontsize=14)
 
 
 
@@ -3161,10 +3161,10 @@ def plots_midband_paper(plot_number):
 
 
 
-		ax     = f1.add_axes([x0, y0 + 3*dy, dx, dy])	
-		h      = ax.plot(fe, (1-Gbc)*100, 'b', linewidth=2, label='antenna loss [%]')
-		h      = ax.plot(flb1[flb1<=110], (1-Gbclb)[flb1<=110]*100, 'r', linewidth=2, label='antenna loss [%]')
-		h      = ax.plot(flb1[flb1<=110], (1-Gbclb2)[flb1<=110]*100, 'g', linewidth=2, label='antenna loss [%]')
+		ax     = f1.add_axes([x0, y0 + 1*dy, dx, dy])	
+		h      = ax.plot(fe, (1-Gbc)*100, 'b', linewidth=1.5, label='antenna loss [%]')
+		h      = ax.plot(flb1[flb1<=110], (1-Gbclb)[flb1<=110]*100, 'r', linewidth=1.5, label='antenna loss [%]')
+		h      = ax.plot(flb1[flb1<=110], (1-Gbclb2)[flb1<=110]*100, 'g', linewidth=1.5, label='antenna loss [%]')
 		#ax2    = ax.twinx()
 		#h2     = ax2.plot(fe, (180/np.pi)*np.unwrap(np.angle(rl)), 'r--', linewidth=2, label=r'$\angle\/\Gamma_{\mathrm{rec}}$')
 		#h      = h1 + h2
@@ -3176,7 +3176,7 @@ def plots_midband_paper(plot_number):
 		#ax.set_yticks(np.arange(-39,-26,3))
 		#ax.set_ylabel('$|\Gamma_{\mathrm{rec}}|$ [dB]', fontsize=16)
 		#ax.text(42, -39.6, '(a)', fontsize=20)
-		ax.set_ylabel(r'antenna loss [%]', fontsize=15)
+		ax.set_ylabel(r'antenna loss [%]')#, fontsize=15)
 
 		#ax2.set_ylim([70, 130])
 		#ax2.set_xticklabels('')
@@ -3189,7 +3189,7 @@ def plots_midband_paper(plot_number):
 		ax.set_ylim([0, 1])
 		ax.set_yticks(np.arange(0.2,0.9,0.2))		
 
-		ax.text(145, 0.05, '(c)', fontsize=18)
+		ax.text(144, 0.07, '(c)', fontsize=14)
 
 
 
@@ -3201,21 +3201,25 @@ def plots_midband_paper(plot_number):
 		
 
 
-		ax     = f1.add_axes([x0, y0 + 2*dy, dx, dy])	
-		h      = ax.plot(fe, (1-Gg)*100, 'b', linewidth=2, label='ground loss [%]')
-		h      = ax.plot(flb, (1-Gglb)*100, 'r', linewidth=2, label='ground loss [%]')
+		ax     = f1.add_axes([x0, y0 + 0*dy, dx, dy])	
+		h      = ax.plot(fe, (1-Gg)*100, 'b', linewidth=1.5, label='ground loss [%]')
+		h      = ax.plot(flb, (1-Gglb)*100, 'r', linewidth=1.5, label='ground loss [%]')
 		#ax2    = ax.twinx()
 		#h2     = ax2.plot(fe, (180/np.pi)*np.unwrap(np.angle(rl)), 'r--', linewidth=2, label=r'$\angle\/\Gamma_{\mathrm{rec}}$')
 		#h      = h1 + h2
 		#labels = [l.get_label() for l in h]
 		#ax.legend(h, labels, loc=2, fontsize=13)
 
+		ax.set_xlabel('$\\nu$ [MHz]')#, fontsize=15)
 		#ax.set_ylim([-41, -25])
-		ax.set_xticklabels('')
+		#ax.set_xticklabels('')
 		#ax.set_yticks(np.arange(-39,-26,3))
 		#ax.set_ylabel('$|\Gamma_{\mathrm{rec}}|$ [dB]', fontsize=16)
 		#ax.text(42, -39.6, '(a)', fontsize=20)
-		ax.set_ylabel(r'ground loss [%]', fontsize=15)
+		ax.set_ylabel(r'ground loss [%]')#, fontsize=15)
+		
+		#xt = np.arange(50, 151, 20)
+		#ax.set_xticks(xt)		
 
 		#ax2.set_ylim([70, 130])
 		#ax2.set_xticklabels('')
@@ -3223,16 +3227,53 @@ def plots_midband_paper(plot_number):
 		#ax2.set_ylabel(r'$\angle\/\Gamma_{\mathrm{rec}}$ [ $^\mathrm{o}$]', fontsize=16)
 
 		ax.set_xlim([45, 155])
-		ax.tick_params(axis='x', direction='in')
+		#ax.tick_params(axis='x', direction='in')
 		ax.set_xticks(np.arange(50, 151, 20))
 		ax.set_ylim([0.1, 0.4])
 		ax.set_yticks(np.arange(0.15,0.36,0.05))		
 		
-		ax.text(145, 0.115, '(d)', fontsize=18)
+		ax.text(144, 0.12, '(d)', fontsize=14)
 		
 
+		plt.savefig(path_plot_save + 'antenna_parameters.pdf', bbox_inches='tight')
+		plt.close()	
+		plt.close()
+		plt.close()
+		plt.close()
 
 
+
+
+
+
+
+
+
+	# Antenna Beam
+	if plot_number == 3:
+
+		# Paths
+		path_plot_save = edges_folder + 'results/plots/20190422/'
+
+
+		# Plot
+
+		size_x = 4
+		size_y = 12 #10.5
+		x0 = 0.15
+		y0 = 0.09
+		dx = 0.8
+		dy = 0.18
+
+
+		f1  = plt.figure(num=1, figsize=(size_x, size_y))		
+
+
+
+
+		# Frequency
+		f, il, ih = ba.frequency_edges(50, 150)
+		fe = f[il:ih+1]	
 
 
 
@@ -3264,23 +3305,51 @@ def plots_midband_paper(plot_number):
 		
 		glb_zenith = bm_lb[:,90,0][5:36]
 		glb_45_E   = bm_lb[:,45,0][5:36]
-		glb_45_H   = bm_lb[:,45,90][5:36]		
-
-
-
-
-		ax     = f1.add_axes([x0, y0 + 1*dy, dx, dy])
-		h      = ax.plot(fe, g_zenith,'b',linewidth=2, label='')
-		h      = ax.plot(fe, g_45_E,'b',linewidth=2, label='')
-		h      = ax.plot(fe, g_45_H,'b',linewidth=2, label='')
-				
-		h      = ax.plot(fe, g_inf_zenith,'b',linewidth=1, label='')
-		h      = ax.plot(fe, g_inf_45_E,'b',linewidth=1, label='')
-		h      = ax.plot(fe, g_inf_45_H,'b',linewidth=1, label='')		
+		glb_45_H   = bm_lb[:,45,90][5:36]
 		
-		h      = ax.plot(flb, glb_zenith,'r',linewidth=2, label='')
-		h      = ax.plot(flb, glb_45_E,'r',linewidth=2, label='')
-		h      = ax.plot(flb, glb_45_H,'r',linewidth=2, label='')
+		
+
+
+
+
+		bm_10 = oeg.FEKO_low_band_blade_beam(beam_file=5, frequency_interpolation='no', frequency=np.array([0]), AZ_antenna_axis=0)
+		fcuec = np.arange(50,121,2)
+		f10   = fcuec[0:-5]
+		
+		g10_zenith = bm_10[:,90,0][0:-5]
+		g10_45_E   = bm_10[:,45,0][0:-5]
+		g10_45_H   = bm_10[:,45,90][0:-5]
+		
+		
+		print(glb_zenith[-1])
+		print(flb[-1])
+		
+		print(g10_zenith[-1])
+		print(f10[-1])
+		
+
+		ax     = f1.add_axes([x0, y0 + 2*dy, dx, dy])
+		
+		h      = ax.plot(fe, g_inf_zenith,'b',linewidth=0.75, label='')
+		h      = ax.plot(fe, g_zenith,'b',linewidth=1.5, label='')
+		h      = ax.plot(flb, glb_zenith,'r',linewidth=1.5, label='')
+		h      = ax.plot(f10, g10_zenith,'g',linewidth=1.5, label='')
+		
+		h      = ax.plot(fe, g_zenith,'b',linewidth=1.5, label='')
+		h      = ax.plot(fe, g_45_E,'b',linewidth=1.5, label='')
+		h      = ax.plot(fe, g_45_H,'b',linewidth=1.5, label='')
+				
+		h      = ax.plot(fe, g_inf_zenith,'b',linewidth=0.75, label='')
+		h      = ax.plot(fe, g_inf_45_E,'b',linewidth=0.75, label='')
+		h      = ax.plot(fe, g_inf_45_H,'b',linewidth=0.75, label='')		
+		
+		h      = ax.plot(flb, glb_zenith,'r',linewidth=1.5, label='')
+		h      = ax.plot(flb, glb_45_E,'r',linewidth=1.5, label='')
+		h      = ax.plot(flb, glb_45_H,'r',linewidth=1.5, label='')
+		
+		h      = ax.plot(f10, g10_zenith,'g',linewidth=1.5, label='')
+		h      = ax.plot(f10, g10_45_E,'g',linewidth=1.5, label='')
+		h      = ax.plot(f10, g10_45_H,'g',linewidth=1.5, label='')		
 		
 		
 		#ax2    = ax.twinx()
@@ -3294,7 +3363,7 @@ def plots_midband_paper(plot_number):
 		#ax.set_yticks(np.arange(3.5,5.1,0.5))
 		#ax.set_ylabel('$C_1$', fontsize=16)
 		#ax.text(42, 3.25, '(b)', fontsize=20)
-		ax.set_ylabel('gain [no units]', fontsize=15)
+		ax.set_ylabel('gain [no units]')#, fontsize=14)
 
 		#ax2.set_ylim([-2.4, -1.8])
 		#ax2.set_xticklabels('')
@@ -3304,16 +3373,17 @@ def plots_midband_paper(plot_number):
 		ax.set_xlim([45, 155])
 		ax.tick_params(axis='x', direction='in')
 		ax.set_xticks(np.arange(50, 151, 20))
-		ax.set_ylim([0, 8])
-		ax.set_yticks(np.arange(1,7.1,1))		
+		ax.set_ylim([0, 9])
+		ax.set_yticks(np.arange(1,8.1,1))		
 		
-		ax.text(145, 0.4, '(e)', fontsize=18)
+		ax.text(145, 0.4, '(a)', fontsize=14)
 		
-		ax.text(50, 5.9, 'zenith', fontsize=12)
-		ax.text(50, 3.2, r'$\theta=45^{\circ}$, H-plane', fontsize=12)
-		ax.text(50, 1.2, r'$\theta=45^{\circ}$, E-plane', fontsize=12)
+		ax.text(50, 5.7, 'zenith', fontsize=10)
+		ax.text(50, 2.9, r'$\theta=45^{\circ}$, H-plane', fontsize=10)
+		ax.text(50, 0.9, r'$\theta=45^{\circ}$, E-plane', fontsize=10)
 		
-	
+		
+		ax.legend(['mid-band infinite GP', 'mid-band 30mx30m GP','low-band 30mx30m GP','low-band 10mx10m GP'], fontsize=7)
 	
 	
 	
@@ -3343,6 +3413,8 @@ def plots_midband_paper(plot_number):
 		mi3 = np.polyval(pi3, fe[0:imax2])
 
 
+
+
 		p1 = np.polyfit(flb, glb_zenith, Nfg)
 		p2 = np.polyfit(flb, glb_45_E, Nfg)
 		p3 = np.polyfit(flb, glb_45_H, Nfg)
@@ -3352,20 +3424,35 @@ def plots_midband_paper(plot_number):
 		mlb3 = np.polyval(p3, flb)
 		
 		
+		p1 = np.polyfit(f10, g10_zenith, Nfg)
+		p2 = np.polyfit(f10, g10_45_E, Nfg)
+		p3 = np.polyfit(f10, g10_45_H, Nfg)
 		
-		ax     = f1.add_axes([x0, y0 + 0*dy, dx, dy])
+		m10_1 = np.polyval(p1, f10)
+		m10_2 = np.polyval(p2, f10)
+		m10_3 = np.polyval(p3, f10)		
 		
-		h      = ax.plot(fe[0:imax2], g_zenith[0:imax2]-m1 + 0.1,'b', linewidth=2, label='$T_{\mathrm{unc}}$')
-		h      = ax.plot(fe[0:imax2], g_45_E[0:imax2]-m2 - 0.1,'b', linewidth=2, label='$T_{\mathrm{unc}}$')
-		h      = ax.plot(fe[0:imax2], g_45_H[0:imax2]-m3 - 0.0,'b', linewidth=2, label='$T_{\mathrm{unc}}$')
+
 		
-		h      = ax.plot(fe[0:imax2], g_inf_zenith[0:imax2]-mi1 + 0.1,'b', linewidth=1, label='$T_{\mathrm{unc}}$')
-		h      = ax.plot(fe[0:imax2], g_inf_45_E[0:imax2]-mi2 - 0.1,'b', linewidth=1, label='$T_{\mathrm{unc}}$')
-		h      = ax.plot(fe[0:imax2], g_inf_45_H[0:imax2]-mi3 - 0.0,'b', linewidth=1, label='$T_{\mathrm{unc}}$')
 		
-		h      = ax.plot(flb, glb_zenith-mlb1 + 0.1,'r', linewidth=2, label='$T_{\mathrm{unc}}$')
-		h      = ax.plot(flb, glb_45_E-mlb2 - 0.1,'r', linewidth=2, label='$T_{\mathrm{unc}}$')
-		h      = ax.plot(flb, glb_45_H-mlb3 - 0.0,'r', linewidth=2, label='$T_{\mathrm{unc}}$')		
+		ax     = f1.add_axes([x0, y0 + 1*dy, dx, dy])
+		
+		h      = ax.plot(fe[0:imax2], g_zenith[0:imax2]-m1 + 0.1,'b', linewidth=1.5, label='$T_{\mathrm{unc}}$')
+		h      = ax.plot(fe[0:imax2], g_45_E[0:imax2]-m2 - 0.1,'b', linewidth=1.5, label='$T_{\mathrm{unc}}$')
+		h      = ax.plot(fe[0:imax2], g_45_H[0:imax2]-m3 - 0.0,'b', linewidth=1.5, label='$T_{\mathrm{unc}}$')
+		
+		h      = ax.plot(fe[0:imax2], g_inf_zenith[0:imax2]-mi1 + 0.1,'b', linewidth=0.75, label='$T_{\mathrm{unc}}$')
+		h      = ax.plot(fe[0:imax2], g_inf_45_E[0:imax2]-mi2 - 0.1,'b', linewidth=0.75, label='$T_{\mathrm{unc}}$')
+		h      = ax.plot(fe[0:imax2], g_inf_45_H[0:imax2]-mi3 - 0.0,'b', linewidth=0.75, label='$T_{\mathrm{unc}}$')
+		
+		h      = ax.plot(flb, glb_zenith-mlb1 + 0.1,'r', linewidth=1.5, label='$T_{\mathrm{unc}}$')
+		h      = ax.plot(flb, glb_45_E-mlb2 - 0.1,'r', linewidth=1.5, label='$T_{\mathrm{unc}}$')
+		h      = ax.plot(flb, glb_45_H-mlb3 - 0.0,'r', linewidth=1.5, label='$T_{\mathrm{unc}}$')		
+
+		h      = ax.plot(f10, g10_zenith-m10_1 + 0.1,'g', linewidth=1.5, label='$T_{\mathrm{unc}}$')
+		h      = ax.plot(f10, g10_45_E-m10_2 - 0.1,'g', linewidth=1.5, label='$T_{\mathrm{unc}}$')
+		h      = ax.plot(f10, g10_45_H-m10_3 - 0.0,'g', linewidth=1.5, label='$T_{\mathrm{unc}}$')	
+
 		
 		
 		#ax2    = ax.twinx()
@@ -3379,13 +3466,40 @@ def plots_midband_paper(plot_number):
 		#ax.set_ylim([178, 190])
 		#ax.set_yticks(np.arange(180, 189, 2))
 		#ax.set_ylabel('$T_{\mathrm{unc}}$ [K]', fontsize=16)
-		ax.set_xlabel('$\\nu$ [MHz]', fontsize=15)
+		#ax.set_xlabel('$\\nu$ [MHz]', fontsize=15)
 		#ax.text(42, 179, '(c)', fontsize=20)
-		ax.set_ylabel('gain residuals\n[0.05 per division]', fontsize=15)
+		ax.set_ylabel('gain residuals\n[0.05 per division]')#, fontsize=14)
 
 		#ax2.set_ylim([-60, 40])
 		#ax2.set_yticks(np.arange(-40, 21, 20))
 		
+		
+		ax.set_xlim([45, 155])
+		xt = np.arange(50, 151, 20)
+		ax.set_xticks(xt)
+		ax.tick_params(axis='x', direction='in')
+		ax.set_xticklabels(xt, fontsize=10)
+		ax.set_ylim([-0.175, 0.175])
+		yt = np.arange(-0.15,0.16,0.05)
+		ax.set_yticks(yt)
+		ax.set_yticklabels(['' for i in range(len(yt))])
+		
+		ax.text(145, -0.156, '(b)', fontsize=14)
+
+		ax.text(113, 0.09, 'zenith', fontsize=10)
+		ax.text(113, -0.01, r'$\theta=45^{\circ}$, H-plane', fontsize=10)
+		ax.text(113, -0.11, r'$\theta=45^{\circ}$, E-plane', fontsize=10)
+		
+
+
+
+
+
+		ax     = f1.add_axes([x0, y0 + 0*dy, dx, dy])
+		
+		ax.set_xlabel('$\\nu$ [MHz]')#, fontsize=15)
+		ax.set_ylabel('place holder [X]')#, fontsize=14)
+
 		
 		ax.set_xlim([45, 155])
 		xt = np.arange(50, 151, 20)
@@ -3397,17 +3511,16 @@ def plots_midband_paper(plot_number):
 		ax.set_yticks(yt)
 		ax.set_yticklabels(['' for i in range(len(yt))])
 		
-		ax.text(145, -0.156, '(f)', fontsize=18)
+		ax.text(145, -0.156, '(c)', fontsize=14)
 
-		ax.text(113, 0.09, 'zenith', fontsize=12)
-		ax.text(113, -0.01, r'$\theta=45^{\circ}$, H-plane', fontsize=12)
-		ax.text(113, -0.11, r'$\theta=45^{\circ}$, E-plane', fontsize=12)
+		
 		
 
 
 
 
-		plt.savefig(path_plot_save + 'antenna_calibration.pdf', bbox_inches='tight')
+
+		plt.savefig(path_plot_save + 'beam_gain.pdf', bbox_inches='tight')
 		plt.close()	
 		plt.close()
 		plt.close()
@@ -3415,22 +3528,38 @@ def plots_midband_paper(plot_number):
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 	
 
 
 
-	if plot_number == 3:
+	if plot_number == 4:
 		
 		# Plot
 
 		size_x = 4.7
-		size_y = 12
+		size_y = 5
 		
 		x0   = 0.13
 		y0   = 0.035
 		dx   = 0.67
-		dy   = 0.187
-		yoff = 0.006
+		dy   = 0.6
+		dy1  = 0.2
+		yoff = 0.05
 		
 		dxc = 0.03
 		xoffc = 0.03
@@ -3449,9 +3578,119 @@ def plots_midband_paper(plot_number):
 		bx1 = bf[IX]
 
 
+
+		plt.close()
+		plt.close()
+		plt.close()
+		f1   = plt.figure(num=1, figsize=(size_x, size_y))		
+
+
+
+
+		ax     = f1.add_axes([x0, y0 + 1*(yoff+dy1), dx, dy])
+		im = ax.imshow(bx1, interpolation='none', extent=[50, 200, 24, 0], aspect='auto', vmin=0.979, vmax=1.021)#, cmap='jet')
+	
+		ax.set_xlim([50, 120])
+		ax.set_xticklabels('')
+		ax.set_yticks(np.arange(0,25,3))
+		ax.set_ylabel('GHA [hr]')
+		
+		cax    = f1.add_axes([x0 + 1*dx + xoffc, y0 + 1*(yoff+dy1), dxc, dy])
+		f1.colorbar(im, cax=cax, orientation='vertical', ticks=[0.98, 0.99, 1, 1.01, 1.02])
+		cax.set_title('$C$')
+		
+		#ax.text(panel_letter_x, panel_letter_y,  '(a)', fontsize=18)
+		
+
+		
+		
+		ax     = f1.add_axes([x0, y0, dx, dy1])
+		ax.plot(f, bx1[0,:], 'k')
+		ax.plot(f, bx1[125,:], 'k--')
+		ax.plot(f, bx1[175,:], 'k:')
+		
+		ax.set_ylim([0.9, 1.1])
+	
+		#cax    = f1.add_axes([x0 + 1*dx + xoffc, y0 + 0*(yoff+dy), dxc, dy])
+		#f1.colorbar(im, cax=cax, orientation='vertical')
+	
+		ax.set_xlim([50, 120])
+		ax.set_ylim([0.95, 1.05])
+		ax.set_xlabel(r'$\nu$ [MHz]')
+		ax.set_yticks([0.96,1,1.04])
+		ax.set_ylabel('$C$')
+		#ax.text(panel_letter_x, panel_letter_y,  '(e)', fontsize=18)		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		# Saving plot
+		path_plot_save = edges_folder + 'results/plots/20190422/'
+		
+
+		plt.savefig(path_plot_save + 'beam_chromaticity_correction.pdf', bbox_inches='tight')
+		plt.close()	
+		plt.close()
+		plt.close()
+		plt.close()
+
+
+
+
+
+
+
+
+
+	if plot_number == 5:
+		
+
+		# Plot
+
+		size_x = 4.7
+		size_y = 5
+		
+		x0   = 0.13
+		y0   = 0.035
+		dx   = 0.53
+		dy   = 0.55
+		dy1  = 0.2
+		xoff = 0.09
+		
+		dxc = 0.03
+		xoffc = 0.03
+		
+		panel_letter_x = 35
+		panel_letter_y = 3
+
+
+
+
+		beam_factor_filename = 'table_lores_mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.6_sigma_deg_5_reffreq_100MHz.hdf5'
+		f, lst, bf           = cal.beam_factor_table_read('/home/raul/DATA2/EDGES_vol2/mid_band/calibration/beam_factors/table/' + beam_factor_filename)
+		gha = lst + (24-17.76)
+		gha[gha>=24] = gha[gha>=24] - 24
+		IX = np.argsort(gha)
+		bx1 = bf[IX]
+
+
+
+
 		beam_factor_filename = 'table_lores_mid_band_50-200MHz_90deg_alan1_haslam_gaussian_index_2.4_2.6_sigma_deg_5_reffreq_100MHz.hdf5'
 		f, lst, bf           = cal.beam_factor_table_read('/home/raul/DATA2/EDGES_vol2/mid_band/calibration/beam_factors/table/' + beam_factor_filename)
 		bx2 = bf[IX]
+
+
 
 
 
@@ -3477,106 +3716,104 @@ def plots_midband_paper(plot_number):
 
 
 
-		ax     = f1.add_axes([x0 + 0*dx, y0 + 4*(yoff+dy), dx, dy])
-		im = ax.imshow(bx1, interpolation='none', extent=[50, 200, 24, 0], aspect='auto', vmin=0.979, vmax=1.021)#, cmap='jet')
-		
-		cax    = f1.add_axes([x0 + 1*dx + xoffc, y0 + 4*(yoff+dy), dxc, dy])
-		f1.colorbar(im, cax=cax, orientation='vertical', ticks=[0.98, 0.99, 1, 1.01, 1.02])
-		
-		ax.set_xlim([50, 120])
-		ax.set_xticklabels('')
-		ax.set_yticks(np.arange(0,22,3))
-		ax.set_ylabel('GHA [hr]')	
-		ax.text(panel_letter_x, panel_letter_y,  '(a)', fontsize=18)
-		
-		
-		
-		
- 		
-		
-		ax     = f1.add_axes([x0 + 0*dx, y0 + 3*(yoff+dy), dx, dy])
-		im = ax.imshow(bx2-bx1, interpolation='none', extent=[50, 200, 24, 0], aspect='auto', vmin=-0.0043, vmax=0.0043)#, cmap='jet')
-		
-		cax    = f1.add_axes([x0 + 1*dx + xoffc, y0 + 1.5*(yoff+dy), dxc, dy])
-		f1.colorbar(im, cax=cax, orientation='vertical', ticks=[-0.004, -0.002, 0, 0.002, 0.004])
-		
-		ax.set_xlim([50, 120])
-		ax.set_xticklabels('')
-		ax.set_yticks(np.arange(0,22,3))
-		ax.set_ylabel('GHA [hr]')
-		ax.text(panel_letter_x, panel_letter_y,  '(b)', fontsize=18)
-		
-		
-		
-		
-		
-		
-		ax     = f1.add_axes([x0 + 0*dx, y0 + 2*(yoff+dy), dx, dy])
-		im = ax.imshow(bx3-bx1, interpolation='none', extent=[50, 200, 24, 0], aspect='auto', vmin=-0.0043, vmax=0.0043)#, cmap='jet')
 
+
+
+
+
+
+
+
+
+
+		
+		ax     = f1.add_axes([x0 + 0*(xoff+dx), y0, dx, dy])
+		im = ax.imshow(bx2-bx1, interpolation='none', extent=[50, 200, 24, 0], aspect='auto', vmin=-0.0043, vmax=0.0043)#, cmap='jet')
+	
+		#cax    = f1.add_axes([x0 + 1*dx + xoffc, y0 + 1.5*(yoff+dy), dxc, dy])
+		#f1.colorbar(im, cax=cax, orientation='vertical', ticks=[-0.004, -0.002, 0, 0.002, 0.004])
+	
+		ax.set_xlim([50, 120])
+		#ax.set_xticklabels('')
+		ax.set_xticks(np.arange(50,121,10))
+		ax.set_yticks(np.arange(0,25,3))
+		ax.set_xlabel(r'$\nu$ [MHz]')
+		ax.set_ylabel('GHA [hr]')
+		#ax.set_text(panel_letter_x, panel_letter_y,  '(b)', fontsize=18)
+		ax.set_title('(a)', fontsize=18)
+	
+	
+	
+	
+	
+		ax     = f1.add_axes([x0 + 1*(xoff+dx), y0, dx, dy])
+		im = ax.imshow(bx3-bx1, interpolation='none', extent=[50, 200, 24, 0], aspect='auto', vmin=-0.0043, vmax=0.0043)#, cmap='jet')
+	
 		#cax    = f1.add_axes([x0 + 1*dx + xoffc, y0 + 2*(yoff+dy), dxc, dy])
 		#f1.colorbar(im, cax=cax, orientation='vertical')
-
+	
 		ax.set_xlim([50, 120])
-		ax.set_xticklabels('')
-		ax.set_yticks(np.arange(0,22,3))
-		ax.set_ylabel('GHA [hr]')
-		ax.text(panel_letter_x, panel_letter_y,  '(c)', fontsize=18)
-		
-		
-		
-		
-		
-		ax     = f1.add_axes([x0 + 0*dx, y0 + 1*(yoff+dy), dx, dy])
+		ax.set_yticklabels('')
+		ax.set_xlabel(r'$\nu$ [MHz]')
+		ax.set_xticks(np.arange(50,121,10))
+		ax.set_yticks(np.arange(0,25,3))
+		#ax.set_ylabel('GHA [hr]')
+		#ax.text(panel_letter_x, panel_letter_y,  '(c)', fontsize=18)
+		ax.set_title('(b)', fontsize=18)
+	
+	
+	
+	
+	
+		ax     = f1.add_axes([x0 + 2*(xoff+dx), y0, dx, dy])
 		im = ax.imshow(bx4-bx1, interpolation='none', extent=[50, 200, 24, 0], aspect='auto', vmin=-0.0043, vmax=0.0043)#, cmap='jet')
-
+	
 		#cax    = f1.add_axes([x0 + 1*dx + xoffc, y0 + 1*(yoff+dy), dxc, dy])
 		#f1.colorbar(im, cax=cax, orientation='vertical')
-		
+	
 		ax.set_xlim([50, 120])
-		ax.set_xticklabels('')
-		ax.set_yticks(np.arange(0,22,3))
-		ax.set_ylabel('GHA [hr]')
-		ax.text(panel_letter_x, panel_letter_y,  '(d)', fontsize=18)
-
-
-
-
-
-		
-		ax     = f1.add_axes([x0 + 0*dx, y0 + 0*(yoff+dy), dx, dy])
+		ax.set_yticklabels('')
+		ax.set_xlabel(r'$\nu$ [MHz]')
+		ax.set_xticks(np.arange(50,121,10))
+		ax.set_yticks(np.arange(0,25,3))
+		#ax.set_ylabel('GHA [hr]')
+		#ax.text(panel_letter_x, panel_letter_y,  '(d)', fontsize=18)
+		ax.set_title('(c)', fontsize=18)
+	
+	
+	
+	
+	
+	
+		ax     = f1.add_axes([x0 + 3*(xoff+dx), y0, dx, dy])
 		im = ax.imshow(bx5-bx1, interpolation='none', extent=[50, 200, 24, 0], aspect='auto', vmin=-0.0043, vmax=0.0043)#, cmap='jet')
-
-		#cax    = f1.add_axes([x0 + 1*dx + xoffc, y0 + 0*(yoff+dy), dxc, dy])
-		#f1.colorbar(im, cax=cax, orientation='vertical')
-		
+	
+		cax    = f1.add_axes([x0 + 3.2*xoff+4*dx, y0, dxc, dy]) #  + xoffc
+		f1.colorbar(im, cax=cax, orientation='vertical')
+		cax.set_title(r'$\Delta C$')
+	
 		ax.set_xlim([50, 120])
-		ax.set_xlabel('frequency [MHz]')
-		ax.set_yticks(np.arange(0,22,3))
-		ax.set_ylabel('GHA [hr]')
-		ax.text(panel_letter_x, panel_letter_y,  '(e)', fontsize=18)
-		
-		
-		
-		
+		ax.set_yticklabels('')
+		ax.set_xlabel(r'$\nu$ [MHz]')
+		ax.set_xticks(np.arange(50,121,10))
+		ax.set_yticks(np.arange(0,25,3))
+		#ax.set_ylabel('GHA [hr]')
+		#ax.text(panel_letter_x, panel_letter_y,  '(e)', fontsize=18)
+		ax.set_title('(d)', fontsize=18)
+	
+
 		
 		# Saving plot
-		path_plot_save = edges_folder + 'results/plots/20190417/'
+		path_plot_save = edges_folder + 'results/plots/20190422/'
 		
 
-		plt.savefig(path_plot_save + 'beam_chromaticity_correction.pdf', bbox_inches='tight')
+		plt.savefig(path_plot_save + 'beam_chromaticity_differences.pdf', bbox_inches='tight')
 		plt.close()	
 		plt.close()
 		plt.close()
 		plt.close()
 
 
-		
-		
-		#h      = ax.plot(fe, 20*np.log10(np.abs(ra)), 'b', linewidth=2, label='$|\Gamma_{\mathrm{ant}}|$')
-		#h      = ax.plot(flb1[flb1<=110], 20*np.log10(np.abs(ralb1[flb1<=110])), 'r', linewidth=2, label='$|\Gamma_{\mathrm{ant}}|$')
-		#h      = ax.plot(flb2[flb2<=110], 20*np.log10(np.abs(ralb2[flb2<=110])), 'g', linewidth=2, label='$|\Gamma_{\mathrm{ant}}|$')
-	
 
 
 
@@ -3588,53 +3825,22 @@ def plots_midband_paper(plot_number):
 
 
 
-		## Frequency
-		#f, il, ih = ba.frequency_edges(50, 150)
-		#fe = f[il:ih+1]	
 
 
-		## Antenna S11
-		## -----------
-		#ra = cal.models_antenna_s11_remove_delay('mid_band', fe, year=2018, day=147, case=5, delay_0=0.17, model_type='polynomial', Nfit=15, plot_fit_residuals='no')
 
-		#xlb1  = np.genfromtxt('/run/media/raul/SSD_4TB/EDGES_vol1/calibration/antenna_s11/low_band1/s11/corrected/2016_243/S11_blade_low_band_2016_243.txt')
-		#flb1  = xlb1[:,0]/1e6
-		#ralb1 = xlb1[:,1] + 1j*xlb1[:,2]
-		
-		#xlb2  = np.genfromtxt('/run/media/raul/SSD_4TB/EDGES_vol1/calibration/antenna_s11/low_band2/s11/corrected/2017-06-29-low2-noshield_average/S11_blade_low_band_2017_180_NO_SHIELD.txt')		
-		#flb2  = xlb2[:,0]/1e6
-		#ralb2 = xlb2[:,1] + 1j*xlb2[:,2]		
-		
-		
 
-	
-		
-		##ax2    = ax.twinx()
-		##h2     = ax2.plot(fe, (180/np.pi)*np.unwrap(np.angle(ra)), 'r--', linewidth=2, label=r'$\angle\/\Gamma_{\mathrm{ant}}$')
-		##h      = h1 + h2
-		##labels = [l.get_label() for l in h]
-		#ax.legend(['mid-band','low-band 1','low-band 2'], fontsize=11)
 
-		##ax.set_ylim([-41, -25])
-		#ax.set_xticklabels('')
-		##
-		#ax.set_ylabel('$|\Gamma_{\mathrm{ant}}|$ [dB]', fontsize=15)
-		
-		##
-		##		
-		##ax2.set_ylabel(r'$\angle\/\Gamma_{\mathrm{ant}}$ [ $^\mathrm{o}$]', fontsize=16)
 
-		#ax.set_xlim([45, 155])
-		#ax.set_ylim([-16, -4])
-		#ax.set_yticks(np.arange(-14,-5,2))
-		##ax.set_xticklabels('')
-		#ax.tick_params(axis='x', direction='in')
-		#ax.set_xticks(np.arange(50, 151, 20))
-		
-		#ax.text(145, -15.5, '(a)', fontsize=18)
+
+
+
+
+
+
+
 			
 	
-	if plot_number == 4:
+	if plot_number == 6:
 		
 		bm_all = cal.FEKO_blade_beam('mid_band', 0, frequency_interpolation='no', AZ_antenna_axis=90)
 		f  = np.arange(50,201,2)
@@ -3880,6 +4086,22 @@ def plots_midband_paper(plot_number):
 		plt.plot(fx, slx - ml, '--')
 		plt.ylabel('residuals to 5-term polynomial\n [fraction of 4pi]')
 		plt.xlabel('frequency [MHz]')
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
