@@ -1905,7 +1905,7 @@ def daily_nominal_filter(band, case, year_day_list):
 	
 	if (band == 'mid_band') and (case == 0):
 		
-		bad = np.array([[2018, 150], [2018, 159], [2018, 161], [2018, 164], [2018, 182], [2018, 184], [2018, 185], [2018, 186], [2018, 192], [2018, 195], [2018, 196], [2018, 204], [2018, 208], [2018, 216], [2018, 220]])
+		bad = np.array([[2018, 150], [2018, 159], [2018, 161], [2018, 164], [2018, 182], [2018, 184], [2018, 185], [2018, 186], [2018, 192], [2018, 193], [2018, 195], [2018, 196], [2018, 204], [2018, 208], [2018, 216], [2018, 220]])
 		
 		for j in range(l):
 			keep = 1
@@ -1938,12 +1938,38 @@ def plot_level4(index_GHA, good_bad, model, FLOW, FHIGH, K_per_division, file_na
 	
 	"""
 	
+	# Load Level 4 data
+	f, py, ry, wy, gha, yy = level4read('/home/raul/DATA2/EDGES_vol2/mid_band/spectra/level4/case0/case0.hdf5')
 	
-	f, px, rx, wx, gha, yx = level4read('/home/raul/DATA2/EDGES_vol2/mid_band/spectra/level4/case0/case0.hdf5')
+
+	px = np.delete(py, 1, axis=0)
+	rx = np.delete(ry, 1, axis=0)
+	wx = np.delete(wy, 1, axis=0)
+	yx = np.delete(yy, 1, axis=0)
+
+
+	
+
+	# Average the data from the two days 147
+	for i in range(len(gha)-1):
+		p147       = np.mean(py[1:3, i, :], axis=0)
+		r147, w147 = ba.spectral_averaging(ry[1:3, i, :], wy[1:3, i, :])
+
+		px[1, i, :] = p147
+		rx[1, i, :] = r147
+		wx[1, i, :] = w147	
+
+
+
+
+
+
+
 	
 	
 	
 	
+	# Identify indices of good and bad days
 	kk = daily_nominal_filter('mid_band', 0, yx)
 	
 	if good_bad == 'good':
@@ -1970,13 +1996,14 @@ def plot_level4(index_GHA, good_bad, model, FLOW, FHIGH, K_per_division, file_na
 	plt.close()
 	plt.close()
 	
-	plt.figure(1, figsize=[5, 11])
+	#plt.figure(1, figsize=[5, 11])
+	plt.figure(1, figsize=[5, 5])
 	plt.ylabel('[' + str(K_per_division) + ' K per division]\n  \n  ')
 	
 	#for i in range(2):
 	for i in range(len(yd)):
 		
-		print(i)
+		print(str(i) + ' ' + str(yd[i,1]))
 		
 		avp   = p_all[i,index_GHA,:]
 		avr   = r_all[i,index_GHA,:]
@@ -2016,9 +2043,9 @@ def plot_level4(index_GHA, good_bad, model, FLOW, FHIGH, K_per_division, file_na
 		else:
 			plt.plot(fb[wb>0], rb[wb>0]-i*K_per_division, 'r')
 			
-		plt.text(55, -i*K_per_division-(1/6)*K_per_division, str(int(yd[i,1])))
+		plt.text(52, -i*K_per_division-(1/6)*K_per_division, str(int(yd[i,1])))
 		
-	plt.xlim([60, 120])
+	plt.xlim([57, 120])
 	plt.xlabel('frequency [MHz]')
 	plt.ylim([-len(yd)*K_per_division, K_per_division])
 	plt.yticks([10], labels=[''])
@@ -2056,12 +2083,12 @@ def plot_level4(index_GHA, good_bad, model, FLOW, FHIGH, K_per_division, file_na
 
 
 
-def integrated_nominal_spectrum(FLOW, FHIGH, day_min1, day_max1, day_min2, day_max2):
+def integrated_spectrum_level4(FLOW, FHIGH, day_min1, day_max1, day_min2, day_max2):
 	
-		
-	f, px, rx, wx, gha, ydx = level4read(edges_folder + 'mid_band/spectra/level4/case3/case3.hdf5')
 	
-	keep_index = daily_nominal_filter('mid_band', 1, ydx)
+	f, px, rx, wx, gha, ydx = level4read(edges_folder + 'mid_band/spectra/level4/case0/case0.hdf5')
+	
+	keep_index = daily_nominal_filter('mid_band', 0, ydx)
 	
 	
 	p  = px[(keep_index==1) & (((ydx[:,1]>=day_min1) & (ydx[:,1]<=day_max1)) | ((ydx[:,1]>=day_min2) & (ydx[:,1]<=day_max2))), 0, :]
@@ -2069,6 +2096,7 @@ def integrated_nominal_spectrum(FLOW, FHIGH, day_min1, day_max1, day_min2, day_m
 	w  = wx[(keep_index==1) & (((ydx[:,1]>=day_min1) & (ydx[:,1]<=day_max1)) | ((ydx[:,1]>=day_min2) & (ydx[:,1]<=day_max2))), 0, :]
 	yd = ydx[(keep_index==1) & (((ydx[:,1]>=day_min1) & (ydx[:,1]<=day_max1)) | ((ydx[:,1]>=day_min2) & (ydx[:,1]<=day_max2))) ]
 	
+	print(p.shape)
 	avp = np.mean(p, axis=0)
 	m   = ba.model_evaluate('LINLOG', avp, f/200)
 	
@@ -2077,16 +2105,52 @@ def integrated_nominal_spectrum(FLOW, FHIGH, day_min1, day_max1, day_min2, day_m
 	rr, wr   = rfi.cleaning_sweep(f, avr, avw, window_width_MHz=3, Npolyterms_block=2, N_choice=20, N_sigma=2.5) 
 	tr       = m + rr
 		
+
+
+
+	# Cleanning RFI spike
+	fr1 = 105.5
+	fr2 = 107.5
+	tr[(f >=fr1) & (f<=fr2)] = 0
+	wr[(f >=fr1) & (f<=fr2)] = 0
+	
+	
+
+	p  = ba.fit_polynomial_fourier('LINLOG', f/200, tr, 7, Weights=wr)
+	m  = ba.model_evaluate('LINLOG', p[0], f/200)
+	r  = tr-m
+
+	fb, rb, wb  = ba.spectral_binning_number_of_samples(f, r, wr)
+
+	mb  = ba.model_evaluate('LINLOG', p[0], fb/200)
+	tb  = mb + rb
+	tb[wb==0] = 0
+
+
+
+
+
+
+	outT = np.array([fb, tb, wb])
+	out  = outT.T
+
+
+	np.savetxt('/home/raul/Desktop/integrated_spectrum.txt', out)
+
+
+
+
+
+
+
+
+
+
+
 	
 	ft = f[(f>=FLOW) & (f<=FHIGH)]
 	tt = tr[(f>=FLOW) & (f<=FHIGH)]
 	wt = wr[(f>=FLOW) & (f<=FHIGH)]
-
-	
-	
-
-
-
 
 
 	pt  = ba.fit_polynomial_fourier('LINLOG', ft/200, tt, 3, Weights=wt)
@@ -2134,24 +2198,26 @@ def integrated_nominal_spectrum(FLOW, FHIGH, day_min1, day_max1, day_min2, day_m
 
 	
 	# Cleanning RFI spike
-	rb3[(fb >=105.5) & (fb<=107.5)] = 0
-	wb3[(fb >=105.5) & (fb<=107.5)] = 0
+	fr1 = 105.5
+	fr2 = 107.5
+	rb3[(fb >=fr1) & (fb<=fr2)] = 0
+	wb3[(fb >=fr1) & (fb<=fr2)] = 0
 	
-	rb4[(fb >=105.5) & (fb<=107.5)] = 0
-	wb4[(fb >=105.5) & (fb<=107.5)] = 0
+	rb4[(fb >=fr1) & (fb<=fr2)] = 0
+	wb4[(fb >=fr1) & (fb<=fr2)] = 0
 
-	rb5[(fb >=105.5) & (fb<=107.5)] = 0
-	wb5[(fb >=105.5) & (fb<=107.5)] = 0
+	rb5[(fb >=fr1) & (fb<=fr2)] = 0
+	wb5[(fb >=fr1) & (fb<=fr2)] = 0
 
 
-	rbl3[(fb >=105.5) & (fb<=107.5)] = 0
-	wbl3[(fb >=105.5) & (fb<=107.5)] = 0
+	rbl3[(fb >=fr1) & (fb<=fr2)] = 0
+	wbl3[(fb >=fr1) & (fb<=fr2)] = 0
 
-	rbl4[(fb >=105.5) & (fb<=107.5)] = 0
-	wbl4[(fb >=105.5) & (fb<=107.5)] = 0
+	rbl4[(fb >=fr1) & (fb<=fr2)] = 0
+	wbl4[(fb >=fr1) & (fb<=fr2)] = 0
 	
-	rbl5[(fb >=105.5) & (fb<=107.5)] = 0
-	wbl5[(fb >=105.5) & (fb<=107.5)] = 0
+	rbl5[(fb >=fr1) & (fb<=fr2)] = 0
+	wbl5[(fb >=fr1) & (fb<=fr2)] = 0
 
 
 
