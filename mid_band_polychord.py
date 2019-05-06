@@ -32,21 +32,20 @@ save_file_name = sys.argv[3]
 Nparameters = N21+Nfg
 Nderived    = 0
 
+
+
+# Input parameters
+# -----------------------
 model_type_signal     = 'tanh'  #'tanh' #, 'tanh'
 model_type_foreground = 'exp'  #'exp', 'linlog'
 
 save_folder = '/home/raul/Desktop/test/'
 
 data        = 'real'   # it could be 'real' or 'simulated'
-case        =  23 #2 #22
-integration = '10.5-11.5hr'
-GHA_index   =  0 #, 14, 15, 16
-
-FLOW        =  61
-FHIGH       = 141 #159
-
-
-v0 = 100
+case        =  1
+FLOW        =  60
+FHIGH       = 120 #159
+v0          = 100
 
 
 
@@ -62,7 +61,7 @@ if data == 'simulated':
 
 
 elif data == 'real':
-	v, t, w, g, sigma, inv_sigma, det_sigma = dm.real_data(case, integration, FLOW, FHIGH, index=GHA_index) 
+	v, t, w, sigma, inv_sigma, det_sigma = dm.real_data(case, FLOW, FHIGH)
 	
 
 

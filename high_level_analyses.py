@@ -7,6 +7,7 @@ import basic as ba
 import rfi as rfi
 
 import calibration as cal
+import calibration_receiver1 as cr1
 
 import reflection_coefficient as rc
 
@@ -1137,7 +1138,7 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
 	if case == 0:
 		flag_folder       = 'case0'
 		
-		receiver_cal_file = 2   # 8 terms over 50-150 MHz
+		receiver_cal_file = 4   # 8 terms over 50-150 MHz
 		
 		antenna_s11_day   = 147
 		antenna_s11_case  = 6   # average between cases 3 and 6
@@ -1153,6 +1154,61 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
 		Nfg   = 5
 
 
+	if case == 1:
+		flag_folder       = 'case1'
+		
+		receiver_cal_file = 1   # cterms=7, wterms=7 terms over 50-150 MHz
+		
+		antenna_s11_day   = 147
+		antenna_s11_case  = 3   # taken 2+ minutes after turning on the switch
+		antenna_s11_Nfit  = 13  # 13 terms over 55-120 MHz
+		
+		balun_correction  = 1
+		ground_correction = 1
+		beam_correction   = 1
+		bf_case           = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
+		
+		FLOW  = 55
+		FHIGH = 120
+		Nfg   = 5
+
+	
+	if case == 2:
+		flag_folder       = 'case2'
+		
+		receiver_cal_file = 2   # cterms=7, wterms=8 terms over 50-150 MHz
+		
+		antenna_s11_day   = 147
+		antenna_s11_case  = 3   # taken 2+ minutes after turning on the switch
+		antenna_s11_Nfit  = 13  # 13 terms over 55-120 MHz
+		
+		balun_correction  = 1
+		ground_correction = 1
+		beam_correction   = 1
+		bf_case           = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
+		
+		FLOW  = 55
+		FHIGH = 120
+		Nfg   = 5
+
+
+	if case == 3:
+		flag_folder       = 'case3'
+		
+		receiver_cal_file = 3   # cterms=7, wterms=15 terms over 50-150 MHz
+		
+		antenna_s11_day   = 147
+		antenna_s11_case  = 3   # taken 2+ minutes after turning on the switch
+		antenna_s11_Nfit  = 13  # 13 terms over 55-120 MHz
+		
+		balun_correction  = 1
+		ground_correction = 1
+		beam_correction   = 1
+		bf_case           = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
+		
+		FLOW  = 55
+		FHIGH = 120
+		Nfg   = 5
 
 
 
@@ -4200,7 +4256,23 @@ def plot_daily_residuals_nominal(f, rx, wx, ydx):
 	
 	
 	
+def plot_number_of_cterms_wterms():
 	
+	rms, cterms, wterms = cr1.calibration_RMS_read('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_term_sweep_50_150MHz/calibration_term_sweep_50_150MHz.hdf5')
+	
+	
+	plt.close()
+	plt.close()
+	plt.close()
+	plt.close()
+	plt.close()
+	
+	plt.figure();plt.imshow(np.flipud(rms[0,:,:]), interpolation='none', vmin=0.016, vmax=0.02, extent=[1, 15, 1, 15]);plt.colorbar() 
+	plt.figure();plt.imshow(np.flipud(rms[1,:,:]), interpolation='none', vmin=0.016, vmax=0.02, extent=[1, 15, 1, 15]);plt.colorbar() 
+	plt.figure();plt.imshow(np.flipud(rms[2,:,:]), interpolation='none', vmin=0.3, vmax=0.6, extent=[1, 15, 1, 15]);plt.colorbar() 
+	plt.figure();plt.imshow(np.flipud(rms[3,:,:]), interpolation='none', vmin=0.3, vmax=0.6, extent=[1, 15, 1, 15]);plt.colorbar() 
+	
+	return 0
 	
 	
 	

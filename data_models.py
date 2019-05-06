@@ -3,8 +3,9 @@ import basic as ba
 import numpy as np
 import os, sys
 
-edges_folder       = os.environ['EDGES']
+edges_folder       = os.environ['EDGES_vol2']
 print('EDGES Folder: ' + edges_folder)
+
 
 
 
@@ -212,132 +213,44 @@ def simulated_data(theta, v, vr, noise_std_at_vr, model_type_signal='exp', model
 
 
 
-def real_data(case, integration, FLOW, FHIGH, index=1):
+def real_data(case, FLOW, FHIGH):
 	
-	if case == 2:
-		if integration == '1hr':
-			vv = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_frequency.txt')
-			tt = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_1hr_temperature.txt')
-			ww = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_1hr_weights.txt')
-			g  = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_1hr_gha_edges.txt')
-			
-		if integration == '2hr':
-			vv = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_frequency.txt')
-			tt = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_2hr_temperature.txt')
-			ww = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_2hr_weights.txt')
-			g  = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_2hr_gha_edges.txt')
-	
-		if integration == '3hr':
-			vv = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_frequency.txt')
-			tt = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_3hr_temperature.txt')
-			ww = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_3hr_weights.txt')
-			g  = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_3hr_gha_edges.txt')
-			
-		if integration == '4hr':
-			vv = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_frequency.txt')
-			tt = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_4hr_temperature.txt')
-			ww = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_4hr_weights.txt')
-			g  = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_4hr_gha_edges.txt')
-			
-		if integration == '6hr':
-			vv = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_frequency.txt')
-			tt = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_6hr_temperature.txt')
-			ww = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_6hr_weights.txt')
-			g  = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_6hr_gha_edges.txt')
-			
-		if integration == '8hr':
-			vv = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_frequency.txt')
-			tt = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_8hr_temperature.txt')
-			ww = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_8hr_weights.txt')
-			g  = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_8hr_gha_edges.txt')
-					
-		if integration == '12hr':
-			vv = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_frequency.txt')
-			tt = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_12hr_temperature.txt')
-			ww = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_12hr_weights.txt')
-			g  = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_12hr_gha_edges.txt')
-	
-		if integration == '10-15hr':
-			vv = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_frequency.txt')
-			tt = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_10-15hr_temperature.txt')
-			ww = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_10-15hr_weights.txt')
-			g  = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/case2_10-15hr_gha_edges.txt')
+	if case == 1:
+		dd = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/integrated_spectrum.txt')
 		
+		vv = dd[:,0]
+		tt = dd[:,1]
+		ww = dd[:,2]
+		
+		v0 = 100
+		A  = 10
+		
+		ss = A*(1/np.sqrt(ww))*(vv/v0)**(-2.5)
 		
 			
-	if case == 22:
-		if integration == '1hr':
-			vv = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case22/case22_frequency.txt')
-			tt = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case22/case22_1hr_temperature.txt')
-			ww = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case22/case22_1hr_weights.txt')
-			g  = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case22/case22_1hr_gha_edges.txt')
-			
-		if integration == '13.5hr-15.5hr':
-			vv = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case22/case22_frequency.txt')
-			tt = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case22/case22_13.5hr-15.5hr_temperature.txt')
-			ww = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case22/case22_13.5hr-15.5hr_weights.txt')
-			g  = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case22/case22_13.5hr-15.5hr_gha_edges.txt')
-			
-			#std_dev_vec   = noise_std_at_vr * (v/vr)**(-2.5)
-			std_dev_vec = np.ones(len(v))
-			std_dev_vec[v <= 100] = 0.025 * std_dev_vec[v <= 100]
-			std_dev_vec[v  > 100] = 0.025 * std_dev_vec[v  > 100]			
-
-			
-	if case == 23:
-		if integration == '10.5-11.5hr':
-			d  = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case23/integrated_spectrum_GHA_10.5-11.5.txt')
-			vv = d[:,0]
-			tt = np.array([d[:,1]])
-			ww = np.array([d[:,2]])
-			g  = [10.5, 11.5]
-			
-			v0 = 100
-			A  = 10
-			ss = A*(1/np.sqrt(ww[0,:]))*(vv/v0)**(-2.5)
-			
-			print(ss)
+	vp = vv[(vv>=FLOW) & (vv<=FHIGH)]
+	tp = tt[(vv>=FLOW) & (vv<=FHIGH)]
+	wp = ww[(vv>=FLOW) & (vv<=FHIGH)]
+	sp = ss[(vv>=FLOW) & (vv<=FHIGH)]
 
 
-	
-	
-	vp  = vv[(vv>=FLOW)   & (vv<=FHIGH)]
-	sp  = ss[(vv>=FLOW)   & (vv<=FHIGH)]
-	tpp = tt[:,(vv>=FLOW) & (vv<=FHIGH)]
-	wpp = ww[:,(vv>=FLOW) & (vv<=FHIGH)]
-	
-	tp  = tpp[index,:]
-	wp  = wpp[index,:]
-	
-	
-	
-	
-	#vk = vp[wp>0]
-	#tk = tp[wp>0]
-	#wk = wp[wp>0]
-	
-	#v = vk[(vk<65) | ((vk>94.7) & (vk<104)) | (vk>112)]
-	#t = tk[(vk<65) | ((vk>94.7) & (vk<104)) | (vk>112)]
-	#w = wk[(vk<65) | ((vk>94.7) & (vk<104)) | (vk>112)]
-	
-	
-	
-	
 	v = vp[wp>0]
 	t = tp[wp>0]
 	w = wp[wp>0]
 	std_dev_vec = sp[wp>0]
-	
-	
-	
 
-	sigma         = np.diag(std_dev_vec**2)     # uncertainty covariance matrix
-	inv_sigma     = np.linalg.inv(sigma)
-	det_sigma     = np.linalg.det(sigma)	
+
+	sigma     = np.diag(std_dev_vec**2)     # uncertainty covariance matrix
+	inv_sigma = np.linalg.inv(sigma)
+	det_sigma = np.linalg.det(sigma)	
 
 	
-		
-	return v, t, w, g, sigma, inv_sigma, det_sigma 
+	return v, t, w, sigma, inv_sigma, det_sigma 
+
+
+
+
+
 
 
 

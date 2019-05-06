@@ -863,6 +863,18 @@ def redshift2frequency(z):
 
 def temperature_thermistor_oven_industries_TR136_170(R, unit):
 
+	"""
+	
+	This function is good for two thermistors:
+	- Oven Industries TR-136-170
+	- Tetech MP-3193
+	
+	The match between the two is better than 0.001 degC
+	
+	"""
+
+
+
 	# Steinhart-Hart coefficients
 	a1 = 1.03514e-3
 	a2 = 2.33825e-4
@@ -886,11 +898,32 @@ def temperature_thermistor_oven_industries_TR136_170(R, unit):
 
 
 
+def temperature_thermistor_omega_ON_930_44006(R, unit):
+
+	# Steinhart-Hart coefficients
+	a1 = 0.001296751267466723
+	a2 = 0.00019737361897609893
+	a3 = 3.0403175473012516e-7
+
+
+	# TK in Kelvin
+	TK = 1/(a1 + a2*np.log(R) + a3*(np.log(R))**3)
+
+	# Kelvin or Celsius
+	if unit == 'K':
+		T = TK
+	if unit == 'C':
+		T = TK - 273.15
+
+	return T
 
 
 
 
-def average_calibration_spectrum(spectrum_files, resistance_file, start_percent=0, plot='no'):
+
+
+
+def average_calibration_spectrum(spectrum_files, thermistor_model, resistance_file, start_percent=0, plot='no'):
 	"""
 	Last modification: May 24, 2015.
 
@@ -943,8 +976,15 @@ def average_calibration_spectrum(spectrum_files, resistance_file, start_percent=
 	else:
 		R = np.genfromtxt(resistance_file)
 
+	# compute physical temperature depending on thermistor model
+	if (thermistor_model == 'tr136') or (thermistor_model == 'mp3139'):
+		temp = temperature_thermistor_oven_industries_TR136_170(R, 'K')
+	
+	elif thermistor_model == 'on930':
+		temp = temperature_thermistor_omega_ON_930_44006(R, 'K')
 
-	temp = temperature_thermistor_oven_industries_TR136_170(R, 'K')
+
+	
 	index_start_temp = int((start_percent/100)*len(temp))
 	temp_sel = temp[index_start_temp::]
 	av_temp = np.mean(temp_sel)

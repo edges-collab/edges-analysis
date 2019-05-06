@@ -511,14 +511,22 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 
 			if receiver_cal_file == 2:
 				print('Receiver calibration FILE 2')
-				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_receiver1_50_150MHz_cterms8_wterms8.txt'
-			
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_receiver1_50_150MHz_cterms7_wterms8.txt'
+
 			if receiver_cal_file == 3:
 				print('Receiver calibration FILE 3')
-				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_receiver1_50_150MHz_cterms9_wterms9.txt'
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_receiver1_50_150MHz_cterms7_wterms15.txt'
 
 			if receiver_cal_file == 4:
 				print('Receiver calibration FILE 4')
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_receiver1_50_150MHz_cterms8_wterms8.txt'
+			
+			if receiver_cal_file == 5:
+				print('Receiver calibration FILE 5')
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_receiver1_50_150MHz_cterms9_wterms9.txt'
+
+			if receiver_cal_file == 6:
+				print('Receiver calibration FILE 6')
 				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_receiver1_50_150MHz_cterms10_wterms10.txt'
 
 
@@ -814,22 +822,6 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 
 
 
-def test():
-	
-	ff = fin[(fin>=55) & (fin<=125)];
-	avt, avw = ba.spectral_averaging(t_all[m_2D[:,3]<11.5,:], w_all[m_2D[:,3]<11.5,:])
-	avtt = avt[(fin>=55) & (fin<=125)]
-	avww = avw[(fin>=55) & (fin<=125)]
-	ttix, wwix = rfi.cleaning_polynomial(ff, avtt, avww, Nterms_fg=7, Nterms_std=5, Nstd=3.5)
-	pp = ba.fit_polynomial_fourier('LINLOG', ff, ttix, 5, Weights=wwix)
-	fb, rb, wb = ba.spectral_binning_number_of_samples(ff, ttix-pp[1], wwix)
-	plt.plot(fb[wb>0], rb[wb>0])
-	plt.ylim([-1.5, 1.5]); plt.xlim([50, 130])
-	
-	return 0
-
-
-
 
 
 
@@ -892,6 +884,34 @@ def level3read(path_file, print_key='no'):
 
 
 	return f, t, p, r, w, rms, tp, m	
+
+
+
+
+
+
+def level3_single_file_test(path_file, FLOW, FHIGH):
+	
+	f, t, p, r, w, rms, tp, m = level3read(path_file)
+
+	
+	avt, avw = ba.spectral_averaging(t[m[:,3]<11.5,:], w[m[:,3]<11.5,:])
+
+	ff   = f[(f>=FLOW) & (f<=FHIGH)]
+	avtt = avt[(f>=FLOW) & (f<=FHIGH)]
+	avww = avw[(f>=FLOW) & (f<=FHIGH)]
+
+	#ttix, wwix = rfi.cleaning_polynomial(ff, avtt, avww, Nterms_fg=7, Nterms_std=5, Nstd=3.5)
+	pp = ba.fit_polynomial_fourier('LINLOG', ff, avtt, 5, Weights=avww)
+	fb, rb, wb = ba.spectral_binning_number_of_samples(ff, avtt-pp[1], avww)
+	plt.plot(fb[wb>0], rb[wb>0])
+	plt.ylim([-1.5, 1.5]); plt.xlim([50, 130])
+	
+	return 0
+
+
+
+
 
 
 
@@ -979,7 +999,18 @@ def rms_filter_computation(band, case, save_parameters='no'):
 		if case == 0:
 			path_files  = edges_folder + '/mid_band/spectra/level3/case0/'
 			save_folder = edges_folder + '/mid_band/rms_filters/case0/'
+			
+		if case == 1:
+			path_files  = edges_folder + '/mid_band/spectra/level3/case1/'
+			save_folder = edges_folder + '/mid_band/rms_filters/case1/'
+
+		if case == 2:
+			path_files  = edges_folder + '/mid_band/spectra/level3/case2/'
+			save_folder = edges_folder + '/mid_band/rms_filters/case2/'
 		
+
+
+
 	
 	if band == 'low_band3':
 		if case == 2:
@@ -1293,6 +1324,12 @@ def rms_filter(band, case, gx, rms, Nsigma):
 	if (case == 0):
 		file_path = edges_folder + band + '/rms_filters/case0/'
 		
+	if (case == 1):
+		file_path = edges_folder + band + '/rms_filters/case1/'
+
+	if (case == 2):
+		file_path = edges_folder + band + '/rms_filters/case2/'
+
 
 	p    = np.genfromtxt(file_path + 'rms_polynomial_parameters.txt')
 	ps   = np.genfromtxt(file_path + 'rms_std_polynomial_parameters.txt')	
@@ -1367,13 +1404,15 @@ def tp_filter(band, GHA, tp):
 			
 			
 			# If enough data points available per hour
-			if len(tp_x) > 10:
+			lx = len(tp_x)
+			if lx > 10:
 				W         =  np.ones(len(GHA_x))
 				bad_old   = -1
 				bad       =  0		
 				iteration =  0
 		
-				while bad > bad_old:
+				while (bad > bad_old) and (bad < int(lx/2)):
+
 		
 					iteration = iteration + 1
 		
@@ -1400,9 +1439,17 @@ def tp_filter(band, GHA, tp):
 		
 					bad_old = np.copy(bad)
 					bad     = len(IN_x_bad)
+
+					if bad >= int(lx/2):
+						IN_x_bad = np.copy(IN_x)
+						print('TANTANTANTANTANTANTANTANTANTANTANTANTANTANTANTANTANTANTANTANTANTANTANTAN')
+
+					
 		
 					print('STD: ' + str(np.round(std,3)) + ' K')
 					print('Number of bad points excised: ' + str(bad))
+
+
 		
 		
 				# Indices of bad data points
@@ -1467,7 +1514,7 @@ def tp_filter(band, GHA, tp):
 
 
 
-def level3_to_level4(band, case, GHA_edges):
+def level3_to_level4(band, case, GHA_edges, sun_el_max, moon_el_max, save_folder_file_name):
 	
 	
 	'''
@@ -1489,9 +1536,18 @@ def level3_to_level4(band, case, GHA_edges):
 
 		if case == 0:
 			path_files             = edges_folder + 'mid_band/spectra/level3/case0/'
-			save_folder            = edges_folder + 'mid_band/spectra/level4/case0/'
-			output_file_name_hdf5  = 'case0.hdf5'
+			save_folder            = edges_folder + 'mid_band/spectra/level4/' + save_folder_file_name + '/'
+			output_file_name_hdf5  = save_folder_file_name + '.hdf5'
 
+		elif case == 1:
+			path_files             = edges_folder + 'mid_band/spectra/level3/case1/'
+			save_folder            = edges_folder + 'mid_band/spectra/level4/' + save_folder_file_name + '/'
+			output_file_name_hdf5  = save_folder_file_name + '.hdf5'
+
+		elif case == 2:
+			path_files             = edges_folder + 'mid_band/spectra/level3/case2/'
+			save_folder            = edges_folder + 'mid_band/spectra/level4/' + save_folder_file_name + '/'
+			output_file_name_hdf5  = save_folder_file_name + '.hdf5'
 
 
 
@@ -1515,6 +1571,7 @@ def level3_to_level4(band, case, GHA_edges):
 	#index_new_list = index_new_list.astype('int') # [0,1]  # for testing purposes
 	index_new_list = range(len(new_list))
 
+
 	
 	# Loading and cleaning data
 	# -------------------------
@@ -1525,26 +1582,33 @@ def level3_to_level4(band, case, GHA_edges):
 	
 	for i in index_new_list:  # range(4):  #
 		
+		# Storing year and day of each file
 		year_day_all[i,0] = float(new_list[i][0:4])
 		
 		if len(new_list[i]) == 8:
 			year_day_all[i,1] = float(new_list[i][5::])			
 		elif len(new_list[i]) > 8:
 			year_day_all[i,1] = float(new_list[i][5:8])
+
+
 		
-		
-		
+
 		
 		flag = flag + 1
 		
 		# Loading data
 		f, ty, py, ry, wy, rmsy, tpy, my = level3read(path_files + new_list[i])
 		print('----------------------------------------------')
+
+
+		# Daily index
+		daily_index1 = np.arange(len(f))		
 		
+
 		
 		# Filtering out high humidity
 		amb_hum_max = 40
-		IX          = data_selection(my, GHA_or_LST='GHA', TIME_1=0, TIME_2=24, sun_el_max=90, moon_el_max=90, amb_hum_max=amb_hum_max, min_receiver_temp=0, max_receiver_temp=100)
+		IX          = data_selection(my, GHA_or_LST='GHA', TIME_1=0, TIME_2=24, sun_el_max=sun_el_max, moon_el_max=moon_el_max, amb_hum_max=amb_hum_max, min_receiver_temp=0, max_receiver_temp=100)
 		
 		tx   = ty[IX,:]
 		px   = py[IX,:]
@@ -1552,9 +1616,15 @@ def level3_to_level4(band, case, GHA_edges):
 		wx   = wy[IX,:]
 		rmsx = rmsy[IX,:]
 		tpx  = tpy[IX,:]	
-		mx   = my[IX,:]	
+		mx   = my[IX,:]
+		daily_index2 = daily_index1[IX] 
+		#master_index[i, IX] = 1
+
 		
 		
+
+
+
 		# Finding index of clean data
 		gx         = np.copy(mx[:,4])
 		gx[gx<0]   = gx[gx<0] + 24
@@ -1577,7 +1647,9 @@ def level3_to_level4(band, case, GHA_edges):
 		w   = wx[index_good,:]
 		rms = rmsx[index_good,:]
 		m   = mx[index_good,:]
-		
+		daily_index3 = daily_index2[index_good]
+
+		#master_index[i, IX][index_good] = 
 		
 		
 		
@@ -1598,7 +1670,12 @@ def level3_to_level4(band, case, GHA_edges):
 			avp_all = np.zeros((len(new_list), len(GHA_edges)-1, len(p[0,:])))
 			avr_all = np.zeros((len(new_list), len(GHA_edges)-1, len(r[0,:])))
 			avw_all = np.zeros((len(new_list), len(GHA_edges)-1, len(w[0,:])))
-			
+
+			# Creating master array of indices of good-quality spectra used in the final averages
+			master_index = np.zeros((len(new_list), len(GHA_edges)-1, 4000))
+		
+
+					
 			grx_all = np.copy(A)
 			gr_all  = np.copy(B)
 			
@@ -1623,12 +1700,14 @@ def level3_to_level4(band, case, GHA_edges):
 				r1 = r[(GHA>=GHA_LOW) & (GHA<GHA_HIGH),:]
 				w1 = w[(GHA>=GHA_LOW) & (GHA<GHA_HIGH),:]
 				m1 = m[(GHA>=GHA_LOW) & (GHA<GHA_HIGH),:]
+				daily_index4 = daily_index3[(GHA>=GHA_LOW) & (GHA<GHA_HIGH)]
 			
 			elif GHA_LOW > GHA_HIGH:
 				p1 = p[(GHA>=GHA_LOW) | (GHA<GHA_HIGH),:]
 				r1 = r[(GHA>=GHA_LOW) | (GHA<GHA_HIGH),:]
 				w1 = w[(GHA>=GHA_LOW) | (GHA<GHA_HIGH),:]
-				m1 = m[(GHA>=GHA_LOW) | (GHA<GHA_HIGH),:]				
+				m1 = m[(GHA>=GHA_LOW) | (GHA<GHA_HIGH),:]
+				daily_index4 = daily_index3[(GHA>=GHA_LOW) | (GHA<GHA_HIGH)]
 
 			
 			
@@ -1666,6 +1745,7 @@ def level3_to_level4(band, case, GHA_edges):
 				avp_all[i,j,:] = avp
 				avr_all[i,j,:] = avr_no_rfi
 				avw_all[i,j,:] = avw_no_rfi
+				master_index[i,j,daily_index4] = 1
 			
 
 
@@ -1738,10 +1818,10 @@ def level3_to_level4(band, case, GHA_edges):
 					
 				FIG_SX      =   7
 				FIG_SY      =   3
-				FLOW_plot   =  45
+				FLOW_plot   =  35
 				FHIGH_plot  = 120
 				XTICKS      = np.arange(60, 121, 10)
-				XTEXT       =  45.5
+				XTEXT       =  35.5
 				YLABEL      = str(DY)  + ' K per division'
 				TITLE       = str(Nfg) + ' LINLOG terms'
 				FIGURE_FORMAT = 'png'			
@@ -1802,6 +1882,7 @@ def level3_to_level4(band, case, GHA_edges):
 		hf.create_dataset('parameters',   data = avp_all)
 		hf.create_dataset('residuals',    data = avr_all)
 		hf.create_dataset('weights',      data = avw_all)
+		hf.create_dataset('index',        data = master_index)
 		hf.create_dataset('gha_edges',    data = GHA_edges)
 		hf.create_dataset('year_day',     data = year_day_all)
 
@@ -1856,7 +1937,7 @@ def level3_to_level4(band, case, GHA_edges):
 
 		
 		
-	return f, avp_all, avr_all, avw_all, GHA_edges, year_day_all  #, f, avp_all, avr_all, avw_all
+	return f, avp_all, avr_all, avw_all, master_index, GHA_edges, year_day_all  #, f, avp_all, avr_all, avw_all
 
 
 
@@ -1881,6 +1962,9 @@ def level4read(path_file):
 		hfX    = hf.get('weights')
 		w_all  = np.array(hfX)		
 
+		hfX    = hf.get('index')
+		index  = np.array(hfX)
+
 		hfX    = hf.get('gha_edges')
 		gha    = np.array(hfX)	
 
@@ -1889,7 +1973,7 @@ def level4read(path_file):
 
 
 
-	return f, p_all, r_all, w_all, gha, yd	
+	return f, p_all, r_all, w_all, index, gha, yd	
 
 
 
@@ -1897,23 +1981,28 @@ def level4read(path_file):
 
 
 
-def daily_nominal_filter(band, case, year_day_list):
+def daily_nominal_filter(band, filter_case, year_day_list):
 	
 	
 	l = len(year_day_list)
 	keep_all = np.zeros(l)
+
 	
-	if (band == 'mid_band') and (case == 0):
-		
-		bad = np.array([[2018, 150], [2018, 159], [2018, 161], [2018, 164], [2018, 182], [2018, 184], [2018, 185], [2018, 186], [2018, 192], [2018, 193], [2018, 195], [2018, 196], [2018, 204], [2018, 208], [2018, 216], [2018, 220]])
-		
-		for j in range(l):
-			keep = 1
-			for i in range(len(bad)):
-				if (year_day_list[j,0] == bad[i,0]) and (year_day_list[j,1] == bad[i,1]):
-					keep = 0
-					
-			keep_all[j] = keep
+	bad0 = np.array([[2018, 150], [2018, 159], [2018, 161], [2018, 164], [2018, 182], [2018, 184], [2018, 185], [2018, 186], [2018, 192], [2018, 193], [2018, 195], [2018, 196], [2018, 204], [2018, 208], [2018, 216], [2018, 220]])
+
+	
+	if (band == 'mid_band'):
+		bad = bad0.copy()
+
+
+
+	for j in range(l):
+		keep = 1
+		for i in range(len(bad)):
+			if (year_day_list[j,0] == bad[i,0]) and (year_day_list[j,1] == bad[i,1]):
+				keep = 0
+				
+		keep_all[j] = keep
 
 	return keep_all
 
@@ -1928,10 +2017,37 @@ def daily_nominal_filter(band, case, year_day_list):
 
 
 
+def daily_strict_filter(band, year_day_list):
+	
+	
+	l = len(year_day_list)
+	keep_all = np.zeros(l)
+
+
+	if (band == 'mid_band'):  
+		good = np.array([[2018, 146], [2018, 147], [2018, 157], [2018, 170], [2018, 180], [2018, 187], [2018, 188], [2018, 191], [2018, 198], [2018, 199], [2018, 200], [2018, 205], [2018, 209], [2018, 210], [2018, 212], [2018, 215], [2018, 218], [2018, 219]])
 
 
 
-def plot_level4(index_GHA, good_bad, model, FLOW, FHIGH, K_per_division, file_name):
+	for j in range(l):
+		keep = 0
+		for i in range(len(good)):
+			if (year_day_list[j,0] == good[i,0]) and (year_day_list[j,1] == good[i,1]):
+				keep = 1
+				
+		keep_all[j] = keep
+
+	return keep_all
+
+
+
+
+
+
+
+
+
+def plot_level4(index_GHA, averaged_146, good_bad, model, FLOW, FHIGH, K_per_division, file_name):
 
 	"""
 	model: 'LINLOG', 'LOGLOG'
@@ -1939,7 +2055,7 @@ def plot_level4(index_GHA, good_bad, model, FLOW, FHIGH, K_per_division, file_na
 	"""
 	
 	# Load Level 4 data
-	f, py, ry, wy, gha, yy = level4read('/home/raul/DATA2/EDGES_vol2/mid_band/spectra/level4/case0/case0.hdf5')
+	f, py, ry, wy, index, gha, yy = level4read('/home/raul/DATA2/EDGES_vol2/mid_band/spectra/level4/case1_sun_below_horizon/case1_sun_below_horizon.hdf5')
 	
 
 	px = np.delete(py, 1, axis=0)
@@ -1963,14 +2079,52 @@ def plot_level4(index_GHA, good_bad, model, FLOW, FHIGH, K_per_division, file_na
 
 
 
+	if averaged_146 == 'yes':
+
+		ldays = len(rx[:,0,0])
+		lgha  = len(rx[0,:,0])
+		
+		pb = np.zeros((ldays-1, lgha, len(px[0,0,:])))
+		rb = np.zeros((ldays-1, lgha, len(rx[0,0,:])))
+		wb = np.zeros((ldays-1, lgha, len(wx[0,0,:])))
+
+		for i in range(ldays-1):
+			for j in range(lgha):
+				print([i,j])
+		
+				pa = np.array((px[0, j, :], px[i+1, j, :]))
+				ra = np.array((rx[0, j, :], rx[i+1, j, :]))
+				wa = np.array((wx[0, j, :], wx[i+1, j, :]))
+	
+				h1        = np.mean(pa, axis=0)
+				h2, h3    = ba.spectral_averaging(ra, wa)
+
+				pb[i,j,:] = h1
+				rb[i,j,:] = h2
+				wb[i,j,:] = h3
+
+		px = np.copy(pb)
+		rx = np.copy(rb)
+		wx = np.copy(wb)
+		yx = np.delete(yx, 0, axis=0)
+
+		print(px.shape)
+		print(rx.shape)
+		print(wx.shape)
+		print(yx.shape)
 
 
-	
-	
-	
+
 	
 	# Identify indices of good and bad days
-	kk = daily_nominal_filter('mid_band', 0, yx)
+	#kk = daily_nominal_filter('mid_band', 0, yx)
+	#kk = daily_strict_filter('mid_band', yx)
+
+
+	kk = np.ones(len(px[:,0]))
+
+
+
 	
 	if good_bad == 'good':
 		p_all = px[kk==1,:]
@@ -1983,6 +2137,16 @@ def plot_level4(index_GHA, good_bad, model, FLOW, FHIGH, K_per_division, file_na
 		r_all = rx[kk==0,:]
 		w_all = wx[kk==0,:]
 		yd    = yx[kk==0]		
+
+
+
+
+
+
+
+
+
+
 	
 		
 	
@@ -1996,11 +2160,17 @@ def plot_level4(index_GHA, good_bad, model, FLOW, FHIGH, K_per_division, file_na
 	plt.close()
 	plt.close()
 	
-	#plt.figure(1, figsize=[5, 11])
-	plt.figure(1, figsize=[5, 5])
+
+	if good_bad == 'good':
+		plt.figure(1, figsize=[5, 11])
+		#plt.figure(1, figsize=[5, 15])
+	elif good_bad == 'bad':	
+		plt.figure(1, figsize=[5, 5])
+
 	plt.ylabel('[' + str(K_per_division) + ' K per division]\n  \n  ')
 	
 	#for i in range(2):
+	ii = -1
 	for i in range(len(yd)):
 		
 		print(str(i) + ' ' + str(yd[i,1]))
@@ -2008,46 +2178,51 @@ def plot_level4(index_GHA, good_bad, model, FLOW, FHIGH, K_per_division, file_na
 		avp   = p_all[i,index_GHA,:]
 		avr   = r_all[i,index_GHA,:]
 		avw   = w_all[i,index_GHA,:]
+
 		
+		lw = len(avw[avw>0])
+		print(lw)
+
+		if lw > 0:
+			ii = ii+1
+			rr, wr   = rfi.cleaning_sweep(f, avr, avw, window_width_MHz=3, Npolyterms_block=2, N_choice=20, N_sigma=2.5)
 		
-		rr, wr   = rfi.cleaning_sweep(f, avr, avw, window_width_MHz=3, Npolyterms_block=2, N_choice=20, N_sigma=2.5)
-		
-		m        = ba.model_evaluate('LINLOG', avp, f/200)
-		tr       = m + rr
+			m        = ba.model_evaluate('LINLOG', avp, f/200)
+			tr       = m + rr
 			
 		
-		ft = f[(f>=FLOW) & (f<=FHIGH)]
-		tt = tr[(f>=FLOW) & (f<=FHIGH)]
-		wt = wr[(f>=FLOW) & (f<=FHIGH)]
-	
+			ft = f[(f>=FLOW) & (f<=FHIGH)]
+			tt = tr[(f>=FLOW) & (f<=FHIGH)]
+			wt = wr[(f>=FLOW) & (f<=FHIGH)]
 		
-		if model == 'LINLOG':
-			pt = ba.fit_polynomial_fourier('LINLOG', ft/200, tt, 5, Weights=wt)
-			mt = ba.model_evaluate('LINLOG', pt[0], ft/200)
-			rt = tt - mt
-		
-			fb, rb, wb = ba.spectral_binning_number_of_samples(ft, rt, wt)
 			
-		
-		if model == 'LOGLOG':
-			pl     = np.polyfit(np.log(ft[wt>0]/200), np.log(tt[wt>0]), 4)
-			log_ml = np.polyval(pl, np.log(ft/200))
-			ml     = np.exp(log_ml)
-			rl     = tt - ml	
-		
-			fb, rb, wb = ba.spectral_binning_number_of_samples(ft, rl, wt)
-		
-		
-		if i%2 == 0:
-			plt.plot(fb[wb>0], rb[wb>0]-i*K_per_division, 'b')
-		else:
-			plt.plot(fb[wb>0], rb[wb>0]-i*K_per_division, 'r')
+			if model == 'LINLOG':
+				pt = ba.fit_polynomial_fourier('LINLOG', ft/200, tt, 5, Weights=wt)
+				mt = ba.model_evaluate('LINLOG', pt[0], ft/200)
+				rt = tt - mt
 			
-		plt.text(52, -i*K_per_division-(1/6)*K_per_division, str(int(yd[i,1])))
+				fb, rb, wb = ba.spectral_binning_number_of_samples(ft, rt, wt)
+				
+			
+			if model == 'LOGLOG':
+				pl     = np.polyfit(np.log(ft[wt>0]/200), np.log(tt[wt>0]), 4)
+				log_ml = np.polyval(pl, np.log(ft/200))
+				ml     = np.exp(log_ml)
+				rl     = tt - ml	
+			
+				fb, rb, wb = ba.spectral_binning_number_of_samples(ft, rl, wt)
+			
+			
+			if i%2 == 0:
+				plt.plot(fb[wb>0], rb[wb>0]-ii*K_per_division, 'b')
+			else:
+				plt.plot(fb[wb>0], rb[wb>0]-ii*K_per_division, 'r')
+				
+			plt.text(52, -ii*K_per_division-(1/6)*K_per_division, str(int(yd[i,1])))
 		
 	plt.xlim([57, 120])
 	plt.xlabel('frequency [MHz]')
-	plt.ylim([-len(yd)*K_per_division, K_per_division])
+	plt.ylim([-(ii+1)*K_per_division, K_per_division])
 	plt.yticks([10], labels=[''])
 	
 
@@ -2083,17 +2258,25 @@ def plot_level4(index_GHA, good_bad, model, FLOW, FHIGH, K_per_division, file_na
 
 
 
-def integrated_spectrum_level4(FLOW, FHIGH, day_min1, day_max1, day_min2, day_max2):
+def integrated_spectrum_level4(case, index_GHA, FLOW, FHIGH, day_min1, day_max1, day_min2, day_max2):
 	
 	
-	f, px, rx, wx, gha, ydx = level4read(edges_folder + 'mid_band/spectra/level4/case0/case0.hdf5')
+	if case == 1:
+		f, px, rx, wx, index, gha, ydx = level4read(edges_folder + 'mid_band/spectra/level4/case1_sun_below_horizon/case1_sun_below_horizon.hdf5')
+
+	elif case == 2:
+		f, px, rx, wx, index, gha, ydx = level4read(edges_folder + 'mid_band/spectra/level4/case2/case2.hdf5')
+
+
 	
-	keep_index = daily_nominal_filter('mid_band', 0, ydx)
+	#keep_index = daily_nominal_filter('mid_band', 0, ydx)
+	#keep_index = daily_strict_filter('mid_band', ydx)
+	keep_index = np.ones(len(px[:,0]))
 	
 	
-	p  = px[(keep_index==1) & (((ydx[:,1]>=day_min1) & (ydx[:,1]<=day_max1)) | ((ydx[:,1]>=day_min2) & (ydx[:,1]<=day_max2))), 0, :]
-	r  = rx[(keep_index==1) & (((ydx[:,1]>=day_min1) & (ydx[:,1]<=day_max1)) | ((ydx[:,1]>=day_min2) & (ydx[:,1]<=day_max2))), 0, :]
-	w  = wx[(keep_index==1) & (((ydx[:,1]>=day_min1) & (ydx[:,1]<=day_max1)) | ((ydx[:,1]>=day_min2) & (ydx[:,1]<=day_max2))), 0, :]
+	p  = px[(keep_index==1) & (((ydx[:,1]>=day_min1) & (ydx[:,1]<=day_max1)) | ((ydx[:,1]>=day_min2) & (ydx[:,1]<=day_max2))), index_GHA, :]
+	r  = rx[(keep_index==1) & (((ydx[:,1]>=day_min1) & (ydx[:,1]<=day_max1)) | ((ydx[:,1]>=day_min2) & (ydx[:,1]<=day_max2))), index_GHA, :]
+	w  = wx[(keep_index==1) & (((ydx[:,1]>=day_min1) & (ydx[:,1]<=day_max1)) | ((ydx[:,1]>=day_min2) & (ydx[:,1]<=day_max2))), index_GHA, :]
 	yd = ydx[(keep_index==1) & (((ydx[:,1]>=day_min1) & (ydx[:,1]<=day_max1)) | ((ydx[:,1]>=day_min2) & (ydx[:,1]<=day_max2))) ]
 	
 	print(p.shape)
@@ -2108,11 +2291,11 @@ def integrated_spectrum_level4(FLOW, FHIGH, day_min1, day_max1, day_min2, day_ma
 
 
 
-	# Cleanning RFI spike
-	fr1 = 105.5
-	fr2 = 107.5
-	tr[(f >=fr1) & (f<=fr2)] = 0
-	wr[(f >=fr1) & (f<=fr2)] = 0
+	## Cleanning RFI spike
+	#fr1 = 105.5
+	#fr2 = 107.5
+	#tr[(f >=fr1) & (f<=fr2)] = 0
+	#wr[(f >=fr1) & (f<=fr2)] = 0
 	
 	
 
@@ -2198,8 +2381,8 @@ def integrated_spectrum_level4(FLOW, FHIGH, day_min1, day_max1, day_min2, day_ma
 
 	
 	# Cleanning RFI spike
-	fr1 = 105.5
-	fr2 = 107.5
+	fr1 = 105.8
+	fr2 = 107.2
 	rb3[(fb >=fr1) & (fb<=fr2)] = 0
 	wb3[(fb >=fr1) & (fb<=fr2)] = 0
 	
@@ -2222,36 +2405,52 @@ def integrated_spectrum_level4(FLOW, FHIGH, day_min1, day_max1, day_min2, day_ma
 
 
 	#plt.plot(ft, rt)
-	plt.figure(figsize=[8, 9])
+	#plt.figure(1, figsize=[8, 9])
 	
-	plt.subplot(2,1,1)
-	plt.plot(fb[wb3>0], rb3[wb3>0], 'r', linewidth=2)
-	plt.plot(fb[wbl3>0], rbl3[wbl3>0], 'r--', linewidth=1)
-	plt.plot(fb[wb4>0], rb4[wb4>0], 'g', linewidth=2)
-	plt.plot(fb[wbl4>0], rbl4[wbl4>0], 'g--', linewidth=1)
-	plt.plot(fb[wb5>0], rb5[wb5>0], 'b', linewidth=2)
-	plt.plot(fb[wbl5>0], rbl5[wbl5>0], 'b--', linewidth=1)
-	plt.xlim([58, 120])
-	plt.ylim([-1, 1])
+	#plt.subplot(2,1,1)
+	#plt.plot(fb[wb3>0], rb3[wb3>0], 'r', linewidth=2)
+	#plt.plot(fb[wbl3>0], rbl3[wbl3>0], 'r--', linewidth=1)
+	#plt.plot(fb[wb4>0], rb4[wb4>0], 'g', linewidth=2)
+	#plt.plot(fb[wbl4>0], rbl4[wbl4>0], 'g--', linewidth=1)
+	#plt.plot(fb[wb5>0], rb5[wb5>0], 'b', linewidth=2)
+	#plt.plot(fb[wbl5>0], rbl5[wbl5>0], 'b--', linewidth=1)
+	#plt.xlim([58, 120])
+	#plt.ylim([-1, 1])
+	##plt.xlabel('frequency [MHz]')
+	#plt.ylabel('brightness temperature [K]')
+	##plt.grid()
+	
+	
+	#plt.subplot(2,1,2)
+	#plt.plot(fb[wb5>0], rb5[wb5>0] + 0.2, 'b', linewidth=2)
+	#plt.plot(fb[wbl5>0], rbl5[wbl5>0] - 0.2, 'b', linewidth=1)
+	#plt.xlim([58, 120])
+	#plt.ylim([-0.6, 0.6])
 	#plt.xlabel('frequency [MHz]')
-	plt.ylabel('brightness temperature [K]')
-	#plt.grid()
+	#plt.ylabel('brightness temperature [K]')
+	#plt.legend(['LinLog','LogLog'])
+	##plt.grid()
+		
+	#plt.savefig('/home/raul/Desktop/average_case1_two_panels.pdf', bbox_inches='tight')
+	#plt.close()
+	#plt.close()	
+
+
+		
+	plt.figure(1, figsize=[8.5, 4.5])
 	
-	
-	plt.subplot(2,1,2)
-	plt.plot(fb[wb5>0], rb5[wb5>0] + 0.2, 'b', linewidth=2)
-	plt.plot(fb[wbl5>0], rbl5[wbl5>0] - 0.2, 'b', linewidth=1)
-	plt.xlim([58, 120])
+	plt.plot(fb[wb5>0], rb5[wb5>0] + 0.3, 'b', linewidth=2)
+	plt.plot(fb[wbl5>0], rbl5[wbl5>0] - 0.3, 'b', linewidth=1)
+	plt.xlim([55, 125])
+	plt.yticks(np.arange(-0.6,0.7,0.2), labels=['','','','','','',''])
 	plt.ylim([-0.6, 0.6])
 	plt.xlabel('frequency [MHz]')
-	plt.ylabel('brightness temperature [K]')
+	plt.ylabel(r'$\Delta$ T  [200 mK per division]')
 	plt.legend(['LinLog','LogLog'])
-	#plt.grid()
-		
-		
-		
+	plt.grid()
+				
 			
-	plt.savefig('/home/raul/Desktop/average.pdf', bbox_inches='tight')
+	plt.savefig('/home/raul/Desktop/X.png', bbox_inches='tight')
 	plt.close()
 	plt.close()	
 

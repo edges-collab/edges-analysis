@@ -1,15 +1,12 @@
 
 
 import sys
-sys.path.insert(0, '/home/raul/GetDist-0.2.8.4.2')
+#sys.path.insert(0, '/home/raul/GetDist-0.2.8.4.2')
 
 import numpy as np
 import matplotlib.pyplot as plt
 #import getdist as getdist
-from getdist import MCSamples, plots
-
-
-
+from getdist import MCSamples, plots    # Install getdist as follows:     # pip install getdist
 
 
 
@@ -55,14 +52,7 @@ def load_samples(input_textfile, index_good, label_names=[]):
 	covariance_matrix = getdist_samples.cov()
 	
 	
-
-
-
 	return getdist_samples, ww, ll, best_fit, covariance_matrix
-
-
-
-
 
 
 
