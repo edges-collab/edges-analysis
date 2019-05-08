@@ -1992,7 +1992,12 @@ def daily_nominal_filter(band, filter_case, year_day_list):
 	
 	# 
 	#bad0 = np.array([[2018, 184], [2018, 195], [2018, 204], [2018, 208], ])
-	bad0 = np.array([[2018, 159],  [2018, 180], [2018, 181], [2018, 182],  [2018, 189], [2018, 190], [2018, 193], [2018, 209]]) # [2018, 178], [2018, 179], 
+	
+	if filter_case == 10:
+		bad0 = np.array([[2018, 146], [2018, 147], [2018, 148], [2018, 149], [2018, 150], [2018, 151], [2018, 152], [2018, 157], [2018, 159],  [2018, 160], [2018, 161], [2018, 162], [2018, 163], [2018, 165], [2018, 167], [2018, 169], [2018, 170], [2018, 174], [2018, 175], [2018, 176], [2018, 177], [2018, 178], [2018, 179], [2018, 180], [2018, 181], [2018, 182], [2018, 184], [2018, 185], [2018, 187], [2018, 189], [2018, 190], [2018, 193], [2018, 195], [2018, 196], [2018, 197], [2018, 204], [2018, 208], [2018, 209], [2018, 216], [2018, 220]])
+		
+	elif filter_case == 12:
+		bad0 = np.array([[2018, 146], [2018, 147], [2018, 149], [2018, 150], [2018, 151], [2018, 152], [2018, 157], [2018, 161], [2018, 162], [2018, 163], [2018, 166], [2018, 174], [2018, 176], [2018, 179], [2018, 182], [2018, 184], [2018, 185], [2018, 187], [2018, 189], [2018, 193], [2018, 195], [2018, 197], [2018, 198], [2018, 200], [2018, 201], [2018, 204], [2018, 210]])   #  [2018, 170],
 
 	
 	if (band == 'mid_band'):
@@ -2053,7 +2058,7 @@ def daily_strict_filter(band, year_day_list):
 
 
 
-def plot_level4(index_GHA, averaged_146, good_bad, model, FLOW, FHIGH, K_per_division, file_name):
+def plot_level4(case, index_GHA, averaged_146, good_bad, model, FLOW, FHIGH, K_per_division, file_name):
 
 	"""
 	model: 'LINLOG', 'LOGLOG'
@@ -2061,8 +2066,14 @@ def plot_level4(index_GHA, averaged_146, good_bad, model, FLOW, FHIGH, K_per_div
 	"""
 	
 	# Load Level 4 data
-	#f, py, ry, wy, index, gha, yy = level4read('/home/raul/DATA2/EDGES_vol2/mid_band/spectra/level4/case1_sun_below_horizon/case1_sun_below_horizon.hdf5')
-	f, py, ry, wy, index, gha, yy = level4read('/home/raul/DATA2/EDGES_vol2/mid_band/spectra/level4/case1/case1.hdf5')
+	if case == 10:
+		f, py, ry, wy, index, gha, yy = level4read('/home/raul/DATA2/EDGES_vol2/mid_band/spectra/level4/case1/case1.hdf5')
+		
+	elif case == 11:
+		f, py, ry, wy, index, gha, yy = level4read('/home/raul/DATA2/EDGES_vol2/mid_band/spectra/level4/case1_sun_below_horizon/case1_sun_below_horizon.hdf5')
+		
+	elif case == 12:
+		f, py, ry, wy, index, gha, yy = level4read('/home/raul/DATA2/EDGES_vol2/mid_band/spectra/level4/case1_1hr_averages/case1_1hr_averages.hdf5')
 	
 
 	px = np.delete(py, 1, axis=0)
@@ -2124,7 +2135,7 @@ def plot_level4(index_GHA, averaged_146, good_bad, model, FLOW, FHIGH, K_per_div
 
 	
 	# Identify indices of good and bad days
-	kk = daily_nominal_filter('mid_band', 0, yx)
+	kk = daily_nominal_filter('mid_band', case, yx)
 	#kk = daily_strict_filter('mid_band', yx)
 	#kk = np.ones(len(px[:,0]))
 
@@ -2167,12 +2178,12 @@ def plot_level4(index_GHA, averaged_146, good_bad, model, FLOW, FHIGH, K_per_div
 	
 
 	if good_bad == 'good':
-		plt.figure(1, figsize=[5, 11])
+		plt.figure(1, figsize=[5, 5.5])
 		#plt.figure(1, figsize=[5, 15])
 	elif good_bad == 'bad':	
 		plt.figure(1, figsize=[5, 5])
 
-	plt.ylabel('[' + str(K_per_division) + ' K per division]\n  \n  ')
+	plt.ylabel('day of year 2018   [' + str(K_per_division) + ' K per division]\n  \n  ')
 	
 	#for i in range(2):
 	ii = -1
@@ -2190,7 +2201,7 @@ def plot_level4(index_GHA, averaged_146, good_bad, model, FLOW, FHIGH, K_per_div
 
 		if lw > 0:
 			ii = ii+1
-			rr, wr   = rfi.cleaning_sweep(f, avr, avw, window_width_MHz=3, Npolyterms_block=2, N_choice=20, N_sigma=2.5)
+			rr, wr   = rfi.cleaning_sweep(f, avr, avw, window_width_MHz=3, Npolyterms_block=2, N_choice=20, N_sigma=3.5)
 		
 			m        = ba.model_evaluate('LINLOG', avp, f/200)
 			tr       = m + rr
@@ -2266,16 +2277,21 @@ def plot_level4(index_GHA, averaged_146, good_bad, model, FLOW, FHIGH, K_per_div
 def integrated_spectrum_level4(case, index_GHA, FLOW, FHIGH, day_min1, day_max1, day_min2, day_max2):
 	
 	
-	if case == 1:
+	if case == 10:
 		#f, px, rx, wx, index, gha, ydx = level4read(edges_folder + 'mid_band/spectra/level4/case1_sun_below_horizon/case1_sun_below_horizon.hdf5')
 		f, px, rx, wx, index, gha, ydx = level4read(edges_folder + 'mid_band/spectra/level4/case1/case1.hdf5')
+
+	if case == 12:
+		#f, px, rx, wx, index, gha, ydx = level4read(edges_folder + 'mid_band/spectra/level4/case1_sun_below_horizon/case1_sun_below_horizon.hdf5')
+		f, px, rx, wx, index, gha, ydx = level4read(edges_folder + 'mid_band/spectra/level4/case1_1hr_averages/case1_1hr_averages.hdf5')
+
 
 	elif case == 2:
 		f, px, rx, wx, index, gha, ydx = level4read(edges_folder + 'mid_band/spectra/level4/case2/case2.hdf5')
 
 
 	
-	keep_index = daily_nominal_filter('mid_band', 0, ydx)
+	keep_index = daily_nominal_filter('mid_band', case, ydx)
 	#keep_index = daily_strict_filter('mid_band', ydx)
 	#keep_index = np.ones(len(px[:,0]))
 	
@@ -2291,7 +2307,7 @@ def integrated_spectrum_level4(case, index_GHA, FLOW, FHIGH, day_min1, day_max1,
 	
 	
 	avr, avw = ba.spectral_averaging(r, w)
-	rr, wr   = rfi.cleaning_sweep(f, avr, avw, window_width_MHz=3, Npolyterms_block=2, N_choice=20, N_sigma=4.5) 
+	rr, wr   = rfi.cleaning_sweep(f, avr, avw, window_width_MHz=3, Npolyterms_block=2, N_choice=20, N_sigma=3.5) 
 	tr       = m + rr
 		
 
@@ -2448,7 +2464,7 @@ def integrated_spectrum_level4(case, index_GHA, FLOW, FHIGH, day_min1, day_max1,
 	plt.plot(fb[wb5>0], rb5[wb5>0] + 0.3, 'b', linewidth=2)
 	plt.plot(fb[wbl5>0], rbl5[wbl5>0] - 0.3, 'b', linewidth=1)
 	plt.xlim([55, 125])
-	plt.yticks(np.arange(-0.6,0.7,0.2), labels=['','','','','','',''])
+	plt.yticks(np.arange(-0.5,0.6,0.2), labels=['','','','','','',''])
 	plt.ylim([-0.6, 0.6])
 	plt.xlabel('frequency [MHz]')
 	plt.ylabel(r'$\Delta$ T  [200 mK per division]')
