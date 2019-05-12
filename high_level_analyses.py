@@ -11,6 +11,10 @@ import calibration_receiver1 as cr1
 
 import reflection_coefficient as rc
 
+import data_models as dm
+import getdist_plots as gp
+
+
 from os import listdir
 
 
@@ -4281,7 +4285,251 @@ def plot_number_of_cterms_wterms():
 	
 	
 	
+
+
+def plots_midband_polychord(fig):
+	
+	
+	
+	if fig==0:
+		folder = edges_folder + 'mid_band/polychord/20190508/case1_nominal/foreground_model_exp/'
+		getdist_samples, ww, ll, best_fit, covariance_matrix = gp.load_samples(folder + 'chain.txt', 0, label_names=[r'T_{100}\;[{\rm K}]', r'\beta', r'\gamma', r'\delta', r'\epsilon']) 
+		o = gp.triangle_plot(getdist_samples, folder + 'result.pdf', legend_FS=10, label_FS=10, axes_FS=5)
+		
+		v, t, w, sigma, inv_sigma, det_sigma = dm.real_data(10, 60, 120)
+		
+		model = dm.full_model(best_fit, v, 100, model_type_signal='exp', model_type_foreground='exp', N21par=0, NFGpar=5)
+	
+		
+	if fig==1:
+		folder = edges_folder + 'mid_band/polychord/20190508/case1_nominal/foreground_model_linlog/'
+		getdist_samples, ww, ll, best_fit, covariance_matrix = gp.load_samples(folder + 'chain.txt', 0, label_names=[r'a_0', r'a_1', r'a_2', r'a_3', r'a_4']) 
+		o = gp.triangle_plot(getdist_samples, folder + 'result.pdf', legend_FS=10, label_FS=12, axes_FS=8)
+		
+		v, t, w, sigma, inv_sigma, det_sigma = dm.real_data(10, 60, 120)
+		
+		model = dm.full_model(best_fit, v, 100, model_type_signal='exp', model_type_foreground='linlog', N21par=0, NFGpar=5)
+
+	
+		
+	if fig==2:
+		# Data used:  60-67, 103-119.5
+		folder = edges_folder + 'mid_band/polychord/20190508/case1_nominal/foreground_model_exp_gap/'
+		getdist_samples, ww, ll, best_fit, covariance_matrix = gp.load_samples(folder + 'chain.txt', 0, label_names=[r'T_{100}\;[{\rm K}]', r'\beta', r'\gamma', r'\delta', r'\epsilon']) 
+		o = gp.triangle_plot(getdist_samples, folder + 'result.pdf', legend_FS=10, label_FS=10, axes_FS=5)
+		
+		v, t, w, sigma, inv_sigma, det_sigma = dm.real_data(10, 60, 119.5)
+		
+		model = dm.full_model(best_fit, v, 100, model_type_signal='exp', model_type_foreground='exp', N21par=0, NFGpar=5)	
+
+
+
+	if fig==3:
+		# Data used:  60-65, 103-119.5
+		folder = edges_folder + 'mid_band/polychord/20190508/case1_nominal/foreground_model_exp_gap2/'
+		getdist_samples, ww, ll, best_fit, covariance_matrix = gp.load_samples(folder + 'chain.txt', 0, label_names=[r'T_{100}\;[{\rm K}]', r'\beta', r'\gamma', r'\delta', r'\epsilon']) 
+		o = gp.triangle_plot(getdist_samples, folder + 'result.pdf', legend_FS=10, label_FS=10, axes_FS=5)
+		
+		v, t, w, sigma, inv_sigma, det_sigma = dm.real_data(10, 60, 119.5)
+		
+		model = dm.full_model(best_fit, v, 100, model_type_signal='exp', model_type_foreground='exp', N21par=0, NFGpar=5)
+		
+		
+		
+
+	if fig==4:
+		# Data used:  60-65, 95-119.5
+		folder = edges_folder + 'mid_band/polychord/20190508/case1_nominal/foreground_model_exp_gap3/'
+		getdist_samples, ww, ll, best_fit, covariance_matrix = gp.load_samples(folder + 'chain.txt', 0, label_names=[r'T_{100}\;[{\rm K}]', r'\beta', r'\gamma', r'\delta', r'\epsilon']) 
+		o = gp.triangle_plot(getdist_samples, folder + 'result.pdf', legend_FS=10, label_FS=10, axes_FS=5)
+		
+		v, t, w, sigma, inv_sigma, det_sigma = dm.real_data(10, 60, 119.5)
+		
+		model = dm.full_model(best_fit, v, 100, model_type_signal='exp', model_type_foreground='exp', N21par=0, NFGpar=5)
+		
+		
+		
+	if fig==5:
+		# Data used:  60-65, 95-115
+		folder = edges_folder + 'mid_band/polychord/20190508/case1_nominal/foreground_model_exp_gap4/'
+		getdist_samples, ww, ll, best_fit, covariance_matrix = gp.load_samples(folder + 'chain.txt', 0, label_names=[r'T_{100}\;[{\rm K}]', r'\beta', r'\gamma', r'\delta', r'\epsilon']) 
+		o = gp.triangle_plot(getdist_samples, folder + 'result.pdf', legend_FS=10, label_FS=10, axes_FS=5)
+		
+		v, t, w, sigma, inv_sigma, det_sigma = dm.real_data(10, 60, 115)
+		
+		model = dm.full_model(best_fit, v, 100, model_type_signal='exp', model_type_foreground='exp', N21par=0, NFGpar=5)		
+	
+
+		
+	if fig==6:
+		# Data used:  60-65, 100-115
+		folder = edges_folder + 'mid_band/polychord/20190508/case1_nominal/foreground_model_exp_gap5/'
+		getdist_samples, ww, ll, best_fit, covariance_matrix = gp.load_samples(folder + 'chain.txt', 0, label_names=[r'T_{100}\;[{\rm K}]', r'\beta', r'\gamma', r'\delta', r'\epsilon']) 
+		o = gp.triangle_plot(getdist_samples, folder + 'result.pdf', legend_FS=10, label_FS=10, axes_FS=5)
+		
+		v, t, w, sigma, inv_sigma, det_sigma = dm.real_data(10, 60, 115)
+		
+		model = dm.full_model(best_fit, v, 100, model_type_signal='exp', model_type_foreground='exp', N21par=0, NFGpar=5)
+		
+		
+		
+
+	if fig==7:
+		# Data used:  60-65, 97-115
+		folder = edges_folder + 'mid_band/polychord/20190508/case1_nominal/foreground_model_exp_gap6/'
+		getdist_samples, ww, ll, best_fit, covariance_matrix = gp.load_samples(folder + 'chain.txt', 0, label_names=[r'T_{100}\;[{\rm K}]', r'\beta', r'\gamma', r'\delta', r'\epsilon']) 
+		o = gp.triangle_plot(getdist_samples, folder + 'result.pdf', legend_FS=10, label_FS=10, axes_FS=5)
+		
+		v, t, w, sigma, inv_sigma, det_sigma = dm.real_data(10, 60, 115)
+		
+		model = dm.full_model(best_fit, v, 100, model_type_signal='exp', model_type_foreground='exp', N21par=0, NFGpar=5)
+
+
+
+	if fig==8:
+		# Data used:  60-65, 100-115, CASE 2, cterms7, wterms8
+		folder = edges_folder + 'mid_band/polychord/20190508/case1_nominal/foreground_model_exp_gap7/'
+		getdist_samples, ww, ll, best_fit, covariance_matrix = gp.load_samples(folder + 'chain.txt', 0, label_names=[r'T_{100}\;[{\rm K}]', r'\beta', r'\gamma', r'\delta', r'\epsilon']) 
+		o = gp.triangle_plot(getdist_samples, folder + 'result.pdf', legend_FS=10, label_FS=10, axes_FS=5)
+		
+		v, t, w, sigma, inv_sigma, det_sigma = dm.real_data(2, 60, 115)
+		
+		model = dm.full_model(best_fit, v, 100, model_type_signal='exp', model_type_foreground='exp', N21par=0, NFGpar=5)
+	
+	
+	
+	if fig==9:
+		# Data used:  60-115
+		folder = edges_folder + 'mid_band/polychord/20190508/case1_nominal/foreground_model_exp_signal_model_tanh/'
+		getdist_samples, ww, ll, best_fit, covariance_matrix = gp.load_samples(folder + 'chain.txt', 0, label_names=[r'A\;[{\rm K}]', r'\nu_0\;[{\rm MHz}]', r'w\;[{\rm MHz}]', r'\tau_1', r'\tau_2', r'T_{100}\;[{\rm K}]', r'\beta', r'\gamma', r'\delta', r'\epsilon']) 
+		o = gp.triangle_plot(getdist_samples, folder + 'result.pdf', legend_FS=10, label_FS=10, axes_FS=5)
+		
+		v, t, w, sigma, inv_sigma, det_sigma = dm.real_data(10, 60, 115)
+		
+		model = dm.full_model(best_fit, v, 100, model_type_signal='tanh', model_type_foreground='exp', N21par=5, NFGpar=5)	
+
+	
+
+
+	if fig==10:
+		# Data used:  60-120
+		folder = edges_folder + 'mid_band/polychord/20190508/case1_nominal/foreground_model_exp_signal_model_tanh_60_120MHz/'
+		getdist_samples, ww, ll, best_fit, covariance_matrix = gp.load_samples(folder + 'chain.txt', 0, label_names=[r'A\;[{\rm K}]', r'\nu_0\;[{\rm MHz}]', r'w\;[{\rm MHz}]', r'\tau_1', r'\tau_2', r'T_{100}\;[{\rm K}]', r'\beta', r'\gamma', r'\delta', r'\epsilon']) 
+		o = gp.triangle_plot(getdist_samples, folder + 'result.pdf', legend_FS=10, label_FS=13, axes_FS=7)
+		
+		v, t, w, sigma, inv_sigma, det_sigma = dm.real_data(10, 60, 120)
+		
+		model = dm.full_model(best_fit, v, 100, model_type_signal='tanh', model_type_foreground='exp', N21par=5, NFGpar=5)	
+
+
+	if fig==11:
+		# Data used:  60-120, CASE 2, cterms7, wterms8
+		folder = edges_folder + 'mid_band/polychord/20190508/case1_nominal/foreground_model_exp_signal_model_tanh_60_120MHz_case2/'
+		getdist_samples, ww, ll, best_fit, covariance_matrix = gp.load_samples(folder + 'chain.txt', 0, label_names=[r'A\;[{\rm K}]', r'\nu_0\;[{\rm MHz}]', r'w\;[{\rm MHz}]', r'\tau_1', r'\tau_2', r'T_{100}\;[{\rm K}]', r'\beta', r'\gamma', r'\delta', r'\epsilon']) 
+		o = gp.triangle_plot(getdist_samples, folder + 'result.pdf', legend_FS=10, label_FS=13, axes_FS=7)
+		
+		v, t, w, sigma, inv_sigma, det_sigma = dm.real_data(2, 60, 120)
+		
+		model = dm.full_model(best_fit, v, 100, model_type_signal='tanh', model_type_foreground='exp', N21par=5, NFGpar=5)
+
+
+
+	if fig==12:
+		# Data used:  60-120
+		folder = edges_folder + 'mid_band/polychord/20190508/case1_nominal/foreground_model_exp_signal_model_exp_60_120MHz/'
+		getdist_samples, ww, ll, best_fit, covariance_matrix = gp.load_samples(folder + 'chain.txt', 2000, label_names=[r'A\;[{\rm K}]', r'\nu_0\;[{\rm MHz}]', r'w\;[{\rm MHz}]', r'\tau', r'\chi', r'T_{100}\;[{\rm K}]', r'\beta', r'\gamma', r'\delta', r'\epsilon']) 
+		o = gp.triangle_plot(getdist_samples, folder + 'result.pdf', legend_FS=10, label_FS=13, axes_FS=7)
+		
+		v, t, w, sigma, inv_sigma, det_sigma = dm.real_data(10, 60, 120)
+		
+		model = dm.full_model(best_fit, v, 100, model_type_signal='exp', model_type_foreground='exp', N21par=5, NFGpar=5)	
+
+
+
+
+	
+	return v, t, w, model
 	
 	
 	
 	
+	
+
+def antsim3_calibration():
+
+	FLOW  = 50
+	FHIGH = 150
+
+
+	# Spectra
+	d   = np.genfromtxt(edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/data/average_spectra_300_350.txt')
+	ff  = d[:,0]
+	tx  = d[:,5]
+
+	tunc  = tx[(ff>=FLOW) & (ff<=FHIGH)]
+	
+
+
+
+
+
+
+
+	
+	# Calibration quantities
+	# ----------------------
+	#rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_receiver1_50_150MHz_cterms7_wterms8.txt'	
+	
+	rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_receiver1_cterms7_wterms8.txt'
+	rcv = np.genfromtxt(rcv_file)
+
+	fX      = rcv[:,0]
+	rcv2    = rcv[(fX>=FLOW) & (fX<=FHIGH),:]
+	f       = rcv2[:,0]
+	s11_LNA = rcv2[:,1] + 1j*rcv2[:,2]
+	C1      = rcv2[:,3]
+	C2      = rcv2[:,4]
+	TU      = rcv2[:,5]
+	TC      = rcv2[:,6]
+	TS      = rcv2[:,7]
+
+			
+			
+		
+	# AntSim3 S11
+	# -----------	
+	path_s11 = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/s11/'
+	fn  = (f-120)/60
+
+	par        = np.genfromtxt(path_s11 + 'par_s11_simu_mag.txt')
+	rsimu_mag  = ba.model_evaluate('polynomial', par, fn)
+	par        = np.genfromtxt(path_s11 + 'par_s11_simu_ang.txt')
+	rsimu_ang  = ba.model_evaluate('polynomial', par, fn)
+	rsimu      = rsimu_mag * (np.cos(rsimu_ang) + 1j*np.sin(rsimu_ang))
+
+	
+	rsimu_MC = cal.MC_antenna_s11(f, rsimu, s11_Npar_max=14)
+	
+	
+	
+	
+
+	# Calibrated antenna temperature with losses and beam chromaticity
+	# ----------------------------------------------------------------
+	tcal = cal.calibrated_antenna_temperature(tunc, rsimu_MC, s11_LNA, C1, C2, TU, TC, TS)
+	
+	fb, tb, wb = ba.spectral_binning_number_of_samples(f, tcal, np.ones(len(f))) 
+	
+
+		
+
+
+	
+	
+	return f, rsimu, rsimu_MC, fb, tb
+
+
+
+
+
+

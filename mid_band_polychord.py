@@ -14,9 +14,13 @@ import sys
 import numpy as np
 import scipy as sp
 import data_models as dm
+import os
 
 import PyPolyChord
 from PyPolyChord.settings import PolyChordSettings
+
+edges_folder       = os.environ['EDGES_vol2']
+print('EDGES Folder: ' + edges_folder)
 
 
 N21 = int(sys.argv[1])
@@ -36,15 +40,21 @@ Nderived    = 0
 
 # Input parameters
 # -----------------------
-model_type_signal     = 'tanh'  #'tanh' #, 'tanh'
+model_type_signal     = 'exp'  #'tanh' #, 'tanh'
 model_type_foreground = 'exp'  #'exp', 'linlog'
 
-save_folder = '/home/raul/Desktop/test/'
+
+save_folder = edges_folder + 'mid_band/polychord/20190508/case1_nominal/foreground_model_exp_signal_model_exp_60_120MHz'
 
 data        = 'real'   # it could be 'real' or 'simulated'
-case        =  1
+case        =  10
 FLOW        =  60
-FHIGH       = 120 #159
+FHIGH       = 120
+
+FLOW_gap  = 0  # nominal value: 0 
+FHIGH_gap = 0  # nominal_value: 0
+
+
 v0          = 100
 
 
@@ -61,7 +71,7 @@ if data == 'simulated':
 
 
 elif data == 'real':
-	v, t, w, sigma, inv_sigma, det_sigma = dm.real_data(case, FLOW, FHIGH)
+	v, t, w, sigma, inv_sigma, det_sigma = dm.real_data(case, FLOW, FHIGH, FLOW_gap=FLOW_gap, FHIGH_gap=FHIGH_gap)
 	
 
 

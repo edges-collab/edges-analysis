@@ -213,25 +213,42 @@ def simulated_data(theta, v, vr, noise_std_at_vr, model_type_signal='exp', model
 
 
 
-def real_data(case, FLOW, FHIGH):
+def real_data(case, FLOW, FHIGH, FLOW_gap=0, FHIGH_gap=0):
 	
-	if case == 1:
-		dd = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/integrated_spectrum.txt')
+	if case == 10:
+		dd = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/integrated_spectrum_case1_nominal.txt')
 		
-		vv = dd[:,0]
-		tt = dd[:,1]
-		ww = dd[:,2]
+	if case == 2:
+		dd = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/integrated_spectrum_case1_nominal_cterms7_wterms8.txt')		
 		
-		v0 = 100
-		A  = 10
-		
-		ss = A*(1/np.sqrt(ww))*(vv/v0)**(-2.5)
+	vv = dd[:,0]
+	tt = dd[:,1]
+	ww = dd[:,2]
+	
+	v0 = 100
+	A  = 12
+	
+	ss = A*(1/np.sqrt(ww))*(vv/v0)**(-2.5)
 		
 			
 	vp = vv[(vv>=FLOW) & (vv<=FHIGH)]
 	tp = tt[(vv>=FLOW) & (vv<=FHIGH)]
 	wp = ww[(vv>=FLOW) & (vv<=FHIGH)]
 	sp = ss[(vv>=FLOW) & (vv<=FHIGH)]
+
+
+	if (FLOW_gap > 0) and (FHIGH_gap > 0):
+		vx = np.copy(vp)
+		tx = np.copy(tp)
+		wx = np.copy(wp)
+		sx = np.copy(sp)
+		
+		vp = vx[(vx<=FLOW_gap) | (vx>=FHIGH_gap)]
+		tp = tx[(vx<=FLOW_gap) | (vx>=FHIGH_gap)]
+		wp = wx[(vx<=FLOW_gap) | (vx>=FHIGH_gap)]
+		sp = sx[(vx<=FLOW_gap) | (vx>=FHIGH_gap)]
+
+
 
 
 	v = vp[wp>0]

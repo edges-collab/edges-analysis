@@ -122,6 +122,7 @@ def switch_correction_receiver1(ant_s11, f_in = np.zeros([0,1]), case = 1):
 		path_folder     = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/data/s11/raw/InternalSwitch/'
 		
 		resistance_of_match = 50.027 # male
+		#print('50')
 		
 		o_in, f = rc.s1p_read(path_folder + 'Open01.s1p')
 		s_in, f = rc.s1p_read(path_folder + 'Short01.s1p')
@@ -730,7 +731,7 @@ def s11_calibration_measurements_mid_band_2018_01_25C(flow=40, fhigh=200, save='
 	# Saving
 	if save == 'yes':
 
-		save_path       = home_folder + '/DATA/EDGES/mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/data/s11/corrected/'
+		save_path       = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/data/s11/corrected/'
 		temperature_LNA = '25degC'
 		output_file_str = save_path + 's11_calibration_mid_band_LNA' + temperature_LNA + '_' + tt.strftime('%Y-%m-%d-%H-%M-%S') + flag + '.txt'
 		np.savetxt(output_file_str, kk)
@@ -1279,6 +1280,16 @@ def calibration_processing_mid_band_2018_01_25C(flow=50, fhigh=180, save='no', s
 	# Loading S11 data
 	s11_all = np.genfromtxt(path_s11 + 's11_calibration_mid_band_LNA25degC_2018-08-13-22-05-34.txt')
 	#s11_all = np.genfromtxt(path_s11 + 's11_calibration_mid_band_LNA25degC_2019-02-16-22-45-49.txt')
+	#s11_all = np.genfromtxt(path_s11 + '
+	#s11_all = np.genfromtxt(path_s11 + 's11_calibration_mid_band_LNA25degC_2019-05-11-20-34-59_other_s11_LNA.txt')
+	#s11_all = np.genfromtxt(path_s11 + 's11_calibration_mid_band_LNA25degC_2019-05-11-20-43-04_other_s11_ambient.txt')
+	#s11_all = np.genfromtxt(path_s11 + 's11_calibration_mid_band_LNA25degC_2019-05-11-20-46-12_other_s11_hot.txt')
+	#s11_all = np.genfromtxt(path_s11 + 's11_calibration_mid_band_LNA25degC_2019-05-11-20-48-43_other_s11_open.txt')
+	#s11_all = np.genfromtxt(path_s11 + 's11_calibration_mid_band_LNA25degC_2019-05-11-20-50-27_other_s11_shorted.txt')
+	#s11_all = np.genfromtxt(path_s11 + 's11_calibration_mid_band_LNA25degC_2019-05-11-20-52-01_other_s11_antsim3.txt')
+	#s11_all = np.genfromtxt(path_s11 + 's11_calibration_mid_band_LNA25degC_2019-05-11-21-04-08_female_standard_resistance_49.98.txt')
+	#s11_all = np.genfromtxt(path_s11 + 's11_calibration_mid_band_LNA25degC_2019-05-11-21-08-48_male_standard_resistance_50.00.txt')
+	
 	s11     = s11_all[(s11_all[:,0]>=flow) & (s11_all[:,0]<=fhigh), :]
 	
 	

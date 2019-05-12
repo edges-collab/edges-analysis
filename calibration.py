@@ -1564,24 +1564,42 @@ def MC_receiver(band, MC_spectra_noise = np.ones(4), MC_s11_syst = np.ones(16), 
 	
 	#band          = 'mid_band'
 	
-	fx, il, ih    = ba.frequency_edges(60,160)
+	fx, il, ih    = ba.frequency_edges(50,150)
 	f             = fx[il:(ih+1)]
+	print(f)
 	fn            = (f-120)/60
 
 	Tamb_internal = 300
+
+	cterms = 7
+	wterms = 8
+
 	
 	# MC flags
 	
 	
 	
-	cterms = 6
-	wterms = 14
+
 	
 
 	# Computing "Perturbed" receiver spectra, reflection coefficients, and physical temperatures
-	ms = models_calibration_spectra(case_models, f, MC_spectra_noise=MC_spectra_noise)
+	
+	# Spectra
+	if np.sum(MC_spectra_noise) == 0:
+		Tunc  = np.genfromtxt(edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/data/average_spectra_300_350.txt')
+		print(Tunc[:,0])
+		ms    = Tunc[:,1:5].T
+		print(ms.shape)
+	else:
+		ms = models_calibration_spectra(case_models, f, MC_spectra_noise=MC_spectra_noise)
+		
+	# S11
 	mr = models_calibration_s11(case_models, f, MC_s11_syst=MC_s11_syst, Npar_max=s11_Npar_max)
+	
+	# Physical temperature
 	mt = models_calibration_physical_temperature(case_models, f, s_parameters=[mr[2], mr[5], mr[6], mr[7]], MC_temp=MC_temp)
+	
+	
 	
 	Tae = ms[0]
 	The = ms[1]
@@ -1618,7 +1636,7 @@ def MC_antenna_s11(f, rant, s11_Npar_max=14):
 
 	# Producing perturbed antenna reflection coefficient
 
-	RMS_mag  = 0.0001
+	RMS_mag  = 0.0005
 	RMS_ang  = 0.1*(np.pi/180) 
 	
 	pert_mag = random_signal_perturbation(f, RMS_mag, s11_Npar_max)
