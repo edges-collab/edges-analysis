@@ -219,7 +219,11 @@ def real_data(case, FLOW, FHIGH, FLOW_gap=0, FHIGH_gap=0):
 		dd = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/integrated_spectrum_case1_nominal.txt')
 		
 	if case == 2:
-		dd = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/integrated_spectrum_case1_nominal_cterms7_wterms8.txt')		
+		dd = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/integrated_spectrum_case1_nominal_cterms7_wterms8.txt')
+		
+	if case == 5:
+		dd = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/integrated_spectrum_case5_cterms8_wterms8_no_rfi.txt')
+		
 		
 	vv = dd[:,0]
 	tt = dd[:,1]

@@ -529,6 +529,13 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 				print('Receiver calibration FILE 6')
 				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_receiver1_50_150MHz_cterms10_wterms10.txt'
 
+			if receiver_cal_file == 7:
+				print('Receiver calibration FILE 7')
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal_50-150MHz_no_rfi/calibration_files/calibration_file_receiver1_cterms9_wterms9_50-150MHz_no_rfi.txt'
+
+			if receiver_cal_file == 8:
+				print('Receiver calibration FILE 8')
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal_50-150MHz_no_rfi/calibration_files/calibration_file_receiver1_cterms8_wterms8_50-150MHz_no_rfi.txt'
 
 				
 			
@@ -904,6 +911,11 @@ def level3_single_file_test(path_file, FLOW, FHIGH):
 	#ttix, wwix = rfi.cleaning_polynomial(ff, avtt, avww, Nterms_fg=7, Nterms_std=5, Nstd=3.5)
 	pp = ba.fit_polynomial_fourier('LINLOG', ff, avtt, 5, Weights=avww)
 	fb, rb, wb = ba.spectral_binning_number_of_samples(ff, avtt-pp[1], avww)
+	
+	#plt.close()
+	#plt.close()
+	#plt.close()
+	plt.figure()
 	plt.plot(fb[wb>0], rb[wb>0])
 	plt.ylim([-1.5, 1.5]); plt.xlim([50, 130])
 	
@@ -1008,6 +1020,13 @@ def rms_filter_computation(band, case, save_parameters='no'):
 			path_files  = edges_folder + '/mid_band/spectra/level3/case2/'
 			save_folder = edges_folder + '/mid_band/rms_filters/case2/'
 		
+		if case == 4:
+			path_files  = edges_folder + '/mid_band/spectra/level3/case4/'
+			save_folder = edges_folder + '/mid_band/rms_filters/case4/'
+
+		if case == 5:
+			path_files  = edges_folder + '/mid_band/spectra/level3/case5/'
+			save_folder = edges_folder + '/mid_band/rms_filters/case5/'
 
 
 
@@ -1329,6 +1348,13 @@ def rms_filter(band, case, gx, rms, Nsigma):
 
 	if (case == 2):
 		file_path = edges_folder + band + '/rms_filters/case2/'
+		
+	if (case == 4):
+		file_path = edges_folder + band + '/rms_filters/case4/'
+		
+	if (case == 5):
+		file_path = edges_folder + band + '/rms_filters/case5/'
+
 
 
 	p    = np.genfromtxt(file_path + 'rms_polynomial_parameters.txt')
@@ -1533,22 +1559,24 @@ def level3_to_level4(band, case, GHA_edges, sun_el_max, moon_el_max, save_folder
 	# ------------------------
 	if band == 'mid_band':
 		
-
 		if case == 0:
-			path_files             = edges_folder + 'mid_band/spectra/level3/case0/'
-			save_folder            = edges_folder + 'mid_band/spectra/level4/' + save_folder_file_name + '/'
-			output_file_name_hdf5  = save_folder_file_name + '.hdf5'
+			path_files  = edges_folder + 'mid_band/spectra/level3/case0/'
 
 		elif case == 1:
-			path_files             = edges_folder + 'mid_band/spectra/level3/case1/'
-			save_folder            = edges_folder + 'mid_band/spectra/level4/' + save_folder_file_name + '/'
-			output_file_name_hdf5  = save_folder_file_name + '.hdf5'
+			path_files  = edges_folder + 'mid_band/spectra/level3/case1/'
 
 		elif case == 2:
-			path_files             = edges_folder + 'mid_band/spectra/level3/case2/'
-			save_folder            = edges_folder + 'mid_band/spectra/level4/' + save_folder_file_name + '/'
-			output_file_name_hdf5  = save_folder_file_name + '.hdf5'
+			path_files  = edges_folder + 'mid_band/spectra/level3/case2/'
 
+		elif case == 4:
+			path_files  = edges_folder + 'mid_band/spectra/level3/case4/'
+			
+		elif case == 5:
+			path_files  = edges_folder + 'mid_band/spectra/level3/case5/'	
+		
+		
+		save_folder            = edges_folder + 'mid_band/spectra/level4/' + save_folder_file_name + '/'
+		output_file_name_hdf5  = save_folder_file_name + '.hdf5'
 
 
 
@@ -1580,7 +1608,7 @@ def level3_to_level4(band, case, GHA_edges, sun_el_max, moon_el_max, save_folder
 	year_day_all = np.zeros((len(index_new_list), 2))
 	
 	
-	for i in index_new_list:  # range(4):  #
+	for i in index_new_list:  # range(4):  # 
 		
 		# Storing year and day of each file
 		year_day_all[i,0] = float(new_list[i][0:4])
@@ -1761,7 +1789,7 @@ def level3_to_level4(band, case, GHA_edges, sun_el_max, moon_el_max, save_folder
 	Ngha = len(GHA_edges)-1
 	
 	# Loop over days
-	for i in index_new_list:  # range(4):  # 
+	for i in index_new_list:  # range(4):  #  
 		
 		# Loop over number of foreground terms
 		for Nfg in [3,4,5]:
@@ -1993,7 +2021,7 @@ def daily_nominal_filter(band, filter_case, year_day_list):
 	# 
 	#bad0 = np.array([[2018, 184], [2018, 195], [2018, 204], [2018, 208], ])
 	
-	if (filter_case == 10) or (filter_case == 2):
+	if (filter_case == 10) or (filter_case == 2) or (filter_case == 4) or (filter_case == 5):
 		bad0 = np.array([[2018, 146], [2018, 147], [2018, 148], [2018, 149], [2018, 150], [2018, 151], [2018, 152], [2018, 157], [2018, 159],  [2018, 160], [2018, 161], [2018, 162], [2018, 163], [2018, 165], [2018, 167], [2018, 169], [2018, 170], [2018, 174], [2018, 175], [2018, 176], [2018, 177], [2018, 178], [2018, 179], [2018, 180], [2018, 181], [2018, 182], [2018, 184], [2018, 185], [2018, 187], [2018, 189], [2018, 190], [2018, 193], [2018, 195], [2018, 196], [2018, 197], [2018, 204], [2018, 208], [2018, 209], [2018, 216], [2018, 220]])
 		
 	elif filter_case == 12:
@@ -2075,6 +2103,14 @@ def plot_level4(case, index_GHA, averaged_146, good_bad, model, FLOW, FHIGH, K_p
 	elif case == 12:
 		f, py, ry, wy, index, gha, yy = level4read('/home/raul/DATA2/EDGES_vol2/mid_band/spectra/level4/case1_1hr_averages/case1_1hr_averages.hdf5')
 	
+
+	if case == 4:
+		f, py, ry, wy, index, gha, yy = level4read('/home/raul/DATA2/EDGES_vol2/mid_band/spectra/level4/case4/case4.hdf5')
+
+
+	if case == 5:
+		f, py, ry, wy, index, gha, yy = level4read('/home/raul/DATA2/EDGES_vol2/mid_band/spectra/level4/case5/case5.hdf5')
+
 
 	px = np.delete(py, 1, axis=0)
 	rx = np.delete(ry, 1, axis=0)
@@ -2290,6 +2326,18 @@ def integrated_spectrum_level4(case, index_GHA, FLOW, FHIGH, day_min1, day_max1,
 		f, px, rx, wx, index, gha, ydx = level4read(edges_folder + 'mid_band/spectra/level4/case2/case2.hdf5')
 
 
+	if case == 4:
+		#f, px, rx, wx, index, gha, ydx = level4read(edges_folder + 'mid_band/spectra/level4/case1_sun_below_horizon/case1_sun_below_horizon.hdf5')
+		f, px, rx, wx, index, gha, ydx = level4read(edges_folder + 'mid_band/spectra/level4/case4/case4.hdf5')
+
+
+	if case == 5:
+		#f, px, rx, wx, index, gha, ydx = level4read(edges_folder + 'mid_band/spectra/level4/case1_sun_below_horizon/case1_sun_below_horizon.hdf5')
+		f, px, rx, wx, index, gha, ydx = level4read(edges_folder + 'mid_band/spectra/level4/case5/case5.hdf5')
+
+
+
+
 	
 	keep_index = daily_nominal_filter('mid_band', case, ydx)
 	#keep_index = daily_strict_filter('mid_band', ydx)
@@ -2403,8 +2451,8 @@ def integrated_spectrum_level4(case, index_GHA, FLOW, FHIGH, day_min1, day_max1,
 
 	
 	# Cleanning RFI spike
-	fr1 = 105.8
-	fr2 = 107.2
+	fr1 = 105.6
+	fr2 = 107.4
 	rb3[(fb >=fr1) & (fb<=fr2)] = 0
 	wb3[(fb >=fr1) & (fb<=fr2)] = 0
 	
@@ -2472,7 +2520,7 @@ def integrated_spectrum_level4(case, index_GHA, FLOW, FHIGH, day_min1, day_max1,
 	plt.grid()
 				
 			
-	plt.savefig('/home/raul/Desktop/X.png', bbox_inches='tight')
+	plt.savefig('/home/raul/Desktop/Xcuec88.png', bbox_inches='tight')
 	plt.close()
 	plt.close()	
 

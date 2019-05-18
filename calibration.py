@@ -173,9 +173,9 @@ def models_calibration_s11(case, f, MC_s11_syst=np.zeros(16), Npar_max=15):
 
 
 	# ----- Make these input parameters ??
-	RMS_expec_mag = 0.0001
+	RMS_expec_mag = 0.0001  # 0.0001
 	print('hola')
-	RMS_expec_ang = 0.1*(np.pi/180)
+	RMS_expec_ang = 1*(np.pi/180)   # 0.1
 	
 	
 	# The following were obtained using the function "two_port_network_uncertainties()" also contained in this file
@@ -668,7 +668,7 @@ def two_port_network_uncertainties():
 
 
 
-def NWP_fit(fn, rl, ro, rs, Toe, Tse, To, Ts, wterms):
+def NWP_fit(fn, rl, ro, rs, Toe, Tse, To, Ts, wterms, second_frequency_array=0):
 
 	"""
 	It is preferable to compute externally, and use a normalized frequency. For instance, fn = (f-120)/60
@@ -702,7 +702,7 @@ def NWP_fit(fn, rl, ro, rs, Toe, Tse, To, Ts, wterms):
 	# Matrices A and b
 	A = np.zeros((3 * wterms, 2*len(fn)))
 	for i in range(wterms):
-		A[i, :] = np.append(K2o * fn ** i, K2s * fn ** i) 
+		A[i, :]              = np.append(K2o * fn ** i, K2s * fn ** i) 
 		A[i + 1 * wterms, :] = np.append(K3o * fn ** i, K3s * fn ** i)
 		A[i + 2 * wterms, :] = np.append(K4o * fn ** i, K4s * fn ** i)
 	b = np.append( (Toe - To*K1o), (Tse - Ts*K1s) )
@@ -723,11 +723,30 @@ def NWP_fit(fn, rl, ro, rs, Toe, Tse, To, Ts, wterms):
 	TU = np.zeros(len(fn))
 	TC = np.zeros(len(fn))
 	TS = np.zeros(len(fn))
+	
+	
+	if np.sum(second_frequency_array) == 0:
+		fna = np.copy(fn)
+
+	else:
+		fna = np.copy(second_frequency_array) 
+		
+	TUX = np.zeros(len(fna))
+	TCX = np.zeros(len(fna))
+	TSX = np.zeros(len(fna))
+	
 
 	for i in range(wterms):
 		TU = TU + param[i, 0] * fn ** i
 		TC = TC + param[i+1*wterms, 0] * fn ** i
 		TS = TS + param[i+2*wterms, 0] * fn ** i
+				
+		TUX = TUX + param[i, 0] * fna ** i
+		TCX = TCX + param[i+1*wterms, 0] * fna ** i
+		TSX = TSX + param[i+2*wterms, 0] * fna ** i	
+
+
+
 
 
 
@@ -738,7 +757,7 @@ def NWP_fit(fn, rl, ro, rs, Toe, Tse, To, Ts, wterms):
 
 
 
-	return TU, TC, TS
+	return TU, TC, TS, TUX, TCX, TSX
 
 
 
@@ -760,7 +779,7 @@ def NWP_fit(fn, rl, ro, rs, Toe, Tse, To, Ts, wterms):
 
 
 
-def calibration_quantities(fn, Tae, The, Toe, Tse, rl, ra, rh, ro, rs, Ta, Th, To, Ts, Tamb_internal, cterms, wterms):
+def calibration_quantities(fn, Tae, The, Toe, Tse, rl, ra, rh, ro, rs, Ta, Th, To, Ts, Tamb_internal, cterms, wterms, second_frequency_array=0):
 
 	"""
 	It is preferable to compute externally, and use a normalized frequency. For instance, fn = (f-120)/60
@@ -790,6 +809,14 @@ def calibration_quantities(fn, Tae, The, Toe, Tse, rl, ra, rh, ro, rs, Ta, Th, T
 	K4h = (np.abs(rh) * np.abs(Fh) / G) * np.sin(PHIh)
 
 
+	# Copy frequency array to "second" frequency array, if no second frequency array is given
+	if np.sum(second_frequency_array) == 0:
+		fna = np.copy(fn)
+		
+	else:
+		fna = np.copy(second_frequency_array)
+
+
 
 	# Initializing arrays
 	niter = 4
@@ -808,7 +835,14 @@ def calibration_quantities(fn, Tae, The, Toe, Tse, rl, ra, rh, ro, rs, Ta, Th, T
 	TC = np.zeros((niter, len(fn)))
 	TS = np.zeros((niter, len(fn)))
 
+	scaX = np.zeros((niter, len(fna)))
+	offX = np.zeros((niter, len(fna)))
 
+	TUX = np.zeros((niter, len(fna)))
+	TCX = np.zeros((niter, len(fna)))
+	TSX = np.zeros((niter, len(fna)))
+	
+	
 
 
 	# Calibration loop
@@ -847,12 +881,20 @@ def calibration_quantities(fn, Tae, The, Toe, Tse, rl, ra, rh, ro, rs, Ta, Th, T
 		m_sca    = np.polyval(p_sca, fn)
 		sca[i,:] = m_sca
 
+
+
 		# Modeling offset
 		p_off    = np.polyfit(fn, off_raw, cterms-1)
 		m_off    = np.polyval(p_off, fn)		
 		off[i,:] = m_off
 
 
+		# 
+		X         = np.polyval(p_sca, fna)
+		scaX[i,:] = X
+
+		X         = np.polyval(p_off, fna)		
+		offX[i,:] = X
 
 
 		# Step 3: corrected "uncalibrated spectrum" of cable
@@ -866,9 +908,18 @@ def calibration_quantities(fn, Tae, The, Toe, Tse, rl, ra, rh, ro, rs, Ta, Th, T
 
 
 		# Step 4: computing NWP
-		TU[i,:], TC[i,:], TS[i,:] = NWP_fit(fn, rl, ro, rs, Toe_iter[i,:], Tse_iter[i,:], To, Ts, wterms)
+		TU[i,:], TC[i,:], TS[i,:], TUX[i,:], TCX[i,:], TSX[i,:] = NWP_fit(fn, rl, ro, rs, Toe_iter[i,:], Tse_iter[i,:], To, Ts, wterms, second_frequency_array=fna)
 
-	return sca[-1,:], off[-1,:], TU[-1,:], TC[-1,:], TS[-1,:]
+
+	if np.sum(second_frequency_array) == 0:
+		return sca[-1,:], off[-1,:], TU[-1,:], TC[-1,:], TS[-1,:]
+	
+	else:
+		return scaX[-1,:], offX[-1,:], TUX[-1,:], TCX[-1,:], TSX[-1,:]
+
+
+
+	
 
 
 
@@ -1636,7 +1687,7 @@ def MC_antenna_s11(f, rant, s11_Npar_max=14):
 
 	# Producing perturbed antenna reflection coefficient
 
-	RMS_mag  = 0.0005
+	RMS_mag  = 0.0001  # original value = 0.0001
 	RMS_ang  = 0.1*(np.pi/180) 
 	
 	pert_mag = random_signal_perturbation(f, RMS_mag, s11_Npar_max)

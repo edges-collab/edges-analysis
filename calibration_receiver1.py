@@ -1204,6 +1204,7 @@ def calibration_processing_mid_band_2018_01_25C(flow=50, fhigh=180, save='no', s
 	file_shorted1 = path_spectra + 'level1_LongCableShorted_2018_059_01_300_350.mat'
 	file_shorted2 = path_spectra + 'level1_LongCableShorted_2018_060_00_300_350.mat'
 	spec_shorted  = [file_shorted1, file_shorted2]
+	#spec_shorted  = [file_shorted1]
 	res_shorted   = path_resistance + 'ShortedCable.txt'
 
 
@@ -1278,14 +1279,14 @@ def calibration_processing_mid_band_2018_01_25C(flow=50, fhigh=180, save='no', s
 
 
 	# Loading S11 data
-	s11_all = np.genfromtxt(path_s11 + 's11_calibration_mid_band_LNA25degC_2018-08-13-22-05-34.txt')
+	#s11_all = np.genfromtxt(path_s11 + 's11_calibration_mid_band_LNA25degC_2018-08-13-22-05-34.txt')
 	#s11_all = np.genfromtxt(path_s11 + 's11_calibration_mid_band_LNA25degC_2019-02-16-22-45-49.txt')
 	#s11_all = np.genfromtxt(path_s11 + '
 	#s11_all = np.genfromtxt(path_s11 + 's11_calibration_mid_band_LNA25degC_2019-05-11-20-34-59_other_s11_LNA.txt')
 	#s11_all = np.genfromtxt(path_s11 + 's11_calibration_mid_band_LNA25degC_2019-05-11-20-43-04_other_s11_ambient.txt')
 	#s11_all = np.genfromtxt(path_s11 + 's11_calibration_mid_band_LNA25degC_2019-05-11-20-46-12_other_s11_hot.txt')
 	#s11_all = np.genfromtxt(path_s11 + 's11_calibration_mid_band_LNA25degC_2019-05-11-20-48-43_other_s11_open.txt')
-	#s11_all = np.genfromtxt(path_s11 + 's11_calibration_mid_band_LNA25degC_2019-05-11-20-50-27_other_s11_shorted.txt')
+	s11_all = np.genfromtxt(path_s11 + 's11_calibration_mid_band_LNA25degC_2019-05-11-20-50-27_other_s11_shorted.txt')
 	#s11_all = np.genfromtxt(path_s11 + 's11_calibration_mid_band_LNA25degC_2019-05-11-20-52-01_other_s11_antsim3.txt')
 	#s11_all = np.genfromtxt(path_s11 + 's11_calibration_mid_band_LNA25degC_2019-05-11-21-04-08_female_standard_resistance_49.98.txt')
 	#s11_all = np.genfromtxt(path_s11 + 's11_calibration_mid_band_LNA25degC_2019-05-11-21-08-48_male_standard_resistance_50.00.txt')
@@ -1375,11 +1376,11 @@ def calibration_processing_mid_band_2018_01_25C(flow=50, fhigh=180, save='no', s
 	fit_s11_hot_mag     = ba.fit_polynomial_fourier('fourier',    f_s11n, s11_hot_mag,     27, plot='no')  #  
 	fit_s11_hot_ang     = ba.fit_polynomial_fourier('fourier',    f_s11n, s11_hot_ang,     27, plot='no')  # 
 
-	fit_s11_open_mag    = ba.fit_polynomial_fourier('fourier',    f_s11n, s11_open_mag,    85, plot='no')  # 27
-	fit_s11_open_ang    = ba.fit_polynomial_fourier('fourier',    f_s11n, s11_open_ang,    85, plot='no')  # 27
+	fit_s11_open_mag    = ba.fit_polynomial_fourier('fourier',    f_s11n, s11_open_mag,    85, plot='no')  # nominal: 85
+	fit_s11_open_ang    = ba.fit_polynomial_fourier('fourier',    f_s11n, s11_open_ang,    85, plot='no')  # nominal: 85
 
-	fit_s11_shorted_mag = ba.fit_polynomial_fourier('fourier',    f_s11n, s11_shorted_mag, 85, plot='no')  # 27
-	fit_s11_shorted_ang = ba.fit_polynomial_fourier('fourier',    f_s11n, s11_shorted_ang, 85, plot='no')  # 27
+	fit_s11_shorted_mag = ba.fit_polynomial_fourier('fourier',    f_s11n, s11_shorted_mag, 85, plot='no')  # nominal: 85
+	fit_s11_shorted_ang = ba.fit_polynomial_fourier('fourier',    f_s11n, s11_shorted_ang, 85, plot='no')  # nominal: 85
 
 	fit_s11_sr_mag      = ba.fit_polynomial_fourier('polynomial', f_s11n, s11_sr_mag,      17, plot='no')  # 
 	fit_s11_sr_ang      = ba.fit_polynomial_fourier('polynomial', f_s11n, s11_sr_ang,      17, plot='no')  # 
@@ -2179,6 +2180,56 @@ def calibration_file_computation(calibration_date, folder, FMIN, FMAX, cterms_no
 
 
 
+
+
+
+	# Use only data without RFI
+	
+	# amateur radio
+	fbad1_low  = 50
+	fbad1_high = 53
+	
+	# channel 2
+	fbad2_low  = 57
+	fbad2_high = 60	
+	
+	# channel 4
+	fbad3_low  = 66
+	fbad3_high = 72	
+	
+	# FM
+	fbad4_low  = 88
+	fbad4_high = 103
+	
+	# RFI in hot load
+	fbad5_low  = 120
+	fbad5_high = 125
+	
+	fbad6_low  = 141
+	fbad6_high = 143
+	
+	
+	index = np.arange(len(f))
+	index_good = index[ ((f<fbad1_low) | (f>fbad1_high)) & ((f<fbad2_low) | (f>fbad2_high)) & ((f<fbad3_low) | (f>fbad3_high)) & ((f<fbad4_low) | (f>fbad4_high)) & ((f<fbad5_low) | (f>fbad5_high)) & ((f<fbad6_low) | (f>fbad6_high))  ]
+	
+	
+	
+	
+	fng  = fn[index_good]
+	Taeg = Tae[index_good]
+	Theg = The[index_good]
+	Toeg = Toe[index_good]
+	Tseg = Tse[index_good]
+	rlg  = rl[index_good]
+	rag  = ra[index_good]
+	rhg  = rh[index_good]
+	rog  = ro[index_good]
+	rsg  = rs[index_good]
+	Tag  = np.copy(Ta)
+	Thdg = Thd[index_good]
+	Tog  = np.copy(To)
+	Tsg  = np.copy(Ts)
+	
 	
 		
 	# Sweeping parameters and computing RMS
@@ -2190,7 +2241,10 @@ def calibration_file_computation(calibration_date, folder, FMIN, FMAX, cterms_no
 		RMS = np.zeros((4,15,15))
 		for j in range(len(index_cterms)):
 			for i in range(len(index_wterms)):
-				C1, C2, TU, TC, TS = cal.calibration_quantities(fn, Tae, The, Toe, Tse, rl, ra, rh, ro, rs, Ta, Thd, To, Ts, Tamb_internal, j+1, i+1)
+				C1, C2, TU, TC, TS = cal.calibration_quantities(fng, Taeg, Theg, Toeg, Tseg, rlg, rag, rhg, rog, rsg, Tag, Thdg, Tog, Tsg, Tamb_internal, j+1, i+1, second_frequency_array=fn)
+				
+				# Only open cable
+				#C1, C2, TU, TC, TS = cal.calibration_quantities(fng, Taeg, Theg, Toeg, Toeg, rlg, rag, rhg, rog, rog, Tag, Thdg, Tog, Tog, Tamb_internal, j+1, i+1, second_frequency_array=fn)
 				
 				print('---------------------------------------------------')
 				print(j+1)
@@ -2265,7 +2319,10 @@ def calibration_file_computation(calibration_date, folder, FMIN, FMAX, cterms_no
 	
 	
 	# Saving nominal case
-	C1, C2, TU, TC, TS = cal.calibration_quantities(fn, Tae, The, Toe, Tse, rl, ra, rh, ro, rs, Ta, Thd, To, Ts, Tamb_internal, cterms_nominal, wterms_nominal)
+	C1, C2, TU, TC, TS = cal.calibration_quantities(fng, Taeg, Theg, Toeg, Tseg, rlg, rag, rhg, rog, rsg, Tag, Thdg, Tog, Tsg, Tamb_internal, cterms_nominal, wterms_nominal, second_frequency_array=fn)
+
+	# Only open cable
+	#C1, C2, TU, TC, TS = cal.calibration_quantities(fng, Taeg, Theg, Toeg, Toeg, rlg, rag, rhg, rog, rog, Tag, Thdg, Tog, Tog, Tamb_internal, cterms_nominal, wterms_nominal, second_frequency_array=fn)
 	
 	# Cross-check	
 	Tac         = cal.calibrated_antenna_temperature(Tae,  ra,  rl, C1, C2, TU, TC, TS, Tamb_internal=Tamb_internal)

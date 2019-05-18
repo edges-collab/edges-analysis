@@ -40,14 +40,14 @@ Nderived    = 0
 
 # Input parameters
 # -----------------------
-model_type_signal     = 'exp'  #'tanh' #, 'tanh'
+model_type_signal     = 'tanh'  #'tanh' #, 'tanh'
 model_type_foreground = 'exp'  #'exp', 'linlog'
 
 
-save_folder = edges_folder + 'mid_band/polychord/20190508/case1_nominal/foreground_model_exp_signal_model_exp_60_120MHz'
+save_folder = edges_folder + 'mid_band/polychord/20190516/case5/cterms8_wterms8_foreground_model_exp_signal_model_tanh_60_120MHz'
 
 data        = 'real'   # it could be 'real' or 'simulated'
-case        =  10
+case        =  5
 FLOW        =  60
 FHIGH       = 120
 
