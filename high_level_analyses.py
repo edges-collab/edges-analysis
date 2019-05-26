@@ -1261,6 +1261,46 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
 
 
 
+	# RFI cleaned lab data, 60-90 MHz
+	if case == 20:
+		flag_folder       = 'case20'
+		
+		receiver_cal_file = 20   # Receiver calibration using data with no RFI, cterms=8, wterms=8 terms over 50-150 MHz
+		
+		antenna_s11_day   = 147
+		antenna_s11_case  = 3   # taken 2+ minutes after turning on the switch
+		antenna_s11_Nfit  = 11  # 13 terms over 55-120 MHz
+		
+		balun_correction  = 1
+		ground_correction = 1
+		beam_correction   = 1
+		bf_case           = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
+		
+		FLOW  = 60
+		FHIGH = 90
+		Nfg   = 4
+
+
+
+
+	# RFI cleaned lab data, 60-120 MHz
+	if case == 30:
+		flag_folder       = 'case30'
+		
+		receiver_cal_file = 30   # cterms=7, wterms=7 terms over 50-150 MHz
+		
+		antenna_s11_day   = 147
+		antenna_s11_case  = 3   # taken 2+ minutes after turning on the switch
+		antenna_s11_Nfit  = 13  # 13 terms over 55-120 MHz
+		
+		balun_correction  = 1
+		ground_correction = 1
+		beam_correction   = 1
+		bf_case           = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
+		
+		FLOW  = 60
+		FHIGH = 120
+		Nfg   = 5
 
 
 
@@ -1286,7 +1326,7 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
 		
 
 	# Processing files
-	for i in range(len(new_list)):
+	for i in range(len(new_list)):  # range(4): #
 		#print(i)
 		
 		day = int(new_list[i][5:8])
@@ -2952,6 +2992,186 @@ def VNA_comparison2():
 	return 0
 
 	
+
+
+
+
+
+
+
+
+
+
+
+def VNA_comparison3():
+	
+	path_folder1  = edges_folder + 'others/vna_comparison/fieldfox_N9923A/agilent_E5061A_male/'
+	path_folder2  = edges_folder + 'others/vna_comparison/fieldfox_N9923A/agilent_E5061A_female/'
+	path_folder3  = edges_folder + 'others/vna_comparison/fieldfox_N9923A/fieldfox_N9923A_male/'
+	path_folder4  = edges_folder + 'others/vna_comparison/fieldfox_N9923A/fieldfox_N9923A_female/'
+
+	REP = '02'
+
+
+	A_o, f       = rc.s1p_read(path_folder1 + 'Open'+ REP +'.s1p')
+	A_s, f       = rc.s1p_read(path_folder1 + 'Short'+ REP +'.s1p')
+	A_m, f       = rc.s1p_read(path_folder1 + 'Match'+ REP +'.s1p')
+	A_at3, f     = rc.s1p_read(path_folder1 + '3dB_'+ REP +'.s1p')
+	A_at6, f     = rc.s1p_read(path_folder1 + '6dB_'+ REP +'.s1p')
+	A_at10, f    = rc.s1p_read(path_folder1 + '10dB_'+ REP +'.s1p')	
+	A_at15, f    = rc.s1p_read(path_folder1 + '15dB_'+ REP +'.s1p')	
+	
+	B_o, f       = rc.s1p_read(path_folder2 + 'Open_'+ REP +'.s1p')
+	B_s, f       = rc.s1p_read(path_folder2 + 'Short_'+ REP +'.s1p')
+	B_m, f       = rc.s1p_read(path_folder2 + 'Match_'+ REP +'.s1p')
+	B_at3, f     = rc.s1p_read(path_folder2 + '3dB_'+ REP +'.s1p')
+	B_at6, f     = rc.s1p_read(path_folder2 + '6dB_02.s1p')
+	B_at10, f    = rc.s1p_read(path_folder2 + '10dB_'+ REP +'.s1p')	
+	B_at15, f    = rc.s1p_read(path_folder2 + '15dB_'+ REP +'.s1p')
+	
+	C_o, f       = rc.s1p_read(path_folder3 + 'OPEN'+ REP +'.s1p')
+	C_s, f       = rc.s1p_read(path_folder3 + 'SHORT'+ REP +'.s1p')
+	C_m, f       = rc.s1p_read(path_folder3 + 'MATCH'+ REP +'.s1p')
+	C_at3, f     = rc.s1p_read(path_folder3 + '3DB_'+ REP +'.s1p')
+	C_at6, f     = rc.s1p_read(path_folder3 + '6DB_'+ REP +'.s1p')
+	C_at10, f    = rc.s1p_read(path_folder3 + '10DB_'+ REP +'.s1p')	
+	C_at15, f    = rc.s1p_read(path_folder3 + '15DB_'+ REP +'.s1p')	
+	
+	D_o, f       = rc.s1p_read(path_folder4 + 'OPEN'+ REP +'.s1p')
+	D_s, f       = rc.s1p_read(path_folder4 + 'SHORT'+ REP +'.s1p')
+	D_m, f       = rc.s1p_read(path_folder4 + 'MATCH'+ REP +'.s1p')
+	D_at3, f     = rc.s1p_read(path_folder4 + '3DB_'+ REP +'.s1p')
+	D_at6, f     = rc.s1p_read(path_folder4 + '6DB_02.s1p')
+	D_at10, f    = rc.s1p_read(path_folder4 + '10DB_'+ REP +'.s1p')	
+	D_at15, f    = rc.s1p_read(path_folder4 + '15DB_'+ REP +'.s1p')
+
+
+
+
+
+
+
+
+
+		
+	# Standard values assumed
+	#o_a =  1 * np.ones(len(f))
+	#s_a = -1 * np.ones(len(f))
+	#m_a =  0 * np.ones(len(f))	
+
+
+	xx  = rc.agilent_85033E(f, 50, m = 1, md_value_ps = 38)
+	o_a = xx[0]
+	s_a = xx[1]
+	m_a = xx[2]
+
+
+
+
+
+	# Correction 
+	A_at3c, xx1, xx2, xx3  = rc.de_embed(o_a, s_a, m_a, A_o, A_s, A_m, A_at3)
+	A_at6c, xx1, xx2, xx3  = rc.de_embed(o_a, s_a, m_a, A_o, A_s, A_m, A_at6)
+	A_at10c, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, A_o, A_s, A_m, A_at10)
+	A_at15c, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, A_o, A_s, A_m, A_at15)
+
+	B_at3c, xx1, xx2, xx3  = rc.de_embed(o_a, s_a, m_a, B_o, B_s, B_m, B_at3)
+	B_at6c, xx1, xx2, xx3  = rc.de_embed(o_a, s_a, m_a, B_o, B_s, B_m, B_at6)
+	B_at10c, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, B_o, B_s, B_m, B_at10)
+	B_at15c, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, B_o, B_s, B_m, B_at15)	
+	
+	C_at3c, xx1, xx2, xx3  = rc.de_embed(o_a, s_a, m_a, C_o, C_s, C_m, C_at3)
+	C_at6c, xx1, xx2, xx3  = rc.de_embed(o_a, s_a, m_a, C_o, C_s, C_m, C_at6)
+	C_at10c, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, C_o, C_s, C_m, C_at10)
+	C_at15c, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, C_o, C_s, C_m, C_at15)
+	
+	D_at3c, xx1, xx2, xx3  = rc.de_embed(o_a, s_a, m_a, D_o, D_s, D_m, D_at3)
+	D_at6c, xx1, xx2, xx3  = rc.de_embed(o_a, s_a, m_a, D_o, D_s, D_m, D_at6)
+	D_at10c, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, D_o, D_s, D_m, D_at10)
+	D_at15c, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, D_o, D_s, D_m, D_at15)
+
+
+
+	# Plot
+	
+	plt.figure(1)
+	
+	plt.subplot(4,2,1)
+	plt.plot(f/1e6, 20*np.log10(np.abs(A_at3c)),'b')
+	plt.plot(f/1e6, 20*np.log10(np.abs(C_at3c)),'b--')
+	plt.plot(f/1e6, 20*np.log10(np.abs(B_at3c)),'r')
+	plt.plot(f/1e6, 20*np.log10(np.abs(D_at3c)),'r--')		
+	plt.ylabel('3-dB Attn [dB]')
+	plt.title('MAGNITUDE')
+
+
+	plt.subplot(4,2,2)
+	plt.plot(f/1e6, (180/np.pi)*np.unwrap(np.angle(C_at3c)) - (180/np.pi)*np.unwrap(np.angle(A_at3c)), 'b--')
+	plt.plot(f/1e6, (180/np.pi)*np.unwrap(np.angle(D_at3c)) - (180/np.pi)*np.unwrap(np.angle(B_at3c)), 'r--')
+	plt.ylabel('3-dB Attn [degrees]')
+	plt.title(r'$\Delta$ PHASE')
+
+
+
+
+
+	plt.subplot(4,2,3)
+	plt.plot(f/1e6, 20*np.log10(np.abs(A_at6c)),'b')
+	plt.plot(f/1e6, 20*np.log10(np.abs(C_at6c)),'b--')
+	plt.plot(f/1e6, 20*np.log10(np.abs(B_at6c)),'r')
+	plt.plot(f/1e6, 20*np.log10(np.abs(D_at6c)),'r--')
+	plt.ylabel('6-dB Attn [dB]')
+
+
+
+
+	plt.subplot(4,2,4)
+	plt.plot(f/1e6, (180/np.pi)*np.unwrap(np.angle(C_at6c)) - (180/np.pi)*np.unwrap(np.angle(A_at6c)), 'b--')
+	plt.plot(f/1e6, (180/np.pi)*np.unwrap(np.angle(D_at6c)) - (180/np.pi)*np.unwrap(np.angle(B_at6c)), 'r--')
+	plt.ylabel('6-dB Attn [degrees]')
+
+
+
+	plt.subplot(4,2,5)
+	plt.plot(f/1e6, 20*np.log10(np.abs(A_at10c)),'b')
+	plt.plot(f/1e6, 20*np.log10(np.abs(C_at10c)),'b--')
+	plt.plot(f/1e6, 20*np.log10(np.abs(B_at10c)),'r')
+	plt.plot(f/1e6, 20*np.log10(np.abs(D_at10c)),'r--')
+	plt.ylabel('10-dB Attn [dB]')
+
+	plt.subplot(4,2,6)
+	plt.plot(f/1e6, (180/np.pi)*np.unwrap(np.angle(C_at10c)) - (180/np.pi)*np.unwrap(np.angle(A_at10c)), 'b--')
+	plt.plot(f/1e6, (180/np.pi)*np.unwrap(np.angle(D_at10c)) - (180/np.pi)*np.unwrap(np.angle(B_at10c)), 'r--')
+	plt.ylabel('10-dB Attn [degrees]')
+	
+	
+
+	plt.subplot(4,2,7)
+	plt.plot(f/1e6, 20*np.log10(np.abs(A_at15c)),'b')
+	plt.plot(f/1e6, 20*np.log10(np.abs(C_at15c)),'b--')
+	plt.plot(f/1e6, 20*np.log10(np.abs(B_at15c)),'r')
+	plt.plot(f/1e6, 20*np.log10(np.abs(D_at15c)),'r--')
+	plt.xlabel('frequency [MHz]')
+	plt.ylabel('15-dB Attn [dB]')
+	plt.legend(['Male E5061A', 'Male N9923A', 'Female E5061A', 'Female N9923A'])
+
+	plt.subplot(4,2,8)
+	plt.plot(f/1e6, (180/np.pi)*np.unwrap(np.angle(C_at15c)) - (180/np.pi)*np.unwrap(np.angle(A_at15c)), 'b--')
+	plt.plot(f/1e6, (180/np.pi)*np.unwrap(np.angle(D_at15c)) - (180/np.pi)*np.unwrap(np.angle(B_at15c)), 'r--')
+	plt.xlabel('frequency [MHz]')
+	plt.ylabel('15-dB Attn [degrees]')
+
+	return 0 #f, at3_K, at6_K, at10_K, at15_K, at3_Kc, at6_Kc, at10_Kc, at15_Kc, at3_R, at6_R, at10_R, at15_R, at3_Rc, at6_Rc, at10_Rc, at15_Rc
+
+
+
+
+
+
+
+
+
+
 
 
 

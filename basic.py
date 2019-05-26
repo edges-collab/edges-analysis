@@ -10,6 +10,8 @@ import datetime as dt
 import astropy.time as apt
 import ephem as eph
 
+import basic as ba
+import rfi as rfi
 
 
 
@@ -923,7 +925,7 @@ def temperature_thermistor_omega_ON_930_44006(R, unit):
 
 
 
-def average_calibration_spectrum(spectrum_files, thermistor_model, resistance_file, start_percent=0, plot='no'):
+def average_calibration_spectrum(spectrum_files, RFI_cleaning, FLOW, FHIGH, thermistor_model, resistance_file, start_percent=0, plot='no'):
 	"""
 	Last modification: May 24, 2015.
 
@@ -961,8 +963,119 @@ def average_calibration_spectrum(spectrum_files, thermistor_model, resistance_fi
 			ta = np.concatenate((ta, tai), axis=0)
 
 	index_start_spectra = int((start_percent/100)*len(ta[:,0]))
-	ta_sel = ta[index_start_spectra::,:]
-	av_ta = np.mean(ta_sel, axis=0)
+	ta_sel0 = ta[index_start_spectra::,:]
+	   
+	
+	
+	# Selecting data in desired frequency range
+	# -----------------------------------------
+	fx, x1, x2 = ba.frequency_edges(1,2)
+	f          = fx[(fx>=FLOW) & (fx<=FHIGH)] # 45 MHz -- 195 MHz
+	ta_sel1    = ta_sel0[:,(fx>=FLOW) & (fx<=FHIGH)]
+	
+	
+	
+	# total power filter
+	# ------------------
+	tp = np.sum(ta_sel1, axis=1)
+	W  = np.ones(len(tp))
+	IN = np.arange(len(tp))
+	
+	Nsigma_tp = 3
+	bad_old   = -1
+	bad       =  0		
+	iteration =  0
+	
+	
+
+	while (bad > bad_old):
+
+		iteration = iteration + 1
+		print('Iteration: ' + str(iteration))
+			
+		std = np.std(tp[W>0])
+		ave = np.mean(tp[W>0])
+		res = tp-ave	
+
+		IN_bad    = IN[(np.abs(res) > Nsigma_tp*std)]
+		W[IN_bad] = 0
+		
+		bad_old = np.copy(bad)
+		bad     = len(IN_bad)
+
+		print('STD: ' + str(np.round(std,3)) + ' K')
+		print('Number of bad points excised: ' + str(bad))
+		print(IN_bad)
+
+
+
+	# indices of good data points
+	# ---------------------------
+	IN_good = np.setdiff1d(IN, IN_bad)
+
+
+
+	# selecting data with normal total power
+	# --------------------------------------
+	ta_sel2 = ta_sel1[IN_good,:]
+
+
+
+	
+	
+	
+	# RFI filter
+	# ----------
+
+	if RFI_cleaning == 'yes':
+		ta_sel3 = np.zeros((len(IN_good), len(f)))
+		ww      = np.zeros((len(IN_good), len(f)))
+		
+		Nsigma_RFI = 2.5
+		
+		print('RFI cleaning')
+		print('---------------------------------')
+		for i in range(len(IN_good)):  # range(2): #
+			
+			print('RFI trace: ' + str(i+1) + ' of ' + str(len(IN_good)))
+			ti1, wi1  = rfi.cleaning_sweep(f, ta_sel2[i,:], np.ones(len(f)), window_width_MHz=4, Npolyterms_block=4, N_choice=20, N_sigma=Nsigma_RFI)
+	
+			flip_ti2, flip_wi2  = rfi.cleaning_sweep(f, np.flip(ta_sel2[i,:]), np.ones(len(f)), window_width_MHz=4, Npolyterms_block=4, N_choice=20, N_sigma=Nsigma_RFI)
+			ti2 = np.flip(flip_ti2)
+			wi2 = np.flip(flip_wi2)
+	
+			ind      = np.arange(len(f))
+			ind_bad  = np.union1d(ind[wi1==0], ind[wi2==0])
+	
+			ti3          = ta_sel2[i,:]
+			ti3[ind_bad] = 0
+	
+			wi3          = np.ones(len(f))
+			wi3[ind_bad] = 0
+	
+	
+			ta_sel3[i,:] = ti3
+			ww[i,:]      = wi3
+
+	
+	elif RFI_cleaning == 'no':
+		ta_sel3 = np.copy(ta_sel2)
+		ww      = np.ones((len(IN_good), len(f)))
+
+
+
+	
+	
+	#av_ta = np.mean(ta_sel2, axis=0)
+	avt, avw = spectral_averaging(ta_sel3, ww)
+
+
+
+
+
+
+
+
 
 
 
@@ -1002,7 +1115,7 @@ def average_calibration_spectrum(spectrum_files, thermistor_model, resistance_fi
 		plt.ylim([min(ta[:,30000])-5, max(ta[:,30000])+5])
 
 		plt.subplot(2,2,2)
-		plt.plot(ta_sel[:,30000],'r')
+		plt.plot(ta_sel0[:,30000],'r')
 		plt.ylim([min(ta[:,30000])-5, max(ta[:,30000])+5])
 
 		plt.subplot(2,2,3)
@@ -1017,7 +1130,7 @@ def average_calibration_spectrum(spectrum_files, thermistor_model, resistance_fi
 		plt.xlabel('sample')
 		plt.ylim([min(temp)-5, max(temp)+5])
 
-	return av_ta, av_temp
+	return f, avt, avw, av_temp    #, ta_sel2
 
 
 

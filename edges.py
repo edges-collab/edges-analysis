@@ -537,19 +537,33 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 				print('Receiver calibration FILE 8')
 				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal_50-150MHz_no_rfi/calibration_files/calibration_file_receiver1_cterms8_wterms8_50-150MHz_no_rfi.txt'
 
-				
+
+
+
+			# Calibration results from May 24th, on
+
+			if receiver_cal_file == 20:
+				print('Receiver calibration FILE 20')
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal_cleaned_60_90MHz/calibration_files/calibration_file_receiver1_cterms5_wterms5.txt'			
 			
-			#elif receiver_cal_file == 1:
-				#print('Receiver calibration FILE X')
-				##rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/using_50.12ohms/calibration_files/calibration_file_receiver1_using_50.12ohms_50-86MHz_cfit6_wfit6.txt'
-				##rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/using_50.12ohms/calibration_files/calibration_file_receiver1_using_50.12ohms_50-86MHz_cfit7_wfit7.txt'
-				##rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/using_50.12ohms/calibration_files/calibration_file_receiver1_using_50.12ohms_50-120MHz_cfit11_wfit11.txt'
-				#rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/using_50.12ohms/calibration_files/calibration_file_receiver1_using_50.12ohms_50-180MHz_cfit15_wfit15.txt'
 			
-			#elif receiver_cal_file == 2:
-				#print('Receiver calibration FILE X2')
-				#rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_mid_band_cfit10_wfit14.txt'
-				
+			if receiver_cal_file == 21:
+				print('Receiver calibration FILE 21')
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal_cleaned_60_90MHz/calibration_files/calibration_file_receiver1_cterms7_wterms4.txt'
+
+
+
+
+
+			if receiver_cal_file == 30:
+				print('Receiver calibration FILE 30')
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal_cleaned_60_120MHz/calibration_files/calibration_file_receiver1_cterms7_wterms6.txt'			
+			
+			
+	
+
+
+
 
 		
 		
