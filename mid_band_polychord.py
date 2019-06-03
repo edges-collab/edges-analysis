@@ -51,8 +51,8 @@ case        =  5
 FLOW        =  60
 FHIGH       = 120
 
-FLOW_gap  = 0  # nominal value: 0 
-FHIGH_gap = 0  # nominal_value: 0
+gap_FLOW  = 0  # nominal value: 0 
+gap_FHIGH = 0  # nominal_value: 0
 
 
 v0          = 100
@@ -71,7 +71,7 @@ if data == 'simulated':
 
 
 elif data == 'real':
-	v, t, w, sigma, inv_sigma, det_sigma = dm.real_data(case, FLOW, FHIGH, FLOW_gap=FLOW_gap, FHIGH_gap=FHIGH_gap)
+	v, t, w, sigma, inv_sigma, det_sigma = dm.real_data(case, FLOW, FHIGH, gap_FLOW=gap_FLOW, gap_FHIGH_=gap_FHIGH)
 	
 
 

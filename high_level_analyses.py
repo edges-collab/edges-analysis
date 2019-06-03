@@ -1194,6 +1194,171 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
 		FLOW  = 55
 		FHIGH = 120
 		Nfg   = 5
+		
+		
+		
+		
+	# ----------------------------------------------------------------------------------------------------
+	# Same data as case=2 (nominal), but after RFI cleaning of the integrated spectra
+	if case == 21:
+		flag_folder       = 'case21'
+		
+		receiver_cal_file = 21   # cterms=7, wterms=7 terms over 50-150 MHz
+		
+		antenna_s11_day   = 147
+		antenna_s11_case  = 3   # taken 2+ minutes after turning on the switch
+		antenna_s11_Nfit  = 13  # 13 terms over 55-120 MHz
+		
+		balun_correction  = 1
+		ground_correction = 1
+		beam_correction   = 1
+		bf_case           = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
+		
+		FLOW  = 55
+		FHIGH = 120
+		Nfg   = 5
+			
+	
+		
+
+	# Same data as case=2 (nominal), but after RFI cleaning of the integrated spectra
+	if case == 22:
+		flag_folder       = 'case22'
+		
+		receiver_cal_file = 22   # cterms=7, wterms=8 terms over 50-150 MHz
+		
+		antenna_s11_day   = 147
+		antenna_s11_case  = 3   # taken 2+ minutes after turning on the switch
+		antenna_s11_Nfit  = 13  # 13 terms over 55-120 MHz
+		
+		balun_correction  = 1
+		ground_correction = 1
+		beam_correction   = 1
+		bf_case           = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
+		
+		FLOW  = 55
+		FHIGH = 120
+		Nfg   = 5	
+
+
+
+	# Same data as case=2 (nominal), but after RFI cleaning of the integrated spectra
+	if case == 23:
+		flag_folder       = 'case23'
+		
+		receiver_cal_file = 23   # cterms=7, wterms=9 terms over 50-150 MHz
+		
+		antenna_s11_day   = 147
+		antenna_s11_case  = 3   # taken 2+ minutes after turning on the switch
+		antenna_s11_Nfit  = 13  # 13 terms over 55-120 MHz
+		
+		balun_correction  = 1
+		ground_correction = 1
+		beam_correction   = 1
+		bf_case           = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
+		
+		FLOW  = 55
+		FHIGH = 120
+		Nfg   = 5
+		
+		
+		
+	# Same data as case=2 (nominal), but after RFI cleaning of the integrated spectra
+	if case == 24:
+		flag_folder       = 'case24'
+		
+		receiver_cal_file = 24   # cterms=7, wterms=10 terms over 50-150 MHz
+		
+		antenna_s11_day   = 147
+		antenna_s11_case  = 3   # taken 2+ minutes after turning on the switch
+		antenna_s11_Nfit  = 13  # 13 terms over 55-120 MHz
+		
+		balun_correction  = 1
+		ground_correction = 1
+		beam_correction   = 1
+		bf_case           = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
+		
+		FLOW  = 55
+		FHIGH = 120
+		Nfg   = 5		
+
+
+
+	# Same data as case=2 (nominal), but after RFI cleaning of the integrated spectra
+	if case == 25:
+		flag_folder       = 'case25'
+		
+		receiver_cal_file = 25   # cterms=8, wterms=8 terms over 50-150 MHz
+		
+		antenna_s11_day   = 147
+		antenna_s11_case  = 3   # taken 2+ minutes after turning on the switch
+		antenna_s11_Nfit  = 13  # 13 terms over 55-120 MHz
+		
+		balun_correction  = 1
+		ground_correction = 1
+		beam_correction   = 1
+		bf_case           = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
+		
+		FLOW  = 55
+		FHIGH = 120
+		Nfg   = 5
+
+
+
+	# Same data as case=2 (nominal), but after RFI cleaning of the integrated spectra
+	if case == 26:
+		flag_folder       = 'case26'
+		
+		receiver_cal_file = 26   # cterms=8, wterms=11 terms over 50-150 MHz
+		
+		antenna_s11_day   = 147
+		antenna_s11_case  = 3   # taken 2+ minutes after turning on the switch
+		antenna_s11_Nfit  = 13  # 13 terms over 55-120 MHz
+		
+		balun_correction  = 1
+		ground_correction = 1
+		beam_correction   = 1
+		bf_case           = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
+		
+		FLOW  = 55
+		FHIGH = 120
+		Nfg   = 5
+		
+
+
+	# Same data as case=2 (nominal), but after RFI cleaning of the integrated spectra
+	if case == 40:
+		flag_folder       = 'case40'
+		
+		receiver_cal_file = 40   # cterms=4, wterms=6 terms over 60-85 MHz
+		
+		antenna_s11_day   = 147
+		antenna_s11_case  = 3   # taken 2+ minutes after turning on the switch
+		antenna_s11_Nfit  = 11  # 11 terms over 60-85 MHz
+		
+		balun_correction  = 1
+		ground_correction = 1
+		beam_correction   = 1
+		bf_case           = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
+		
+		FLOW  = 60
+		FHIGH = 85
+		Nfg   = 3
+		
+
+
+
+
+	# -------------------------------------------------------------------------------------------------------------
+
+
+
+
+
+
+
+	
+		
 
 
 	if case == 3:
@@ -1287,11 +1452,55 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
 	if case == 30:
 		flag_folder       = 'case30'
 		
-		receiver_cal_file = 30   # cterms=7, wterms=7 terms over 50-150 MHz
+		receiver_cal_file = 30   # cterms=7, wterms=6 terms over 60-120 MHz
 		
 		antenna_s11_day   = 147
 		antenna_s11_case  = 3   # taken 2+ minutes after turning on the switch
-		antenna_s11_Nfit  = 13  # 13 terms over 55-120 MHz
+		antenna_s11_Nfit  = 13  # 13 terms over 60-120 MHz
+		
+		balun_correction  = 1
+		ground_correction = 1
+		beam_correction   = 1
+		bf_case           = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
+		
+		FLOW  = 60
+		FHIGH = 120
+		Nfg   = 5
+
+
+
+
+	# RFI cleaned lab data, 60-120 MHz
+	if case == 31:
+		flag_folder       = 'case31'
+		
+		receiver_cal_file = 31   # cterms=7, wterms=8 terms over 60-120 MHz
+		
+		antenna_s11_day   = 147
+		antenna_s11_case  = 3   # taken 2+ minutes after turning on the switch
+		antenna_s11_Nfit  = 13  # 13 terms over 60-120 MHz
+		
+		balun_correction  = 1
+		ground_correction = 1
+		beam_correction   = 1
+		bf_case           = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
+		
+		FLOW  = 60
+		FHIGH = 120
+		Nfg   = 5
+
+
+
+
+	# RFI cleaned lab data, 60-120 MHz
+	if case == 32:
+		flag_folder       = 'case32'
+		
+		receiver_cal_file = 32   # cterms=7, wterms=9 terms over 60-120 MHz
+		
+		antenna_s11_day   = 147
+		antenna_s11_case  = 3   # taken 2+ minutes after turning on the switch
+		antenna_s11_Nfit  = 13  # 13 terms over 60-120 MHz
 		
 		balun_correction  = 1
 		ground_correction = 1
@@ -1308,7 +1517,173 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
 
 
 
+	# RFI cleaned lab data, 60-120 MHz
+	if case == 33:
+		flag_folder       = 'case33'
+		
+		receiver_cal_file = 33   # cterms=6, wterms=4 terms over 60-120 MHz
+		
+		antenna_s11_day   = 147
+		antenna_s11_case  = 3   # taken 2+ minutes after turning on the switch
+		antenna_s11_Nfit  = 13  # 13 terms over 60-120 MHz
+		
+		balun_correction  = 1
+		ground_correction = 1
+		beam_correction   = 1
+		bf_case           = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
+		
+		FLOW  = 60
+		FHIGH = 120
+		Nfg   = 5
+
+
+
+
+
+
+	# RFI cleaned lab data, 60-120 MHz
+	if case == 34:
+		flag_folder       = 'case34'
+		
+		receiver_cal_file = 34   # cterms=6, wterms=8 terms over 60-120 MHz
+		
+		antenna_s11_day   = 147
+		antenna_s11_case  = 3   # taken 2+ minutes after turning on the switch
+		antenna_s11_Nfit  = 13  # 13 terms over 60-120 MHz
+		
+		balun_correction  = 1
+		ground_correction = 1
+		beam_correction   = 1
+		bf_case           = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
+		
+		FLOW  = 60
+		FHIGH = 120
+		Nfg   = 5
+
+
+
+
+	# RFI cleaned lab data, 60-120 MHz
+	if case == 35:
+		flag_folder       = 'case35'
+		
+		receiver_cal_file = 35   # cterms=6, wterms=9 terms over 60-120 MHz
+		
+		antenna_s11_day   = 147
+		antenna_s11_case  = 3   # taken 2+ minutes after turning on the switch
+		antenna_s11_Nfit  = 13  # 13 terms over 60-120 MHz
+		
+		balun_correction  = 1
+		ground_correction = 1
+		beam_correction   = 1
+		bf_case           = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
+		
+		FLOW  = 60
+		FHIGH = 120
+		Nfg   = 5
+
+
+
+
+
+
+	# RFI cleaned lab data, 60-120 MHz
+	if case == 36:
+		flag_folder       = 'case36'
+		
+		receiver_cal_file = 35   # cterms=6, wterms=9 terms over 60-120 MHz
+		
+		antenna_s11_day   = 147
+		antenna_s11_case  = 3   # taken 2+ minutes after turning on the switch
+		antenna_s11_Nfit  = 12  # 12 terms over 60-120 MHz
+		
+		balun_correction  = 1
+		ground_correction = 1
+		beam_correction   = 1
+		bf_case           = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
+		
+		FLOW  = 60
+		FHIGH = 120
+		Nfg   = 5
+
+
+
+	# RFI cleaned lab data, 60-120 MHz
+	if case == 37:
+		flag_folder       = 'case37'
+		
+		receiver_cal_file = 35   # cterms=6, wterms=9 terms over 60-120 MHz
+		
+		antenna_s11_day   = 147
+		antenna_s11_case  = 3   # taken 2+ minutes after turning on the switch
+		antenna_s11_Nfit  = 11  # 12 terms over 60-120 MHz
+		
+		balun_correction  = 1
+		ground_correction = 1
+		beam_correction   = 1
+		bf_case           = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
+		
+		FLOW  = 60
+		FHIGH = 120
+		Nfg   = 5
+
+
+
+
+	# RFI cleaned lab data, 60-120 MHz
+	if case == 38:
+		flag_folder       = 'case38'
+		
+		receiver_cal_file = 35   # cterms=6, wterms=9 terms over 60-120 MHz
+		
+		antenna_s11_day   = 147
+		antenna_s11_case  = 3   # taken 2+ minutes after turning on the switch
+		antenna_s11_Nfit  = 10  # 12 terms over 60-120 MHz
+		
+		balun_correction  = 1
+		ground_correction = 1
+		beam_correction   = 1
+		bf_case           = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
+		
+		FLOW  = 60
+		FHIGH = 120
+		Nfg   = 5
+
+
+
+
+
 	
+	# RFI cleaned lab data, 60-120 MHz
+	if case == 39:
+		flag_folder       = 'case39'
+		
+		receiver_cal_file = 39   # cterms=5, wterms=9 terms over 60-120 MHz
+		
+		antenna_s11_day   = 147
+		antenna_s11_case  = 3   # taken 2+ minutes after turning on the switch
+		antenna_s11_Nfit  = 11  # 12 terms over 60-120 MHz
+		
+		balun_correction  = 1
+		ground_correction = 1
+		beam_correction   = 1
+		bf_case           = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
+		
+		FLOW  = 60
+		FHIGH = 120
+		Nfg   = 5
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 	# Listing files to be processed

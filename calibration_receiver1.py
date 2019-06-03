@@ -2595,17 +2595,19 @@ def calibration_file_computation(calibration_date, folder, FMIN, FMAX, cterms_no
 	
 	
 	# Location of saved results
-	path_save = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/' + calibration_date + '/results/' + folder + '/calibration_files/'
+	path_save = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/' + calibration_date + '/results/' + folder + '/calibration_files/60_85MHz/'
 	
 	
 		
 	# Spectra
+	TuncV = np.genfromtxt(edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/' + calibration_date +  '/results/' + folder + '/data/average_spectra_300_350.txt')
+		
+		
+	# Frequency selection
+	Tunc = TuncV[(TuncV[:,0]>=FMIN) & (TuncV[:,0]<=FMAX),:]
+		
+		
 	if (calibration_date == '2018_01_25C') and ((folder == 'nominal_cleaned_60_120MHz') or (folder == 'nominal_cleaned_60_90MHz')):
-		TuncV = np.genfromtxt(edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/' + calibration_date +  '/results/' + folder + '/data/average_spectra_300_350.txt')
-		
-		
-		# Frequency selection
-		Tunc = TuncV[(TuncV[:,0]>=FMIN) & (TuncV[:,0]<=FMAX),:]
 		
 		
 		# Taking the original data
@@ -2628,123 +2630,150 @@ def calibration_file_computation(calibration_date, folder, FMIN, FMAX, cterms_no
 		
 		WW_all = np.zeros(len(ff))
 		
-				
-				
+	
+	else:	
+		
+		# Taking the original data
+		ff    = Tunc[:,0]		
+		TTae  = Tunc[:,1]
+		TThe  = Tunc[:,2]
+		TToe  = Tunc[:,3]
+		TTse  = Tunc[:,4]
+		TTqe  = Tunc[:,5]
+		
+		
+		WWae  = np.ones(len(ff))
+		WWhe  = np.ones(len(ff))
+		WWoe  = np.ones(len(ff))
+		WWse  = np.ones(len(ff))
+		WWqe  = np.ones(len(ff))
+		
+		WW_all = np.zeros(len(ff))
+		
+		
+		
+		
+		
+		
 					
-		# Now, RFI cleaning
-		N_sigma = 3.0
-		
-		ind       = np.arange(len(ff))
-		
-		print('hola1')
-		tax1, wax1     = rfi.cleaning_sweep(ff, TTae, WWae, window_width_MHz=4, Npolyterms_block=4, N_choice=20, N_sigma=N_sigma)
-		flip1, flip2   = rfi.cleaning_sweep(ff, np.flip(TTae), np.flip(WWae), window_width_MHz=4, Npolyterms_block=4, N_choice=20, N_sigma=N_sigma)
-		tax2           = np.flip(flip1)
-		wax2           = np.flip(flip2)
+	# Now, RFI cleaning
+	N_sigma = 3.3
 	
-		iax = np.union1d(ind[wax1==0], ind[wax2==0])	
+	ind       = np.arange(len(ff))
+	
+	print('hola1')
+	tax1, wax1     = rfi.cleaning_sweep(ff, TTae, WWae, window_width_MHz=4, Npolyterms_block=4, N_choice=20, N_sigma=N_sigma)
+	flip1, flip2   = rfi.cleaning_sweep(ff, np.flip(TTae), np.flip(WWae), window_width_MHz=4, Npolyterms_block=4, N_choice=20, N_sigma=N_sigma)
+	tax2           = np.flip(flip1)
+	wax2           = np.flip(flip2)
+
+	iax = np.union1d(ind[wax1==0], ind[wax2==0])	
+
+
 	
 	
-		
-		
-		print('hola2')
-		thx1, whx1     = rfi.cleaning_sweep(ff, TThe, WWhe, window_width_MHz=4, Npolyterms_block=4, N_choice=20, N_sigma=N_sigma)
-		flip1, flip2   = rfi.cleaning_sweep(ff, np.flip(TThe), np.flip(WWhe), window_width_MHz=4, Npolyterms_block=4, N_choice=20, N_sigma=N_sigma)
-		thx2           = np.flip(flip1)
-		whx2           = np.flip(flip2)
+	print('hola2')
+	thx1, whx1     = rfi.cleaning_sweep(ff, TThe, WWhe, window_width_MHz=4, Npolyterms_block=4, N_choice=20, N_sigma=N_sigma)
+	flip1, flip2   = rfi.cleaning_sweep(ff, np.flip(TThe), np.flip(WWhe), window_width_MHz=4, Npolyterms_block=4, N_choice=20, N_sigma=N_sigma)
+	thx2           = np.flip(flip1)
+	whx2           = np.flip(flip2)
+
+	ihx = np.union1d(ind[whx1==0], ind[whx2==0])		
 	
-		ihx = np.union1d(ind[whx1==0], ind[whx2==0])		
-		
-		
-		
-		
-		print('hola3')
-		tox1, wox1     = rfi.cleaning_sweep(ff, TToe, WWoe, window_width_MHz=4, Npolyterms_block=4, N_choice=20, N_sigma=N_sigma)
-		flip1, flip2   = rfi.cleaning_sweep(ff, np.flip(TToe), np.flip(WWoe), window_width_MHz=4, Npolyterms_block=4, N_choice=20, N_sigma=N_sigma)
-		tox2           = np.flip(flip1)
-		wox2           = np.flip(flip2)
 	
-		iox = np.union1d(ind[wox1==0], ind[wox2==0])		
+	
+	
+	print('hola3')
+	tox1, wox1     = rfi.cleaning_sweep(ff, TToe, WWoe, window_width_MHz=4, Npolyterms_block=4, N_choice=20, N_sigma=N_sigma)
+	flip1, flip2   = rfi.cleaning_sweep(ff, np.flip(TToe), np.flip(WWoe), window_width_MHz=4, Npolyterms_block=4, N_choice=20, N_sigma=N_sigma)
+	tox2           = np.flip(flip1)
+	wox2           = np.flip(flip2)
+
+	iox = np.union1d(ind[wox1==0], ind[wox2==0])		
+	
 		
+	
+	
+	print('hola4')
+	tsx1, wsx1     = rfi.cleaning_sweep(ff, TTse, WWse, window_width_MHz=4, Npolyterms_block=4, N_choice=20, N_sigma=N_sigma)
+	flip1, flip2   = rfi.cleaning_sweep(ff, np.flip(TTse), np.flip(WWse), window_width_MHz=4, Npolyterms_block=4, N_choice=20, N_sigma=N_sigma)
+	tsx2           = np.flip(flip1)
+	wsx2           = np.flip(flip2)
+
+	isx = np.union1d(ind[wsx1==0], ind[wsx2==0])		
+	
+	
+	
+	print('hola5')
+	tqx1, wqx1     = rfi.cleaning_sweep(ff, TTqe, WWqe, window_width_MHz=4, Npolyterms_block=4, N_choice=20, N_sigma=N_sigma)
+	flip1, flip2   = rfi.cleaning_sweep(ff, np.flip(TTqe), np.flip(WWqe), window_width_MHz=4, Npolyterms_block=4, N_choice=20, N_sigma=N_sigma)
+	tqx2           = np.flip(flip1)
+	wqx2           = np.flip(flip2)
+
+	iqx = np.union1d(ind[wqx1==0], ind[wqx2==0])		
+		
+	
+	
+	
+	
+	XX         = np.union1d(iax, ihx)
+	print(len(XX))
+	
+	XX         = np.union1d(XX, iox)
+	print(len(XX))
+	
+	XX         = np.union1d(XX, isx)
+	print(len(XX))
+	
+	index_bad  = np.union1d(XX, iqx)
+	print(len(index_bad))
+	
+	index_good = np.setdiff1d(ind, index_bad)
+	print(len(index_good))
+	
+	
+	
+	# Removing data points with zero weight. But for the rest, not using the weights because they are pretty even across frequency
+	f     = ff[index_good]
+	Tae   = TTae[index_good]
+	The   = TThe[index_good]
+	Toe   = TToe[index_good]
+	Tse   = TTse[index_good]
+	Tqe   = TTqe[index_good]
+	
+	WW_all[index_good] = 1
+
+
+
+	
+	#else:
+		#TuncV = np.genfromtxt(edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/' + calibration_date +  '/results/' + folder + '/data/average_spectra_300_350.txt')
+		
+		## Frequency selection
+		#Tunc = TuncV[(TuncV[:,0]>=FMIN) & (TuncV[:,0]<=FMAX),:]		
+				
+		#xff    = Tunc[:,0]
+		#xTTae  = Tunc[:,1]
+		#xTThe  = Tunc[:,2]
+		#xTToe  = Tunc[:,3]
+		#xTTse  = Tunc[:,4]
+		#xTTqe  = Tunc[:,5]
+		
+		#ff     = xff[(xff>=FMIN) & (xff<=FMAX)]
+		#TTae   = xTTae[(xff>=FMIN) & (xff<=FMAX)]
+		#TThe   = xTThe[(xff>=FMIN) & (xff<=FMAX)]
+		#TToe   = xTToe[(xff>=FMIN) & (xff<=FMAX)]
+		#TTse   = xTTse[(xff>=FMIN) & (xff<=FMAX)]
+		#TTqe   = xTTqe[(xff>=FMIN) & (xff<=FMAX)]
 			
+		#ff    = np.copy(f)
+		#TTae  = np.copy(Tae)
+		#TThe  = np.copy(The)
+		#TToe  = np.copy(Toe)
+		#TTse  = np.copy(Tse)
+		#TTqe  = np.copy(Tqe)		
 		
-		
-		print('hola4')
-		tsx1, wsx1     = rfi.cleaning_sweep(ff, TTse, WWse, window_width_MHz=4, Npolyterms_block=4, N_choice=20, N_sigma=N_sigma)
-		flip1, flip2   = rfi.cleaning_sweep(ff, np.flip(TTse), np.flip(WWse), window_width_MHz=4, Npolyterms_block=4, N_choice=20, N_sigma=N_sigma)
-		tsx2           = np.flip(flip1)
-		wsx2           = np.flip(flip2)
-	
-		isx = np.union1d(ind[wsx1==0], ind[wsx2==0])		
-		
-		
-		
-		print('hola5')
-		tqx1, wqx1     = rfi.cleaning_sweep(ff, TTqe, WWqe, window_width_MHz=4, Npolyterms_block=4, N_choice=20, N_sigma=N_sigma)
-		flip1, flip2   = rfi.cleaning_sweep(ff, np.flip(TTqe), np.flip(WWqe), window_width_MHz=4, Npolyterms_block=4, N_choice=20, N_sigma=N_sigma)
-		tqx2           = np.flip(flip1)
-		wqx2           = np.flip(flip2)
-	
-		iqx = np.union1d(ind[wqx1==0], ind[wqx2==0])		
-			
-		
-		
-		
-		
-		XX         = np.union1d(iax, ihx)
-		print(len(XX))
-		
-		XX         = np.union1d(XX, iox)
-		print(len(XX))
-		
-		XX         = np.union1d(XX, isx)
-		print(len(XX))
-		
-		index_bad  = np.union1d(XX, iqx)
-		print(len(index_bad))
-		
-		index_good = np.setdiff1d(ind, index_bad)
-		print(len(index_good))
-		
-		
-		
-		# Removing data points with zero weight. But for the rest, not using the weights because they are pretty even across frequency
-		f     = ff[index_good]
-		Tae   = TTae[index_good]
-		The   = TThe[index_good]
-		Toe   = TToe[index_good]
-		Tse   = TTse[index_good]
-		Tqe   = TTqe[index_good]
-		
-		WW_all[index_good] = 1
-	
-	
-	
-	
-	else:
-		Tunc  = np.genfromtxt(edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/' + calibration_date +  '/results/' + folder + '/data/average_spectra_300_350.txt')
-		xff    = Tunc[:,0]
-		xTTae  = Tunc[:,1]
-		xTThe  = Tunc[:,2]
-		xTToe  = Tunc[:,3]
-		xTTse  = Tunc[:,4]
-		xTTqe  = Tunc[:,5]
-		
-		f     = xff[(xff>=FMIN) & (xff<=FMAX)]
-		Tae   = xTTae[(xff>=FMIN) & (xff<=FMAX)]
-		The   = xTThe[(xff>=FMIN) & (xff<=FMAX)]
-		Toe   = xTToe[(xff>=FMIN) & (xff<=FMAX)]
-		Tse   = xTTse[(xff>=FMIN) & (xff<=FMAX)]
-		Tqe   = xTTqe[(xff>=FMIN) & (xff<=FMAX)]
-		
-		ff    = np.copy(f)
-		TTae  = np.copy(Tae)
-		TThe  = np.copy(The)
-		TToe  = np.copy(Toe)
-		TTse  = np.copy(Tse)
-		TTqe  = np.copy(Tqe)		
-		
-		WW_all = np.ones(len(ff))
+		#WW_all = np.ones(len(ff))
 	
 	
 	

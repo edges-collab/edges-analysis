@@ -507,27 +507,27 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 			
 			if receiver_cal_file == 1:
 				print('Receiver calibration FILE 1')
-				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_receiver1_50_150MHz_cterms7_wterms7.txt'
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/original/calibration_file_receiver1_cterms7_wterms7.txt'
 
 			if receiver_cal_file == 2:
 				print('Receiver calibration FILE 2')
-				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_receiver1_50_150MHz_cterms7_wterms8.txt'
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/original/calibration_file_receiver1_cterms7_wterms8.txt'
 
 			if receiver_cal_file == 3:
 				print('Receiver calibration FILE 3')
-				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_receiver1_50_150MHz_cterms7_wterms15.txt'
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/original/calibration_file_receiver1_cterms7_wterms15.txt'
 
 			if receiver_cal_file == 4:
 				print('Receiver calibration FILE 4')
-				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_receiver1_50_150MHz_cterms8_wterms8.txt'
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/original/calibration_file_receiver1_cterms8_wterms8.txt'
 			
 			if receiver_cal_file == 5:
 				print('Receiver calibration FILE 5')
-				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_receiver1_50_150MHz_cterms9_wterms9.txt'
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/original/calibration_file_receiver1_cterms9_wterms9.txt'
 
 			if receiver_cal_file == 6:
 				print('Receiver calibration FILE 6')
-				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_receiver1_50_150MHz_cterms10_wterms10.txt'
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/original/calibration_file_receiver1_cterms10_wterms10.txt'
 
 			if receiver_cal_file == 7:
 				print('Receiver calibration FILE 7')
@@ -541,32 +541,89 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 
 
 			# Calibration results from May 24th, on
-
-			if receiver_cal_file == 20:
-				print('Receiver calibration FILE 20')
-				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal_cleaned_60_90MHz/calibration_files/calibration_file_receiver1_cterms5_wterms5.txt'			
 			
-			
-			if receiver_cal_file == 21:
-				print('Receiver calibration FILE 21')
-				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal_cleaned_60_90MHz/calibration_files/calibration_file_receiver1_cterms7_wterms4.txt'
-
-
-
-
-
 			if receiver_cal_file == 30:
 				print('Receiver calibration FILE 30')
 				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal_cleaned_60_120MHz/calibration_files/calibration_file_receiver1_cterms7_wterms6.txt'			
 			
 			
+			if receiver_cal_file == 31:
+				print('Receiver calibration FILE 31')
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal_cleaned_60_120MHz/calibration_files/calibration_file_receiver1_cterms7_wterms8.txt'		
+
+
+			if receiver_cal_file == 32:
+				print('Receiver calibration FILE 32')
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal_cleaned_60_120MHz/calibration_files/calibration_file_receiver1_cterms7_wterms9.txt'	
+
+
+
+
+			if receiver_cal_file == 33:
+				print('Receiver calibration FILE 33')
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal_cleaned_60_120MHz/calibration_files/calibration_file_receiver1_cterms6_wterms4.txt'	
+
+
+
+			if receiver_cal_file == 34:
+				print('Receiver calibration FILE 34')
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal_cleaned_60_120MHz/calibration_files/calibration_file_receiver1_cterms6_wterms8.txt'	
+
+
+
+			if receiver_cal_file == 35:
+				print('Receiver calibration FILE 35')
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal_cleaned_60_120MHz/calibration_files/calibration_file_receiver1_cterms6_wterms9.txt'	
+
+
+			if receiver_cal_file == 39:
+				print('Receiver calibration FILE 39')
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal_cleaned_60_120MHz/calibration_files/calibration_file_receiver1_cterms5_wterms9.txt'	
+
+
+
+
+
+
+			# Calibration results from June 3rd, on
+			if receiver_cal_file == 21:
+				print('Receiver calibration FILE 21')
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_receiver1_cterms7_wterms7.txt'
+
+			if receiver_cal_file == 22:
+				print('Receiver calibration FILE 22')
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_receiver1_cterms7_wterms8.txt'
+			
+			if receiver_cal_file == 23:
+				print('Receiver calibration FILE 23')
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_receiver1_cterms7_wterms9.txt'
+
+			if receiver_cal_file == 24:
+				print('Receiver calibration FILE 24')
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_receiver1_cterms7_wterms10.txt'
+				
+			if receiver_cal_file == 25:
+				print('Receiver calibration FILE 25')
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_receiver1_cterms8_wterms8.txt'
+
+			if receiver_cal_file == 26:
+				print('Receiver calibration FILE 26')
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_receiver1_cterms8_wterms11.txt'
+
+
+
+
+
+			if receiver_cal_file == 40:
+				print('Receiver calibration FILE 40')
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/60_85MHz/calibration_file_receiver1_60_85MHz_cterms4_wterms6.txt'
+				
+				print('quebecuac')
+
+
+
+
 	
-
-
-
-
-		
-		
 		
 		rcv = np.genfromtxt(rcv_file)
 	
@@ -1042,7 +1099,26 @@ def rms_filter_computation(band, case, save_parameters='no'):
 			path_files  = edges_folder + '/mid_band/spectra/level3/case5/'
 			save_folder = edges_folder + '/mid_band/rms_filters/case5/'
 
-
+		if case == 30:
+			path_files  = edges_folder + '/mid_band/spectra/level3/case30/'
+			save_folder = edges_folder + '/mid_band/rms_filters/case30/'
+			
+		if case == 31:
+			path_files  = edges_folder + '/mid_band/spectra/level3/case31/'
+			save_folder = edges_folder + '/mid_band/rms_filters/case31/'
+			
+		if case == 32:
+			path_files  = edges_folder + '/mid_band/spectra/level3/case32/'
+			save_folder = edges_folder + '/mid_band/rms_filters/case32/'
+			
+			
+			
+			
+			
+		if case == 25:
+			path_files  = edges_folder + '/mid_band/spectra/level3/case25/'
+			save_folder = edges_folder + '/mid_band/rms_filters/case25/'
+		
 
 	
 	if band == 'low_band3':
@@ -1371,6 +1447,27 @@ def rms_filter(band, case, gx, rms, Nsigma):
 
 
 
+
+
+	if (case == 30):
+		file_path = edges_folder + band + '/rms_filters/case30/'
+		
+	if (case == 31):
+		file_path = edges_folder + band + '/rms_filters/case31/'
+
+	if (case == 32):
+		file_path = edges_folder + band + '/rms_filters/case32/'		
+
+
+
+
+	if (case == 25):
+		file_path = edges_folder + band + '/rms_filters/case25/'
+
+
+
+		
+		
 	p    = np.genfromtxt(file_path + 'rms_polynomial_parameters.txt')
 	ps   = np.genfromtxt(file_path + 'rms_std_polynomial_parameters.txt')	
 	
@@ -1587,7 +1684,29 @@ def level3_to_level4(band, case, GHA_edges, sun_el_max, moon_el_max, save_folder
 			
 		elif case == 5:
 			path_files  = edges_folder + 'mid_band/spectra/level3/case5/'	
-		
+			
+			
+			
+				
+		elif case == 30:
+			path_files  = edges_folder + 'mid_band/spectra/level3/case30/'	
+			
+		elif case == 31:
+			path_files  = edges_folder + 'mid_band/spectra/level3/case31/'	
+			
+		elif case == 32:
+			path_files  = edges_folder + 'mid_band/spectra/level3/case32/'
+
+
+
+		elif case == 25:
+			path_files  = edges_folder + 'mid_band/spectra/level3/case25/'
+
+			
+			
+			
+			
+			
 		
 		save_folder            = edges_folder + 'mid_band/spectra/level4/' + save_folder_file_name + '/'
 		output_file_name_hdf5  = save_folder_file_name + '.hdf5'
@@ -2035,7 +2154,9 @@ def daily_nominal_filter(band, filter_case, year_day_list):
 	# 
 	#bad0 = np.array([[2018, 184], [2018, 195], [2018, 204], [2018, 208], ])
 	
-	if (filter_case == 10) or (filter_case == 2) or (filter_case == 4) or (filter_case == 5):
+	if (filter_case == 10) or (filter_case == 2) or (filter_case == 4) or (filter_case == 5) or (filter_case == 30) or (filter_case == 31) or (filter_case == 32) or (filter_case == 25) :
+		#bad0 = np.array([])
+		
 		bad0 = np.array([[2018, 146], [2018, 147], [2018, 148], [2018, 149], [2018, 150], [2018, 151], [2018, 152], [2018, 157], [2018, 159],  [2018, 160], [2018, 161], [2018, 162], [2018, 163], [2018, 165], [2018, 167], [2018, 169], [2018, 170], [2018, 174], [2018, 175], [2018, 176], [2018, 177], [2018, 178], [2018, 179], [2018, 180], [2018, 181], [2018, 182], [2018, 184], [2018, 185], [2018, 187], [2018, 189], [2018, 190], [2018, 193], [2018, 195], [2018, 196], [2018, 197], [2018, 204], [2018, 208], [2018, 209], [2018, 216], [2018, 220]])
 		
 	elif filter_case == 12:
@@ -2327,31 +2448,38 @@ def plot_level4(case, index_GHA, averaged_146, good_bad, model, FLOW, FHIGH, K_p
 def integrated_spectrum_level4(case, index_GHA, FLOW, FHIGH, day_min1, day_max1, day_min2, day_max2):
 	
 	
-	if case == 10:
-		#f, px, rx, wx, index, gha, ydx = level4read(edges_folder + 'mid_band/spectra/level4/case1_sun_below_horizon/case1_sun_below_horizon.hdf5')
-		f, px, rx, wx, index, gha, ydx = level4read(edges_folder + 'mid_band/spectra/level4/case1/case1.hdf5')
-
-	if case == 12:
-		#f, px, rx, wx, index, gha, ydx = level4read(edges_folder + 'mid_band/spectra/level4/case1_sun_below_horizon/case1_sun_below_horizon.hdf5')
-		f, px, rx, wx, index, gha, ydx = level4read(edges_folder + 'mid_band/spectra/level4/case1_1hr_averages/case1_1hr_averages.hdf5')
-
-
-	elif case == 2:
+	if case == 2:
 		f, px, rx, wx, index, gha, ydx = level4read(edges_folder + 'mid_band/spectra/level4/case2/case2.hdf5')
+		save_path     = edges_folder + 'mid_band/spectra/level5/case2/'
+		save_spectrum = 'integrated_spectrum_case2.txt'
+		save_plot     = 'case2.png'
+
+	if case == 26:
+		f, px, rx, wx, index, gha, ydx = level4read(edges_folder + 'mid_band/spectra/level4/case26/case26.hdf5')
+		save_path     = edges_folder + 'mid_band/spectra/level5/case26/'
+		save_spectrum = 'integrated_spectrum_case26.txt'
+		save_plot     = 'case26.png'
+				
+	if case == 40:
+		f, px, rx, wx, index, gha, ydx = level4read(edges_folder + 'mid_band/spectra/level4/case40/case40.hdf5')
+		save_path     = edges_folder + 'mid_band/spectra/level5/case40/'
+		save_spectrum = 'integrated_spectrum_case40.txt'
+		save_plot     = 'case40.png'
 
 
-	if case == 4:
-		#f, px, rx, wx, index, gha, ydx = level4read(edges_folder + 'mid_band/spectra/level4/case1_sun_below_horizon/case1_sun_below_horizon.hdf5')
-		f, px, rx, wx, index, gha, ydx = level4read(edges_folder + 'mid_band/spectra/level4/case4/case4.hdf5')
-
-
-	if case == 5:
-		#f, px, rx, wx, index, gha, ydx = level4read(edges_folder + 'mid_band/spectra/level4/case1_sun_below_horizon/case1_sun_below_horizon.hdf5')
-		f, px, rx, wx, index, gha, ydx = level4read(edges_folder + 'mid_band/spectra/level4/case5/case5.hdf5')
-
-
-
-
+	if not exists(save_path):
+		makedirs(save_path)
+		
+		
+		
+	
+	
+	
+	
+		
+	# Producing integrated spectrum
+	# ------------------------------------------------
+	
 	
 	keep_index = daily_nominal_filter('mid_band', case, ydx)
 	#keep_index = daily_strict_filter('mid_band', ydx)
@@ -2401,10 +2529,8 @@ def integrated_spectrum_level4(case, index_GHA, FLOW, FHIGH, day_min1, day_max1,
 	outT = np.array([fb, tb, wb])
 	out  = outT.T
 
-
-	np.savetxt('/home/raul/Desktop/integrated_spectrum.txt', out)
-
-
+	# Saving spectrum
+	np.savetxt(save_path + save_spectrum, out)
 
 
 
@@ -2413,6 +2539,9 @@ def integrated_spectrum_level4(case, index_GHA, FLOW, FHIGH, day_min1, day_max1,
 
 
 
+
+	# Producing plot
+	# ----------------------------------------
 
 	
 	ft = f[(f>=FLOW) & (f<=FHIGH)]
@@ -2534,7 +2663,7 @@ def integrated_spectrum_level4(case, index_GHA, FLOW, FHIGH, day_min1, day_max1,
 	plt.grid()
 				
 			
-	plt.savefig('/home/raul/Desktop/Xcuec88.png', bbox_inches='tight')
+	plt.savefig(save_path + save_plot, bbox_inches='tight')
 	plt.close()
 	plt.close()	
 

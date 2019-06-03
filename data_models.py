@@ -11,6 +11,132 @@ print('EDGES Folder: ' + edges_folder)
 
 
 
+
+
+def simulated_data(theta, v, vr, noise_std_at_vr, model_type_signal='exp', model_type_foreground='exp', N21par=4, NFGpar=5):
+
+	#v          = np.arange(50, 101, 1)
+	#T75        = 1500
+	#beta       = -2.5
+	#std_dev_vec  = 2*np.ones(len(v))   # frequency dependent or independent
+	#std_dev = 1
+	#noise   = np.random.normal(0, std_dev, size=len(v))
+
+
+	std_dev_vec   = noise_std_at_vr * (v/vr)**(-2.5)
+	#std_dev_vec   = noise_std_at_vr*np.ones(len(v))
+
+
+	sigma         = np.diag(std_dev_vec**2)     # uncertainty covariance matrix
+	inv_sigma     = np.linalg.inv(sigma)
+	det_sigma     = np.linalg.det(sigma)
+
+	noise         = np.random.multivariate_normal(np.zeros(len(v)), sigma)
+
+
+
+	d_no_noise    = full_model(theta, v, vr, model_type_signal=model_type_signal, model_type_foreground=model_type_foreground, N21par=N21par, NFGpar=NFGpar)
+	d             = d_no_noise + noise
+
+	N             = len(v)
+
+
+	return d, sigma, inv_sigma, det_sigma
+
+
+
+
+
+
+
+
+
+
+def real_data(case, FLOW, FHIGH, gap_FLOW=0, gap_FHIGH=0):
+	
+	
+	#if case == 10:
+		#dd = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/integrated_spectrum_case1_nominal.txt')
+		
+	if case == 2:
+		dd = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/integrated_spectrum_case1_nominal_cterms7_wterms8.txt')
+		
+	#if case == 5:
+		#dd = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/integrated_spectrum_case5_cterms8_wterms8_no_rfi.txt')
+		
+		
+	vv = dd[:,0]
+	tt = dd[:,1]
+	ww = dd[:,2]
+	
+	v0 = 100
+	A  = 12
+	
+	ss = A*(1/np.sqrt(ww))*(vv/v0)**(-2.5)
+		
+			
+	vp = vv[(vv>=FLOW) & (vv<=FHIGH)]
+	tp = tt[(vv>=FLOW) & (vv<=FHIGH)]
+	wp = ww[(vv>=FLOW) & (vv<=FHIGH)]
+	sp = ss[(vv>=FLOW) & (vv<=FHIGH)]
+
+
+	# Possibility of removing from analysis the data range between FLOW_gap and FHIGH_gap
+	if (gap_FLOW > 0) and (gap_FHIGH > 0):
+		vx = np.copy(vp)
+		tx = np.copy(tp)
+		wx = np.copy(wp)
+		sx = np.copy(sp)
+		
+		vp = vx[(vx<=gap_FLOW) | (vx>=gap_FHIGH)]
+		tp = tx[(vx<=gap_FLOW) | (vx>=gap_FHIGH)]
+		wp = wx[(vx<=gap_FLOW) | (vx>=gap_FHIGH)]
+		sp = sx[(vx<=gap_FLOW) | (vx>=gap_FHIGH)]
+
+
+
+
+	v = vp[wp>0]
+	t = tp[wp>0]
+	w = wp[wp>0]
+	std_dev_vec = sp[wp>0]
+
+
+	sigma     = np.diag(std_dev_vec**2)     # uncertainty covariance matrix
+	inv_sigma = np.linalg.inv(sigma)
+	det_sigma = np.linalg.det(sigma)	
+
+	
+	return v, t, w, sigma, inv_sigma, det_sigma 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 def foreground_model(model_type, theta_fg, v, vr, ion_abs_coeff='free', ion_emi_coeff='free'):
 	
 	#print(theta_fg)
@@ -170,103 +296,6 @@ def full_model(theta, v, vr, model_type_signal='exp', model_type_foreground='exp
 
 
 
-
-
-
-
-def simulated_data(theta, v, vr, noise_std_at_vr, model_type_signal='exp', model_type_foreground='exp', N21par=4, NFGpar=5):
-
-	#v          = np.arange(50, 101, 1)
-	#T75        = 1500
-	#beta       = -2.5
-	#std_dev_vec  = 2*np.ones(len(v))   # frequency dependent or independent
-	#std_dev = 1
-	#noise   = np.random.normal(0, std_dev, size=len(v))
-
-
-	std_dev_vec   = noise_std_at_vr * (v/vr)**(-2.5)
-	#std_dev_vec   = noise_std_at_vr*np.ones(len(v))
-
-
-	sigma         = np.diag(std_dev_vec**2)     # uncertainty covariance matrix
-	inv_sigma     = np.linalg.inv(sigma)
-	det_sigma     = np.linalg.det(sigma)
-
-	noise         = np.random.multivariate_normal(np.zeros(len(v)), sigma)
-
-
-
-	d_no_noise    = full_model(theta, v, vr, model_type_signal=model_type_signal, model_type_foreground=model_type_foreground, N21par=N21par, NFGpar=NFGpar)
-	d             = d_no_noise + noise
-
-	N             = len(v)
-
-
-	return d, sigma, inv_sigma, det_sigma
-
-
-
-
-
-
-
-
-
-
-def real_data(case, FLOW, FHIGH, FLOW_gap=0, FHIGH_gap=0):
-	
-	if case == 10:
-		dd = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/integrated_spectrum_case1_nominal.txt')
-		
-	if case == 2:
-		dd = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/integrated_spectrum_case1_nominal_cterms7_wterms8.txt')
-		
-	if case == 5:
-		dd = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/integrated_spectrum_case5_cterms8_wterms8_no_rfi.txt')
-		
-		
-	vv = dd[:,0]
-	tt = dd[:,1]
-	ww = dd[:,2]
-	
-	v0 = 100
-	A  = 12
-	
-	ss = A*(1/np.sqrt(ww))*(vv/v0)**(-2.5)
-		
-			
-	vp = vv[(vv>=FLOW) & (vv<=FHIGH)]
-	tp = tt[(vv>=FLOW) & (vv<=FHIGH)]
-	wp = ww[(vv>=FLOW) & (vv<=FHIGH)]
-	sp = ss[(vv>=FLOW) & (vv<=FHIGH)]
-
-
-	if (FLOW_gap > 0) and (FHIGH_gap > 0):
-		vx = np.copy(vp)
-		tx = np.copy(tp)
-		wx = np.copy(wp)
-		sx = np.copy(sp)
-		
-		vp = vx[(vx<=FLOW_gap) | (vx>=FHIGH_gap)]
-		tp = tx[(vx<=FLOW_gap) | (vx>=FHIGH_gap)]
-		wp = wx[(vx<=FLOW_gap) | (vx>=FHIGH_gap)]
-		sp = sx[(vx<=FLOW_gap) | (vx>=FHIGH_gap)]
-
-
-
-
-	v = vp[wp>0]
-	t = tp[wp>0]
-	w = wp[wp>0]
-	std_dev_vec = sp[wp>0]
-
-
-	sigma     = np.diag(std_dev_vec**2)     # uncertainty covariance matrix
-	inv_sigma = np.linalg.inv(sigma)
-	det_sigma = np.linalg.det(sigma)	
-
-	
-	return v, t, w, sigma, inv_sigma, det_sigma 
 
 
 
