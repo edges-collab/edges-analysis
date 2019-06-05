@@ -1079,47 +1079,22 @@ def rms_filter_computation(band, case, save_parameters='no'):
 	# Listing files available
 	# ------------------------
 	if band == 'mid_band':
-		if case == 0:
-			path_files  = edges_folder + '/mid_band/spectra/level3/case0/'
-			save_folder = edges_folder + '/mid_band/rms_filters/case0/'
-			
-		if case == 1:
-			path_files  = edges_folder + '/mid_band/spectra/level3/case1/'
-			save_folder = edges_folder + '/mid_band/rms_filters/case1/'
 
 		if case == 2:
 			path_files  = edges_folder + '/mid_band/spectra/level3/case2/'
 			save_folder = edges_folder + '/mid_band/rms_filters/case2/'
 		
-		if case == 4:
-			path_files  = edges_folder + '/mid_band/spectra/level3/case4/'
-			save_folder = edges_folder + '/mid_band/rms_filters/case4/'
-
-		if case == 5:
-			path_files  = edges_folder + '/mid_band/spectra/level3/case5/'
-			save_folder = edges_folder + '/mid_band/rms_filters/case5/'
-
-		if case == 30:
-			path_files  = edges_folder + '/mid_band/spectra/level3/case30/'
-			save_folder = edges_folder + '/mid_band/rms_filters/case30/'
-			
-		if case == 31:
-			path_files  = edges_folder + '/mid_band/spectra/level3/case31/'
-			save_folder = edges_folder + '/mid_band/rms_filters/case31/'
-			
-		if case == 32:
-			path_files  = edges_folder + '/mid_band/spectra/level3/case32/'
-			save_folder = edges_folder + '/mid_band/rms_filters/case32/'
-			
-			
-			
-			
-			
-		if case == 25:
-			path_files  = edges_folder + '/mid_band/spectra/level3/case25/'
-			save_folder = edges_folder + '/mid_band/rms_filters/case25/'
+						
+		if case == 26:
+			path_files  = edges_folder + '/mid_band/spectra/level3/case26/'
+			save_folder = edges_folder + '/mid_band/rms_filters/case26/'
+						
+							
+		if case == 40:
+			path_files  = edges_folder + '/mid_band/spectra/level3/case40/'
+			save_folder = edges_folder + '/mid_band/rms_filters/case40/'
+						
 		
-
 	
 	if band == 'low_band3':
 		if case == 2:
@@ -1430,39 +1405,18 @@ def rms_filter_computation(band, case, save_parameters='no'):
 
 def rms_filter(band, case, gx, rms, Nsigma):
 	
-	if (case == 0):
-		file_path = edges_folder + band + '/rms_filters/case0/'
-		
-	if (case == 1):
-		file_path = edges_folder + band + '/rms_filters/case1/'
 
 	if (case == 2):
 		file_path = edges_folder + band + '/rms_filters/case2/'
-		
-	if (case == 4):
-		file_path = edges_folder + band + '/rms_filters/case4/'
-		
-	if (case == 5):
-		file_path = edges_folder + band + '/rms_filters/case5/'
+
+	if (case == 26):
+		file_path = edges_folder + band + '/rms_filters/case26/'
+
+	if (case == 40):
+		file_path = edges_folder + band + '/rms_filters/case40/'
 
 
 
-
-
-	if (case == 30):
-		file_path = edges_folder + band + '/rms_filters/case30/'
-		
-	if (case == 31):
-		file_path = edges_folder + band + '/rms_filters/case31/'
-
-	if (case == 32):
-		file_path = edges_folder + band + '/rms_filters/case32/'		
-
-
-
-
-	if (case == 25):
-		file_path = edges_folder + band + '/rms_filters/case25/'
 
 
 
@@ -1670,39 +1624,15 @@ def level3_to_level4(band, case, GHA_edges, sun_el_max, moon_el_max, save_folder
 	# ------------------------
 	if band == 'mid_band':
 		
-		if case == 0:
-			path_files  = edges_folder + 'mid_band/spectra/level3/case0/'
 
-		elif case == 1:
-			path_files  = edges_folder + 'mid_band/spectra/level3/case1/'
-
-		elif case == 2:
+		if case == 2:
 			path_files  = edges_folder + 'mid_band/spectra/level3/case2/'
 
-		elif case == 4:
-			path_files  = edges_folder + 'mid_band/spectra/level3/case4/'
-			
-		elif case == 5:
-			path_files  = edges_folder + 'mid_band/spectra/level3/case5/'	
-			
-			
-			
-				
-		elif case == 30:
-			path_files  = edges_folder + 'mid_band/spectra/level3/case30/'	
-			
-		elif case == 31:
-			path_files  = edges_folder + 'mid_band/spectra/level3/case31/'	
-			
-		elif case == 32:
-			path_files  = edges_folder + 'mid_band/spectra/level3/case32/'
+		if case == 26:
+			path_files  = edges_folder + 'mid_band/spectra/level3/case26/'
 
-
-
-		elif case == 25:
-			path_files  = edges_folder + 'mid_band/spectra/level3/case25/'
-
-			
+		if case == 40:
+			path_files  = edges_folder + 'mid_band/spectra/level3/case40/'
 			
 			
 			
@@ -2154,7 +2084,7 @@ def daily_nominal_filter(band, filter_case, year_day_list):
 	# 
 	#bad0 = np.array([[2018, 184], [2018, 195], [2018, 204], [2018, 208], ])
 	
-	if (filter_case == 10) or (filter_case == 2) or (filter_case == 4) or (filter_case == 5) or (filter_case == 30) or (filter_case == 31) or (filter_case == 32) or (filter_case == 25) :
+	if (filter_case == 10) or (filter_case == 2) or (filter_case == 4) or (filter_case == 5) or (filter_case == 30) or (filter_case == 31) or (filter_case == 32) or (filter_case == 26) or (filter_case == 40):
 		#bad0 = np.array([])
 		
 		bad0 = np.array([[2018, 146], [2018, 147], [2018, 148], [2018, 149], [2018, 150], [2018, 151], [2018, 152], [2018, 157], [2018, 159],  [2018, 160], [2018, 161], [2018, 162], [2018, 163], [2018, 165], [2018, 167], [2018, 169], [2018, 170], [2018, 174], [2018, 175], [2018, 176], [2018, 177], [2018, 178], [2018, 179], [2018, 180], [2018, 181], [2018, 182], [2018, 184], [2018, 185], [2018, 187], [2018, 189], [2018, 190], [2018, 193], [2018, 195], [2018, 196], [2018, 197], [2018, 204], [2018, 208], [2018, 209], [2018, 216], [2018, 220]])
@@ -2652,8 +2582,13 @@ def integrated_spectrum_level4(case, index_GHA, FLOW, FHIGH, day_min1, day_max1,
 		
 	plt.figure(1, figsize=[8.5, 4.5])
 	
-	plt.plot(fb[wb5>0], rb5[wb5>0] + 0.3, 'b', linewidth=2)
-	plt.plot(fb[wbl5>0], rbl5[wbl5>0] - 0.3, 'b', linewidth=1)
+	#plt.plot(fb[wb5>0], rb5[wb5>0] + 0.3, 'b', linewidth=2)
+	#plt.plot(fb[wbl5>0], rbl5[wbl5>0] - 0.3, 'b', linewidth=1)
+	
+	plt.plot(fb[wb3>0], rb3[wb3>0] + 0.3, 'b', linewidth=2)
+	plt.plot(fb[wbl3>0], rbl3[wbl3>0] - 0.3, 'b', linewidth=1)	
+	
+	
 	plt.xlim([55, 125])
 	plt.yticks(np.arange(-0.5,0.6,0.2), labels=['','','','','','',''])
 	plt.ylim([-0.6, 0.6])

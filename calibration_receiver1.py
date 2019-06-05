@@ -2583,7 +2583,7 @@ def calibration_processing_mid_band_2019_04_25C(flow=50, fhigh=180, save='no', s
 
 
 
-def calibration_file_computation(calibration_date, folder, FMIN, FMAX, cterms_nominal, wterms_nominal, save_nominal='no', save_nominal_flag='', term_sweep='no', panels=4):
+def calibration_file_computation(calibration_date, folder, FMIN, FMAX, cterms_nominal, wterms_nominal, save_nominal='no', save_nominal_flag='', term_sweep='no', panels=4, plot_nominal='no'):
 	
 	"""
 	
@@ -2595,7 +2595,7 @@ def calibration_file_computation(calibration_date, folder, FMIN, FMAX, cterms_no
 	
 	
 	# Location of saved results
-	path_save = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/' + calibration_date + '/results/' + folder + '/calibration_files/60_85MHz/'
+	path_save = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/' + calibration_date + '/results/' + folder + '/calibration_files/'
 	
 	
 		
@@ -3010,19 +3010,19 @@ def calibration_file_computation(calibration_date, folder, FMIN, FMAX, cterms_no
 				# Cross-check	
 				TTac        = cal.calibrated_antenna_temperature(TTae,  rra,  rrl, C1, C2, TU, TC, TS, Tamb_internal=Tamb_internal)
 				fb, tab, wb = ba.spectral_binning_number_of_samples(ff, TTac, WW_all, nsamples=64)
-			
+				
 				TThc        = cal.calibrated_antenna_temperature(TThe,  rrh,  rrl, C1, C2, TU, TC, TS, Tamb_internal=Tamb_internal)
 				TThhc       = (TThc - (1-GG)*Ta)/GG
 				fb, thb, wb = ba.spectral_binning_number_of_samples(ff, TThhc, WW_all, nsamples=64)
-			
+				
 				TToc        = cal.calibrated_antenna_temperature(TToe,  rro,  rrl, C1, C2, TU, TC, TS, Tamb_internal=Tamb_internal)
 				fb, tob, wb = ba.spectral_binning_number_of_samples(ff, TToc, WW_all, nsamples=64)
-			
+				
 				TTsc        = cal.calibrated_antenna_temperature(TTse,  rrs,  rrl, C1, C2, TU, TC, TS, Tamb_internal=Tamb_internal)
 				fb, tsb, wb = ba.spectral_binning_number_of_samples(ff, TTsc, WW_all, nsamples=64)
 			
 				
-			
+				
 				TTqc        = cal.calibrated_antenna_temperature(TTqe,  rrsimu,  rrl, C1, C2, TU, TC, TS, Tamb_internal=Tamb_internal)
 				fb, tqb, wb = ba.spectral_binning_number_of_samples(ff, TTqc, WW_all, nsamples=64)
 				
@@ -3126,30 +3126,9 @@ def calibration_file_computation(calibration_date, folder, FMIN, FMAX, cterms_no
 	
 	
 	
-	# Saving nominal case
-	
+	# Saving nominal case	
 	C1, C2, TU, TC, TS = cal.calibration_quantities(fn, Tae, The, Toe, Tse, rl, ra, rh, ro, rs, Ta, Thd, To, Ts, Tamb_internal, cterms_nominal, wterms_nominal, second_frequency_array=ffn)
-
-	## Only open cable
-	##C1, C2, TU, TC, TS = cal.calibration_quantities(fng, Taeg, Theg, Toeg, Toeg, rlg, rag, rhg, rog, rog, Tag, Thdg, Tog, Tog, Tamb_internal, cterms_nominal, wterms_nominal, second_frequency_array=fn)
 	
-	## Cross-check	
-	#Tac         = cal.calibrated_antenna_temperature(Tae,  ra,  rl, C1, C2, TU, TC, TS, Tamb_internal=Tamb_internal)
-	#fb, tab, wb = ba.spectral_binning_number_of_samples(f, Tac, np.ones(len(f)), nsamples=64)
-
-	#Thc         = cal.calibrated_antenna_temperature(The,  rh,  rl, C1, C2, TU, TC, TS, Tamb_internal=Tamb_internal)
-	#Thhc        = (Thc - (1-G)*Ta)/G
-	#fb, thb, wb = ba.spectral_binning_number_of_samples(f, Thhc, np.ones(len(f)), nsamples=64)
-
-	#Toc         = cal.calibrated_antenna_temperature(Toe,  ro,  rl, C1, C2, TU, TC, TS, Tamb_internal=Tamb_internal)
-	#fb, tob, wb = ba.spectral_binning_number_of_samples(f, Toc, np.ones(len(f)), nsamples=64)
-
-	#Tsc         = cal.calibrated_antenna_temperature(Tse,  rs,  rl, C1, C2, TU, TC, TS, Tamb_internal=Tamb_internal)
-	#fb, tsb, wb = ba.spectral_binning_number_of_samples(f, Tsc, np.ones(len(f)), nsamples=64)	
-	## Why do I NOT get 32 degC for the Ant Sim 3 ???
-	
-	#Tsimuc         = cal.calibrated_antenna_temperature(Tsse,  rsimu,  rl, C1, C2, TU, TC, TS, Tamb_internal=Tamb_internal)
-	#fb, tsimub, wb = ba.spectral_binning_number_of_samples(f, Tsimuc, np.ones(len(f)), nsamples=64)	
 
 	# Saving results
 	if save_nominal == 'yes':
@@ -3167,6 +3146,70 @@ def calibration_file_computation(calibration_date, folder, FMIN, FMAX, cterms_no
 
 		# Save
 		np.savetxt(path_save + 'calibration_file_receiver1' + save_nominal_flag + '.txt', save_array, fmt='%1.8f')
+
+
+	
+	if plot_nominal == 'yes':
+
+
+		# Plotting cross-check	
+		TTac        = cal.calibrated_antenna_temperature(TTae,  rra,  rrl, C1, C2, TU, TC, TS, Tamb_internal=Tamb_internal)
+		fb, tab, wb = ba.spectral_binning_number_of_samples(ff, TTac, WW_all, nsamples=64)
+		
+		TThc        = cal.calibrated_antenna_temperature(TThe,  rrh,  rrl, C1, C2, TU, TC, TS, Tamb_internal=Tamb_internal)
+		TThhc       = (TThc - (1-GG)*Ta)/GG
+		fb, thb, wb = ba.spectral_binning_number_of_samples(ff, TThhc, WW_all, nsamples=64)
+		
+		TToc        = cal.calibrated_antenna_temperature(TToe,  rro,  rrl, C1, C2, TU, TC, TS, Tamb_internal=Tamb_internal)
+		fb, tob, wb = ba.spectral_binning_number_of_samples(ff, TToc, WW_all, nsamples=64)
+		
+		TTsc        = cal.calibrated_antenna_temperature(TTse,  rrs,  rrl, C1, C2, TU, TC, TS, Tamb_internal=Tamb_internal)
+		fb, tsb, wb = ba.spectral_binning_number_of_samples(ff, TTsc, WW_all, nsamples=64)
+	
+		
+		
+		TTqc        = cal.calibrated_antenna_temperature(TTqe,  rrsimu,  rrl, C1, C2, TU, TC, TS, Tamb_internal=Tamb_internal)
+		fb, tqb, wb = ba.spectral_binning_number_of_samples(ff, TTqc, WW_all, nsamples=64)
+		
+		
+		
+		
+		plt.close()
+		plt.close()
+		plt.close()
+		plt.close()
+		
+		plt.figure(1, figsize=[6,6])
+		plt.subplot(4,1,1); plt.plot(ff[WW_all>0], TTac[WW_all>0], 'g'); plt.plot(fb, Ta*np.ones(len(fb)), 'k'); plt.xticks(np.arange(FMIN, FMAX+1, 10), labels=[]); plt.ylabel(r'T$_A$ [K]', fontsize=14)
+		plt.text(100, 296.7, 'RMS=' + str(round(np.std(TTac[WW_all>0]-Ta),3))+' K')
+		#plt.title('CTerms='+str(cterms_nominal)+', WTerms='+str(wterms_nominal))
+		plt.xlim([60, 120])
+		plt.ylim([295.8, 297.0])
+		
+		plt.subplot(4,1,2); plt.plot(ff[WW_all>0], TThhc[WW_all>0], 'g'); plt.plot(fb, Th*np.ones(len(fb)), 'k'); plt.xticks(np.arange(FMIN, FMAX+1, 10), labels=[]); plt.ylabel(r'T$_H$ [K]', fontsize=14)
+		plt.text(100, 400, 'RMS=' + str(round(np.std(TThhc[WW_all>0]-Th),3))+' K')
+		#RMS=' + str(round(np.std(TThhc[WW_all>0]-Th),3))+'K')
+		plt.xlim([60, 120])
+		plt.ylim([399.1, 400.3])
+		
+		plt.subplot(4,1,3); plt.plot(ff[WW_all>0], TToc[WW_all>0], 'g'); plt.plot(fb, To*np.ones(len(fb)), 'k'); plt.xticks(np.arange(FMIN, FMAX+1, 10), labels=[]); plt.ylabel(r'T$_O$ [K]', fontsize=14)
+		plt.text(100, 300, 'RMS=' + str(round(np.std(TToc[WW_all>0]-To),2))+' K')
+		plt.xlim([60, 120])
+		plt.ylim([288, 304])
+		
+		plt.subplot(4,1,4); plt.plot(ff[WW_all>0], TTsc[WW_all>0], 'g'); plt.plot(fb, Ts*np.ones(len(fb)), 'k'); plt.xticks(np.arange(FMIN, FMAX+1, 10)); plt.ylabel(r'T$_S$ [K]', fontsize=14)
+		plt.text(100, 300, 'RMS=' + str(round(np.std(TTsc[WW_all>0]-Ts),2))+' K')
+		plt.xlim([60, 120])
+		plt.ylim([288, 304])
+		plt.xlabel('frequency [MHz]')
+	
+	
+		# Creating folder if necessary
+					
+		plt.savefig(path_save + 'calibration_crosscheck_60_120MHz_cterms'+str(cterms_nominal)+'_wterms'+str(wterms_nominal)+'.png', bbox_inches='tight')
+		plt.close()			
+		
+
 
 
 
