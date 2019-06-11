@@ -35,7 +35,8 @@ edges_folder       = os.environ['EDGES_vol2']
 print('EDGES Folder: ' + edges_folder)
 
 
-
+sys.path.insert(0, "/home/raul/edges/old")
+import old_edges as oeg
 
 
 
@@ -704,6 +705,10 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 				
 				if bf_case == 0:
 					beam_factor_filename = 'table_hires_mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.6_sigma_deg_5_reffreq_100MHz.hdf5'
+					
+				if bf_case == 1:
+					beam_factor_filename = 'table_hires_mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.6_sigma_deg_5_reffreq_75MHz.hdf5'
+
 
 				
 			elif band == 'low_band3':
@@ -2159,22 +2164,9 @@ def plot_level4(case, index_GHA, averaged_146, good_bad, model, FLOW, FHIGH, K_p
 	"""
 	
 	# Load Level 4 data
-	if case == 10:
-		f, py, ry, wy, index, gha, yy = level4read('/home/raul/DATA2/EDGES_vol2/mid_band/spectra/level4/case1/case1.hdf5')
-		
-	elif case == 11:
-		f, py, ry, wy, index, gha, yy = level4read('/home/raul/DATA2/EDGES_vol2/mid_band/spectra/level4/case1_sun_below_horizon/case1_sun_below_horizon.hdf5')
-		
-	elif case == 12:
-		f, py, ry, wy, index, gha, yy = level4read('/home/raul/DATA2/EDGES_vol2/mid_band/spectra/level4/case1_1hr_averages/case1_1hr_averages.hdf5')
-	
+	if case == 2:
+		f, py, ry, wy, index, gha, yy = level4read('/home/raul/DATA2/EDGES_vol2/mid_band/spectra/level4/case2/case2.hdf5')
 
-	if case == 4:
-		f, py, ry, wy, index, gha, yy = level4read('/home/raul/DATA2/EDGES_vol2/mid_band/spectra/level4/case4/case4.hdf5')
-
-
-	if case == 5:
-		f, py, ry, wy, index, gha, yy = level4read('/home/raul/DATA2/EDGES_vol2/mid_band/spectra/level4/case5/case5.hdf5')
 
 
 	px = np.delete(py, 1, axis=0)
@@ -2338,7 +2330,7 @@ def plot_level4(case, index_GHA, averaged_146, good_bad, model, FLOW, FHIGH, K_p
 			plt.text(52, -ii*K_per_division-(1/6)*K_per_division, str(int(yd[i,1])))
 		
 	plt.xlim([57, 123])
-	plt.xlabel('frequency [MHz]')
+	plt.xlabel(r'$\nu$ [MHz]', fontsize=12)
 	plt.ylim([-(ii+1)*K_per_division, K_per_division])
 	plt.yticks([10], labels=[''])
 	
@@ -4515,36 +4507,6 @@ def average_level3_mid_band(case, LST_1=0, LST_2=24, sun_el_max=90, moon_el_max=
 	
 	
 	return fb, rb_all, wb_all, list_files, f, RX_all, WX_all, PX_all
-
-
-
-
-
-
-
-
-
-
-## Load data
-## ---------
-#path_data = home_folder + '/EDGES/spectra/level3/' + band + '/' + flag_folder + '/'
-#filename  = path_data + year_day_hdf5
-#f, t, p, r, w, rms, m = level3read(filename)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

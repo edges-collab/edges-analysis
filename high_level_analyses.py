@@ -1197,6 +1197,31 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
 		
 		
 		
+	if case == 275:
+		flag_folder       = 'case2_75MHz'
+		
+		receiver_cal_file = 2   # cterms=7, wterms=8 terms over 50-150 MHz
+		
+		antenna_s11_day   = 147
+		antenna_s11_case  = 3   # taken 2+ minutes after turning on the switch
+		antenna_s11_Nfit  = 13  # 13 terms over 55-120 MHz
+		
+		balun_correction  = 1
+		ground_correction = 1
+		beam_correction   = 1
+		bf_case           = 1   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index NORMALIZED at 75MHz instead of 100 MHz as in case 2.
+		
+		FLOW  = 55
+		FHIGH = 120
+		Nfg   = 5
+	
+		
+		
+		
+		
+		
+		
+		
 		
 	# ----------------------------------------------------------------------------------------------------
 	# Same data as case=2 (nominal), but after RFI cleaning of the integrated spectra
@@ -4799,23 +4824,280 @@ def plots_midband_paper(plot_number):
 
 
 
+	if plot_number == 7:
+		
+		# Data
+		dd = np.genfromtxt(edges_folder + '/mid_band/spectra/level5/case2/integrated_spectrum_case2.txt')
+		#dd = np.genfromtxt(edges_folder + '/mid_band/spectra/level5/case26/integrated_spectrum_case26.txt')
+		ddd  = dd[dd[:,0]>=60,:]
+
+		FLOW  = 60
+		FHIGH = 100
+		
+		
+		
+		d = ddd[ (ddd[:,0]>=FLOW) & (ddd[:,0]<=FHIGH), :]		
+		v  = d[:,0]
+		t  = d[:,1]
+		w  = d[:,2]
+		
+		t[w==0] = np.nan
+		
+		
+		
+		
+		# Best-fit foreground model
+		vr = 100
+		
+		#filename = edges_folder + 'mid_band/polychord/20190605/case2/foreground_exp/chain.txt'
+		filename = edges_folder + 'mid_band/polychord/20190606/case2/foreground_exp_60_100MHz/chain.txt'
+		#filename = edges_folder + 'mid_band/polychord/20190605/case26/foreground_exp/chain.txt'
+		getdist_samples, ww, ll, best_fit, covariance_matrix = gp.load_samples(filename, 0, label_names=[r'T_{100}\;[{\rm K}]', r'\beta', r'\gamma', r'\delta'])#, r'\epsilon'])
+		model_fg = dm.foreground_model('exp', best_fit, v, vr, ion_abs_coeff=0, ion_emi_coeff=0)
+		
+		
+		# Best-fit foreground model + signal model
+		filename = edges_folder + 'mid_band/polychord/20190605/case2/foreground_exp_signal_tanh/chain.txt'
+		#filename = edges_folder + 'mid_band/polychord/20190605/case26/foreground_exp_signal_tanh/chain.txt'
+		label_names=[r'A\;[{\rm K}]', r'\nu_0\;[{\rm MHz}]', r'w\;[{\rm MHz}]', r'\tau_1', r'\tau_2', r'T_{100}\;[{\rm K}]', r'\beta', r'\gamma', r'\delta', r'\epsilon']
+		getdist_samples, ww, ll, best_fit, covariance_matrix = gp.load_samples(filename, 0, label_names=label_names)
+		full_model = dm.full_model(best_fit, v, vr, model_type_signal='tanh', model_type_foreground='exp', N21par=5, NFGpar=5)
+		#foreground_model('exp', best_fit, v, vr, ion_abs_coeff=0, ion_emi_coeff=0)
+		
+		# Best-fit signal model
+		model_signal = dm.signal_model('tanh', best_fit[0:5], v)
+		
+		model_edges2018      = dm.signal_model('exp', [-0.5, 78, 19, 7], v)
+		model_edges2018_A1 = dm.signal_model('exp', [-1, 78, 19, 7], v)
+		model_edges2018_A2 = dm.signal_model('exp', [-0.3, 78, 19, 7], v)
+		
 
 
+		
+		dx = 0.4
+		dy = 0.25
+		
+		
+		x0a = 0.35
+		y0a = 0.74		
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+		x0b = 0.1
+		y0b = 0.4
+		
+		x0c = 0.58
+		y0c = 0.4
+		
+		x0d = 0.1
+		y0d = 0.1
+		
+		x0e = 0.58
+		y0e = 0.1	
+		
+		
+		
+		
+		f1 = plt.figure(1)
+		
+		
+		# Panel a
+		# ---------------------------------
+		ax = f1.add_axes([x0a, y0a, dx, dy])
+		ax.plot(v, t, 'b', linewidth=1)
 	
+		ax.set_xlim([FLOW, FHIGH])
+		ax.set_ylim([0, 3500])
+		
+		#ax.set_xticklabels('')
+		ax.set_xticks(np.arange(60,121,10))
+		
+		ax.set_yticks(np.arange(0,3501,500))
+		ax.set_yticklabels(['0','','1000','','2000', '', '3000'])
+		
+		#ax.set_xlabel(r'$\nu$ [MHz]')
+		ax.set_ylabel('T$_b$ [K]', fontsize=13)
+		#ax.set_text(panel_letter_x, panel_letter_y,  '(b)', fontsize=18)
+		ax.text(115,3070,'a', fontsize=13, fontweight='bold')
+		#ax.grid()
+	
+
+		# Panel b
+		# ---------------------------------
+		ax = f1.add_axes([x0b, y0b, dx, dy])
+		ax.plot(v, t-model_fg, 'b', linewidth=1)
+
+		ax.set_xlim([FLOW, FHIGH])
+		ax.set_ylim([-0.5, 0.5])
+		
+		ax.set_xticks(np.arange(60,121,10))
+		ax.set_xticklabels([])
+		
+		ax.set_yticks(np.arange(-0.4,0.41,0.2))
+		ax.set_yticklabels(['-0.4','-0.2','0','0.2','0.4'])
+		
+		#ax.set_xlabel(r'$\nu$ [MHz]')
+		ax.set_ylabel('T$_b$ [K]', fontsize=13)
+		#ax.set_text(panel_letter_x, panel_letter_y,  '(b)', fontsize=18)
+		ax.text(115,0.35,'b', fontsize=13, fontweight='bold')
+		#ax.grid()
+
+
+
+		# Panel c
+		# ---------------------------------
+		ax = f1.add_axes([x0c, y0c, dx, dy])
+		ax.plot(v, t-full_model,'b', linewidth=1)
+
+		ax.set_xlim([FLOW, FHIGH])
+		ax.set_ylim([-0.5, 0.5])
+		
+		ax.set_xticks(np.arange(60,121,10))
+		ax.set_xticklabels([])
+		
+		ax.set_yticks(np.arange(-0.4,0.41,0.2))
+		ax.set_yticklabels(['-0.4','-0.2','0','0.2','0.4'])
+		
+		#ax.set_xlabel(r'$\nu$ [MHz]')
+		#ax.set_ylabel('T$_b$ [K]')
+		#ax.set_text(panel_letter_x, panel_letter_y,  '(b)', fontsize=18)
+		ax.text(115,0.35,'c', fontsize=13, fontweight='bold')
+		#ax.grid()
+
+
+		# Panel d
+		# ---------------------------------
+		ax = f1.add_axes([x0d, y0d, dx, dy])
+		ax.plot(v, model_signal, 'b', linewidth=1)
+		ax.plot(v, model_edges2018, 'r', linewidth=0.5)
+		ax.plot(v, model_edges2018_A1, 'r--', linewidth=0.5)
+		ax.plot(v, model_edges2018_A2, 'r--', linewidth=0.5)
+		ax.plot(v, model_signal, 'b', linewidth=1)
+		
+		
+
+		ax.set_xlim([FLOW, FHIGH])
+		ax.set_ylim([-0.9, 0.1])
+		
+		ax.set_xticks(np.arange(60,121,10))
+		
+		ax.set_yticks(np.arange(-0.8,0.1,0.2))
+		#ax.set_yticklabels(['-0.6','-0.4','-0.2','0'])
+		
+		ax.set_xlabel(r'$\nu$ [MHz]', fontsize=13)
+		ax.set_ylabel('T$_b$ [K]', fontsize=13)
+		#ax.set_text(panel_letter_x, panel_letter_y,  '(b)', fontsize=18)
+		ax.text(115,-0.25,'d', fontsize=13, fontweight='bold')
+		#ax.grid()
+
+
+		# Panel e
+		# ---------------------------------
+		ax = f1.add_axes([x0e, y0e, dx, dy])
+		ax.plot(v, model_signal + (t-full_model), 'b', linewidth=1)
+		ax.plot(v, model_edges2018, 'r', linewidth=0.5)
+		ax.plot(v, model_edges2018_A1, 'r--', linewidth=0.5)
+		ax.plot(v, model_edges2018_A2, 'r--', linewidth=0.5)
+		ax.plot(v, model_signal + (t-full_model), 'b', linewidth=1)	
+
+		ax.set_xlim([FLOW, FHIGH])
+		ax.set_ylim([-0.9, 0.1])
+		
+		ax.set_xticks(np.arange(60,121,10))
+		
+		ax.set_yticks(np.arange(-0.8,0.1,0.2))
+		#ax.set_yticklabels(['-0.6','-0.4','-0.2','0'])
+		
+		ax.set_xlabel(r'$\nu$ [MHz]', fontsize=13)
+		#ax.set_ylabel('T$_b$ [K]')
+		#ax.set_text(panel_letter_x, panel_letter_y,  '(b)', fontsize=18)
+		ax.text(115,-0.25,'e', fontsize=13, fontweight='bold')
+		#ax.grid()
+		ax.legend(['this work', 'Bowman et al. (2018)'], fontsize=6)
+
+
+		# Saving plot
+		path_plot_save = edges_folder + 'plots/20190606/'
+		
+
+		plt.savefig(path_plot_save + 'x.pdf', bbox_inches='tight')
+		plt.close()	
+		plt.close()
+		plt.close()
+		plt.close()
+
+
+
+	if plot_number == 8:
+		
+		filename = edges_folder + 'mid_band/polychord/20190605/case2/foreground_exp_signal_tanh/chain.txt'
+		#filename = edges_folder + 'mid_band/polychord/20190605/case26/foreground_exp_signal_tanh/chain.txt'
+		
+		label_names=[r'A\;[{\rm K}]', r'\nu_0\;[{\rm MHz}]', r'w\;[{\rm MHz}]', r'\tau_1', r'\tau_2', r'T_{100}\;[{\rm K}]', r'\beta', r'\gamma', r'\delta', r'\epsilon']
+		getdist_samples, ww, ll, best_fit, covariance_matrix = gp.load_samples(filename, 0, label_names=label_names)
+		
+		output_pdf_filename = edges_folder + 'plots/20190605/triangle_plot_nominal.pdf'
+		o = gp.triangle_plot(getdist_samples, output_pdf_filename, legend_FS=10, label_FS=14, axes_FS=6.5)
+		
+		
+		
+	
+	
+	if plot_number == 9:
+		
+		# Plot of histogram of GHA for integrated spectrum
+		f, px, rx, wx, index, gha, ydx = eg.level4read('/home/raul/DATA2/EDGES_vol2/mid_band/spectra/level4/case26/case26.hdf5')
+		
+		
+		keep = eg.daily_nominal_filter('mid_band', 26, ydx)
+		ydy = ydx[keep>0]
+		
+		
+		
+		
+		ix = np.arange(len(ydy))
+		
+		path_files  = edges_folder + 'mid_band/spectra/level3/case26/'
+		new_list    = listdir(path_files)
+		new_list.sort()
+		
+		index_new_list = range(len(new_list))
+		
+		gha_all = np.array([])
+		for i in index_new_list:
+			
+			if len(new_list[i]) == 8:
+				day = float(new_list[i][5::])			
+			elif len(new_list[i]) > 8:
+				day = float(new_list[i][5:8])
+
+
+			
+			Q = ix[ydy[:,1]==day]
+			
+			if len(Q)>0:
+				print(new_list[i])
+				f, ty, py, ry, wy, rmsy, tpy, my = eg.level3read(path_files + new_list[i])
+				ii = index[i,0,0:len(my)]
+				gha_i = my[ii>0,4]
+				gha_i[gha_i<0] = gha_i[gha_i<0] + 24
+				gha_all = np.append(gha_all, gha_i)
+				
+		plt.close()
+		plt.close()
+		plt.figure(1, figsize=[3.9, 2.6])
+		plt.hist(gha_all, np.arange(6,18.1,1/6))
+		plt.xlabel('GHA [hr]')
+		plt.ylabel('# of raw spectra\nper 10-min GHA bin')
+		plt.savefig('/home/raul/Desktop/gha_histogram.pdf', bbox_inches='tight')
+		plt.close()	
+		plt.close()
+		plt.close()
+		plt.close()		
+		
+
+
+
+
+
 	
 	
 	return 0

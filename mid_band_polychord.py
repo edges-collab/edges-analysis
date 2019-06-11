@@ -4,7 +4,7 @@
 
 how to run:
 
-$ python mid_band_polychord.py 0 5 test
+$ python mid_band_polychord.py 0 5
 
 
 '''
@@ -17,6 +17,10 @@ import data_models as dm
 import os
 
 import PyPolyChord
+
+from os import makedirs, listdir
+from os.path import exists
+
 from PyPolyChord.settings import PolyChordSettings
 
 edges_folder       = os.environ['EDGES_vol2']
@@ -25,7 +29,38 @@ print('EDGES Folder: ' + edges_folder)
 
 N21 = int(sys.argv[1])
 Nfg = int(sys.argv[2])
-save_file_name = sys.argv[3]
+
+
+
+
+# Folder and file name
+# --------------------------
+case        =  2
+save_folder = edges_folder + 'mid_band/polychord/20190606/case2/foreground_exp_60_100MHz'
+if not exists(save_folder):
+	makedirs(save_folder)
+	
+save_file_name = 'chain' #sys.argv[3]
+	
+
+
+# Input parameters
+# -----------------------
+model_type_foreground = 'exp'  #'exp', 'linlog'
+model_type_signal     = 'tanh'  #'tanh' #, 'tanh'
+
+data        = 'real'   # it could be 'real' or 'simulated'
+FLOW        =  60
+FHIGH       = 100 #120
+
+gap_FLOW  = 0  # nominal value: 0 
+gap_FHIGH = 0  # nominal_value: 0
+
+v0          = 100
+
+
+
+
 
 
 
@@ -35,30 +70,6 @@ save_file_name = sys.argv[3]
 # -----------------------
 Nparameters = N21+Nfg
 Nderived    = 0
-
-
-
-# Input parameters
-# -----------------------
-model_type_signal     = 'tanh'  #'tanh' #, 'tanh'
-model_type_foreground = 'exp'  #'exp', 'linlog'
-
-
-save_folder = edges_folder + 'mid_band/polychord/20190516/case5/cterms8_wterms8_foreground_model_exp_signal_model_tanh_60_120MHz'
-
-data        = 'real'   # it could be 'real' or 'simulated'
-case        =  5
-FLOW        =  60
-FHIGH       = 120
-
-gap_FLOW  = 0  # nominal value: 0 
-gap_FHIGH = 0  # nominal_value: 0
-
-
-v0          = 100
-
-
-
 
 # Data
 # -------------------------------------------------
@@ -71,7 +82,7 @@ if data == 'simulated':
 
 
 elif data == 'real':
-	v, t, w, sigma, inv_sigma, det_sigma = dm.real_data(case, FLOW, FHIGH, gap_FLOW=gap_FLOW, gap_FHIGH_=gap_FHIGH)
+	v, t, w, sigma, inv_sigma, det_sigma = dm.real_data(case, FLOW, FHIGH, gap_FLOW=gap_FLOW, gap_FHIGH=gap_FHIGH)
 	
 
 

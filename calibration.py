@@ -2558,7 +2558,12 @@ def antenna_beam_factor_interpolation(band, case, lst_hires, fnew, Npar_freq=15)
 			freq    = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_haslam_gaussian_index_2.4_2.6_sigma_deg_5_reffreq_100MHz_freq.txt')
 			lst_old = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_haslam_gaussian_index_2.4_2.6_sigma_deg_5_reffreq_100MHz_LST.txt')
 			
-
+		elif case == 5:
+			bf_old  = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.6_sigma_deg_5_reffreq_76MHz_data.txt')
+			freq    = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.6_sigma_deg_5_reffreq_76MHz_freq.txt')
+			lst_old = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.6_sigma_deg_5_reffreq_76MHz_LST.txt')
+			
+			
 		
 		
 		
@@ -2626,10 +2631,21 @@ def antenna_beam_factor_interpolation(band, case, lst_hires, fnew, Npar_freq=15)
 
 def beam_factor_table_computation(band, case, f, N_lst, file_name_hdf5):
 
-
-	# Produce the beam factor at high resolution
-	# ------------------------------------------
-	#N_lst = 6000   # number of LST points within 24 hours
+	"""
+	Frequency vector
+	------------------
+	ff, i1, i2 = ba.frequency_edges(50, 199)
+	f = ff[i1::]
+	
+	
+	High and Low LST resolution
+	------------------------------------------
+	high:   N_lst = 6000   # number of LST points within 24 hours
+	low:    N_lst = 300    # number of LST points within 24 hours
+	
+	
+	
+	"""
 	
 	
 	lst_hires    = np.arange(0,24,24/N_lst)

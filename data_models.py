@@ -54,15 +54,12 @@ def simulated_data(theta, v, vr, noise_std_at_vr, model_type_signal='exp', model
 
 def real_data(case, FLOW, FHIGH, gap_FLOW=0, gap_FHIGH=0):
 	
-	
-	#if case == 10:
-		#dd = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/integrated_spectrum_case1_nominal.txt')
 		
 	if case == 2:
-		dd = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/integrated_spectrum_case1_nominal_cterms7_wterms8.txt')
+		dd = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/integrated_spectrum_case2.txt')
 		
-	#if case == 5:
-		#dd = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/integrated_spectrum_case5_cterms8_wterms8_no_rfi.txt')
+	if case == 26:
+		dd = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case26/integrated_spectrum_case26.txt')
 		
 		
 	vv = dd[:,0]
