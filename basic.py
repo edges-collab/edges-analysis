@@ -13,6 +13,8 @@ import ephem as eph
 import basic as ba
 import rfi as rfi
 
+import data_models as dm
+
 
 
 
@@ -546,11 +548,15 @@ def spectral_binning_number_of_samples(freq_in, spectrum_in, weights_in, nsample
 	flag_start = 0
 	i = 0
 	for j in range(len(freq_in)):
+		#print(j)
 
 		if i == 0:
 			sum_fre = 0
 			sum_num = 0
 			sum_den = 0
+			samples_spectrum_in = []
+			samples_weights_in  = []
+			
 
 		if (i >= 0) and (i < nsamples):
 
@@ -564,27 +570,44 @@ def spectral_binning_number_of_samples(freq_in, spectrum_in, weights_in, nsample
 				av_sp_temp = sum_num / sum_den
 			else:
 				av_sp_temp = 0
-
-
+				
+			if weights_in[j]>0:
+				samples_spectrum_in = np.append(samples_spectrum_in, spectrum_in[j])
+				samples_weights_in  = np.append(samples_weights_in, weights_in[j])
+			
+			
 		if i < (nsamples-1):
 			i = i+1
 
 		elif i == (nsamples-1):
+			
+			if len(samples_spectrum_in) <= 1:
+				std_of_the_mean = 1e6			
+			
+			if len(samples_spectrum_in) > 1:
+				sample_variance = np.sum(((samples_spectrum_in - av_sp_temp)**2)*samples_weights_in)/np.sum(samples_weights_in)
+				#sample_variance = (np.std(samples_spectrum_in))**2
+				std_of_the_mean = np.sqrt(sample_variance/len(samples_spectrum_in))
+			
+			
 			if flag_start == 0:
 				av_fr = av_fr_temp
 				av_sp = av_sp_temp
 				av_we = sum_den
+				av_std = std_of_the_mean
 				flag_start = 1
 
 			elif flag_start > 0:
 				av_fr = np.append(av_fr, av_fr_temp)
 				av_sp = np.append(av_sp, av_sp_temp)
 				av_we = np.append(av_we, sum_den)
+				av_std = np.append(av_std, std_of_the_mean)
 
 			i = 0
 
 
-	return av_fr, av_sp, av_we
+	return av_fr, av_sp, av_we, av_std
+
 
 
 
@@ -1136,12 +1159,129 @@ def average_calibration_spectrum(spectrum_files, RFI_cleaning, FLOW, FHIGH, ther
 
 
 
+def signal_edges2018_uncertainties(v):
+
+	# Nominal model reported in Bowman et al. (2018)
+	# ----------------------------------------------
+	model_nominal = dm.signal_model('exp', [-0.5, 78, 19, 7], v)
+	
+	
+	
+	# Computing distribution of models and limits
+	# -------------------------------------------
+	N_MC = 10000
+	dx   = 0.003/2   # probability tails for 99.7% (3 sigma) probabilities
+	
+	# Centers and Widths of Gaussian Parameter Distributions
+	uA = (-1-(-0.2))/2 -0.2
+	sA = (0.2+0.5)/6
+	
+	uv0 = 78
+	sv0 = 1/3
+	
+	uW = (23-17)/2 + 17
+	sW = (23-17)/6
+	
+	ut = (12-4)/2 + 4
+	st = (12-4)/6
+	
+	# Random models
+	model_perturbed = np.zeros((N_MC, len(v)))
+	
+	for i in range(N_MC):	
+		x   = np.random.multivariate_normal([0,0,0,0], np.diag(np.ones(4)))
+		dA  = sA  * x[0]
+		dv0 = sv0 * x[1]
+		dW  = sW  * x[2]
+		dt  = st  * x[3]
+			
+		model_perturbed[i,:] = dm.signal_model('exp', [uA+dA, uv0+dv0, uW+dW, ut+dt], v)
+		
+	# Limits
+	limits = np.zeros((len(v),2))
+	for i in range(len(v)):
+		x_low  = -1
+		x_high = -1
+		x            = model_perturbed[:,i]
+		x_increasing = np.sort(x)
+		cx           = np.abs(np.cumsum(x_increasing))
+		norm_cx      = cx/np.max(cx)
+		for j in range(len(norm_cx)-1):
+			#print(norm_cx[j])
+			if (norm_cx[j]<dx) and (norm_cx[j+1]>=dx):
+				x_low = x_increasing[j+1]
+				
+			if (norm_cx[j]<(1-dx)) and (norm_cx[j+1]>(1-dx)):
+				x_high = x_increasing[j]
+		
+		if x_low == -1:
+			x_low = x_increasing[0]
+		if x_high == -1:
+			x_high = x_increasing[-1]
+			
+			
+		limits[i,0] = x_low
+		limits[i,1] = x_high
+			
+		
+		
+		
+			
+			
+	return model_nominal, model_perturbed, limits
 
 
 
 
 
 
+
+
+
+def HFSS_beam_read(path_to_file, dB_or_linear, theta_min=0, theta_max=180, theta_resolution=1, phi_min=0, phi_max=359, phi_resolution=1):
+	
+	'''
+	
+	'''
+	
+	d = np.genfromtxt(path_to_file, skip_header=1, delimiter=',')
+	
+	theta        = np.arange(theta_min, theta_max+theta_resolution, theta_resolution)
+	
+	phi          = np.arange(phi_min, phi_max+phi_resolution, phi_resolution)
+	#phiV[phiV<0] = phiV[phiV<0] + 360
+	#iV           = np.argsort(phiV)
+	#phiV         = phiV[iV]	
+	#phi          = np.unique(phiV, axis=0)
+	
+	
+	beam_map = np.zeros((len(theta), len(phi)))
+	for i in range(len(theta)):
+		
+		phiX   = d[d[:,1] == theta[i], 0]
+		powerX = d[d[:,1] == theta[i], 2]
+		
+		phiX[phiX<0]  = phiX[phiX<0] + 360
+		phiX, iX      = np.unique(phiX, axis=0, return_index=True)
+		powerX        = powerX[iX]
+		
+		
+		iY     = np.argsort(phiX)
+		powerY = powerX[iY]
+		
+		if dB_or_linear == 'dB':
+			linear_power  = 10**(powerY/10)
+			
+		elif dB_or_linear == 'linear':
+			linear_power = np.copy(powerY)
+	
+		linear_power[np.isnan(linear_power) == True] = 0
+		beam_map[i,:] = linear_power	
+		
+		
+	
+	
+	return theta, phi, beam_map
 
 
 

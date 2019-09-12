@@ -119,6 +119,30 @@ def switch_correction_receiver1(ant_s11, f_in = np.zeros([0,1]), case = 1):
 		#l_ex, f = rc.s1p_read(path_folder + 'ExternalMatch02.s1p')	
 
 
+		
+	# Characterization of Switch at MRO in NOVEMBER 2017
+	if case == 0:
+		path_folder = edges_folder_v1 + 'calibration/receiver_calibration/mid_band/2017_11_15C_25C_35C/data/s11/raw/25C/receiver_MRO_fieldfox_40-200MHz/'
+		
+		resistance_of_match = 49.85     # 
+		
+		
+		o_in, f = rc.s1p_read(path_folder + 'B15.s1p')
+		s_in, f = rc.s1p_read(path_folder + 'B16.s1p')
+		l_in, f = rc.s1p_read(path_folder + 'B17.s1p')
+	
+		o_ex, f = rc.s1p_read(path_folder + 'B18.s1p')
+		s_ex, f = rc.s1p_read(path_folder + 'B19.s1p')
+		l_ex, f = rc.s1p_read(path_folder + 'B20.s1p')
+
+
+
+
+
+
+
+
+
 	
 	if case == 1:
 		path_folder     = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/data/s11/raw/InternalSwitch/'
@@ -133,6 +157,30 @@ def switch_correction_receiver1(ant_s11, f_in = np.zeros([0,1]), case = 1):
 		o_ex, f = rc.s1p_read(path_folder + 'ExternalOpen01.s1p')
 		s_ex, f = rc.s1p_read(path_folder + 'ExternalShort01.s1p')
 		l_ex, f = rc.s1p_read(path_folder + 'ExternalMatch01.s1p')
+
+
+	# This is just a test case, using a probably wrong value of resistence of 50.12 ohms
+	if case == 105012:
+		path_folder     = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/data/s11/raw/InternalSwitch/'
+		
+		resistance_of_match = 50.12 # male
+		#print('50')
+		
+		o_in, f = rc.s1p_read(path_folder + 'Open01.s1p')
+		s_in, f = rc.s1p_read(path_folder + 'Short01.s1p')
+		l_in, f = rc.s1p_read(path_folder + 'Match01.s1p')
+	
+		o_ex, f = rc.s1p_read(path_folder + 'ExternalOpen01.s1p')
+		s_ex, f = rc.s1p_read(path_folder + 'ExternalShort01.s1p')
+		l_ex, f = rc.s1p_read(path_folder + 'ExternalMatch01.s1p')
+
+
+
+
+
+
+
+
 
 
 
@@ -222,6 +270,24 @@ def switch_correction_receiver1(ant_s11, f_in = np.zeros([0,1]), case = 1):
 		o_ex, f = rc.s1p_read(path_folder + 'ExternalOpen01.s1p')
 		s_ex, f = rc.s1p_read(path_folder + 'ExternalShort01.s1p')
 		l_ex, f = rc.s1p_read(path_folder + 'ExternalMatch01.s1p')
+	
+		
+	# This is just a test case, using a probably wrong value of resistence of 50.12 ohms		
+	if case == 605012:
+		path_folder     = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2019_03_25C/data/s11/raw/SwitchingState01/'
+		
+		resistance_of_match = 50.12 # male
+		
+		o_in, f = rc.s1p_read(path_folder + 'Open01.s1p')
+		s_in, f = rc.s1p_read(path_folder + 'Short01.s1p')
+		l_in, f = rc.s1p_read(path_folder + 'Match01.s1p')
+	
+		o_ex, f = rc.s1p_read(path_folder + 'ExternalOpen01.s1p')
+		s_ex, f = rc.s1p_read(path_folder + 'ExternalShort01.s1p')
+		l_ex, f = rc.s1p_read(path_folder + 'ExternalMatch01.s1p')		
+		
+		
+		
 		
 	if case == 7:
 		path_folder     = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2019_03_25C/data/s11/raw/SwitchingState01/'
@@ -2217,34 +2283,35 @@ def calibration_processing_mid_band_2019_04_25C(flow=50, fhigh=180, save='no', s
 	# Average calibration spectra / physical temperature
 	# Percentage of initial data to leave out
 	percent = 5 # 5%
-	ssa,    phys_temp_ambient  = ba.average_calibration_spectrum(spec_ambient, res_ambient, 1*percent, plot='no')
-	ssh,    phys_temp_hot      = ba.average_calibration_spectrum(spec_hot,     res_hot,     2*percent, plot='no')
-	sso,    phys_temp_open     = ba.average_calibration_spectrum(spec_open,    res_open,    1*percent, plot='no')
-	sss,    phys_temp_shorted  = ba.average_calibration_spectrum(spec_shorted, res_shorted, 1*percent, plot='no')
-	sss2,   phys_temp_sim2     = ba.average_calibration_spectrum(spec_sim2,    res_sim2,    1*percent, plot='no')
-	sss3,   phys_temp_sim3     = ba.average_calibration_spectrum(spec_sim3,    res_sim3,    1*percent, plot='no')
+
+	fe, sa,  w1, phys_temp_ambient  = ba.average_calibration_spectrum(spec_ambient, 'no', flow, fhigh, 'mp3139', res_ambient, 1*percent, plot='no')
+	fe, sh,  w2, phys_temp_hot      = ba.average_calibration_spectrum(spec_hot,     'no', flow, fhigh, 'mp3139', res_hot,     2*percent, plot='no')
+	fe, so,  w3, phys_temp_open     = ba.average_calibration_spectrum(spec_open,    'no', flow, fhigh, 'mp3139', res_open,    1*percent, plot='no')
+	fe, ss,  w4, phys_temp_shorted  = ba.average_calibration_spectrum(spec_shorted, 'no', flow, fhigh, 'mp3139', res_shorted, 1*percent, plot='no')
+	fe, ss2, w5, phys_temp_sim2     = ba.average_calibration_spectrum(spec_sim2,    'no', flow, fhigh, 'mp3139', res_sim2,    1*percent, plot='no')
+	fe, ss3, w6, phys_temp_sim3     = ba.average_calibration_spectrum(spec_sim3,    'no', flow, fhigh, 'on930',  res_sim3,    1*percent, plot='no')
 
 
 
 
 
 
+	#ssa,    phys_temp_ambient  = ba.average_calibration_spectrum(spec_ambient, res_ambient, 1*percent, plot='no')
+	#ssh,    phys_temp_hot      = ba.average_calibration_spectrum(spec_hot,     res_hot,     2*percent, plot='no')
+	#sso,    phys_temp_open     = ba.average_calibration_spectrum(spec_open,    res_open,    1*percent, plot='no')
+	#sss,    phys_temp_shorted  = ba.average_calibration_spectrum(spec_shorted, res_shorted, 1*percent, plot='no')
+	#sss2,   phys_temp_sim2     = ba.average_calibration_spectrum(spec_sim2,    res_sim2,    1*percent, plot='no')
+	#sss3,   phys_temp_sim3     = ba.average_calibration_spectrum(spec_sim3,    res_sim3,    1*percent, plot='no')
 
-
-
-
-
-
-
-	# Select frequency range
-	ff, ilow, ihigh = ba.frequency_edges(flow, fhigh)
-	fe    = ff[ilow:ihigh+1]
-	sa    = ssa[ilow:ihigh+1]
-	sh    = ssh[ilow:ihigh+1]
-	so    = sso[ilow:ihigh+1]
-	ss    = sss[ilow:ihigh+1]
-	ss2   = sss2[ilow:ihigh+1]
-	ss3   = sss3[ilow:ihigh+1]
+	## Select frequency range
+	#ff, ilow, ihigh = ba.frequency_edges(flow, fhigh)
+	#fe    = ff[ilow:ihigh+1]
+	#sa    = ssa[ilow:ihigh+1]
+	#sh    = ssh[ilow:ihigh+1]
+	#so    = sso[ilow:ihigh+1]
+	#ss    = sss[ilow:ihigh+1]
+	#ss2   = sss2[ilow:ihigh+1]
+	#ss3   = sss3[ilow:ihigh+1]
 
 
 	

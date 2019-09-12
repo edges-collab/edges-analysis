@@ -27,36 +27,48 @@ edges_folder       = os.environ['EDGES_vol2']
 print('EDGES Folder: ' + edges_folder)
 
 
-N21 = int(sys.argv[1])
-Nfg = int(sys.argv[2])
+Nfg = int(sys.argv[1])
+N21 = int(sys.argv[2])
 
 
 
-
-# Folder and file name
-# --------------------------
-case        =  2
-save_folder = edges_folder + 'mid_band/polychord/20190606/case2/foreground_exp_60_100MHz'
-if not exists(save_folder):
-	makedirs(save_folder)
-	
-save_file_name = 'chain' #sys.argv[3]
-	
 
 
 # Input parameters
 # -----------------------
-model_type_foreground = 'exp'  #'exp', 'linlog'
-model_type_signal     = 'tanh'  #'tanh' #, 'tanh'
+#save_folder = edges_folder + 'mid_band/polychord/20190818/case_test1/foreground_powerlog_5par/' #_signal_tanh_5par/'
+#save_folder = edges_folder + 'mid_band/polychord/20190909/case101_GHA_15-17hr/foreground_powerlog_5par_signal_tanh_5par/'
+#save_folder = edges_folder + 'mid_band/polychord/20190910/case101_GHA_6-18hr/foreground_linlog_5par/'
+save_folder = edges_folder + 'mid_band/polychord/20190910/case101_GHA_6-18hr/foreground_linlog_5par_signal_exp_4par/'
+
 
 data        = 'real'   # it could be 'real' or 'simulated'
-FLOW        =  60
-FHIGH       = 100 #120
+case        =  101  # 0=nominal
+FLOW        =  58   #  58
+FHIGH       = 118   # 128
+v0          =  90
 
 gap_FLOW  = 0  # nominal value: 0 
 gap_FHIGH = 0  # nominal_value: 0
 
-v0          = 100
+model_type_foreground = 'linlog' #, 'linlog', 'powerlog'
+model_type_signal     = 'exp'     #'exp'  #, 'tanh'
+
+
+
+
+
+
+
+
+
+
+if not exists(save_folder):
+	makedirs(save_folder)
+save_file_name = 'chain' #sys.argv[3]
+	
+
+
 
 
 
@@ -105,20 +117,20 @@ def prior_list(N21, Nfg, model_type_signal, model_type_foreground):
 	if ((model_type_signal == 'exp') or (model_type_signal == 'tanh')) and (N21>=4):
 		
 		# Amplitude
-		pl[0, 0] = -5
-		pl[0, 1] =  0 #5
+		pl[0, 0] = -2
+		pl[0, 1] =  2   # 0
 
 		# Center
-		pl[1, 0] = 61
-		pl[1, 1] = 100		
+		pl[1, 0] = 58  #61
+		pl[1, 1] = 128 #149 #119  #100		
 	
 		# Width
 		pl[2, 0] =  2
-		pl[2, 1] = 40
+		pl[2, 1] = 70 #60 #30
 		
 		# Tau
 		pl[3, 0] =  0.01
-		pl[3, 1] =  20
+		pl[3, 1] =  20 
 		
 		if (model_type_signal == 'exp') and (N21 == 5):
 			
@@ -138,7 +150,7 @@ def prior_list(N21, Nfg, model_type_signal, model_type_foreground):
 		
 		
 	# Foreground model
-	if model_type_foreground == 'exp':
+	if model_type_foreground == 'powerlog':
 	
 		# Temperature at reference frequency
 		pl[N21,   0] =   100   # lower limit of first parameter, temperature at 100 MHz

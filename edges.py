@@ -624,6 +624,25 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 
 
 
+
+			if receiver_cal_file == 88:
+				print('Receiver calibration FILE 88')
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2019_04_25C/results/nominal/calibration_files/calibration_file_receiver1_50_150MHz_cterms8_wterms8.txt'
+			if receiver_cal_file == 810:
+				print('Receiver calibration FILE 810')
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2019_04_25C/results/nominal/calibration_files/calibration_file_receiver1_50_150MHz_cterms8_wterms10.txt'				
+			if receiver_cal_file == 811:				
+				print('Receiver calibration FILE 811')
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2019_04_25C/results/nominal/calibration_files/calibration_file_receiver1_50_150MHz_cterms8_wterms11.txt'
+				
+				print('quebecuac')
+
+
+
+
+
+
+
 	
 		
 		rcv = np.genfromtxt(rcv_file)
@@ -643,6 +662,12 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 		# Antenna S11
 		# -----------
 		s11_ant = cal.models_antenna_s11_remove_delay(band, fin, year=antenna_s11_year, day=antenna_s11_day, case=antenna_s11_case, delay_0=0.17, model_type='polynomial', Nfit=antenna_s11_Nfit, plot_fit_residuals='no')
+		
+		#s11_ant_1 = cal.models_antenna_s11_remove_delay('mid_band', fin, year=2018, day=antenna_s11_day, case=3, delay_0=0.17, model_type='polynomial', Nfit=antenna_s11_Nfit, plot_fit_residuals='no')
+		#s11_ant_2 = cal.models_antenna_s11_remove_delay('mid_band', fin, year=2018, day=antenna_s11_day, case=37, delay_0=0.17, model_type='polynomial', Nfit=antenna_s11_Nfit, plot_fit_residuals='no')
+		#s11_ant = np.mean(np.array([s11_ant_1, s11_ant_2]), axis=0)
+		
+		
 		
 
 
@@ -701,14 +726,25 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 			
 		if beam_correction == 1:
 			if band == 'mid_band':
-				#beam_factor_filename = 'table_hires_mid_band_50-200MHz_90deg_alan0_haslam_2.5_2.6_reffreq_100MHz.hdf5'
 				
 				if bf_case == 0:
-					beam_factor_filename = 'table_hires_mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.6_sigma_deg_5_reffreq_100MHz.hdf5'
+					beam_factor_filename = 'table_hires_mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz.hdf5'
 					
 				if bf_case == 1:
-					beam_factor_filename = 'table_hires_mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.6_sigma_deg_5_reffreq_75MHz.hdf5'
-
+					beam_factor_filename = 'table_hires_mid_band_50-200MHz_90deg_alan1_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz.hdf5'
+					
+				if bf_case == 2:
+					beam_factor_filename = 'table_hires_mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_120MHz.hdf5'
+					
+				if bf_case == 3:
+					beam_factor_filename = 'table_hires_mid_band_50-200MHz_90deg_alan0_haslam_flat_index_2.56_reffreq_90MHz.hdf5'				
+					
+				if bf_case == 4:
+					beam_factor_filename = 'table_hires_mid_band_50-200MHz_90deg_alan0_LW_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz.hdf5'					
+					
+				if bf_case == 5:
+					beam_factor_filename = 'table_hires_mid_band_50-200MHz_90deg_alan0_guzman_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz.hdf5'
+					
 
 				
 			elif band == 'low_band3':
@@ -768,9 +804,9 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 			
 			# Fitting foreground model to binned version of spectra
 			# -----------------------------------------------------
-			Nsamples      = 16 # 48.8 kHz
-			fbi, tbi, wbi = ba.spectral_binning_number_of_samples(fin, tti, wwi, nsamples=Nsamples)
-			par_fg        = ba.fit_polynomial_fourier('LINLOG', fbi/200, tbi, Nfg, Weights=wbi)
+			Nsamples           = 16 # 48.8 kHz
+			fbi, tbi, wbi, sbi = ba.spectral_binning_number_of_samples(fin, tti, wwi, nsamples=Nsamples)
+			par_fg             = ba.fit_polynomial_fourier('LINLOG', fbi/200, tbi, Nfg, Weights=wbi)
 			
 			
 			# Evaluating foreground model at raw resolution
@@ -973,29 +1009,102 @@ def level3read(path_file, print_key='no'):
 
 
 
-def level3_single_file_test(path_file, FLOW, FHIGH):
+
+
+
+
+
+def level3_single_file_test(path_file, GHA_1, GHA_2, FLOW, FHIGH, plot_residuals_yes_no, model_type, Nfg, save_yes_no, save_spectrum_name):
 	
 	f, t, p, r, w, rms, tp, m = level3read(path_file)
 
-	
-	avt, avw = ba.spectral_averaging(t[m[:,3]<11.5,:], w[m[:,3]<11.5,:])
+	gha = m[:,4]
+	gha[gha<0] = gha[gha<0] + 24
 
-	ff   = f[(f>=FLOW) & (f<=FHIGH)]
-	avtt = avt[(f>=FLOW) & (f<=FHIGH)]
-	avww = avw[(f>=FLOW) & (f<=FHIGH)]
 
-	#ttix, wwix = rfi.cleaning_polynomial(ff, avtt, avww, Nterms_fg=7, Nterms_std=5, Nstd=3.5)
-	pp = ba.fit_polynomial_fourier('LINLOG', ff, avtt, 5, Weights=avww)
-	fb, rb, wb = ba.spectral_binning_number_of_samples(ff, avtt-pp[1], avww)
+
+	if GHA_2 > GHA_1:
+		avr, avw = ba.spectral_averaging(r[(gha>=GHA_1) & (gha<=GHA_2),:], w[(gha>=GHA_1) & (gha<=GHA_2),:])
+		avp = np.mean(p[(gha>=GHA_1) & (gha<=GHA_2),:], axis=0)
+		
+	if GHA_2 < GHA_1:
+		avr, avw = ba.spectral_averaging(r[(gha>=GHA_1) | (gha<=GHA_2),:], w[(gha>=GHA_1) | (gha<=GHA_2),:])
+		avp = np.mean(p[(gha>=GHA_1) | (gha<=GHA_2),:], axis=0)
+		
+		
+		
 	
-	#plt.close()
-	#plt.close()
-	#plt.close()
-	plt.figure()
-	plt.plot(fb[wb>0], rb[wb>0])
-	plt.ylim([-1.5, 1.5]); plt.xlim([50, 130])
+	fb, rb, wb, sb = ba.spectral_binning_number_of_samples(f, avr, avw, nsamples=64)
 	
-	return 0
+	
+	
+	mb = ba.model_evaluate('LINLOG', avp, fb/200)
+	
+	tb = mb + rb
+	
+	
+
+	ff  = fb[(fb>=FLOW) & (fb<=FHIGH)]
+	tt  = tb[(fb>=FLOW) & (fb<=FHIGH)]
+	ww  = wb[(fb>=FLOW) & (fb<=FHIGH)]
+	ss  = sb[(fb>=FLOW) & (fb<=FHIGH)]
+	
+	
+	
+
+	
+	if plot_residuals_yes_no == 'yes':
+		#ttix, wwix = rfi.cleaning_polynomial(ff, avtt, avww, Nterms_fg=7, Nterms_std=5, Nstd=3.5)
+		if model_type == 'LINLOG':
+			pp = ba.fit_polynomial_fourier('LINLOG', ff, tt, Nfg, Weights=1/(ss**2))
+			model = pp[1]
+		#fb, rb, wb, sb = ba.spectral_binning_number_of_samples(ff, avtt-pp[1], avww, nsamples=128)
+		
+		elif model_type == 'LOGLOG':
+			pp = np.polyfit(np.log(ff), np.log(tt), Nfg-1)
+			log_model = np.polyval(pp, np.log(ff))
+			model = np.exp(log_model)
+		
+		#plt.close()
+		#plt.close()
+		#plt.close()
+		plt.figure()
+		plt.plot(ff[ww>0], (tt-model)[ww>0])
+		plt.ylim([-5, 5])
+		plt.xlim([55, 152])
+
+
+		
+	
+	
+	if save_yes_no == 'yes':
+		
+		outT = np.array([ff, tt, ww, ss])
+		out  = outT.T
+		
+		save_path = edges_folder + 'mid_band/spectra/level5/one_day_tests/'
+		np.savetxt(save_path + save_spectrum_name, out)
+		
+	
+
+	
+	return ff, tt, ww, ss
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1072,7 +1181,7 @@ def data_selection(m, GHA_or_LST='GHA', TIME_1=0, TIME_2=24, sun_el_max=90, moon
 def rms_filter_computation(band, case, save_parameters='no'):
 	"""
 
-	Last modification:  2019-01-01
+	Last modification:  2019-09-02
 	
 	Computation of the RMS filter
 	
@@ -1085,20 +1194,16 @@ def rms_filter_computation(band, case, save_parameters='no'):
 	# ------------------------
 	if band == 'mid_band':
 
-		if case == 2:
-			path_files  = edges_folder + '/mid_band/spectra/level3/case2/'
-			save_folder = edges_folder + '/mid_band/rms_filters/case2/'
+		if case == 10:
+			path_files  = edges_folder + '/mid_band/spectra/level3/rcv18_sw18_nominal/'
+			save_folder = edges_folder + '/mid_band/rms_filters/rcv18_sw18_nominal/'
+
+
+		if case == 20:
+			path_files  = edges_folder + '/mid_band/spectra/level3/rcv18_sw19_nominal/'
+			save_folder = edges_folder + '/mid_band/rms_filters/rcv18_sw19_nominal/'
+
 		
-						
-		if case == 26:
-			path_files  = edges_folder + '/mid_band/spectra/level3/case26/'
-			save_folder = edges_folder + '/mid_band/rms_filters/case26/'
-						
-							
-		if case == 40:
-			path_files  = edges_folder + '/mid_band/spectra/level3/case40/'
-			save_folder = edges_folder + '/mid_band/rms_filters/case40/'
-						
 		
 	
 	if band == 'low_band3':
@@ -1411,14 +1516,17 @@ def rms_filter_computation(band, case, save_parameters='no'):
 def rms_filter(band, case, gx, rms, Nsigma):
 	
 
-	if (case == 2):
-		file_path = edges_folder + band + '/rms_filters/case2/'
+	#if (case == 0):
+		#file_path = edges_folder + band + '/rms_filters/case_nominal/'
 
-	if (case == 26):
-		file_path = edges_folder + band + '/rms_filters/case26/'
+	if band == 'mid_band':
+		if (case >= 10) and (case <= 19):
+			file_path = edges_folder + band + '/rms_filters/rcv18_sw18_nominal/'		
+		
+		
+		if (case >= 20) and (case <= 29):
+			file_path = edges_folder + band + '/rms_filters/rcv18_sw19_nominal/'
 
-	if (case == 40):
-		file_path = edges_folder + band + '/rms_filters/case40/'
 
 
 
@@ -1630,21 +1738,26 @@ def level3_to_level4(band, case, GHA_edges, sun_el_max, moon_el_max, save_folder
 	if band == 'mid_band':
 		
 
-		if case == 2:
-			path_files  = edges_folder + 'mid_band/spectra/level3/case2/'
+		# Case 1 calibration: Receiver 2018, Switch 2018
+		if (case >= 10) and (case <= 19):
+			if case == 10:
+				path_files  = edges_folder + 'mid_band/spectra/level3/rcv18_sw18_nominal/'
 
-		if case == 26:
-			path_files  = edges_folder + 'mid_band/spectra/level3/case26/'
 
-		if case == 40:
-			path_files  = edges_folder + 'mid_band/spectra/level3/case40/'
-			
+		# Case 2 calibration: Receiver 2018, Switch 2019
+		if (case >= 20) and (case <= 29):
+			if case == 20:
+				path_files  = edges_folder + 'mid_band/spectra/level3/rcv18_sw19_nominal/'
+
 			
 			
 			
 		
 		save_folder            = edges_folder + 'mid_band/spectra/level4/' + save_folder_file_name + '/'
 		output_file_name_hdf5  = save_folder_file_name + '.hdf5'
+
+
+
 
 
 
@@ -1871,7 +1984,7 @@ def level3_to_level4(band, case, GHA_edges, sun_el_max, moon_el_max, save_folder
 				yr = avr_all[i,j,:]
 				yw = avw_all[i,j,:]
 							
-				fb, yrb, ywb = ba.spectral_binning_number_of_samples(f, yr, yw)
+				fb, yrb, ywb, ysb = ba.spectral_binning_number_of_samples(f, yr, yw)
 				
 				
 				# Creating arrays with residuals to plot
@@ -1912,11 +2025,11 @@ def level3_to_level4(band, case, GHA_edges, sun_el_max, moon_el_max, save_folder
 				elif Nfg == 5:
 					DY = 2
 					
-				FIG_SX      =   7
+				FIG_SX      =   9
 				FIG_SY      =   3
 				FLOW_plot   =  35
-				FHIGH_plot  = 120
-				XTICKS      = np.arange(60, 121, 10)
+				FHIGH_plot  = 152
+				XTICKS      = np.arange(60, 151, 10)
 				XTEXT       =  35.5
 				YLABEL      = str(DY)  + ' K per division'
 				TITLE       = str(Nfg) + ' LINLOG terms'
@@ -2077,25 +2190,198 @@ def level4read(path_file):
 
 
 
-def daily_nominal_filter(band, filter_case, year_day_list):
+def daily_nominal_filter(band, case, index_GHA, year_day_list):
 	
 	
 	l = len(year_day_list)
 	keep_all = np.zeros(l)
 
-	# Original
-	#bad0 = np.array([[2018, 150], [2018, 159], [2018, 161], [2018, 164], [2018, 182], [2018, 184], [2018, 185], [2018, 186], [2018, 192], [2018, 193], [2018, 195], [2018, 196], [2018, 204], [2018, 208], [2018, 216], [2018, 220]])
-	
-	# 
-	#bad0 = np.array([[2018, 184], [2018, 195], [2018, 204], [2018, 208], ])
-	
-	if (filter_case == 10) or (filter_case == 2) or (filter_case == 4) or (filter_case == 5) or (filter_case == 30) or (filter_case == 31) or (filter_case == 32) or (filter_case == 26) or (filter_case == 40):
-		#bad0 = np.array([])
+
+	# Choosing case
+	if band == 'mid_band':
 		
-		bad0 = np.array([[2018, 146], [2018, 147], [2018, 148], [2018, 149], [2018, 150], [2018, 151], [2018, 152], [2018, 157], [2018, 159],  [2018, 160], [2018, 161], [2018, 162], [2018, 163], [2018, 165], [2018, 167], [2018, 169], [2018, 170], [2018, 174], [2018, 175], [2018, 176], [2018, 177], [2018, 178], [2018, 179], [2018, 180], [2018, 181], [2018, 182], [2018, 184], [2018, 185], [2018, 187], [2018, 189], [2018, 190], [2018, 193], [2018, 195], [2018, 196], [2018, 197], [2018, 204], [2018, 208], [2018, 209], [2018, 216], [2018, 220]])
+		# Calibration from 2018
+		if case == 101:
+			if index_GHA == 0:				
+				bad0 = np.array([])
+				
+			if index_GHA == 1:				
+				bad0 = np.array([])
+				
+			if index_GHA == 2:
+				bad0 = np.array([])
+				
+			if index_GHA == 3:
+				bad0 = np.array([[2018, 161]])
+				
+			if index_GHA == 4:
+				bad0 = np.array([[2018, 204], [2018, 205]])
+				
+			if index_GHA == 5:
+				bad0 = np.array([[2018, 167], [2018, 200]])
+				
+			if index_GHA == 6:
+				bad0 = np.array([])
+
+			if index_GHA == 7:
+				bad0 = np.array([[2018, 146], [2018, 157], [2018, 209]])
+
+			if index_GHA == 8:
+				bad0 = np.array([[2018, 146], [2018, 152], [2018, 159], [2018, 162], [2018, 192]])
+				
+			if index_GHA == 9:
+				bad0 = np.array([[2018, 159], [2018, 196]])
+				
+			if index_GHA == 10:
+				bad0 = np.array([[2018, 176], [2018, 196], [2018, 201], [2018, 204], [2018, 218]])
+				
+			if index_GHA == 11:
+				bad0 = np.array([[2018, 149], [2018, 204], [2018, 216]])
+				
+			if index_GHA == 12:
+				bad0 = np.array([[2018, 176], [2018, 195], [2018, 204]])
+
+			if index_GHA == 13:
+				bad0 = np.array([[2018, 176], [2018, 185], [2018, 195], [2018, 204], [2018, 208]])
+
+			if index_GHA == 14:
+				bad0 = np.array([[2018, 185], [2018, 208]])
+
+			if index_GHA == 15:
+				bad0 = np.array([[2018, 185]])
+
+			if index_GHA == 16:
+				bad0 = np.array([])
+				
+			if index_GHA == 17:
+				bad0 = np.array([[2018, 185]])
+				
+			if index_GHA == 18:
+				bad0 = np.array([[2018, 192]])
+				
+			if index_GHA == 19:
+				bad0 = np.array([])
+				
+			if index_GHA == 20:
+				bad0 = np.array([[2018, 185], [2018, 198], [2018, 216]])
+				
+			if index_GHA == 21:
+				bad0 = np.array([[2018, 148], [2018, 160]])
+				
+			if index_GHA == 22:
+				bad0 = np.array([[2018, 146]])
+				
+			if index_GHA == 23:
+				bad0 = np.array([[2018, 146], [2018, 170], [2018, 185], [2018, 215], [2018, 216], [2018, 217], [2018, 220]])			
+
+
+
 		
-	elif filter_case == 12:
-		bad0 = np.array([[2018, 146], [2018, 147], [2018, 149], [2018, 150], [2018, 151], [2018, 152], [2018, 157], [2018, 161], [2018, 162], [2018, 163], [2018, 166], [2018, 174], [2018, 176], [2018, 179], [2018, 182], [2018, 184], [2018, 185], [2018, 187], [2018, 189], [2018, 193], [2018, 195], [2018, 197], [2018, 198], [2018, 200], [2018, 201], [2018, 204], [2018, 210]])   #  [2018, 170],
+		
+		# Calibration from 2019
+		
+		if case == 2:
+			if index_GHA == 0:				
+				bad0 = np.array([[2018, 146], [2018, 220]])
+				
+			if index_GHA == 1:	
+				bad0 = np.array([[2018, 147], [2018, 180], [2018, 185]])
+				
+			if index_GHA == 2:
+				bad0 = np.array([])
+				
+			if index_GHA == 3:
+				bad0 = np.array([])
+				
+			if index_GHA == 4:	
+				bad0 = np.array([[2018, 204]])
+				
+			if index_GHA == 5:
+				bad0 = np.array([])
+				
+			if index_GHA == 6:
+				bad0 = np.array([])
+				
+			if index_GHA == 7:
+				bad0 = np.array([[2018, 146], [2018, 215]])
+				
+			if index_GHA == 8:
+				bad0 = np.array([[2018, 146], [2018, 159], [2018, 211], [2018, 212]])
+				
+			if index_GHA == 9:
+				bad0 = np.array([[2018, 146], [2018, 147], [2018, 159], [2018, 190], [2018, 192], [2018, 193], [2018, 212]])
+				
+			if index_GHA == 10:
+				bad0 = np.array([[2018, 159],  [2018, 196], [2018, 199]])
+				
+			if index_GHA == 11:
+				bad0 = np.array([[2018, 149],  [2018, 152], [2018, 176], [2018, 204], [2018, 209]])
+				
+			if index_GHA == 12:
+				bad0 = np.array([[2018, 175], [2018, 195], [2018, 204], [2018, 216]])
+				
+			if index_GHA == 13:
+				bad0 = np.array([[2018, 176], [2018, 185], [2018, 195], [2018, 204], [2018, 208]])
+				
+			if index_GHA == 14:
+				bad0 = np.array([[2018, 176], [2018, 185], [2018, 208]])
+
+			if index_GHA == 15:
+				bad0 = np.array([[2018, 185]])
+				
+			if index_GHA == 16:
+				bad0 = np.array([[2018, 185]])
+				
+			if index_GHA == 17:
+				bad0 = np.array([[2018, 216]])
+				
+			if index_GHA == 18:
+				bad0 = np.array([[2018, 146], [2018, 192], [2018, 196]])
+				
+			if index_GHA == 19:
+				bad0 = np.array([])
+				
+			if index_GHA == 20:
+				bad0 = np.array([])
+				
+			if index_GHA == 21:
+				bad0 = np.array([])
+				
+			if index_GHA == 22:
+				bad0 = np.array([])
+			
+			if index_GHA == 23:
+				bad0 = np.array([[2018, 147], [2018, 152], [2018, 160], [2018, 182], [2018, 184], [2018, 185], [2018, 186], [2018, 197], [2018, 220]])
+
+			
+				
+				# BEST:
+				# bad0 = np.array([[2018, 146], [2018, 147], [2018, 148], [2018, 149], [2018, 150], [2018, 151], [2018, 152], [2018, 157], [2018, 159],  [2018, 160], [2018, 161], [2018, 162], [2018, 163], [2018, 165], [2018, 167], [2018, 169], [2018, 170], [2018, 174], [2018, 175], [2018, 176], [2018, 177], [2018, 178], [2018, 179], [2018, 180], [2018, 181], [2018, 182], [2018, 184], [2018, 185], [2018, 187], [2018, 189], [2018, 190], [2018, 193], [2018, 195], [2018, 196], [2018, 197], [2018, 201], [2018, 204], [2018, 208], [2018, 209], [2018, 216], [2018, 220]])
+				
+				# MODIFIED ORIGINAL:
+				#bad0 = np.array([[2018, 146], [2018, 147], [2018, 148], [2018, 149], [2018, 150], [2018, 151], [2018, 152], [2018, 157], [2018, 159],  [2018, 160], [2018, 161], [2018, 162], [2018, 163], [2018, 164], [2018, 165], [2018, 166], [2018, 167], [2018, 169], [2018, 170], [2018, 174], [2018, 175], [2018, 176], [2018, 177], [2018, 178], [2018, 179], [2018, 180], [2018, 181], [2018, 182], [2018, 184], [2018, 185], [2018, 189], [2018, 190], [2018, 193], [2018, 195], [2018, 196], [2018, 201], [2018, 204], [2018, 208], [2018, 216], [2018, 220]])
+				
+				#bad0 = np.array([[2018, 146], [2018, 147], [2018, 148], [2018, 149], [2018, 150], [2018, 151], [2018, 152], [2018, 157], [2018, 159],  [2018, 160], [2018, 161], [2018, 162], [2018, 163], [2018, 164], [2018, 165], [2018, 166], [2018, 167], [2018, 169], [2018, 170], [2018, 174], [2018, 175], [2018, 176], [2018, 177], [2018, 178], [2018, 179], [2018, 180], [2018, 181], [2018, 182], [2018, 184], [2018, 185], [2018, 189], [2018, 190], [2018, 193], [2018, 195], [2018, 196], [2018, 201], [2018, 204], [2018, 208], [2018, 216], [2018, 220]])
+				
+				
+				 
+				
+				# [2018, 187], [2018, 197], [2018, 209], 
+				
+				
+				# New test
+				#bad0 = np.array([[2018, 159], [2018, 184], [2018, 185], [2018, 189], [2018, 195], [2018, 196], [2018, 197], [2018, 204], [2018, 208], [2018, 216], [2018, 220]])
+				
+				
+				
+			#bad0 = np.array([[2018, 159], [2018, 184], [2018, 185], [2018, 193], [2018, 195], [2018, 196], [2018, 204], [2018, 208], [2018, 216], [2018, 220]])
+				#bad0 = []
+			#print('hola')
+		
+		
+		
+		
+		
 
 	
 	if (band == 'mid_band'):
@@ -2132,9 +2418,10 @@ def daily_strict_filter(band, year_day_list):
 
 
 	if (band == 'mid_band'):  
-		#good = np.array([[2018, 146], [2018, 147], [2018, 157], [2018, 170], [2018, 180], [2018, 187], [2018, 188], [2018, 191], [2018, 198], [2018, 199], [2018, 200], [2018, 205], [2018, 209], [2018, 210], [2018, 212], [2018, 215], [2018, 218], [2018, 219]])
 		
-		good = np.array([[2018, 146], [2018, 147], [2018, 187], [2018, 188], [2018, 191], [2018, 192], [2018, 205], [2018, 210], [2018, 211], [2018, 215], [2018, 217], [2018, 219]]) #  [2018, 198], [2018, 200], 
+		good = np.array([[2018, 147], [2018, 148], [2018, 149], [2018, 150], [2018, 151], [2018, 152], [2018, 157], [2018, 160], [2018, 161], [2018, 162], [2018, 163], [2018, 164], [2018, 165], [2018, 166], [2018, 167], [2018, 170], [2018, 174], [2018, 175], [2018, 176], [2018, 177], [2018, 178], [2018, 179], [2018, 180], [2018, 181], [2018, 182]])
+		
+		# np.array([[2018, 147], [2018, 148], [2018, 149], [2018, 157], [2018, 160], [2018, 165], [2018, 166], [2018, 167], [2018, 169], [2018, 170], [2018, 174], [2018, 175], [2018, 176], [2018, 177], [2018, 178], [2018, 179], [2018, 181], [2018, 186], [2018, 187], [2018, 188], [2018, 189], [2018, 190], [2018, 191], [2018, 197], [2018, 198], [2018, 199], [2018, 200], [2018, 201], [2018, 209]]) #
 
 
 
@@ -2156,7 +2443,47 @@ def daily_strict_filter(band, year_day_list):
 
 
 
-def plot_level4(case, index_GHA, averaged_146, good_bad, model, FLOW, FHIGH, K_per_division, file_name):
+
+
+
+def daily_rms_filter(band, case, index_GHA, year_day_list, rms_threshold):
+	
+	l = len(year_day_list)
+	keep_all = np.zeros(l)	
+	
+	if band == 'mid_band':
+		if case == 1:
+			d    = np.genfromtxt(edges_folder + 'mid_band/spectra/level4/case1/rms_filters/rms_index' + str(index_GHA) + '.txt')
+			rms_original = d[:,-1]
+			good = d[rms_original<= rms_threshold, :]
+			lg   = len(good[:,0])
+			
+			
+			
+			
+						
+	for j in range(l):
+		keep = 0
+		for i in range(lg):
+			if (year_day_list[j,0] == good[i,0]) and (year_day_list[j,1] == good[i,1]):
+				keep = 1
+				
+		keep_all[j] = keep
+	
+	
+	
+	return keep_all
+
+
+
+
+
+
+
+
+
+
+def plot_level4(case, index_GHA, averaged_146, good_bad, FLOW, FHIGH, model, Nfg, K_per_division, file_name):
 
 	"""
 	model: 'LINLOG', 'LOGLOG'
@@ -2164,8 +2491,42 @@ def plot_level4(case, index_GHA, averaged_146, good_bad, model, FLOW, FHIGH, K_p
 	"""
 	
 	# Load Level 4 data
-	if case == 2:
-		f, py, ry, wy, index, gha, yy = level4read('/home/raul/DATA2/EDGES_vol2/mid_band/spectra/level4/case2/case2.hdf5')
+	if case == 101:
+		f, py, ry, wy, index, gha, yy = level4read('/home/raul/DATA2/EDGES_vol2/mid_band/spectra/level4/rcv18_sw18_nominal_GHA_every_1hr/rcv18_sw18_nominal_GHA_every_1hr.hdf5')
+		
+		#save_rms_folder = edges_folder + 'mid_band/spectra/level4/rcv18_ant19_nominal/rms_filters/'
+		#if not exists(save_rms_folder):
+			#makedirs(save_rms_folder)
+			
+			
+
+
+
+
+
+	if case == 200:
+		f, py, ry, wy, index, gha, yy = level4read('/home/raul/DATA2/EDGES_vol2/mid_band/spectra/level4/rcv18_ant19_nominal/rcv18_ant19_nominal.hdf5')
+		
+		save_rms_folder = edges_folder + 'mid_band/spectra/level4/rcv18_ant19_nominal/rms_filters/'
+		if not exists(save_rms_folder):
+			makedirs(save_rms_folder)		
+		
+
+	if case == 201:
+		f, py, ry, wy, index, gha, yy = level4read('/home/raul/DATA2/EDGES_vol2/mid_band/spectra/level4/rcv18_ant19_every_1hr_GHA/rcv18_ant19_every_1hr_GHA.hdf5')
+		
+		save_rms_folder = edges_folder + 'mid_band/spectra/level4/rcv18_ant19_every_1hr_GHA/rms_filters/'
+		if not exists(save_rms_folder):
+			makedirs(save_rms_folder)
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2175,7 +2536,302 @@ def plot_level4(case, index_GHA, averaged_146, good_bad, model, FLOW, FHIGH, K_p
 	yx = np.delete(yy, 1, axis=0)
 
 
+
+
+	# Average the data from the two days 147
+	for i in range(len(gha)-1):
+		p147       = np.mean(py[1:3, i, :], axis=0)
+		r147, w147 = ba.spectral_averaging(ry[1:3, i, :], wy[1:3, i, :])
+
+		px[1, i, :] = p147
+		rx[1, i, :] = r147
+		wx[1, i, :] = w147	
+
+
+
+
+
+	if averaged_146 == 'yes':
+
+		ldays = len(rx[:,0,0])
+		lgha  = len(rx[0,:,0])
+		
+		pb = np.zeros((ldays-1, lgha, len(px[0,0,:])))
+		rb = np.zeros((ldays-1, lgha, len(rx[0,0,:])))
+		wb = np.zeros((ldays-1, lgha, len(wx[0,0,:])))
+
+		for i in range(ldays-1):
+			for j in range(lgha):
+				print([i,j])
+		
+				pa = np.array((px[0, j, :], px[i+1, j, :]))
+				ra = np.array((rx[0, j, :], rx[i+1, j, :]))
+				wa = np.array((wx[0, j, :], wx[i+1, j, :]))
 	
+				h1        = np.mean(pa, axis=0)
+				h2, h3    = ba.spectral_averaging(ra, wa)
+
+				pb[i,j,:] = h1
+				rb[i,j,:] = h2
+				wb[i,j,:] = h3
+
+		px = np.copy(pb)
+		rx = np.copy(rb)
+		wx = np.copy(wb)
+		yx = np.delete(yx, 0, axis=0)
+
+		print(px.shape)
+		print(rx.shape)
+		print(wx.shape)
+		print(yx.shape)
+
+
+
+	
+	# Identify indices of good and bad days
+	kk = daily_nominal_filter('mid_band', case, index_GHA, yx)
+	#kk = daily_strict_filter('mid_band', yx)
+	#kk = np.ones(len(px[:,0]))
+
+
+
+	
+	if good_bad == 'good':
+		p_all = px[kk==1,:]
+		r_all = rx[kk==1,:]
+		w_all = wx[kk==1,:]
+		yd    = yx[kk==1]
+		
+	elif good_bad == 'bad':
+		p_all = px[kk==0,:]
+		r_all = rx[kk==0,:]
+		w_all = wx[kk==0,:]
+		yd    = yx[kk==0]		
+
+
+
+
+
+
+
+
+
+
+	
+		
+	
+	
+	
+	#index = np.arange(len(yd))
+	
+	
+	#Nfg = 4
+	NS = 168
+	
+	plt.close()
+	plt.close()
+	plt.close()
+	plt.close()
+	plt.close()
+	
+
+	if good_bad == 'good':
+		#plt.figure(1, figsize=[5, 5.5])
+		plt.figure(1, figsize=[7, 15])
+	elif good_bad == 'bad':	
+		plt.figure(1, figsize=[5, 5])
+
+	plt.ylabel('day of year 2018   [' + str(K_per_division) + ' K per division]\n  \n  ')
+	
+	#for i in range(2):
+	
+	RMS_all = np.zeros((len(yd[:,0]), 7))
+	ii = -1
+	for i in range(len(yd)):
+		
+		print(str(i) + ' ' + str(yd[i,1]))
+		
+		avp   = p_all[i,index_GHA,:]
+		avr   = r_all[i,index_GHA,:]
+		avw   = w_all[i,index_GHA,:]
+
+		
+		lw = len(avw[avw>0])
+		print(lw)
+
+		if lw > 0:
+			ii = ii+1
+			rr, wr   = rfi.cleaning_sweep(f, avr, avw, window_width_MHz=3, Npolyterms_block=2, N_choice=20, N_sigma=3.5)
+		
+			m        = ba.model_evaluate('LINLOG', avp, f/200)
+			tr       = m + rr
+			
+		
+			ft = f[(f>=FLOW) & (f<=FHIGH)]
+			tt = tr[(f>=FLOW) & (f<=FHIGH)]
+			wt = wr[(f>=FLOW) & (f<=FHIGH)]
+		
+			
+			if model == 'LINLOG':
+				pt = ba.fit_polynomial_fourier('LINLOG', ft/200, tt, Nfg, Weights=wt)
+				mt = ba.model_evaluate('LINLOG', pt[0], ft/200)
+				rt = tt - mt
+			
+				fb, rb, wb, sb = ba.spectral_binning_number_of_samples(ft, rt, wt, nsamples=NS)
+				
+			
+			if model == 'LOGLOG':
+				pl     = np.polyfit(np.log(ft[wt>0]/200), np.log(tt[wt>0]), Nfg-1)
+				log_ml = np.polyval(pl, np.log(ft/200))
+				ml     = np.exp(log_ml)
+				rl     = tt - ml	
+			
+				fb, rb, wb, sb = ba.spectral_binning_number_of_samples(ft, rl, wt, nsamples=NS)
+			
+			
+			if i%2 == 0:
+				plt.plot(fb[wb>0], rb[wb>0]-ii*K_per_division, 'b')
+			else:
+				plt.plot(fb[wb>0], rb[wb>0]-ii*K_per_division, 'r')
+				
+				
+			RMS = 1000*np.std(rb[wb>0])
+			RMS_text = str(int(RMS)) + ' mK'
+			print(RMS_text)
+				
+			plt.text(50, -ii*K_per_division-(1/6)*K_per_division, str(int(yd[i,1])))
+			plt.text(153, -ii*K_per_division-(1/6)*K_per_division, RMS_text)
+			
+			
+			
+			RMS_all[i,0] = yd[i,0]
+			RMS_all[i,1] = yd[i,1]
+			RMS_all[i,2] = index_GHA
+			RMS_all[i,3] = FLOW
+			RMS_all[i,4] = FHIGH
+			RMS_all[i,5] = Nfg
+			RMS_all[i,6] = RMS
+		
+	plt.xlim([55, 152])
+	plt.xticks(np.arange(60,151,10))
+	plt.xlabel(r'$\nu$ [MHz]', fontsize=12)
+	plt.ylim([-(ii+1)*K_per_division, K_per_division])
+	plt.yticks([10], labels=[''])
+	
+	GHA_integration = gha[2] - gha[1]
+	
+	GHA1 = gha[index_GHA]
+	GHA2 = gha[index_GHA] + GHA_integration
+	if GHA2 > 24:
+		GHA2 = GHA2 - 24
+	plt.title('GHA=' + str(GHA1) + '-' + str(GHA2) + ' hr, ' + model + ', ' + str(int(Nfg)) + ' terms', fontsize=16)
+	
+	
+
+
+	plt.savefig('/home/raul/Desktop/' + file_name + '.pdf', bbox_inches='tight')
+	plt.close()	
+	plt.close()
+	plt.close()
+	plt.close()
+	
+	
+	# Save
+	# ----
+	#np.savetxt(save_rms_folder + 'rms_index' + str(index_GHA) + '.txt', RMS_all)
+		
+	return fb, rb, wb, RMS_all
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def spectral_fit_two_ranges(model_type, fx, tx, wx, sx, F1L, F1H, F2L, F2H, Nfg):
+	
+	f = fx[wx>0]
+	t = tx[wx>0]
+	w = wx[wx>0]
+	s = sx[wx>0]
+	
+	
+	index_all = np.arange(0,len(f))
+	index_sel = index_all[((f>=F1L) & (f<=F1H)) | ((f>=F2L) & (f<=F2H))]
+	
+	ff = f[index_sel]
+	tt = t[index_sel]
+	ww = w[index_sel]
+	ss = s[index_sel]
+	
+	if model_type == 'LINLOG':
+		pp    = ba.fit_polynomial_fourier('LINLOG', ff, tt, Nfg, Weights=1/(ss**2))
+		model = ba.model_evaluate('LINLOG', pp[0], fx)
+		
+	elif model_type == 'LOGLOG':
+		pp = np.polyfit(np.log(ff), np.log(tt), Nfg-1)
+		log_model = np.polyval(pp, np.log(fx))
+		model = np.exp(log_model)
+		
+	return model
+
+
+
+
+
+
+
+
+
+
+
+
+def plot_level4_second_approach(case, index_GHA, averaged_146, good_bad, model, FLOW, FHIGH, F1L, F1H, F2L, F2H, Nfg, K_per_division, file_name):
+
+	"""
+	model: 'LINLOG', 'LOGLOG'
+	
+	"""
+	
+	# Load Level 4 data
+	#if case == 0:
+		#f, py, ry, wy, index, gha, yy = level4read('/home/raul/DATA2/EDGES_vol2/mid_band/spectra/level4/case_nominal/case_nominal.hdf5')
+		
+		#save_rms_folder = edges_folder + 'mid_band/spectra/level4/case1/rms_filters/'
+		#if not exists(save_rms_folder):
+			#makedirs(save_rms_folder)		
+		
+		
+	#if case == 1:
+		#f, py, ry, wy, index, gha, yy = level4read('/home/raul/DATA2/EDGES_vol2/mid_band/spectra/level4/case1/case1.hdf5')
+		
+		#save_rms_folder = edges_folder + 'mid_band/spectra/level4/case1/rms_filters/'
+		#if not exists(save_rms_folder):
+			#makedirs(save_rms_folder)		
+	
+	if case == 1:
+		f, py, ry, wy, index, gha, yy = level4read('/home/raul/DATA2/EDGES_vol2/mid_band/spectra/level4/case_nominal_55_150MHz/case_nominal_55_150MHz.hdf5')
+		
+		save_rms_folder = edges_folder + 'mid_band/spectra/level4/case_nominal_55_150MHz/rms_filters/'
+		if not exists(save_rms_folder):
+			makedirs(save_rms_folder)
+
+
+	px = np.delete(py, 1, axis=0)
+	rx = np.delete(ry, 1, axis=0)
+	wx = np.delete(wy, 1, axis=0)
+	yx = np.delete(yy, 1, axis=0)
+
+
+
 
 	# Average the data from the two days 147
 	for i in range(len(gha)-1):
@@ -2263,6 +2919,10 @@ def plot_level4(case, index_GHA, averaged_146, good_bad, model, FLOW, FHIGH, K_p
 	
 	#index = np.arange(len(yd))
 	
+	
+	#Nfg = 4
+	NS = 168
+	
 	plt.close()
 	plt.close()
 	plt.close()
@@ -2271,14 +2931,16 @@ def plot_level4(case, index_GHA, averaged_146, good_bad, model, FLOW, FHIGH, K_p
 	
 
 	if good_bad == 'good':
-		plt.figure(1, figsize=[5, 5.5])
-		#plt.figure(1, figsize=[5, 15])
+		#plt.figure(1, figsize=[5, 5.5])
+		plt.figure(1, figsize=[7, 20])
 	elif good_bad == 'bad':	
 		plt.figure(1, figsize=[5, 5])
 
 	plt.ylabel('day of year 2018   [' + str(K_per_division) + ' K per division]\n  \n  ')
 	
 	#for i in range(2):
+	
+	RMS_all = np.zeros((len(yd[:,0]), 7))
 	ii = -1
 	for i in range(len(yd)):
 		
@@ -2303,23 +2965,34 @@ def plot_level4(case, index_GHA, averaged_146, good_bad, model, FLOW, FHIGH, K_p
 			ft = f[(f>=FLOW) & (f<=FHIGH)]
 			tt = tr[(f>=FLOW) & (f<=FHIGH)]
 			wt = wr[(f>=FLOW) & (f<=FHIGH)]
+			
+			
+			# ----------------------------------------------------------------------
+			index_all = np.arange(0,len(ft))
+			index_sel = index_all[((ft>=F1L) & (ft<=F1H)) | ((ft>=F2L) & (ft<=F2H))]
+			
+			fx = ft[index_sel]
+			tx = tt[index_sel]
+			wx = wt[index_sel]
+			# ----------------------------------------------------------------------
+			
 		
 			
 			if model == 'LINLOG':
-				pt = ba.fit_polynomial_fourier('LINLOG', ft/200, tt, 5, Weights=wt)
-				mt = ba.model_evaluate('LINLOG', pt[0], ft/200)
+				p  = ba.fit_polynomial_fourier('LINLOG', fx/200, tx, Nfg, Weights=wx)
+				mt = ba.model_evaluate('LINLOG', p[0], ft/200)
 				rt = tt - mt
 			
-				fb, rb, wb = ba.spectral_binning_number_of_samples(ft, rt, wt)
+				fb, rb, wb, sb = ba.spectral_binning_number_of_samples(ft, rt, wt, nsamples=NS)
 				
 			
 			if model == 'LOGLOG':
-				pl     = np.polyfit(np.log(ft[wt>0]/200), np.log(tt[wt>0]), 4)
-				log_ml = np.polyval(pl, np.log(ft/200))
+				p      = np.polyfit(np.log(fx[wx>0]/200), np.log(tx[wx>0]), Nfg-1)
+				log_ml = np.polyval(p, np.log(ft/200))
 				ml     = np.exp(log_ml)
 				rl     = tt - ml	
 			
-				fb, rb, wb = ba.spectral_binning_number_of_samples(ft, rl, wt)
+				fb, rb, wb, sb = ba.spectral_binning_number_of_samples(ft, rl, wt, nsamples=NS)
 			
 			
 			if i%2 == 0:
@@ -2327,11 +3000,31 @@ def plot_level4(case, index_GHA, averaged_146, good_bad, model, FLOW, FHIGH, K_p
 			else:
 				plt.plot(fb[wb>0], rb[wb>0]-ii*K_per_division, 'r')
 				
-			plt.text(52, -ii*K_per_division-(1/6)*K_per_division, str(int(yd[i,1])))
+				
+			RMS = 1000*np.std(rb[wb>0])
+			RMS_text = str(int(RMS)) + ' mK'
+			print(RMS_text)
+				
+			plt.text(50, -ii*K_per_division-(1/6)*K_per_division, str(int(yd[i,1])))
+			plt.text(153, -ii*K_per_division-(1/6)*K_per_division, RMS_text)
+			
+			
+			
+			RMS_all[i,0] = yd[i,0]
+			RMS_all[i,1] = yd[i,1]
+			RMS_all[i,2] = index_GHA
+			RMS_all[i,3] = FLOW
+			RMS_all[i,4] = FHIGH
+			RMS_all[i,5] = Nfg
+			RMS_all[i,6] = RMS
 		
-	plt.xlim([57, 123])
+	plt.plot([F1L, F1L],[-1000, 1000], 'y--', linewidth=1)
+	plt.plot([F1H, F1H],[-1000, 1000], 'y--', linewidth=1)
+	plt.plot([F2L, F2L],[-1000, 1000], 'y--', linewidth=1)
+	plt.plot([F2H, F2H],[-1000, 1000], 'y--', linewidth=1)
+	plt.xlim([55, 151])
 	plt.xlabel(r'$\nu$ [MHz]', fontsize=12)
-	plt.ylim([-(ii+1)*K_per_division, K_per_division])
+	plt.ylim([-(ii+1.5)*K_per_division, 1.5*K_per_division])
 	plt.yticks([10], labels=[''])
 	
 
@@ -2342,8 +3035,12 @@ def plot_level4(case, index_GHA, averaged_146, good_bad, model, FLOW, FHIGH, K_p
 	plt.close()
 	plt.close()
 	
+	
+	# Save
+	# ----
+	#np.savetxt(save_rms_folder + 'rms_index' + str(index_GHA) + '.txt', RMS_all)
 		
-	return fb, rb, wb
+	return fb, rb, wb, RMS_all
 
 
 
@@ -2367,51 +3064,297 @@ def plot_level4(case, index_GHA, averaged_146, good_bad, model, FLOW, FHIGH, K_p
 
 
 
-def integrated_spectrum_level4(case, index_GHA, FLOW, FHIGH, day_min1, day_max1, day_min2, day_max2):
+
+
+
+
+
+
+
+
+
+
+
+
+def daily_integrations_and_residuals():
+	
+	f, pz, rz, wz, index, gha, ydz = level4read(edges_folder + 'mid_band/spectra/level4/case_nominal/case_nominal.hdf5')
+	
+	#keep_index = daily_nominal_filter('mid_band', case, ydx)
 	
 	
-	if case == 2:
-		f, px, rx, wx, index, gha, ydx = level4read(edges_folder + 'mid_band/spectra/level4/case2/case2.hdf5')
-		save_path     = edges_folder + 'mid_band/spectra/level5/case2/'
-		save_spectrum = 'integrated_spectrum_case2.txt'
-		save_plot     = 'case2.png'
 
-	if case == 26:
-		f, px, rx, wx, index, gha, ydx = level4read(edges_folder + 'mid_band/spectra/level4/case26/case26.hdf5')
-		save_path     = edges_folder + 'mid_band/spectra/level5/case26/'
-		save_spectrum = 'integrated_spectrum_case26.txt'
-		save_plot     = 'case26.png'
+	px = np.delete(pz, 1, axis=0)
+	rx = np.delete(rz, 1, axis=0)
+	wx = np.delete(wz, 1, axis=0)
+	ydx = np.delete(ydz, 1, axis=0)
+
+
+	
+
+	# Average the data from the two days 147
+	for i in range(len(gha)-1):
+		p147       = np.mean(pz[1:3, i, :], axis=0)
+		r147, w147 = ba.spectral_averaging(rz[1:3, i, :], wz[1:3, i, :])
+
+		px[1, i, :] = p147
+		rx[1, i, :] = r147
+		wx[1, i, :] = w147
+
+	
+	
+	
+	
+	bad_days = np.array([[2018, 159], [2018, 169], [2018, 184], [2018, 185], [2018, 191], [2018, 193], [2018, 195], [2018, 196], [2018, 204], [2018, 208], [2018, 216], [2018, 220]])  # 
+	
+	# 
+	FLOW  = 57 #60
+	FHIGH = 120
+	Nfg   = 5
+	Nsp   = 1
+	
+	
+	
+	
+	
+	
+	
+	
+	ll = len(px[:,0,0])
+	j = -1
+		
+	for i in range(ll):
+		
+		if (ydx[i,0] in bad_days[:,0]) and (ydx[i,1] in bad_days[:,1]):    #print(i)
+		
+			print(ydx[i,:])
+			
+		else:
+			j = j+1
+		
+			mx = ba.model_evaluate('LINLOG', px[i,0,:], f/200)
+			tx = mx + rx[i,0,:]
+			
+			fy = f[(f>=FLOW) & (f<=FHIGH)]
+			ty = tx[(f>=FLOW) & (f<=FHIGH)]
+			wy = wx[i,0,(f>=FLOW) & (f<=FHIGH)]
+			
+			p  = ba.fit_polynomial_fourier('LINLOG', fy/200, ty, Nfg, Weights=wy)
+			my = ba.model_evaluate('LINLOG', p[0], fy/200)
+			ry = ty - my
+					
+			fb, rb, wb, sb  = ba.spectral_binning_number_of_samples(fy, ry, wy, nsamples=128)
 				
-	if case == 40:
-		f, px, rx, wx, index, gha, ydx = level4read(edges_folder + 'mid_band/spectra/level4/case40/case40.hdf5')
-		save_path     = edges_folder + 'mid_band/spectra/level5/case40/'
-		save_spectrum = 'integrated_spectrum_case40.txt'
-		save_plot     = 'case40.png'
+			mb = ba.model_evaluate('LINLOG', p[0], fb/200)
+			tb  = mb + rb
+			
+			
+			if j == 0:
+				rb_all = np.zeros((ll - len(bad_days), len(fb)))
+				tb_all = np.zeros((ll - len(bad_days), len(fb)))
+				wb_all = np.zeros((ll - len(bad_days), len(fb)))
+				sb_all = np.zeros((ll - len(bad_days), len(fb)))
+				yd_all = np.zeros((ll - len(bad_days), 2))
+				
+			tb_all[j,:] = tb
+			rb_all[j,:] = rb
+			wb_all[j,:] = wb
+			sb_all[j,:] = sb
+			yd_all[j,:] = ydx[i,:]
 
 
-	if not exists(save_path):
-		makedirs(save_path)
+
+
+	K = 0.5
+	lb = int(np.floor(len(tb_all[:,0])/Nsp))
+	#lb = len(tb_all[:,0])
+	plt.figure(figsize=[6.5,10])
+	for i in range(lb):
+		
+		rb_i, wb_i = ba.spectral_averaging(rb_all[(Nsp*i):(Nsp*i+Nsp),:], wb_all[(Nsp*i):(Nsp*i+Nsp),:])
+		
+		#if i%2 == 0:
+			#cc = 'b'
+		#else:
+			#cc = 'r'
+			
+		if i < 26/Nsp:
+			cc = 'b'
+			lw = 2
+		else:
+			cc = 'r'
+			lw = 1
+		plt.plot(fb, rb_i - K*i, color=cc, linewidth=lw)
+		
+		
+		if Nsp == 1:
+			plt.text(54, - K*i-0.3*K, str(int(yd_all[i,1])))
+		elif Nsp>1:
+			plt.text(52, - K*i-0.3*K, str(int(yd_all[Nsp*i,1])) + '-'+ str(int(yd_all[Nsp*i+Nsp-1,1])))
 		
 		
 		
+		#plt.plot(fb, rb_all[i,:] - K*i)
+		#plt.text(40, - K*i, str(yd_all[i,1]))
+	
+	plt.ylim([-K*lb, K])
+	plt.yticks([])
+	plt.xlabel(r'$\nu$ [MHz]', fontsize=13)
+	plt.xlim([52, 120])
+		
+		
+	#
+	#plt.savefig(edges_folder + 'plots/20190813/mid_band_comparison.png', bbox_inches='tight')
+	#plt.close()
+	#plt.close()
 	
 	
+	#np.savetxt(edges_folder + 'mid_band/spectra/level5/residuals_for_steven/days.txt', yd_all)
+	#np.savetxt(edges_folder + 'mid_band/spectra/level5/residuals_for_steven/residuals_390kHz.txt', rb_all)
+	#np.savetxt(edges_folder + 'mid_band/spectra/level5/residuals_for_steven/std_dev_390kHz.txt', sb_all)
+	#np.savetxt(edges_folder + 'mid_band/spectra/level5/residuals_for_steven/frequency_390kHz.txt', fb)
+		
+		
+		
+	return fb, tb_all, rb_all, wb_all, sb_all, yd_all
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def integrated_spectrum_level4(case, index_GHA, FLOW, FHIGH, day_range, day_min1, day_max1, day_min2, day_max2, Nfg, rms_threshold, save_yes_no, filename_flag):
 	
+	
+	if case == 100:
+		f, px, rx, wx, index, gha, ydx = level4read(edges_folder + 'mid_band/spectra/level4/rcv18_sw18_nominal_GHA_6_18hr/rcv18_sw18_nominal_GHA_6_18hr.hdf5')
+		#if day_range == 'daily':
+			#save_path     = edges_folder + 'mid_band/spectra/level5/case_nominal/daily/'
+			#save_plot     = 'day'+str(day_min2) +'.png'
+		#else:
+			#save_path     = edges_folder + 'mid_band/spectra/level5/rcv18_ant19_nominal/'
+			#save_plot     = 'case_nominal_days_186_219_58-120MHz_v2.png'
+			
+		#save_path                      = edges_folder + 'mid_band/spectra/level5/rcv18_ant19_nominal/'
+		#now           = datetime.now()
+		#date_time     = now.strftime("%Y-%m-%d-%H-%M-%S")
+		#save_spectrum = 'integrated_spectrum_rcv18_ant19_nominal_' + date_time + '.txt'    #.nominal_days_147_182.txt'
+	
+	if case == 101:
+		f, px, rx, wx, index, gha, ydx = level4read(edges_folder + 'mid_band/spectra/level4/rcv18_sw18_nominal_GHA_every_1hr/rcv18_sw18_nominal_GHA_every_1hr.hdf5')
+		save_path                      = edges_folder + 'mid_band/spectra/level5/rcv18_sw18_nominal_GHA_every_1hr/'
+		save_spectrum                  = 'integrated_spectrum_rcv18_sw18_every_1hr_GHA' + filename_flag + '.txt'
+
+
+
+
+	
+	if case == 21:
+		
+		f, px, rx, wx, index, gha, ydx = level4read(edges_folder + 'mid_band/spectra/level4/rcv18_ant19_nominal/rcv18_ant19_nominal.hdf5')
+		
+
+
+	if case == 22:
+		#f, px, rx, wx, index, gha, ydx = level4read(edges_folder + 'mid_band/spectra/level4/case_nominal_55_150MHz/case_nominal_55_150MHz.hdf5')		
+		#if day_range == 'daily':
+			#save_path     = edges_folder + 'mid_band/spectra/level5/case_nominal/daily/'
+			#save_plot     = 'day'+str(day_min2) +'.png'
+		#else:
+			#save_path     = edges_folder + 'mid_band/spectra/level5/rcv18_ant19_every_1hr_GHA/'
+			##save_plot     = 'case_nominal_days_186_219_58-120MHz_v2.png'
+			
+		#save_spectrum = 'integrated_spectrum_rcv18_ant19_nominal_days_147_182.txt'
+		
+		f, px, rx, wx, index, gha, ydx = level4read(edges_folder + 'mid_band/spectra/level4/rcv18_ant19_every_1hr_GHA/rcv18_ant19_every_1hr_GHA.hdf5')
+		
+		save_path                      = edges_folder + 'mid_band/spectra/level5/rcv18_ant19_every_1hr_GHA/'
+		#now           = datetime.now()
+		#date_time     = now.strftime("%Y-%m-%d-%H-%M-%S")
+		save_spectrum = 'integrated_spectrum_rcv18_ant19_every_1hr_GHA' + filename_flag + '.txt'    #.nominal_days_147_182.txt'
+		
+
+
+
+	#if not exists(save_path):
+		#makedirs(save_path)
+		
 	
 		
 	# Producing integrated spectrum
-	# ------------------------------------------------
+	# ------------------------------------------------	
 	
-	
-	keep_index = daily_nominal_filter('mid_band', case, ydx)
-	#keep_index = daily_strict_filter('mid_band', ydx)
-	#keep_index = np.ones(len(px[:,0]))
-	
-	
-	p  = px[(keep_index==1) & (((ydx[:,1]>=day_min1) & (ydx[:,1]<=day_max1)) | ((ydx[:,1]>=day_min2) & (ydx[:,1]<=day_max2))), index_GHA, :]
-	r  = rx[(keep_index==1) & (((ydx[:,1]>=day_min1) & (ydx[:,1]<=day_max1)) | ((ydx[:,1]>=day_min2) & (ydx[:,1]<=day_max2))), index_GHA, :]
-	w  = wx[(keep_index==1) & (((ydx[:,1]>=day_min1) & (ydx[:,1]<=day_max1)) | ((ydx[:,1]>=day_min2) & (ydx[:,1]<=day_max2))), index_GHA, :]
-	yd = ydx[(keep_index==1) & (((ydx[:,1]>=day_min1) & (ydx[:,1]<=day_max1)) | ((ydx[:,1]>=day_min2) & (ydx[:,1]<=day_max2))) ]
+	if len(index_GHA) == 1:
+		keep_index = daily_nominal_filter('mid_band', case, index_GHA[0], ydx)
+		#keep_index2 = daily_rms_filter('mid_band', case, index_GHA, ydx, rms_threshold)
+		#keep_index  = keep_index1 * keep_index2
+		
+		
+		#keep_index = daily_strict_filter('mid_band', ydx)
+		#keep_index = np.ones(len(px[:,0]))
+		
+		
+		p  = px[(keep_index==1) & (((ydx[:,1]>=day_min1) & (ydx[:,1]<=day_max1)) | ((ydx[:,1]>=day_min2) & (ydx[:,1]<=day_max2))), index_GHA[0], :]
+		r  = rx[(keep_index==1) & (((ydx[:,1]>=day_min1) & (ydx[:,1]<=day_max1)) | ((ydx[:,1]>=day_min2) & (ydx[:,1]<=day_max2))), index_GHA[0], :]
+		w  = wx[(keep_index==1) & (((ydx[:,1]>=day_min1) & (ydx[:,1]<=day_max1)) | ((ydx[:,1]>=day_min2) & (ydx[:,1]<=day_max2))), index_GHA[0], :]
+		#yd = ydx[(keep_index==1) & (((ydx[:,1]>=day_min1) & (ydx[:,1]<=day_max1)) | ((ydx[:,1]>=day_min2) & (ydx[:,1]<=day_max2))) ]
+		
+
+	elif len(index_GHA) > 1:
+		for i in range(len(index_GHA)):
+			keep_index = daily_nominal_filter('mid_band', case, index_GHA[i], ydx)
+			#keep_index2 = daily_rms_filter('mid_band', case, index_GHA, ydx, rms_threshold)
+			#keep_index  = keep_index1 * keep_index2
+			
+			
+			#keep_index = daily_strict_filter('mid_band', ydx)
+			#keep_index = np.ones(len(px[:,0]))
+			
+			
+			p_i  = px[(keep_index==1) & (((ydx[:,1]>=day_min1) & (ydx[:,1]<=day_max1)) | ((ydx[:,1]>=day_min2) & (ydx[:,1]<=day_max2))), index_GHA[i], :]
+			r_i  = rx[(keep_index==1) & (((ydx[:,1]>=day_min1) & (ydx[:,1]<=day_max1)) | ((ydx[:,1]>=day_min2) & (ydx[:,1]<=day_max2))), index_GHA[i], :]
+			w_i  = wx[(keep_index==1) & (((ydx[:,1]>=day_min1) & (ydx[:,1]<=day_max1)) | ((ydx[:,1]>=day_min2) & (ydx[:,1]<=day_max2))), index_GHA[i], :]
+			#yd = ydx[(keep_index==1) & (((ydx[:,1]>=day_min1) & (ydx[:,1]<=day_max1)) | ((ydx[:,1]>=day_min2) & (ydx[:,1]<=day_max2))) ]
+			
+			if i == 0:
+				p = np.copy(p_i)
+				r = np.copy(r_i)
+				w = np.copy(w_i)
+				
+			elif i > 0:
+				p = np.vstack((p, p_i))
+				r = np.vstack((r, r_i))
+				w = np.vstack((w, w_i))
+			
+			
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		
 	
 	print(p.shape)
 	avp = np.mean(p, axis=0)
@@ -2419,40 +3362,50 @@ def integrated_spectrum_level4(case, index_GHA, FLOW, FHIGH, day_min1, day_max1,
 	
 	
 	avr, avw = ba.spectral_averaging(r, w)
-	rr, wr   = rfi.cleaning_sweep(f, avr, avw, window_width_MHz=3, Npolyterms_block=2, N_choice=20, N_sigma=3.5) 
+	rr, wr   = rfi.cleaning_sweep(f, avr, avw, window_width_MHz=3, Npolyterms_block=2, N_choice=20, N_sigma=3)
+	
+	
+	
 	tr       = m + rr
 		
 
 
 
 	# Cleanning RFI spike
-	fr1 = 105.6
-	fr2 = 107.4
+	#if (case == 0) and (index_GHA == 0):
+		#fr1 = 105.6
+		#fr2 = 107.4
+		#tr[(f >=fr1) & (f<=fr2)] = 0
+		#wr[(f >=fr1) & (f<=fr2)] = 0
+	
+	fr1 = 136
+	fr2 = 139
 	tr[(f >=fr1) & (f<=fr2)] = 0
 	wr[(f >=fr1) & (f<=fr2)] = 0
-	
-	
 
 	p  = ba.fit_polynomial_fourier('LINLOG', f/200, tr, 7, Weights=wr)
 	m  = ba.model_evaluate('LINLOG', p[0], f/200)
 	r  = tr-m
-
-	fb, rb, wb  = ba.spectral_binning_number_of_samples(f, r, wr)
+	
+	NS = 64
+	fb, rb, wb, sb  = ba.spectral_binning_number_of_samples(f, r, wr, nsamples=NS)
 
 	mb  = ba.model_evaluate('LINLOG', p[0], fb/200)
 	tb  = mb + rb
 	tb[wb==0] = 0
+	sb[wb==0] = 0
 
 
 
 
 
 
-	outT = np.array([fb, tb, wb])
+	outT = np.array([fb, tb, wb, sb])
 	out  = outT.T
 
 	# Saving spectrum
-	np.savetxt(save_path + save_spectrum, out)
+	if (save_yes_no == 'yes') and (day_range != 'daily'):
+		np.savetxt(save_path + save_spectrum, out, header='freq [MHz], temp [K], weight [K], std dev [K]')
 
 
 
@@ -2462,148 +3415,28 @@ def integrated_spectrum_level4(case, index_GHA, FLOW, FHIGH, day_min1, day_max1,
 
 
 
-	# Producing plot
+	# Computing residuals for plot
 	# ----------------------------------------
-
+	fx = fb[(fb>=FLOW) & (fb<=FHIGH)]
+	tx = tb[(fb>=FLOW) & (fb<=FHIGH)]
+	wx = wb[(fb>=FLOW) & (fb<=FHIGH)]
+	sx = sb[(fb>=FLOW) & (fb<=FHIGH)]
 	
-	ft = f[(f>=FLOW) & (f<=FHIGH)]
-	tt = tr[(f>=FLOW) & (f<=FHIGH)]
-	wt = wr[(f>=FLOW) & (f<=FHIGH)]
-
-
-	pt  = ba.fit_polynomial_fourier('LINLOG', ft/200, tt, 3, Weights=wt)
+	ft = fx[wx>0]
+	tt = tx[wx>0]
+	wt = wx[wx>0]
+	st = sx[wx>0]
+	
+	pt  = ba.fit_polynomial_fourier('LINLOG', ft/200, tt, Nfg, Weights=(1/(st**2)))
 	mt  = ba.model_evaluate('LINLOG', pt[0], ft/200)
-	rt3 = tt-mt
+	rt  = tt-mt
 	
-	pt  = ba.fit_polynomial_fourier('LINLOG', ft/200, tt, 4, Weights=wt)
-	mt  = ba.model_evaluate('LINLOG', pt[0], ft/200)
-	rt4 = tt-mt
-	
-	pt  = ba.fit_polynomial_fourier('LINLOG', ft/200, tt, 5, Weights=wt)
-	mt  = ba.model_evaluate('LINLOG', pt[0], ft/200)
-	rt5 = tt-mt
-	
-	
-	pl     = np.polyfit(np.log(ft[wt>0]/200), np.log(tt[wt>0]), 2)
+	pl     = np.polyfit(np.log(ft/200), np.log(tt), Nfg-1)
 	log_ml = np.polyval(pl, np.log(ft/200))
 	ml     = np.exp(log_ml)
-	rl3    = tt - ml
+	rl     = tt - ml
 	
-	pl     = np.polyfit(np.log(ft[wt>0]/200), np.log(tt[wt>0]), 3)
-	log_ml = np.polyval(pl, np.log(ft/200))
-	ml     = np.exp(log_ml)
-	rl4    = tt - ml
-	
-	pl     = np.polyfit(np.log(ft[wt>0]/200), np.log(tt[wt>0]), 4)
-	log_ml = np.polyval(pl, np.log(ft/200))
-	ml     = np.exp(log_ml)
-	rl5    = tt - ml
-	
-	
-	
-	
-	
-	
-	fb, rb3, wb3  = ba.spectral_binning_number_of_samples(ft, rt3, wt)
-	fb, rb4, wb4  = ba.spectral_binning_number_of_samples(ft, rt4, wt)
-	fb, rb5, wb5  = ba.spectral_binning_number_of_samples(ft, rt5, wt)
-
-	fb, rbl3, wbl3  = ba.spectral_binning_number_of_samples(ft, rl3, wt)
-	fb, rbl4, wbl4  = ba.spectral_binning_number_of_samples(ft, rl4, wt)
-	fb, rbl5, wbl5  = ba.spectral_binning_number_of_samples(ft, rl5, wt)
-	
-
-
-	
-	# Cleanning RFI spike
-	fr1 = 105.6
-	fr2 = 107.4
-	rb3[(fb >=fr1) & (fb<=fr2)] = 0
-	wb3[(fb >=fr1) & (fb<=fr2)] = 0
-	
-	rb4[(fb >=fr1) & (fb<=fr2)] = 0
-	wb4[(fb >=fr1) & (fb<=fr2)] = 0
-
-	rb5[(fb >=fr1) & (fb<=fr2)] = 0
-	wb5[(fb >=fr1) & (fb<=fr2)] = 0
-
-
-	rbl3[(fb >=fr1) & (fb<=fr2)] = 0
-	wbl3[(fb >=fr1) & (fb<=fr2)] = 0
-
-	rbl4[(fb >=fr1) & (fb<=fr2)] = 0
-	wbl4[(fb >=fr1) & (fb<=fr2)] = 0
-	
-	rbl5[(fb >=fr1) & (fb<=fr2)] = 0
-	wbl5[(fb >=fr1) & (fb<=fr2)] = 0
-
-
-
-	#plt.plot(ft, rt)
-	#plt.figure(1, figsize=[8, 9])
-	
-	#plt.subplot(2,1,1)
-	#plt.plot(fb[wb3>0], rb3[wb3>0], 'r', linewidth=2)
-	#plt.plot(fb[wbl3>0], rbl3[wbl3>0], 'r--', linewidth=1)
-	#plt.plot(fb[wb4>0], rb4[wb4>0], 'g', linewidth=2)
-	#plt.plot(fb[wbl4>0], rbl4[wbl4>0], 'g--', linewidth=1)
-	#plt.plot(fb[wb5>0], rb5[wb5>0], 'b', linewidth=2)
-	#plt.plot(fb[wbl5>0], rbl5[wbl5>0], 'b--', linewidth=1)
-	#plt.xlim([58, 120])
-	#plt.ylim([-1, 1])
-	##plt.xlabel('frequency [MHz]')
-	#plt.ylabel('brightness temperature [K]')
-	##plt.grid()
-	
-	
-	#plt.subplot(2,1,2)
-	#plt.plot(fb[wb5>0], rb5[wb5>0] + 0.2, 'b', linewidth=2)
-	#plt.plot(fb[wbl5>0], rbl5[wbl5>0] - 0.2, 'b', linewidth=1)
-	#plt.xlim([58, 120])
-	#plt.ylim([-0.6, 0.6])
-	#plt.xlabel('frequency [MHz]')
-	#plt.ylabel('brightness temperature [K]')
-	#plt.legend(['LinLog','LogLog'])
-	##plt.grid()
-		
-	#plt.savefig('/home/raul/Desktop/average_case1_two_panels.pdf', bbox_inches='tight')
-	#plt.close()
-	#plt.close()	
-
-
-		
-	plt.figure(1, figsize=[8.5, 4.5])
-	
-	#plt.plot(fb[wb5>0], rb5[wb5>0] + 0.3, 'b', linewidth=2)
-	#plt.plot(fb[wbl5>0], rbl5[wbl5>0] - 0.3, 'b', linewidth=1)
-	
-	plt.plot(fb[wb3>0], rb3[wb3>0] + 0.3, 'b', linewidth=2)
-	plt.plot(fb[wbl3>0], rbl3[wbl3>0] - 0.3, 'b', linewidth=1)	
-	
-	
-	plt.xlim([55, 125])
-	plt.yticks(np.arange(-0.5,0.6,0.2), labels=['','','','','','',''])
-	plt.ylim([-0.6, 0.6])
-	plt.xlabel('frequency [MHz]')
-	plt.ylabel(r'$\Delta$ T  [200 mK per division]')
-	plt.legend(['LinLog','LogLog'])
-	plt.grid()
-				
-			
-	plt.savefig(save_path + save_plot, bbox_inches='tight')
-	plt.close()
-	plt.close()	
-
-	
-	
-	return ft, tt, mt, wt
-
-
-
-
-
-
-
+	return ft, tt, st, rt, rl
 
 
 

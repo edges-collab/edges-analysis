@@ -3,8 +3,12 @@ import basic as ba
 import numpy as np
 import os, sys
 
+from os import listdir, makedirs, system
+
 edges_folder       = os.environ['EDGES_vol2']
 print('EDGES Folder: ' + edges_folder)
+
+
 
 
 
@@ -54,22 +58,65 @@ def simulated_data(theta, v, vr, noise_std_at_vr, model_type_signal='exp', model
 
 def real_data(case, FLOW, FHIGH, gap_FLOW=0, gap_FHIGH=0):
 	
+	#if case == 0:
+		##dd = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case_nominal/integrated_spectrum_case_nominal_days_186_219_60-120MHz.txt')
+		##dd = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case_nominal/integrated_spectrum_case_nominal_days_186_219_58-120MHz_v2.txt')
+		#dd = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case_nominal/integrated_spectrum_case_nominal_days_186_219_58-120MHz.txt')
+	
+	
+	if case == 1:
+		#dd = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case_nominal/integrated_spectrum_case_nominal_days_186_219_60-120MHz.txt')
+		#dd = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case_nominal/integrated_spectrum_case_nominal_days_186_219_58-120MHz_v2.txt')
+		#dd = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/rcv18_ant19_nominal/integrated_spectrum_rcv18_ant19_nominal_days_147_182.txt')
+		dd = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/one_day_tests/another_one.txt')
 		
-	if case == 2:
-		dd = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/integrated_spectrum_case2.txt')
 		
-	if case == 26:
-		dd = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case26/integrated_spectrum_case26.txt')
+	if case == 101:
+		#dd = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/rcv18_sw18_nominal_GHA_every_1hr/integrated_spectrum_rcv18_sw18_every_1hr_GHA_15-17hr.txt')
+		dd = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/rcv18_sw18_nominal_GHA_every_1hr/integrated_spectrum_rcv18_sw18_every_1hr_GHA_6-18hr.txt')
+		#dd = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/rcv18_sw18_nominal_GHA_every_1hr/integrated_spectrum_rcv18_sw18_every_1hr_GHA_18-6hr.txt')
+		
+		
+		
+	
+	
+
+	#if case == 11:
+		#dd = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case1/integrated_spectrum_case1_days_146_219_GHA_6-18.txt')
+		
+	#if case == 12:
+		#dd = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case1/integrated_spectrum_case1_days_146_219_GHA_18-6.txt')
+
+
+	
+		
+	#if case == 2:
+		##dd = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/integrated_spectrum_case2_days_164_219.txt')
+		##dd = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/integrated_spectrum_case2_days_147_219_65-105MHz.txt')
+		#dd = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/integrated_spectrum_case2_days_186_219_60-120MHz.txt')
+
+
+	#if case == 3:
+		#dd = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/one_day_tests/integrated_spectrum_2018_188_gha6_18_case87.txt')
+
+
+
+
+
+
+		
+	#if case == 26:
+		#dd = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case26/integrated_spectrum_case26.txt')
 		
 		
 	vv = dd[:,0]
 	tt = dd[:,1]
 	ww = dd[:,2]
+	ss = dd[:,3]
 	
-	v0 = 100
-	A  = 12
-	
-	ss = A*(1/np.sqrt(ww))*(vv/v0)**(-2.5)
+	#v0 = 100
+	#A  = 12
+	#ss = A*(1/np.sqrt(ww))*(vv/v0)**(-2.5)
 		
 			
 	vp = vv[(vv>=FLOW) & (vv<=FHIGH)]
@@ -144,7 +191,7 @@ def foreground_model(model_type, theta_fg, v, vr, ion_abs_coeff='free', ion_emi_
 	model_fg = 0
 
 	# ########################
-	if model_type == 'exp':
+	if model_type == 'powerlog':
 		
 		
 		if (ion_abs_coeff == 'free') and (ion_emi_coeff == 'free'):
@@ -339,6 +386,109 @@ def spectrum_channel_to_channel_difference(f, t, w, FLOW, FHIGH, noise_of_residu
 	
 	return diff
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+def svd_functions(folder_with_spectra, FLOW, FHIGH, number_of_functions, method='average_removed'):
+	
+	'''
+	
+	Computing SVD functions
+	
+	'''
+	
+	
+	# Listing files to be processed
+	# -----------------------------
+	folder = edges_folder + 'mid_band/spectra/level5/' + folder_with_spectra + '/'
+	list_of_spectra = listdir(folder)
+	list_of_spectra.sort()
+	
+	
+	
+	
+	# Generate the original matrix of spectra
+	# ---------------------------------------
+	for i in range(len(list_of_spectra)):
+		
+		filename = list_of_spectra[i]
+		#print(filename)
+		
+		d = np.genfromtxt(folder + filename)
+		
+		if i == 0:
+			A  = d[:,1]
+			fx = d[:,0] 
+		
+		if i > 0:
+			A = np.vstack((A, d[:,1]))
+			
+			
+	# Cut to desired frequency range
+	f = fx[(fx>=FLOW) & (fx<=FHIGH)]
+	A = A[:,(fx>=FLOW) & (fx<=FHIGH)]
+	
+	
+	# Remove channels with no data
+	P = np.prod(A, axis=0)
+	f = f[P>0]
+	A = A[:,P>0]
+	
+	
+	
+	
+	# Generating one of the two possible data matrices for SVD
+	# --------------------------------------------------------
+	
+	# Remove the average spectrum
+	if method == 'average_removed':
+		
+		avA = np.mean(A, axis=0)
+		C   = A - avA
+		
+		
+	# Generate matrix of differences. The number of rows is N*(N-1)/2. If there are 24 spectra per day (1 per hour), N=24.
+	elif method == 'delta_all':
+		
+		flag = 0
+		for j in range(len(list_of_spectra)-1):
+			#print(j)
+			for i in range(len(list_of_spectra)-1-j):
+	
+				k = i + (j+1)
+				B = A[k] - A[j]				
+						
+						
+				if flag == 0:
+					C = np.copy(B)
+					
+				elif flag > 0:
+					C = np.vstack((C, B))
+					
+				print(str(flag) + ': ' + str(k) + '-' + str(j))	
+				
+				flag = flag + 1
+	
+	
+	
+	
+	# SVD
+	# ---------------------------------------
+	u, EValues, EFunctions = np.linalg.svd(C)
+		
+		
+		
+	return f, EValues, EFunctions
 
 
 

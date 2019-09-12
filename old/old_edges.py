@@ -759,11 +759,13 @@ def high_band_switch_correction(ant_s11, sw_temp):
 
 def low_band_switch_correction(ant_s11, temp_sw, f_in = np.zeros([0,1])):
 
+	edges_folder1 = '/home/raul/DATA1/EDGES_vol1/'
+
 
 	# Paths
-	data_path_15 = home_folder + '/DATA/EDGES/calibration/receiver_calibration/low_band1/2015_08_25C/data/s11/raw/20150905/switch15degC/'
-	data_path_25 = home_folder + '/DATA/EDGES/calibration/receiver_calibration/low_band1/2015_08_25C/data/s11/raw/20150903/switch25degC/'
-	data_path_35 = home_folder + '/DATA/EDGES/calibration/receiver_calibration/low_band1/2015_08_25C/data/s11/raw/20150905/switch35degC/'
+	data_path_15 = edges_folder1 + 'calibration/receiver_calibration/low_band1/2015_08_25C/data/s11/raw/20150905/switch15degC/'
+	data_path_25 = edges_folder1 + 'calibration/receiver_calibration/low_band1/2015_08_25C/data/s11/raw/20150903/switch25degC/'
+	data_path_35 = edges_folder1 + 'calibration/receiver_calibration/low_band1/2015_08_25C/data/s11/raw/20150905/switch35degC/'
 
 
 	# Measurements at 15degC 

@@ -2565,10 +2565,15 @@ def batch_level2_to_level3(case, save, folder, antenna_type):
 
 
 
-def level3read(folder, filename):
+def level3read(file_path):
 
-	# Loading results
-	file_path = home_folder + '/DATA/EDGES/spectra/level3/high_band_2015/2018_analysis/' + folder + '/' + filename + '.hdf5'
+	'''
+	
+	# file_path = path_to + / + filename.hdf5
+	
+	'''
+	
+
 	with h5py.File(file_path,'r') as hf:
 		
 		X   = hf.get('frequency')
@@ -2710,7 +2715,7 @@ def batch_level3_to_level4(folder, LST1, LST2, fLOW, fHIGH, save, save_file_name
 				# Cut to frequency range
 				fc   =   f[(f>=fLOW) & (f<=fHIGH)]
 				rx2  =  rx[:, (f>=fLOW) & (f<=fHIGH)]
-				wx2  =  wx[:, (f>=fLOW) & (f<=fHIGH)]					
+				wx2  =  wx[:, (f>=fLOW) & (f<=fHIGH)]			
 				
 				avp              = np.mean(px, axis=0)
 				av_model_factor  = np.polyval(avp, fc/200)

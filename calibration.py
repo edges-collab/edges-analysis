@@ -26,13 +26,15 @@ from astropy.io import fits
 from os.path import expanduser
 home_folder = expanduser("~")
 
-import os
+import os, sys
 edges_folder       = os.environ['EDGES_vol2']
 print('EDGES Folder: ' + edges_folder)
 
 edges_folder_v1       = os.environ['EDGES_vol1']
 
+sys.path.insert(0, "/home/raul/edges/old")
 
+import old_edges as oeg
 
 
 
@@ -1065,7 +1067,10 @@ def models_antenna_s11_remove_delay(band, f_MHz, year=2018, day=147, case=5, del
 			if case == 2:
 				d = np.genfromtxt(path_data + 'antenna_s11_2018_147_16_51_33.txt'); print('Antenna S11: 2018-147: 147_16_51_33')
 			if case == 3:
-				d = np.genfromtxt(path_data + 'antenna_s11_2018_147_16_52_34.txt'); print('Antenna S11: 2018-147: 147_16_52_34')			
+				d = np.genfromtxt(path_data + 'antenna_s11_2018_147_16_52_34.txt'); print('Antenna S11: 2018-147: 147_16_52_34')
+				
+			if case == 3105012:
+				d = np.genfromtxt(path_data + 'antenna_s11_mid_band_2018_147_switch_calibration_2018_01_5012_case3.txt'); print('Antenna S11: 2018-147: 147_16_52_34: case 3: 50.12ohms')								
 			if case == 4:
 				d = np.genfromtxt(path_data + 'antenna_s11_2018_147_17_03_25.txt'); print('Antenna S11: 2018-147: 147_17_03_25')			
 			if case == 5:
@@ -1076,10 +1081,77 @@ def models_antenna_s11_remove_delay(band, f_MHz, year=2018, day=147, case=5, del
 				d = np.genfromtxt(path_data + 'antenna_s11_mid_band_2018_147.txt'); print('Antenna S11: 2018-147: average of Case 3 and Case 5')
 			
 			
+	
+			# Calibrated using switch measurements from 2019-03
+			if case == 36:
+				d = np.genfromtxt(path_data + 'antenna_s11_mid_band_2018_147_switch_calibration_2019_03_case6.txt'); print('Antenna S11: 2018-147: switch calibration from 2019-03 case 6')
+				
+			if case == 3605012:
+				d = np.genfromtxt(path_data + 'antenna_s11_mid_band_2018_147_switch_calibration_2019_03_5012_case3.txt'); print('Antenna S11: 2018-147: switch calibration from 2019-03 case 6: 50.12ohms')
+	
+			if case == 37:
+				d = np.genfromtxt(path_data + 'antenna_s11_mid_band_2018_147_switch_calibration_2019_03_case7.txt'); print('Antenna S11: 2018-147: switch calibration from 2019-03 case 7')
+	
+			if case == 38:
+				d = np.genfromtxt(path_data + 'antenna_s11_mid_band_2018_147_switch_calibration_2019_03_case8.txt'); print('Antenna S11: 2018-147: switch calibration from 2019-03 case 8')
+					
+			if case == 39:
+				d = np.genfromtxt(path_data + 'antenna_s11_mid_band_2018_147_switch_calibration_2019_03_case9.txt'); print('Antenna S11: 2018-147: switch calibration from 2019-03 case 9')
+				
+				
+				
+			# Calibrated using switch measurements from 2019-04
+			if case == 410:
+				d = np.genfromtxt(path_data + 'antenna_s11_mid_band_2018_147_switch_calibration_2019_04_case10.txt'); print('Antenna S11: 2018-147: switch calibration from 2019-04 case 10')	
+	
+			if case == 411:
+				d = np.genfromtxt(path_data + 'antenna_s11_mid_band_2018_147_switch_calibration_2019_04_case11.txt'); print('Antenna S11: 2018-147: switch calibration from 2019-04 case 11')
+	
+			if case == 412:
+				d = np.genfromtxt(path_data + 'antenna_s11_mid_band_2018_147_switch_calibration_2019_04_case12.txt'); print('Antenna S11: 2018-147: switch calibration from 2019-04 case 12')
+					
+			if case == 413:
+				d = np.genfromtxt(path_data + 'antenna_s11_mid_band_2018_147_switch_calibration_2019_04_case13.txt'); print('Antenna S11: 2018-147: switch calibration from 2019-04 case 13')				
+				
+				
+
+					
 			
 	
 		if (year == 2018) and (day == 222):
-			d = np.genfromtxt(path_data + 'antenna_s11_mid_band_2018_222.txt'); print('Antenna S11: 2018-222')
+			if case == 11:
+				d = np.genfromtxt(path_data + 'antenna_s11_mid_band_2018_222_case1_switch_calibration_2018_01.txt'); print('Antenna S11: 2018-222')
+				
+			if case == 12:
+				d = np.genfromtxt(path_data + 'antenna_s11_mid_band_2018_222_case2_switch_calibration_2018_01.txt'); print('Antenna S11: 2018-222')
+
+			if case == 13:
+				d = np.genfromtxt(path_data + 'antenna_s11_mid_band_2018_222_case3_switch_calibration_2018_01.txt'); print('Antenna S11: 2018-222')
+				
+			if case == 14:
+				d = np.genfromtxt(path_data + 'antenna_s11_mid_band_2018_222_case4_switch_calibration_2018_01.txt'); print('Antenna S11: 2018-222')
+
+	
+			if case == 31:
+				d = np.genfromtxt(path_data + 'antenna_s11_mid_band_2018_222_case1_switch_calibration_2019_03.txt'); print('Antenna S11: 2018-222')
+				
+			if case == 32:
+				d = np.genfromtxt(path_data + 'antenna_s11_mid_band_2018_222_case2_switch_calibration_2019_03.txt'); print('Antenna S11: 2018-222')
+
+			if case == 33:
+				d = np.genfromtxt(path_data + 'antenna_s11_mid_band_2018_222_case3_switch_calibration_2019_03.txt'); print('Antenna S11: 2018-222')
+				
+			if case == 34:
+				d = np.genfromtxt(path_data + 'antenna_s11_mid_band_2018_222_case4_switch_calibration_2019_03.txt'); print('Antenna S11: 2018-222')
+
+
+	
+	
+	
+	
+	
+	
+				
 
 
 	# Low-Band 3
@@ -2236,7 +2308,22 @@ def guzman_45MHz_map():
 
 
 
-def antenna_beam_factor(band, name_save, beam_file=0, sky_model='haslam', rotation_from_north=90, index_model='gaussian', sigma_deg=5, index_center=2.4, index_pole=2.6, band_deg=10, index_inband=2.5, index_outband=2.6, reference_frequency=100):
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def antenna_beam_factor(band, name_save, beam_file=0, sky_model='haslam', rotation_from_north=90, index_model='gaussian', sigma_deg=8.5, index_center=2.4, index_pole=2.65, band_deg=10, index_inband=2.5, index_outband=2.6, reference_frequency=100):
 
 	"""
 	2019-04-16
@@ -2245,13 +2332,13 @@ def antenna_beam_factor(band, name_save, beam_file=0, sky_model='haslam', rotati
 	sky_model                 : 'haslam', 'LW', 'guzman'
 	
 	index_model               : 'gaussian' (default), or 'step'
-	parameters for 'gaussian' :  sigma_deg=5, index_center=2.4, index_pole=2.6
+	parameters for 'gaussian' :  sigma_deg=8.5, index_center=2.4, index_pole=2.65
 	parameters for 'step'     :  band_deg=10, index_inband=2.5, index_outband=2.6
 	
 	Example:
 	
 	
-	[101] :   o = cal.antenna_beam_factor('mid_band', 'mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.6_sigma_deg_5_reffreq_100MHz', beam_file=0, sky_model='haslam', rotation_from_north=90, index_model='gaussian', sigma_deg=5, index_center=2.4, index_pole=2.6, reference_frequency=100) 
+	[101] :   o = cal.antenna_beam_factor('mid_band', 'mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz', beam_file=0, sky_model='haslam', rotation_from_north=90, index_model='gaussian', sigma_deg=8.5, index_center=2.4, index_pole=2.65, reference_frequency=90) 
 	
 	"""
 
@@ -2519,6 +2606,31 @@ def antenna_beam_factor(band, name_save, beam_file=0, sky_model='haslam', rotati
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 def antenna_beam_factor_interpolation(band, case, lst_hires, fnew, Npar_freq=15):
 
 	"""
@@ -2534,34 +2646,34 @@ def antenna_beam_factor_interpolation(band, case, lst_hires, fnew, Npar_freq=15)
 		file_path = edges_folder + 'mid_band/calibration/beam_factors/raw/'
 
 		if case == 0:
-			bf_old  = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.6_sigma_deg_5_reffreq_100MHz_data.txt')
-			freq    = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.6_sigma_deg_5_reffreq_100MHz_freq.txt')
-			lst_old = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.6_sigma_deg_5_reffreq_100MHz_LST.txt')
+			bf_old  = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_data.txt')
+			freq    = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_freq.txt')
+			lst_old = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_LST.txt')
 
 		elif case == 1:
-			bf_old  = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan0_haslam_step_index_2.5_2.6_band_deg_10_reffreq_100MHz_data.txt')
-			freq    = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan0_haslam_step_index_2.5_2.6_band_deg_10_reffreq_100MHz_freq.txt')
-			lst_old = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan0_haslam_step_index_2.5_2.6_band_deg_10_reffreq_100MHz_LST.txt')
+			bf_old  = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan0_haslam_flat_index_2.56_reffreq_90MHz_data.txt')
+			freq    = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan0_haslam_flat_index_2.56_reffreq_90MHz_freq.txt')
+			lst_old = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan0_haslam_flat_index_2.56_reffreq_90MHz_LST.txt')
 			
 		elif case == 2:
-			bf_old  = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan0_LW_gaussian_index_2.4_2.6_sigma_deg_5_reffreq_100MHz_data.txt')
-			freq    = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan0_LW_gaussian_index_2.4_2.6_sigma_deg_5_reffreq_100MHz_freq.txt')
-			lst_old = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan0_LW_gaussian_index_2.4_2.6_sigma_deg_5_reffreq_100MHz_LST.txt')
+			bf_old  = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan0_LW_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_data.txt')
+			freq    = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan0_LW_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_freq.txt')
+			lst_old = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan0_LW_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_LST.txt')
 
 		elif case == 3:
-			bf_old  = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan0_guzman_gaussian_index_2.4_2.6_sigma_deg_5_reffreq_100MHz_data.txt')
-			freq    = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan0_guzman_gaussian_index_2.4_2.6_sigma_deg_5_reffreq_100MHz_freq.txt')
-			lst_old = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan0_guzman_gaussian_index_2.4_2.6_sigma_deg_5_reffreq_100MHz_LST.txt')
+			bf_old  = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan0_guzman_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_data.txt')
+			freq    = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan0_guzman_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_freq.txt')
+			lst_old = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan0_guzman_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_LST.txt')
 			
 		elif case == 4:
-			bf_old  = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_haslam_gaussian_index_2.4_2.6_sigma_deg_5_reffreq_100MHz_data.txt')
-			freq    = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_haslam_gaussian_index_2.4_2.6_sigma_deg_5_reffreq_100MHz_freq.txt')
-			lst_old = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_haslam_gaussian_index_2.4_2.6_sigma_deg_5_reffreq_100MHz_LST.txt')
+			bf_old  = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_data.txt')
+			freq    = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_freq.txt')
+			lst_old = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan1_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_LST.txt')
 			
 		elif case == 5:
-			bf_old  = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.6_sigma_deg_5_reffreq_76MHz_data.txt')
-			freq    = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.6_sigma_deg_5_reffreq_76MHz_freq.txt')
-			lst_old = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.6_sigma_deg_5_reffreq_76MHz_LST.txt')
+			bf_old  = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_120MHz_data.txt')
+			freq    = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_120MHz_freq.txt')
+			lst_old = np.genfromtxt(file_path + 'mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_120MHz_LST.txt')
 			
 			
 		
@@ -2736,10 +2848,10 @@ def beam_factor_table_evaluate(f_table, lst_table, bf_table, lst_in):
 
 
 
-def corrected_antenna_s11(day, case, save_name_flag):
+def corrected_antenna_s11(day, measurement_case, switch_case, save_name_flag):
 	
 	# Creating folder if necessary
-	path_save = home_folder + '/DATA/EDGES/mid_band/calibration/antenna_s11/corrected/2018_' + str(day) + '/'
+	path_save = edges_folder + 'mid_band/calibration/antenna_s11/corrected/2018_' + str(day) + '/'
 	if not exists(path_save):
 		makedirs(path_save)	
 	
@@ -2757,21 +2869,21 @@ def corrected_antenna_s11(day, case, save_name_flag):
 	
 	# Mid-Band
 	if day == 147:
-		path_antenna_s11 = home_folder + '/DATA/EDGES/mid_band/calibration/antenna_s11/raw/mid-rcv1-20180527/'
+		path_antenna_s11 = edges_folder + 'mid_band/calibration/antenna_s11/raw/mid-rcv1-20180527/'
 
-		if case == 1:
+		if measurement_case == 1:
 			date_all = ['147_16_50_13', '147_16_50_13']
 
-		if case == 2:
+		if measurement_case == 2:
 			date_all = ['147_16_51_33', '147_16_51_33']
 			
-		if case == 3:
+		if measurement_case == 3:
 			date_all = ['147_16_52_34', '147_16_52_34']
 			
-		if case == 4:
+		if measurement_case == 4:
 			date_all = ['147_17_03_25', '147_17_03_25']
 		
-		if case == 5:
+		if measurement_case == 5:
 			date_all = ['147_17_04_33', '147_17_04_33']
 			
 			
@@ -2779,8 +2891,20 @@ def corrected_antenna_s11(day, case, save_name_flag):
 		
 	# Mid-Band
 	if day == 222:
-		path_antenna_s11 = home_folder + '/DATA/EDGES/mid_band/calibration/antenna_s11/raw/mid_20180809/'
-		date_all = ['222_05_41_09', '222_05_43_53', '222_05_45_58', '222_05_48_06']
+		path_antenna_s11 = edges_folder + 'mid_band/calibration/antenna_s11/raw/mid_20180809/'
+		if measurement_case == 1:
+			date_all = ['222_05_41_09', '222_05_41_09']
+			
+		if measurement_case == 2:
+			date_all = ['222_05_43_53', '222_05_43_53']
+		
+		if measurement_case == 3:
+			date_all = ['222_05_45_58', '222_05_45_58']
+			
+		if measurement_case == 4:
+			date_all = ['222_05_48_06', '222_05_48_06']
+			
+		#date_all = ['222_05_41_09', '222_05_43_53', '222_05_45_58', '222_05_48_06']
 	
 			
 	# Alan's noise source + 6dB attenuator
@@ -2824,7 +2948,13 @@ def corrected_antenna_s11(day, case, save_name_flag):
 		
 		
 		# Correction at receiver input
-		a = cr1.switch_correction_receiver1_2018_01_25C(a_sw_c, f_in = f_m)
+		if (switch_case < 15) or (switch_case > 100):
+			a = cr1.switch_correction_receiver1(a_sw_c, f_in = f_m, case=switch_case)
+			
+		# Just for testing
+		elif (switch_case > 15) and (switch_case < 100):
+			a = oeg.low_band_switch_correction(a_sw_c, 27, f_in = f_m)
+			
 		
 		if i == 0:
 			a_all = np.copy(a[0])
@@ -2850,8 +2980,8 @@ def corrected_antenna_s11(day, case, save_name_flag):
 		
 	
 	# Save
-	np.savetxt(path_save + 'antenna_s11_2018_' + str(day) + save_name_flag + '.txt', ra, header='freq [MHz]   real(s11)   imag(s11)')
-	
+	np.savetxt(path_save + 'antenna_s11_mid_band_2018_' + str(day) + save_name_flag + '.txt', ra, header='freq [MHz]   real(s11)   imag(s11)')
+	print('xxx')
 	return ra, a_all
 
 
@@ -2893,6 +3023,83 @@ def ground_loss(band, f_MHz):
 
 	
 	return 1-model
+
+
+
+
+
+
+
+
+
+def HFSS_integrated_beam_directivity():
+	
+	#if case == 1:
+		#path_to_file = '/home/raul/Desktop/beam/beam_75MHz_pec.csv'
+		
+	#if case == 2:
+		#path_to_file = '/home/raul/Desktop/beam/beam_75MHz_MROsoil.csv'
+	
+	#if case == 3:
+		#path_to_file = '/home/raul/Desktop/beam/beam_60MHz_30mx30m_stainless_steel_groundplane_halfspace_MROsoil.csv'
+		
+	#if case == 4:
+		#path_to_file = '/home/raul/Desktop/beam/beam_75MHz_30mx30m_stainless_steel_groundplane_halfspace_MROsoil.csv'
+
+	#if case == 5:
+		#path_to_file = '/home/raul/Desktop/beam/beam_120MHz_30mx30m_stainless_steel_groundplane_halfspace_MROsoil.csv'
+
+	#if case == 6:
+		#path_to_file = '/home/raul/Desktop/beam/beam_75MHz_30mx30m_PEC_groundplane_halfspace_MROsoil.csv'
+
+	
+	#if case == 10:
+		#path_to_file = '/run/media/raul/WD_RED_6TB/EDGES_vol2/others/beam_simulations/MROsoil_55MHz_MROsoil_global_material.csv'
+		#dB_or_linear = 'linear'
+
+	#if case == 11:
+		#path_to_file = '/run/media/raul/WD_RED_6TB/EDGES_vol2/others/beam_simulations/MROsoil_55MHz_vacuum_global_material.csv'
+		#dB_or_linear = 'linear'
+
+
+	
+	path_to_file = '/run/media/raul/WD_RED_6TB/EDGES_vol2/others/beam_simulations/20190911/test4_0.04Sm/MROsoil_vacuum_120MHz.csv'
+	dB_or_linear = 'linear'	
+	theta, phi, beam1 = ba.HFSS_beam_read(path_to_file, dB_or_linear, theta_min=0, theta_max=180, theta_resolution=1, phi_min=0, phi_max=359, phi_resolution=1)
+	
+
+	path_to_file = '/run/media/raul/WD_RED_6TB/EDGES_vol2/others/beam_simulations/20190911/test4_0.04Sm/MROsoil_MROsoil_120MHz.csv'
+	dB_or_linear = 'linear'	
+	theta, phi, beam2 = ba.HFSS_beam_read(path_to_file, dB_or_linear, theta_min=0, theta_max=180, theta_resolution=1, phi_min=0, phi_max=359, phi_resolution=1)
+	
+	
+	
+	
+	sin_theta      = np.sin((np.pi/180)*theta)
+	sin_theta_A_T  = np.array([sin_theta])	
+	sin_theta_A    = sin_theta_A_T.T
+	sin_theta_2D   = np.tile(sin_theta_A, len(phi))
+	
+	beam = np.copy(beam1)
+	#beam[0:91,:] = beam1[0:91,:] 
+	beam[91::,:] = beam2[91::,:] 
+
+	
+	total_radiated_power = np.sum(beam * sin_theta_2D)
+	
+	
+	
+	directivity          =  (4*np.pi) * beam / total_radiated_power 
+	
+	directivity_above = np.sum(directivity[0:91,:]*sin_theta_2D[0:91,:])
+	directivity_below = np.sum(directivity[91::,:]*sin_theta_2D[91::,:])
+	
+	return theta, phi, beam, directivity_above, directivity_below
+
+
+
+
+
 
 
 

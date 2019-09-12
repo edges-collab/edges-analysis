@@ -1,6 +1,7 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
+import scipy.interpolate as sci
 
 import edges as eg
 import basic as ba
@@ -14,6 +15,13 @@ import reflection_coefficient as rc
 import data_models as dm
 import getdist_plots as gp
 
+import healpy as hp
+
+import astropy.units as apu
+import astropy.time as apt
+import astropy.coordinates as apc
+
+import datetime as dt
 
 from os import listdir
 
@@ -1138,47 +1146,11 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
 
 
 	# Case selection
-
+	
+	# Receiver calibration from 2018-Jan 
+	# ---------------------------------------------------------
 	if case == 0:
-		flag_folder       = 'case0'
-		
-		receiver_cal_file = 4   # 8 terms over 50-150 MHz
-		
-		antenna_s11_day   = 147
-		antenna_s11_case  = 6   # average between cases 3 and 6
-		antenna_s11_Nfit  = 13  # 13 terms over 55-120 MHz
-		
-		balun_correction  = 1
-		ground_correction = 1
-		beam_correction   = 1
-		bf_case           = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
-		
-		FLOW  = 55
-		FHIGH = 120
-		Nfg   = 5
-
-
-	if case == 1:
-		flag_folder       = 'case1'
-		
-		receiver_cal_file = 1   # cterms=7, wterms=7 terms over 50-150 MHz
-		
-		antenna_s11_day   = 147
-		antenna_s11_case  = 3   # taken 2+ minutes after turning on the switch
-		antenna_s11_Nfit  = 13  # 13 terms over 55-120 MHz
-		
-		balun_correction  = 1
-		ground_correction = 1
-		beam_correction   = 1
-		bf_case           = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
-		
-		FLOW  = 55
-		FHIGH = 120
-		Nfg   = 5
-
-	
-	if case == 2:
-		flag_folder       = 'case2'
+		flag_folder       = 'case_nominal'
 		
 		receiver_cal_file = 2   # cterms=7, wterms=8 terms over 50-150 MHz
 		
@@ -1195,66 +1167,88 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
 		FHIGH = 120
 		Nfg   = 5
 		
-		
-		
-	if case == 275:
-		flag_folder       = 'case2_75MHz'
-		
-		receiver_cal_file = 2   # cterms=7, wterms=8 terms over 50-150 MHz
-		
-		antenna_s11_day   = 147
-		antenna_s11_case  = 3   # taken 2+ minutes after turning on the switch
-		antenna_s11_Nfit  = 13  # 13 terms over 55-120 MHz
-		
-		balun_correction  = 1
-		ground_correction = 1
-		beam_correction   = 1
-		bf_case           = 1   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index NORMALIZED at 75MHz instead of 100 MHz as in case 2.
-		
-		FLOW  = 55
-		FHIGH = 120
-		Nfg   = 5
-	
-		
-		
-		
-		
-		
-		
-		
-		
-	# ----------------------------------------------------------------------------------------------------
-	# Same data as case=2 (nominal), but after RFI cleaning of the integrated spectra
-	if case == 21:
-		flag_folder       = 'case21'
-		
-		receiver_cal_file = 21   # cterms=7, wterms=7 terms over 50-150 MHz
-		
-		antenna_s11_day   = 147
-		antenna_s11_case  = 3   # taken 2+ minutes after turning on the switch
-		antenna_s11_Nfit  = 13  # 13 terms over 55-120 MHz
-		
-		balun_correction  = 1
-		ground_correction = 1
-		beam_correction   = 1
-		bf_case           = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
-		
-		FLOW  = 55
-		FHIGH = 120
-		Nfg   = 5
 			
+	if case == 1:
+		flag_folder       = 'case_nominal_55_150MHz'
+		
+		receiver_cal_file = 2   # cterms=7, wterms=8 terms over 50-150 MHz
+		
+		antenna_s11_day   = 147
+		antenna_s11_case  = 3  # taken 2+ minutes after turning on the switch
+		antenna_s11_Nfit  = 14  # 14 terms over 55-150 MHz
+		
+		balun_correction  = 1
+		ground_correction = 1
+		beam_correction   = 1
+		bf_case           = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
+		
+		FLOW  = 55
+		FHIGH = 150
+		Nfg   = 5
+
+		
+		
+		
 	
+
+		
+		
 		
 
-	# Same data as case=2 (nominal), but after RFI cleaning of the integrated spectra
-	if case == 22:
-		flag_folder       = 'case22'
+	# Receiver calibration from 2019-Apr 
+	# ---------------------------------------------------------
+	# Case selection
+	#if case == 80:
+		#flag_folder       = 'case1'
 		
-		receiver_cal_file = 22   # cterms=7, wterms=8 terms over 50-150 MHz
+		#receiver_cal_file = 810   # 7-7#  cterms=7, wterms=8 terms over 50-150 MHz
+		
+		#antenna_s11_day   = 147
+		#antenna_s11_case  = 37  # taken 2+ minutes after turning on the switch
+		#antenna_s11_Nfit  = 13  # 13 terms over 55-120 MHz
+		
+		#balun_correction  = 1
+		#ground_correction = 1
+		#beam_correction   = 1
+		#bf_case           = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
+		
+		#FLOW  = 55
+		#FHIGH = 120
+		#Nfg   = 5
+		
+		
+	## Case selection
+	#if case == 81:
+		#flag_folder       = 'tests_55_150MHz/rcv18_ant19'
+		
+		#receiver_cal_file = 2   # 7-7#  cterms=7, wterms=8 terms over 50-150 MHz
+		
+		#antenna_s11_day   = 147
+		#antenna_s11_case  = 37  # taken 2+ minutes after turning on the switch
+		#antenna_s11_Nfit  = 14  # 13 terms over 55-120 MHz
+		
+		#balun_correction  = 1
+		#ground_correction = 1
+		#beam_correction   = 1
+		#bf_case           = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
+		
+		#FLOW  = 55
+		#FHIGH = 150
+		#Nfg   = 5
+		
+
+
+	# Receiver 2018, Antenna 2019
+	# ----------------------------------------------------------
+	# Case selection
+	if case == 10:
+		flag_folder       = 'rcv18_ant19_nominal'
+		
+		receiver_cal_file = 2   # 7-7#  cterms=7, wterms=8 terms over 50-150 MHz
 		
 		antenna_s11_day   = 147
-		antenna_s11_case  = 3   # taken 2+ minutes after turning on the switch
-		antenna_s11_Nfit  = 13  # 13 terms over 55-120 MHz
+		antenna_s11_case  = 37  # taken 2+ minutes after turning on the switch
+		antenna_s11_Nfit  = 14  # 14 terms over 55-150 MHz
 		
 		balun_correction  = 1
 		ground_correction = 1
@@ -1262,138 +1256,19 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
 		bf_case           = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
 		
 		FLOW  = 55
-		FHIGH = 120
-		Nfg   = 5	
-
-
-
-	# Same data as case=2 (nominal), but after RFI cleaning of the integrated spectra
-	if case == 23:
-		flag_folder       = 'case23'
-		
-		receiver_cal_file = 23   # cterms=7, wterms=9 terms over 50-150 MHz
-		
-		antenna_s11_day   = 147
-		antenna_s11_case  = 3   # taken 2+ minutes after turning on the switch
-		antenna_s11_Nfit  = 13  # 13 terms over 55-120 MHz
-		
-		balun_correction  = 1
-		ground_correction = 1
-		beam_correction   = 1
-		bf_case           = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
-		
-		FLOW  = 55
-		FHIGH = 120
+		FHIGH = 150
 		Nfg   = 5
-		
-		
-		
-	# Same data as case=2 (nominal), but after RFI cleaning of the integrated spectra
-	if case == 24:
-		flag_folder       = 'case24'
-		
-		receiver_cal_file = 24   # cterms=7, wterms=10 terms over 50-150 MHz
-		
-		antenna_s11_day   = 147
-		antenna_s11_case  = 3   # taken 2+ minutes after turning on the switch
-		antenna_s11_Nfit  = 13  # 13 terms over 55-120 MHz
-		
-		balun_correction  = 1
-		ground_correction = 1
-		beam_correction   = 1
-		bf_case           = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
-		
-		FLOW  = 55
-		FHIGH = 120
-		Nfg   = 5		
-
-
-
-	# Same data as case=2 (nominal), but after RFI cleaning of the integrated spectra
-	if case == 25:
-		flag_folder       = 'case25'
-		
-		receiver_cal_file = 25   # cterms=8, wterms=8 terms over 50-150 MHz
-		
-		antenna_s11_day   = 147
-		antenna_s11_case  = 3   # taken 2+ minutes after turning on the switch
-		antenna_s11_Nfit  = 13  # 13 terms over 55-120 MHz
-		
-		balun_correction  = 1
-		ground_correction = 1
-		beam_correction   = 1
-		bf_case           = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
-		
-		FLOW  = 55
-		FHIGH = 120
-		Nfg   = 5
-
-
-
-	# Same data as case=2 (nominal), but after RFI cleaning of the integrated spectra
-	if case == 26:
-		flag_folder       = 'case26'
-		
-		receiver_cal_file = 26   # cterms=8, wterms=11 terms over 50-150 MHz
-		
-		antenna_s11_day   = 147
-		antenna_s11_case  = 3   # taken 2+ minutes after turning on the switch
-		antenna_s11_Nfit  = 13  # 13 terms over 55-120 MHz
-		
-		balun_correction  = 1
-		ground_correction = 1
-		beam_correction   = 1
-		bf_case           = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
-		
-		FLOW  = 55
-		FHIGH = 120
-		Nfg   = 5
-		
-
-
-	# Same data as case=2 (nominal), but after RFI cleaning of the integrated spectra
-	if case == 40:
-		flag_folder       = 'case40'
-		
-		receiver_cal_file = 40   # cterms=4, wterms=6 terms over 60-85 MHz
-		
-		antenna_s11_day   = 147
-		antenna_s11_case  = 3   # taken 2+ minutes after turning on the switch
-		antenna_s11_Nfit  = 11  # 11 terms over 60-85 MHz
-		
-		balun_correction  = 1
-		ground_correction = 1
-		beam_correction   = 1
-		bf_case           = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
-		
-		FLOW  = 60
-		FHIGH = 85
-		Nfg   = 3
-		
-
-
-
-
-	# -------------------------------------------------------------------------------------------------------------
-
-
-
-
-
-
-
 	
-		
 
 
-	if case == 3:
-		flag_folder       = 'case3'
+	if case == 'TEST':
+		flag_folder       = 'tests_55_150MHz/rcv18_sw18_147_case1'
 		
-		receiver_cal_file = 3   # cterms=7, wterms=15 terms over 50-150 MHz
+		receiver_cal_file = 2   # 7-7#  cterms=7, wterms=8 terms over 50-150 MHz
 		
 		antenna_s11_day   = 147
-		antenna_s11_case  = 3   # taken 2+ minutes after turning on the switch
-		antenna_s11_Nfit  = 13  # 13 terms over 55-120 MHz
+		antenna_s11_case  = 1  # taken 2+ minutes after turning on the switch
+		antenna_s11_Nfit  = 14  # 14 terms over 55-150 MHz
 		
 		balun_correction  = 1
 		ground_correction = 1
@@ -1401,308 +1276,49 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
 		bf_case           = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
 		
 		FLOW  = 55
-		FHIGH = 120
+		FHIGH = 150
 		Nfg   = 5
-
-
-
-
-	if case == 4:
-		flag_folder       = 'case4'
 		
-		receiver_cal_file = 7   # Receiver calibration using data with no RFI, cterms=9, wterms=9 terms over 50-150 MHz
-		
-		antenna_s11_day   = 147
-		antenna_s11_case  = 3   # taken 2+ minutes after turning on the switch
-		antenna_s11_Nfit  = 13  # 13 terms over 55-120 MHz
-		
-		balun_correction  = 1
-		ground_correction = 1
-		beam_correction   = 1
-		bf_case           = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
-		
-		FLOW  = 55
-		FHIGH = 120
-		Nfg   = 5
-
-
-
-
-	if case == 5:
-		flag_folder       = 'case5'
-		
-		receiver_cal_file = 8   # Receiver calibration using data with no RFI, cterms=8, wterms=8 terms over 50-150 MHz
-		
-		antenna_s11_day   = 147
-		antenna_s11_case  = 3   # taken 2+ minutes after turning on the switch
-		antenna_s11_Nfit  = 13  # 13 terms over 55-120 MHz
-		
-		balun_correction  = 1
-		ground_correction = 1
-		beam_correction   = 1
-		bf_case           = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
-		
-		FLOW  = 55
-		FHIGH = 120
-		Nfg   = 5
-
-
-
-
-
-
-	# RFI cleaned lab data, 60-90 MHz
-	if case == 20:
-		flag_folder       = 'case20'
-		
-		receiver_cal_file = 20   # Receiver calibration using data with no RFI, cterms=8, wterms=8 terms over 50-150 MHz
-		
-		antenna_s11_day   = 147
-		antenna_s11_case  = 3   # taken 2+ minutes after turning on the switch
-		antenna_s11_Nfit  = 11  # 13 terms over 55-120 MHz
-		
-		balun_correction  = 1
-		ground_correction = 1
-		beam_correction   = 1
-		bf_case           = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
-		
-		FLOW  = 60
-		FHIGH = 90
-		Nfg   = 4
-
-
-
-
-	# RFI cleaned lab data, 60-120 MHz
-	if case == 30:
-		flag_folder       = 'case30'
-		
-		receiver_cal_file = 30   # cterms=7, wterms=6 terms over 60-120 MHz
-		
-		antenna_s11_day   = 147
-		antenna_s11_case  = 3   # taken 2+ minutes after turning on the switch
-		antenna_s11_Nfit  = 13  # 13 terms over 60-120 MHz
-		
-		balun_correction  = 1
-		ground_correction = 1
-		beam_correction   = 1
-		bf_case           = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
-		
-		FLOW  = 60
-		FHIGH = 120
-		Nfg   = 5
-
-
-
-
-	# RFI cleaned lab data, 60-120 MHz
-	if case == 31:
-		flag_folder       = 'case31'
-		
-		receiver_cal_file = 31   # cterms=7, wterms=8 terms over 60-120 MHz
-		
-		antenna_s11_day   = 147
-		antenna_s11_case  = 3   # taken 2+ minutes after turning on the switch
-		antenna_s11_Nfit  = 13  # 13 terms over 60-120 MHz
-		
-		balun_correction  = 1
-		ground_correction = 1
-		beam_correction   = 1
-		bf_case           = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
-		
-		FLOW  = 60
-		FHIGH = 120
-		Nfg   = 5
-
-
-
-
-	# RFI cleaned lab data, 60-120 MHz
-	if case == 32:
-		flag_folder       = 'case32'
-		
-		receiver_cal_file = 32   # cterms=7, wterms=9 terms over 60-120 MHz
-		
-		antenna_s11_day   = 147
-		antenna_s11_case  = 3   # taken 2+ minutes after turning on the switch
-		antenna_s11_Nfit  = 13  # 13 terms over 60-120 MHz
-		
-		balun_correction  = 1
-		ground_correction = 1
-		beam_correction   = 1
-		bf_case           = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
-		
-		FLOW  = 60
-		FHIGH = 120
-		Nfg   = 5
-
-
-
-
-
-
-
-	# RFI cleaned lab data, 60-120 MHz
-	if case == 33:
-		flag_folder       = 'case33'
-		
-		receiver_cal_file = 33   # cterms=6, wterms=4 terms over 60-120 MHz
-		
-		antenna_s11_day   = 147
-		antenna_s11_case  = 3   # taken 2+ minutes after turning on the switch
-		antenna_s11_Nfit  = 13  # 13 terms over 60-120 MHz
-		
-		balun_correction  = 1
-		ground_correction = 1
-		beam_correction   = 1
-		bf_case           = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
-		
-		FLOW  = 60
-		FHIGH = 120
-		Nfg   = 5
-
-
-
-
-
-
-	# RFI cleaned lab data, 60-120 MHz
-	if case == 34:
-		flag_folder       = 'case34'
-		
-		receiver_cal_file = 34   # cterms=6, wterms=8 terms over 60-120 MHz
-		
-		antenna_s11_day   = 147
-		antenna_s11_case  = 3   # taken 2+ minutes after turning on the switch
-		antenna_s11_Nfit  = 13  # 13 terms over 60-120 MHz
-		
-		balun_correction  = 1
-		ground_correction = 1
-		beam_correction   = 1
-		bf_case           = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
-		
-		FLOW  = 60
-		FHIGH = 120
-		Nfg   = 5
-
-
-
-
-	# RFI cleaned lab data, 60-120 MHz
-	if case == 35:
-		flag_folder       = 'case35'
-		
-		receiver_cal_file = 35   # cterms=6, wterms=9 terms over 60-120 MHz
-		
-		antenna_s11_day   = 147
-		antenna_s11_case  = 3   # taken 2+ minutes after turning on the switch
-		antenna_s11_Nfit  = 13  # 13 terms over 60-120 MHz
-		
-		balun_correction  = 1
-		ground_correction = 1
-		beam_correction   = 1
-		bf_case           = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
-		
-		FLOW  = 60
-		FHIGH = 120
-		Nfg   = 5
-
-
-
-
-
-
-	# RFI cleaned lab data, 60-120 MHz
-	if case == 36:
-		flag_folder       = 'case36'
-		
-		receiver_cal_file = 35   # cterms=6, wterms=9 terms over 60-120 MHz
-		
-		antenna_s11_day   = 147
-		antenna_s11_case  = 3   # taken 2+ minutes after turning on the switch
-		antenna_s11_Nfit  = 12  # 12 terms over 60-120 MHz
-		
-		balun_correction  = 1
-		ground_correction = 1
-		beam_correction   = 1
-		bf_case           = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
-		
-		FLOW  = 60
-		FHIGH = 120
-		Nfg   = 5
-
-
-
-	# RFI cleaned lab data, 60-120 MHz
-	if case == 37:
-		flag_folder       = 'case37'
-		
-		receiver_cal_file = 35   # cterms=6, wterms=9 terms over 60-120 MHz
-		
-		antenna_s11_day   = 147
-		antenna_s11_case  = 3   # taken 2+ minutes after turning on the switch
-		antenna_s11_Nfit  = 11  # 12 terms over 60-120 MHz
-		
-		balun_correction  = 1
-		ground_correction = 1
-		beam_correction   = 1
-		bf_case           = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
-		
-		FLOW  = 60
-		FHIGH = 120
-		Nfg   = 5
-
-
-
-
-	# RFI cleaned lab data, 60-120 MHz
-	if case == 38:
-		flag_folder       = 'case38'
-		
-		receiver_cal_file = 35   # cterms=6, wterms=9 terms over 60-120 MHz
-		
-		antenna_s11_day   = 147
-		antenna_s11_case  = 3   # taken 2+ minutes after turning on the switch
-		antenna_s11_Nfit  = 10  # 12 terms over 60-120 MHz
-		
-		balun_correction  = 1
-		ground_correction = 1
-		beam_correction   = 1
-		bf_case           = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
-		
-		FLOW  = 60
-		FHIGH = 120
-		Nfg   = 5
-
-
-
-
-
 	
-	# RFI cleaned lab data, 60-120 MHz
-	if case == 39:
-		flag_folder       = 'case39'
+
+	if case == 'TEST_2':
+		flag_folder       = 'tests_55_150MHz/rcv18_sw18_ant222'
 		
-		receiver_cal_file = 39   # cterms=5, wterms=9 terms over 60-120 MHz
+		receiver_cal_file = 2   # 7-7#  cterms=7, wterms=8 terms over 50-150 MHz
 		
-		antenna_s11_day   = 147
-		antenna_s11_case  = 3   # taken 2+ minutes after turning on the switch
-		antenna_s11_Nfit  = 11  # 12 terms over 60-120 MHz
+		antenna_s11_day   = 222
+		antenna_s11_case  = 11  # taken 2+ minutes after turning on the switch
+		antenna_s11_Nfit  = 14  # 14 terms over 55-150 MHz
 		
 		balun_correction  = 1
 		ground_correction = 1
 		beam_correction   = 1
 		bf_case           = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
 		
-		FLOW  = 60
-		FHIGH = 120
+		FLOW  = 55
+		FHIGH = 150
 		Nfg   = 5
 
 
 
-
-
-
+	# Averaging the two S11 (same antenna S11 calibrated with 2018 and 2019).
+	if case == 'TEST_3':
+		flag_folder       = 'tests_55_150MHz/rcv18_sw18and19_ant147'
+		
+		receiver_cal_file = 2   # 7-7#  cterms=7, wterms=8 terms over 50-150 MHz
+		
+		antenna_s11_day   = 147
+		#antenna_s11_case  = 11  # taken 2+ minutes after turning on the switch
+		antenna_s11_Nfit  = 14  # 14 terms over 55-150 MHz
+		
+		balun_correction  = 1
+		ground_correction = 1
+		beam_correction   = 1
+		bf_case           = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
+		
+		FLOW  = 55
+		FHIGH = 150
+		Nfg   = 5
 
 
 
@@ -3584,6 +3200,164 @@ def VNA_comparison3():
 
 
 
+def VNA_comparison4():
+	
+	path_folder  = edges_folder + 'others/vna_comparison/keysight_P9370A/'
+	
+
+	o_p1, fx       = rc.s1p_read(path_folder + 'open.s1p')
+	s_p1, fx       = rc.s1p_read(path_folder + 'short.s1p')
+	m_p1, fx       = rc.s1p_read(path_folder + 'load.s1p')
+	at3_p1, fx     = rc.s1p_read(path_folder + 'attn3db.s1p')
+	at6_p1, fx     = rc.s1p_read(path_folder + 'attn6db.s1p')
+	at10_p1, fx    = rc.s1p_read(path_folder + 'attn10db.s1p')	
+	
+	o_p2, fx       = rc.s1p_read(path_folder + 'port2_open.s1p')
+	s_p2, fx       = rc.s1p_read(path_folder + 'port2_short.s1p')
+	m_p2, fx       = rc.s1p_read(path_folder + 'port2_load.s1p')
+	at3_p2, fx     = rc.s1p_read(path_folder + 'port2_attn3db.s1p')
+	at6_p2, fx     = rc.s1p_read(path_folder + 'port2_attn6db.s1p')
+	at10_p2, fx    = rc.s1p_read(path_folder + 'port2_attn10db.s1p')
+
+
+	
+	FLOW = 15e6
+	f    = fx[(fx>=FLOW)]
+	
+	o_p1    = o_p1[(fx>=FLOW)]
+	s_p1    = s_p1[(fx>=FLOW)]
+	m_p1    = m_p1[(fx>=FLOW)]
+	at3_p1  = at3_p1[(fx>=FLOW)]
+	at6_p1  = at6_p1[(fx>=FLOW)]
+	at10_p1 = at10_p1[(fx>=FLOW)]	
+	
+	o_p2    = o_p2[(fx>=FLOW)]
+	s_p2    = s_p2[(fx>=FLOW)]
+	m_p2    = m_p2[(fx>=FLOW)]
+	at3_p2  = at3_p2[(fx>=FLOW)]
+	at6_p2  = at6_p2[(fx>=FLOW)]
+	at10_p2 = at10_p2[(fx>=FLOW)]		
+
+
+	
+	
+	Leads = 0.004
+	R50   = 48.785 - Leads
+	R3    = 163.70 - Leads
+	R6    = 85.04  - Leads
+	R10   = 61.615 - Leads
+	
+	g3    = rc.impedance2gamma(R3, 50) * np.ones(len(f))
+	g6    = rc.impedance2gamma(R6, 50) * np.ones(len(f))
+	g10   = rc.impedance2gamma(R10, 50) * np.ones(len(f))
+	
+	xx  = rc.agilent_85033E(f, R50, m = 0, md_value_ps = 38)
+	o_a = xx[0]
+	s_a = xx[1]
+	m_a = xx[2]	
+	
+	
+
+
+	# Correction	
+	at3_p1c, xx1, xx2, xx3  = rc.de_embed(o_a, s_a, m_a, o_p1, s_p1, m_p1, at3_p1)
+	at6_p1c, xx1, xx2, xx3  = rc.de_embed(o_a, s_a, m_a, o_p1, s_p1, m_p1, at6_p1)
+	at10_p1c, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_p1, s_p1, m_p1, at10_p1)
+	
+	at3_p2c, xx1, xx2, xx3  = rc.de_embed(o_a, s_a, m_a, o_p2, s_p2, m_p2, at3_p2)
+	at6_p2c, xx1, xx2, xx3  = rc.de_embed(o_a, s_a, m_a, o_p2, s_p2, m_p2, at6_p2)
+	at10_p2c, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_p2, s_p2, m_p2, at10_p2)
+
+
+
+
+
+	# Plot
+	
+	plt.figure(1, figsize=(12, 10))
+	
+	plt.subplot(3,2,1)
+	plt.plot(f/1e6, 20*np.log10(np.abs(at3_p1c)),'k')
+	plt.plot(f/1e6, 20*np.log10(np.abs(at3_p2c)),'r')
+	plt.plot(f/1e6, 20*np.log10(np.abs(g3)),'g--')
+	
+	
+	
+	plt.ylabel('3-dB Attn [dB]')
+	plt.title('MAGNITUDE')
+	plt.legend(['Port 1', 'Port 2', 'From DC resistance'])
+
+	plt.subplot(3,2,2)
+	plt.plot(f/1e6, (180/np.pi)*np.unwrap(np.angle(at3_p2c)) - (180/np.pi)*np.unwrap(np.angle(at3_p1c)),'r')
+	plt.ylabel('3-dB Attn [degrees]')
+	plt.title(r'$\Delta$ PHASE')
+
+
+
+
+	plt.subplot(3,2,3)
+	plt.plot(f/1e6, 20*np.log10(np.abs(at6_p1c)),'k')
+	plt.plot(f/1e6, 20*np.log10(np.abs(at6_p2c)),'r')
+	plt.plot(f/1e6, 20*np.log10(np.abs(g6)),'g--')
+	
+	plt.ylabel('6-dB Attn [dB]')
+
+	plt.subplot(3,2,4)
+	plt.plot(f/1e6, (180/np.pi)*np.unwrap(np.angle(at6_p2c)) - (180/np.pi)*np.unwrap(np.angle(at6_p1c)),'r')
+	plt.ylabel('6-dB Attn [degrees]')
+
+
+
+
+	plt.subplot(3,2,5)
+	plt.plot(f/1e6, 20*np.log10(np.abs(at10_p1c)),'k')
+	plt.plot(f/1e6, 20*np.log10(np.abs(at10_p2c)),'r')
+	plt.plot(f/1e6, 20*np.log10(np.abs(g10)),'g--')
+	
+	plt.ylabel('10-dB Attn [dB]')
+	plt.xlabel('frequency [MHz]')
+
+	plt.subplot(3,2,6)
+	plt.plot(f/1e6, (180/np.pi)*np.unwrap(np.angle(at10_p2c)) - (180/np.pi)*np.unwrap(np.angle(at10_p1c)),'r')
+	plt.ylabel('10-dB Attn [degrees]')
+	plt.xlabel('frequency [MHz]')
+	
+	
+
+
+
+	plt.savefig(edges_folder + 'plots/20190612/vna_comparison.pdf', bbox_inches='tight')
+	plt.close()	
+	plt.close()
+	plt.close()
+	plt.close()
+
+
+
+	return 0
+
+	
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -3599,16 +3373,18 @@ def plots_midband_paper(plot_number):
 	
 
 		# Paths
-		path_plot_save = edges_folder + 'results/plots/20190407/'
+		path_plot_save = edges_folder + 'plots/20190730/'
 
 
 		# Calibration parameters
-		rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_receiver1_50_150MHz_cterms7_wterms7.txt'
+		rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_receiver1_cterms7_wterms8.txt'
+		
+		#mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_receiver1_50_150MHz_cterms7_wterms7.txt'
 
 		rcv = np.genfromtxt(rcv_file)
 	
-		FLOW  = 50
-		FHIGH = 150
+		FLOW  = 60
+		FHIGH = 120
 		
 		fX      = rcv[:,0]
 		rcv2    = rcv[(fX>=FLOW) & (fX<=FHIGH),:]
@@ -3624,10 +3400,30 @@ def plots_midband_paper(plot_number):
 
 
 
+		# Low-Band
+		rcv1 = np.genfromtxt('/home/raul/DATA1/EDGES_vol1/calibration/receiver_calibration/low_band1/2015_08_25C/results/nominal/calibration_files/calibration_file_low_band_2015_nominal.txt')
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 		# Plot
 
-		size_x = 5
-		size_y = 6.5 #10.5
+		size_x = 4
+		size_y = 7 #10.5
 		x0 = 0.15
 		y0 = 0.09
 		dx = 0.7
@@ -3638,27 +3434,38 @@ def plots_midband_paper(plot_number):
 
 
 		ax     = f1.add_axes([x0, y0 + 2*dy, dx, dy])	
-		h1     = ax.plot(fe, 20*np.log10(np.abs(rl)), 'b', linewidth=2, label='$|\Gamma_{\mathrm{rec}}|$')
+		h1     = ax.plot(fe, 20*np.log10(np.abs(rl)), 'b', linewidth=1.5, label='$|\Gamma_{\mathrm{rec}}|$')
+		ax.plot(rcv1[:,0], 20*np.log10(np.abs(rcv1[:,1]+1j*rcv1[:,2])), 'r', linewidth=1.5)
+		
+		
+		
+		
+		
 		ax2    = ax.twinx()
-		h2     = ax2.plot(fe, (180/np.pi)*np.unwrap(np.angle(rl)), 'r--', linewidth=2, label=r'$\angle\/\Gamma_{\mathrm{rec}}$')
+		h2     = ax2.plot(fe, (180/np.pi)*np.unwrap(np.angle(rl)), 'b--', linewidth=1.5, label=r'$\angle\/\Gamma_{\mathrm{rec}}$')
+		ax2.plot(rcv1[:,0], (180/np.pi)*np.unwrap(np.angle(rcv1[:,1]+1j*rcv1[:,2])), 'r--', linewidth=1.5)
+		
+		
 		h      = h1 + h2
 		labels = [l.get_label() for l in h]
-		ax.legend(h, labels, loc=2, fontsize=13)
+		ax.legend(h, labels, loc=0, fontsize=10, ncol=2)
 
-		ax.set_ylim([-41, -25])
+		ax.set_ylim([-40, -32])
 		ax.set_xticklabels('')
-		ax.set_yticks(np.arange(-39,-26,3))
-		ax.set_ylabel('$|\Gamma_{\mathrm{rec}}|$ [dB]', fontsize=16)
-		ax.text(42, -39.6, '(a)', fontsize=20)
+		ax.set_yticks(np.arange(-39,-32,2))
+		ax.set_ylabel('$|\Gamma_{\mathrm{rec}}|$ [dB]', fontsize=14)
+		ax.text(48.5, -39.7, '(a)', fontsize=16)
+		ax.text(97, -39, 'Mid-Band', fontweight='bold', color='b')
+		ax.text(97, -39.5, 'Low-Band 1', fontweight='bold', color='r')
 
 		ax2.set_ylim([70, 130])
 		ax2.set_xticklabels('')
 		ax2.set_yticks(np.arange(80,121,10))		
-		ax2.set_ylabel(r'$\angle\/\Gamma_{\mathrm{rec}}$ [ $^\mathrm{o}$]', fontsize=16)
+		ax2.set_ylabel(r'$\angle\/\Gamma_{\mathrm{rec}}$ [ $^\mathrm{o}$]', fontsize=14)
 
-		ax.set_xlim([40, 160])
+		ax.set_xlim([48, 122])
 		ax.tick_params(axis='x', direction='in')
-		ax.set_xticks(np.arange(50, 151, 20))
+		ax.set_xticks(np.arange(50, 121, 10))
 		
 		
 		
@@ -3667,27 +3474,31 @@ def plots_midband_paper(plot_number):
 
 
 		ax     = f1.add_axes([x0, y0 + 1*dy, dx, dy])
-		h1     = ax.plot(fe, sca,'b',linewidth=2, label='$C_1$')
+		h1     = ax.plot(fe, sca,'b',linewidth=1.5, label='$C_1$')
+		ax.plot(rcv1[:,0], rcv1[:,3],'r', linewidth=1.5)      #  <----------------------------- Low-Band
 		ax2    = ax.twinx()
-		h2     = ax2.plot(fe, off,'r--',linewidth=2, label='$C_2$')
+		h2     = ax2.plot(fe, off,'b--',linewidth=1.5, label='$C_2$')
+		ax2.plot(rcv1[:,0], rcv1[:,4],'r--', linewidth=1.5)      #  <----------------------------- Low-Band
 		h      = h1 + h2
 		labels = [l.get_label() for l in h]
-		ax.legend(h, labels, loc=0, fontsize=13)
+		ax.legend(h, labels, loc=0, fontsize=10, ncol=2)
 
-		ax.set_ylim([3, 5.5])
+		ax.set_ylim([3.3, 5.2])
 		ax.set_xticklabels('')
 		ax.set_yticks(np.arange(3.5,5.1,0.5))
-		ax.set_ylabel('$C_1$', fontsize=16)
-		ax.text(42, 3.25, '(b)', fontsize=20)
+		ax.set_ylabel('$C_1$', fontsize=14)
+		ax.text(48.5, 3.38, '(b)', fontsize=16)
 
-		ax2.set_ylim([-2.4, -1.8])
+		#ax2.set_ylim([-2.4, -1.8])
+		ax2.set_ylim([-2.75, -0.75])
+		#ax2.set_ylim([-1.6, -1.4])
 		ax2.set_xticklabels('')
-		ax2.set_yticks(np.arange(-2.3, -1.85, 0.1))
-		ax2.set_ylabel('$C_2$ [K]', fontsize=16)
+		ax2.set_yticks(np.arange(-2.5, -0.85, 0.5))
+		ax2.set_ylabel('$C_2$ [K]', fontsize=14)
 
-		ax.set_xlim([40, 160])
+		ax.set_xlim([48, 122])
 		ax.tick_params(axis='x', direction='in')
-		ax.set_xticks(np.arange(50, 151, 20))
+		ax.set_xticks(np.arange(50, 121, 10))
 		
 		
 		
@@ -3696,27 +3507,32 @@ def plots_midband_paper(plot_number):
 
 
 		ax     = f1.add_axes([x0, y0 + 0*dy, dx, dy])
-		h1     = ax.plot(fe, TU,'b', linewidth=2, label='$T_{\mathrm{unc}}$')
+		h1     = ax.plot(fe, TU,'b', linewidth=1.5, label='$T_{\mathrm{unc}}$')
+		ax.plot(rcv1[:,0], rcv1[:,5],'r', linewidth=1.5)      #  <----------------------------- Low-Band
+		
 		ax2    = ax.twinx()
-		h2     = ax2.plot(fe, TC,'r--', linewidth=2, label='$T_{\mathrm{cos}}$')
-		h3     = ax2.plot(fe, TS,'g--', linewidth=2, label='$T_{\mathrm{sin}}$')		
+		h2     = ax2.plot(fe, TC,'b--', linewidth=1.5, label='$T_{\mathrm{cos}}$')
+		ax2.plot(rcv1[:,0], rcv1[:,6],'r--', linewidth=1.5)      #  <----------------------------- Low-Band
+		
+		h3     = ax2.plot(fe, TS,'b:', linewidth=1.5, label='$T_{\mathrm{sin}}$')
+		ax2.plot(rcv1[:,0], rcv1[:,7],'r:', linewidth=1.5)      #  <----------------------------- Low-Band
 
 		h      = h1 + h2 + h3
 		labels = [l.get_label() for l in h]
-		ax.legend(h, labels, loc=0, fontsize=13, ncol=3)
+		ax.legend(h, labels, loc=0, fontsize=10, ncol=3)
 
 		ax.set_ylim([178, 190])
 		ax.set_yticks(np.arange(180, 189, 2))
-		ax.set_ylabel('$T_{\mathrm{unc}}$ [K]', fontsize=16)
-		ax.set_xlabel('$\\nu$ [MHz]', fontsize=16)
-		ax.text(42, 179, '(c)', fontsize=20)
+		ax.set_ylabel('$T_{\mathrm{unc}}$ [K]', fontsize=14)
+		ax.set_xlabel('$\\nu$ [MHz]', fontsize=14)
+		ax.text(48.5, 178.5, '(c)', fontsize=16)
 
-		ax2.set_ylim([-60, 40])
+		ax2.set_ylim([-55, 35])
 		ax2.set_yticks(np.arange(-40, 21, 20))
-		ax2.set_ylabel('$T_{\mathrm{cos}}, T_{\mathrm{sin}}$ [K]', fontsize=16)
+		ax2.set_ylabel('$T_{\mathrm{cos}}, T_{\mathrm{sin}}$ [K]', fontsize=14)
 		
-		ax.set_xlim([40, 160])
-		ax.set_xticks(np.arange(50, 151, 20))
+		ax.set_xlim([48, 122])
+		ax.set_xticks(np.arange(50, 121, 10))
 
 
 		plt.savefig(path_plot_save + 'receiver_calibration.pdf', bbox_inches='tight')
@@ -3740,7 +3556,7 @@ def plots_midband_paper(plot_number):
 	
 
 		# Paths
-		path_plot_save = edges_folder + 'results/plots/20190422/'
+		path_plot_save = edges_folder + 'plots/20190730/'
 
 
 
@@ -3767,7 +3583,7 @@ def plots_midband_paper(plot_number):
 
 
 		# Frequency
-		f, il, ih = ba.frequency_edges(50, 150)
+		f, il, ih = ba.frequency_edges(60, 120)
 		fe = f[il:ih+1]	
 
 
@@ -3786,9 +3602,9 @@ def plots_midband_paper(plot_number):
 		
 
 		ax     = f1.add_axes([x0, y0 + 3*dy, dx, dy])	
-		h      = ax.plot(fe, 20*np.log10(np.abs(ra)), 'b', linewidth=1.5, label='$|\Gamma_{\mathrm{ant}}|$')
-		h      = ax.plot(flb1[flb1<=110], 20*np.log10(np.abs(ralb1[flb1<=110])), 'r', linewidth=1.5, label='$|\Gamma_{\mathrm{ant}}|$')
-		h      = ax.plot(flb2[flb2<=110], 20*np.log10(np.abs(ralb2[flb2<=110])), 'g', linewidth=1.5, label='$|\Gamma_{\mathrm{ant}}|$')
+		h      = ax.plot(fe, 20*np.log10(np.abs(ra)), 'b',                              linewidth=1.3, label='$|\Gamma_{\mathrm{ant}}|$')
+		h      = ax.plot(flb1[flb1<=100], 20*np.log10(np.abs(ralb1[flb1<=100])), 'r',   linewidth=1.3, label='$|\Gamma_{\mathrm{ant}}|$')
+		h      = ax.plot(flb2[flb2<=100], 20*np.log10(np.abs(ralb2[flb2<=100])), 'r--', linewidth=1.3, label='$|\Gamma_{\mathrm{ant}}|$')
 		
 		
 		
@@ -3797,7 +3613,7 @@ def plots_midband_paper(plot_number):
 		#h2     = ax2.plot(fe, (180/np.pi)*np.unwrap(np.angle(ra)), 'r--', linewidth=2, label=r'$\angle\/\Gamma_{\mathrm{ant}}$')
 		#h      = h1 + h2
 		#labels = [l.get_label() for l in h]
-		ax.legend(['mid-band','low-band 1','low-band 2'], fontsize=9)
+		ax.legend(['Mid-Band','Low-Band 1','Low-Band 2'], fontsize=9)
 
 		#ax.set_ylim([-41, -25])
 		ax.set_xticklabels('')
@@ -3808,14 +3624,14 @@ def plots_midband_paper(plot_number):
 		#		
 		#ax2.set_ylabel(r'$\angle\/\Gamma_{\mathrm{ant}}$ [ $^\mathrm{o}$]', fontsize=16)
 
-		ax.set_xlim([45, 155])
+		ax.set_xlim([48, 122])
 		ax.set_ylim([-16, -4])
 		ax.set_yticks(np.arange(-14,-5,2))
 		#ax.set_xticklabels('')
 		ax.tick_params(axis='x', direction='in')
-		ax.set_xticks(np.arange(50, 151, 20))
+		ax.set_xticks(np.arange(50, 125, 10))
 		
-		ax.text(144, -15.3, '(a)', fontsize=14)
+		ax.text(114, -15.3, '(a)', fontsize=14)
 		
 
 
@@ -3831,9 +3647,9 @@ def plots_midband_paper(plot_number):
 
 
 		ax     = f1.add_axes([x0, y0 + 2*dy, dx, dy])	
-		h      = ax.plot(fe, (180/np.pi)*np.unwrap(np.angle(ra)), 'b', linewidth=1.5, label=r'$\angle\/\Gamma_{\mathrm{ant}}$')
-		h      = ax.plot(flb1[flb1<=110], (180/np.pi)*np.unwrap(np.angle(ralb1[flb1<=110])), 'r', linewidth=1.5, label=r'$\angle\/\Gamma_{\mathrm{ant}}$')
-		h      = ax.plot(flb2[flb2<=110], (180/np.pi)*np.unwrap(np.angle(ralb2[flb2<=110])), 'g', linewidth=1.5, label=r'$\angle\/\Gamma_{\mathrm{ant}}$')
+		h      = ax.plot(fe, (180/np.pi)*np.unwrap(np.angle(ra)), 'b',                              linewidth=1.3, label=r'$\angle\/\Gamma_{\mathrm{ant}}$')
+		h      = ax.plot(flb1[flb1<=100], (180/np.pi)*np.unwrap(np.angle(ralb1[flb1<=100])), 'r',   linewidth=1.3, label=r'$\angle\/\Gamma_{\mathrm{ant}}$')
+		h      = ax.plot(flb2[flb2<=100], (180/np.pi)*np.unwrap(np.angle(ralb2[flb2<=100])), 'r--', linewidth=1.3, label=r'$\angle\/\Gamma_{\mathrm{ant}}$')
 	
 		
 		#ax2    = ax.twinx()
@@ -3843,7 +3659,7 @@ def plots_midband_paper(plot_number):
 		#ax.legend(h, labels, loc=2, fontsize=13)
 
 		#ax.set_ylim([-41, -25])
-		#ax.set_xticklabels('')
+		ax.set_xticklabels('')
 		#ax.set_yticks(np.arange(-39,-26,3))
 		#ax.set_ylabel('$|\Gamma_{\mathrm{rec}}|$ [dB]', fontsize=16)
 		ax.set_ylabel(r'$\angle\/\Gamma_{\mathrm{ant}}$ [ $^\mathrm{o}$]') #, fontsize=15)
@@ -3854,13 +3670,13 @@ def plots_midband_paper(plot_number):
 		#ax2.set_yticks(np.arange(80,121,10))		
 		#ax2.set_ylabel(r'$\angle\/\Gamma_{\mathrm{rec}}$ [ $^\mathrm{o}$]', fontsize=16)
 
-		ax.set_xlim([45, 155])	
+		ax.set_xlim([48, 122])
 		ax.tick_params(axis='x', direction='in')
-		ax.set_xticks(np.arange(50, 151, 20))
+		ax.set_xticks(np.arange(50, 125, 10))
 		ax.set_ylim([-800, 400])
 		ax.set_yticks(np.arange(-600,201,200))			
 		
-		ax.text(144, -730, '(b)', fontsize=14)
+		ax.text(114, -730, '(b)', fontsize=14)
 
 
 
@@ -3891,9 +3707,9 @@ def plots_midband_paper(plot_number):
 
 
 		ax     = f1.add_axes([x0, y0 + 1*dy, dx, dy])	
-		h      = ax.plot(fe, (1-Gbc)*100, 'b', linewidth=1.5, label='antenna loss [%]')
-		h      = ax.plot(flb1[flb1<=110], (1-Gbclb)[flb1<=110]*100, 'r', linewidth=1.5, label='antenna loss [%]')
-		h      = ax.plot(flb1[flb1<=110], (1-Gbclb2)[flb1<=110]*100, 'g', linewidth=1.5, label='antenna loss [%]')
+		h      = ax.plot(fe, (1-Gbc)*100, 'b',                              linewidth=1.3, label='antenna loss [%]')
+		h      = ax.plot(flb1[flb1<=100], (1-Gbclb)[flb1<=100]*100,  'r',   linewidth=1.3, label='antenna loss [%]')
+		h      = ax.plot(flb1[flb1<=100], (1-Gbclb2)[flb1<=100]*100, 'r--', linewidth=1.3, label='antenna loss [%]')
 		#ax2    = ax.twinx()
 		#h2     = ax2.plot(fe, (180/np.pi)*np.unwrap(np.angle(rl)), 'r--', linewidth=2, label=r'$\angle\/\Gamma_{\mathrm{rec}}$')
 		#h      = h1 + h2
@@ -3901,7 +3717,7 @@ def plots_midband_paper(plot_number):
 		#ax.legend(h, labels, loc=2, fontsize=13)
 
 		#ax.set_ylim([-41, -25])
-		ax.set_xticklabels('')
+		#ax.set_xticklabels('')
 		#ax.set_yticks(np.arange(-39,-26,3))
 		#ax.set_ylabel('$|\Gamma_{\mathrm{rec}}|$ [dB]', fontsize=16)
 		#ax.text(42, -39.6, '(a)', fontsize=20)
@@ -3912,57 +3728,17 @@ def plots_midband_paper(plot_number):
 		#ax2.set_yticks(np.arange(80,121,10))		
 		#ax2.set_ylabel(r'$\angle\/\Gamma_{\mathrm{rec}}$ [ $^\mathrm{o}$]', fontsize=16)
 
-		ax.set_xlim([45, 155])
+		ax.set_xlim([48, 122])
 		ax.tick_params(axis='x', direction='in')
-		ax.set_xticks(np.arange(50, 151, 20))
+		ax.set_xticks(np.arange(50, 125, 10))
 		ax.set_ylim([0, 1])
 		ax.set_yticks(np.arange(0.2,0.9,0.2))		
 
-		ax.text(144, 0.07, '(c)', fontsize=14)
-
-
-
-
-		Gg   = cal.ground_loss('mid_band', fe)
-		flb  = np.arange(50, 111, 1)
-		Gglb = cal.ground_loss('low_band', flb)
+		ax.text(114, 0.07, '(c)', fontsize=14)
 		
-		
+		ax.set_xlabel('$\\nu$ [MHz]', fontsize=13)
 
 
-		ax     = f1.add_axes([x0, y0 + 0*dy, dx, dy])	
-		h      = ax.plot(fe, (1-Gg)*100, 'b', linewidth=1.5, label='ground loss [%]')
-		h      = ax.plot(flb, (1-Gglb)*100, 'r', linewidth=1.5, label='ground loss [%]')
-		#ax2    = ax.twinx()
-		#h2     = ax2.plot(fe, (180/np.pi)*np.unwrap(np.angle(rl)), 'r--', linewidth=2, label=r'$\angle\/\Gamma_{\mathrm{rec}}$')
-		#h      = h1 + h2
-		#labels = [l.get_label() for l in h]
-		#ax.legend(h, labels, loc=2, fontsize=13)
-
-		ax.set_xlabel('$\\nu$ [MHz]')#, fontsize=15)
-		#ax.set_ylim([-41, -25])
-		#ax.set_xticklabels('')
-		#ax.set_yticks(np.arange(-39,-26,3))
-		#ax.set_ylabel('$|\Gamma_{\mathrm{rec}}|$ [dB]', fontsize=16)
-		#ax.text(42, -39.6, '(a)', fontsize=20)
-		ax.set_ylabel(r'ground loss [%]')#, fontsize=15)
-		
-		#xt = np.arange(50, 151, 20)
-		#ax.set_xticks(xt)		
-
-		#ax2.set_ylim([70, 130])
-		#ax2.set_xticklabels('')
-		#ax2.set_yticks(np.arange(80,121,10))		
-		#ax2.set_ylabel(r'$\angle\/\Gamma_{\mathrm{rec}}$ [ $^\mathrm{o}$]', fontsize=16)
-
-		ax.set_xlim([45, 155])
-		#ax.tick_params(axis='x', direction='in')
-		ax.set_xticks(np.arange(50, 151, 20))
-		ax.set_ylim([0.1, 0.4])
-		ax.set_yticks(np.arange(0.15,0.36,0.05))		
-		
-		ax.text(144, 0.12, '(d)', fontsize=14)
-		
 
 		plt.savefig(path_plot_save + 'antenna_parameters.pdf', bbox_inches='tight')
 		plt.close()	
@@ -3982,17 +3758,25 @@ def plots_midband_paper(plot_number):
 	if plot_number == 3:
 
 		# Paths
-		path_plot_save = edges_folder + 'results/plots/20190422/'
+		path_plot_save = edges_folder + 'plots/20190801/'
 
 
 		# Plot
 
-		size_x = 4
-		size_y = 12 #10.5
+		size_x = 7.2
+		size_y = 6 #10.5
 		x0 = 0.15
 		y0 = 0.09
-		dx = 0.8
-		dy = 0.18
+		dx = 0.45
+		dy = 0.4
+
+		xoff = x0/1.3
+
+
+
+
+
+
 
 
 		f1  = plt.figure(num=1, figsize=(size_x, size_y))		
@@ -4000,54 +3784,53 @@ def plots_midband_paper(plot_number):
 
 
 
-		# Frequency
-		f, il, ih = ba.frequency_edges(50, 150)
-		fe = f[il:ih+1]	
+		## Frequency
+		#f, il, ih = ba.frequency_edges(50, 150)
+		#fe = f[il:ih+1]	
 
 
 
-
+		flow  = 50
+		fhigh = 120
 
 
 		bm = cal.FEKO_blade_beam('mid_band', 0, frequency_interpolation='no', frequency=np.array([0]), AZ_antenna_axis=0)
 		ff = np.arange(50,201,2)
 		
-		imax = 51
-		fe = ff[0:imax]
-		
-		g_zenith = bm[:,90,0][0:imax]
-		g_45_E   = bm[:,45,0][0:imax]
-		g_45_H   = bm[:,45,90][0:imax]
+		fe       = ff[(ff>=flow) & (ff<=fhigh)]
+		g_zenith = bm[:,90,0][(ff>=flow) & (ff<=fhigh)]
+		g_45_E   = bm[:,45,0][(ff>=flow) & (ff<=fhigh)]
+		g_45_H   = bm[:,45,90][(ff>=flow) & (ff<=fhigh)]
 		
 	
 		
 		bm_inf = cal.FEKO_blade_beam('mid_band', 1, frequency_interpolation='no', frequency=np.array([0]), AZ_antenna_axis=0)
-		g_inf_zenith = bm_inf[:,90,0][0:imax]
-		g_inf_45_E   = bm_inf[:,45,0][0:imax]
-		g_inf_45_H   = bm_inf[:,45,90][0:imax]
+		ff = np.arange(50,201,2)
+		
+		g_inf_zenith = bm_inf[:,90,0][(ff>=flow) & (ff<=fhigh)]
+		g_inf_45_E   = bm_inf[:,45,0][(ff>=flow) & (ff<=fhigh)]
+		g_inf_45_H   = bm_inf[:,45,90][(ff>=flow) & (ff<=fhigh)]
 		
 
 
 		bm_lb = oeg.FEKO_low_band_blade_beam(beam_file=2, frequency_interpolation='no', frequency=np.array([0]), AZ_antenna_axis=0)
 		fcuec = np.arange(40,121,2)
-		flb   = fcuec[5:36]
 		
-		glb_zenith = bm_lb[:,90,0][5:36]
-		glb_45_E   = bm_lb[:,45,0][5:36]
-		glb_45_H   = bm_lb[:,45,90][5:36]
+		flb        = fcuec[(fcuec>=flow) & (fcuec<=fhigh)]
+		glb_zenith = bm_lb[:,90,0][(fcuec>=flow) & (fcuec<=fhigh)]
+		glb_45_E   = bm_lb[:,45,0][(fcuec>=flow) & (fcuec<=fhigh)]
+		glb_45_H   = bm_lb[:,45,90][(fcuec>=flow) & (fcuec<=fhigh)]
 		
 		
-
-
-
 
 		bm_10 = oeg.FEKO_low_band_blade_beam(beam_file=5, frequency_interpolation='no', frequency=np.array([0]), AZ_antenna_axis=0)
-		fcuec = np.arange(50,121,2)
-		f10   = fcuec[0:-5]
+		fcuec      = np.arange(50,121,2)
+
+		f10        = fcuec[(fcuec>=flow) & (fcuec<=fhigh)]	
+		g10_zenith = bm_10[:,90,0][(fcuec>=flow) & (fcuec<=fhigh)]
+		g10_45_E   = bm_10[:,45,0][(fcuec>=flow) & (fcuec<=fhigh)]
+		g10_45_H   = bm_10[:,45,90][(fcuec>=flow) & (fcuec<=fhigh)]
 		
-		g10_zenith = bm_10[:,90,0][0:-5]
-		g10_45_E   = bm_10[:,45,0][0:-5]
-		g10_45_H   = bm_10[:,45,90][0:-5]
 		
 		
 		print(glb_zenith[-1])
@@ -4055,30 +3838,36 @@ def plots_midband_paper(plot_number):
 		
 		print(g10_zenith[-1])
 		print(f10[-1])
+
+
+
+
+
+
 		
 
-		ax     = f1.add_axes([x0, y0 + 2*dy, dx, dy])
+		ax     = f1.add_axes([x0, y0 + 1*dy, dx, dy])
 		
-		h      = ax.plot(fe, g_inf_zenith,'b',linewidth=0.75, label='')
-		h      = ax.plot(fe, g_zenith,'b',linewidth=1.5, label='')
-		h      = ax.plot(flb, glb_zenith,'r',linewidth=1.5, label='')
-		h      = ax.plot(f10, g10_zenith,'g',linewidth=1.5, label='')
+		h      = ax.plot(fe,  g_zenith,    'b',linewidth=1.0, label='')
+		h      = ax.plot(fe,  g_inf_zenith,'b--',linewidth=0.5, label='')
+		h      = ax.plot(flb, glb_zenith,  'r',linewidth=1.0, label='')
+		h      = ax.plot(f10, g10_zenith,  'r--',linewidth=0.5, label='')
 		
-		h      = ax.plot(fe, g_zenith,'b',linewidth=1.5, label='')
-		h      = ax.plot(fe, g_45_E,'b',linewidth=1.5, label='')
-		h      = ax.plot(fe, g_45_H,'b',linewidth=1.5, label='')
+		h      = ax.plot(fe, g_zenith, 'b',linewidth=1.0, label='')
+		h      = ax.plot(fe, g_45_E,   'b',linewidth=1.0, label='')
+		h      = ax.plot(fe, g_45_H,   'b',linewidth=1.0, label='')
 				
-		h      = ax.plot(fe, g_inf_zenith,'b',linewidth=0.75, label='')
-		h      = ax.plot(fe, g_inf_45_E,'b',linewidth=0.75, label='')
-		h      = ax.plot(fe, g_inf_45_H,'b',linewidth=0.75, label='')		
+		h      = ax.plot(fe, g_inf_zenith, 'b--',linewidth=0.5, label='')
+		h      = ax.plot(fe, g_inf_45_E,   'b--',linewidth=0.5, label='')
+		h      = ax.plot(fe, g_inf_45_H,   'b--',linewidth=0.5, label='')		
 		
-		h      = ax.plot(flb, glb_zenith,'r',linewidth=1.5, label='')
-		h      = ax.plot(flb, glb_45_E,'r',linewidth=1.5, label='')
-		h      = ax.plot(flb, glb_45_H,'r',linewidth=1.5, label='')
+		h      = ax.plot(flb, glb_zenith, 'r',linewidth=1.0, label='')
+		h      = ax.plot(flb, glb_45_E,   'r',linewidth=1.0, label='')
+		h      = ax.plot(flb, glb_45_H,   'r',linewidth=1.0, label='')
 		
-		h      = ax.plot(f10, g10_zenith,'g',linewidth=1.5, label='')
-		h      = ax.plot(f10, g10_45_E,'g',linewidth=1.5, label='')
-		h      = ax.plot(f10, g10_45_H,'g',linewidth=1.5, label='')		
+		h      = ax.plot(f10, g10_zenith, 'r--',linewidth=0.5, label='')
+		h      = ax.plot(f10, g10_45_E,   'r--',linewidth=0.5, label='')
+		h      = ax.plot(f10, g10_45_H,   'r--',linewidth=0.5, label='')		
 		
 		
 		#ax2    = ax.twinx()
@@ -4092,27 +3881,27 @@ def plots_midband_paper(plot_number):
 		#ax.set_yticks(np.arange(3.5,5.1,0.5))
 		#ax.set_ylabel('$C_1$', fontsize=16)
 		#ax.text(42, 3.25, '(b)', fontsize=20)
-		ax.set_ylabel('gain [no units]')#, fontsize=14)
+		ax.set_ylabel('gain')#, fontsize=14)
 
 		#ax2.set_ylim([-2.4, -1.8])
 		#ax2.set_xticklabels('')
 		#ax2.set_yticks(np.arange(-2.3, -1.85, 0.1))
 		#ax2.set_ylabel('$C_2$ [K]', fontsize=16)
 
-		ax.set_xlim([45, 155])
+		ax.set_xlim([48, 122])
 		ax.tick_params(axis='x', direction='in')
-		ax.set_xticks(np.arange(50, 151, 20))
+		ax.set_xticks(np.arange(50, 121, 10))
 		ax.set_ylim([0, 9])
 		ax.set_yticks(np.arange(1,8.1,1))		
 		
-		ax.text(145, 0.4, '(a)', fontsize=14)
+		ax.text(115, 0.4, '(a)', fontsize=14)
 		
 		ax.text(50, 5.7, 'zenith', fontsize=10)
 		ax.text(50, 2.9, r'$\theta=45^{\circ}$, H-plane', fontsize=10)
 		ax.text(50, 0.9, r'$\theta=45^{\circ}$, E-plane', fontsize=10)
 		
 		
-		ax.legend(['mid-band infinite GP', 'mid-band 30mx30m GP','low-band 30mx30m GP','low-band 10mx10m GP'], fontsize=7)
+		ax.legend(['Mid-Band 30mx30m GP', 'Mid-Band infinite GP', 'Low-Band 30mx30m GP', 'Low-Band 10mx10m GP'], fontsize=7, ncol=2)
 	
 	
 	
@@ -4120,26 +3909,25 @@ def plots_midband_paper(plot_number):
 	
 	
 		
-		Nfg   = 3
+		Nfg   = 4
 	
 		
-		imax2 = 31
-		p1 = np.polyfit(fe[0:imax2], g_zenith[0:imax2], Nfg)
-		p2 = np.polyfit(fe[0:imax2], g_45_E[0:imax2], Nfg)
-		p3 = np.polyfit(fe[0:imax2], g_45_H[0:imax2], Nfg)
+		p1 = np.polyfit(fe, g_zenith, Nfg)
+		p2 = np.polyfit(fe, g_45_E, Nfg)
+		p3 = np.polyfit(fe, g_45_H, Nfg)
 		
-		m1 = np.polyval(p1, fe[0:imax2])
-		m2 = np.polyval(p2, fe[0:imax2])
-		m3 = np.polyval(p3, fe[0:imax2])
+		m1 = np.polyval(p1, fe)
+		m2 = np.polyval(p2, fe)
+		m3 = np.polyval(p3, fe)
 
 
-		pi1 = np.polyfit(fe[0:imax2], g_inf_zenith[0:imax2], Nfg)
-		pi2 = np.polyfit(fe[0:imax2], g_inf_45_E[0:imax2], Nfg)
-		pi3 = np.polyfit(fe[0:imax2], g_inf_45_H[0:imax2], Nfg)
+		pi1 = np.polyfit(fe, g_inf_zenith, Nfg)
+		pi2 = np.polyfit(fe, g_inf_45_E, Nfg)
+		pi3 = np.polyfit(fe, g_inf_45_H, Nfg)
 		
-		mi1 = np.polyval(pi1, fe[0:imax2])
-		mi2 = np.polyval(pi2, fe[0:imax2])
-		mi3 = np.polyval(pi3, fe[0:imax2])
+		mi1 = np.polyval(pi1, fe)
+		mi2 = np.polyval(pi2, fe)
+		mi3 = np.polyval(pi3, fe)
 
 
 
@@ -4164,23 +3952,24 @@ def plots_midband_paper(plot_number):
 
 		
 		
-		ax     = f1.add_axes([x0, y0 + 1*dy, dx, dy])
+		ax     = f1.add_axes([x0, y0 + 0*dy, dx, dy])
 		
-		h      = ax.plot(fe[0:imax2], g_zenith[0:imax2]-m1 + 0.1,'b', linewidth=1.5, label='$T_{\mathrm{unc}}$')
-		h      = ax.plot(fe[0:imax2], g_45_E[0:imax2]-m2 - 0.1,'b', linewidth=1.5, label='$T_{\mathrm{unc}}$')
-		h      = ax.plot(fe[0:imax2], g_45_H[0:imax2]-m3 - 0.0,'b', linewidth=1.5, label='$T_{\mathrm{unc}}$')
+		DY = 0.08
+		h      = ax.plot(fe, g_zenith-m1 + DY,'b', linewidth=1.0, label='$T_{\mathrm{unc}}$')
+		h      = ax.plot(fe, g_45_E-m2   - DY,'b', linewidth=1.0, label='$T_{\mathrm{unc}}$')
+		h      = ax.plot(fe, g_45_H-m3   - 0.0,'b', linewidth=1.0, label='$T_{\mathrm{unc}}$')
 		
-		h      = ax.plot(fe[0:imax2], g_inf_zenith[0:imax2]-mi1 + 0.1,'b', linewidth=0.75, label='$T_{\mathrm{unc}}$')
-		h      = ax.plot(fe[0:imax2], g_inf_45_E[0:imax2]-mi2 - 0.1,'b', linewidth=0.75, label='$T_{\mathrm{unc}}$')
-		h      = ax.plot(fe[0:imax2], g_inf_45_H[0:imax2]-mi3 - 0.0,'b', linewidth=0.75, label='$T_{\mathrm{unc}}$')
+		h      = ax.plot(fe, g_inf_zenith-mi1 + DY,'b--', linewidth=0.5, label='$T_{\mathrm{unc}}$')
+		h      = ax.plot(fe, g_inf_45_E-mi2   - DY,'b--', linewidth=0.5, label='$T_{\mathrm{unc}}$')
+		h      = ax.plot(fe, g_inf_45_H-mi3   - 0.0,'b--', linewidth=0.5, label='$T_{\mathrm{unc}}$')
 		
-		h      = ax.plot(flb, glb_zenith-mlb1 + 0.1,'r', linewidth=1.5, label='$T_{\mathrm{unc}}$')
-		h      = ax.plot(flb, glb_45_E-mlb2 - 0.1,'r', linewidth=1.5, label='$T_{\mathrm{unc}}$')
-		h      = ax.plot(flb, glb_45_H-mlb3 - 0.0,'r', linewidth=1.5, label='$T_{\mathrm{unc}}$')		
+		h      = ax.plot(flb, glb_zenith-mlb1 + DY,'r', linewidth=1.0, label='$T_{\mathrm{unc}}$')
+		h      = ax.plot(flb, glb_45_E-mlb2   - DY,'r', linewidth=1.0, label='$T_{\mathrm{unc}}$')
+		h      = ax.plot(flb, glb_45_H-mlb3   - 0.0,'r', linewidth=1.0, label='$T_{\mathrm{unc}}$')		
 
-		h      = ax.plot(f10, g10_zenith-m10_1 + 0.1,'g', linewidth=1.5, label='$T_{\mathrm{unc}}$')
-		h      = ax.plot(f10, g10_45_E-m10_2 - 0.1,'g', linewidth=1.5, label='$T_{\mathrm{unc}}$')
-		h      = ax.plot(f10, g10_45_H-m10_3 - 0.0,'g', linewidth=1.5, label='$T_{\mathrm{unc}}$')	
+		h      = ax.plot(f10, g10_zenith-m10_1 + DY,'r--', linewidth=0.5, label='$T_{\mathrm{unc}}$')
+		h      = ax.plot(f10, g10_45_E-m10_2   - DY,'r--', linewidth=0.5, label='$T_{\mathrm{unc}}$')
+		h      = ax.plot(f10, g10_45_H-m10_3   - 0.0,'r--', linewidth=0.5, label='$T_{\mathrm{unc}}$')	
 
 		
 		
@@ -4195,53 +3984,120 @@ def plots_midband_paper(plot_number):
 		#ax.set_ylim([178, 190])
 		#ax.set_yticks(np.arange(180, 189, 2))
 		#ax.set_ylabel('$T_{\mathrm{unc}}$ [K]', fontsize=16)
-		#ax.set_xlabel('$\\nu$ [MHz]', fontsize=15)
+		ax.set_xlabel('$\\nu$ [MHz]')#, fontsize=15)
 		#ax.text(42, 179, '(c)', fontsize=20)
-		ax.set_ylabel('gain residuals\n[0.05 per division]')#, fontsize=14)
+		ax.set_ylabel('gain residuals\n['+ str(DY/2) + ' per division]')#, fontsize=14)
 
 		#ax2.set_ylim([-60, 40])
 		#ax2.set_yticks(np.arange(-40, 21, 20))
 		
 		
-		ax.set_xlim([45, 155])
-		xt = np.arange(50, 151, 20)
+		ax.set_xlim([48, 122])
+		xt = np.arange(50, 121, 10)
 		ax.set_xticks(xt)
-		ax.tick_params(axis='x', direction='in')
-		ax.set_xticklabels(xt, fontsize=10)
-		ax.set_ylim([-0.175, 0.175])
-		yt = np.arange(-0.15,0.16,0.05)
+		#ax.set_xticklabels('')
+		#ax.set_xticklabels(xt, fontsize=10)
+		#ax.tick_params(axis='x', direction='in')
+		yt = np.arange(-1.5*DY, 1.5*DY+0.0001, DY/2)
+		ax.set_ylim([-0.135, 0.135])
 		ax.set_yticks(yt)
 		ax.set_yticklabels(['' for i in range(len(yt))])
 		
-		ax.text(145, -0.156, '(b)', fontsize=14)
+		ax.text(115, -0.123, '(b)', fontsize=14)
 
-		ax.text(113, 0.09, 'zenith', fontsize=10)
-		ax.text(113, -0.01, r'$\theta=45^{\circ}$, H-plane', fontsize=10)
-		ax.text(113, -0.11, r'$\theta=45^{\circ}$, E-plane', fontsize=10)
+		ax.text(50, 0.035, 'zenith', fontsize=10)
+		ax.text(50, -0.03, r'$\theta=45^{\circ}$, H-plane', fontsize=10)
+		ax.text(50, -0.12, r'$\theta=45^{\circ}$, E-plane', fontsize=10)
 		
 
 
 
 
 
-		ax     = f1.add_axes([x0, y0 + 0*dy, dx, dy])
+		ax     = f1.add_axes([x0 + 1*dx + xoff, y0 + 1*dy, dx, dy])
 		
+	
+		Gg   = cal.ground_loss('mid_band', fe)
+		flb  = np.arange(50, 121, 1)
+		Gglb = cal.ground_loss('low_band', flb)
+
+		h      = ax.plot(fe, (1-Gg)*100, 'b', linewidth=1.0, label='ground loss [%]')
+		h      = ax.plot(flb, (1-Gglb)*100, 'r', linewidth=1.0, label='ground loss [%]')
+
+		#ax.set_xlabel('$\\nu$ [MHz]')#, fontsize=15)
+		#ax.set_ylim([-41, -25])
+		#ax.set_xticklabels('')
+		#ax.set_yticks(np.arange(-39,-26,3))
+		#ax.set_ylabel('$|\Gamma_{\mathrm{rec}}|$ [dB]', fontsize=16)
+		#ax.text(42, -39.6, '(a)', fontsize=20)
+		ax.set_ylabel(r'ground loss [%]')#, fontsize=15)
+
+
+		
+		ax.set_xlim([48, 122])
+		xt = np.arange(50, 121, 10)
+		ax.set_xticks(xt)
+		ax.set_xticklabels('')
+		ax.tick_params(axis='x', direction='in')
+		#ax.set_xticklabels(['' for i in range(len(xt))], fontsize=15)
+		#ax.set_xticklabels(xt, fontsize=10)
+		ax.set_ylim([0.1, 0.5])
+		ax.set_yticks(np.arange(0.15,0.46,0.05))
+				
+		ax.text(115, 0.118, '(c)', fontsize=14)
+
+		
+		
+		
+		
+		
+		
+		
+		
+		
+
+	
+		ax     = f1.add_axes([x0 + 1*dx + xoff, y0 + 0*dy, dx, dy])	
+	
+	
+		#ax2    = ax.twinx()
+		#h2     = ax2.plot(fe, (180/np.pi)*np.unwrap(np.angle(rl)), 'r--', linewidth=2, label=r'$\angle\/\Gamma_{\mathrm{rec}}$')
+		#h      = h1 + h2
+		#labels = [l.get_label() for l in h]
+		#ax.legend(h, labels, loc=2, fontsize=13)
+	
+
+		#xt = np.arange(50, 151, 20)
+		#ax.set_xticks(xt)		
+	
+		#ax2.set_ylim([70, 130])
+		#ax2.set_xticklabels('')
+		#ax2.set_yticks(np.arange(80,121,10))		
+		#ax2.set_ylabel(r'$\angle\/\Gamma_{\mathrm{rec}}$ [ $^\mathrm{o}$]', fontsize=16)
+
+
 		ax.set_xlabel('$\\nu$ [MHz]')#, fontsize=15)
 		ax.set_ylabel('place holder [X]')#, fontsize=14)
-
-		
-		ax.set_xlim([45, 155])
-		xt = np.arange(50, 151, 20)
-		ax.set_xticks(xt)
-		#ax.set_xticklabels(['' for i in range(len(xt))], fontsize=15)
-		ax.set_xticklabels(xt, fontsize=10)
+	
+		ax.set_xlim([48, 122])
+		#ax.tick_params(axis='x', direction='in')
+		ax.set_xticks(np.arange(50, 121, 10))
+			
 		ax.set_ylim([-0.175, 0.175])
 		yt = np.arange(-0.15,0.16,0.05)
 		ax.set_yticks(yt)
 		ax.set_yticklabels(['' for i in range(len(yt))])
-		
-		ax.text(145, -0.156, '(c)', fontsize=14)
 
+
+		ax.text(115, 0.12, '(d)', fontsize=14)
+		
+		
+		
+		
+		
+		
+		
+		
 		
 		
 
@@ -4299,14 +4155,14 @@ def plots_midband_paper(plot_number):
 
 
 
-		beam_factor_filename = 'table_lores_mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.6_sigma_deg_5_reffreq_100MHz.hdf5'
+		beam_factor_filename = 'table_lores_mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz.hdf5'
 		f, lst, bf           = cal.beam_factor_table_read('/home/raul/DATA2/EDGES_vol2/mid_band/calibration/beam_factors/table/' + beam_factor_filename)
 		gha = lst + (24-17.76)
 		gha[gha>=24] = gha[gha>=24] - 24
 		IX = np.argsort(gha)
 		bx1 = bf[IX]
 
-
+		print(gha[IX][175])
 
 		plt.close()
 		plt.close()
@@ -4319,7 +4175,11 @@ def plots_midband_paper(plot_number):
 		ax     = f1.add_axes([x0, y0 + 1*(yoff+dy1), dx, dy])
 		im = ax.imshow(bx1, interpolation='none', extent=[50, 200, 24, 0], aspect='auto', vmin=0.979, vmax=1.021)#, cmap='jet')
 	
-		ax.set_xlim([50, 120])
+		ax.plot(f, 6*np.ones(len(f)), 'w--', linewidth=1.5)
+		ax.plot(f, 18*np.ones(len(f)), 'w--', linewidth=1.5)
+	
+	
+		ax.set_xlim([60, 120])
 		ax.set_xticklabels('')
 		ax.set_yticks(np.arange(0,25,3))
 		ax.set_ylabel('GHA [hr]')
@@ -4334,19 +4194,20 @@ def plots_midband_paper(plot_number):
 		
 		
 		ax     = f1.add_axes([x0, y0, dx, dy1])
-		ax.plot(f, bx1[0,:], 'k')
-		ax.plot(f, bx1[125,:], 'k--')
-		ax.plot(f, bx1[175,:], 'k:')
+		ax.plot(f, bx1[125,:], 'k')
+		ax.plot(f, bx1[175,:], 'k--')
+		#ax.plot(f, bx1[225,:], 'k:')
+		ax.legend(['GHA=10 hr','GHA=14 hr'], fontsize=8, ncol=2)
 		
 		ax.set_ylim([0.9, 1.1])
 	
 		#cax    = f1.add_axes([x0 + 1*dx + xoffc, y0 + 0*(yoff+dy), dxc, dy])
 		#f1.colorbar(im, cax=cax, orientation='vertical')
 	
-		ax.set_xlim([50, 120])
-		ax.set_ylim([0.95, 1.05])
+		ax.set_xlim([60, 120])
+		ax.set_ylim([0.975, 1.025])
 		ax.set_xlabel(r'$\nu$ [MHz]')
-		ax.set_yticks([0.96,1,1.04])
+		ax.set_yticks([0.98,1,1.02])
 		ax.set_ylabel('$C$')
 		#ax.text(panel_letter_x, panel_letter_y,  '(e)', fontsize=18)		
 		
@@ -4364,7 +4225,7 @@ def plots_midband_paper(plot_number):
 		
 		
 		# Saving plot
-		path_plot_save = edges_folder + 'results/plots/20190422/'
+		path_plot_save = edges_folder + 'plots/20190729/'
 		
 
 		plt.savefig(path_plot_save + 'beam_chromaticity_correction.pdf', bbox_inches='tight')
@@ -4403,9 +4264,7 @@ def plots_midband_paper(plot_number):
 		panel_letter_y = 3
 
 
-
-
-		beam_factor_filename = 'table_lores_mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.6_sigma_deg_5_reffreq_100MHz.hdf5'
+		beam_factor_filename = 'table_lores_mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz.hdf5'				
 		f, lst, bf           = cal.beam_factor_table_read('/home/raul/DATA2/EDGES_vol2/mid_band/calibration/beam_factors/table/' + beam_factor_filename)
 		gha = lst + (24-17.76)
 		gha[gha>=24] = gha[gha>=24] - 24
@@ -4415,24 +4274,19 @@ def plots_midband_paper(plot_number):
 
 
 
-		beam_factor_filename = 'table_lores_mid_band_50-200MHz_90deg_alan1_haslam_gaussian_index_2.4_2.6_sigma_deg_5_reffreq_100MHz.hdf5'
+		beam_factor_filename = 'table_lores_mid_band_50-200MHz_90deg_alan1_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz.hdf5'
 		f, lst, bf           = cal.beam_factor_table_read('/home/raul/DATA2/EDGES_vol2/mid_band/calibration/beam_factors/table/' + beam_factor_filename)
 		bx2 = bf[IX]
 
-
-
-
-
-		beam_factor_filename = 'table_lores_mid_band_50-200MHz_90deg_alan0_haslam_step_index_2.5_2.6_band_deg_10_reffreq_100MHz.hdf5'
+		beam_factor_filename = 'table_lores_mid_band_50-200MHz_90deg_alan0_haslam_flat_index_2.56_reffreq_90MHz.hdf5'
 		f, lst, bf           = cal.beam_factor_table_read('/home/raul/DATA2/EDGES_vol2/mid_band/calibration/beam_factors/table/' + beam_factor_filename)
 		bx3 = bf[IX]
 
-
-		beam_factor_filename = 'table_lores_mid_band_50-200MHz_90deg_alan0_LW_gaussian_index_2.4_2.6_sigma_deg_5_reffreq_100MHz.hdf5'
+		beam_factor_filename = 'table_lores_mid_band_50-200MHz_90deg_alan0_LW_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz.hdf5'
 		f, lst, bf           = cal.beam_factor_table_read('/home/raul/DATA2/EDGES_vol2/mid_band/calibration/beam_factors/table/' + beam_factor_filename)
 		bx4 = bf[IX]
 		
-		beam_factor_filename = 'table_lores_mid_band_50-200MHz_90deg_alan0_guzman_gaussian_index_2.4_2.6_sigma_deg_5_reffreq_100MHz.hdf5'
+		beam_factor_filename = 'table_lores_mid_band_50-200MHz_90deg_alan0_guzman_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz.hdf5'
 		f, lst, bf           = cal.beam_factor_table_read('/home/raul/DATA2/EDGES_vol2/mid_band/calibration/beam_factors/table/' + beam_factor_filename)
 		bx5 = bf[IX]
 
@@ -4451,23 +4305,28 @@ def plots_midband_paper(plot_number):
 
 
 
+		scale_max = 0.0043
+		scale_min = -0.0043
 
-
-
-
+		cmap = plt.cm.viridis
+		rgba = cmap(0.0)
+		cmap.set_under(rgba)
 		
 		ax     = f1.add_axes([x0 + 0*(xoff+dx), y0, dx, dy])
-		im = ax.imshow(bx2-bx1, interpolation='none', extent=[50, 200, 24, 0], aspect='auto', vmin=-0.0043, vmax=0.0043)#, cmap='jet')
+		im = ax.imshow(bx2-bx1, interpolation='none', extent=[50, 200, 24, 0], aspect='auto', vmin=scale_min, vmax=scale_max, cmap=cmap)#, cmap='jet')
 	
 		#cax    = f1.add_axes([x0 + 1*dx + xoffc, y0 + 1.5*(yoff+dy), dxc, dy])
 		#f1.colorbar(im, cax=cax, orientation='vertical', ticks=[-0.004, -0.002, 0, 0.002, 0.004])
+		
+		plt.plot([60,120], [6,6], 'w--', linewidth=2)
+		plt.plot([60,120], [18,18], 'w--', linewidth=2)
 	
-		ax.set_xlim([50, 120])
+		ax.set_xlim([60, 120])
 		#ax.set_xticklabels('')
-		ax.set_xticks(np.arange(50,121,10))
+		ax.set_xticks(np.arange(60,121,10))
 		ax.set_yticks(np.arange(0,25,3))
-		ax.set_xlabel(r'$\nu$ [MHz]')
-		ax.set_ylabel('GHA [hr]')
+		ax.set_xlabel(r'$\nu$ [MHz]', fontsize=14)
+		ax.set_ylabel('GHA [hr]', fontsize=14)
 		#ax.set_text(panel_letter_x, panel_letter_y,  '(b)', fontsize=18)
 		ax.set_title('(a)', fontsize=18)
 	
@@ -4476,15 +4335,19 @@ def plots_midband_paper(plot_number):
 	
 	
 		ax     = f1.add_axes([x0 + 1*(xoff+dx), y0, dx, dy])
-		im = ax.imshow(bx3-bx1, interpolation='none', extent=[50, 200, 24, 0], aspect='auto', vmin=-0.0043, vmax=0.0043)#, cmap='jet')
+		im = ax.imshow(bx3-bx1, interpolation='none', extent=[50, 200, 24, 0], aspect='auto', vmin=scale_min, vmax=scale_max, cmap=cmap)#, cmap='jet')
 	
 		#cax    = f1.add_axes([x0 + 1*dx + xoffc, y0 + 2*(yoff+dy), dxc, dy])
 		#f1.colorbar(im, cax=cax, orientation='vertical')
+
+		plt.plot([60,120], [6,6], 'w--', linewidth=2)
+		plt.plot([60,120], [18,18], 'w--', linewidth=2)	
 	
-		ax.set_xlim([50, 120])
+	
+		ax.set_xlim([60, 120])
 		ax.set_yticklabels('')
-		ax.set_xlabel(r'$\nu$ [MHz]')
-		ax.set_xticks(np.arange(50,121,10))
+		ax.set_xlabel(r'$\nu$ [MHz]', fontsize=14)
+		ax.set_xticks(np.arange(60,121,10))
 		ax.set_yticks(np.arange(0,25,3))
 		#ax.set_ylabel('GHA [hr]')
 		#ax.text(panel_letter_x, panel_letter_y,  '(c)', fontsize=18)
@@ -4495,15 +4358,19 @@ def plots_midband_paper(plot_number):
 	
 	
 		ax     = f1.add_axes([x0 + 2*(xoff+dx), y0, dx, dy])
-		im = ax.imshow(bx4-bx1, interpolation='none', extent=[50, 200, 24, 0], aspect='auto', vmin=-0.0043, vmax=0.0043)#, cmap='jet')
+		im = ax.imshow(bx4-bx1, interpolation='none', extent=[50, 200, 24, 0], aspect='auto', vmin=scale_min, vmax=scale_max, cmap=cmap)#, cmap='jet')
 	
 		#cax    = f1.add_axes([x0 + 1*dx + xoffc, y0 + 1*(yoff+dy), dxc, dy])
 		#f1.colorbar(im, cax=cax, orientation='vertical')
 	
-		ax.set_xlim([50, 120])
+		plt.plot([60,120], [6,6], 'w--', linewidth=2)
+		plt.plot([60,120], [18,18], 'w--', linewidth=2)	
+	
+	
+		ax.set_xlim([60, 120])
 		ax.set_yticklabels('')
-		ax.set_xlabel(r'$\nu$ [MHz]')
-		ax.set_xticks(np.arange(50,121,10))
+		ax.set_xlabel(r'$\nu$ [MHz]', fontsize=14)
+		ax.set_xticks(np.arange(60,121,10))
 		ax.set_yticks(np.arange(0,25,3))
 		#ax.set_ylabel('GHA [hr]')
 		#ax.text(panel_letter_x, panel_letter_y,  '(d)', fontsize=18)
@@ -4515,16 +4382,20 @@ def plots_midband_paper(plot_number):
 	
 	
 		ax     = f1.add_axes([x0 + 3*(xoff+dx), y0, dx, dy])
-		im = ax.imshow(bx5-bx1, interpolation='none', extent=[50, 200, 24, 0], aspect='auto', vmin=-0.0043, vmax=0.0043)#, cmap='jet')
+		im = ax.imshow(bx5-bx1, interpolation='none', extent=[50, 200, 24, 0], aspect='auto', vmin=scale_min, vmax=scale_max, cmap=cmap)#, cmap='jet')
+
+		plt.plot([60,120], [6,6], 'w--', linewidth=2)
+		plt.plot([60,120], [18,18], 'w--', linewidth=2)
+
 	
 		cax    = f1.add_axes([x0 + 3.2*xoff+4*dx, y0, dxc, dy]) #  + xoffc
 		f1.colorbar(im, cax=cax, orientation='vertical')
-		cax.set_title(r'$\Delta C$')
+		cax.set_title(r'$\Delta C$', fontsize=14)
 	
-		ax.set_xlim([50, 120])
+		ax.set_xlim([60, 120])
 		ax.set_yticklabels('')
-		ax.set_xlabel(r'$\nu$ [MHz]')
-		ax.set_xticks(np.arange(50,121,10))
+		ax.set_xlabel(r'$\nu$ [MHz]', fontsize=14)
+		ax.set_xticks(np.arange(60,121,10))
 		ax.set_yticks(np.arange(0,25,3))
 		#ax.set_ylabel('GHA [hr]')
 		#ax.text(panel_letter_x, panel_letter_y,  '(e)', fontsize=18)
@@ -4533,7 +4404,7 @@ def plots_midband_paper(plot_number):
 
 		
 		# Saving plot
-		path_plot_save = edges_folder + 'results/plots/20190422/'
+		path_plot_save = edges_folder + '/plots/20190729/'
 		
 
 		plt.savefig(path_plot_save + 'beam_chromaticity_differences.pdf', bbox_inches='tight')
@@ -4826,146 +4697,292 @@ def plots_midband_paper(plot_number):
 
 	if plot_number == 7:
 		
-		# Data
-		dd = np.genfromtxt(edges_folder + '/mid_band/spectra/level5/case2/integrated_spectrum_case2.txt')
-		#dd = np.genfromtxt(edges_folder + '/mid_band/spectra/level5/case26/integrated_spectrum_case26.txt')
-		ddd  = dd[dd[:,0]>=60,:]
-
-		FLOW  = 60
-		FHIGH = 100
+		
+		FLOW  = 58
+		FHIGH = 120
+		case  = 0
+		vr = 90
+		
+		path_plot_save   = edges_folder + 'plots/20190815/'
+		figure_plot_save = 'powerlog_5par_exp_4par_v1.pdf'
+		
+		fg = 'powerlog5'
+		signal = 'exp4'
 		
 		
 		
-		d = ddd[ (ddd[:,0]>=FLOW) & (ddd[:,0]<=FHIGH), :]		
+		
+		
+		#d = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case_nominal/integrated_spectrum_case_nominal_days_186_219_58-120MHz_v2.txt')
+		d = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case_nominal/integrated_spectrum_case_nominal_days_186_219_58-120MHz.txt')
+		
+		#d = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case_nominal/integrated_spectrum_case_nominal_days_186_219_60-120MHz.txt')
+		#d = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/integrated_spectrum_case2_days_186_219_60-120MHz.txt')
 		v  = d[:,0]
 		t  = d[:,1]
 		w  = d[:,2]
-		
+		s  = d[:,3]
+	
 		t[w==0] = np.nan
-		
-		
-		
-		
+		s[w==0] = np.nan		
+
+
+
 		# Best-fit foreground model
-		vr = 100
+		if fg == 'linlog5':
+			#filename_foreground = edges_folder + 'mid_band/polychord/20190811/case_nominal/foreground_linlog_5par/chain.txt'
+			#label_foreground    = [r'a_0', r'a_1', r'a_2', r'a_3', r'a_4']
+			#getdist_samples, ww, ll, best_fit, covariance_matrix = gp.load_samples(filename_foreground, 0, label_names=label_foreground)
+			#model_fg = dm.foreground_model('linlog', best_fit, v, vr, ion_abs_coeff=0, ion_emi_coeff=0)
+				
+			filename_foreground = edges_folder + 'mid_band/polychord/20190815/case_nominal/foreground_linlog_5par_v2/chain.txt'
+			label_foreground    = [r'a_0', r'a_1', r'a_2', r'a_3', r'a_4']
+			getdist_samples, ww, ll, best_fit, covariance_matrix = gp.load_samples(filename_foreground, 0, label_names=label_foreground)
+			model_fg = dm.foreground_model('linlog', best_fit, v, vr, ion_abs_coeff=0, ion_emi_coeff=0)
+			
+			
+			
+			
+		if fg == 'powerlog5':
+			#filename_foreground = edges_folder + 'mid_band/polychord/20190811/case_nominal/foreground_powerlog_5par/chain.txt'
+			#label_foreground    = [r'T_{90}\;[{\rm K}]', r'\beta', r'\gamma', r'\delta', r'\epsilon']
+			#getdist_samples, ww, ll, best_fit, covariance_matrix = gp.load_samples(filename_foreground, 0, label_names=label_foreground)
+			#model_fg = dm.foreground_model('powerlog', best_fit, v, vr, ion_abs_coeff=0, ion_emi_coeff=0)
+			
+			filename_foreground = edges_folder + 'mid_band/polychord/20190815/case_nominal/foreground_powerlog_5par/chain.txt'
+			label_foreground    = [r'T_{90}\;[{\rm K}]', r'\beta', r'\gamma', r'\delta', r'\epsilon']
+			getdist_samples, ww, ll, best_fit, covariance_matrix = gp.load_samples(filename_foreground, 0, label_names=label_foreground)
+			model_fg = dm.foreground_model('powerlog', best_fit, v, vr, ion_abs_coeff=0, ion_emi_coeff=0)
+			
+			#filename_foreground = edges_folder + 'mid_band/polychord/20190815/case_nominal/foreground_powerlog_5par_v2/chain.txt'
+			#label_foreground    = [r'T_{90}\;[{\rm K}]', r'\beta', r'\gamma', r'\delta', r'\epsilon']
+			#getdist_samples, ww, ll, best_fit, covariance_matrix = gp.load_samples(filename_foreground, 0, label_names=label_foreground)
+			#model_fg = dm.foreground_model('powerlog', best_fit, v, vr, ion_abs_coeff=0, ion_emi_coeff=0)			
 		
-		#filename = edges_folder + 'mid_band/polychord/20190605/case2/foreground_exp/chain.txt'
-		filename = edges_folder + 'mid_band/polychord/20190606/case2/foreground_exp_60_100MHz/chain.txt'
-		#filename = edges_folder + 'mid_band/polychord/20190605/case26/foreground_exp/chain.txt'
-		getdist_samples, ww, ll, best_fit, covariance_matrix = gp.load_samples(filename, 0, label_names=[r'T_{100}\;[{\rm K}]', r'\beta', r'\gamma', r'\delta'])#, r'\epsilon'])
-		model_fg = dm.foreground_model('exp', best_fit, v, vr, ion_abs_coeff=0, ion_emi_coeff=0)
 		
 		
 		# Best-fit foreground model + signal model
-		filename = edges_folder + 'mid_band/polychord/20190605/case2/foreground_exp_signal_tanh/chain.txt'
-		#filename = edges_folder + 'mid_band/polychord/20190605/case26/foreground_exp_signal_tanh/chain.txt'
-		label_names=[r'A\;[{\rm K}]', r'\nu_0\;[{\rm MHz}]', r'w\;[{\rm MHz}]', r'\tau_1', r'\tau_2', r'T_{100}\;[{\rm K}]', r'\beta', r'\gamma', r'\delta', r'\epsilon']
-		getdist_samples, ww, ll, best_fit, covariance_matrix = gp.load_samples(filename, 0, label_names=label_names)
-		full_model = dm.full_model(best_fit, v, vr, model_type_signal='tanh', model_type_foreground='exp', N21par=5, NFGpar=5)
-		#foreground_model('exp', best_fit, v, vr, ion_abs_coeff=0, ion_emi_coeff=0)
+		full = fg + '_' + signal
+		if full == 'linlog5_exp4':
+			#filename_foreground_plus_signal  = edges_folder + 'mid_band/polychord/20190811/case_nominal/foreground_linlog_5par_signal_exp_4par/chain.txt'
+			#label_foreground_plus_signal     = [r'A\;[{\rm K}]', r'\nu_0\;[{\rm MHz}]', r'w\;[{\rm MHz}]', r'\tau', r'a_0', r'a_1', r'a_2', r'a_3', r'a_4']
+			#getdist_samples, ww, ll, best_fit, covariance_matrix = gp.load_samples(filename_foreground_plus_signal, 0, label_names=label_foreground_plus_signal)
+			#full_model = dm.full_model(best_fit, v, vr, model_type_signal='exp', model_type_foreground='linlog', N21par=4, NFGpar=5)
+			
+			filename_foreground_plus_signal  = edges_folder + 'mid_band/polychord/20190815/case_nominal/foreground_linlog_5par_signal_exp_4par_v2/chain.txt'
+			label_foreground_plus_signal     = [r'A\;[{\rm K}]', r'\nu_0\;[{\rm MHz}]', r'w\;[{\rm MHz}]', r'\tau', r'a_0', r'a_1', r'a_2', r'a_3', r'a_4']
+			getdist_samples, ww, ll, best_fit, covariance_matrix = gp.load_samples(filename_foreground_plus_signal, 0, label_names=label_foreground_plus_signal)
+			full_model = dm.full_model(best_fit, v, vr, model_type_signal='exp', model_type_foreground='linlog', N21par=4, NFGpar=5)			
+
+		
+		if full == 'powerlog5_exp4':
+			#filename_foreground_plus_signal  = edges_folder + 'mid_band/polychord/20190811/case_nominal/foreground_powerlog_5par_signal_exp_4par/chain.txt'
+			#label_foreground_plus_signal     = [r'A\;[{\rm K}]', r'\nu_0\;[{\rm MHz}]', r'w\;[{\rm MHz}]', r'\tau', r'T_{90}\;[{\rm K}]', r'\beta', r'\gamma', r'\delta', r'\epsilon']
+			#getdist_samples, ww, ll, best_fit, covariance_matrix = gp.load_samples(filename_foreground_plus_signal, 0, label_names=label_foreground_plus_signal)
+			#full_model = dm.full_model(best_fit, v, vr, model_type_signal='exp', model_type_foreground='powerlog', N21par=4, NFGpar=5)
+			
+			filename_foreground_plus_signal  = edges_folder + 'mid_band/polychord/20190815/case_nominal/foreground_powerlog_5par_signal_exp_4par/chain.txt'
+			label_foreground_plus_signal     = [r'A\;[{\rm K}]', r'\nu_0\;[{\rm MHz}]', r'w\;[{\rm MHz}]', r'\tau', r'T_{90}\;[{\rm K}]', r'\beta', r'\gamma', r'\delta', r'\epsilon']
+			getdist_samples, ww, ll, best_fit, covariance_matrix = gp.load_samples(filename_foreground_plus_signal, 0, label_names=label_foreground_plus_signal)
+			full_model = dm.full_model(best_fit, v, vr, model_type_signal='exp', model_type_foreground='powerlog', N21par=4, NFGpar=5)			
+			
+			#filename_foreground_plus_signal  = edges_folder + 'mid_band/polychord/20190815/case_nominal/foreground_powerlog_5par_signal_exp_4par_v2/chain.txt'
+			#label_foreground_plus_signal     = [r'A\;[{\rm K}]', r'\nu_0\;[{\rm MHz}]', r'w\;[{\rm MHz}]', r'\tau', r'T_{90}\;[{\rm K}]', r'\beta', r'\gamma', r'\delta', r'\epsilon']
+			#getdist_samples, ww, ll, best_fit, covariance_matrix = gp.load_samples(filename_foreground_plus_signal, 0, label_names=label_foreground_plus_signal)
+			#full_model = dm.full_model(best_fit, v, vr, model_type_signal='exp', model_type_foreground='powerlog', N21par=4, NFGpar=5)		
+	
+		
+		if full == 'powerlog5_tanh5':
+			filename_foreground_plus_signal  = edges_folder + 'mid_band/polychord/20190811/case_nominal/foreground_powerlog_5par_signal_tanh_5par/chain.txt'
+			label_foreground_plus_signal     = [r'A\;[{\rm K}]', r'\nu_0\;[{\rm MHz}]', r'w\;[{\rm MHz}]', r'\tau_1', r'\tau_2', r'T_{90}\;[{\rm K}]', r'\beta', r'\gamma', r'\delta', r'\epsilon']
+			getdist_samples, ww, ll, best_fit, covariance_matrix = gp.load_samples(filename_foreground_plus_signal, 0, label_names=label_foreground_plus_signal)
+			full_model = dm.full_model(best_fit, v, vr, model_type_signal='tanh', model_type_foreground='powerlog', N21par=5, NFGpar=5)
+
+
+
 		
 		# Best-fit signal model
-		model_signal = dm.signal_model('tanh', best_fit[0:5], v)
+		if signal == 'exp4':
+			model_signal = dm.signal_model('exp', best_fit[0:4], v)	
+			
+		if signal == 'tanh5':
+			model_signal = dm.signal_model('tanh', best_fit[0:5], v)	
+	
 		
-		model_edges2018      = dm.signal_model('exp', [-0.5, 78, 19, 7], v)
-		model_edges2018_A1 = dm.signal_model('exp', [-1, 78, 19, 7], v)
-		model_edges2018_A2 = dm.signal_model('exp', [-0.3, 78, 19, 7], v)
+		
+		# Data
+		#v, t, w, sigma, inv_sigma, det_sigma = dm.real_data(case, FLOW, FHIGH, gap_FLOW=0, gap_FHIGH=0)
+	
+		#filename = edges_folder + 'mid_band/polychord/20190810/case2/foreground_linlog_5par/chain.txt'
+		
+		#getdist_samples, ww, ll, best_fit, covariance_matrix = gp.load_samples(filename, 0, label_names=
+				
+		#filename = edges_folder + 'mid_band/polychord/20190810/case2/foreground_linlog_5par_exp_4par/chain.txt'
+		
+		#label_names=[r'A\;[{\rm K}]', r'\nu_0\;[{\rm MHz}]', r'w\;[{\rm MHz}]', r'\tau', r'T_{100}\;[{\rm K}]', r'\beta', r'\gamma', r'\delta', r'\epsilon']
+		
+		#foreground_model('exp', best_fit, v, vr, ion_abs_coeff=0, ion_emi_coeff=0)
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		# EDGES Bowman et al. (2018)
+		#model_edges2018      = dm.signal_model('exp', [-0.5, 78, 19, 7], v)
+		#model_edges2018_A1 = dm.signal_model('exp', [-1, 78, 19, 7], v)
+		#model_edges2018_A2 = dm.signal_model('exp', [-0.3, 78, 19, 7], v)
+		
+		model_edges2018, x2, limits = ba.signal_edges2018_uncertainties(v)
+		model_edges2018_A1 = limits[:,0]
+		model_edges2018_A2 = limits[:,1]
+		
+		
+		
 		
 
 
 		
-		dx = 0.4
-		dy = 0.25
+		
+		x0b = 0.35
+		y0b = 0.525
+		dx  = 0.4
+		dyb = 0.1		
 		
 		
 		x0a = 0.35
-		y0a = 0.74		
+		y0a = 0.625
+		dx  = 0.4
+		dya = 0.2
+		
 
-		x0b = 0.1
-		y0b = 0.4
-		
-		x0c = 0.58
-		y0c = 0.4
-		
-		x0d = 0.1
-		y0d = 0.1
-		
-		x0e = 0.58
-		y0e = 0.1	
+		x0c = 0.1
+		y0c = 0.37
+		dx  = 0.4
+		dyc = 0.11
 		
 		
+		x0d = 0.58
+		y0d = 0.37
+		dx  = 0.4
+		dyd = 0.11
+		
+			
+		x0e = 0.1
+		y0e = 0.1
+		dx  = 0.4
+		dye = 0.25
 		
 		
-		f1 = plt.figure(1)
+		x0f = 0.58
+		y0f = 0.1	
+		dx  = 0.4
+		dyf = 0.25
+		
+		
+		f1 = plt.figure(1, figsize=[8,10])
+		
+
+
 		
 		
 		# Panel a
 		# ---------------------------------
-		ax = f1.add_axes([x0a, y0a, dx, dy])
+		ax = f1.add_axes([x0a, y0a, dx, dya])
 		ax.plot(v, t, 'b', linewidth=1)
 	
 		ax.set_xlim([FLOW, FHIGH])
-		ax.set_ylim([0, 3500])
+		ax.set_ylim([250, 3500])
 		
 		#ax.set_xticklabels('')
-		ax.set_xticks(np.arange(60,121,10))
-		
-		ax.set_yticks(np.arange(0,3501,500))
-		ax.set_yticklabels(['0','','1000','','2000', '', '3000'])
-		
-		#ax.set_xlabel(r'$\nu$ [MHz]')
-		ax.set_ylabel('T$_b$ [K]', fontsize=13)
-		#ax.set_text(panel_letter_x, panel_letter_y,  '(b)', fontsize=18)
-		ax.text(115,3070,'a', fontsize=13, fontweight='bold')
-		#ax.grid()
-	
-
-		# Panel b
-		# ---------------------------------
-		ax = f1.add_axes([x0b, y0b, dx, dy])
-		ax.plot(v, t-model_fg, 'b', linewidth=1)
-
-		ax.set_xlim([FLOW, FHIGH])
-		ax.set_ylim([-0.5, 0.5])
-		
-		ax.set_xticks(np.arange(60,121,10))
 		ax.set_xticklabels([])
 		
-		ax.set_yticks(np.arange(-0.4,0.41,0.2))
-		ax.set_yticklabels(['-0.4','-0.2','0','0.2','0.4'])
+		ax.set_yticks(np.arange(500,3001,500))
+		ax.set_yticklabels(['500','1000','1500','2000', '2500', '3000'])
 		
 		#ax.set_xlabel(r'$\nu$ [MHz]')
 		ax.set_ylabel('T$_b$ [K]', fontsize=13)
 		#ax.set_text(panel_letter_x, panel_letter_y,  '(b)', fontsize=18)
-		ax.text(115,0.35,'b', fontsize=13, fontweight='bold')
+		ax.text(114,2900,'(a)', fontsize=14)#, fontweight='bold')
 		#ax.grid()
-
-
+	
+	
+		# Panel b
+		# ---------------------------------
+		ax = f1.add_axes([x0b, y0b, dx, dyb])
+		ax.plot(v,  s, 'b', linewidth=1)
+		ax.plot(v, -s, 'b', linewidth=1)
+		ax.plot(v, np.zeros(len(v)), 'k--')
+		ax.set_xlim([FLOW, FHIGH])
+		ax.set_ylim([-0.07, 0.07])
+		#ax.set_xticklabels([])
+		ax.set_xticks(np.arange(60,121,10))
+		ax.set_ylabel('$\sigma_b$ [K]', fontsize=13)
+		ax.text(114,0.03,'(b)', fontsize=14)#, fontweight='bold')
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
 
 		# Panel c
 		# ---------------------------------
-		ax = f1.add_axes([x0c, y0c, dx, dy])
-		ax.plot(v, t-full_model,'b', linewidth=1)
+		ax = f1.add_axes([x0c, y0c, dx, dyc])
+		ax.plot(v, t-model_fg, 'b', linewidth=1)
 
 		ax.set_xlim([FLOW, FHIGH])
-		ax.set_ylim([-0.5, 0.5])
+		ax.set_ylim([-0.3, 0.3])
 		
 		ax.set_xticks(np.arange(60,121,10))
 		ax.set_xticklabels([])
 		
-		ax.set_yticks(np.arange(-0.4,0.41,0.2))
-		ax.set_yticklabels(['-0.4','-0.2','0','0.2','0.4'])
+		ax.set_yticks(np.arange(-0.2,0.21,0.2))
+		#ax.set_yticklabels(['-0.6','-0.4','-0.2','0','0.2','0.4','0.6'])
+		ax.set_yticklabels(['-0.2','0','0.2'])
 		
 		#ax.set_xlabel(r'$\nu$ [MHz]')
-		#ax.set_ylabel('T$_b$ [K]')
+		ax.set_ylabel('T$_b$ [K]', fontsize=13)
 		#ax.set_text(panel_letter_x, panel_letter_y,  '(b)', fontsize=18)
-		ax.text(115,0.35,'c', fontsize=13, fontweight='bold')
+		ax.text(114,0.170,'(c)', fontsize=14)#, fontweight='bold')
 		#ax.grid()
+
 
 
 		# Panel d
 		# ---------------------------------
-		ax = f1.add_axes([x0d, y0d, dx, dy])
+		ax = f1.add_axes([x0d, y0d, dx, dyd])
+		ax.plot(v, t-full_model, 'b', linewidth=1)
+
+		ax.set_xlim([FLOW, FHIGH])
+		ax.set_ylim([-0.3, 0.3])
+		
+		ax.set_xticks(np.arange(60,121,10))
+		ax.set_xticklabels([])
+		
+		ax.set_yticks(np.arange(-0.2,0.21,0.2))
+		#ax.set_yticklabels(['-0.6','-0.4','-0.2','0','0.2','0.4','0.6'])
+		ax.set_yticklabels(['-0.2','0','0.2'])
+		
+		#ax.set_xlabel(r'$\nu$ [MHz]')
+		#ax.set_ylabel('T$_b$ [K]')
+		#ax.set_text(panel_letter_x, panel_letter_y,  '(b)', fontsize=18)
+		ax.text(114,0.170,'(d)', fontsize=14)#, fontweight='bold')
+		#ax.grid()
+
+
+		# Panel e
+		# ---------------------------------
+		ax = f1.add_axes([x0e, y0e, dx, dye])
 		ax.plot(v, model_signal, 'b', linewidth=1)
 		ax.plot(v, model_edges2018, 'r', linewidth=0.5)
 		ax.plot(v, model_edges2018_A1, 'r--', linewidth=0.5)
@@ -4975,23 +4992,23 @@ def plots_midband_paper(plot_number):
 		
 
 		ax.set_xlim([FLOW, FHIGH])
-		ax.set_ylim([-0.9, 0.1])
+		ax.set_ylim([-1.3, 0.1])
 		
 		ax.set_xticks(np.arange(60,121,10))
 		
-		ax.set_yticks(np.arange(-0.8,0.1,0.2))
+		ax.set_yticks(np.arange(-1.2,0.1,0.2))
 		#ax.set_yticklabels(['-0.6','-0.4','-0.2','0'])
 		
 		ax.set_xlabel(r'$\nu$ [MHz]', fontsize=13)
 		ax.set_ylabel('T$_b$ [K]', fontsize=13)
 		#ax.set_text(panel_letter_x, panel_letter_y,  '(b)', fontsize=18)
-		ax.text(115,-0.25,'d', fontsize=13, fontweight='bold')
+		ax.text(114,-0.25,'(e)', fontsize=14)#, fontweight='bold')
 		#ax.grid()
 
 
-		# Panel e
+		# Panel f
 		# ---------------------------------
-		ax = f1.add_axes([x0e, y0e, dx, dy])
+		ax = f1.add_axes([x0f, y0f, dx, dyf])
 		ax.plot(v, model_signal + (t-full_model), 'b', linewidth=1)
 		ax.plot(v, model_edges2018, 'r', linewidth=0.5)
 		ax.plot(v, model_edges2018_A1, 'r--', linewidth=0.5)
@@ -4999,43 +5016,69 @@ def plots_midband_paper(plot_number):
 		ax.plot(v, model_signal + (t-full_model), 'b', linewidth=1)	
 
 		ax.set_xlim([FLOW, FHIGH])
-		ax.set_ylim([-0.9, 0.1])
+		ax.set_ylim([-1.3, 0.1])
 		
 		ax.set_xticks(np.arange(60,121,10))
 		
-		ax.set_yticks(np.arange(-0.8,0.1,0.2))
+		ax.set_yticks(np.arange(-1.2,0.1,0.2))
 		#ax.set_yticklabels(['-0.6','-0.4','-0.2','0'])
 		
 		ax.set_xlabel(r'$\nu$ [MHz]', fontsize=13)
 		#ax.set_ylabel('T$_b$ [K]')
 		#ax.set_text(panel_letter_x, panel_letter_y,  '(b)', fontsize=18)
-		ax.text(115,-0.25,'e', fontsize=13, fontweight='bold')
+		ax.text(114,-0.25,'(f)', fontsize=14)#, fontweight='bold')
 		#ax.grid()
-		ax.legend(['this work', 'Bowman et al. (2018)'], fontsize=6)
+		ax.legend(['Mid-Band', 'Bowman et al. (2018)'], fontsize=9, loc=4)
 
 
 		# Saving plot
-		path_plot_save = edges_folder + 'plots/20190606/'
-		
-
-		plt.savefig(path_plot_save + 'x.pdf', bbox_inches='tight')
+		plt.savefig(path_plot_save + figure_plot_save, bbox_inches='tight')
 		plt.close()	
 		plt.close()
 		plt.close()
 		plt.close()
+		
+		
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
 	if plot_number == 8:
 		
-		filename = edges_folder + 'mid_band/polychord/20190605/case2/foreground_exp_signal_tanh/chain.txt'
+		#filename = edges_folder + 'mid_band/polychord/20190605/case2/foreground_exp_signal_tanh/chain.txt'
 		#filename = edges_folder + 'mid_band/polychord/20190605/case26/foreground_exp_signal_tanh/chain.txt'
+		#filename = edges_folder + 'mid_band/polychord/20190612/case2/foreground_exp_5par_signal_exp_4par/chain.txt'
+		#filename = edges_folder + 'mid_band/polychord/20190612/case2/foreground_exp_5par_signal_exp_5par/chain.txt'
+		#filename = edges_folder + 'mid_band/polychord/20190612/case2/foreground_exp_5par_signal_tanh_60_115MHz/chain.txt'
+		filename = edges_folder + 'mid_band/polychord/20190617/case2/foreground_exp_signal_exp_4par_60_120MHz/chain.txt'
 		
-		label_names=[r'A\;[{\rm K}]', r'\nu_0\;[{\rm MHz}]', r'w\;[{\rm MHz}]', r'\tau_1', r'\tau_2', r'T_{100}\;[{\rm K}]', r'\beta', r'\gamma', r'\delta', r'\epsilon']
+		#label_names=[r'A\;[{\rm K}]', r'\nu_0\;[{\rm MHz}]', r'w\;[{\rm MHz}]', r'\tau_1', r'\tau_2', r'T_{100}\;[{\rm K}]', r'\beta', r'\gamma', r'\delta', r'\epsilon']
+		label_names=[r'A\;[{\rm K}]', r'\nu_0\;[{\rm MHz}]', r'w\;[{\rm MHz}]', r'\tau', r'T_{100}\;[{\rm K}]', r'\beta', r'\gamma', r'\delta', r'\epsilon']
 		getdist_samples, ww, ll, best_fit, covariance_matrix = gp.load_samples(filename, 0, label_names=label_names)
+		#reordered_getdist_samples = np.flip(getdist_samples)
 		
-		output_pdf_filename = edges_folder + 'plots/20190605/triangle_plot_nominal.pdf'
-		o = gp.triangle_plot(getdist_samples, output_pdf_filename, legend_FS=10, label_FS=14, axes_FS=6.5)
+		output_pdf_filename = edges_folder + 'plots/20190617/triangle_plot_exp_exp_4par_60_120MHz.pdf'
+		o = gp.triangle_plot(getdist_samples, output_pdf_filename, legend_FS=10, label_FS=18, axes_FS=7)  # reordered
+		#gp.rotate_xticklabels(rotation=90)
+		
+		
+		
+		
+		
 		
 		
 		
@@ -5080,16 +5123,157 @@ def plots_midband_paper(plot_number):
 				gha_i = my[ii>0,4]
 				gha_i[gha_i<0] = gha_i[gha_i<0] + 24
 				gha_all = np.append(gha_all, gha_i)
+		
+		
+		
+		
+		
+		
+		
+
+		sp = np.genfromtxt(edges_folder + 'mid_band/spectra/level5/case2/integrated_spectrum_case2.txt')
+		fb = sp[:,0]
+		wb = sp[:,2]
+		
+		fbb = fb[fb>=60]
+		wbb = wb[fb>=60]
+		
+		
+		
+		
+				
 				
 		plt.close()
 		plt.close()
-		plt.figure(1, figsize=[3.9, 2.6])
-		plt.hist(gha_all, np.arange(6,18.1,1/6))
+		fig = plt.figure(1, figsize=[3.7, 5])
+		
+		x0_top = 0.1 
+		y0_top = 0.57
+		
+		x0_bottom = 0.1
+		y0_bottom = 0.1
+		
+		dx  = 0.85
+		dy  = 0.35	
+		
+		ax = fig.add_axes([x0_top, y0_top, dx, dy])
+		ax.hist(gha_all, np.arange(6,18.1,1/6))
+		plt.ylim([0, 400])
 		plt.xlabel('GHA [hr]')
-		plt.ylabel('# of raw spectra\nper 10-min GHA bin')
-		plt.savefig('/home/raul/Desktop/gha_histogram.pdf', bbox_inches='tight')
+		plt.ylabel('number of raw spectra\nper 10-min GHA bin')
+		plt.text(5.8,345,'(a)', fontsize=14)
+		
+		ax = fig.add_axes([x0_bottom, y0_bottom, dx, dy])
+		ax.step(fbb, wbb/np.max(wbb), linewidth=1)
+		plt.yticks([0, 0.25, 0.5, 0.75, 1])
+		plt.ylim([0, 1.25])
+		plt.xlabel(r'$\nu$ [MHz]')
+		plt.ylabel('normalized weights')
+		plt.text(59,1.09,'(b)', fontsize=14)
+		
+		plt.savefig(edges_folder + 'plots/20190730/data_statistics.pdf', bbox_inches='tight')
 		plt.close()	
 		plt.close()
+		plt.close()
+		plt.close()		
+		
+
+
+	if plot_number == 10:
+
+
+	
+	
+		filename = '/home/raul/DATA1/EDGES_vol1/spectra/level3/low_band2_2017/EW_with_shield_nominal/2017_160_00.hdf5'
+		flx, tlx, wlx, ml = oeg.level3_read_raw_spectra(filename)
+	
+	
+		filename = '/home/raul/DATA2/EDGES_vol2/mid_band/spectra/level3/case2_75MHz/2018_150_00.hdf5'
+		fmx, tmx, pm, rmx, wmx, rmsm, tpm, mm  = eg.level3read(filename)
+	
+		FLOW  = 60
+		FHIGH = 100
+	
+		fl = flx[(flx>=FLOW) & (flx<=FHIGH)]
+		tl = tlx[:, (flx>=FLOW) & (flx<=FHIGH)]
+		wl = wlx[:, (flx>=FLOW) & (flx<=FHIGH)]
+	
+		fm = fmx[(fmx>=FLOW) & (fmx<=FHIGH)]
+		tm = tmx[:, (fmx>=FLOW) & (fmx<=FHIGH)]
+		wm = wmx[:, (fmx>=FLOW) & (fmx<=FHIGH)]
+	
+	
+	
+		il_0 = 1597
+		il_2 = 1787
+		il_4 = 1976
+		il_6 = 2166
+		il_8 = 77
+		il_10 = 267
+		il_12 = 457
+		il_14 = 647
+		il_16 = 837
+		il_18 = 1027
+		il_20 = 1217
+		il_22 = 1407
+		
+		
+		im_0 = 1610
+		im_2 = 1793
+		im_4 = 1977
+		im_6 = 2161
+		im_8 = 138
+		im_10 = 322
+		im_12 = 505
+		im_14 = 689
+		im_16 = 873
+		im_18 = 1057
+		im_20 = 1241
+		im_22 = 1425
+		
+		
+		il = [il_0, il_2, il_4, il_6, il_8, il_10, il_12, il_14, il_16, il_18, il_20, il_22]
+		im = [im_0, im_2, im_4, im_6, im_8, im_10, im_12, im_14, im_16, im_18, im_20, im_22]
+		
+	
+	
+	
+	
+		plt.figure(figsize=[4,6])
+		#gg = [0.5, 0.5, 0.5]
+		gg = 'c'
+		dy = 500 # K
+		lw = 1
+		k  = 0.1
+		for i in range(12):
+			tli = tl[il[i],:]
+			wli = wl[il[i],:]
+			
+			tmi = tm[im[i],:]
+			wmi = wm[im[i],:]
+			
+			if i%2 == 0:
+				plt.plot(fl[wmi>0], (tmi-tli)[wmi>0] - i*dy, color=gg, linewidth=lw)
+			else:
+				plt.plot(fl[wmi>0], (tmi-tli)[wmi>0] - i*dy, color=gg, linewidth=lw)
+				
+			plt.plot([50, 150], [-i*dy, -i*dy], 'k')
+			if i <= 4:
+				plt.text(53.6, -i*dy-k*dy, str(2*i) + ' hr')
+			else:
+				plt.text(52.3, -i*dy-k*dy, str(2*i) + ' hr')
+			
+		#yticks = dy*np.arange(-11,2)
+		#plt.yticks(yticks, [str(-2*(i-11)) + ' hr'  for i in range(12)], direction='in')
+		plt.yticks([])
+		plt.ylabel('GHA [' + str(dy) + ' K per division]\n\n\n')
+		plt.xlabel(r'$\nu$ [MHz]')
+		plt.xlim([58, 102])
+		plt.ylim([-12*dy, dy])
+		
+		
+		# Saving		
+		plt.savefig(edges_folder + '/plots/20190612/comparison_mid_low2.pdf', bbox_inches='tight')
 		plt.close()
 		plt.close()		
 		
@@ -5098,6 +5282,324 @@ def plots_midband_paper(plot_number):
 
 
 
+	if plot_number == 11:
+		
+		# Loading Haslam map
+		map1, lon1, lat1, gc1 = cal.haslam_408MHz_map()
+		
+		# Loading LW map
+		map2, lon2, lat2, gc2 = cal.LW_150MHz_map()
+		
+		# Loading Guzman map
+		map3, lon3, lat3, gc3 = cal.guzman_45MHz_map()
+			
+	
+		#print(v0)
+	
+	
+	
+	
+		# Scaling sky map (the map contains the CMB, which has to be removed and then added back)
+		# ---------------------------------------------------------------------------------------
+		ipole     = 2.65
+		icenter   = 2.4
+		sigma_deg = 8.5
+		
+		i1 = ipole - (ipole-icenter) * np.exp(-(1/2)*(np.abs(lat1)/sigma_deg)**2)
+		i2 = ipole - (ipole-icenter) * np.exp(-(1/2)*(np.abs(lat2)/sigma_deg)**2)
+		i3 = ipole - (ipole-icenter) * np.exp(-(1/2)*(np.abs(lat3)/sigma_deg)**2)
+		
+
+
+		i12 = 2.56 * np.ones(len(lat1))
+
+
+		band_deg = 10
+		index_inband  = 2.4
+		index_outband = 2.65
+		i13 = np.zeros(len(lat1))
+		i13[np.abs(lat1) <= band_deg] = index_inband
+		i13[np.abs(lat1) > band_deg]  = index_outband
+		
+		
+					
+	
+		Tcmb  = 2.725
+		s1  = (map1 - Tcmb) * (90/408)**(-i1)  + Tcmb
+		s2 = (map1 - Tcmb) * (90/408)**(-i12) + Tcmb
+		s3 = (map1 - Tcmb) * (90/408)**(-i13) + Tcmb
+		s4  = (map2 - Tcmb) * (90/150)**(-i2)  + Tcmb
+		s5  = (map3 - Tcmb) * (90/45)**(-i3)   + Tcmb
+		
+		ss4 = hp.pixelfunc.ud_grade(s4, 512, order_in='NESTED')
+		ss5 = hp.pixelfunc.ud_grade(s5, 512, order_in='NESTED')
+
+		
+		plt.close()
+		plt.close()
+		plt.close()
+		plt.close()
+		plt.close()
+		plt.close()
+		plt.close()
+		plt.close()
+		plt.close()
+		plt.close()
+		plt.close()
+		plt.close()
+		plt.close()
+		plt.close()
+		plt.close()
+		plt.close()
+		
+		hp.cartview(s1, nest='yes', min=500, max=2000, cbar=False, coord='GC')
+		hp.cartview(s2, nest='yes', min=500, max=2000, cbar=False, coord='GC')
+		hp.cartview(ss4, nest='yes', min=500, max=2000, cbar=False, coord='GC')
+		hp.cartview(ss5, nest='yes', min=500, max=2000, cbar=False, coord='GC')
+		
+		dLIM=500
+		hp.cartview(s2 - s1, nest='yes', min=-dLIM, max=dLIM, cbar=False, coord='GC')
+		hp.cartview(ss4 - s1, nest='yes', min=-dLIM, max=dLIM, cbar=False, coord='GC')
+		hp.cartview(ss5 - s1, nest='yes', min=-dLIM, max=dLIM, cbar=False, coord='GC')
+		
+		
+		
+		
+		
+		
+		
+	
+	
+	
+		
+
+	if plot_number == 12:
+		
+		plt.close()
+		plt.close()
+		plt.close()
+		plt.close()
+		plt.close()
+		plt.close()
+		plt.close()
+		plt.close()
+		plt.close()
+		plt.close()
+		plt.close()
+		
+		
+		
+				
+		# Loading Haslam map
+		map408, lon, lat, gc = cal.haslam_408MHz_map()
+
+		ipole     = 2.65
+		icenter   = 2.4
+		sigma_deg = 8.5
+		
+		i1 = ipole - (ipole-icenter) * np.exp(-(1/2)*(np.abs(lat)/sigma_deg)**2)
+		
+		Tcmb = 2.725
+		s    = (map408 - Tcmb) * (90/408)**(-i1)  + Tcmb
+		
+
+		hp.cartview(np.log10(s), nest='true', coord=('G', 'C'), flip='geo', title='', notext='true', min=2.7, max=4.3, unit=r'log($T_{\mathrm{sky}}$)', rot=[5.76667*15,0,0], cmap='jet')   #, ,     , min=2.2, max=3.9 unit=r'log($T_{sky}$)' title='', min=2.3, max=2.6, unit=r'$\beta$'), , rot=[180,0,0]
+		hp.graticule(local=True)
+
+
+
+
+
+
+
+	
+		beam   = cal.FEKO_blade_beam('mid_band', 0, frequency_interpolation='no', AZ_antenna_axis=90)
+		f      = np.arange(50,201,2)
+		beam90 = beam[20,:,:]
+		beam90n = beam90/np.max(beam90)
+		
+		FWHM = np.zeros((360, 2))
+		EL_raw    = np.arange(0,91,1)
+		EL_new    = np.arange(0,90.01, 0.01)
+		
+		for j in range(len(beam90[0,:])): # Loop over AZ
+			#print(j)
+
+			func           = sci.interp1d(EL_raw, beam90n[:,j])
+			beam90n_interp = func(EL_new)
+
+			minDiff = 100
+			for i in range(len(EL_new)):	
+				Diff    = np.abs(beam90n_interp[i] - 0.5)
+				if Diff < minDiff:
+					#print(90-EL_new[i])
+					minDiff   = np.copy(Diff)
+					FWHM[j,0] = j
+					FWHM[j,1] = 90 - EL_new[i]
+
+
+		
+		# Reference location
+		EDGES_lat_deg  = -26.714778
+		EDGES_lon_deg  = 116.605528 
+		EDGES_location = apc.EarthLocation(lat=EDGES_lat_deg*apu.deg, lon=EDGES_lon_deg*apu.deg)		
+		
+		
+		
+		Time_iter_UTC_start  = np.array([2014, 1, 1,  3, 31, 0])    # 18    LST, obtained iteratively using LST = eg.utc2lst(Time_iter_UTC_start, EDGES_lon_deg)
+		Time_iter_UTC_middle = np.array([2014, 1, 1,  9, 30, 0])    # 0     LST, obtained iteratively using LST = eg.utc2lst(Time_iter_UTC_start, EDGES_lon_deg)
+		Time_iter_UTC_end    = np.array([2014, 1, 1,  15, 29, 0])   # 6     LST, obtained iteratively using LST = eg.utc2lst(Time_iter_UTC_start, EDGES_lon_deg)
+
+
+
+
+		Time_iter_UTC_start_dt  = dt.datetime(Time_iter_UTC_start[0], Time_iter_UTC_start[1], Time_iter_UTC_start[2], Time_iter_UTC_start[3], Time_iter_UTC_start[4], Time_iter_UTC_start[5]) 
+		Time_iter_UTC_middle_dt = dt.datetime(Time_iter_UTC_middle[0], Time_iter_UTC_middle[1], Time_iter_UTC_middle[2], Time_iter_UTC_middle[3], Time_iter_UTC_middle[4], Time_iter_UTC_middle[5])
+		Time_iter_UTC_end_dt    = dt.datetime(Time_iter_UTC_end[0], Time_iter_UTC_end[1], Time_iter_UTC_end[2], Time_iter_UTC_end[3], Time_iter_UTC_end[4], Time_iter_UTC_end[5]) 
+
+
+		# Converting Beam Contours from Local to Equatorial coordinates
+		AltAz_start = apc.SkyCoord(alt = (90-FWHM[:,1])*apu.deg, az = FWHM[:,0]*apu.deg, frame = 'altaz', obstime = apt.Time(Time_iter_UTC_start_dt, format='datetime'), location = EDGES_location)
+		RaDec_start = AltAz_start.icrs	
+		Ra_start  = np.asarray(RaDec_start.ra)
+		Dec_start = np.asarray(RaDec_start.dec)
+		RaWrap_start = np.copy(Ra_start)
+		RaWrap_start[Ra_start>180] = Ra_start[Ra_start>180] - 360
+
+
+
+
+		AltAz_middle = apc.SkyCoord(alt = (90-FWHM[:,1])*apu.deg, az = FWHM[:,0]*apu.deg, frame = 'altaz', obstime = apt.Time(Time_iter_UTC_middle_dt, format='datetime'), location = EDGES_location)
+		RaDec_middle = AltAz_middle.icrs	
+		Ra_middle  = np.asarray(RaDec_middle.ra)
+		Dec_middle = np.asarray(RaDec_middle.dec)
+		RaWrap_middle = np.copy(Ra_middle)
+		RaWrap_middle[Ra_middle>180] = Ra_middle[Ra_middle>180] - 360		
+
+
+
+
+		AltAz_end = apc.SkyCoord(alt = (90-FWHM[:,1])*apu.deg, az = FWHM[:,0]*apu.deg, frame = 'altaz', obstime = apt.Time(Time_iter_UTC_end_dt, format='datetime'), location = EDGES_location)
+		RaDec_end = AltAz_end.icrs	
+		Ra_end  = np.asarray(RaDec_end.ra)
+		Dec_end = np.asarray(RaDec_end.dec)
+		RaWrap_end = np.copy(Ra_end)
+		RaWrap_end[Ra_end>180] = Ra_end[Ra_end>180] - 360		
+
+
+
+
+
+		plt.plot(np.arange(-180,181,1), -26.7*np.ones(361), 'y--', linewidth=2)
+		
+		plt.plot(RaWrap_start, Dec_start, 'w',     linewidth=3)
+		plt.plot(RaWrap_middle, Dec_middle, 'w--', linewidth=3)
+		plt.plot(RaWrap_end, Dec_end, 'w:',        linewidth=3)		
+
+
+		plt.plot(-6*(360/24), -26.7, 'x', color='1', markersize=5, mew=2)
+		plt.plot(0*(360/24), -26.7, 'x', color='1', markersize=5, mew=2)
+		plt.plot(6*(360/24), -26.7, 'x', color='1', markersize=5, mew=2)	
+	
+	
+	
+		off_x = -4
+		off_y = -12
+		plt.text(-180+off_x, -90+off_y, '0')
+		plt.text(-150+off_x, -90+off_y, '2')
+		plt.text(-120+off_x, -90+off_y, '4')
+		plt.text( -90+off_x, -90+off_y, '6')
+		plt.text( -60+off_x, -90+off_y, '8')
+		plt.text( -30+off_x, -90+off_y, '10')
+		plt.text(  -0+off_x, -90+off_y, '12')
+	
+		plt.text( 30+off_x, -90+off_y, '14')
+		plt.text( 60+off_x, -90+off_y, '16')
+		plt.text( 90+off_x, -90+off_y, '18')
+		plt.text(120+off_x, -90+off_y, '20')
+		plt.text(150+off_x, -90+off_y, '22')
+		plt.text(180+off_x, -90+off_y, '24')		
+	
+		plt.text(-60, -115, 'galactic hour angle [hr]')
+	
+	
+	
+		off_x1 = -15
+		off_x2 = -10
+		off_x3 = -19
+		off_y  = -3
+		plt.text(-180+off_x1,  90+off_y,  '90')
+		plt.text(-180+off_x1,  60+off_y,  '60')
+		plt.text(-180+off_x1,  30+off_y,  '30')
+		plt.text(-180+off_x2,   0+off_y,   '0')
+		plt.text(-180+off_x3, -30+off_y, '-30')
+		plt.text(-180+off_x3, -60+off_y, '-60')
+		plt.text(-180+off_x3, -90+off_y, '-90')
+	
+		plt.text(-210, 45, 'declination [degrees]', rotation=90)
+	
+
+
+
+	if plot_number == 13:
+		f = np.arange(60, 120.5, 0.5)
+		b18 = dm.signal_model('exp', [-0.5, 78, 19, 7], f)
+		
+		x1 = dm.signal_model('exp', [-0.5, 78, 19, 7, -0.5], f)
+		x2 = dm.signal_model('exp', [-0.5, 78, 19, 7,  0.5], f)
+		
+		t1 = dm.signal_model('tanh', [-0.5, 78, 19, 3, 7], f)
+		t2 = dm.signal_model('tanh', [-0.5, 78, 19, 7, 3], f)
+		
+		
+		plt.close()
+		plt.close()
+		plt.close()
+		plt.close()
+		plt.close()
+		plt.close()
+		plt.close()
+		
+		
+		x0_top = 0.1
+		y0_top = 0.5
+		x0_bottom = 0.1
+		y0_bottom = 0.1
+		
+		dx = 0.85
+		dy = 0.4
+		
+		
+		fig = plt.figure(figsize=[3.8,4.3])
+		
+		ax = fig.add_axes([x0_top, y0_top, dx, dy])
+		ax.plot(f, b18, 'k')
+		ax.plot(f, x1, 'b--')
+		ax.plot(f, x2, 'b:')
+		#plt.plot(f, b18, 'k')
+		plt.ylim([-0.7, 0.1])
+		plt.yticks(np.arange(-0.6,0.05, 0.2))
+		plt.text(59, -0.65, '(a)', fontsize=15)
+		plt.legend([r'Bowman et al. (2018)',r'Exp Model, $\chi=-0.5$',r'Exp Model, $\chi=+0.5$'], fontsize=8)
+		plt.ylabel('brightness\n temperature [K]')
+		
+		
+		ax = fig.add_axes([x0_bottom, y0_bottom, dx, dy])
+		ax.plot(f, b18, 'k')
+		ax.plot(f, t1, 'r--')
+		ax.plot(f, t2, 'r:')
+		#plt.plot(f, b18, 'k')
+		plt.ylim([-0.7, 0.1])
+		plt.yticks(np.arange(-0.6,0.05, 0.2))
+		plt.text(59, -0.65, '(b)', fontsize=15)
+		plt.legend([r'Bowman et al. (2018)',r'Tanh Model, $\tau_1=3$',r'Tanh Model, $\tau_2=3$'], fontsize=8)
+		plt.xlabel(r'$\nu$ [MHz]', fontsize=13)
+		plt.ylabel('brightness\n temperature [K]')
+		
+		# Saving		
+		plt.savefig(edges_folder + '/plots/20190730/absorption_models.pdf', bbox_inches='tight')
+		plt.close()
+		plt.close()		
 	
 	
 	return 0
@@ -5728,6 +6230,1302 @@ def plot_calibrated_raw_lab_data():
 
 	
 	return f, Ta, Th, To, Ts, Tq, Tae, The, Toe, Tse, Tqe, mae, mhe, moe, mse
+
+
+
+
+def plots_midband_metadata():
+	
+	
+	
+
+	list_files   = listdir(edges_folder + '/mid_band/spectra/level3/case_nominal/')
+	list_files.sort()
+	
+
+	plt.close()
+	plt.close()
+	
+	
+	# Processing files
+	for i in range(len(list_files)):
+		
+		day = list_files[i][0:11]
+		
+		f, t, p, r, w, rms, tp, m = eg.level3read(edges_folder + '/mid_band/spectra/level3/case_nominal/' + list_files[i])
+
+		gha = m[:,4]
+		gha[gha<0] = gha[gha<0] + 24
+		
+		sun_el = m[:,6]
+		temp   = m[:,9]
+		hum    = m[:,10]
+		rec_temp = m[:,11]
+		
+		
+		index_gha_6  = -1
+		index_gha_18 = -1
+		for i in range(len(gha)-1):
+			if (gha[i]<=6) and (gha[i+1]>6):
+				index_gha_6 = i
+				
+			if (gha[i]<=18) and (gha[i+1]>18):
+				index_gha_18 = i+1			
+
+
+
+
+
+		plt.close()
+		plt.close()
+
+
+		plt.figure(figsize=[4.5,9])
+		plt.subplot(5,1,1)
+		plt.plot(gha, 'b', linewidth=2)
+		if index_gha_6 > -1:
+			plt.plot([index_gha_6, index_gha_6], [-1000, 1000], 'g--', linewidth=2)
+			#plt.text(index_gha_6, 12, 'GHA=6hr', rotation=90, color='g', fontsize=12)
+			plt.text(index_gha_6, 12, ' 6hr', rotation=0, color='g', fontsize=10)
+		if index_gha_18 > -1:
+			plt.plot([index_gha_18, index_gha_18], [-1000, 1000], 'r--', linewidth=2)
+			#plt.text(index_gha_18, 14, 'GHA=18hr', rotation=90, color='r', fontsize=12)
+			plt.text(index_gha_18, 12, ' 18hr', rotation=0, color='r', fontsize=10)
+		plt.ylim([-1, 26])		
+		plt.yticks([0,6,12,18,24])
+		plt.ylabel('GHA [hr]')
+		plt.grid()
+		plt.title(day)
+		#plt.legend(['GHA = 6 hr','GHA = 18 hr'], loc=0)
+		
+		
+		plt.subplot(5,1,2)
+		plt.plot(sun_el, 'b', linewidth=2)
+		if index_gha_6 > -1:
+			plt.plot([index_gha_6, index_gha_6], [-1000, 1000], 'g--', linewidth=2)
+			
+		if index_gha_18 > -1:
+			plt.plot([index_gha_18, index_gha_18], [-1000, 1000], 'r--', linewidth=2)
+		plt.ylim([-110, 110])
+		plt.yticks([-90, -45, 0, 45, 90])
+		plt.ylabel('sun elev [deg]')
+		plt.grid()
+		
+		
+		
+		plt.subplot(5,1,3)
+		plt.plot(temp, 'b', linewidth=2)
+		if index_gha_6 > -1:
+			plt.plot([index_gha_6, index_gha_6], [-1000, 1000], 'g--', linewidth=2)
+			
+		if index_gha_18 > -1:
+			plt.plot([index_gha_18, index_gha_18], [-1000, 1000], 'r--', linewidth=2)
+		plt.ylim([0, 40])
+		plt.yticks([10,20,30])
+		plt.ylabel(r'amb temp [$^{\circ}$C]')
+		plt.grid()
+		
+		
+		
+		plt.subplot(5,1,4)
+		plt.plot(hum, 'b', linewidth=2)
+		if index_gha_6 > -1:
+			plt.plot([index_gha_6, index_gha_6], [-1000, 1000], 'g--', linewidth=2)
+			
+		if index_gha_18 > -1:
+			plt.plot([index_gha_18, index_gha_18], [-1000, 1000], 'r--', linewidth=2)
+		plt.ylim([-30, 110])
+		plt.yticks([-20,0,20,40,60,80,100])
+		plt.ylabel('amb humid [%]')
+		plt.grid()
+		
+		
+		
+		plt.subplot(5,1,5)
+		plt.plot(rec_temp, 'b', linewidth=2)
+		if index_gha_6 > -1:
+			plt.plot([index_gha_6, index_gha_6], [-1000, 1000], 'g--', linewidth=2)
+			
+		if index_gha_18 > -1:
+			plt.plot([index_gha_18, index_gha_18], [-1000, 1000], 'r--', linewidth=2)
+			
+		plt.ylim([23, 27])
+		plt.yticks([24,25,26])
+		plt.ylabel(r'rec temp [$^{\circ}$C]')
+		plt.grid()		
+		
+		
+		plt.xlabel('time [number of raw spectra since start of file]')
+
+
+
+
+		plt.savefig(edges_folder + '/mid_band/spectra/level3/case_nominal/metadata/' + day + '.png', bbox_inches='tight')
+		plt.close()	
+		plt.close()
+		#plt.close()
+		#plt.close()
+		#plt.close()
+		#plt.close()
+		#plt.close()
+		#plt.close()
+	
+	
+	
+	
+	return 0
+
+
+
+
+
+
+def comparison_switch_receiver1():
+	
+	f       = np.arange(50,201)
+	ant_s11 = np.ones(len(f))
+	
+	o1 = cr1.switch_correction_receiver1(ant_s11, f_in = f, case = 1)
+	o2 = cr1.switch_correction_receiver1(ant_s11, f_in = f, case = 2)
+	
+	o10 = cr1.switch_correction_receiver1(ant_s11, f_in = f, case = 10)
+	o11 = cr1.switch_correction_receiver1(ant_s11, f_in = f, case = 11)
+	o12 = cr1.switch_correction_receiver1(ant_s11, f_in = f, case = 12)
+	o13 = cr1.switch_correction_receiver1(ant_s11, f_in = f, case = 13)	
+	
+	
+	fl = np.arange(50,101)
+	al = np.ones(len(fl))
+	ol = oeg.low_band_switch_correction(al, 25, f_in = fl)
+	
+	
+	
+	
+	
+	ant_1    = o1[0]
+	s11_1    = o1[1]
+	s12s21_1 = o1[2]
+	s22_1    = o1[3]
+	
+	ant_2    = o2[0]
+	s11_2    = o2[1]
+	s12s21_2 = o2[2]
+	s22_2    = o2[3]	
+
+	ant_10    = o10[0]
+	s11_10    = o10[1]
+	s12s21_10 = o10[2]
+	s22_10    = o10[3]
+	
+	ant_11    = o11[0]
+	s11_11    = o11[1]
+	s12s21_11 = o11[2]
+	s22_11    = o11[3]	
+	
+	ant_12    = o12[0]
+	s11_12    = o12[1]
+	s12s21_12 = o12[2]
+	s22_12    = o12[3]
+
+	ant_13    = o13[0]
+	s11_13    = o13[1]
+	s12s21_13 = o13[2]
+	s22_13    = o13[3]
+	
+	
+	ant_l    = ol[0]
+	s11_l    = ol[1]
+	s12s21_l = ol[2]
+	s22_l    = ol[3]	
+	
+	
+	
+	
+	
+	
+	
+	
+
+	
+	plt.subplot(3,2,1)
+	plt.plot(f, 20*np.log10(np.abs(s11_1)), 'b')
+	plt.plot(f, 20*np.log10(np.abs(s11_2)), 'b--')
+	
+	plt.plot(f, 20*np.log10(np.abs(s11_10)), 'r')
+	plt.plot(f, 20*np.log10(np.abs(s11_11)), 'r')
+	plt.plot(f, 20*np.log10(np.abs(s11_12)), 'r')
+	plt.plot(f, 20*np.log10(np.abs(s11_13)), 'r')
+	
+	plt.plot(fl, 20*np.log10(np.abs(s11_l)), 'g')	
+	
+	
+	
+	plt.subplot(3,2,2)
+	plt.plot(f, (180/np.pi)*np.unwrap(np.angle(s11_1)), 'b')
+	plt.plot(f, (180/np.pi)*np.unwrap(np.angle(s11_2)), 'b--')
+	
+	plt.plot(f, (180/np.pi)*np.unwrap(np.angle(s11_10)), 'r')
+	plt.plot(f, (180/np.pi)*np.unwrap(np.angle(s11_11)), 'r')
+	plt.plot(f, (180/np.pi)*np.unwrap(np.angle(s11_12)), 'r')
+	plt.plot(f, (180/np.pi)*np.unwrap(np.angle(s11_13)), 'r')
+	
+	plt.plot(fl, (180/np.pi)*np.unwrap(np.angle(s11_l)), 'g')
+	
+	
+	
+	
+	
+	plt.subplot(3,2,3)
+	plt.plot(f, 20*np.log10(np.abs(s12s21_1)), 'b')
+	plt.plot(f, 20*np.log10(np.abs(s12s21_2)), 'b--')
+	
+	plt.plot(f, 20*np.log10(np.abs(s12s21_10)), 'r')
+	plt.plot(f, 20*np.log10(np.abs(s12s21_11)), 'r')
+	plt.plot(f, 20*np.log10(np.abs(s12s21_12)), 'r')
+	plt.plot(f, 20*np.log10(np.abs(s12s21_13)), 'r')
+	
+	plt.plot(fl, 20*np.log10(np.abs(s12s21_l)), 'g')
+		
+
+	plt.subplot(3,2,4)
+	plt.plot(f, (180/np.pi)*np.unwrap(np.angle(s12s21_1)), 'b')
+	plt.plot(f, (180/np.pi)*np.unwrap(np.angle(s12s21_2)), 'b--')
+	
+	plt.plot(f, (180/np.pi)*np.unwrap(np.angle(s12s21_10)), 'r')
+	plt.plot(f, (180/np.pi)*np.unwrap(np.angle(s12s21_11)), 'r')
+	plt.plot(f, (180/np.pi)*np.unwrap(np.angle(s12s21_12)), 'r')
+	plt.plot(f, (180/np.pi)*np.unwrap(np.angle(s12s21_13)), 'r')
+	
+	plt.plot(fl, (180/np.pi)*np.unwrap(np.angle(s12s21_l)), 'g')
+
+
+	
+	plt.subplot(3,2,5)
+	plt.plot(f, 20*np.log10(np.abs(s22_1)), 'b')
+	plt.plot(f, 20*np.log10(np.abs(s22_2)), 'b--')
+	
+	plt.plot(f, 20*np.log10(np.abs(s22_10)), 'r')
+	plt.plot(f, 20*np.log10(np.abs(s22_11)), 'r')
+	plt.plot(f, 20*np.log10(np.abs(s22_12)), 'r')
+	plt.plot(f, 20*np.log10(np.abs(s22_13)), 'r')
+	
+	plt.plot(fl, 20*np.log10(np.abs(s22_l)), 'g')
+	
+
+	plt.subplot(3,2,6)
+	plt.plot(f, (180/np.pi)*np.unwrap(np.angle(s22_1)), 'b')
+	plt.plot(f, (180/np.pi)*np.unwrap(np.angle(s22_2)), 'b--')
+	
+	plt.plot(f, (180/np.pi)*np.unwrap(np.angle(s22_10)), 'r')
+	plt.plot(f, (180/np.pi)*np.unwrap(np.angle(s22_11)), 'r')
+	plt.plot(f, (180/np.pi)*np.unwrap(np.angle(s22_12)), 'r')
+	plt.plot(f, (180/np.pi)*np.unwrap(np.angle(s22_13)), 'r')	
+	
+	plt.plot(fl, (180/np.pi)*np.unwrap(np.angle(s22_l)), 'g')
+	
+	return 0
+
+
+
+
+
+
+
+
+def plots_for_memo148(plot_number):
+	
+	
+	# Receiver calibration parameters
+	if plot_number==1:
+	
+
+		# Paths
+		path_plot_save = edges_folder + 'plots/20190828/'
+
+
+		# Calibration parameters
+		rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_receiver1_cterms7_wterms8.txt'
+		
+		#mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_receiver1_50_150MHz_cterms7_wterms7.txt'
+
+		rcv = np.genfromtxt(rcv_file)
+	
+		FLOW  = 50
+		FHIGH = 150
+		
+		fX      = rcv[:,0]
+		rcv2    = rcv[(fX>=FLOW) & (fX<=FHIGH),:]
+		
+		fe      = rcv2[:,0]
+		rl      = rcv2[:,1] + 1j*rcv2[:,2]
+		sca     = rcv2[:,3]
+		off     = rcv2[:,4]
+		TU      = rcv2[:,5]
+		TC      = rcv2[:,6]
+		TS      = rcv2[:,7]
+
+
+		rcv1 = np.genfromtxt('/home/raul/DATA2/EDGES_vol2/mid_band/calibration/receiver_calibration/receiver1/2019_04_25C/results/nominal/calibration_files/calibration_file_receiver1_50_150MHz_cterms8_wterms10.txt')
+
+
+
+
+		# Low-Band
+		rcv_lb = np.genfromtxt('/home/raul/DATA1/EDGES_vol1/calibration/receiver_calibration/low_band1/2015_08_25C/results/nominal/calibration_files/calibration_file_low_band_2015_nominal.txt')
+		
+		
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		# Plot
+
+		size_x = 6
+		size_y = 8 #10.5
+		x0 = 0.15
+		y0 = 0.09
+		dx = 0.7
+		dy = 0.3
+
+
+		f1  = plt.figure(num=1, figsize=(size_x, size_y))		
+
+
+		ax     = f1.add_axes([x0, y0 + 2*dy, dx, dy])	
+		h1     = ax.plot(fe, 20*np.log10(np.abs(rl)), 'b', linewidth=1.5, label='$|\Gamma_{\mathrm{rec}}|$')
+		ax.plot(rcv1[:,0], 20*np.log10(np.abs(rcv1[:,1]+1j*rcv1[:,2])), 'r', linewidth=1.5)
+		ax.plot(rcv_lb[:,0], 20*np.log10(np.abs(rcv_lb[:,1]+1j*rcv_lb[:,2])), 'g', linewidth=1.5)
+		
+		
+		
+		
+		
+		ax2    = ax.twinx()
+		h2     = ax2.plot(fe, (180/np.pi)*np.unwrap(np.angle(rl)), 'b--', linewidth=1.5, label=r'$\angle\/\Gamma_{\mathrm{rec}}$')
+		ax2.plot(rcv1[:,0], (180/np.pi)*np.unwrap(np.angle(rcv1[:,1]+1j*rcv1[:,2])), 'r--', linewidth=1.5)
+		ax2.plot(rcv_lb[:,0], (180/np.pi)*np.unwrap(np.angle(rcv_lb[:,1]+1j*rcv_lb[:,2])), 'g--', linewidth=1.5)
+		
+		
+		h      = h1 + h2
+		labels = [l.get_label() for l in h]
+		ax.legend(h, labels, loc=0, fontsize=10, ncol=2)
+
+		ax.set_ylim([-40, -28])
+		ax.set_xticklabels('')
+		ax.set_yticks(np.arange(-39,-28,2))
+		ax.set_ylabel('$|\Gamma_{\mathrm{rec}}|$ [dB]', fontsize=14)
+		ax.text(48.5, -39.5, '(a)', fontsize=16)
+		ax.text(113, -37, '2015-Aug', fontweight='bold', color='g')
+		ax.text(113, -38, '2018-Jan', fontweight='bold', color='b')
+		ax.text(113, -39, '2019-Apr', fontweight='bold', color='r')
+
+		ax2.set_ylim([70, 130])
+		ax2.set_xticklabels('')
+		ax2.set_yticks(np.arange(80,121,10))		
+		ax2.set_ylabel(r'$\angle\/\Gamma_{\mathrm{rec}}$ [ $^\mathrm{o}$]', fontsize=14)
+
+		ax.set_xlim([48, 152])
+		ax.tick_params(axis='x', direction='in')
+		ax.set_xticks(np.arange(50, 151, 10))
+		
+		
+		
+		
+
+
+
+		ax     = f1.add_axes([x0, y0 + 1*dy, dx, dy])
+		h1     = ax.plot(fe, sca,'b',linewidth=1.5, label='$C_1$')
+		ax.plot(rcv1[:,0], rcv1[:,3],'r', linewidth=1.5)      
+		ax.plot(rcv_lb[:,0], rcv_lb[:,3],'g', linewidth=1.5)      #  <----------------------------- Low-Band
+		ax2    = ax.twinx()
+		h2     = ax2.plot(fe, off,'b--',linewidth=1.5, label='$C_2$')
+		ax2.plot(rcv1[:,0], rcv1[:,4],'r--', linewidth=1.5)      
+		ax2.plot(rcv_lb[:,0], rcv_lb[:,4],'g--', linewidth=1.5)      #  <----------------------------- Low-Band
+		h      = h1 + h2
+		labels = [l.get_label() for l in h]
+		ax.legend(h, labels, loc=0, fontsize=10, ncol=2)
+
+		ax.set_ylim([3.3, 5.2])
+		ax.set_xticklabels('')
+		ax.set_yticks(np.arange(3.5,5.1,0.5))
+		ax.set_ylabel('$C_1$', fontsize=14)
+		ax.text(48.5, 3.38, '(b)', fontsize=16)
+
+		#ax2.set_ylim([-2.4, -1.8])
+		ax2.set_ylim([-2.75, -0])
+		#ax2.set_ylim([-1.6, -1.4])
+		ax2.set_xticklabels('')
+		ax2.set_yticks(np.arange(-2.5, -0.05, 0.5))
+		ax2.set_ylabel('$C_2$ [K]', fontsize=14)
+
+		ax.set_xlim([48, 152])
+		ax.tick_params(axis='x', direction='in')
+		ax.set_xticks(np.arange(50, 151, 10))
+		
+		
+		
+		
+
+
+
+		ax     = f1.add_axes([x0, y0 + 0*dy, dx, dy])
+		h1     = ax.plot(fe, TU,'b', linewidth=1.5, label='$T_{\mathrm{unc}}$')
+		ax.plot(rcv1[:,0], rcv1[:,5],'r', linewidth=1.5)      # 
+		ax.plot(rcv_lb[:,0], rcv_lb[:,5],'g', linewidth=1.5)      #  <----------------------------- Low-Band
+		
+		ax2    = ax.twinx()
+		h2     = ax2.plot(fe, TC,'b--', linewidth=1.5, label='$T_{\mathrm{cos}}$')
+		ax2.plot(rcv1[:,0], rcv1[:,6],'r--', linewidth=1.5)      
+		ax2.plot(rcv_lb[:,0], rcv_lb[:,6],'g--', linewidth=1.5)      #  <----------------------------- Low-Band
+		
+		h3     = ax2.plot(fe, TS,'b:', linewidth=1.5, label='$T_{\mathrm{sin}}$')
+		ax2.plot(rcv1[:,0], rcv1[:,7],'r:', linewidth=1.5)      
+		ax2.plot(rcv_lb[:,0], rcv_lb[:,7],'g:', linewidth=1.5)      #  <----------------------------- Low-Band
+
+		h      = h1 + h2 + h3
+		labels = [l.get_label() for l in h]
+		ax.legend(h, labels, loc=0, fontsize=10, ncol=3)
+
+		ax.set_ylim([178, 190])
+		ax.set_yticks(np.arange(180, 189, 2))
+		ax.set_ylabel('$T_{\mathrm{unc}}$ [K]', fontsize=14)
+		ax.set_xlabel('$\\nu$ [MHz]', fontsize=14)
+		ax.text(48.5, 178.5, '(c)', fontsize=16)
+
+		ax2.set_ylim([-55, 35])
+		ax2.set_yticks(np.arange(-40, 21, 20))
+		ax2.set_ylabel('$T_{\mathrm{cos}}, T_{\mathrm{sin}}$ [K]', fontsize=14)
+		
+		ax.set_xlim([48, 152])
+		ax.set_xticks(np.arange(50, 151, 10))
+
+
+		plt.savefig(path_plot_save + 'receiver_calibration.pdf', bbox_inches='tight')
+		plt.close()	
+		plt.close()
+		plt.close()
+		plt.close()
+
+
+
+
+
+	if plot_number == 2:
+		
+		# Paths
+		path_plot_save = edges_folder + 'plots/20190828/'		
+
+		
+
+		
+		flb = np.arange(50,100,1)
+		alb = np.ones(len(flb))
+		
+		f   = np.arange(50,151,1)
+		ant_s11 = np.ones(len(f))
+		
+		
+		o = oeg.low_band_switch_correction(alb, 27.16, f_in = flb)
+		v1 = o[1]
+		v2 = o[2]
+		v3 = o[3]		
+		
+		o = cr1.switch_correction_receiver1(ant_s11, f_in = f, case = 0)
+		w1 = o[1]
+		w2 = o[2]
+		w3 = o[3]		
+		
+		o = cr1.switch_correction_receiver1(ant_s11, f_in = f, case = 1)
+		x1 = o[1]
+		x2 = o[2]
+		x3 = o[3]
+		
+		o = cr1.switch_correction_receiver1(ant_s11, f_in = f, case = 6)
+		y1 = o[1]
+		y2 = o[2]
+		y3 = o[3]
+		
+
+
+		size_x = 11
+		size_y = 13.0	
+	
+		f1  = plt.figure(num=1, figsize=(size_x, size_y))
+
+		plt.subplot(3,2,1)
+		plt.plot(flb, 20*np.log10(np.abs(v1)), 'k--')
+		plt.plot(f, 20*np.log10(np.abs(w1)), 'k:')
+		plt.plot(f, 20*np.log10(np.abs(x1)), 'b')
+		plt.plot(f, 20*np.log10(np.abs(y1)), 'r--')
+		plt.xticks(np.arange(50, 151, 10), labels='')
+		plt.ylabel(r'$|S_{11}|$ [dB]')
+		plt.grid()
+		plt.legend([r'sw 2015, 50.12$\Omega$', r'sw 2017, 49.85$\Omega$', r'sw 2018, 50.027$\Omega$',r'sw 2019, 50.15$\Omega$'])
+		
+		plt.subplot(3,2,2)
+		plt.plot(flb, (180/np.pi)*np.unwrap(np.angle(v1)), 'k--')
+		plt.plot(f, (180/np.pi)*np.unwrap(np.angle(w1)), 'k:')
+		plt.plot(f, (180/np.pi)*np.unwrap(np.angle(x1)), 'b')
+		plt.plot(f, (180/np.pi)*np.unwrap(np.angle(y1)), 'r--')
+		plt.xticks(np.arange(50, 151, 10), labels='')
+		plt.ylabel(r'$\angle S_{11}$ [deg]')
+		plt.grid()
+
+
+
+		plt.subplot(3,2,3)
+		plt.plot(flb, 20*np.log10(np.abs(v2)), 'k--')
+		plt.plot(f, 20*np.log10(np.abs(w2)), 'k:')
+		plt.plot(f, 20*np.log10(np.abs(x2)), 'b')
+		plt.plot(f, 20*np.log10(np.abs(y2)), 'r--')
+		plt.xticks(np.arange(50, 151, 10), labels='')
+		plt.ylabel(r'$|S_{12}S_{21}|$ [dB]')
+		plt.grid()
+		
+		plt.subplot(3,2,4)
+		plt.plot(flb, (180/np.pi)*np.unwrap(np.angle(v2)), 'k--')
+		plt.plot(f, (180/np.pi)*np.unwrap(np.angle(w2)), 'k:')
+		plt.plot(f, (180/np.pi)*np.unwrap(np.angle(x2)), 'b')
+		plt.plot(f, (180/np.pi)*np.unwrap(np.angle(y2)), 'r--')
+		plt.xticks(np.arange(50, 151, 10), labels='')
+		plt.ylabel(r'$\angle S_{12}S_{21}$ [deg]')
+		plt.grid()
+
+
+	
+		plt.subplot(3,2,5)
+		plt.plot(flb, 20*np.log10(np.abs(v3)), 'k--')
+		plt.plot(f, 20*np.log10(np.abs(w3)), 'k:')
+		plt.plot(f, 20*np.log10(np.abs(x3)), 'b')
+		plt.plot(f, 20*np.log10(np.abs(y3)), 'r--')
+		plt.xticks(np.arange(50, 151, 10))
+		plt.ylabel(r'$|S_{22}|$ [dB]')
+		plt.xlabel(r'$\nu$ [MHz]', fontsize=14)
+		plt.grid()
+		
+		plt.subplot(3,2,6)
+		plt.plot(flb, (180/np.pi)*np.unwrap(np.angle(v3)), 'k--')
+		plt.plot(f, (180/np.pi)*np.unwrap(np.angle(w3)), 'k:')
+		plt.plot(f, (180/np.pi)*np.unwrap(np.angle(x3)), 'b')
+		plt.plot(f, (180/np.pi)*np.unwrap(np.angle(y3)), 'r--')
+		plt.xticks(np.arange(50, 151, 10))
+		plt.ylabel(r'$\angle S_{22}$ [deg]')
+		plt.xlabel(r'$\nu$ [MHz]', fontsize=14)
+		plt.grid()
+
+
+
+		plt.savefig(path_plot_save + 'sw_parameters.pdf', bbox_inches='tight')
+		plt.close()	
+		plt.close()
+		plt.close()
+		plt.close()
+		
+
+
+
+
+
+	if plot_number == 3:
+		
+		# Paths
+		path_plot_save = edges_folder + 'plots/20190828/'		
+
+
+
+		size_x = 11
+		size_y = 13.0	
+
+		f1  = plt.figure(num=1, figsize=(size_x, size_y))
+		
+		
+		# Frequency
+		f, il, ih = ba.frequency_edges(50, 150)
+		fe = f[il:ih+1]					
+		
+		ra1 = cal.models_antenna_s11_remove_delay('mid_band', fe, year=2018, day=147, case=3, delay_0=0.17, model_type='polynomial', Nfit=15, plot_fit_residuals='no')
+		ra2 = cal.models_antenna_s11_remove_delay('mid_band', fe, year=2018, day=147, case=36, delay_0=0.17, model_type='polynomial', Nfit=15, plot_fit_residuals='no')
+		
+		ra3 = cal.models_antenna_s11_remove_delay('mid_band', fe, year=2018, day=147, case=3105012, delay_0=0.17, model_type='polynomial', Nfit=15, plot_fit_residuals='no')
+		ra4 = cal.models_antenna_s11_remove_delay('mid_band', fe, year=2018, day=147, case=3605012, delay_0=0.17, model_type='polynomial', Nfit=15, plot_fit_residuals='no')
+		
+		
+		ra11 = cal.models_antenna_s11_remove_delay('mid_band', fe, year=2018, day=222, case=11, delay_0=0.17, model_type='polynomial', Nfit=15, plot_fit_residuals='no') 
+		ra31 = cal.models_antenna_s11_remove_delay('mid_band', fe, year=2018, day=222, case=31, delay_0=0.17, model_type='polynomial', Nfit=15, plot_fit_residuals='no')
+		
+		
+		
+		plt.subplot(3,2,1)
+		plt.plot(fe, 20*np.log10(np.abs(ra1)), 'b')
+		plt.xticks(np.arange(50, 151, 10), labels='')
+		plt.grid()
+		plt.ylabel('magnitude [dB]')
+		
+		plt.subplot(3,2,2)
+		plt.plot(fe, (180/np.pi)*np.unwrap(np.angle(ra1)), 'b')
+		plt.xticks(np.arange(50, 151, 10), labels='')
+		plt.grid()		
+		plt.ylabel('phase [deg]')
+	
+		plt.subplot(3,2,3)
+		plt.plot(fe, 20*np.log10(np.abs(ra2)) - 20*np.log10(np.abs(ra1)), 'r')
+		plt.plot(fe, 20*np.log10(np.abs(ra3)) - 20*np.log10(np.abs(ra1)), 'r--')
+		plt.plot(fe, 20*np.log10(np.abs(ra4)) - 20*np.log10(np.abs(ra1)), 'r:')
+		plt.xticks(np.arange(50, 151, 10))
+		plt.ylim([-0.04, 0.06])
+		plt.grid()
+		#plt.xlabel(r'$\nu$ [MHz]', fontsize=14)
+		plt.ylabel(r'$\Delta$ magnitude [dB]')
+		plt.legend([r'Day 147(sw 2019, 50.15$\Omega$) - Day 147(sw 2018, 50.027$\Omega$)',r'Day 147(sw 2018, 50.12$\Omega$) - Day 147(sw 2018, 50.027$\Omega$)',r'Day 147(sw 2019, 50.12$\Omega$) - Day 147(sw 2018, 50.027$\Omega$)'], fontsize=8)
+	
+		plt.subplot(3,2,4)
+		plt.plot(fe, (180/np.pi)*np.unwrap(np.angle(ra2)) - (180/np.pi)*np.unwrap(np.angle(ra1)), 'r')
+		plt.plot(fe, (180/np.pi)*np.unwrap(np.angle(ra3)) - (180/np.pi)*np.unwrap(np.angle(ra1)), 'r--')
+		plt.plot(fe, (180/np.pi)*np.unwrap(np.angle(ra4)) - (180/np.pi)*np.unwrap(np.angle(ra1)), 'r:')
+		plt.xticks(np.arange(50, 151, 10))
+		plt.ylim([-0.3, 0.3])
+		plt.grid()
+		#plt.xlabel(r'$\nu$ [MHz]', fontsize=14)
+		plt.ylabel(r'$\Delta$ phase [deg]')
+		
+		
+
+	
+		plt.subplot(3,2,5)
+		plt.plot(fe, 20*np.log10(np.abs(ra11)) - 20*np.log10(np.abs(ra1)), 'g')
+		plt.plot(fe, 20*np.log10(np.abs(ra31)) - 20*np.log10(np.abs(ra1)), 'g--')
+		plt.xticks(np.arange(50, 151, 10))
+		plt.ylim([-0.2, 0.2])
+		plt.grid()
+		plt.xlabel(r'$\nu$ [MHz]', fontsize=14)
+		plt.ylabel(r'$\Delta$ magnitude [dB]')
+		plt.legend([r'Day 222(sw 2018, 50.027$\Omega$) - Day 147(sw 2018, 50.027$\Omega$)', r'Day 222(sw 2019, 50.15$\Omega$) - Day 147(sw 2018, 50.027$\Omega$)'], fontsize=8)
+	
+		plt.subplot(3,2,6)
+		plt.plot(fe, (180/np.pi)*np.unwrap(np.angle(ra11)) - (180/np.pi)*np.unwrap(np.angle(ra1)), 'g')
+		plt.plot(fe, (180/np.pi)*np.unwrap(np.angle(ra31)) - (180/np.pi)*np.unwrap(np.angle(ra1)), 'g--')
+		plt.xticks(np.arange(50, 151, 10))
+		plt.ylim([-2, 2])
+		plt.grid()
+		plt.xlabel(r'$\nu$ [MHz]', fontsize=14)
+		plt.ylabel(r'$\Delta$ phase [deg]')
+		
+		
+		
+		plt.savefig(path_plot_save + 'antenna_s11.pdf', bbox_inches='tight')
+		plt.close()	
+		plt.close()
+		plt.close()
+		plt.close()
+		
+		
+		
+	if plot_number == 4:
+		
+		
+		# Paths
+		path_plot_save = edges_folder + 'plots/20190828/'
+		
+		GHA1 = 6
+		GHA2 = 18
+		
+		f, t150_low_case1, w, s150_low_case1   = eg.level3_single_file_test(edges_folder + 'mid_band/spectra/level3/tests_55_150MHz/rcv18_sw18/2018_150_00.hdf5', GHA1, GHA2, 60, 150, 'no', 'LINLOG', 5, 'no', 'name')
+		f, t150_low_case2, w, s150_low_case2   = eg.level3_single_file_test(edges_folder + 'mid_band/spectra/level3/tests_55_150MHz/rcv18_sw19/2018_150_00.hdf5', GHA1, GHA2, 60, 150, 'no', 'LINLOG', 5, 'no', 'name')
+		f, t150_low_case3, w, s150_low_case3   = eg.level3_single_file_test(edges_folder + 'mid_band/spectra/level3/tests_55_150MHz/rcv19_sw18/2018_150_00.hdf5', GHA1, GHA2, 60, 150, 'no', 'LINLOG', 5, 'no', 'name')
+		f, t150_low_case4, w, s150_low_case4   = eg.level3_single_file_test(edges_folder + 'mid_band/spectra/level3/tests_55_150MHz/rcv19_sw19/2018_150_00.hdf5', GHA1, GHA2, 60, 150, 'no', 'LINLOG', 5, 'no', 'name')
+		
+		#f, t150_high_case1, w, s150_high_case1 = eg.level3_single_file_test(edges_folder + 'mid_band/spectra/level3/tests_55_150MHz/rcv18_sw18/2018_150_00.hdf5', 18, 6, 60, 150, 'no', 'LINLOG', 5, 'no', 'name')	
+		#f, t150_high_case2, w, s150_high_case2 = eg.level3_single_file_test(edges_folder + 'mid_band/spectra/level3/tests_55_150MHz/rcv18_sw19/2018_150_00.hdf5', 18, 6, 60, 150, 'no', 'LINLOG', 5, 'no', 'name')
+		#f, t188_high_case1, w, s188_high_case1 = eg.level3_single_file_test(edges_folder + 'mid_band/spectra/level3/tests_55_150MHz/rcv18_sw18/2018_188_00.hdf5', 18, 6, 60, 150, 'no', 'LINLOG', 5, 'no', 'name')
+		#f, t188_high_case2, w, s188_high_case2 = eg.level3_single_file_test(edges_folder + 'mid_band/spectra/level3/tests_55_150MHz/rcv18_sw19/2018_188_00.hdf5', 18, 6, 60, 150, 'no', 'LINLOG', 5, 'no', 'name')
+		
+		f1 = plt.figure(figsize=[6,5])
+		
+		plt.subplot(2,1,1)
+		plt.plot(f, t150_low_case2 - t150_low_case1, 'b')
+		#plt.plot(f, t150_low_case3 - t150_low_case1, 'b--')
+		#plt.plot(f, t150_low_case4 - t150_low_case1, 'b:')
+		plt.xticks(np.arange(50, 151, 10), labels='')
+		plt.xlim([58, 152])
+		plt.ylim([-1,2])
+		plt.title('Day 2018-150, GHA=6-18 hr')
+		#plt.xlabel(r'$\nu$ [MHz]', fontsize=14)
+		plt.ylabel(r'$\Delta$ temperature [K]')
+		plt.legend(['Case 2 - Case 1'], fontsize=9)
+		
+
+		plt.subplot(2,1,2)
+		#plt.plot(f, t150_low_case2 - t150_low_case1, 'b')
+		plt.plot(f, t150_low_case3 - t150_low_case1, 'b--')
+		plt.plot(f, t150_low_case4 - t150_low_case1, 'b:')
+		plt.xticks(np.arange(50, 151, 10))
+		plt.xlim([58, 152])
+		#plt.ylim([-3,3])
+		#plt.title('Day 150, GHA=6-18 hr')
+		plt.xlabel(r'$\nu$ [MHz]', fontsize=14)
+		plt.ylabel(r'$\Delta$ temperature [K]')
+		plt.legend(['Case 3 - Case 1', 'Case 4 - Case 1'], fontsize=9)
+		
+		plt.savefig(path_plot_save + 'delta_temperature.pdf', bbox_inches='tight')
+		plt.close()	
+		plt.close()
+		plt.close()
+		plt.close()
+		
+
+
+
+	if plot_number == 5:
+		
+		
+		# Paths
+		path_plot_save = edges_folder + 'plots/20190828/'
+		
+		GHA1 = 6
+		GHA2 = 18
+		
+		#fx, t150_low_case1, w, s150_low_case1   = eg.level3_single_file_test(edges_folder + 'mid_band/spectra/level3/tests_55_150MHz/rcv18_sw18and19_ant147/2018_150_00.hdf5', GHA1, GHA2, 55, 150, 'no', 'LINLOG', 5, 'no', 'name')
+		
+		fx, t150_low_case1, w, s150_low_case1   = eg.level3_single_file_test(edges_folder + 'mid_band/spectra/level3/tests_55_150MHz/rcv18_sw18/2018_150_00.hdf5',             GHA1, GHA2, 55, 150, 'no', 'LINLOG', 5, 'no', 'name')
+		fx, t150_low_case2, w, s150_low_case2   = eg.level3_single_file_test(edges_folder + 'mid_band/spectra/level3/tests_55_150MHz/rcv18_sw19/2018_150_00.hdf5',             GHA1, GHA2, 55, 150, 'no', 'LINLOG', 5, 'no', 'name')
+		fx, t150_low_case3, w, s150_low_case3   = eg.level3_single_file_test(edges_folder + 'mid_band/spectra/level3/tests_55_150MHz/rcv19_sw18/2018_150_00.hdf5',             GHA1, GHA2, 55, 150, 'no', 'LINLOG', 5, 'no', 'name')
+		fx, t150_low_case4, w, s150_low_case4   = eg.level3_single_file_test(edges_folder + 'mid_band/spectra/level3/tests_55_150MHz/rcv19_sw19/2018_150_00.hdf5',             GHA1, GHA2, 55, 150, 'no', 'LINLOG', 5, 'no', 'name')
+		
+		
+		#f, t150_high_case1, w, s150_high_case1 = eg.level3_single_file_test(edges_folder + 'mid_band/spectra/level3/tests_55_150MHz/rcv18_sw18/2018_150_00.hdf5', 18, 6, 60, 150, 'no', 'LINLOG', 5, 'no', 'name')	
+		#f, t150_high_case2, w, s150_high_case2 = eg.level3_single_file_test(edges_folder + 'mid_band/spectra/level3/tests_55_150MHz/rcv18_sw19/2018_150_00.hdf5', 18, 6, 60, 150, 'no', 'LINLOG', 5, 'no', 'name')
+		#f, t188_high_case1, w, s188_high_case1 = eg.level3_single_file_test(edges_folder + 'mid_band/spectra/level3/tests_55_150MHz/rcv18_sw18/2018_188_00.hdf5', 18, 6, 60, 150, 'no', 'LINLOG', 5, 'no', 'name')
+		#f, t188_high_case2, w, s188_high_case2 = eg.level3_single_file_test(edges_folder + 'mid_band/spectra/level3/tests_55_150MHz/rcv18_sw19/2018_188_00.hdf5', 18, 6, 60, 150, 'no', 'LINLOG', 5, 'no', 'name')
+			
+		
+		FLOW  = 60
+		FHIGH = 150
+		
+		f              = fx[(fx>=FLOW)&(fx<=FHIGH)]
+		
+		t150_low_case1 = t150_low_case1[(fx>=FLOW)&(fx<=FHIGH)]
+		t150_low_case2 = t150_low_case2[(fx>=FLOW)&(fx<=FHIGH)]
+		t150_low_case3 = t150_low_case3[(fx>=FLOW)&(fx<=FHIGH)]
+		t150_low_case4 = t150_low_case4[(fx>=FLOW)&(fx<=FHIGH)]
+		
+		s150_low_case1 = s150_low_case1[(fx>=FLOW)&(fx<=FHIGH)]
+		s150_low_case2 = s150_low_case2[(fx>=FLOW)&(fx<=FHIGH)]
+		s150_low_case3 = s150_low_case3[(fx>=FLOW)&(fx<=FHIGH)]
+		s150_low_case4 = s150_low_case4[(fx>=FLOW)&(fx<=FHIGH)]
+
+
+
+		
+		
+		p  = ba.fit_polynomial_fourier('LINLOG', f, t150_low_case1, 5, Weights=1/(s150_low_case1**2))
+		r1 = t150_low_case1 - p[1]
+		
+		p  = ba.fit_polynomial_fourier('LINLOG', f, t150_low_case2, 5, Weights=1/(s150_low_case2**2))
+		r2 = t150_low_case2 - p[1]
+		
+		p  = ba.fit_polynomial_fourier('LINLOG', f, t150_low_case3, 5, Weights=1/(s150_low_case3**2))
+		r3 = t150_low_case3 - p[1]
+		
+		p  = ba.fit_polynomial_fourier('LINLOG', f, t150_low_case4, 5, Weights=1/(s150_low_case4**2))
+		r4 = t150_low_case4 - p[1]
+		
+		
+		
+		
+		
+		
+		
+		f1 = plt.figure(figsize=[8,8])
+		
+		plt.subplot(4,1,1)
+		plt.plot(f, r1, 'b')
+		plt.xticks(np.arange(50, 151, 10), labels='')
+		plt.xlim([55, 152])
+		plt.ylim([-1,1])
+		plt.title('Day 2018-150, GHA=6-18 hr')
+		#plt.xlabel(r'$\nu$ [MHz]', fontsize=14)
+		plt.ylabel(r'$\Delta$ T [K]')
+		plt.legend(['Case 1'], fontsize=9)
+		
+		
+		plt.subplot(4,1,2)
+		plt.plot(f, r2, 'b')
+		plt.xticks(np.arange(50, 151, 10), labels='')
+		plt.xlim([55, 152])
+		plt.ylim([-1,1])
+		#plt.title('Day 2018-150, GHA=6-18 hr')
+		#plt.xlabel(r'$\nu$ [MHz]', fontsize=14)
+		plt.ylabel(r'$\Delta$ T [K]')
+		plt.legend(['Case 2'], fontsize=9)
+		
+		
+		plt.subplot(4,1,3)
+		plt.plot(f, r3, 'b')
+		plt.xticks(np.arange(50, 151, 10), labels='')
+		plt.xlim([55, 152])
+		plt.ylim([-1,1])
+		#plt.title('Day 2018-150, GHA=6-18 hr')
+		#plt.xlabel(r'$\nu$ [MHz]', fontsize=14)
+		plt.ylabel(r'$\Delta$ T [K]')
+		plt.legend(['Case 3'], fontsize=9)
+		
+		
+		plt.subplot(4,1,4)
+		plt.plot(f, r4, 'b')
+		plt.xticks(np.arange(50, 151, 10))
+		plt.xlim([55, 152])
+		plt.ylim([-1,1])
+		#plt.title('Day 2018-150, GHA=6-18 hr')
+		plt.xlabel(r'$\nu$ [MHz]', fontsize=14)
+		plt.ylabel(r'$\Delta$ T [K]')
+		plt.legend(['Case 4'], fontsize=9)
+				
+		
+		#plt.subplot(2,1,2)
+		##plt.plot(f, t150_low_case2 - t150_low_case1, 'b')
+		#plt.plot(f, t150_low_case3 - t150_low_case1, 'b--')
+		#plt.plot(f, t150_low_case4 - t150_low_case1, 'b:')
+		#plt.xticks(np.arange(50, 151, 10))
+		#plt.xlim([58, 152])
+		##plt.ylim([-3,3])
+		##plt.title('Day 150, GHA=6-18 hr')
+		#plt.xlabel(r'$\nu$ [MHz]', fontsize=14)
+		#plt.ylabel(r'$\Delta$ temperature [K]')
+		#plt.legend(['Case 3 - Case 1', 'Case 4 - Case 1'], fontsize=9)
+		
+		
+		plt.savefig(path_plot_save + 'residuals1.pdf', bbox_inches='tight')
+		plt.close()	
+		plt.close()
+		plt.close()
+		plt.close()
+
+
+
+
+
+
+
+
+
+
+
+	if plot_number == 6:
+		
+		
+		# Paths
+		path_plot_save = edges_folder + 'plots/20190828/'
+		
+		GHA1 = 6
+		GHA2 = 18
+		
+		#fx, t150_low_case1, w, s150_low_case1   = eg.level3_single_file_test(edges_folder + 'mid_band/spectra/level3/tests_55_150MHz/rcv18_sw18and19_ant147/2018_150_00.hdf5', GHA1, GHA2, 55, 150, 'no', 'LINLOG', 5, 'no', 'name')
+		
+		fx, t188_low_case1, w, s188_low_case1   = eg.level3_single_file_test(edges_folder + 'mid_band/spectra/level3/tests_55_150MHz/rcv18_sw18/2018_188_00.hdf5',             GHA1, GHA2, 55, 150, 'no', 'LINLOG', 5, 'no', 'name')
+		fx, t188_low_case2, w, s188_low_case2   = eg.level3_single_file_test(edges_folder + 'mid_band/spectra/level3/tests_55_150MHz/rcv18_sw19/2018_188_00.hdf5',             GHA1, GHA2, 55, 150, 'no', 'LINLOG', 5, 'no', 'name')
+		fx, t188_low_case3, w, s188_low_case3   = eg.level3_single_file_test(edges_folder + 'mid_band/spectra/level3/tests_55_150MHz/rcv19_sw18/2018_188_00.hdf5',             GHA1, GHA2, 55, 150, 'no', 'LINLOG', 5, 'no', 'name')
+		fx, t188_low_case4, w, s188_low_case4   = eg.level3_single_file_test(edges_folder + 'mid_band/spectra/level3/tests_55_150MHz/rcv19_sw19/2018_188_00.hdf5',             GHA1, GHA2, 55, 150, 'no', 'LINLOG', 5, 'no', 'name')
+		
+		
+		#f, t150_high_case1, w, s150_high_case1 = eg.level3_single_file_test(edges_folder + 'mid_band/spectra/level3/tests_55_150MHz/rcv18_sw18/2018_150_00.hdf5', 18, 6, 60, 150, 'no', 'LINLOG', 5, 'no', 'name')	
+		#f, t150_high_case2, w, s150_high_case2 = eg.level3_single_file_test(edges_folder + 'mid_band/spectra/level3/tests_55_150MHz/rcv18_sw19/2018_150_00.hdf5', 18, 6, 60, 150, 'no', 'LINLOG', 5, 'no', 'name')
+		#f, t188_high_case1, w, s188_high_case1 = eg.level3_single_file_test(edges_folder + 'mid_band/spectra/level3/tests_55_150MHz/rcv18_sw18/2018_188_00.hdf5', 18, 6, 60, 150, 'no', 'LINLOG', 5, 'no', 'name')
+		#f, t188_high_case2, w, s188_high_case2 = eg.level3_single_file_test(edges_folder + 'mid_band/spectra/level3/tests_55_150MHz/rcv18_sw19/2018_188_00.hdf5', 18, 6, 60, 150, 'no', 'LINLOG', 5, 'no', 'name')
+			
+		
+		FLOW  = 60
+		FHIGH = 150
+		
+		f              = fx[(fx>=FLOW)&(fx<=FHIGH)]
+		
+		t188_low_case1 = t188_low_case1[(fx>=FLOW)&(fx<=FHIGH)]
+		t188_low_case2 = t188_low_case2[(fx>=FLOW)&(fx<=FHIGH)]
+		t188_low_case3 = t188_low_case3[(fx>=FLOW)&(fx<=FHIGH)]
+		t188_low_case4 = t188_low_case4[(fx>=FLOW)&(fx<=FHIGH)]
+		
+		s188_low_case1 = s188_low_case1[(fx>=FLOW)&(fx<=FHIGH)]
+		s188_low_case2 = s188_low_case2[(fx>=FLOW)&(fx<=FHIGH)]
+		s188_low_case3 = s188_low_case3[(fx>=FLOW)&(fx<=FHIGH)]
+		s188_low_case4 = s188_low_case4[(fx>=FLOW)&(fx<=FHIGH)]
+
+
+
+		
+		
+		p  = ba.fit_polynomial_fourier('LINLOG', f, t188_low_case1, 5, Weights=1/(s188_low_case1**2))
+		r1 = t188_low_case1 - p[1]
+		
+		p  = ba.fit_polynomial_fourier('LINLOG', f, t188_low_case2, 5, Weights=1/(s188_low_case2**2))
+		r2 = t188_low_case2 - p[1]
+		
+		p  = ba.fit_polynomial_fourier('LINLOG', f, t188_low_case3, 5, Weights=1/(s188_low_case3**2))
+		r3 = t188_low_case3 - p[1]
+		
+		p  = ba.fit_polynomial_fourier('LINLOG', f, t188_low_case4, 5, Weights=1/(s188_low_case4**2))
+		r4 = t188_low_case4 - p[1]
+		
+		
+		
+		
+		
+		
+		
+		f1 = plt.figure(figsize=[8,8])
+		
+		plt.subplot(4,1,1)
+		plt.plot(f, r1, 'b')
+		plt.xticks(np.arange(50, 151, 10), labels='')
+		plt.xlim([55, 152])
+		plt.ylim([-1,1])
+		plt.title('Day 2018-188, GHA=6-18 hr')
+		#plt.xlabel(r'$\nu$ [MHz]', fontsize=14)
+		plt.ylabel(r'$\Delta$ T [K]')
+		plt.legend(['Case 1'], fontsize=9)
+		
+		
+		plt.subplot(4,1,2)
+		plt.plot(f, r2, 'b')
+		plt.xticks(np.arange(50, 151, 10), labels='')
+		plt.xlim([55, 152])
+		plt.ylim([-1,1])
+		#plt.title('Day 2018-150, GHA=6-18 hr')
+		#plt.xlabel(r'$\nu$ [MHz]', fontsize=14)
+		plt.ylabel(r'$\Delta$ T [K]')
+		plt.legend(['Case 2'], fontsize=9)
+		
+		
+		plt.subplot(4,1,3)
+		plt.plot(f, r3, 'b')
+		plt.xticks(np.arange(50, 151, 10), labels='')
+		plt.xlim([55, 152])
+		plt.ylim([-1,1])
+		#plt.title('Day 2018-150, GHA=6-18 hr')
+		#plt.xlabel(r'$\nu$ [MHz]', fontsize=14)
+		plt.ylabel(r'$\Delta$ T [K]')
+		plt.legend(['Case 3'], fontsize=9)
+		
+		
+		plt.subplot(4,1,4)
+		plt.plot(f, r4, 'b')
+		plt.xticks(np.arange(50, 151, 10))
+		plt.xlim([55, 152])
+		plt.ylim([-1,1])
+		#plt.title('Day 2018-150, GHA=6-18 hr')
+		plt.xlabel(r'$\nu$ [MHz]', fontsize=14)
+		plt.ylabel(r'$\Delta$ T [K]')
+		plt.legend(['Case 4'], fontsize=9)
+				
+		
+		#plt.subplot(2,1,2)
+		##plt.plot(f, t150_low_case2 - t150_low_case1, 'b')
+		#plt.plot(f, t150_low_case3 - t150_low_case1, 'b--')
+		#plt.plot(f, t150_low_case4 - t150_low_case1, 'b:')
+		#plt.xticks(np.arange(50, 151, 10))
+		#plt.xlim([58, 152])
+		##plt.ylim([-3,3])
+		##plt.title('Day 150, GHA=6-18 hr')
+		#plt.xlabel(r'$\nu$ [MHz]', fontsize=14)
+		#plt.ylabel(r'$\Delta$ temperature [K]')
+		#plt.legend(['Case 3 - Case 1', 'Case 4 - Case 1'], fontsize=9)
+		
+		
+		plt.savefig(path_plot_save + 'residuals2.pdf', bbox_inches='tight')
+		plt.close()	
+		plt.close()
+		plt.close()
+		plt.close()
+
+
+
+
+
+
+
+	if plot_number == 7:
+		
+		
+		# Paths
+		path_plot_save = edges_folder + 'plots/20190828/'
+		
+		GHA1 = 6
+		GHA2 = 18
+		
+		#fx, t150_low_case1, w, s150_low_case1   = eg.level3_single_file_test(edges_folder + 'mid_band/spectra/level3/tests_55_150MHz/rcv18_sw18and19_ant147/2018_150_00.hdf5', GHA1, GHA2, 55, 150, 'no', 'LINLOG', 5, 'no', 'name')
+		
+		fx, t150_low_case1, w, s150_low_case1   = eg.level3_single_file_test(edges_folder + 'mid_band/spectra/level3/tests_55_150MHz/rcv18_sw18/2018_150_00.hdf5',             GHA1, GHA2, 55, 150, 'no', 'LINLOG', 5, 'no', 'name')
+		fx, t150_low_case2, w, s150_low_case2   = eg.level3_single_file_test(edges_folder + 'mid_band/spectra/level3/tests_55_150MHz/rcv18_sw19/2018_150_00.hdf5',             GHA1, GHA2, 55, 150, 'no', 'LINLOG', 5, 'no', 'name')
+		fx, t150_low_case3, w, s150_low_case3   = eg.level3_single_file_test(edges_folder + 'mid_band/spectra/level3/tests_55_150MHz/rcv18_sw18and19_ant147/2018_150_00.hdf5',             GHA1, GHA2, 55, 150, 'no', 'LINLOG', 5, 'no', 'name')
+		
+		
+		#f, t150_high_case1, w, s150_high_case1 = eg.level3_single_file_test(edges_folder + 'mid_band/spectra/level3/tests_55_150MHz/rcv18_sw18/2018_150_00.hdf5', 18, 6, 60, 150, 'no', 'LINLOG', 5, 'no', 'name')	
+		#f, t150_high_case2, w, s150_high_case2 = eg.level3_single_file_test(edges_folder + 'mid_band/spectra/level3/tests_55_150MHz/rcv18_sw19/2018_150_00.hdf5', 18, 6, 60, 150, 'no', 'LINLOG', 5, 'no', 'name')
+		#f, t188_high_case1, w, s188_high_case1 = eg.level3_single_file_test(edges_folder + 'mid_band/spectra/level3/tests_55_150MHz/rcv18_sw18/2018_188_00.hdf5', 18, 6, 60, 150, 'no', 'LINLOG', 5, 'no', 'name')
+		#f, t188_high_case2, w, s188_high_case2 = eg.level3_single_file_test(edges_folder + 'mid_band/spectra/level3/tests_55_150MHz/rcv18_sw19/2018_188_00.hdf5', 18, 6, 60, 150, 'no', 'LINLOG', 5, 'no', 'name')
+			
+		
+		FLOW  = 60
+		FHIGH = 150
+		
+		f              = fx[(fx>=FLOW)&(fx<=FHIGH)]
+		
+		t150_low_case1 = t150_low_case1[(fx>=FLOW)&(fx<=FHIGH)]
+		t150_low_case2 = t150_low_case2[(fx>=FLOW)&(fx<=FHIGH)]
+		t150_low_case3 = t150_low_case3[(fx>=FLOW)&(fx<=FHIGH)]
+		
+		s150_low_case1 = s150_low_case1[(fx>=FLOW)&(fx<=FHIGH)]
+		s150_low_case2 = s150_low_case2[(fx>=FLOW)&(fx<=FHIGH)]
+		s150_low_case3 = s150_low_case3[(fx>=FLOW)&(fx<=FHIGH)]
+
+
+
+		
+		
+		p  = ba.fit_polynomial_fourier('LINLOG', f, t150_low_case1, 5, Weights=1/(s150_low_case1**2))
+		r1 = t150_low_case1 - p[1]
+		
+		p  = ba.fit_polynomial_fourier('LINLOG', f, t150_low_case2, 5, Weights=1/(s150_low_case2**2))
+		r2 = t150_low_case2 - p[1]
+		
+		p  = ba.fit_polynomial_fourier('LINLOG', f, t150_low_case3, 5, Weights=1/(s150_low_case3**2))
+		r3 = t150_low_case3 - p[1]
+		
+		
+		
+		
+		
+		
+		
+		
+		f1 = plt.figure(figsize=[8,8])
+		
+		plt.subplot(3,1,1)
+		plt.plot(f, r1, 'b')
+		plt.xticks(np.arange(50, 151, 10), labels='')
+		plt.xlim([55, 152])
+		plt.ylim([-1,1])
+		plt.title('Day 2018-150, GHA=6-18 hr')
+		#plt.xlabel(r'$\nu$ [MHz]', fontsize=14)
+		plt.ylabel(r'$\Delta$ T [K]')
+		plt.legend(['Case 1'], fontsize=9)
+		
+		
+		plt.subplot(3,1,2)
+		plt.plot(f, r2, 'b')
+		plt.xticks(np.arange(50, 151, 10), labels='')
+		plt.xlim([55, 152])
+		plt.ylim([-1,1])
+		#plt.title('Day 2018-150, GHA=6-18 hr')
+		#plt.xlabel(r'$\nu$ [MHz]', fontsize=14)
+		plt.ylabel(r'$\Delta$ T [K]')
+		plt.legend(['Case 2'], fontsize=9)
+		
+		
+		plt.subplot(3,1,3)
+		plt.plot(f, r3, 'b')
+		plt.xticks(np.arange(50, 151, 10))
+		plt.xlim([55, 152])
+		plt.ylim([-1,1])
+		#plt.title('Day 2018-150, GHA=6-18 hr')
+		plt.xlabel(r'$\nu$ [MHz]', fontsize=14)
+		plt.ylabel(r'$\Delta$ T [K]')
+		plt.legend(['average sw 2018 & 2019'], fontsize=9)
+		
+		
+		#plt.subplot(4,1,4)
+		#plt.plot(f, r4, 'b')
+		#plt.xticks(np.arange(50, 151, 10))
+		#plt.xlim([55, 152])
+		#plt.ylim([-1,1])
+		##plt.title('Day 2018-150, GHA=6-18 hr')
+		#plt.xlabel(r'$\nu$ [MHz]', fontsize=14)
+		#plt.ylabel(r'$\Delta$ T [K]')
+		#plt.legend(['Case 4'], fontsize=9)
+				
+		
+		#plt.subplot(2,1,2)
+		##plt.plot(f, t150_low_case2 - t150_low_case1, 'b')
+		#plt.plot(f, t150_low_case3 - t150_low_case1, 'b--')
+		#plt.plot(f, t150_low_case4 - t150_low_case1, 'b:')
+		#plt.xticks(np.arange(50, 151, 10))
+		#plt.xlim([58, 152])
+		##plt.ylim([-3,3])
+		##plt.title('Day 150, GHA=6-18 hr')
+		#plt.xlabel(r'$\nu$ [MHz]', fontsize=14)
+		#plt.ylabel(r'$\Delta$ temperature [K]')
+		#plt.legend(['Case 3 - Case 1', 'Case 4 - Case 1'], fontsize=9)
+		
+		
+		plt.savefig(path_plot_save + 'residuals3.pdf', bbox_inches='tight')
+		plt.close()	
+		plt.close()
+		plt.close()
+		plt.close()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	if plot_number == 8:
+		
+		
+		# Paths
+		path_plot_save = edges_folder + 'plots/20190828/'
+		
+		GHA1 = 6
+		GHA2 = 18
+		
+		#fx, t150_low_case1, w, s150_low_case1   = eg.level3_single_file_test(edges_folder + 'mid_band/spectra/level3/tests_55_150MHz/rcv18_sw18and19_ant147/2018_150_00.hdf5', GHA1, GHA2, 55, 150, 'no', 'LINLOG', 5, 'no', 'name')
+		
+		fx, t188_low_case1, w, s188_low_case1   = eg.level3_single_file_test(edges_folder + 'mid_band/spectra/level3/tests_55_150MHz/rcv18_sw18/2018_188_00.hdf5',             GHA1, GHA2, 55, 150, 'no', 'LINLOG', 5, 'no', 'name')
+		fx, t188_low_case2, w, s188_low_case2   = eg.level3_single_file_test(edges_folder + 'mid_band/spectra/level3/tests_55_150MHz/rcv18_sw19/2018_188_00.hdf5',             GHA1, GHA2, 55, 150, 'no', 'LINLOG', 5, 'no', 'name')
+		fx, t188_low_case3, w, s188_low_case3   = eg.level3_single_file_test(edges_folder + 'mid_band/spectra/level3/tests_55_150MHz/rcv18_sw18and19_ant147/2018_188_00.hdf5',             GHA1, GHA2, 55, 150, 'no', 'LINLOG', 5, 'no', 'name')
+		
+		
+		#f, t150_high_case1, w, s150_high_case1 = eg.level3_single_file_test(edges_folder + 'mid_band/spectra/level3/tests_55_150MHz/rcv18_sw18/2018_150_00.hdf5', 18, 6, 60, 150, 'no', 'LINLOG', 5, 'no', 'name')	
+		#f, t150_high_case2, w, s150_high_case2 = eg.level3_single_file_test(edges_folder + 'mid_band/spectra/level3/tests_55_150MHz/rcv18_sw19/2018_150_00.hdf5', 18, 6, 60, 150, 'no', 'LINLOG', 5, 'no', 'name')
+		#f, t188_high_case1, w, s188_high_case1 = eg.level3_single_file_test(edges_folder + 'mid_band/spectra/level3/tests_55_150MHz/rcv18_sw18/2018_188_00.hdf5', 18, 6, 60, 150, 'no', 'LINLOG', 5, 'no', 'name')
+		#f, t188_high_case2, w, s188_high_case2 = eg.level3_single_file_test(edges_folder + 'mid_band/spectra/level3/tests_55_150MHz/rcv18_sw19/2018_188_00.hdf5', 18, 6, 60, 150, 'no', 'LINLOG', 5, 'no', 'name')
+			
+		
+		FLOW  = 60
+		FHIGH = 150
+		
+		f              = fx[(fx>=FLOW)&(fx<=FHIGH)]
+		
+		t188_low_case1 = t188_low_case1[(fx>=FLOW)&(fx<=FHIGH)]
+		t188_low_case2 = t188_low_case2[(fx>=FLOW)&(fx<=FHIGH)]
+		t188_low_case3 = t188_low_case3[(fx>=FLOW)&(fx<=FHIGH)]
+		
+		s188_low_case1 = s188_low_case1[(fx>=FLOW)&(fx<=FHIGH)]
+		s188_low_case2 = s188_low_case2[(fx>=FLOW)&(fx<=FHIGH)]
+		s188_low_case3 = s188_low_case3[(fx>=FLOW)&(fx<=FHIGH)]
+
+
+
+		
+		
+		p  = ba.fit_polynomial_fourier('LINLOG', f, t188_low_case1, 5, Weights=1/(s188_low_case1**2))
+		r1 = t188_low_case1 - p[1]
+		
+		p  = ba.fit_polynomial_fourier('LINLOG', f, t188_low_case2, 5, Weights=1/(s188_low_case2**2))
+		r2 = t188_low_case2 - p[1]
+		
+		p  = ba.fit_polynomial_fourier('LINLOG', f, t188_low_case3, 5, Weights=1/(s188_low_case3**2))
+		r3 = t188_low_case3 - p[1]
+		
+		
+		
+		
+		
+		
+		
+		
+		f1 = plt.figure(figsize=[8,8])
+		
+		plt.subplot(3,1,1)
+		plt.plot(f, r1, 'b')
+		plt.xticks(np.arange(50, 151, 10), labels='')
+		plt.xlim([55, 152])
+		plt.ylim([-1,1])
+		plt.title('Day 2018-188, GHA=6-18 hr')
+		#plt.xlabel(r'$\nu$ [MHz]', fontsize=14)
+		plt.ylabel(r'$\Delta$ T [K]')
+		plt.legend(['Case 1'], fontsize=9)
+		
+		
+		plt.subplot(3,1,2)
+		plt.plot(f, r2, 'b')
+		plt.xticks(np.arange(50, 151, 10), labels='')
+		plt.xlim([55, 152])
+		plt.ylim([-1,1])
+		#plt.title('Day 2018-150, GHA=6-18 hr')
+		#plt.xlabel(r'$\nu$ [MHz]', fontsize=14)
+		plt.ylabel(r'$\Delta$ T [K]')
+		plt.legend(['Case 2'], fontsize=9)
+		
+		
+		plt.subplot(3,1,3)
+		plt.plot(f, r3, 'b')
+		plt.xticks(np.arange(50, 151, 10))
+		plt.xlim([55, 152])
+		plt.ylim([-1,1])
+		#plt.title('Day 2018-150, GHA=6-18 hr')
+		plt.xlabel(r'$\nu$ [MHz]', fontsize=14)
+		plt.ylabel(r'$\Delta$ T [K]')
+		plt.legend(['average sw 2018 & 2019'], fontsize=9)
+		
+		
+		#plt.subplot(4,1,4)
+		#plt.plot(f, r4, 'b')
+		#plt.xticks(np.arange(50, 151, 10))
+		#plt.xlim([55, 152])
+		#plt.ylim([-1,1])
+		##plt.title('Day 2018-150, GHA=6-18 hr')
+		#plt.xlabel(r'$\nu$ [MHz]', fontsize=14)
+		#plt.ylabel(r'$\Delta$ T [K]')
+		#plt.legend(['Case 4'], fontsize=9)
+				
+		
+		#plt.subplot(2,1,2)
+		##plt.plot(f, t150_low_case2 - t150_low_case1, 'b')
+		#plt.plot(f, t150_low_case3 - t150_low_case1, 'b--')
+		#plt.plot(f, t150_low_case4 - t150_low_case1, 'b:')
+		#plt.xticks(np.arange(50, 151, 10))
+		#plt.xlim([58, 152])
+		##plt.ylim([-3,3])
+		##plt.title('Day 150, GHA=6-18 hr')
+		#plt.xlabel(r'$\nu$ [MHz]', fontsize=14)
+		#plt.ylabel(r'$\Delta$ temperature [K]')
+		#plt.legend(['Case 3 - Case 1', 'Case 4 - Case 1'], fontsize=9)
+		
+		
+		plt.savefig(path_plot_save + 'residuals4.pdf', bbox_inches='tight')
+		plt.close()	
+		plt.close()
+		plt.close()
+		plt.close()
+
+
+
+
+
+
+
+	
+	return 0
 
 
 
