@@ -3373,7 +3373,7 @@ def plots_midband_paper(plot_number):
 	
 
 		# Paths
-		path_plot_save = edges_folder + 'plots/20190730/'
+		path_plot_save = edges_folder + 'plots/20190917/'
 
 
 		# Calibration parameters
@@ -3383,8 +3383,8 @@ def plots_midband_paper(plot_number):
 
 		rcv = np.genfromtxt(rcv_file)
 	
-		FLOW  = 60
-		FHIGH = 120
+		FLOW  = 50
+		FHIGH = 130
 		
 		fX      = rcv[:,0]
 		rcv2    = rcv[(fX>=FLOW) & (fX<=FHIGH),:]
@@ -3422,50 +3422,54 @@ def plots_midband_paper(plot_number):
 
 		# Plot
 
-		size_x = 4
-		size_y = 7 #10.5
+		size_x = 4.5
+		size_y = 7.5 #10.5
 		x0 = 0.15
 		y0 = 0.09
 		dx = 0.7
 		dy = 0.3
+		
+		
+		FS_LABELS = 12
+		FS_PANELS = 14
 
 
 		f1  = plt.figure(num=1, figsize=(size_x, size_y))		
 
 
 		ax     = f1.add_axes([x0, y0 + 2*dy, dx, dy])	
-		h1     = ax.plot(fe, 20*np.log10(np.abs(rl)), 'b', linewidth=1.5, label='$|\Gamma_{\mathrm{rec}}|$')
-		ax.plot(rcv1[:,0], 20*np.log10(np.abs(rcv1[:,1]+1j*rcv1[:,2])), 'r', linewidth=1.5)
+		h1     = ax.plot(fe, 20*np.log10(np.abs(rl)), 'b', linewidth=1.3, label='$|\Gamma_{\mathrm{rec}}|$')
+		ax.plot(rcv1[:,0], 20*np.log10(np.abs(rcv1[:,1]+1j*rcv1[:,2])), 'r', linewidth=1.3)
 		
 		
 		
 		
 		
 		ax2    = ax.twinx()
-		h2     = ax2.plot(fe, (180/np.pi)*np.unwrap(np.angle(rl)), 'b--', linewidth=1.5, label=r'$\angle\/\Gamma_{\mathrm{rec}}$')
-		ax2.plot(rcv1[:,0], (180/np.pi)*np.unwrap(np.angle(rcv1[:,1]+1j*rcv1[:,2])), 'r--', linewidth=1.5)
+		h2     = ax2.plot(fe, (180/np.pi)*np.unwrap(np.angle(rl)), 'b--', linewidth=1.3, label=r'$\angle\/\Gamma_{\mathrm{rec}}$')
+		ax2.plot(rcv1[:,0], (180/np.pi)*np.unwrap(np.angle(rcv1[:,1]+1j*rcv1[:,2])), 'r--', linewidth=1.3)
 		
 		
 		h      = h1 + h2
 		labels = [l.get_label() for l in h]
 		ax.legend(h, labels, loc=0, fontsize=10, ncol=2)
 
-		ax.set_ylim([-40, -32])
+		ax.set_ylim([-40, -30])
 		ax.set_xticklabels('')
-		ax.set_yticks(np.arange(-39,-32,2))
-		ax.set_ylabel('$|\Gamma_{\mathrm{rec}}|$ [dB]', fontsize=14)
-		ax.text(48.5, -39.7, '(a)', fontsize=16)
-		ax.text(97, -39, 'Mid-Band', fontweight='bold', color='b')
-		ax.text(97, -39.5, 'Low-Band 1', fontweight='bold', color='r')
+		ax.set_yticks(np.arange(-39,-30,2))
+		ax.set_ylabel('$|\Gamma_{\mathrm{rec}}|$ [dB]', fontsize=FS_LABELS)
+		ax.text(48.5, -39.55, '(a)', fontsize=FS_PANELS)
+		ax.text(105, -38.9, 'Mid-Band', fontweight='bold', color='b')
+		ax.text(105, -39.5, 'Low-Band 1', fontweight='bold', color='r')
 
 		ax2.set_ylim([70, 130])
 		ax2.set_xticklabels('')
 		ax2.set_yticks(np.arange(80,121,10))		
-		ax2.set_ylabel(r'$\angle\/\Gamma_{\mathrm{rec}}$ [ $^\mathrm{o}$]', fontsize=14)
+		ax2.set_ylabel(r'$\angle\/\Gamma_{\mathrm{rec}}$ [ $^\mathrm{o}$]', fontsize=FS_LABELS)
 
-		ax.set_xlim([48, 122])
+		ax.set_xlim([48, 132])
 		ax.tick_params(axis='x', direction='in')
-		ax.set_xticks(np.arange(50, 121, 10))
+		ax.set_xticks(np.arange(50, 131, 10))
 		
 		
 		
@@ -3474,11 +3478,11 @@ def plots_midband_paper(plot_number):
 
 
 		ax     = f1.add_axes([x0, y0 + 1*dy, dx, dy])
-		h1     = ax.plot(fe, sca,'b',linewidth=1.5, label='$C_1$')
-		ax.plot(rcv1[:,0], rcv1[:,3],'r', linewidth=1.5)      #  <----------------------------- Low-Band
+		h1     = ax.plot(fe, sca,'b',linewidth=1.3, label='$C_1$')
+		ax.plot(rcv1[:,0], rcv1[:,3],'r', linewidth=1.3)      #  <----------------------------- Low-Band
 		ax2    = ax.twinx()
-		h2     = ax2.plot(fe, off,'b--',linewidth=1.5, label='$C_2$')
-		ax2.plot(rcv1[:,0], rcv1[:,4],'r--', linewidth=1.5)      #  <----------------------------- Low-Band
+		h2     = ax2.plot(fe, off,'b--',linewidth=1.3, label='$C_2$')
+		ax2.plot(rcv1[:,0], rcv1[:,4],'r--', linewidth=1.3)      #  <----------------------------- Low-Band
 		h      = h1 + h2
 		labels = [l.get_label() for l in h]
 		ax.legend(h, labels, loc=0, fontsize=10, ncol=2)
@@ -3486,19 +3490,19 @@ def plots_midband_paper(plot_number):
 		ax.set_ylim([3.3, 5.2])
 		ax.set_xticklabels('')
 		ax.set_yticks(np.arange(3.5,5.1,0.5))
-		ax.set_ylabel('$C_1$', fontsize=14)
-		ax.text(48.5, 3.38, '(b)', fontsize=16)
+		ax.set_ylabel('$C_1$', fontsize=FS_LABELS)
+		ax.text(48.5, 3.38, '(b)', fontsize=FS_PANELS)
 
 		#ax2.set_ylim([-2.4, -1.8])
 		ax2.set_ylim([-2.75, -0.75])
 		#ax2.set_ylim([-1.6, -1.4])
 		ax2.set_xticklabels('')
 		ax2.set_yticks(np.arange(-2.5, -0.85, 0.5))
-		ax2.set_ylabel('$C_2$ [K]', fontsize=14)
+		ax2.set_ylabel('$C_2$ [K]', fontsize=FS_LABELS)
 
-		ax.set_xlim([48, 122])
+		ax.set_xlim([48, 132])
 		ax.tick_params(axis='x', direction='in')
-		ax.set_xticks(np.arange(50, 121, 10))
+		ax.set_xticks(np.arange(50, 131, 10))
 		
 		
 		
@@ -3507,15 +3511,15 @@ def plots_midband_paper(plot_number):
 
 
 		ax     = f1.add_axes([x0, y0 + 0*dy, dx, dy])
-		h1     = ax.plot(fe, TU,'b', linewidth=1.5, label='$T_{\mathrm{unc}}$')
-		ax.plot(rcv1[:,0], rcv1[:,5],'r', linewidth=1.5)      #  <----------------------------- Low-Band
+		h1     = ax.plot(fe, TU,'b', linewidth=1.3, label='$T_{\mathrm{U}}$')
+		ax.plot(rcv1[:,0], rcv1[:,5],'r', linewidth=1.3)      #  <----------------------------- Low-Band
 		
 		ax2    = ax.twinx()
-		h2     = ax2.plot(fe, TC,'b--', linewidth=1.5, label='$T_{\mathrm{cos}}$')
-		ax2.plot(rcv1[:,0], rcv1[:,6],'r--', linewidth=1.5)      #  <----------------------------- Low-Band
+		h2     = ax2.plot(fe, TC,'b--', linewidth=1.3, label='$T_{\mathrm{C}}$')
+		ax2.plot(rcv1[:,0], rcv1[:,6],'r--', linewidth=1.3)      #  <----------------------------- Low-Band
 		
-		h3     = ax2.plot(fe, TS,'b:', linewidth=1.5, label='$T_{\mathrm{sin}}$')
-		ax2.plot(rcv1[:,0], rcv1[:,7],'r:', linewidth=1.5)      #  <----------------------------- Low-Band
+		h3     = ax2.plot(fe, TS,'b:', linewidth=1.3, label='$T_{\mathrm{S}}$')
+		ax2.plot(rcv1[:,0], rcv1[:,7],'r:', linewidth=1.3)      #  <----------------------------- Low-Band
 
 		h      = h1 + h2 + h3
 		labels = [l.get_label() for l in h]
@@ -3523,16 +3527,16 @@ def plots_midband_paper(plot_number):
 
 		ax.set_ylim([178, 190])
 		ax.set_yticks(np.arange(180, 189, 2))
-		ax.set_ylabel('$T_{\mathrm{unc}}$ [K]', fontsize=14)
-		ax.set_xlabel('$\\nu$ [MHz]', fontsize=14)
-		ax.text(48.5, 178.5, '(c)', fontsize=16)
+		ax.set_ylabel('$T_{\mathrm{U}}$ [K]', fontsize=FS_LABELS)
+		ax.set_xlabel('$\\nu$ [MHz]', fontsize=FS_LABELS)
+		ax.text(48.5, 178.5, '(c)', fontsize=FS_PANELS)
 
 		ax2.set_ylim([-55, 35])
 		ax2.set_yticks(np.arange(-40, 21, 20))
-		ax2.set_ylabel('$T_{\mathrm{cos}}, T_{\mathrm{sin}}$ [K]', fontsize=14)
+		ax2.set_ylabel('$T_{\mathrm{C}}, T_{\mathrm{S}}$ [K]', fontsize=FS_LABELS)
 		
-		ax.set_xlim([48, 122])
-		ax.set_xticks(np.arange(50, 121, 10))
+		ax.set_xlim([48, 132])
+		ax.set_xticks(np.arange(50, 131, 10))
 
 
 		plt.savefig(path_plot_save + 'receiver_calibration.pdf', bbox_inches='tight')
@@ -3556,19 +3560,21 @@ def plots_midband_paper(plot_number):
 	
 
 		# Paths
-		path_plot_save = edges_folder + 'plots/20190730/'
+		path_plot_save = edges_folder + 'plots/20190917/'
 
 
 
 
 		# Plot
+		
+		FS_LABELS = 12
 
-		size_x = 3.5
-		size_y = 9.0 #10.5
+		size_x = 4.5
+		size_y = 5.5 #10.5
 		x0 = 0.15
 		y0 = 0.09
 		dx = 0.8
-		dy = 0.18
+		dy = 0.4 #18
 
 
 		f1  = plt.figure(num=1, figsize=(size_x, size_y))		
@@ -3583,7 +3589,7 @@ def plots_midband_paper(plot_number):
 
 
 		# Frequency
-		f, il, ih = ba.frequency_edges(60, 120)
+		f, il, ih = ba.frequency_edges(50, 130)
 		fe = f[il:ih+1]	
 
 
@@ -3601,10 +3607,10 @@ def plots_midband_paper(plot_number):
 		
 		
 
-		ax     = f1.add_axes([x0, y0 + 3*dy, dx, dy])	
-		h      = ax.plot(fe, 20*np.log10(np.abs(ra)), 'b',                              linewidth=1.3, label='$|\Gamma_{\mathrm{ant}}|$')
-		h      = ax.plot(flb1[flb1<=100], 20*np.log10(np.abs(ralb1[flb1<=100])), 'r',   linewidth=1.3, label='$|\Gamma_{\mathrm{ant}}|$')
-		h      = ax.plot(flb2[flb2<=100], 20*np.log10(np.abs(ralb2[flb2<=100])), 'r--', linewidth=1.3, label='$|\Gamma_{\mathrm{ant}}|$')
+		ax     = f1.add_axes([x0, y0 + 1*dy, dx, dy])	
+		h      = ax.plot(fe, 20*np.log10(np.abs(ra)), 'b',                              linewidth=1.3, label='')
+		h      = ax.plot(flb1[flb1<=100], 20*np.log10(np.abs(ralb1[flb1<=100])), 'r',   linewidth=1.3, label='')
+		h      = ax.plot(flb2[flb2<=100], 20*np.log10(np.abs(ralb2[flb2<=100])), 'r--', linewidth=1.3, label='')
 		
 		
 		
@@ -3618,20 +3624,20 @@ def plots_midband_paper(plot_number):
 		#ax.set_ylim([-41, -25])
 		ax.set_xticklabels('')
 		#
-		ax.set_ylabel('$|\Gamma_{\mathrm{ant}}|$ [dB]') #, fontsize=15)
+		ax.set_ylabel('$|\Gamma_{\mathrm{ant}}|$ [dB]', fontsize=FS_LABELS)
 		
 		#
 		#		
 		#ax2.set_ylabel(r'$\angle\/\Gamma_{\mathrm{ant}}$ [ $^\mathrm{o}$]', fontsize=16)
 
-		ax.set_xlim([48, 122])
-		ax.set_ylim([-16, -4])
-		ax.set_yticks(np.arange(-14,-5,2))
+		ax.set_xlim([48, 132])
+		ax.set_ylim([-17, -1])
+		ax.set_yticks(np.arange(-16,-1,2))
 		#ax.set_xticklabels('')
 		ax.tick_params(axis='x', direction='in')
-		ax.set_xticks(np.arange(50, 125, 10))
+		ax.set_xticks(np.arange(50, 131, 10))
 		
-		ax.text(114, -15.3, '(a)', fontsize=14)
+		ax.text(122, -15.6, '(a)', fontsize=14)
 		
 
 
@@ -3646,10 +3652,10 @@ def plots_midband_paper(plot_number):
 
 
 
-		ax     = f1.add_axes([x0, y0 + 2*dy, dx, dy])	
-		h      = ax.plot(fe, (180/np.pi)*np.unwrap(np.angle(ra)), 'b',                              linewidth=1.3, label=r'$\angle\/\Gamma_{\mathrm{ant}}$')
-		h      = ax.plot(flb1[flb1<=100], (180/np.pi)*np.unwrap(np.angle(ralb1[flb1<=100])), 'r',   linewidth=1.3, label=r'$\angle\/\Gamma_{\mathrm{ant}}$')
-		h      = ax.plot(flb2[flb2<=100], (180/np.pi)*np.unwrap(np.angle(ralb2[flb2<=100])), 'r--', linewidth=1.3, label=r'$\angle\/\Gamma_{\mathrm{ant}}$')
+		ax     = f1.add_axes([x0, y0 + 0*dy, dx, dy])	
+		h      = ax.plot(fe, (180/np.pi)*np.unwrap(np.angle(ra)), 'b',                              linewidth=1.3, label=r'')
+		h      = ax.plot(flb1[flb1<=100], (180/np.pi)*np.unwrap(np.angle(ralb1[flb1<=100])), 'r',   linewidth=1.3, label=r'')
+		h      = ax.plot(flb2[flb2<=100], (180/np.pi)*np.unwrap(np.angle(ralb2[flb2<=100])), 'r--', linewidth=1.3, label=r'')
 	
 		
 		#ax2    = ax.twinx()
@@ -3659,10 +3665,10 @@ def plots_midband_paper(plot_number):
 		#ax.legend(h, labels, loc=2, fontsize=13)
 
 		#ax.set_ylim([-41, -25])
-		ax.set_xticklabels('')
+		#ax.set_xticklabels('')
 		#ax.set_yticks(np.arange(-39,-26,3))
 		#ax.set_ylabel('$|\Gamma_{\mathrm{rec}}|$ [dB]', fontsize=16)
-		ax.set_ylabel(r'$\angle\/\Gamma_{\mathrm{ant}}$ [ $^\mathrm{o}$]') #, fontsize=15)
+		ax.set_ylabel(r'$\angle\/\Gamma_{\mathrm{ant}}$ [ $^\mathrm{o}$]', fontsize=FS_LABELS)
 		#ax.text(42, -39.6, '(a)', fontsize=20)
 
 		#ax2.set_ylim([70, 130])
@@ -3670,13 +3676,23 @@ def plots_midband_paper(plot_number):
 		#ax2.set_yticks(np.arange(80,121,10))		
 		#ax2.set_ylabel(r'$\angle\/\Gamma_{\mathrm{rec}}$ [ $^\mathrm{o}$]', fontsize=16)
 
-		ax.set_xlim([48, 122])
+		ax.set_xlim([48, 132])
 		ax.tick_params(axis='x', direction='in')
-		ax.set_xticks(np.arange(50, 125, 10))
-		ax.set_ylim([-800, 400])
+		ax.set_xticks(np.arange(50, 131, 10))
+		ax.set_ylim([-700, 300])
 		ax.set_yticks(np.arange(-600,201,200))			
 		
-		ax.text(114, -730, '(b)', fontsize=14)
+		ax.text(122, -620, '(b)', fontsize=14)
+		ax.set_xlabel('$\\nu$ [MHz]', fontsize=13)
+
+
+
+
+		plt.savefig(path_plot_save + 'antenna_reflection_coefficients.pdf', bbox_inches='tight')
+		plt.close()	
+		plt.close()
+		plt.close()
+		plt.close()
 
 
 
@@ -3685,6 +3701,53 @@ def plots_midband_paper(plot_number):
 
 
 
+
+
+	# Balun loss
+	if plot_number == 3:
+
+
+		# Paths
+		path_plot_save = edges_folder + 'plots/20190917/'
+
+
+
+
+		# Plot
+		
+		FS_LABELS = 12
+
+		size_x = 4.5
+		size_y = 2.7 #10.5
+		x0 = 0.15
+		y0 = 0.09
+		dx = 0.8
+		dy = 0.8 #18
+
+
+		f1  = plt.figure(num=1, figsize=(size_x, size_y))		
+
+
+
+
+
+
+		# Frequency
+		f, il, ih = ba.frequency_edges(50, 130)
+		fe = f[il:ih+1]	
+
+
+		# Antenna S11
+		# -----------
+		ra = cal.models_antenna_s11_remove_delay('mid_band', fe, year=2018, day=147, case=5, delay_0=0.17, model_type='polynomial', Nfit=15, plot_fit_residuals='no')
+
+		xlb1  = np.genfromtxt('/run/media/raul/SSD_4TB/EDGES_vol1/calibration/antenna_s11/low_band1/s11/corrected/2016_243/S11_blade_low_band_2016_243.txt')
+		flb1  = xlb1[:,0]/1e6
+		ralb1 = xlb1[:,1] + 1j*xlb1[:,2]
+		
+		xlb2  = np.genfromtxt('/run/media/raul/SSD_4TB/EDGES_vol1/calibration/antenna_s11/low_band2/s11/corrected/2017-06-29-low2-noshield_average/S11_blade_low_band_2017_180_NO_SHIELD.txt')		
+		flb2  = xlb2[:,0]/1e6
+		ralb2 = xlb2[:,1] + 1j*xlb2[:,2]	
 
 
 
@@ -3706,10 +3769,10 @@ def plots_midband_paper(plot_number):
 
 
 
-		ax     = f1.add_axes([x0, y0 + 1*dy, dx, dy])	
-		h      = ax.plot(fe, (1-Gbc)*100, 'b',                              linewidth=1.3, label='antenna loss [%]')
-		h      = ax.plot(flb1[flb1<=100], (1-Gbclb)[flb1<=100]*100,  'r',   linewidth=1.3, label='antenna loss [%]')
-		h      = ax.plot(flb1[flb1<=100], (1-Gbclb2)[flb1<=100]*100, 'r--', linewidth=1.3, label='antenna loss [%]')
+		ax     = f1.add_axes([x0, y0 + 0*dy, dx, dy])	
+		h      = ax.plot(fe, (1-Gbc)*100, 'b',                              linewidth=1.3, label='')
+		h      = ax.plot(flb1[flb1<=100], (1-Gbclb)[flb1<=100]*100,  'r',   linewidth=1.3, label='')
+		h      = ax.plot(flb1[flb1<=100], (1-Gbclb2)[flb1<=100]*100, 'r--', linewidth=1.3, label='')
 		#ax2    = ax.twinx()
 		#h2     = ax2.plot(fe, (180/np.pi)*np.unwrap(np.angle(rl)), 'r--', linewidth=2, label=r'$\angle\/\Gamma_{\mathrm{rec}}$')
 		#h      = h1 + h2
@@ -3728,19 +3791,20 @@ def plots_midband_paper(plot_number):
 		#ax2.set_yticks(np.arange(80,121,10))		
 		#ax2.set_ylabel(r'$\angle\/\Gamma_{\mathrm{rec}}$ [ $^\mathrm{o}$]', fontsize=16)
 
-		ax.set_xlim([48, 122])
+		ax.set_xlim([48, 132])
 		ax.tick_params(axis='x', direction='in')
-		ax.set_xticks(np.arange(50, 125, 10))
+		ax.set_xticks(np.arange(50, 131, 10))
 		ax.set_ylim([0, 1])
 		ax.set_yticks(np.arange(0.2,0.9,0.2))		
 
-		ax.text(114, 0.07, '(c)', fontsize=14)
+		#ax.text(114, 0.07, '(c)', fontsize=14)
 		
 		ax.set_xlabel('$\\nu$ [MHz]', fontsize=13)
+		ax.legend(['Mid-Band','Low-Band 1','Low-Band 2'], fontsize=9)
 
 
 
-		plt.savefig(path_plot_save + 'antenna_parameters.pdf', bbox_inches='tight')
+		plt.savefig(path_plot_save + 'balun_loss.pdf', bbox_inches='tight')
 		plt.close()	
 		plt.close()
 		plt.close()
@@ -3754,8 +3818,23 @@ def plots_midband_paper(plot_number):
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 	# Antenna Beam
-	if plot_number == 3:
+	if plot_number == 4:
 
 		# Paths
 		path_plot_save = edges_folder + 'plots/20190801/'
@@ -4132,7 +4211,7 @@ def plots_midband_paper(plot_number):
 
 
 
-	if plot_number == 4:
+	if plot_number == 5:
 		
 		# Plot
 
@@ -4242,7 +4321,7 @@ def plots_midband_paper(plot_number):
 
 
 
-	if plot_number == 5:
+	if plot_number == 6:
 		
 
 		# Plot
@@ -4440,7 +4519,7 @@ def plots_midband_paper(plot_number):
 
 			
 	
-	if plot_number == 6:
+	if plot_number == 7:
 		
 		bm_all = cal.FEKO_blade_beam('mid_band', 0, frequency_interpolation='no', AZ_antenna_axis=90)
 		f  = np.arange(50,201,2)
@@ -4695,7 +4774,7 @@ def plots_midband_paper(plot_number):
 
 
 
-	if plot_number == 7:
+	if plot_number == 8:
 		
 		
 		FLOW  = 58
@@ -5057,7 +5136,7 @@ def plots_midband_paper(plot_number):
 
 
 
-	if plot_number == 8:
+	if plot_number == 9:
 		
 		#filename = edges_folder + 'mid_band/polychord/20190605/case2/foreground_exp_signal_tanh/chain.txt'
 		#filename = edges_folder + 'mid_band/polychord/20190605/case26/foreground_exp_signal_tanh/chain.txt'
@@ -5084,7 +5163,7 @@ def plots_midband_paper(plot_number):
 		
 	
 	
-	if plot_number == 9:
+	if plot_number == 10:
 		
 		# Plot of histogram of GHA for integrated spectrum
 		f, px, rx, wx, index, gha, ydx = eg.level4read('/home/raul/DATA2/EDGES_vol2/mid_band/spectra/level4/case26/case26.hdf5')
@@ -5179,7 +5258,7 @@ def plots_midband_paper(plot_number):
 		
 
 
-	if plot_number == 10:
+	if plot_number == 11:
 
 
 	
@@ -5282,7 +5361,7 @@ def plots_midband_paper(plot_number):
 
 
 
-	if plot_number == 11:
+	if plot_number == 12:
 		
 		# Loading Haslam map
 		map1, lon1, lat1, gc1 = cal.haslam_408MHz_map()
@@ -5373,7 +5452,7 @@ def plots_midband_paper(plot_number):
 	
 		
 
-	if plot_number == 12:
+	if plot_number == 13:
 		
 		plt.close()
 		plt.close()
@@ -5541,7 +5620,7 @@ def plots_midband_paper(plot_number):
 
 
 
-	if plot_number == 13:
+	if plot_number == 14:
 		f = np.arange(60, 120.5, 0.5)
 		b18 = dm.signal_model('exp', [-0.5, 78, 19, 7], f)
 		
