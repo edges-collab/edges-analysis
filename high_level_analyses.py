@@ -1169,7 +1169,7 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
 		
 			
 	if case == 1:
-		flag_folder       = 'case_nominal_55_150MHz'
+		flag_folder       = 'test_rcv18_sw18_no_beam_correction' #'case_nominal_55_150MHz'
 		
 		receiver_cal_file = 2   # cterms=7, wterms=8 terms over 50-150 MHz
 		
@@ -1179,7 +1179,7 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
 		
 		balun_correction  = 1
 		ground_correction = 1
-		beam_correction   = 1
+		beam_correction   = 0 # 1
 		bf_case           = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
 		
 		FLOW  = 55
@@ -3837,7 +3837,7 @@ def plots_midband_paper(plot_number):
 	if plot_number == 4:
 
 		# Paths
-		path_plot_save = edges_folder + 'plots/20190801/'
+		path_plot_save = edges_folder + 'plots/20190917/'
 
 
 		# Plot
@@ -3980,7 +3980,7 @@ def plots_midband_paper(plot_number):
 		ax.text(50, 0.9, r'$\theta=45^{\circ}$, E-plane', fontsize=10)
 		
 		
-		ax.legend(['Mid-Band 30mx30m GP', 'Mid-Band infinite GP', 'Low-Band 30mx30m GP', 'Low-Band 10mx10m GP'], fontsize=7, ncol=2)
+		ax.legend([r'Mid-Band 30x30 m$^2$ GP', 'Mid-Band infinite GP', r'Low-Band 30x30 m$^2$ GP', r'Low-Band 10x10 m$^2$ GP'], fontsize=7, ncol=2)
 	
 	
 	
@@ -4093,52 +4093,200 @@ def plots_midband_paper(plot_number):
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		# ########################################################
+		fmin = 50
+		fmax = 120
+		
+		fmin_res = 50
+		fmax_res = 120
+		
+		Nfg = 5
+		
+		
+		
+		el             = np.arange(0,91) 
+		sin_theta      = np.sin((90-el)*(np.pi/180)) 
+		sin_theta_2D_T = np.tile(sin_theta, (360, 1))
+		sin_theta_2D   = sin_theta_2D_T.T			
+		
+		
+			
+		b_all = cal.FEKO_blade_beam('mid_band', 0, frequency_interpolation='no', AZ_antenna_axis=90)
+		f     = np.arange(50,201,2)
+		
+		#b_all = cal.FEKO_blade_beam('low_band3', 1, frequency_interpolation='no', AZ_antenna_axis=90)
+		#f     = np.arange(50, 121, 2)
+		
+		
+		
+		#b_all = oeg.FEKO_high_band_blade_beam_plus_shaped_finite_ground_plane(beam_file=20, frequency_interpolation='no', frequency=np.array([0]), AZ_antenna_axis=0)
+		#f = np.arange(65, 201, 1)
+		
+		
+		bint = np.zeros(len(f))
+		for i in range(len(f)):
+			
+			b       = b_all[i,:,:]
+			bint[i] = np.sum(b * sin_theta_2D)
+		
+		fr1 = f[(f>=fmin) & (f<=fmax)]
+		bx1 = bint[(f>=fmin) & (f<=fmax)]
+		b1  = bx1/np.mean(bx1)
+		
+		ff1 = fr1[(fr1>=fmin_res) & (fr1<=fmax_res)]
+		bb1 = b1[(fr1>=fmin_res) & (fr1<=fmax_res)]
+		
+		x   = np.polyfit(ff1, bb1, Nfg-1)
+		m   = np.polyval(x, ff1)
+		r1  = bb1 - m
+			
+	
+	
+						
+		b_all = cal.FEKO_blade_beam('mid_band', 1, frequency_interpolation='no', AZ_antenna_axis=90)
+		f     = np.arange(50,201,2)
+		
+		bint  = np.zeros(len(f))
+		for i in range(len(f)):
+			
+			b       = b_all[i,:,:]
+			bint[i] = np.sum(b * sin_theta_2D)
+		
+		fr2 = f[(f>=fmin) & (f<=fmax)]
+		bb  = bint[(f>=fmin) & (f<=fmax)]
+		b2  = bb/np.mean(bb)
+		
+		ff2 = fr2[(fr2>=fmin_res) & (fr2<=fmax_res)]
+		bb2 = b2[(fr2>=fmin_res) & (fr2<=fmax_res)]
+		
+		x   = np.polyfit(ff2, bb2, Nfg-1)
+		m   = np.polyval(x, ff2)
+		r2  = bb2 - m
+
+
+
+
+
+
+
+
+
+		b_all = oeg.FEKO_low_band_blade_beam(beam_file=2, frequency_interpolation='no', AZ_antenna_axis=0)
+		f     = np.arange(40,121,2)
+		#f     = np.arange(40,101,2)
+		
+		bint = np.zeros(len(f))
+		for i in range(len(f)):
+			
+			b       = b_all[i,:,:]
+			bint[i] = np.sum(b * sin_theta_2D) 
+
+		fr3 = f[(f>=fmin) & (f<=fmax)]
+		bx3 = bint[(f>=fmin) & (f<=fmax)]
+		b3  = bx3/np.mean(bx3)
+		
+		ff3 = fr3[(fr3>=fmin_res) & (fr3<=fmax_res)]
+		bb3 = b3[(fr3>=fmin_res) & (fr3<=fmax_res)]
+		
+		x   = np.polyfit(ff3, bb3, 4)
+		m   = np.polyval(x, ff3)
+		r3  = bb3 - m
+
+			
+			
+		
+		
+		b_all  = oeg.FEKO_low_band_blade_beam(beam_file=5, frequency_interpolation='no', frequency=np.array([0]), AZ_antenna_axis=0)
+		f      = np.arange(50,121,2)
+		
+		bint   = np.zeros(len(f))
+		for i in range(len(f)):
+			
+			b        = b_all[i,:,:]
+			bint[i]  = np.sum(b * sin_theta_2D) 
+	
+		fr4 = f[(f>=fmin) & (f<=fmax)]
+		bb  = bint[(f>=fmin) & (f<=fmax)]
+		b4  = bb/np.mean(bb)
+		
+		ff4 = fr4[(fr4>=fmin_res) & (fr4<=fmax_res)]
+		bb4 = b4[(fr4>=fmin_res) & (fr4<=fmax_res)]
+		
+		x   = np.polyfit(ff4, bb4, 4)
+		m   = np.polyval(x, ff4)
+		r4  = bb4 - m		
+
+		
+		
+		
+	
+
+	
+	
+		
+		
+		#plt.close()
 		ax     = f1.add_axes([x0 + 1*dx + xoff, y0 + 1*dy, dx, dy])
 		
-	
-		Gg   = cal.ground_loss('mid_band', fe)
-		flb  = np.arange(50, 121, 1)
-		Gglb = cal.ground_loss('low_band', flb)
-
-		h      = ax.plot(fe, (1-Gg)*100, 'b', linewidth=1.0, label='ground loss [%]')
-		h      = ax.plot(flb, (1-Gglb)*100, 'r', linewidth=1.0, label='ground loss [%]')
-
-		#ax.set_xlabel('$\\nu$ [MHz]')#, fontsize=15)
-		#ax.set_ylim([-41, -25])
-		#ax.set_xticklabels('')
-		#ax.set_yticks(np.arange(-39,-26,3))
-		#ax.set_ylabel('$|\Gamma_{\mathrm{rec}}|$ [dB]', fontsize=16)
-		#ax.text(42, -39.6, '(a)', fontsize=20)
-		ax.set_ylabel(r'ground loss [%]')#, fontsize=15)
-
-
+		h = ax.plot(fr1, b1, 'b',   linewidth=1.0)
+		h = ax.plot(fr2, b2, 'b--', linewidth=0.5)
+		h = ax.plot(fr3, b3, 'r',   linewidth=1.0)
+		h = ax.plot(fr4, b4, 'r--', linewidth=0.5)
+		ax.set_ylabel('normalized integrated gain')
+		#plt.legend(['Mid-Band 30mx30m ground plane','Mid-Band infinite ground plane','Low-Band 30mx30m ground plane',''], fontsize=7)
 		
-		ax.set_xlim([48, 122])
-		xt = np.arange(50, 121, 10)
+		
+		
+		ax.set_xlim([48, 132])
+		xt = np.arange(50, 131, 10)
 		ax.set_xticks(xt)
-		ax.set_xticklabels('')
+		#ax.set_xticklabels('')
 		ax.tick_params(axis='x', direction='in')
-		#ax.set_xticklabels(['' for i in range(len(xt))], fontsize=15)
-		#ax.set_xticklabels(xt, fontsize=10)
-		ax.set_ylim([0.1, 0.5])
-		ax.set_yticks(np.arange(0.15,0.46,0.05))
-				
-		ax.text(115, 0.118, '(c)', fontsize=14)
-
+		ax.set_xticklabels(['' for i in range(len(xt))])
 		
-		
-		
-		
-		
-		
-		
-		
-		
-
+		ax.set_ylim([0.980, 1.015])
+		ax.set_yticks(np.arange(0.985,1.011,0.005))
 	
+		#ax.text(115, 0.118, '(c)', fontsize=14)		
+		
+		
+		#plt.subplot(2,1,2)
+		#plt.plot(fx, smx - mm)
+		#plt.plot(fx, smix - mmi, ':')
+		#plt.plot(fx, slx - ml, '--')
+		#plt.ylabel('residuals to 5-term polynomial\n [fraction of 4pi]')
+		#plt.xlabel('frequency [MHz]')
+
+		# ###################################################################################
+
+
+
+
+
+
+
 		ax     = f1.add_axes([x0 + 1*dx + xoff, y0 + 0*dy, dx, dy])	
 	
-	
+		h = ax.plot(ff1, r1,        'b',   linewidth=1.0)
+		h = ax.plot(ff2, r2-0.0005, 'b--', linewidth=0.5)
+		h = ax.plot(ff3, r3-0.001,  'r',   linewidth=1.0)
+		h = ax.plot(ff4, r4-0.0015, 'r--', linewidth=0.5)
+		
 		#ax2    = ax.twinx()
 		#h2     = ax2.plot(fe, (180/np.pi)*np.unwrap(np.angle(rl)), 'r--', linewidth=2, label=r'$\angle\/\Gamma_{\mathrm{rec}}$')
 		#h      = h1 + h2
@@ -4149,26 +4297,26 @@ def plots_midband_paper(plot_number):
 		#xt = np.arange(50, 151, 20)
 		#ax.set_xticks(xt)		
 	
-		#ax2.set_ylim([70, 130])
+		ax.set_ylim([-0.002, 0.0005])
 		#ax2.set_xticklabels('')
 		#ax2.set_yticks(np.arange(80,121,10))		
 		#ax2.set_ylabel(r'$\angle\/\Gamma_{\mathrm{rec}}$ [ $^\mathrm{o}$]', fontsize=16)
 
 
 		ax.set_xlabel('$\\nu$ [MHz]')#, fontsize=15)
-		ax.set_ylabel('place holder [X]')#, fontsize=14)
+		ax.set_ylabel('normalized integrated gain residuals\n [0.05% per division]')#, fontsize=14)
 	
-		ax.set_xlim([48, 122])
+		ax.set_xlim([48, 132])
 		#ax.tick_params(axis='x', direction='in')
-		ax.set_xticks(np.arange(50, 121, 10))
+		ax.set_xticks(np.arange(50, 131, 10))
 			
-		ax.set_ylim([-0.175, 0.175])
-		yt = np.arange(-0.15,0.16,0.05)
-		ax.set_yticks(yt)
-		ax.set_yticklabels(['' for i in range(len(yt))])
+		#ax.set_ylim([-0.175, 0.175])
+		#yt = np.arange(-0.15,0.16,0.05)
+		#ax.set_yticks(yt)
+		ax.set_yticklabels('') #['' for i in range(len(yt))])
 
 
-		ax.text(115, 0.12, '(d)', fontsize=14)
+		#ax.text(115, 0.12, '(d)', fontsize=14)
 		
 		
 		
@@ -4189,6 +4337,96 @@ def plots_midband_paper(plot_number):
 		plt.close()
 		plt.close()
 		plt.close()
+
+
+
+
+
+
+
+		f2 = plt.figure()
+		#loss_K = 300*(1-((np.pi/180)**2)*bx1/(4*np.pi))
+		sky_K = 1*((np.pi/180)**2)*bx3/(4*np.pi)
+		par   = np.polyfit(fr3, sky_K, 4)
+		model = np.polyval(par, fr3)
+		
+		plt.subplot(2,1,1)
+		plt.plot(fr3, sky_K)
+		plt.subplot(2,1,2)
+		plt.plot(fr3, sky_K - model)
+		plt.savefig(path_plot_save + 'test.pdf', bbox_inches='tight')
+		plt.close()			
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	
+	if plot_number == 50:
+	
+		ax     = f1.add_axes([x0 + 1*dx + xoff, y0 + 1*dy, dx, dy])
+	
+	
+		Gg   = cal.ground_loss('mid_band', fe)
+		flb  = np.arange(50, 121, 1)
+		Gglb = cal.ground_loss('low_band', flb)
+	
+		h      = ax.plot(fe, (1-Gg)*100, 'b', linewidth=1.0, label='ground loss [%]')
+		h      = ax.plot(flb, (1-Gglb)*100, 'r', linewidth=1.0, label='ground loss [%]')
+	
+		#ax.set_xlabel('$\\nu$ [MHz]')#, fontsize=15)
+		#ax.set_ylim([-41, -25])
+		#ax.set_xticklabels('')
+		#ax.set_yticks(np.arange(-39,-26,3))
+		#ax.set_ylabel('$|\Gamma_{\mathrm{rec}}|$ [dB]', fontsize=16)
+		#ax.text(42, -39.6, '(a)', fontsize=20)
+		ax.set_ylabel(r'ground loss [%]')#, fontsize=15)
+	
+	
+	
+		ax.set_xlim([48, 122])
+		xt = np.arange(50, 121, 10)
+		ax.set_xticks(xt)
+		ax.set_xticklabels('')
+		ax.tick_params(axis='x', direction='in')
+		#ax.set_xticklabels(['' for i in range(len(xt))], fontsize=15)
+		#ax.set_xticklabels(xt, fontsize=10)
+		ax.set_ylim([0.1, 0.5])
+		ax.set_yticks(np.arange(0.15,0.46,0.05))
+	
+		ax.text(115, 0.118, '(c)', fontsize=14)
+	
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -5681,7 +5919,9 @@ def plots_midband_paper(plot_number):
 		plt.close()		
 	
 	
-	return 0
+	
+	
+	return fr3, bx3
 
 
 
@@ -7605,6 +7845,190 @@ def plots_for_memo148(plot_number):
 
 	
 	return 0
+
+
+
+
+
+def plots_of_absorption_glitch():
+	
+	lst = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/low_band3/calibration/beam_factors/raw/gain_glitch_test_LST.txt')
+	f   = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/low_band3/calibration/beam_factors/raw/gain_glitch_test_freq.txt')
+	t   = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/low_band3/calibration/beam_factors/raw/gain_glitch_test_tant.txt')
+	
+	gah = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/low_band3/calibration/beam_factors/raw/gain_glitch_test_int_gain_above_horizon.txt')
+	pah = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/low_band3/calibration/beam_factors/raw/gain_glitch_test_pixels_above_horizon.txt')
+	
+	bf  = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/low_band3/calibration/beam_factors/raw/gain_glitch_test_data.txt')
+
+
+	
+	t10 = t[11]
+	t53 = t[53]
+	
+	bf10 = bf[11]
+	bf53 = bf[53]
+	
+	fr  = f[(f>=60) & (f<=120)]
+	t10 = t10[(f>=60) & (f<=120)]
+	t53 = t53[(f>=60) & (f<=120)]
+	
+	gg  = gah[(f>=60) & (f<=120)]
+	
+	bf10 = bf10[(f>=60) & (f<=120)]
+	bf53 = bf53[(f>=60) & (f<=120)]
+	
+	
+	t10_corr = t10*gg/3145728 + 300*(1-(gg/3145728))
+	t53_corr = t53*gg/3145728 + 300*(1-(gg/3145728))
+	
+	bf10_corr = bf10 * (gg/gg[13])
+	bf53_corr = bf53 * (gg/gg[13])
+	
+	
+	
+	p10_1 = ba.fit_polynomial_fourier('LINLOG', fr, t10_corr, 6)   
+	p10_2 = ba.fit_polynomial_fourier('LINLOG', fr, t10, 6)   
+	
+	p53_1 = ba.fit_polynomial_fourier('LINLOG', fr, t53_corr, 6)   
+	p53_2 = ba.fit_polynomial_fourier('LINLOG', fr, t53, 6) 	
+	
+
+
+	p_bf_10_1 = ba.fit_polynomial_fourier('LINLOG', fr, bf10_corr, 6)   
+	p_bf_10_2 = ba.fit_polynomial_fourier('LINLOG', fr, bf10, 6)  
+
+	p_bf_53_1 = ba.fit_polynomial_fourier('LINLOG', fr, bf53_corr, 6)   
+	p_bf_53_2 = ba.fit_polynomial_fourier('LINLOG', fr, bf53, 6) 
+	
+	
+	
+	
+	
+	k10_corr = (t10_corr - 300*(1-(gg/3145728)))/bf10_corr
+	k10      = t10_corr/bf10
+	
+	k53_corr = (t53_corr - 300*(1-(gg/3145728)))/bf53_corr
+	k53      = t53_corr/bf53	
+	
+	
+	p_k10_corr = ba.fit_polynomial_fourier('LINLOG', fr, k10_corr, 6)  
+	p_k10      = ba.fit_polynomial_fourier('LINLOG', fr, k10, 6)  
+	
+	p_k53_corr = ba.fit_polynomial_fourier('LINLOG', fr, k53_corr, 6)  
+	p_k53      = ba.fit_polynomial_fourier('LINLOG', fr, k53, 6) 	
+	
+	
+	
+	plt.close()
+	
+	plt.figure(1)
+	
+	plt.subplot(2,2,1)
+	plt.plot(fr, t10_corr)
+	plt.plot(fr, t10)
+	plt.ylabel('temperature [K]')
+	plt.title('Low Foreground (GHA = 10 hr)')
+	
+	plt.subplot(2,2,2)
+	plt.plot(fr, t53)
+	#plt.ylabel('temperature [K]')
+	plt.title('High Foreground (GHA = 0 hr)')
+	
+	plt.subplot(2,2,3)
+	plt.plot(fr, t10_corr - p10_1[1])
+	plt.plot(fr, t10 - p10_2[1])
+	plt.ylim([-0.5, 0.5])
+	plt.xlabel('frequency [MHz]')
+	plt.ylabel(r'$\Delta$ temperature [K]')
+	plt.legend(['correct','incorrect'])
+	
+	
+	plt.subplot(2,2,4)
+	plt.plot(fr, t53_corr - p53_1[1])
+	plt.plot(fr, t53 - p53_2[1])	
+	plt.ylim([-0.5, 0.5])
+	plt.xlabel('frequency [MHz]')
+	#plt.ylabel(r'\Delta temperature [K]')
+	
+	
+	
+	plt.figure(2)
+	
+	plt.subplot(2,2,1)
+	plt.plot(fr, bf10_corr)
+	plt.plot(fr, bf10)
+	#plt.ylabel('temperature [K]')
+	plt.title('Low Foreground (GHA = 10 hr)')
+	
+	plt.subplot(2,2,2)
+	plt.plot(fr, bf53_corr)
+	plt.plot(fr, bf53)
+	#plt.ylabel('temperature [K]')
+	plt.title('High Foreground (GHA = 0 hr)')
+	
+	plt.subplot(2,2,3)
+	plt.plot(fr, bf10_corr - p_bf_10_1[1])
+	plt.plot(fr, bf10 - p_bf_10_2[1])
+	#plt.plot(fr, t10 - p10_2[1])
+	plt.ylim([-0.0004, 0.0004])
+	plt.xlabel('frequency [MHz]')
+	plt.ylabel(r'$\Delta$ temperature [K]')
+	plt.legend(['correct','incorrect'])
+	
+	
+	plt.subplot(2,2,4)
+	plt.plot(fr, bf53_corr - p_bf_53_1[1])
+	plt.plot(fr, bf53 - p_bf_53_2[1])	
+	#plt.plot(fr, t53_corr - p53_1[1])
+	#plt.plot(fr, t53 - p53_2[1])	
+	plt.ylim([-0.0004, 0.0004])
+	plt.xlabel('frequency [MHz]')	
+	
+
+
+
+
+
+	plt.figure(3)
+	
+	plt.subplot(2,2,1)
+	plt.plot(fr, k10_corr)
+	#plt.plot(fr, k10)
+	plt.ylabel('temperature [K]')
+	plt.title('Low Foreground (GHA = 10 hr)')
+	
+	plt.subplot(2,2,2)
+	plt.plot(fr, t53_corr)
+	##plt.ylabel('temperature [K]')
+	plt.title('High Foreground (GHA = 0 hr)')
+	
+	plt.subplot(2,2,3)
+	plt.plot(fr, k10_corr - p_k10_corr[1])
+	plt.plot(fr, k10 - p_k10[1])
+	plt.ylim([-0.5, 0.5])
+	plt.xlabel('frequency [MHz]')
+	plt.ylabel(r'$\Delta$ temperature [K]')
+	plt.legend(['correct','incorrect'])
+	
+	
+	plt.subplot(2,2,4)
+	plt.plot(fr, k53_corr - p_k53_corr[1])
+	plt.plot(fr, k53 - p_k53[1])	
+	plt.ylim([-0.5, 0.5])
+	plt.xlabel('frequency [MHz]')
+	
+	
+
+
+
+
+
+
+
+	
+	return f, t, lst, bf, gah
+
 
 
 

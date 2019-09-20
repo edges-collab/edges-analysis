@@ -2369,9 +2369,14 @@ def antenna_beam_factor(band, name_save, beam_file=0, sky_model='haslam', rotati
 	if (band == 'mid_band') and (beam_file == 100):
 		rotation_from_north = rotation_from_north - 90
 	
+	
 	# Best case, Feb 20, 2019
-	beam_all = FEKO_blade_beam(band, beam_file, AZ_antenna_axis=rotation_from_north)
+	if (band == 'mid_band') or (band == 'low_band3'):
+		beam_all = FEKO_blade_beam(band, beam_file, AZ_antenna_axis=rotation_from_north)
 
+	elif band == 'low_band':
+		beam_all = oeg.FEKO_low_band_blade_beam(beam_file=beam_file, frequency_interpolation='no', frequency=np.array([0]), AZ_antenna_axis=rotation_from_north)
+	
 
 	# Frequency array
 	if band == 'mid_band':
@@ -2396,7 +2401,15 @@ def antenna_beam_factor(band, name_save, beam_file=0, sky_model='haslam', rotati
 			
 	elif band == 'low_band3':
 		if beam_file == 1:
-			freq_array = np.arange(50, 121, 2, dtype='uint32')		
+			freq_array = np.arange(50, 121, 2, dtype='uint32')
+			
+			
+			
+	elif band == 'low_band':
+		if beam_file == 2:
+			freq_array = np.arange(40,121,2, dtype='uint32')
+			
+			
 			
 					
 	# Index of reference frequency
@@ -2491,6 +2504,9 @@ def antenna_beam_factor(band, name_save, beam_file=0, sky_model='haslam', rotati
 	convolution     = np.zeros((len(LST), len(beam_all[:,0,0])))	
 	numerator       = np.zeros((len(LST), len(beam_all[:,0,0])))
 	denominator     = np.zeros((len(LST), len(beam_all[:,0,0])))
+	
+	integrated_gain_above_horizon = np.zeros(len(beam_all[:,0,0]))
+	pixels_above_horizon          = np.zeros(len(LST))
 
 
 	#for i in range(2):
@@ -2561,6 +2577,12 @@ def antenna_beam_factor(band, name_save, beam_file=0, sky_model='haslam', rotati
 			# Antenna temperature, i.e., Convolution between (beam at all frequencies) and (sky at all frequencies)
 			sky_above_horizon_ff    = sky_above_horizon[:, j].flatten()
 			convolution[i, j]       = np.sum(beam_above_horizon[index_no_nan]*sky_above_horizon_ff[index_no_nan])/np.sum(beam_above_horizon[index_no_nan])
+			
+			if i == 0:
+				integrated_gain_above_horizon[j] = np.sum(beam_above_horizon[index_no_nan])
+				
+			if j == 0:
+				pixels_above_horizon[i]          = len(beam_above_horizon[index_no_nan])
 
 
 
@@ -2579,9 +2601,12 @@ def antenna_beam_factor(band, name_save, beam_file=0, sky_model='haslam', rotati
 	np.savetxt(path_save + name_save + '_LST.txt',  LST)
 	np.savetxt(path_save + name_save + '_freq.txt', freq_array)
 
+	np.savetxt(path_save + name_save + '_int_gain_above_horizon.txt', integrated_gain_above_horizon)
+	np.savetxt(path_save + name_save + '_pixels_above_horizon.txt', pixels_above_horizon)
+	
 
 
-	return freq_array, LST, convolution, beam_factor
+	return freq_array, LST, convolution, beam_factor, integrated_gain_above_horizon, pixels_above_horizon
 
 
 

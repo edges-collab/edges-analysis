@@ -15095,7 +15095,8 @@ def FEKO_high_band_blade_beam_plus_shaped_finite_ground_plane(beam_file=1, frequ
 
 	"""
 
-	data_folder = home_folder + '/DATA/EDGES/calibration/beam/alans_antenna_simulations/blade_high_band/'
+	#data_folder = home_folder + '/DATA/EDGES/calibration/beam/alans_antenna_simulations/blade_high_band/'
+	data_folder = edges_folder + '/calibration/beam/alan/blade_high_band/'
 
 	# Loading beam
 	# ------------------------------------------------------
