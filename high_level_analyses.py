@@ -7850,175 +7850,784 @@ def plots_for_memo148(plot_number):
 
 
 
-def plots_of_absorption_glitch():
+def plots_of_absorption_glitch(part_number):
 	
-	lst = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/low_band3/calibration/beam_factors/raw/gain_glitch_test_LST.txt')
-	f   = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/low_band3/calibration/beam_factors/raw/gain_glitch_test_freq.txt')
-	t   = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/low_band3/calibration/beam_factors/raw/gain_glitch_test_tant.txt')
 	
-	gah = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/low_band3/calibration/beam_factors/raw/gain_glitch_test_int_gain_above_horizon.txt')
-	pah = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/low_band3/calibration/beam_factors/raw/gain_glitch_test_pixels_above_horizon.txt')
-	
-	bf  = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/low_band3/calibration/beam_factors/raw/gain_glitch_test_data.txt')
+	if part_number == 1:
 
-
-	
-	t10 = t[11]
-	t53 = t[53]
-	
-	bf10 = bf[11]
-	bf53 = bf[53]
-	
-	fr  = f[(f>=60) & (f<=120)]
-	t10 = t10[(f>=60) & (f<=120)]
-	t53 = t53[(f>=60) & (f<=120)]
-	
-	gg  = gah[(f>=60) & (f<=120)]
-	
-	bf10 = bf10[(f>=60) & (f<=120)]
-	bf53 = bf53[(f>=60) & (f<=120)]
-	
-	
-	t10_corr = t10*gg/3145728 + 300*(1-(gg/3145728))
-	t53_corr = t53*gg/3145728 + 300*(1-(gg/3145728))
-	
-	bf10_corr = bf10 * (gg/gg[13])
-	bf53_corr = bf53 * (gg/gg[13])
-	
-	
-	
-	p10_1 = ba.fit_polynomial_fourier('LINLOG', fr, t10_corr, 6)   
-	p10_2 = ba.fit_polynomial_fourier('LINLOG', fr, t10, 6)   
-	
-	p53_1 = ba.fit_polynomial_fourier('LINLOG', fr, t53_corr, 6)   
-	p53_2 = ba.fit_polynomial_fourier('LINLOG', fr, t53, 6) 	
-	
-
-
-	p_bf_10_1 = ba.fit_polynomial_fourier('LINLOG', fr, bf10_corr, 6)   
-	p_bf_10_2 = ba.fit_polynomial_fourier('LINLOG', fr, bf10, 6)  
-
-	p_bf_53_1 = ba.fit_polynomial_fourier('LINLOG', fr, bf53_corr, 6)   
-	p_bf_53_2 = ba.fit_polynomial_fourier('LINLOG', fr, bf53, 6) 
-	
-	
-	
-	
-	
-	k10_corr = (t10_corr - 300*(1-(gg/3145728)))/bf10_corr
-	k10      = t10_corr/bf10
-	
-	k53_corr = (t53_corr - 300*(1-(gg/3145728)))/bf53_corr
-	k53      = t53_corr/bf53	
-	
-	
-	p_k10_corr = ba.fit_polynomial_fourier('LINLOG', fr, k10_corr, 6)  
-	p_k10      = ba.fit_polynomial_fourier('LINLOG', fr, k10, 6)  
-	
-	p_k53_corr = ba.fit_polynomial_fourier('LINLOG', fr, k53_corr, 6)  
-	p_k53      = ba.fit_polynomial_fourier('LINLOG', fr, k53, 6) 	
-	
-	
-	
-	plt.close()
-	
-	plt.figure(1)
-	
-	plt.subplot(2,2,1)
-	plt.plot(fr, t10_corr)
-	plt.plot(fr, t10)
-	plt.ylabel('temperature [K]')
-	plt.title('Low Foreground (GHA = 10 hr)')
-	
-	plt.subplot(2,2,2)
-	plt.plot(fr, t53)
-	#plt.ylabel('temperature [K]')
-	plt.title('High Foreground (GHA = 0 hr)')
-	
-	plt.subplot(2,2,3)
-	plt.plot(fr, t10_corr - p10_1[1])
-	plt.plot(fr, t10 - p10_2[1])
-	plt.ylim([-0.5, 0.5])
-	plt.xlabel('frequency [MHz]')
-	plt.ylabel(r'$\Delta$ temperature [K]')
-	plt.legend(['correct','incorrect'])
-	
-	
-	plt.subplot(2,2,4)
-	plt.plot(fr, t53_corr - p53_1[1])
-	plt.plot(fr, t53 - p53_2[1])	
-	plt.ylim([-0.5, 0.5])
-	plt.xlabel('frequency [MHz]')
-	#plt.ylabel(r'\Delta temperature [K]')
-	
-	
-	
-	plt.figure(2)
-	
-	plt.subplot(2,2,1)
-	plt.plot(fr, bf10_corr)
-	plt.plot(fr, bf10)
-	#plt.ylabel('temperature [K]')
-	plt.title('Low Foreground (GHA = 10 hr)')
-	
-	plt.subplot(2,2,2)
-	plt.plot(fr, bf53_corr)
-	plt.plot(fr, bf53)
-	#plt.ylabel('temperature [K]')
-	plt.title('High Foreground (GHA = 0 hr)')
-	
-	plt.subplot(2,2,3)
-	plt.plot(fr, bf10_corr - p_bf_10_1[1])
-	plt.plot(fr, bf10 - p_bf_10_2[1])
-	#plt.plot(fr, t10 - p10_2[1])
-	plt.ylim([-0.0004, 0.0004])
-	plt.xlabel('frequency [MHz]')
-	plt.ylabel(r'$\Delta$ temperature [K]')
-	plt.legend(['correct','incorrect'])
-	
-	
-	plt.subplot(2,2,4)
-	plt.plot(fr, bf53_corr - p_bf_53_1[1])
-	plt.plot(fr, bf53 - p_bf_53_2[1])	
-	#plt.plot(fr, t53_corr - p53_1[1])
-	#plt.plot(fr, t53 - p53_2[1])	
-	plt.ylim([-0.0004, 0.0004])
-	plt.xlabel('frequency [MHz]')	
-	
+		# ########################################################
+		fmin = 50
+		fmax = 200
+		
+		fmin_res = 50
+		fmax_res = 120
+		
+		Nfg = 5
+		
+		
+		
+		el             = np.arange(0,91) 
+		sin_theta      = np.sin((90-el)*(np.pi/180)) 
+		sin_theta_2D_T = np.tile(sin_theta, (360, 1))
+		sin_theta_2D   = sin_theta_2D_T.T			
+		
+		
 
 
 
-
-
-	plt.figure(3)
+		# High-Band Blade on Soil, no GP
+		b_all = oeg.FEKO_high_band_blade_beam_plus_shaped_finite_ground_plane(beam_file=21, frequency_interpolation='no', frequency=np.array([0]), AZ_antenna_axis=0)
+		f = np.arange(65, 201, 1)		
 	
-	plt.subplot(2,2,1)
-	plt.plot(fr, k10_corr)
-	#plt.plot(fr, k10)
-	plt.ylabel('temperature [K]')
-	plt.title('Low Foreground (GHA = 10 hr)')
+		bint = np.zeros(len(f))
+		for i in range(len(f)):
+			
+			b       = b_all[i,:,:]
+			bint[i] = np.sum(b * sin_theta_2D)
+		
+		ft  = f[(f>=fmin) & (f<=fmax)]
+		bx  = bint[(f>=fmin) & (f<=fmax)]
+		bt   = (1/(4*np.pi)) * ((np.pi/180)**2)*bx   #/np.mean(bx)
+		
+		fr  = ft[(ft>=fmin_res) & (ft<=fmax_res)]
+		br  = bt[(ft>=fmin_res) & (ft<=fmax_res)]
+		
+		x   = np.polyfit(fr, br, Nfg-1)
+		m   = np.polyval(x, fr)
+		rr  = br - m
+		
+		
+		ft1 = np.copy(ft)
+		bt1 = np.copy(bt)
+		
+		fr1 = np.copy(fr)
+		rr1 = np.copy(rr)
+
+
+		
+		# High-Band Fourpoint on Plus-Sign GP
+		b_all = oeg.FEKO_high_band_fourpoint_beam(2, frequency_interpolation='no', frequency=np.array([0]), AZ_antenna_axis=0)
+		f = np.arange(65, 201, 1)
+		
+		
+		bint = np.zeros(len(f))
+		for i in range(len(f)):
+			
+			b       = b_all[i,:,:]
+			bint[i] = np.sum(b * sin_theta_2D)
+		
+		ft  = f[(f>=fmin) & (f<=fmax)]
+		bx  = bint[(f>=fmin) & (f<=fmax)]
+		bt   = (1/(4*np.pi)) * ((np.pi/180)**2)*bx   #/np.mean(bx)
+		
+		fr  = ft[(ft>=fmin_res) & (ft<=fmax_res)]
+		br  = bt[(ft>=fmin_res) & (ft<=fmax_res)]
+		
+		x   = np.polyfit(fr, br, Nfg-1)
+		m   = np.polyval(x, fr)
+		rr  = br - m
+		
+		
+		ft2 = np.copy(ft)
+		bt2 = np.copy(bt)
+		
+		fr2 = np.copy(fr)
+		rr2 = np.copy(rr)
+		
+		
+		
+		# High-Band Blade on Plus-Sign GP
+		b_all = oeg.FEKO_high_band_blade_beam_plus_shaped_finite_ground_plane(beam_file=20, frequency_interpolation='no', frequency=np.array([0]), AZ_antenna_axis=0)
+		f = np.arange(65, 201, 1)		
 	
-	plt.subplot(2,2,2)
-	plt.plot(fr, t53_corr)
-	##plt.ylabel('temperature [K]')
-	plt.title('High Foreground (GHA = 0 hr)')
+		bint = np.zeros(len(f))
+		for i in range(len(f)):
+			
+			b       = b_all[i,:,:]
+			bint[i] = np.sum(b * sin_theta_2D)
+		
+		ft  = f[(f>=fmin) & (f<=fmax)]
+		bx  = bint[(f>=fmin) & (f<=fmax)]
+		bt   = (1/(4*np.pi)) * ((np.pi/180)**2)*bx   #/np.mean(bx)
+		
+		fr  = ft[(ft>=fmin_res) & (ft<=fmax_res)]
+		br  = bt[(ft>=fmin_res) & (ft<=fmax_res)]
+		
+		x   = np.polyfit(fr, br, Nfg-1)
+		m   = np.polyval(x, fr)
+		rr  = br - m
+		
+		
+		ft3 = np.copy(ft)
+		bt3 = np.copy(bt)
+		
+		fr3 = np.copy(fr)
+		rr3 = np.copy(rr)
+			
 	
-	plt.subplot(2,2,3)
-	plt.plot(fr, k10_corr - p_k10_corr[1])
-	plt.plot(fr, k10 - p_k10[1])
-	plt.ylim([-0.5, 0.5])
-	plt.xlabel('frequency [MHz]')
-	plt.ylabel(r'$\Delta$ temperature [K]')
-	plt.legend(['correct','incorrect'])
 	
 	
-	plt.subplot(2,2,4)
-	plt.plot(fr, k53_corr - p_k53_corr[1])
-	plt.plot(fr, k53 - p_k53[1])	
-	plt.ylim([-0.5, 0.5])
-	plt.xlabel('frequency [MHz]')
+	
+		# Low-Band 3, Blade on Plus-Sign GP
+		b_all = cal.FEKO_blade_beam('low_band3', 1, frequency_interpolation='no', AZ_antenna_axis=90)
+		f     = np.arange(50, 121, 2)	
 	
 	
+		bint = np.zeros(len(f))
+		for i in range(len(f)):
+			
+			b       = b_all[i,:,:]
+			bint[i] = np.sum(b * sin_theta_2D)
+		
+		ft  = f[(f>=fmin) & (f<=fmax)]
+		bx  = bint[(f>=fmin) & (f<=fmax)]
+		bt   = (1/(4*np.pi)) * ((np.pi/180)**2)*bx   #/np.mean(bx)
+		
+		fr  = ft[(ft>=fmin_res) & (ft<=fmax_res)]
+		br  = bt[(ft>=fmin_res) & (ft<=fmax_res)]
+		
+		x   = np.polyfit(fr, br, Nfg-1)
+		m   = np.polyval(x, fr)
+		rr  = br - m
+		
+		
+		ft4 = np.copy(ft)
+		bt4 = np.copy(bt)
+		
+		fr4 = np.copy(fr)
+		rr4 = np.copy(rr)
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		# Figure 2
+		# #########################################################################################
+		
+		
+		
+		
+		# Mid-Band, Blade, infinite GP
+		b_all = cal.FEKO_blade_beam('mid_band', 1, frequency_interpolation='no', AZ_antenna_axis=90)
+		f     = np.arange(50,201,2)		
+		
+		bint = np.zeros(len(f))
+		for i in range(len(f)):
+			
+			b       = b_all[i,:,:]
+			bint[i] = np.sum(b * sin_theta_2D)
+		
+		ft  = f[(f>=fmin) & (f<=fmax)]
+		bx  = bint[(f>=fmin) & (f<=fmax)]
+		bt   = (1/(4*np.pi)) * ((np.pi/180)**2)*bx   #/np.mean(bx)
+		
+		fr  = ft[(ft>=fmin_res) & (ft<=fmax_res)]
+		br  = bt[(ft>=fmin_res) & (ft<=fmax_res)]
+		
+		x   = np.polyfit(fr, br, Nfg-1)
+		m   = np.polyval(x, fr)
+		rr  = br - m
+		
+		
+		ft5 = np.copy(ft)
+		bt5 = np.copy(bt)
+		
+		fr5 = np.copy(fr)
+		rr5 = np.copy(rr)			
+		
+		
+		
+		
+		# Low-Band, Blade on 10m x 10m GP
+		b_all  = oeg.FEKO_low_band_blade_beam(beam_file=5, frequency_interpolation='no', frequency=np.array([0]), AZ_antenna_axis=0)
+		f      = np.arange(50,121,2)
+		
+		
+		bint = np.zeros(len(f))
+		for i in range(len(f)):
+			
+			b       = b_all[i,:,:]
+			bint[i] = np.sum(b * sin_theta_2D)
+		
+		ft  = f[(f>=fmin) & (f<=fmax)]
+		bx  = bint[(f>=fmin) & (f<=fmax)]
+		bt   = (1/(4*np.pi)) * ((np.pi/180)**2)*bx   #/np.mean(bx)
+		
+		fr  = ft[(ft>=fmin_res) & (ft<=fmax_res)]
+		br  = bt[(ft>=fmin_res) & (ft<=fmax_res)]
+		
+		x   = np.polyfit(fr, br, Nfg-1)
+		m   = np.polyval(x, fr)
+		rr  = br - m
+		
+		
+		ft6 = np.copy(ft)
+		bt6 = np.copy(bt)
+		
+		fr6 = np.copy(fr)
+		rr6 = np.copy(rr)		
+		
+		
+		
+		
+		
+		# Low-Band, Blade on 30m x 30m GP
+		b_all = oeg.FEKO_low_band_blade_beam(beam_file=2, frequency_interpolation='no', AZ_antenna_axis=0)
+		f     = np.arange(40,121,2)		
+		
+		bint = np.zeros(len(f))
+		for i in range(len(f)):
+			
+			b       = b_all[i,:,:]
+			bint[i] = np.sum(b * sin_theta_2D)
+		
+		ft  = f[(f>=fmin) & (f<=fmax)]
+		bx  = bint[(f>=fmin) & (f<=fmax)]
+		bt   = (1/(4*np.pi)) * ((np.pi/180)**2)*bx   #/np.mean(bx)
+		
+		fr  = ft[(ft>=fmin_res) & (ft<=fmax_res)]
+		br  = bt[(ft>=fmin_res) & (ft<=fmax_res)]
+		
+		x   = np.polyfit(fr, br, Nfg-1)
+		m   = np.polyval(x, fr)
+		rr  = br - m
+		
+		
+		ft7 = np.copy(ft)
+		bt7 = np.copy(bt)
+		
+		fr7 = np.copy(fr)
+		rr7 = np.copy(rr)				
+		
+		
+		
+		
+		
+		# Low-Band, Blade on 30m x 30m GP, NIVEDITA
+		b_all = oeg.FEKO_low_band_blade_beam(beam_file=0, frequency_interpolation='no', AZ_antenna_axis=0)
+		f     = np.arange(40,101,2)		
+		
+		bint = np.zeros(len(f))
+		for i in range(len(f)):
+			
+			b       = b_all[i,:,:]
+			bint[i] = np.sum(b * sin_theta_2D)
+		
+		ft  = f[(f>=fmin) & (f<=fmax)]
+		bx  = bint[(f>=fmin) & (f<=fmax)]
+		bt   = (1/(4*np.pi)) * ((np.pi/180)**2)*bx   #/np.mean(bx)
+		
+		fr  = ft[(ft>=fmin_res) & (ft<=fmax_res)]
+		br  = bt[(ft>=fmin_res) & (ft<=fmax_res)]
+		
+		x   = np.polyfit(fr, br, Nfg-1)
+		m   = np.polyval(x, fr)
+		rr  = br - m
+		
+		
+		ft8 = np.copy(ft)
+		bt8 = np.copy(bt)
+		
+		fr8 = np.copy(fr)
+		rr8 = np.copy(rr)			
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		# Mid-Band, Blade, on 30m x 30m GP
+		b_all = cal.FEKO_blade_beam('mid_band', 0, frequency_interpolation='no', AZ_antenna_axis=90)
+		f     = np.arange(50,201,2)		
+		
+		bint = np.zeros(len(f))
+		for i in range(len(f)):
+			
+			b       = b_all[i,:,:]
+			bint[i] = np.sum(b * sin_theta_2D)
+		
+		ft  = f[(f>=fmin) & (f<=fmax)]
+		bx  = bint[(f>=fmin) & (f<=fmax)]
+		bt   = (1/(4*np.pi)) * ((np.pi/180)**2)*bx   #/np.mean(bx)
+		
+		fr  = ft[(ft>=fmin_res) & (ft<=fmax_res)]
+		br  = bt[(ft>=fmin_res) & (ft<=fmax_res)]
+		
+		x   = np.polyfit(fr, br, Nfg-1)
+		m   = np.polyval(x, fr)
+		rr  = br - m
+		
+		
+		ft9 = np.copy(ft)
+		bt9 = np.copy(bt)
+		
+		fr9 = np.copy(fr)
+		rr9 = np.copy(rr)		
+		
+		
+		
+		
+		
+		# Mid-Band, Blade, on 30m x 30m GP, NIVEDITA
+		b_all = cal.FEKO_blade_beam('mid_band', 100, frequency_interpolation='no', AZ_antenna_axis=90)
+		f     = np.arange(60,201,2)
+		
+		bint = np.zeros(len(f))
+		for i in range(len(f)):
+			
+			b       = b_all[i,:,:]
+			bint[i] = np.sum(b * sin_theta_2D)
+		
+		ft  = f[(f>=fmin) & (f<=fmax)]
+		bx  = bint[(f>=fmin) & (f<=fmax)]
+		bt   = (1/(4*np.pi)) * ((np.pi/180)**2)*bx   #/np.mean(bx)
+		
+		fr  = ft[(ft>=fmin_res) & (ft<=fmax_res)]
+		br  = bt[(ft>=fmin_res) & (ft<=fmax_res)]
+		
+		x   = np.polyfit(fr, br, Nfg-1)
+		m   = np.polyval(x, fr)
+		rr  = br - m
+		
+		
+		ft10 = np.copy(ft)
+		bt10 = np.copy(bt)
+		
+		fr10 = np.copy(fr)
+		rr10 = np.copy(rr)		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+	
+	
+	
+	
+		plt.figure(1)
+	
+		plt.subplot(4,2,1)
+		plt.plot(ft1, bt1)
+		plt.xlim([45, 205])
+		
+		plt.subplot(4,2,2)
+		plt.plot(fr1, rr1)
+		plt.xlim([45, 125])
+		
+		
+		plt.subplot(4,2,3)
+		plt.plot(ft2, bt2)
+		plt.xlim([45, 205])
+		
+		plt.subplot(4,2,4)
+		plt.plot(fr2, rr2)		
+		plt.xlim([45, 125])
+		
+		plt.subplot(4,2,5)
+		plt.plot(ft3, bt3)
+		plt.xlim([45, 205])
+		
+		plt.subplot(4,2,6)
+		plt.plot(fr3, rr3)		
+		plt.xlim([45, 125])
+			
+		plt.subplot(4,2,7)
+		plt.plot(ft4, bt4)
+		plt.xlim([45, 205])
+		
+		plt.subplot(4,2,8)
+		plt.plot(fr4, rr4)			
+		plt.xlim([45, 125])
+		
+		
+		
+	
+	
+	
+	
+	
+		plt.figure(2)
+	
+		plt.subplot(6,2,1)
+		plt.plot(ft5, bt5)
+		plt.xlim([45, 125])		
+		
+		plt.subplot(6,2,2)
+		plt.plot(fr5, rr5)
+		plt.xlim([45, 125])		
+		
+		
+		plt.subplot(6,2,3)
+		plt.plot(ft6, bt6)
+		plt.xlim([45, 125])		
+		
+		plt.subplot(6,2,4)
+		plt.plot(fr6, rr6)
+		plt.xlim([45, 125])			
+		
+		
+		plt.subplot(6,2,5)
+		plt.plot(ft7, bt7)
+		plt.xlim([45, 125])		
+		
+		plt.subplot(6,2,6)
+		plt.plot(fr7, rr7)
+		plt.xlim([45, 125])
+		
+		
+		plt.subplot(6,2,7)
+		plt.plot(ft8, bt8)
+		plt.xlim([45, 125])		
+		
+		plt.subplot(6,2,8)
+		plt.plot(fr8, rr8)
+		plt.xlim([45, 125])		
+		
+		
+		plt.subplot(6,2,9)
+		plt.plot(ft9, bt9)
+		plt.xlim([45, 125])		
+		
+		plt.subplot(6,2,10)
+		plt.plot(fr9, rr9)
+		plt.xlim([45, 125])		
+		
+		
+		plt.subplot(6,2,11)
+		plt.plot(ft10, bt10)
+		plt.xlim([45, 125])		
+		
+		plt.subplot(6,2,12)
+		plt.plot(fr10, rr10)
+		plt.xlim([45, 125])		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+			
+		#b_all = cal.FEKO_blade_beam('mid_band', 0, frequency_interpolation='no', AZ_antenna_axis=90)
+		#f     = np.arange(50,201,2)
+		
+		##b_all = cal.FEKO_blade_beam('low_band3', 1, frequency_interpolation='no', AZ_antenna_axis=90)
+		##f     = np.arange(50, 121, 2)
+		
+		
+		
+		##b_all = oeg.FEKO_high_band_blade_beam_plus_shaped_finite_ground_plane(beam_file=20, frequency_interpolation='no', frequency=np.array([0]), AZ_antenna_axis=0)
+		##f = np.arange(65, 201, 1)
+		
+		
+		#bint = np.zeros(len(f))
+		#for i in range(len(f)):
+			
+			#b       = b_all[i,:,:]
+			#bint[i] = np.sum(b * sin_theta_2D)
+		
+		#fr1 = f[(f>=fmin) & (f<=fmax)]
+		#bx1 = bint[(f>=fmin) & (f<=fmax)]
+		#b1  = bx1/np.mean(bx1)
+		
+		#ff1 = fr1[(fr1>=fmin_res) & (fr1<=fmax_res)]
+		#bb1 = b1[(fr1>=fmin_res) & (fr1<=fmax_res)]
+		
+		#x   = np.polyfit(ff1, bb1, Nfg-1)
+		#m   = np.polyval(x, ff1)
+		#r1  = bb1 - m
+			
+	
+	
+						
+		#b_all = cal.FEKO_blade_beam('mid_band', 1, frequency_interpolation='no', AZ_antenna_axis=90)
+		#f     = np.arange(50,201,2)
+		
+		#bint  = np.zeros(len(f))
+		#for i in range(len(f)):
+			
+			#b       = b_all[i,:,:]
+			#bint[i] = np.sum(b * sin_theta_2D)
+		
+		#fr2 = f[(f>=fmin) & (f<=fmax)]
+		#bb  = bint[(f>=fmin) & (f<=fmax)]
+		#b2  = bb/np.mean(bb)
+		
+		#ff2 = fr2[(fr2>=fmin_res) & (fr2<=fmax_res)]
+		#bb2 = b2[(fr2>=fmin_res) & (fr2<=fmax_res)]
+		
+		#x   = np.polyfit(ff2, bb2, Nfg-1)
+		#m   = np.polyval(x, ff2)
+		#r2  = bb2 - m
+
+
+
+
+
+
+
+
+
+		#b_all = oeg.FEKO_low_band_blade_beam(beam_file=2, frequency_interpolation='no', AZ_antenna_axis=0)
+		#f     = np.arange(40,121,2)
+		##f     = np.arange(40,101,2)
+		
+		#bint = np.zeros(len(f))
+		#for i in range(len(f)):
+			
+			#b       = b_all[i,:,:]
+			#bint[i] = np.sum(b * sin_theta_2D) 
+
+		#fr3 = f[(f>=fmin) & (f<=fmax)]
+		#bx3 = bint[(f>=fmin) & (f<=fmax)]
+		#b3  = bx3/np.mean(bx3)
+		
+		#ff3 = fr3[(fr3>=fmin_res) & (fr3<=fmax_res)]
+		#bb3 = b3[(fr3>=fmin_res) & (fr3<=fmax_res)]
+		
+		#x   = np.polyfit(ff3, bb3, 4)
+		#m   = np.polyval(x, ff3)
+		#r3  = bb3 - m
+
+			
+			
+		
+		
+		#b_all  = oeg.FEKO_low_band_blade_beam(beam_file=5, frequency_interpolation='no', frequency=np.array([0]), AZ_antenna_axis=0)
+		#f      = np.arange(50,121,2)
+		
+		#bint   = np.zeros(len(f))
+		#for i in range(len(f)):
+			
+			#b        = b_all[i,:,:]
+			#bint[i]  = np.sum(b * sin_theta_2D) 
+	
+		#fr4 = f[(f>=fmin) & (f<=fmax)]
+		#bb  = bint[(f>=fmin) & (f<=fmax)]
+		#b4  = bb/np.mean(bb)
+		
+		#ff4 = fr4[(fr4>=fmin_res) & (fr4<=fmax_res)]
+		#bb4 = b4[(fr4>=fmin_res) & (fr4<=fmax_res)]
+		
+		#x   = np.polyfit(ff4, bb4, 4)
+		#m   = np.polyval(x, ff4)
+		#r4  = bb4 - m		
+
+	
+	
+	
+	
+	
+	
+	elif part_number == 2:
+	
+		lst = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/low_band3/calibration/beam_factors/raw/gain_glitch_test_LST.txt')
+		f   = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/low_band3/calibration/beam_factors/raw/gain_glitch_test_freq.txt')
+		t   = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/low_band3/calibration/beam_factors/raw/gain_glitch_test_tant.txt')
+		
+		gah = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/low_band3/calibration/beam_factors/raw/gain_glitch_test_int_gain_above_horizon.txt')
+		pah = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/low_band3/calibration/beam_factors/raw/gain_glitch_test_pixels_above_horizon.txt')
+		
+		bf  = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/low_band3/calibration/beam_factors/raw/gain_glitch_test_data.txt')
+	
+	
+		
+		t10 = t[11]
+		t53 = t[53]
+		
+		bf10 = bf[11]
+		bf53 = bf[53]
+		
+		fr  = f[(f>=60) & (f<=120)]
+		t10 = t10[(f>=60) & (f<=120)]
+		t53 = t53[(f>=60) & (f<=120)]
+		
+		gg  = gah[(f>=60) & (f<=120)]
+		
+		bf10 = bf10[(f>=60) & (f<=120)]
+		bf53 = bf53[(f>=60) & (f<=120)]
+		
+		
+		t10_corr = t10*gg/3145728 + 300*(1-(gg/3145728))
+		t53_corr = t53*gg/3145728 + 300*(1-(gg/3145728))
+		
+		bf10_corr = bf10 * (gg/gg[13])
+		bf53_corr = bf53 * (gg/gg[13])
+		
+		
+		
+		p10_1 = ba.fit_polynomial_fourier('LINLOG', fr, t10_corr, 6)   
+		p10_2 = ba.fit_polynomial_fourier('LINLOG', fr, t10, 6)   
+		
+		p53_1 = ba.fit_polynomial_fourier('LINLOG', fr, t53_corr, 6)   
+		p53_2 = ba.fit_polynomial_fourier('LINLOG', fr, t53, 6) 	
+		
+	
+	
+		p_bf_10_1 = ba.fit_polynomial_fourier('LINLOG', fr, bf10_corr, 6)   
+		p_bf_10_2 = ba.fit_polynomial_fourier('LINLOG', fr, bf10, 6)  
+	
+		p_bf_53_1 = ba.fit_polynomial_fourier('LINLOG', fr, bf53_corr, 6)   
+		p_bf_53_2 = ba.fit_polynomial_fourier('LINLOG', fr, bf53, 6) 
+		
+		
+		
+		
+		
+		k10_corr = (t10_corr - 300*(1-(gg/3145728)))/bf10_corr
+		k10      = t10_corr/bf10
+		
+		k53_corr = (t53_corr - 300*(1-(gg/3145728)))/bf53_corr
+		k53      = t53_corr/bf53	
+		
+		
+		p_k10_corr = ba.fit_polynomial_fourier('LINLOG', fr, k10_corr, 6)  
+		p_k10      = ba.fit_polynomial_fourier('LINLOG', fr, k10, 6)  
+		
+		p_k53_corr = ba.fit_polynomial_fourier('LINLOG', fr, k53_corr, 6)  
+		p_k53      = ba.fit_polynomial_fourier('LINLOG', fr, k53, 6) 	
+		
+		
+		
+		plt.close()
+		
+		plt.figure(1)
+		
+		plt.subplot(2,2,1)
+		plt.plot(fr, t10_corr)
+		plt.plot(fr, t10, '--')
+		plt.ylabel('temperature [K]')
+		plt.title('Low Foreground (GHA = 10 hr)')
+		
+		plt.subplot(2,2,2)
+		plt.plot(fr, t53_corr)
+		plt.plot(fr, t53, '--')
+		#plt.ylabel('temperature [K]')
+		plt.title('High Foreground (GHA = 0 hr)')
+		
+		plt.subplot(2,2,3)
+		plt.plot(fr, t10_corr - p10_1[1])
+		plt.plot(fr, t10 - p10_2[1], '--')
+		plt.ylim([-0.5, 0.5])
+		plt.xlabel('frequency [MHz]')
+		plt.ylabel(r'$\Delta$ temperature [K]')
+		plt.legend(['correct','incorrect'])
+		
+		
+		plt.subplot(2,2,4)
+		plt.plot(fr, t53_corr - p53_1[1])
+		plt.plot(fr, t53 - p53_2[1], '--')	
+		plt.ylim([-0.5, 0.5])
+		plt.xlabel('frequency [MHz]')
+		#plt.ylabel(r'\Delta temperature [K]')
+		
+		
+		
+		plt.figure(2)
+		
+		plt.subplot(2,2,1)
+		plt.plot(fr, bf10_corr)
+		plt.plot(fr, bf10, '--')
+		plt.ylabel('beam correction factor')
+		plt.title('Low Foreground (GHA = 10 hr)')
+		
+		plt.subplot(2,2,2)
+		plt.plot(fr, bf53_corr)
+		plt.plot(fr, bf53, '--')
+		#plt.ylabel('temperature [K]')
+		plt.title('High Foreground (GHA = 0 hr)')
+		
+		plt.subplot(2,2,3)
+		plt.plot(fr, bf10_corr - p_bf_10_1[1])
+		plt.plot(fr, bf10 - p_bf_10_2[1], '--')
+		#plt.plot(fr, t10 - p10_2[1])
+		plt.ylim([-0.0004, 0.0004])
+		plt.xlabel('frequency [MHz]')
+		plt.ylabel(r'$\Delta$ temperature [K]')
+		plt.legend(['correct','incorrect'])
+		
+		
+		plt.subplot(2,2,4)
+		plt.plot(fr, bf53_corr - p_bf_53_1[1])
+		plt.plot(fr, bf53 - p_bf_53_2[1], '--')	
+		#plt.plot(fr, t53_corr - p53_1[1])
+		#plt.plot(fr, t53 - p53_2[1])	
+		plt.ylim([-0.0004, 0.0004])
+		plt.xlabel('frequency [MHz]')	
+		
+	
+	
+	
+	
+	
+		plt.figure(3)
+		
+		plt.subplot(2,2,1)
+		plt.plot(fr, k10_corr)
+		#plt.plot(fr, k10)
+		plt.ylabel('temperature [K]')
+		plt.title('Low Foreground (GHA = 10 hr)')
+		
+		plt.subplot(2,2,2)
+		plt.plot(fr, t53_corr)
+		##plt.ylabel('temperature [K]')
+		plt.title('High Foreground (GHA = 0 hr)')
+		
+		plt.subplot(2,2,3)
+		plt.plot(fr, k10_corr - p_k10_corr[1])
+		plt.plot(fr, k10 - p_k10[1], '--')
+		plt.ylim([-0.5, 0.5])
+		plt.xlabel('frequency [MHz]')
+		plt.ylabel(r'$\Delta$ temperature [K]')
+		plt.legend(['correct','incorrect'])
+		
+		
+		plt.subplot(2,2,4)
+		plt.plot(fr, k53_corr - p_k53_corr[1])
+		plt.plot(fr, k53 - p_k53[1], '--')	
+		plt.ylim([-0.5, 0.5])
+		plt.xlabel('frequency [MHz]')
+		
+		
 
 
 
@@ -8027,7 +8636,7 @@ def plots_of_absorption_glitch():
 
 
 	
-	return f, t, lst, bf, gah
+	return 0 #f, t, lst, bf, gah
 
 
 

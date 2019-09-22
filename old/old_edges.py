@@ -14822,7 +14822,7 @@ def data_analysis_high_band_level3_extra_RFI_flagging(f, ta, m, w, fit_model='ED
 
 
 
-def FEKO_high_band_fourpoint_beam(frequency_interpolation='no', frequency=np.array([0]), AZ_antenna_axis=0):
+def FEKO_high_band_fourpoint_beam(case, frequency_interpolation='no', frequency=np.array([0]), AZ_antenna_axis=0):
 
 	"""
 
@@ -14831,17 +14831,27 @@ def FEKO_high_band_fourpoint_beam(frequency_interpolation='no', frequency=np.arr
 
 	"""
 
-	filename = home_folder + '/DATA/EDGES/calibration/beam/alans_antenna_simulations/fourpoint_high-band/alan_latest_fourpoint_beam_model_azelq_2m_6.8_2.0_1.4a80.txt'
+	#filename = home_folder + '/DATA/EDGES/calibration/beam/alans_antenna_simulations/fourpoint_high-band/alan_latest_fourpoint_beam_model_azelq_2m_6.8_2.0_1.4a80.txt'
+	
+	if case == 1:
+		filename = '/run/media/raul/WD_BLACK_6TB/EDGES_vol1/calibration/beam/alan/fourpoint_high-band/alan_latest_fourpoint_beam_model_azelq_2m_6.8_2.0_1.4a80.txt'
+		f_original = np.arange(80,201,5)
+		
+	elif case == 2:
+		filename = '/run/media/raul/WD_BLACK_6TB/EDGES_vol1/calibration/beam/alan/fourpoint_high-band/azelq_fourplus65_200.txt'
+		f_original = np.arange(65,201,1)
+		
+		
 	data = np.genfromtxt(filename)
 
 	# Loading data
-	beam_maps = np.zeros((25,91,360))
-	for i in range(25):
+	beam_maps = np.zeros((len(f_original),91,360))
+	for i in range(len(f_original)):
 		beam_maps[i,:,:] = (10**(data[(i*360):((i+1)*360),2::]/10)).T
 
 	# Frequency interpolation
 	if frequency_interpolation == 'yes':
-		f_original = np.arange(80,201,5)
+	
 		interp_beam = np.zeros((len(frequency), len(beam_maps[0,:,0]), len(beam_maps[0,0,:])))
 		for j in range(len(beam_maps[0,:,0])):
 			for i in range(len(beam_maps[0,0,:])):
