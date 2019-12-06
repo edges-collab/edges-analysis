@@ -639,10 +639,73 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 
 
 
+			if receiver_cal_file == 100:
+				print('Receiver calibration FILE 100')
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2019_10_25C/results/nominal/calibration_files/calibration_file_receiver1_50_190MHz_cterms10_wterms13.txt'
+
+
+
+			if receiver_cal_file == 200:
+				print('Receiver calibration FILE 200')
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal_2019_12_50-150MHz_try1/calibration_files/calibration_file_receiver1_55_150MHz_cterms14_wterms14.txt'
+
+			if receiver_cal_file == 201:
+				print('Receiver calibration FILE 201')
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal_2019_12_50-150MHz_try1/calibration_files/calibration_file_receiver1_50_150MHz_cterms7_wterms8.txt'
+
+			if receiver_cal_file == 202:
+				print('Receiver calibration FILE 202')
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal_2019_12_50-150MHz_try1/calibration_files/calibration_file_receiver1_50_150MHz_cterms7_wterms11.txt'
 
 
 
 
+
+
+
+			if receiver_cal_file == 301:
+				print('Receiver calibration FILE 301')
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal_2019_12_50-150MHz_try1/calibration_files/calibration_file_receiver1_60_120MHz_cterms7_wterms4.txt'
+
+
+			if receiver_cal_file == 302:
+				print('Receiver calibration FILE 302')
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal_2019_12_50-150MHz_try1/calibration_files/calibration_file_receiver1_60_120MHz_cterms7_wterms5.txt'
+
+
+			if receiver_cal_file == 303:
+				print('Receiver calibration FILE 303')
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal_2019_12_50-150MHz_try1/calibration_files/calibration_file_receiver1_60_120MHz_cterms7_wterms9.txt'
+
+
+
+			if receiver_cal_file == 304:
+				print('Receiver calibration FILE 304')
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal_2019_12_50-150MHz_try1/calibration_files/calibration_file_receiver1_60_120MHz_cterms8_wterms4.txt'
+
+
+			if receiver_cal_file == 305:
+				print('Receiver calibration FILE 305')
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal_2019_12_50-150MHz_try1/calibration_files/calibration_file_receiver1_60_120MHz_cterms8_wterms5.txt'
+
+
+			if receiver_cal_file == 306:
+				print('Receiver calibration FILE 306')
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal_2019_12_50-150MHz_try1/calibration_files/calibration_file_receiver1_60_120MHz_cterms8_wterms9.txt'
+
+
+			if receiver_cal_file == 307:
+				print('Receiver calibration FILE 307')
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal_2019_12_50-150MHz_try1/calibration_files/calibration_file_receiver1_60_120MHz_cterms5_wterms4.txt'
+
+
+			if receiver_cal_file == 308:
+				print('Receiver calibration FILE 308')
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal_2019_12_50-150MHz_try1/calibration_files/calibration_file_receiver1_60_120MHz_cterms6_wterms4.txt'
+
+	
+	
+	
 	
 		
 		rcv = np.genfromtxt(rcv_file)
@@ -1034,7 +1097,7 @@ def level3_single_file_test(path_file, GHA_1, GHA_2, FLOW, FHIGH, plot_residuals
 		
 		
 	
-	fb, rb, wb, sb = ba.spectral_binning_number_of_samples(f, avr, avw, nsamples=64)
+	fb, rb, wb, sb = ba.spectral_binning_number_of_samples(f, avr, avw, nsamples=128)
 	
 	
 	
@@ -1070,8 +1133,8 @@ def level3_single_file_test(path_file, GHA_1, GHA_2, FLOW, FHIGH, plot_residuals
 		#plt.close()
 		plt.figure()
 		plt.plot(ff[ww>0], (tt-model)[ww>0])
-		plt.ylim([-5, 5])
-		plt.xlim([55, 152])
+		plt.ylim([-1, 1])
+		plt.xlim([60, 150])
 
 
 		
@@ -1202,6 +1265,22 @@ def rms_filter_computation(band, case, save_parameters='no'):
 		if case == 20:
 			path_files  = edges_folder + '/mid_band/spectra/level3/rcv18_sw19_nominal/'
 			save_folder = edges_folder + '/mid_band/rms_filters/rcv18_sw19_nominal/'
+
+
+		if case == 2:
+			path_files  = edges_folder + '/mid_band/spectra/level3/calibration_2019_10_no_ground_loss_no_beam_corrections/'
+			save_folder = edges_folder + '/mid_band/rms_filters/calibration_2019_10_no_ground_loss_no_beam_corrections/'
+
+
+		if case == 3:
+			path_files  = edges_folder + '/mid_band/spectra/level3/case_nominal_50-150MHz_no_ground_loss_no_beam_corrections/'
+			save_folder = edges_folder + '/mid_band/rms_filters/case_nominal_50-150MHz_no_ground_loss_no_beam_corrections/'
+
+
+		if case == 5:
+			path_files  = edges_folder + '/mid_band/spectra/level3/case_nominal_14_14_terms_55-150MHz_no_ground_loss_no_beam_corrections/'
+			save_folder = edges_folder + '/mid_band/rms_filters/case_nominal_14_14_terms_55-150MHz_no_ground_loss_no_beam_corrections/'
+
 
 		
 		
@@ -1528,8 +1607,16 @@ def rms_filter(band, case, gx, rms, Nsigma):
 			file_path = edges_folder + band + '/rms_filters/rcv18_sw19_nominal/'
 
 
+		if case == 2:
+			file_path = edges_folder + band + '/rms_filters/calibration_2019_10_no_ground_loss_no_beam_corrections/'
 
 
+		if case == 3:
+			file_path = edges_folder + band + '/rms_filters/case_nominal_50-150MHz_no_ground_loss_no_beam_corrections/'
+
+
+		if case == 5:
+			file_path = edges_folder + band + '/rms_filters/case_nominal_14_14_terms_55-150MHz_no_ground_loss_no_beam_corrections/'
 
 
 
@@ -1748,7 +1835,24 @@ def level3_to_level4(band, case, GHA_edges, sun_el_max, moon_el_max, save_folder
 		if (case >= 20) and (case <= 29):
 			if case == 20:
 				path_files  = edges_folder + 'mid_band/spectra/level3/rcv18_sw19_nominal/'
+		
+		
+		
+		# Receiver and switch calibration 2019-10	
+		if case == 2:
+			path_files  = edges_folder + 'mid_band/spectra/level3/calibration_2019_10_no_ground_loss_no_beam_corrections/'
 
+		
+		
+		# Case 1 calibration: Receiver 2018, Switch 2018, AGAIN		
+		if case == 3:
+			path_files  = edges_folder + 'mid_band/spectra/level3/case_nominal_50-150MHz_no_ground_loss_no_beam_corrections/'
+
+			
+
+		# Case 1 calibration: Receiver 2018, Switch 2018, AGAIN		
+		if case == 5:
+			path_files  = edges_folder + 'mid_band/spectra/level3/case_nominal_14_14_terms_55-150MHz_no_ground_loss_no_beam_corrections/'			
 			
 			
 			
@@ -1965,113 +2069,113 @@ def level3_to_level4(band, case, GHA_edges, sun_el_max, moon_el_max, save_folder
 
 	
 	
-	# Producing plots with daily residuals
-	# ------------------------------------
-	Ngha = len(GHA_edges)-1
+	## Producing plots with daily residuals
+	## ------------------------------------
+	#Ngha = len(GHA_edges)-1
 	
-	# Loop over days
-	for i in index_new_list:  # range(4):  #  
+	## Loop over days
+	#for i in index_new_list:  # range(4):  #  
 		
-		# Loop over number of foreground terms
-		for Nfg in [3,4,5]:
+		## Loop over number of foreground terms
+		#for Nfg in [3,4,5]:
 			
-			# Loop over GHA
-			for j in range(Ngha):
+			## Loop over GHA
+			#for j in range(Ngha):
 				
-				print('Nfg: ' + str(Nfg) + '. GHA: ' + str(GHA_edges[j]) + '-' + str(GHA_edges[j+1]) + ' hr')
+				#print('Nfg: ' + str(Nfg) + '. GHA: ' + str(GHA_edges[j]) + '-' + str(GHA_edges[j+1]) + ' hr')
 				
-				yp = avp_all[i,j,:]
-				yr = avr_all[i,j,:]
-				yw = avw_all[i,j,:]
+				#yp = avp_all[i,j,:]
+				#yr = avr_all[i,j,:]
+				#yw = avw_all[i,j,:]
 							
-				fb, yrb, ywb, ysb = ba.spectral_binning_number_of_samples(f, yr, yw)
+				#fb, yrb, ywb, ysb = ba.spectral_binning_number_of_samples(f, yr, yw)
 				
 				
-				# Creating arrays with residuals to plot
-				if j == 0:
-					qrb_all = np.zeros((Ngha, len(fb)))
-					qwb_all = np.zeros((Ngha, len(fb)))					
+				## Creating arrays with residuals to plot
+				#if j == 0:
+					#qrb_all = np.zeros((Ngha, len(fb)))
+					#qwb_all = np.zeros((Ngha, len(fb)))					
 					
 				
-				if np.sum(yw>0):
+				#if np.sum(yw>0):
 					
-					model        = ba.model_evaluate('LINLOG', yp, fb/200)
-					ytb          = model + yrb
+					#model        = ba.model_evaluate('LINLOG', yp, fb/200)
+					#ytb          = model + yrb
 					
-					ytb[ywb==0]  = 0
+					#ytb[ywb==0]  = 0
 									
-					par  = ba.fit_polynomial_fourier('LINLOG', fb/200, ytb, Nfg, Weights=ywb)
-					qrb  = ytb - par[1]
+					#par  = ba.fit_polynomial_fourier('LINLOG', fb/200, ytb, Nfg, Weights=ywb)
+					#qrb  = ytb - par[1]
 					
-					qrb_all[j,:] = qrb
-					qwb_all[j,:] = ywb
+					#qrb_all[j,:] = qrb
+					#qwb_all[j,:] = ywb
 			
 			
 					
-			# Plotting residuals for each day
+			## Plotting residuals for each day
 			
-			# Settings
-			# ----------------------------------
-			LST_text    = ['GHA=' + str(GHA_edges[k]) + '-' + str(GHA_edges[k+1]) + ' hr' for k in range(Ngha)]
+			## Settings
+			## ----------------------------------
+			#LST_text    = ['GHA=' + str(GHA_edges[k]) + '-' + str(GHA_edges[k+1]) + ' hr' for k in range(Ngha)]
 			
 			
-			if band == 'mid_band':
-				if Nfg == 3:
-					DY = 8
+			#if band == 'mid_band':
+				#if Nfg == 3:
+					#DY = 8
 					
-				elif Nfg == 4:
-					DY = 3
+				#elif Nfg == 4:
+					#DY = 3
 					
-				elif Nfg == 5:
-					DY = 2
+				#elif Nfg == 5:
+					#DY = 2
 					
-				FIG_SX      =   9
-				FIG_SY      =   3
-				FLOW_plot   =  35
-				FHIGH_plot  = 152
-				XTICKS      = np.arange(60, 151, 10)
-				XTEXT       =  35.5
-				YLABEL      = str(DY)  + ' K per division'
-				TITLE       = str(Nfg) + ' LINLOG terms'
-				FIGURE_FORMAT = 'png'			
+				#FIG_SX      =   10
+				#FIG_SY      =   1 * len(GHA_edges)
+				#FLOW_plot   =  30
+				#FHIGH_plot  = 152
+				#XTICKS      = np.arange(50, 151, 10)
+				#XTEXT       =  30.5
+				#YLABEL      = str(DY)  + ' K per division'
+				#TITLE       = str(Nfg) + ' LINLOG terms'
+				#FIGURE_FORMAT = 'png'			
 
 			
 			
 			
 			
-			elif band == 'low_band3':
-				if Nfg == 3:
-					DY = 8
+			#elif band == 'low_band3':
+				#if Nfg == 3:
+					#DY = 8
 					
-				elif Nfg == 4:
-					DY = 4
+				#elif Nfg == 4:
+					#DY = 4
 					
-				elif Nfg == 5:
-					DY = 3
+				#elif Nfg == 5:
+					#DY = 3
 				
-				FIG_SX      =   7
-				FIG_SY      =  20				
-				FLOW_plot   =  30
-				FHIGH_plot  = 125
-				XTICKS      = np.arange(50, 121, 10)
-				XTEXT       =  31
-				YLABEL      = str(DY)  + ' K per division'
-				TITLE       = str(Nfg) + ' LINLOG terms'
-				FIGURE_FORMAT = 'png'
+				#FIG_SX      =   7
+				#FIG_SY      =  20				
+				#FLOW_plot   =  30
+				#FHIGH_plot  = 125
+				#XTICKS      = np.arange(50, 121, 10)
+				#XTEXT       =  31
+				#YLABEL      = str(DY)  + ' K per division'
+				#TITLE       = str(Nfg) + ' LINLOG terms'
+				#FIGURE_FORMAT = 'png'
 				
 			
 			
 			
-			# Creating folder
-			figure_save_path_subfolder = save_folder + '/plots/Nfg_' + str(Nfg) + '/'
-			if not exists(figure_save_path_subfolder):
-				makedirs(figure_save_path_subfolder)
+			## Creating folder
+			#figure_save_path_subfolder = save_folder + '/plots/Nfg_' + str(Nfg) + '/'
+			#if not exists(figure_save_path_subfolder):
+				#makedirs(figure_save_path_subfolder)
 			
-			figure_save_name = new_list[i][:-5]
+			#figure_save_name = new_list[i][:-5]
 			
 			
-			# Plotting
-			x = plot_residuals(fb, qrb_all, qwb_all, LST_text, FIG_SX=FIG_SX, FIG_SY=FIG_SY, DY=DY, FLOW=FLOW_plot, FHIGH=FHIGH_plot, XTICKS=XTICKS, XTEXT=XTEXT, YLABEL=YLABEL, TITLE=TITLE, save='yes', figure_path=figure_save_path_subfolder, figure_name=figure_save_name, figure_format=FIGURE_FORMAT)
+			## Plotting
+			#x = plot_residuals(fb, qrb_all, qwb_all, LST_text, FIG_SX=FIG_SX, FIG_SY=FIG_SY, DY=DY, FLOW=FLOW_plot, FHIGH=FHIGH_plot, XTICKS=XTICKS, XTEXT=XTEXT, YLABEL=YLABEL, TITLE=TITLE, save='yes', figure_path=figure_save_path_subfolder, figure_name=figure_save_name, figure_format=FIGURE_FORMAT)
 			
 						
 			
@@ -2183,6 +2287,968 @@ def level4read(path_file):
 
 
 	return f, p_all, r_all, w_all, index, gha, yd	
+
+
+
+
+
+
+
+
+
+
+def level4_binned_residuals(case, FLOW, FHIGH, output_file_name_hdf5):
+
+	if case == 2:	
+		f, p, r, w, index, gha, yy = level4read(edges_folder + 'mid_band/spectra/level4/calibration_2019_10_no_ground_loss_no_beam_corrections/calibration_2019_10_no_ground_loss_no_beam_corrections.hdf5')
+		save_folder                = edges_folder + 'mid_band/spectra/level4/calibration_2019_10_no_ground_loss_no_beam_corrections/binned_residuals/'
+
+	elif case == 3:	
+		f, p, r, w, index, gha, yy = level4read(edges_folder + 'mid_band/spectra/level4/case_nominal_50-150MHz_no_ground_loss_no_beam_corrections/case_nominal_50-150MHz_no_ground_loss_no_beam_corrections.hdf5')
+		save_folder                = edges_folder + 'mid_band/spectra/level4/case_nominal_50-150MHz_no_ground_loss_no_beam_corrections/binned_residuals/'
+	
+	
+	elif case == 5:	
+		f, p, r, w, index, gha, yy = level4read(edges_folder + 'mid_band/spectra/level4/case_nominal_14_14_terms_55-150MHz_no_ground_loss_no_beam_corrections/case_nominal_14_14_terms_55-150MHz_no_ground_loss_no_beam_corrections.hdf5')
+		save_folder                = edges_folder + 'mid_band/spectra/level4/case_nominal_14_14_terms_55-150MHz_no_ground_loss_no_beam_corrections/binned_residuals/'
+
+
+	
+	# Computing the residuals
+	# -----------------------
+	start = 0
+	#Ndays = 6
+	for i in range(len(r[:,0,0])):  # range(Ndays): #
+		for k in range(len(r[0,:,0])):
+			
+			
+			
+			# If there are enough data points
+			if np.sum(w[i,k,:]) > 100:
+			
+				model_k = ba.model_evaluate('LINLOG', p[i,k,:], f/200)
+				t_k = r[i,k,:] + model_k
+				w_k = w[i,k,:]
+				
+				fc   = f[(f>FLOW) & (f<FHIGH)]
+				tc_k = t_k[(f>FLOW) & (f<FHIGH)]
+				wc_k = w_k[(f>FLOW) & (f<FHIGH)]
+				
+				# 5 terms for low foregrounds, 6 terms for high foregrounds
+				if (gha[k] >= 6) and (gha[k] <= 17):
+					Nfg = 5
+				else:
+					Nfg = 6
+				print((yy[i], Nfg))
+				
+				pc_k = ba.fit_polynomial_fourier('LINLOG', fc/200, tc_k, Nfg, Weights=wc_k)
+				mc_k = ba.model_evaluate('LINLOG', pc_k[0], fc/200)
+				
+				rc_k = tc_k - mc_k
+			
+				fb, rb, wb, sb = ba.spectral_binning_number_of_samples(fc, rc_k, wc_k)
+				
+				if start == 0:
+					binned_residuals = np.zeros((len(r[:,0,0]), len(r[0,:,0]), len(fb)))
+					binned_weights   = np.zeros((len(r[:,0,0]), len(r[0,:,0]), len(fb)))
+					binned_stddev    = np.zeros((len(r[:,0,0]), len(r[0,:,0]), len(fb)))
+					start = 1
+					
+				binned_residuals[i,k,:] = rb
+				binned_weights[i,k,:]   = wb
+				binned_stddev[i,k,:]    = sb
+				
+	# Save
+	# ----		
+	with h5py.File(save_folder + output_file_name_hdf5, 'w') as hf:
+		hf.create_dataset('frequency',    data = fb)
+		hf.create_dataset('residuals',    data = binned_residuals)
+		hf.create_dataset('weights',      data = binned_weights)
+		hf.create_dataset('stddev',       data = binned_stddev)
+		hf.create_dataset('gha_edges',    data = gha)
+		hf.create_dataset('year_day',     data = yy)
+
+
+	return fb, binned_residuals
+
+
+
+
+
+
+
+
+
+def level4_binned_read(path_file):
+
+	with h5py.File(path_file,'r') as hf:
+
+		hfX    = hf.get('frequency')
+		fb     = np.array(hfX)
+
+		hfX    = hf.get('residuals')
+		rb     = np.array(hfX)
+
+		hfX    = hf.get('weights')
+		wb     = np.array(hfX)		
+
+		hfX    = hf.get('stddev')
+		sb     = np.array(hfX)
+
+		hfX    = hf.get('gha_edges')
+		gha    = np.array(hfX)	
+
+		hfX    = hf.get('year_day')
+		yd     = np.array(hfX)
+
+	return fb, rb, wb, sb, gha, yd	
+
+
+
+
+
+
+
+
+
+
+
+def level4_plot_residuals(case, GHA_index, TITLE, figure_save_name, DY):
+
+	if case == 2:
+		filename = edges_folder + 'mid_band/spectra/level4/calibration_2019_10_no_ground_loss_no_beam_corrections/binned_residuals/binned_residuals_one_hour_GHA.hdf5'
+		figure_save_path_subfolder = edges_folder + 'mid_band/spectra/level4/calibration_2019_10_no_ground_loss_no_beam_corrections/binned_plots/'
+
+	elif case == 3:
+		filename = edges_folder + 'mid_band/spectra/level4/case_nominal_50-150MHz_no_ground_loss_no_beam_corrections/binned_residuals/binned_residuals_one_hour_GHA.hdf5'
+		figure_save_path_subfolder = edges_folder + 'mid_band/spectra/level4/case_nominal_50-150MHz_no_ground_loss_no_beam_corrections/binned_plots/'
+		
+		
+	elif case == 5:
+		filename = edges_folder + 'mid_band/spectra/level4/case_nominal_14_14_terms_55-150MHz_no_ground_loss_no_beam_corrections/binned_residuals/binned_residuals_one_hour_GHA.hdf5'
+		figure_save_path_subfolder = edges_folder + 'mid_band/spectra/level4/case_nominal_14_14_terms_55-150MHz_no_ground_loss_no_beam_corrections/binned_plots/'		
+	
+	
+	fb, rb, wb, sb, gha, yd = level4_binned_read(filename) 
+	#Nfg = 5
+	
+	start = 0
+	for i in range(len(yd)):
+		if np.sum(wb[i,GHA_index,:]) > 0:
+			
+			std_x = np.std(rb[i,GHA_index,:][wb[i,GHA_index,:]>0])
+			
+			if start == 0:
+				rb_new  = rb[i,GHA_index,:]
+				wb_new  = wb[i,GHA_index,:]
+				yd_new  = yd[i]
+				std_new = np.copy(std_x)
+						
+				start = 1
+				
+				
+			elif start == 1:
+				rb_new  = np.vstack((rb_new, rb[i,GHA_index,:]))
+				wb_new  = np.vstack((wb_new, wb[i,GHA_index,:]))
+				yd_new  = np.vstack((yd_new, yd[i]))
+				std_new = np.append(std_new, std_x)
+				
+		
+		
+	# Plots
+	# ---------------------
+
+	# Settings
+	LST_text    = [str(int(yd_new[i,1])) + ': ' + str(int(1000*std_new[i])) + ' mK' for i in range(len(yd_new))]
+
+	#DY          =   2
+	FIG_SX      =   8.5
+	FIG_SY      =  20 
+	FLOW_plot   =  35
+	FHIGH_plot  = 152
+	XTICKS      = np.arange(60, 151, 10)
+	XTEXT       =  35.5
+	YLABEL      = str(DY)  + ' K per division'
+	#TITLE       = str(Nfg) + ' LINLOG terms'
+	#figure_save_name = 'test'
+	FIGURE_FORMAT = 'pdf' #'png'			
+
+
+	# Plotting
+	x = plot_residuals(fb, rb_new, wb_new, LST_text, FIG_SX=FIG_SX, FIG_SY=FIG_SY, DY=DY, FLOW=FLOW_plot, FHIGH=FHIGH_plot, XTICKS=XTICKS, XTEXT=XTEXT, YLABEL=YLABEL, TITLE=TITLE, save='yes', figure_path=figure_save_path_subfolder, figure_name=figure_save_name, figure_format=FIGURE_FORMAT)
+	
+	
+	return rb_new, wb_new, yd_new
+
+
+
+
+
+
+
+
+
+
+def level4_good_days_GHA(GHA, first_day, last_day):
+	
+	# Data filter
+	if GHA == 0:
+		good_days = np.arange(140, 300, 1) 
+
+	if GHA == 1:
+		good_days = np.concatenate((np.arange(148, 160, 1), np.arange(161, 220, 1)))
+		
+	if GHA == 2:
+		good_days = np.arange(140, 300, 1) 
+		
+	if GHA == 3:
+		good_days = np.arange(140, 300, 1) 
+
+	if GHA == 4:
+		good_days = np.arange(140, 300, 1) 
+		
+	if GHA == 5:
+		good_days = np.arange(140, 300, 1) 		
+		
+		
+		
+	if GHA == 6:
+		good_days = np.arange(147, 300, 1) # np.arange(186, 300, 1)
+
+	if GHA == 7:
+		good_days = np.concatenate((np.arange(147, 153, 1), np.arange(159, 202, 1), np.arange(210, 300, 1)))
+		
+	if GHA == 8:
+		good_days = np.concatenate((np.arange(147, 153, 1), np.arange(160, 168, 1), np.arange(174, 300, 1)))
+
+	if GHA == 9:
+		good_days = np.concatenate((np.arange(147, 153, 1), np.arange(160, 168, 1), np.arange(174, 194, 1), np.arange(197, 300, 1)))
+		
+	if GHA == 10:
+		good_days = np.concatenate((np.arange(148, 168, 1), np.arange(177, 194, 1), np.arange(197, 202, 1), np.arange(205, 216, 1)))
+
+	if GHA == 11:
+		good_days = np.concatenate((np.arange(147, 202, 1), np.arange(205, 216, 1), np.arange(218, 300, 1)))
+
+	if GHA == 12:
+		good_days = np.concatenate((np.arange(147, 158, 1), np.arange(160, 176, 1), np.arange(177, 194, 1), np.arange(197, 202, 1), np.arange(205, 220, 1)))
+
+
+
+
+
+
+		
+	if GHA == 13:
+		good_days = np.concatenate((np.arange(140, 176, 1), np.arange(177, 183, 1), np.arange(187, 194, 1), np.arange(197, 206, 1), np.arange(210, 300, 1)))
+
+	if GHA == 14:
+		good_days = np.concatenate((np.arange(140, 183, 1), np.arange(187, 206, 1), np.arange(210, 300, 1))) 
+
+	if GHA == 15:
+		good_days = np.concatenate((np.arange(140, 183, 1), np.arange(187, 206, 1), np.arange(210, 300, 1)))      
+
+	if GHA == 16:
+		good_days = np.arange(140, 300, 1)
+	
+	if GHA == 17:
+		good_days = np.arange(140, 300, 1)
+	
+	if GHA == 18:
+		good_days = np.arange(140, 300, 1)
+
+	if GHA == 19:
+		good_days = np.arange(140, 300, 1)
+
+	if GHA == 20:
+		good_days = np.arange(140, 300, 1)
+
+	if GHA == 21:
+		good_days = np.arange(140, 300, 1) 
+
+	if GHA == 22:
+		good_days = np.arange(140, 300, 1)
+		
+	if GHA == 23:
+		good_days = np.arange(148, 300, 1) 		
+		
+		
+		
+	good_days_out = good_days[ (good_days>=first_day) & (good_days<=last_day) ]
+	
+		
+	return good_days_out
+
+
+
+
+
+
+
+
+
+
+
+def level4_integration(case, GHA_list, first_day, last_day, FLOW, FHIGH, Nfg): #, output_file_name_hdf5):
+	
+	if case == 2:
+		f, p, r, w, index, gha, yy = level4read(edges_folder + 'mid_band/spectra/level4/calibration_2019_10_no_ground_loss_no_beam_corrections/calibration_2019_10_no_ground_loss_no_beam_corrections.hdf5')	
+	
+	elif case == 3:
+		f, p, r, w, index, gha, yy = level4read(edges_folder + 'mid_band/spectra/level4/case_nominal_50-150MHz_no_ground_loss_no_beam_corrections/case_nominal_50-150MHz_no_ground_loss_no_beam_corrections.hdf5')
+		
+	elif case == 5:
+		f, p, r, w, index, gha, yy = level4read(edges_folder + 'mid_band/spectra/level4/case_nominal_14_14_terms_55-150MHz_no_ground_loss_no_beam_corrections/case_nominal_14_14_terms_55-150MHz_no_ground_loss_no_beam_corrections.hdf5')		
+		
+	
+
+	# Computing the residuals
+	# -----------------------	
+	start = 0
+	
+	for k in range(len(GHA_list)):
+		GHA_index = GHA_list[k]
+		
+		good_days = level4_good_days_GHA(GHA_index, first_day, last_day, )
+		
+		for i in range(len(yy)):	
+			if yy[i,1] in good_days:
+				
+				print([GHA_index, yy[i,1]])
+				if start == 0:
+					p_new  = p[i, GHA_index, :]
+					r_new  = r[i, GHA_index, :]
+					w_new  = w[i, GHA_index, :]
+										
+					start = 1
+										
+				elif start == 1:
+					p_new  = np.vstack((p_new, p[i, GHA_index, :]))
+					r_new  = np.vstack((r_new, r[i, GHA_index, :]))
+					w_new  = np.vstack((w_new, w[i, GHA_index, :]))
+					
+										
+	avr, avw = ba.spectral_averaging(r_new, w_new)
+	avp = np.mean(p_new, axis=0)
+			
+			
+	model = ba.model_evaluate('LINLOG', avp, f/200)
+	avt   = avr + model
+			
+	fc = f[(f>FLOW) & (f<FHIGH)]
+	tc = avt[(f>FLOW) & (f<FHIGH)]
+	wc = avw[(f>FLOW) & (f<FHIGH)]
+	
+	
+	pc = ba.fit_polynomial_fourier('LINLOG', fc/200, tc, Nfg, Weights=wc)
+	mc = ba.model_evaluate('LINLOG', pc[0], fc/200)
+	rc = tc - mc
+	fb, rb, wb, sb = ba.spectral_binning_number_of_samples(fc, rc, wc)
+	mb = ba.model_evaluate('LINLOG', pc[0], fb/200)
+	tb = rb + mb
+	tb[wb == 0] = 0
+	
+				
+	return fb, tb, rb, wb, sb
+
+
+
+
+
+
+def spectrum_fit(f, t, w, Nfg=5, F1_LOW=60, F1_HIGH=65, F2_LOW=95, F2_HIGH=140):
+	
+	#F1_LOW  = 60
+	#F1_HIGH = 65
+	
+	#F2_LOW  = 95
+	#F2_HIGH = 140
+	
+	fc = f[((f>=F1_LOW) & (f<=F1_HIGH)) | ((f>=F2_LOW) & (f<=F2_HIGH))]
+	tc = t[((f>=F1_LOW) & (f<=F1_HIGH)) | ((f>=F2_LOW) & (f<=F2_HIGH))]
+	wc = w[((f>=F1_LOW) & (f<=F1_HIGH)) | ((f>=F2_LOW) & (f<=F2_HIGH))]
+	
+	pc = ba.fit_polynomial_fourier('LINLOG', fc/200, tc, Nfg, Weights=wc)
+	m  = ba.model_evaluate('LINLOG', pc[0], f/200)
+	r  = t - m
+	
+	#plt.plot(f, r)
+	return f, r
+
+
+
+
+
+def level4_save_averaged_spectra(case, GHA_case, first_day, last_day):
+
+	if case == 2:
+		header_text = 'f [MHz], t_ant (GHA=0-23) [K], std (GHA=0-23) [K], Nsamples (GHA=0-23)'
+		file_path = edges_folder + 'mid_band/spectra/level4/calibration_2019_10_no_ground_loss_no_beam_corrections/binned_averages/'
+		file_name = 'GHA_every_1hr.txt'
+	
+	if case == 3:
+		header_text = 'f [MHz], t_ant (GHA=0-23) [K], std (GHA=0-23) [K], Nsamples (GHA=0-23)'
+		file_path = edges_folder + 'mid_band/spectra/level4/case_nominal_50-150MHz_no_ground_loss_no_beam_corrections/binned_averages/'
+		file_name = 'GHA_every_1hr.txt'
+
+	if case == 5:
+		header_text = 'f [MHz], t_ant (GHA=0-23) [K], std (GHA=0-23) [K], Nsamples (GHA=0-23)'
+		file_path = edges_folder + 'mid_band/spectra/level4/case_nominal_14_14_terms_55-150MHz_no_ground_loss_no_beam_corrections/binned_averages/'
+		file_name = 'GHA_every_1hr.txt'
+
+
+		
+		
+	start = 0
+	
+	# case 2 corresponds to 1 spectrum every 1 hr in GHA
+	if GHA_case == 24:
+		for i in range(24):
+			fb, tb, rb, wb, sb = level4_integration(case, [i], first_day, last_day, 55, 150, 5)
+			if start == 0:
+				outT           = np.zeros((1+3*24, len(fb)))
+				outT[0,:]      = fb
+				outT[i+1,:]    = tb
+				outT[i+1+24,:] = sb
+				outT[i+1+48,:] = wb
+				
+				start = 1
+				
+			else:
+				outT[i+1,:]    = tb
+				outT[i+1+24,:] = sb
+				outT[i+1+48,:] = wb
+				
+	out = outT.T
+	np.savetxt(file_path + file_name, out, header=header_text)
+			
+	return out
+
+
+
+
+
+
+
+
+def level4_plot_integrated_residuals(case, FLOW=60, FHIGH=150):
+
+	if case == 2:
+		d = np.genfromtxt(edges_folder + 'mid_band/spectra/level4/calibration_2019_10_no_ground_loss_no_beam_corrections/binned_averages/GHA_every_1hr.txt')
+
+	elif case == 3:
+		d = np.genfromtxt(edges_folder + 'mid_band/spectra/level4/case_nominal_50-150MHz_no_ground_loss_no_beam_corrections/binned_averages/GHA_every_1hr.txt')
+		
+	elif case == 5:
+		d = np.genfromtxt(edges_folder + 'mid_band/spectra/level4/case_nominal_14_14_terms_55-150MHz_no_ground_loss_no_beam_corrections/binned_averages/GHA_every_1hr.txt')
+		
+	
+	f = d[:,0] 
+	
+	
+	start_low  = 0
+	start_high = 0
+	for i in range(24):
+		if (i>=6) and (i<=17):
+			ff, r = spectrum_fit(f, d[:,i+1], d[:,i+1+48], Nfg=5, F1_LOW=FLOW, F1_HIGH=FHIGH, F2_LOW=FLOW, F2_HIGH=FHIGH)
+			if start_low == 0:
+				r_low = np.copy(r)
+				w_low = d[:,i+1+48]
+				start_low = 1
+			else:		
+				r_low = np.vstack((r_low, r))
+				w_low = np.vstack((w_low, d[:,i+1+48]))
+				
+		if (i<6) or (i>17):
+			ff, r = spectrum_fit(f, d[:,i+1], d[:,i+1+48], Nfg=5, F1_LOW=FLOW, F1_HIGH=FHIGH, F2_LOW=FLOW, F2_HIGH=FHIGH)
+			if start_high == 0:
+				r_high = np.copy(r)
+				w_high = d[:,i+1+48]
+				start_high = 1
+			else:		
+				r_high = np.vstack((r_high, r))
+				w_high = np.vstack((w_high, d[:,i+1+48]))
+
+	
+	r_high1 = r_high[0:6,:]
+	r_high2 = r_high[6::,:]
+	r_high = np.vstack((r_high2, r_high1))
+		
+	w_high1 = w_high[0:6,:]
+	w_high2 = w_high[6::,:]
+	w_high = np.vstack((w_high2, w_high1))
+
+	
+
+	plt.close()
+	plt.close()
+	plt.close()
+	plt.close()
+	
+	
+	plt.figure(figsize=[13,11])
+	plt.subplot(1,2,1)
+	c = 'b'
+	for i in range(len(r_low[:,0])):
+		plt.plot(f[w_low[i,:]>0], r_low[i,:][w_low[i,:]>0]-0.5*i, c)
+		if c == 'b':
+			c = 'r'
+		elif c == 'r':
+			c = 'b'
+	plt.xlim([60, 150])
+	plt.grid()
+	plt.ylim([-6, 0.5])
+	plt.xlabel('frequency [MHz]')
+	plt.ylabel('GHA\n [0.5 K per division]')
+	plt.yticks(np.arange(-5.5, 0.1, 0.5), np.arange(17, 5, -1))
+
+
+
+
+	plt.subplot(1,2,2)
+	c = 'b'
+	for i in range(len(r_high[:,0])):
+		plt.plot(f[w_high[i,:]>0], r_high[i,:][w_high[i,:]>0]-2*i, c)
+		if c == 'b':
+			c = 'r'
+		elif c == 'r':
+			c = 'b'		
+	plt.xlim([60, 150])
+	plt.grid()
+	plt.ylim([-24, 2])
+	plt.xlabel('frequency [MHz]')
+	plt.ylabel('GHA\n [2 K per division]')
+	plt.yticks(np.arange(-22, 0.1, 2), np.arange(5, -7, -1))
+	
+	
+	
+	plt.savefig(edges_folder + 'plots/20191205/data_residuals_no_ground_loss_no_beam_correction.pdf', bbox_inches='tight')
+	plt.close()
+	plt.close()
+	plt.close()
+	plt.close()
+	
+	
+	return 0
+
+
+
+
+
+
+
+
+def residuals_of_simulations(case, name_flag, Nfg=5, FLOW=60, FHIGH=150):
+	
+	#t_all = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_120MHz_tant.txt')
+	#f = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_120MHz_freq.txt')
+	#LST = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_120MHz_LST.txt')
+	
+	if case == '11': # inf ground plane
+		t_all = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_90deg_alan1_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_tant.txt')
+		f     = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_90deg_alan1_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_freq.txt')
+		LST   = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_90deg_alan1_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_LST.txt')
+		bf_all = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_90deg_alan1_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_data.txt')
+	
+	elif case == '12': # 30x30 m
+		t_all = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_tant.txt')
+		f     = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_freq.txt')
+		LST   = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_LST.txt')
+		bf_all = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_data.txt')
+	
+	elif case == '13':
+		t_all = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_90deg_alan0_haslam_flat_index_2.56_reffreq_90MHz_tant.txt')
+		f     = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_90deg_alan0_haslam_flat_index_2.56_reffreq_90MHz_freq.txt')
+		LST   = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_90deg_alan0_haslam_flat_index_2.56_reffreq_90MHz_LST.txt')
+		bf_all = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_90deg_alan0_haslam_flat_index_2.56_reffreq_90MHz_data.txt')
+	
+	elif case == '14': 
+		t_all = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_90deg_alan0_guzman_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_tant.txt')
+		f     = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_90deg_alan0_guzman_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_freq.txt')
+		LST   = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_90deg_alan0_guzman_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_LST.txt')
+		bf_all = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_90deg_alan0_guzman_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_data.txt')
+		
+	elif case == '15': 
+		t_all = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_90deg_alan0_LW_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_tant.txt')
+		f     = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_90deg_alan0_LW_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_freq.txt')
+		LST   = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_90deg_alan0_LW_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_LST.txt')
+		bf_all = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_90deg_alan0_LW_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_data.txt')
+		
+	elif case == '16': 
+		t_all = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_90deg_alan0_LW_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_tant.txt')
+		f     = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_90deg_alan0_LW_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_freq.txt')
+		LST   = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_90deg_alan0_LW_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_LST.txt')
+		bf_all = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_90deg_alan0_LW_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_data.txt')
+		
+
+	
+	if case == '21': # WIPL-D
+		t_all = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_WIPL-D_101_90deg_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_tant.txt')
+		f     = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_WIPL-D_101_90deg_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_freq.txt')
+		LST   = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_WIPL-D_101_90deg_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_LST.txt')		
+		l_all = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_WIPL-D_101_90deg_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_loss.txt')
+		bf_all = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_WIPL-D_101_90deg_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_beam_factor.txt')
+			
+		# Adding the ground loss
+		t_all = t_all + 300*l_all
+		
+		
+	if case == '22': # WIPL-D
+		t_all = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_WIPL-D_102_90deg_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_tant.txt')
+		f     = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_WIPL-D_102_90deg_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_freq.txt')
+		LST   = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_WIPL-D_102_90deg_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_LST.txt')		
+		l_all = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_WIPL-D_102_90deg_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_loss.txt')
+		bf_all = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_WIPL-D_102_90deg_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_beam_factor.txt')
+			
+		# Adding the ground loss
+		t_all = t_all + 300*l_all		
+	
+	
+	if case == '23': # WIPL-D
+		t_all  = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_WIPL-D_103_90deg_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_tant.txt')
+		f      = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_WIPL-D_103_90deg_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_freq.txt')
+		LST    = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_WIPL-D_103_90deg_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_LST.txt')
+		l_all  = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_WIPL-D_103_90deg_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_loss.txt')		
+		bf_all = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_WIPL-D_103_90deg_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_beam_factor.txt')
+		
+			
+		# Adding the ground loss
+		t_all = t_all + 300*l_all		
+	
+
+	elif case == '31': # 30x30 m,   SAME AS CASE 12 BUT WITH CORRECT COMPUTATION OF ANTENNA TEMPERATURE AND BEAM FACTOR
+		t_all = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/CORRECT_mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_tant.txt')
+		f     = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/CORRECT_mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_freq.txt')
+		LST   = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/CORRECT_mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_LST.txt')
+		bf_all = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/CORRECT_mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_beam_factor.txt')
+
+
+		
+		
+	fc = f[(f>=FLOW) & (f<=FHIGH)]
+	tc = t_all[:,(f>=FLOW) & (f<=FHIGH)]
+	bc = bf_all[:,(f>=FLOW) & (f<=FHIGH)]
+	
+	GHA        = LST - 17.76
+	GHA[GHA<0] = GHA[GHA<0] + 24
+	
+	index_sort = np.argsort(GHA)
+	
+	GHA_inc = GHA[index_sort]
+	tc_inc  = tc[index_sort,:]
+	bc_inc  = bc[index_sort,:]
+	
+
+
+	res    = np.zeros((24, len(fc)))
+	resb   = np.zeros((24, len(fc)))
+	bf_all = np.zeros((24, len(fc)))
+	
+	for i in range(24):
+		index = np.arange(len(GHA_inc))
+		
+		ix = index[(GHA_inc>=i) & (GHA_inc<(i+1))]
+		tx = tc_inc[ix,:]
+		bx = bc_inc[ix,:]
+		
+		
+		print(ix)
+		avt = np.mean(tx, axis=0)
+		avb = np.mean(bx, axis=0)
+		
+		pc = ba.fit_polynomial_fourier('LINLOG', fc/200, avt, Nfg)
+		mc = ba.model_evaluate('LINLOG', pc[0], fc/200)
+		rc = avt - mc
+		res[i,:] = rc
+		
+		pc = ba.fit_polynomial_fourier('LINLOG', fc/200, avb, Nfg)
+		mbc = ba.model_evaluate('LINLOG', pc[0], fc/200)
+		rbc = avb - mbc
+		resb[i,:] = rbc		
+		
+		
+		bf_all[i,:] = avb
+		
+		
+
+	gg = np.arange(24)
+
+	r_low  = res[(gg>=6) & (gg<=17), :]
+	
+	r_high  = res[(gg<6) | (gg>17), :]
+	r_high1 = r_high[0:6,:]
+	r_high2 = r_high[6::,:]
+	r_high  = np.vstack((r_high2, r_high1))	
+
+	
+	
+	
+	rb_low  = resb[(gg>=6) & (gg<=17), :]
+	
+	rb_high  = resb[(gg<6) | (gg>17), :]
+	rb_high1 = rb_high[0:6,:]
+	rb_high2 = rb_high[6::,:]
+	rb_high  = np.vstack((rb_high2, rb_high1))	
+	
+	
+	
+	
+	b_low  = bf_all[(gg>=6) & (gg<=17), :]
+	
+	b_high  = bf_all[(gg<6) | (gg>17), :]
+	b_high1 = b_high[0:6,:]
+	b_high2 = b_high[6::,:]
+	b_high  = np.vstack((b_high2, b_high1))
+
+
+
+
+	f = np.copy(fc)
+
+
+
+
+
+
+
+
+
+
+
+
+
+	plt.close()
+	plt.close()
+	plt.close()
+	plt.close()
+	
+	plt.figure(figsize=[13,11])
+	plt.subplot(1,2,1)
+	c = 'b'
+	for i in range(len(r_low[:,0])):
+		plt.plot(f, r_low[i,:]-0.5*i, c)
+		if c == 'b':
+			c = 'r'
+		elif c == 'r':
+			c = 'b'
+	plt.xlim([60, 150])
+	plt.grid()
+	plt.ylim([-6, 0.5])
+	plt.xlabel('frequency [MHz]')
+	plt.ylabel('GHA\n [0.5 K per division]')
+	plt.yticks(np.arange(-5.5, 0.1, 0.5), np.arange(17, 5, -1))
+
+
+	plt.subplot(1,2,2)
+	c = 'b'
+	for i in range(len(r_high[:,0])):
+		plt.plot(f, r_high[i,:]-2*i, c)
+		if c == 'b':
+			c = 'r'
+		elif c == 'r':
+			c = 'b'		
+	plt.xlim([60, 150])
+	plt.grid()
+	plt.ylim([-24, 2])
+	plt.xlabel('frequency [MHz]')
+	plt.ylabel('GHA\n [2 K per division]')
+	plt.yticks(np.arange(-22, 0.1, 2), np.arange(5, -7, -1))
+	
+	
+	plt.savefig(edges_folder + 'plots/20191127/' + name_flag + '_simulated_residuals.pdf', bbox_inches='tight')
+	plt.close()
+	plt.close()
+	plt.close()
+	plt.close()
+
+
+
+
+
+	#plt.close()
+	#plt.close()
+	#plt.close()
+	#plt.close()
+	
+	plt.figure(figsize=[13,11])
+	plt.subplot(1,2,1)
+	c = 'b'
+	for i in range(len(b_low[:,0])):
+		plt.plot(f, b_low[i,:]-0.1*i, c)
+		if c == 'b':
+			c = 'r'
+		elif c == 'r':
+			c = 'b'
+	plt.xlim([60, 150])
+	plt.grid()
+	plt.ylim([-0.2, 1.1])
+	plt.xlabel('frequency [MHz]')
+	plt.ylabel('GHA\n [0.1 per division]')
+	plt.yticks(np.arange(-0.1, 1.01, 0.1), np.arange(17, 5, -1))
+
+
+	plt.subplot(1,2,2)
+	c = 'b'
+	for i in range(len(b_high[:,0])):
+		plt.plot(f, b_high[i,:]-0.1*i, c)
+		if c == 'b':
+			c = 'r'
+		elif c == 'r':
+			c = 'b'		
+	plt.xlim([60, 150])
+	plt.grid()
+	plt.ylim([-0.2, 1.1])
+	plt.xlabel('frequency [MHz]')
+	plt.ylabel('GHA\n [0.1 per division]')
+	plt.yticks(np.arange(-0.1, 1.01, 0.1), np.arange(5, -7, -1))
+	
+	
+	plt.savefig(edges_folder + 'plots/20191127/' + name_flag + '_simulated_correction.pdf', bbox_inches='tight')
+	plt.close()
+	plt.close()
+	plt.close()
+	plt.close()
+	
+	
+	
+	
+	
+	
+	
+
+	#plt.close()
+	#plt.close()
+	#plt.close()
+	#plt.close()
+	
+	plt.figure(figsize=[13,11])
+	plt.subplot(1,2,1)
+	c = 'b'
+	for i in range(len(rb_low[:,0])):
+		plt.plot(f, rb_low[i,:]-0.005*i, c)
+		if c == 'b':
+			c = 'r'
+		elif c == 'r':
+			c = 'b'
+	plt.xlim([60, 150])
+	plt.grid()
+	plt.ylim([-0.06, 0.005])
+	plt.xlabel('frequency [MHz]')
+	plt.ylabel('GHA\n [0.05 per division]')
+	plt.yticks(np.arange(-0.055, 0.0025, 0.005), np.arange(17, 5, -1))
+
+
+	plt.subplot(1,2,2)
+	c = 'b'
+	for i in range(len(rb_high[:,0])):
+		plt.plot(f, rb_high[i,:]-0.005*i, c)
+		if c == 'b':
+			c = 'r'
+		elif c == 'r':
+			c = 'b'		
+	plt.xlim([60, 150])
+	plt.grid()
+	plt.ylim([-0.06, 0.005])
+	plt.xlabel('frequency [MHz]')
+	plt.ylabel('GHA\n [0.05 per division]')
+	plt.yticks(np.arange(-0.055, 0.0025, 0.005), np.arange(5, -7, -1))
+	
+	
+	plt.savefig(edges_folder + 'plots/20191127/' + name_flag + '_simulated_correction_residuals.pdf', bbox_inches='tight')
+	plt.close()
+	plt.close()
+	plt.close()
+	plt.close()	
+	
+	
+	
+
+	
+	
+	return fc, GHA_inc, res
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

@@ -727,7 +727,7 @@ def NWP_fit(fn, rl, ro, rs, Toe, Tse, To, Ts, wterms, second_frequency_array=0):
 	TS = np.zeros(len(fn))
 	
 	
-	if np.sum(second_frequency_array) == 0:
+	if isinstance(second_frequency_array, int) == True:
 		fna = np.copy(fn)
 
 	else:
@@ -812,11 +812,12 @@ def calibration_quantities(fn, Tae, The, Toe, Tse, rl, ra, rh, ro, rs, Ta, Th, T
 
 
 	# Copy frequency array to "second" frequency array, if no second frequency array is given
-	if np.sum(second_frequency_array) == 0:
+	if isinstance(second_frequency_array, int) == True:
 		fna = np.copy(fn)
 		
 	else:
 		fna = np.copy(second_frequency_array)
+		print('wawawawawawa')
 
 
 
@@ -836,6 +837,8 @@ def calibration_quantities(fn, Tae, The, Toe, Tse, rl, ra, rh, ro, rs, Ta, Th, T
 	TU = np.zeros((niter, len(fn)))
 	TC = np.zeros((niter, len(fn)))
 	TS = np.zeros((niter, len(fn)))
+
+
 
 	scaX = np.zeros((niter, len(fna)))
 	offX = np.zeros((niter, len(fna)))
@@ -913,7 +916,7 @@ def calibration_quantities(fn, Tae, The, Toe, Tse, rl, ra, rh, ro, rs, Ta, Th, T
 		TU[i,:], TC[i,:], TS[i,:], TUX[i,:], TCX[i,:], TSX[i,:] = NWP_fit(fn, rl, ro, rs, Toe_iter[i,:], Tse_iter[i,:], To, Ts, wterms, second_frequency_array=fna)
 
 
-	if np.sum(second_frequency_array) == 0:
+	if isinstance(second_frequency_array, int) == True:
 		return sca[-1,:], off[-1,:], TU[-1,:], TC[-1,:], TS[-1,:]
 	
 	else:
@@ -2323,7 +2326,7 @@ def guzman_45MHz_map():
 
 
 
-def antenna_beam_factor(band, name_save, beam_file=0, sky_model='haslam', rotation_from_north=90, index_model='gaussian', sigma_deg=8.5, index_center=2.4, index_pole=2.65, band_deg=10, index_inband=2.5, index_outband=2.6, reference_frequency=100):
+def antenna_beam_factor(band, name_save, FLOW=50, FHIGH=200, beam_file=0, sky_model='haslam', rotation_from_north=90, index_model='gaussian', sigma_deg=8.5, index_center=2.4, index_pole=2.65, band_deg=10, index_inband=2.5, index_outband=2.6, reference_frequency=100):
 
 	"""
 	2019-04-16
@@ -2343,18 +2346,9 @@ def antenna_beam_factor(band, name_save, beam_file=0, sky_model='haslam', rotati
 	"""
 
 
-
-
-
-	
-
-
 	# Data paths
 	path_data = edges_folder + 'sky_models/'
 	path_save = edges_folder + band + '/calibration/beam_factors/raw/'
-
-
-
 
 
 
@@ -2371,52 +2365,81 @@ def antenna_beam_factor(band, name_save, beam_file=0, sky_model='haslam', rotati
 	
 	
 	# Best case, Feb 20, 2019
-	if (band == 'mid_band') or (band == 'low_band3'):
-		beam_all = FEKO_blade_beam(band, beam_file, AZ_antenna_axis=rotation_from_north)
+	if ((band == 'mid_band') and (beam_file <= 100)) or (band == 'low_band3'):
+		beam_all_X = FEKO_blade_beam(band, beam_file, AZ_antenna_axis=rotation_from_north)
 
 	elif band == 'low_band':
-		beam_all = oeg.FEKO_low_band_blade_beam(beam_file=beam_file, frequency_interpolation='no', frequency=np.array([0]), AZ_antenna_axis=rotation_from_north)
+		beam_all_X = oeg.FEKO_low_band_blade_beam(beam_file=beam_file, frequency_interpolation='no', frequency=np.array([0]), AZ_antenna_axis=rotation_from_north)
+		
 	
+	
+
+	
+	# Beams from WIPL-D
+	elif ((band == 'mid_band') and (beam_file > 100)):
+		
+		if beam_file == 101:
+			filename = edges_folder + '/others/beam_simulations/wipl-d/20191030/blade_dipole_infinite_soil_real_metal_GP_30mx30m.ra1'
+			
+		elif beam_file == 102:
+			filename = edges_folder + '/others/beam_simulations/wipl-d/20191124/mid_band_perf_30x30_5mm_wire_.ra1'
+			
+		elif beam_file == 103:
+			filename = edges_folder + '/others/beam_simulations/wipl-d/20191124/mid_band_perf_30x30_5mm_wire_no_soil_conductivity.ra1'			
+			
+			
+		freq_array_X, AZ_beam, EL_beam, beam_all_X = ba.WIPLD_beam_read(filename, AZ_antenna_axis=rotation_from_north)
+
+		
+
+			
 
 	# Frequency array
 	if band == 'mid_band':
 		if beam_file == 0:  # Best case, Feb 20, 2019
 			# ALAN #0
-			freq_array = np.arange(50, 201, 2, dtype='uint32') 		
+			freq_array_X = np.arange(50, 201, 2, dtype='uint32') 		
 		
 		elif beam_file == 1:
 			# ALAN #1
-			freq_array = np.arange(50, 201, 2, dtype='uint32')  
+			freq_array_X = np.arange(50, 201, 2, dtype='uint32')  
 	
 		elif beam_file == 2:
 			# ALAN #2
-			freq_array = np.arange(50, 201, 2, dtype='uint32')  
+			freq_array_X = np.arange(50, 201, 2, dtype='uint32')  
 	
 		elif beam_file == 100:
 			# NIVEDITA
-			freq_array = np.arange(60, 201, 2, dtype='uint32')	
+			freq_array_X = np.arange(60, 201, 2, dtype='uint32')	
 
-
-
-			
+		
 	elif band == 'low_band3':
 		if beam_file == 1:
-			freq_array = np.arange(50, 121, 2, dtype='uint32')
-			
-			
-			
+			freq_array_X = np.arange(50, 121, 2, dtype='uint32')
+					
 	elif band == 'low_band':
 		if beam_file == 2:
-			freq_array = np.arange(40,121,2, dtype='uint32')
+			freq_array_X = np.arange(40,121,2, dtype='uint32')
 			
+
+
+	
+	
+	# Selecting frequency range
+	freq_array = freq_array_X[(freq_array_X >= FLOW) & (freq_array_X <= FHIGH)]
+	beam_all   = beam_all_X[(freq_array_X >= FLOW) & (freq_array_X <= FHIGH), :, :]
+				
+
+	print(beam_all.shape)
+	print(np.max(beam_all))
+
+
 			
-			
-					
+				
 	# Index of reference frequency
 	index_freq_array = np.arange(len(freq_array))
 	irf = index_freq_array[freq_array == reference_frequency]
 	print('Reference frequency: ' + str(freq_array[irf][0]) + ' MHz')
-
 
 
 
@@ -2501,12 +2524,13 @@ def antenna_beam_factor(band, name_save, beam_file=0, sky_model='haslam', rotati
 	# Looping over LST
 	LST             = np.zeros(72)
 	convolution_ref = np.zeros((len(LST), len(beam_all[:,0,0])))
-	convolution     = np.zeros((len(LST), len(beam_all[:,0,0])))	
-	numerator       = np.zeros((len(LST), len(beam_all[:,0,0])))
-	denominator     = np.zeros((len(LST), len(beam_all[:,0,0])))
+	antenna_temperature_above_horizon = np.zeros((len(LST), len(beam_all[:,0,0])))	
+	loss_fraction = np.zeros((len(LST), len(beam_all[:,0,0])))
+	
 	
 	integrated_gain_above_horizon = np.zeros(len(beam_all[:,0,0]))
 	pixels_above_horizon          = np.zeros(len(LST))
+	
 
 
 	#for i in range(2):
@@ -2538,8 +2562,8 @@ def antenna_beam_factor(band, name_save, beam_file=0, sky_model='haslam', rotati
 
 
 		# Selecting coordinates above the horizon
-		AZ_above_horizon         = AZ[EL>=0]
-		EL_above_horizon         = EL[EL>=0]
+		AZ_above_horizon      = AZ[EL>=0]
+		EL_above_horizon      = EL[EL>=0]
 
 
 
@@ -2550,8 +2574,8 @@ def antenna_beam_factor(band, name_save, beam_file=0, sky_model='haslam', rotati
 
 
 		# Arranging AZ and EL arrays corresponding to beam model
-		az_array   = np.tile(AZ_beam,91)
-		el_array   = np.repeat(EL_beam,360)
+		az_array            = np.tile(AZ_beam,91)
+		el_array            = np.repeat(EL_beam,360)
 		az_el_original      = np.array([az_array, el_array]).T
 		az_el_above_horizon = np.array([AZ_above_horizon, EL_above_horizon]).T
 
@@ -2561,52 +2585,85 @@ def antenna_beam_factor(band, name_save, beam_file=0, sky_model='haslam', rotati
 		for j in range(len(freq_array)):
 
 			print(name_save + ', Freq: ' + str(j) + ' out of ' + str(len(beam_all[:,0,0])))
-
+			
+			
 			beam_array         = beam_all[j,:,:].reshape(1,-1)[0]
 			beam_above_horizon = spi.griddata(az_el_original, beam_array, az_el_above_horizon, method='cubic')  # interpolated beam
 
 
 			no_nan_array = np.ones(len(AZ_above_horizon)) - np.isnan(beam_above_horizon)
 			index_no_nan = np.nonzero(no_nan_array)[0]
-
-	
-			# Convolution between (beam at all frequencies) and (sky at reference frequency)
-			convolution_ref[i, j]   = np.sum(beam_above_horizon[index_no_nan]*sky_ref_above_horizon[index_no_nan])/np.sum(beam_above_horizon[index_no_nan])
-
-
-			# Antenna temperature, i.e., Convolution between (beam at all frequencies) and (sky at all frequencies)
-			sky_above_horizon_ff    = sky_above_horizon[:, j].flatten()
-			convolution[i, j]       = np.sum(beam_above_horizon[index_no_nan]*sky_above_horizon_ff[index_no_nan])/np.sum(beam_above_horizon[index_no_nan])
 			
-			if i == 0:
-				integrated_gain_above_horizon[j] = np.sum(beam_above_horizon[index_no_nan])
-				
-			if j == 0:
-				pixels_above_horizon[i]          = len(beam_above_horizon[index_no_nan])
+			sky_above_horizon_ff = sky_above_horizon[:, j].flatten()
 
 
 
+			## Convolution and Antenna temperature OLD 'incorrect' WAY
+			## -------------------------------------------------------
 	
+			## Convolution between (beam at all frequencies) and (sky at reference frequency)
+			#convolution_ref[i, j] = np.sum(beam_above_horizon[index_no_nan]*sky_ref_above_horizon[index_no_nan])/np.sum(beam_above_horizon[index_no_nan])
+
+			## Antenna temperature, i.e., Convolution between (beam at all frequencies) and (sky at all frequencies)
+			#antenna_temperature_above_horizon[i, j] = np.sum(beam_above_horizon[index_no_nan]*sky_above_horizon_ff[index_no_nan]) / np.sum(beam_above_horizon[index_no_nan])
+			
+			#loss_fraction[i, j] = 0
+			
+			
+			
+			
+			# Convolution and Antenna temperature NEW 'correct' WAY
+			# -----------------------------------------------------
+			
+			# Convolution between (beam at all frequencies) and (sky at reference frequency)
+			convolution_ref[i, j] = np.sum(beam_above_horizon[index_no_nan]*sky_ref_above_horizon[index_no_nan])			
+						
+			# Number of pixels over 4pi that are not 'nan'
+			Npixels_total             = len(EL)
+			Npixels_above_horizon_nan = len(EL_above_horizon) - len(EL_above_horizon[index_no_nan])  # The nans are only above the horizon
+			Npixels_total_no_nan      = Npixels_total - Npixels_above_horizon_nan
+			
+			# 'Correct' antenna temperature above the horizon, i.e., Convolution between (beam at all frequencies) and (sky at all frequencies)
+			antenna_temperature_above_horizon[i, j] = np.sum(beam_above_horizon[index_no_nan]*sky_above_horizon_ff[index_no_nan]) / Npixels_total_no_nan
+			
+			# Loss fraction
+			loss_fraction[i, j] = 1 - (np.sum(beam_above_horizon[index_no_nan]) / Npixels_total_no_nan)
+			
+			
+			
+										
+			#if i == 0:
+				#integrated_gain_above_horizon[j] = np.sum(beam_above_horizon[index_no_nan])
+				
+			#if j == 0:
+				#pixels_above_horizon[i]          = len(beam_above_horizon[index_no_nan])
+				
+			#numerator[i,j] = np.sum(beam_above_horizon[index_no_nan]*sky_above_horizon_ff[index_no_nan])
+
+			
+
+	# Beam factor 
+	# -------------------------------	
 	beam_factor_T = convolution_ref.T/convolution_ref[:,irf].T
 	beam_factor   = beam_factor_T.T
 
 
-
+	
+	
 
 
 	# Saving
 	# ---------------------------------------------------------
-	np.savetxt(path_save + name_save + '_tant.txt', convolution)
-	np.savetxt(path_save + name_save + '_data.txt', beam_factor)
-	np.savetxt(path_save + name_save + '_LST.txt',  LST)
 	np.savetxt(path_save + name_save + '_freq.txt', freq_array)
-
-	np.savetxt(path_save + name_save + '_int_gain_above_horizon.txt', integrated_gain_above_horizon)
-	np.savetxt(path_save + name_save + '_pixels_above_horizon.txt', pixels_above_horizon)
+	np.savetxt(path_save + name_save + '_LST.txt',  LST)
+	np.savetxt(path_save + name_save + '_tant.txt', antenna_temperature_above_horizon)
+	np.savetxt(path_save + name_save + '_loss.txt', loss_fraction)
+	np.savetxt(path_save + name_save + '_beam_factor.txt', beam_factor)
 	
 
 
-	return freq_array, LST, convolution, beam_factor, integrated_gain_above_horizon, pixels_above_horizon
+
+	return freq_array, LST, antenna_temperature_above_horizon, loss_fraction, beam_factor           #, convolution, numerator, pixels_above_horizon #convolution, beam_factor, integrated_gain_above_horizon
 
 
 
@@ -3123,9 +3180,59 @@ def HFSS_integrated_beam_directivity():
 
 
 
+def beam_solid_angle(gain_map):
+	
+	# Theta vector valid for the FEKO beams. In the beam, dimension 1 increases from index 0 to 90 corresponding to elevation, which is 90-theta
+	theta = np.arange(90,-1,-1)
+	
+	sin_theta      = np.sin(theta*(np.pi/180))
+	sin_theta_2D_T = np.tile(sin_theta, (360, 1))
+	sin_theta_2D   = sin_theta_2D_T.T
+			
+	beam_integration = np.sum(gain_map * sin_theta_2D)
+	beam_solid_angle = (1/(4*np.pi)) * ((np.pi/180)**2) * beam_integration
+				
+	return beam_solid_angle
 
 
 
+
+
+
+def beam_normalization(f_X, input_beam_X, FLOW=50, FHIGH=150):
+	
+	"""
+	2019-Nov-29
+	
+	
+	input_beam_X = cal.FEKO_blade_beam('mid_band', 0, AZ_antenna_axis=90)
+	f_X          = np.arange(50,201,2)
+	
+	f, original_solid_angle, normalized_beam = cal.beam_normalization(f_X, input_beam_X)
+	
+	"""
+	
+	
+	# Select data in the range 50-150 MHz, where we have ground loss data available.
+	f          = f_X[(f_X >= FLOW) & (f_X <= FHIGH)]
+	input_beam = input_beam_X[(f_X >= FLOW) & (f_X <= FHIGH),:,:]
+	
+	# Definitions
+	g                    = ground_loss('mid_band', f)
+	output_beam          = np.copy(input_beam)	
+	original_solid_angle = np.zeros(len(f))
+	
+	# Frequency-by-frequency correction
+	for i in range(len(f)):
+		m   = input_beam[i,:,:]
+		osa = beam_solid_angle(m)
+		original_solid_angle[i] = osa
+		
+		output_beam[i,:,:] = (g[i]/osa) * m
+	
+	
+	
+	return f, original_solid_angle, output_beam
 
 
 

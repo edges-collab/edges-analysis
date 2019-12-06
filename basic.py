@@ -1285,3 +1285,127 @@ def HFSS_beam_read(path_to_file, dB_or_linear, theta_min=0, theta_max=180, theta
 
 
 
+
+
+
+
+def WIPLD_beam_read(filename, AZ_antenna_axis=0):
+	
+	# '/EDGES_vol2/others/beam_simulations/wipl-d/20191012/blade_dipole_infinite_PEC.ra1'
+	with open(filename) as fn:
+		
+		file_length = 0
+		number_of_frequencies = 0
+		
+		flag_columns = 0
+		frequencies_list = []
+		for line in fn:
+			file_length = file_length + 1
+			if line[2] == '>':
+				number_of_frequencies = number_of_frequencies + 1
+				frequencies_list.append(float(line[19:32]))
+				print(line)
+				
+			if (line[2] != '>') and (flag_columns == 0):
+				line_splitted = line.split()
+				number_of_columns = len(line_splitted)
+				flag_columns = 1
+		
+		rows_per_frequency = (file_length - number_of_frequencies) / number_of_frequencies
+		
+		print(file_length)
+		print(int(number_of_frequencies))
+		print(int(rows_per_frequency))
+		print(int(number_of_columns))
+		
+		output = np.zeros((int(number_of_frequencies), int(rows_per_frequency), int(number_of_columns)))
+		
+		
+	frequencies = np.array(frequencies_list)
+
+
+
+	with open(filename) as fn:
+		i = -1
+		for line in fn:
+			
+			if line[2] == '>':
+				i = i + 1
+				j = -1
+				
+				print(line)
+			else:
+				j = j + 1
+				line_splitted = line.split()
+				line_array    = np.array(line_splitted, dtype=float)
+				
+				output[i,j,:] = line_array
+				#print(line_array)
+				
+				
+
+	# Rearranging data
+	# ----------------
+	phi_u   = np.unique(output[0,:,0])
+	theta_u = np.unique(output[0,:,1])
+	
+	beam = np.zeros((len(frequencies), len(theta_u), len(phi_u))) 
+	
+	for i in range(len(frequencies)):
+		out_2D = output[i,:,:]
+		
+		phi   = out_2D[:,0]
+		theta = 90 - out_2D[:,1]  # theta is zero at the zenith, and goes to 180 deg
+		gain  = out_2D[:,6]
+		
+		theta_u = np.unique(theta)
+		it = np.argsort(theta_u)
+		theta_a = theta_u[it]
+		
+		for j in range(len(theta_a)):
+			#print(theta_a[j])
+			
+			phi_j  = phi[theta == theta_a[j]]
+			gain_j = gain[theta == theta_a[j]]
+			
+			ip = np.argsort(phi_j)
+			gp = gain_j[ip]
+			
+			beam[i, j, :] = gp
+	
+	
+	
+	# Flip beam from theta to elevation
+	# ---------------------------------
+	beam_maps = beam[:,::-1,:]
+	
+				
+	# Change coordinates from theta/phi, to AZ/EL
+	# -------------------------------------------
+	EL = np.arange(0,91) #, dtype='uint32')
+	AZ = np.arange(0,360) #, dtype='uint32')
+				
+	
+	
+	# Shifting beam relative to true AZ (referenced at due North)
+	# Due to angle of orientation of excited antenna panels relative to due North
+	# ---------------------------------------------------------
+	print('AZ_antenna_axis = ' + str(AZ_antenna_axis) + ' deg')
+	if AZ_antenna_axis < 0:
+		AZ_index          = -AZ_antenna_axis
+		bm1               = beam_maps[:,:,AZ_index::]
+		bm2               = beam_maps[:,:,0:AZ_index]
+		beam_maps_shifted = np.append(bm1, bm2, axis=2)
+
+	elif AZ_antenna_axis > 0:
+		AZ_index          = AZ_antenna_axis
+		bm1               = beam_maps[:,:,0:(-AZ_index)]
+		bm2               = beam_maps[:,:,(360-AZ_index)::]
+		beam_maps_shifted = np.append(bm2, bm1, axis=2)
+
+	elif AZ_antenna_axis == 0:
+		beam_maps_shifted = np.copy(beam_maps)
+	
+	return frequencies, AZ, EL, beam_maps_shifted
+
+
