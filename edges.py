@@ -464,7 +464,7 @@ def antenna_efficiency(band, f):
 
 
 
-def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=1, antenna_s11_year=2018, antenna_s11_day=147, antenna_s11_case=5, antenna_s11_Nfit=15, balun_correction=1, ground_correction=1, beam_correction=1, bf_case=0, FLOW=50, FHIGH=150, Nfg=7):
+def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=1, antenna_s11_year=2018, antenna_s11_day=147, antenna_s11_case=5, antenna_s11_Nfit=15, antenna_correction=1, balun_correction=1, ground_correction=1, beam_correction=1, bf_case=0, FLOW=50, FHIGH=150, Nfg=7):
 	
 	"""
 
@@ -658,6 +658,20 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal_2019_12_50-150MHz_try1/calibration_files/calibration_file_receiver1_50_150MHz_cterms7_wterms11.txt'
 
 
+			if receiver_cal_file == 203:
+				print('Receiver calibration FILE 203')
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal_2019_12_50-150MHz_try1_LNA_rep1/calibration_files/calibration_file_receiver1_50_150MHz_cterms7_wterms8.txt'
+
+
+			if receiver_cal_file == 204:
+				print('Receiver calibration FILE 204')
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal_2019_12_50-150MHz_try1_LNA_rep2/calibration_files/calibration_file_receiver1_50_150MHz_cterms7_wterms8.txt'
+
+
+			if receiver_cal_file == 205:
+				print('Receiver calibration FILE 205')
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal_2019_12_50-150MHz_try1_LNA_rep12/calibration_files/calibration_file_receiver1_50_150MHz_cterms7_wterms8.txt'
+
 
 
 
@@ -707,6 +721,47 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 	
 	
 	
+	
+	
+	
+			if receiver_cal_file == 401:
+				print('Receiver calibration FILE 401')
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal_2019_12_50-150MHz_LNA1_a1_h1_o1_s1_sim2/calibration_files/calibration_file_receiver1_50_150MHz_cterms7_wterms8.txt'
+
+
+			if receiver_cal_file == 402:
+				print('Receiver calibration FILE 402')
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal_2019_12_50-150MHz_LNA1_a1_h2_o1_s1_sim2/calibration_files/calibration_file_receiver1_50_150MHz_cterms7_wterms8.txt'
+
+
+			if receiver_cal_file == 403:
+				print('Receiver calibration FILE 403')
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal_2019_12_50-150MHz_LNA1_a2_h1_o1_s1_sim2/calibration_files/calibration_file_receiver1_50_150MHz_cterms7_wterms8.txt'
+
+
+			if receiver_cal_file == 404:
+				print('Receiver calibration FILE 404')
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal_2019_12_50-150MHz_LNA1_a2_h2_o1_s1_sim2/calibration_files/calibration_file_receiver1_50_150MHz_cterms7_wterms8.txt'
+
+
+			if receiver_cal_file == 405:
+				print('Receiver calibration FILE 404')
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal_2019_12_50-150MHz_LNA1_a2_h2_o1_s2_sim2/calibration_files/calibration_file_receiver1_50_150MHz_cterms7_wterms8.txt'
+
+
+			if receiver_cal_file == 406:
+				print('Receiver calibration FILE 406')
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal_2019_12_50-150MHz_LNA1_a2_h2_o2_s1_sim2/calibration_files/calibration_file_receiver1_50_150MHz_cterms7_wterms8.txt'
+
+
+			if receiver_cal_file == 407:
+				print('Receiver calibration FILE 407')
+				rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal_2019_12_50-150MHz_LNA1_a2_h2_o2_s2_sim2/calibration_files/calibration_file_receiver1_50_150MHz_cterms7_wterms8.txt'
+
+
+
+
+	
 		
 		rcv = np.genfromtxt(rcv_file)
 	
@@ -738,6 +793,16 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 		# ----------------------------------------------------------------
 		tc_with_loss_and_beam = cal.calibrated_antenna_temperature(t_2D, s11_ant, s11_LNA, C1, C2, TU, TC, TS)
 
+
+		# Antenna Loss (interface between panels and balun)
+		# -------------------------------------------------
+		if antenna_correction == 0:
+			Ga = 1
+			print('NO ANTENNA LOSS CORRECTION')
+		
+		if antenna_correction == 1:
+			Ga = cal.antenna_loss(band, fin)
+
 		
 		
 		
@@ -766,7 +831,7 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 	
 		# Total loss
 		# ----------
-		G = Gbc * Gg
+		G = Ga * Gbc * Gg
 	
 	
 	
@@ -1611,7 +1676,7 @@ def rms_filter(band, case, gx, rms, Nsigma):
 			file_path = edges_folder + band + '/rms_filters/calibration_2019_10_no_ground_loss_no_beam_corrections/'
 
 
-		if case == 3:
+		if (case == 3) or (case == 406):
 			file_path = edges_folder + band + '/rms_filters/case_nominal_50-150MHz_no_ground_loss_no_beam_corrections/'
 
 
@@ -1853,7 +1918,13 @@ def level3_to_level4(band, case, GHA_edges, sun_el_max, moon_el_max, save_folder
 		# Case 1 calibration: Receiver 2018, Switch 2018, AGAIN		
 		if case == 5:
 			path_files  = edges_folder + 'mid_band/spectra/level3/case_nominal_14_14_terms_55-150MHz_no_ground_loss_no_beam_corrections/'			
+	
 			
+		# Calibration: Receiver 2018, Switch 2018, AGAIN, LNA1		
+		if case == 406:
+			path_files  = edges_folder + 'mid_band/spectra/level3/case_nominal_50-150MHz_LNA1_a2_h2_o2_s1_sim2/'
+
+
 			
 			
 		
@@ -2313,6 +2384,12 @@ def level4_binned_residuals(case, FLOW, FHIGH, output_file_name_hdf5):
 		save_folder                = edges_folder + 'mid_band/spectra/level4/case_nominal_14_14_terms_55-150MHz_no_ground_loss_no_beam_corrections/binned_residuals/'
 
 
+	elif case == 406:	
+		f, p, r, w, index, gha, yy = level4read(edges_folder + 'mid_band/spectra/level4/case_nominal_50-150MHz_LNA1_a2_h2_o2_s1_sim2/case_nominal_50-150MHz_LNA1_a2_h2_o2_s1_sim2.hdf5')
+		save_folder                = edges_folder + 'mid_band/spectra/level4/case_nominal_50-150MHz_LNA1_a2_h2_o2_s1_sim2/binned_residuals/'
+
+
+
 	
 	# Computing the residuals
 	# -----------------------
@@ -2426,7 +2503,12 @@ def level4_plot_residuals(case, GHA_index, TITLE, figure_save_name, DY):
 		
 	elif case == 5:
 		filename = edges_folder + 'mid_band/spectra/level4/case_nominal_14_14_terms_55-150MHz_no_ground_loss_no_beam_corrections/binned_residuals/binned_residuals_one_hour_GHA.hdf5'
-		figure_save_path_subfolder = edges_folder + 'mid_band/spectra/level4/case_nominal_14_14_terms_55-150MHz_no_ground_loss_no_beam_corrections/binned_plots/'		
+		figure_save_path_subfolder = edges_folder + 'mid_band/spectra/level4/case_nominal_14_14_terms_55-150MHz_no_ground_loss_no_beam_corrections/binned_plots/'
+		
+	elif case == 406:
+		filename = edges_folder + 'mid_band/spectra/level4/case_nominal_50-150MHz_LNA1_a2_h2_o2_s1_sim2/binned_residuals/binned_residuals_one_hour_GHA.hdf5'
+		figure_save_path_subfolder = edges_folder + 'mid_band/spectra/level4/case_nominal_50-150MHz_LNA1_a2_h2_o2_s1_sim2/binned_plots/'
+		
 	
 	
 	fb, rb, wb, sb, gha, yd = level4_binned_read(filename) 
@@ -2506,44 +2588,48 @@ def level4_good_days_GHA(GHA, first_day, last_day):
 
 	if GHA == 4:
 		good_days = np.arange(140, 300, 1) 
+
+
+
+
 		
 	if GHA == 5:
 		good_days = np.arange(140, 300, 1) 		
-		
-		
 		
 	if GHA == 6:
 		good_days = np.arange(147, 300, 1) # np.arange(186, 300, 1)
 
 	if GHA == 7:
-		good_days = np.concatenate((np.arange(147, 153, 1), np.arange(159, 202, 1), np.arange(210, 300, 1)))
+		good_days = np.concatenate((np.arange(147, 153, 1), np.arange(160, 168, 1), np.arange(174, 202, 1), np.arange(210, 300, 1)))
 		
 	if GHA == 8:
-		good_days = np.concatenate((np.arange(147, 153, 1), np.arange(160, 168, 1), np.arange(174, 300, 1)))
+		good_days = np.concatenate((np.arange(147, 151, 1), np.arange(160, 168, 1), np.arange(174, 300, 1)))
 
 	if GHA == 9:
-		good_days = np.concatenate((np.arange(147, 153, 1), np.arange(160, 168, 1), np.arange(174, 194, 1), np.arange(197, 300, 1)))
+		good_days = np.concatenate((np.arange(147, 153, 1), np.arange(160, 168, 1), np.arange(174, 194, 1), np.arange(197, 202, 1), np.arange(210, 300, 1)))
 		
 	if GHA == 10:
 		good_days = np.concatenate((np.arange(148, 168, 1), np.arange(177, 194, 1), np.arange(197, 202, 1), np.arange(205, 216, 1)))
 
 	if GHA == 11:
-		good_days = np.concatenate((np.arange(147, 202, 1), np.arange(205, 216, 1), np.arange(218, 300, 1)))
+		good_days = np.arange(187, 202, 1) # np.concatenate((np.arange(147, 149, 1), np.arange(151, 153, 1), np.arange(174, 176, 1), np.arange(177, 178, 1), np.arange(179, 202, 1))) # , np.arange(205, 207, 1), np.arange(218, 300, 1))
 
 	if GHA == 12:
-		good_days = np.concatenate((np.arange(147, 158, 1), np.arange(160, 176, 1), np.arange(177, 194, 1), np.arange(197, 202, 1), np.arange(205, 220, 1)))
-
-
-
-
-
-
+		good_days = np.arange(147, 150, 1)
+		#good_days = np.concatenate((np.arange(147, 158, 1), np.arange(160, 176, 1), np.arange(177, 194, 1), np.arange(197, 202, 1), np.arange(205, 220, 1)))
 		
 	if GHA == 13:
-		good_days = np.concatenate((np.arange(140, 176, 1), np.arange(177, 183, 1), np.arange(187, 194, 1), np.arange(197, 206, 1), np.arange(210, 300, 1)))
+		good_days = np.array([147, 149, 157, 159])   # , 161, 162, 163, 164, 165, 166, 167, 170
+		
+		#good_days = np.concatenate((np.arange(140, 176, 1), np.arange(177, 183, 1), np.arange(187, 194, 1), np.arange(197, 206, 1), np.arange(210, 300, 1)))
+
+
+
+
+
 
 	if GHA == 14:
-		good_days = np.concatenate((np.arange(140, 183, 1), np.arange(187, 206, 1), np.arange(210, 300, 1))) 
+		good_days = np.arange(148, 183, 1)  # np.concatenate((np.arange(140, 183, 1), np.arange(187, 206, 1), np.arange(210, 300, 1))) 
 
 	if GHA == 15:
 		good_days = np.concatenate((np.arange(140, 183, 1), np.arange(187, 206, 1), np.arange(210, 300, 1)))      
@@ -2599,6 +2685,10 @@ def level4_integration(case, GHA_list, first_day, last_day, FLOW, FHIGH, Nfg): #
 		
 	elif case == 5:
 		f, p, r, w, index, gha, yy = level4read(edges_folder + 'mid_band/spectra/level4/case_nominal_14_14_terms_55-150MHz_no_ground_loss_no_beam_corrections/case_nominal_14_14_terms_55-150MHz_no_ground_loss_no_beam_corrections.hdf5')		
+		
+	elif case == 406:
+		f, p, r, w, index, gha, yy = level4read(edges_folder + 'mid_band/spectra/level4/case_nominal_50-150MHz_LNA1_a2_h2_o2_s1_sim2/case_nominal_50-150MHz_LNA1_a2_h2_o2_s1_sim2.hdf5')		
+		
 		
 	
 
@@ -2696,9 +2786,12 @@ def level4_save_averaged_spectra(case, GHA_case, first_day, last_day):
 		file_path = edges_folder + 'mid_band/spectra/level4/case_nominal_14_14_terms_55-150MHz_no_ground_loss_no_beam_corrections/binned_averages/'
 		file_name = 'GHA_every_1hr.txt'
 
-
-		
-		
+	if case == 406:
+		header_text = 'f [MHz], t_ant (GHA=0-23) [K], std (GHA=0-23) [K], Nsamples (GHA=0-23)'
+		file_path = edges_folder + 'mid_band/spectra/level4/case_nominal_50-150MHz_LNA1_a2_h2_o2_s1_sim2/binned_averages/'
+		file_name = 'GHA_every_1hr.txt'
+	
+	
 	start = 0
 	
 	# case 2 corresponds to 1 spectrum every 1 hr in GHA
@@ -2742,6 +2835,11 @@ def level4_plot_integrated_residuals(case, FLOW=60, FHIGH=150):
 	elif case == 5:
 		d = np.genfromtxt(edges_folder + 'mid_band/spectra/level4/case_nominal_14_14_terms_55-150MHz_no_ground_loss_no_beam_corrections/binned_averages/GHA_every_1hr.txt')
 		
+	elif case == 406:
+		d = np.genfromtxt(edges_folder + 'mid_band/spectra/level4/case_nominal_50-150MHz_LNA1_a2_h2_o2_s1_sim2/binned_averages/GHA_every_1hr.txt')	
+	
+	
+	
 	
 	f = d[:,0] 
 	
@@ -2822,7 +2920,7 @@ def level4_plot_integrated_residuals(case, FLOW=60, FHIGH=150):
 	
 	
 	
-	plt.savefig(edges_folder + 'plots/20191205/data_residuals_no_ground_loss_no_beam_correction.pdf', bbox_inches='tight')
+	plt.savefig(edges_folder + 'plots/20191214/data_residuals_no_ground_loss_no_beam_correction.pdf', bbox_inches='tight')
 	plt.close()
 	plt.close()
 	plt.close()

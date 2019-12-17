@@ -2326,7 +2326,7 @@ def guzman_45MHz_map():
 
 
 
-def antenna_beam_factor(band, name_save, FLOW=50, FHIGH=200, beam_file=0, sky_model='haslam', rotation_from_north=90, index_model='gaussian', sigma_deg=8.5, index_center=2.4, index_pole=2.65, band_deg=10, index_inband=2.5, index_outband=2.6, reference_frequency=100):
+def antenna_beam_factor(band, name_save, FLOW=50, FHIGH=200, beam_file=0, normalize_mid_band_beam='yes', sky_model='haslam', rotation_from_north=90, index_model='gaussian', sigma_deg=8.5, index_center=2.4, index_pole=2.65, band_deg=10, index_inband=2.5, index_outband=2.6, reference_frequency=100):
 
 	"""
 	2019-04-16
@@ -2422,12 +2422,30 @@ def antenna_beam_factor(band, name_save, FLOW=50, FHIGH=200, beam_file=0, sky_mo
 			freq_array_X = np.arange(40,121,2, dtype='uint32')
 			
 
+	
+	
+	
+	
+		
+		
+		
+
+		
+
+
+
 
 	
 	
 	# Selecting frequency range
+	if (band == 'mid_band') and (normalize_mid_band_beam == 'yes'):  # Beam normalization
+		FLOW  = 50
+		FHIGH = 150		
 	freq_array = freq_array_X[(freq_array_X >= FLOW) & (freq_array_X <= FHIGH)]
 	beam_all   = beam_all_X[(freq_array_X >= FLOW) & (freq_array_X <= FHIGH), :, :]
+	
+	ground_gain = ground_loss('mid_band', freq_array)
+	
 				
 
 	print(beam_all.shape)
@@ -2614,24 +2632,32 @@ def antenna_beam_factor(band, name_save, FLOW=50, FHIGH=200, beam_file=0, sky_mo
 			
 			# Convolution and Antenna temperature NEW 'correct' WAY
 			# -----------------------------------------------------
-			
-			# Convolution between (beam at all frequencies) and (sky at reference frequency)
-			convolution_ref[i, j] = np.sum(beam_above_horizon[index_no_nan]*sky_ref_above_horizon[index_no_nan])			
-						
 			# Number of pixels over 4pi that are not 'nan'
 			Npixels_total             = len(EL)
 			Npixels_above_horizon_nan = len(EL_above_horizon) - len(EL_above_horizon[index_no_nan])  # The nans are only above the horizon
-			Npixels_total_no_nan      = Npixels_total - Npixels_above_horizon_nan
+			Npixels_total_no_nan      = Npixels_total - Npixels_above_horizon_nan			
 			
-			# 'Correct' antenna temperature above the horizon, i.e., Convolution between (beam at all frequencies) and (sky at all frequencies)
-			antenna_temperature_above_horizon[i, j] = np.sum(beam_above_horizon[index_no_nan]*sky_above_horizon_ff[index_no_nan]) / Npixels_total_no_nan
+					
+			if normalize_mid_band_beam == 'yes':
+				SOLID_ANGLE     = (np.sum(beam_above_horizon[index_no_nan]) / Npixels_total_no_nan)
+				NORMALIZED_BEAM_ABOVE_HORIZON = (ground_gain[j]/SOLID_ANGLE)*beam_above_horizon
+			else:
+				NORMALIZED_BEAM_ABOVE_HORIZON = np.copy(beam_above_horizon)
+						
+			
+			
+			# Convolution between (beam at all frequencies) and (sky at reference frequency)
+			convolution_ref[i, j] = np.sum(NORMALIZED_BEAM_ABOVE_HORIZON[index_no_nan]*sky_ref_above_horizon[index_no_nan])			
+									
+			# 'Correct' antenna temperature above the horizon, i.e., Convolution between (beam at all frequencies) and (sky at all frequencies)			
+			antenna_temperature_above_horizon[i, j] = np.sum(NORMALIZED_BEAM_ABOVE_HORIZON[index_no_nan]*sky_above_horizon_ff[index_no_nan]) / Npixels_total_no_nan
 			
 			# Loss fraction
-			loss_fraction[i, j] = 1 - (np.sum(beam_above_horizon[index_no_nan]) / Npixels_total_no_nan)
+			loss_fraction[i, j] = 1 - (np.sum(NORMALIZED_BEAM_ABOVE_HORIZON[index_no_nan]) / Npixels_total_no_nan)
 			
 			
 			
-										
+
 			#if i == 0:
 				#integrated_gain_above_horizon[j] = np.sum(beam_above_horizon[index_no_nan])
 				
@@ -2760,8 +2786,11 @@ def antenna_beam_factor_interpolation(band, case, lst_hires, fnew, Npar_freq=15)
 			
 		
 		
-		
-		
+		if case == 10:
+			bf_old  = np.genfromtxt(file_path + 'NORMALIZED_mid_band_50-150MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_beam_factor.txt')
+			freq    = np.genfromtxt(file_path + 'NORMALIZED_mid_band_50-150MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_freq.txt')
+			lst_old = np.genfromtxt(file_path + 'NORMALIZED_mid_band_50-150MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_LST.txt')		
+	
 		
 		
 		
@@ -3105,6 +3134,37 @@ def ground_loss(band, f_MHz):
 
 	
 	return 1-model
+
+
+
+
+
+
+
+def antenna_loss(band, f_MHz):
+	
+	"""
+	Dec 7, 2019
+	"""
+	
+	if band == 'mid_band':
+		d = np.genfromtxt(edges_folder + 'mid_band/calibration/antenna_loss/loss_mid_ant_column.txt')
+		
+		fr = d[:,0]
+		dr = d[:,1]
+		
+		par   = np.polyfit(fr, dr, 11)  # 7 terms are sufficient
+		model = np.polyval(par, f_MHz)
+		
+		mr = np.polyval(par, fr)
+	
+	return 1-model
+
+
+
+
+
+
 
 
 

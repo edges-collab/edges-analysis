@@ -633,7 +633,7 @@ def s11_calibration_measurements_mid_band_2018_01_25C(flow=40, fhigh=200, save='
 	main_path    = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/data/s11/raw/'
 
 
-	path_LNA     = main_path + 'ReceiverReading03/'    # seems slightly better than the others
+	path_LNA     = main_path + 'ReceiverReading01/'    # seems slightly better than the others
 	path_ambient = main_path + 'Ambient/'
 	path_hot     = main_path + 'HotLoad/'
 	path_open    = main_path + 'LongCableOpen/'
@@ -718,10 +718,10 @@ def s11_calibration_measurements_mid_band_2018_01_25C(flow=40, fhigh=200, save='
 	# -----------------------------------------------------------------------------------------
 	# Hot load before
 	# -------------------
-	o_m, f_h = rc.s1p_read(path_hot + 'Open02.s1p')
-	s_m, f_h = rc.s1p_read(path_hot + 'Short02.s1p')
-	l_m, f_h = rc.s1p_read(path_hot + 'Match02.s1p')
-	h_m, f_h = rc.s1p_read(path_hot + 'External02.s1p')
+	o_m, f_h = rc.s1p_read(path_hot + 'Open01.s1p')
+	s_m, f_h = rc.s1p_read(path_hot + 'Short01.s1p')
+	l_m, f_h = rc.s1p_read(path_hot + 'Match01.s1p')
+	h_m, f_h = rc.s1p_read(path_hot + 'External01.s1p')
 
 
 	# Standards assumed at the switch
@@ -752,10 +752,10 @@ def s11_calibration_measurements_mid_band_2018_01_25C(flow=40, fhigh=200, save='
 	# -----------------------------------------------------------------------------------------
 	# Open Cable before
 	# -------------------
-	o_m, f_o = rc.s1p_read(path_open  + 'Open02.s1p')
-	s_m, f_o = rc.s1p_read(path_open  + 'Short02.s1p')
-	l_m, f_o = rc.s1p_read(path_open  + 'Match02.s1p')
-	oc_m, f_o = rc.s1p_read(path_open + 'External02.s1p')
+	o_m, f_o = rc.s1p_read(path_open  + 'Open01.s1p')
+	s_m, f_o = rc.s1p_read(path_open  + 'Short01.s1p')
+	l_m, f_o = rc.s1p_read(path_open  + 'Match01.s1p')
+	oc_m, f_o = rc.s1p_read(path_open + 'External01.s1p')
 
 
 	# Standards assumed at the switch
@@ -782,7 +782,7 @@ def s11_calibration_measurements_mid_band_2018_01_25C(flow=40, fhigh=200, save='
 
 
 	# -----------------------------------------------------------------------------------------
-	# Short Cable before
+	# Shorted Cable before
 	# -------------------
 	o_m,  f_s = rc.s1p_read(path_shorted + 'Open01.s1p')
 	s_m,  f_s = rc.s1p_read(path_shorted + 'Short01.s1p')
@@ -2387,7 +2387,27 @@ def calibration_processing_mid_band_2018_01_25C(flow=50, fhigh=180, save='no', s
 
 
 	#s11_all = np.genfromtxt(path_s11 + 's11_calibration_mid_band_LNA25degC_2019-12-03-02-11-41_all_rep2.txt')
-	s11_all = np.genfromtxt(path_s11 + 's11_calibration_mid_band_LNA25degC_2019-12-03-02-37-29_all_rep2_but_shorted.txt')
+	
+	# Nominal 
+	#s11_all = np.genfromtxt(path_s11 + 's11_calibration_mid_band_LNA25degC_2019-12-03-02-37-29_all_rep2_but_shorted.txt')
+	
+	# BEST SO FAR --->  s11_all = np.genfromtxt(path_s11 + 's11_calibration_mid_band_LNA25degC_2019-12-06-18-51-24_all_rep2_but_shorted_LNA_rep1.txt')
+	#s11_all = np.genfromtxt(path_s11 + 's11_calibration_mid_band_LNA25degC_2019-12-06-18-51-53_all_rep2_but_shorted_LNA_rep2.txt')
+	
+	#s11_all = np.genfromtxt(path_s11 + 's11_calibration_mid_band_LNA25degC_2019-12-06-21-02-05_all_rep2_but_shorted_LNA_rep12.txt')
+	
+	#s11_all = np.genfromtxt(path_s11 + 's11_calibration_mid_band_LNA25degC_2019-12-07-10-51-01_LNA1_a2_h2_o1_s1_sim2.txt')
+	#s11_all = np.genfromtxt(path_s11 + 's11_calibration_mid_band_LNA25degC_2019-12-07-10-56-06_LNA1_a2_h2_o1_s2_sim2.txt')
+	#s11_all = np.genfromtxt(path_s11 + 's11_calibration_mid_band_LNA25degC_2019-12-07-10-56-39_LNA1_a2_h2_o2_s1_sim2.txt')
+	#s11_all = np.genfromtxt(path_s11 + 's11_calibration_mid_band_LNA25degC_2019-12-07-10-56-56_LNA1_a2_h2_o2_s2_sim2.txt')
+
+	#s11_all = np.genfromtxt(path_s11 + 's11_calibration_mid_band_LNA25degC_2019-12-07-11-10-27_LNA1_a1_h1_o1_s1_sim2.txt')
+	#s11_all = np.genfromtxt(path_s11 + 's11_calibration_mid_band_LNA25degC_2019-12-07-11-11-55_LNA1_a1_h2_o1_s1_sim2.txt')
+	s11_all = np.genfromtxt(path_s11 + 's11_calibration_mid_band_LNA25degC_2019-12-07-11-12-42_LNA1_a2_h1_o1_s1_sim2.txt')
+		
+	
+	
+	
 		
 	s11     = s11_all[(s11_all[:,0]>=flow) & (s11_all[:,0]<=fhigh), :]
 	
@@ -3658,7 +3678,7 @@ def calibration_file_computation(calibration_date, folder, FMIN, FMAX, cterms_no
 
 
 
-	elif (calibration_date == '2018_01_25C') and (folder == 'nominal_2019_12_50-150MHz_try1'):
+	elif (calibration_date == '2018_01_25C') and ((folder == 'nominal_2019_12_50-150MHz_try1') or (folder == 'nominal_2019_12_50-150MHz_try1_LNA_rep1') or (folder == 'nominal_2019_12_50-150MHz_try1_LNA_rep2') or (folder == 'nominal_2019_12_50-150MHz_try1_LNA_rep12') or (folder == 'nominal_2019_12_50-150MHz_LNA1_a1_h1_o1_s1_sim2') or (folder == 'nominal_2019_12_50-150MHz_LNA1_a1_h2_o1_s1_sim2') or (folder == 'nominal_2019_12_50-150MHz_LNA1_a2_h1_o1_s1_sim2') or (folder == 'nominal_2019_12_50-150MHz_LNA1_a2_h2_o1_s1_sim2') or (folder == 'nominal_2019_12_50-150MHz_LNA1_a2_h2_o1_s2_sim2') or (folder == 'nominal_2019_12_50-150MHz_LNA1_a2_h2_o2_s1_sim2') or (folder == 'nominal_2019_12_50-150MHz_LNA1_a2_h2_o2_s2_sim2')):
 		# Taking the original data
 		ff    = Tunc[:,0]		
 		TTae  = Tunc[:,1]
@@ -3829,7 +3849,7 @@ def calibration_file_computation(calibration_date, folder, FMIN, FMAX, cterms_no
 	# Physical temperature
 	Tphys = np.genfromtxt(edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/' + calibration_date + '/results/' + folder + '/temp/physical_temperatures.txt')
 	
-	if (calibration_date == '2018_01_25C') and (folder == 'nominal_2019_12_50-150MHz_try1'):
+	if (calibration_date == '2018_01_25C') and ((folder == 'nominal_2019_12_50-150MHz_try1') or (folder == 'nominal_2019_12_50-150MHz_try1_LNA_rep1') or (folder == 'nominal_2019_12_50-150MHz_try1_LNA_rep2') or (folder == 'nominal_2019_12_50-150MHz_try1_LNA_rep12') or (folder == 'nominal_2019_12_50-150MHz_LNA1_a1_h1_o1_s1_sim2') or (folder == 'nominal_2019_12_50-150MHz_LNA1_a1_h2_o1_s1_sim2') or (folder == 'nominal_2019_12_50-150MHz_LNA1_a2_h1_o1_s1_sim2') or (folder == 'nominal_2019_12_50-150MHz_LNA1_a2_h2_o1_s1_sim2') or (folder == 'nominal_2019_12_50-150MHz_LNA1_a2_h2_o1_s2_sim2') or (folder == 'nominal_2019_12_50-150MHz_LNA1_a2_h2_o2_s1_sim2') or (folder == 'nominal_2019_12_50-150MHz_LNA1_a2_h2_o2_s2_sim2')):
 		
 		Ta    = Tphys[0]
 		Th    = Tphys[1]
@@ -3918,7 +3938,7 @@ def calibration_file_computation(calibration_date, folder, FMIN, FMAX, cterms_no
 
 
 
-	elif ((calibration_date == '2018_01_25C') and (folder == 'nominal_2019_12_50-150MHz_try1')):
+	elif (calibration_date == '2018_01_25C') and ((folder == 'nominal_2019_12_50-150MHz_try1') or (folder == 'nominal_2019_12_50-150MHz_try1_LNA_rep1') or (folder == 'nominal_2019_12_50-150MHz_try1_LNA_rep2') or (folder == 'nominal_2019_12_50-150MHz_try1_LNA_rep12') or (folder == 'nominal_2019_12_50-150MHz_LNA1_a1_h1_o1_s1_sim2') or (folder == 'nominal_2019_12_50-150MHz_LNA1_a1_h2_o1_s1_sim2') or (folder == 'nominal_2019_12_50-150MHz_LNA1_a2_h1_o1_s1_sim2') or (folder == 'nominal_2019_12_50-150MHz_LNA1_a2_h2_o1_s1_sim2') or (folder == 'nominal_2019_12_50-150MHz_LNA1_a2_h2_o1_s2_sim2') or (folder == 'nominal_2019_12_50-150MHz_LNA1_a2_h2_o2_s1_sim2') or (folder == 'nominal_2019_12_50-150MHz_LNA1_a2_h2_o2_s2_sim2')):
 		ffn  = (ff/200) - 0.5		
 		
 		par     = np.genfromtxt(path_s11 + 'par_s11_LNA_mag.txt')	
@@ -4155,7 +4175,7 @@ def calibration_file_computation(calibration_date, folder, FMIN, FMAX, cterms_no
 
 
 
-	elif (calibration_date == '2018_01_25C') and (folder == 'nominal_2019_12_50-150MHz_try1'):
+	elif (calibration_date == '2018_01_25C') and ((folder == 'nominal_2019_12_50-150MHz_try1') or (folder == 'nominal_2019_12_50-150MHz_try1_LNA_rep1') or (folder == 'nominal_2019_12_50-150MHz_try1_LNA_rep2') or (folder == 'nominal_2019_12_50-150MHz_try1_LNA_rep12') or (folder == 'nominal_2019_12_50-150MHz_LNA1_a1_h1_o1_s1_sim2') or (folder == 'nominal_2019_12_50-150MHz_LNA1_a1_h2_o1_s1_sim2') or (folder == 'nominal_2019_12_50-150MHz_LNA1_a2_h1_o1_s1_sim2') or (folder == 'nominal_2019_12_50-150MHz_LNA1_a2_h2_o1_s1_sim2') or (folder == 'nominal_2019_12_50-150MHz_LNA1_a2_h2_o1_s2_sim2') or (folder == 'nominal_2019_12_50-150MHz_LNA1_a2_h2_o2_s1_sim2') or (folder == 'nominal_2019_12_50-150MHz_LNA1_a2_h2_o2_s2_sim2')):
 		
 		fn   = (f/200) - 0.5
 		
