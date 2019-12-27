@@ -31,7 +31,7 @@ import os, sys
 #edges_code_folder = os.environ['EDGES_CODE']
 #sys.path.insert(0, edges_code_folder)
 
-edges_folder       = os.environ['EDGES_vol2']
+edges_folder       = os.environ['EDGES_vol3']
 print('EDGES Folder: ' + edges_folder)
 
 
@@ -854,24 +854,30 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 			
 		if beam_correction == 1:
 			if band == 'mid_band':
-				
 				if bf_case == 0:
-					beam_factor_filename = 'table_hires_mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz.hdf5'
+					beam_factor_filename = 'table_hires_NORMALIZED_mid_band_50-150MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz.hdf5'
 					
-				if bf_case == 1:
-					beam_factor_filename = 'table_hires_mid_band_50-200MHz_90deg_alan1_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz.hdf5'
 					
-				if bf_case == 2:
-					beam_factor_filename = 'table_hires_mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_120MHz.hdf5'
+				
+				# All beam correction tables
+				# --------------------------------------------------
+				#if bf_case == 0:
+					#beam_factor_filename = 'table_hires_mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz.hdf5'
 					
-				if bf_case == 3:
-					beam_factor_filename = 'table_hires_mid_band_50-200MHz_90deg_alan0_haslam_flat_index_2.56_reffreq_90MHz.hdf5'				
+				#if bf_case == 1:
+					#beam_factor_filename = 'table_hires_mid_band_50-200MHz_90deg_alan1_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz.hdf5'
 					
-				if bf_case == 4:
-					beam_factor_filename = 'table_hires_mid_band_50-200MHz_90deg_alan0_LW_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz.hdf5'					
+				#if bf_case == 2:
+					#beam_factor_filename = 'table_hires_mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_120MHz.hdf5'
 					
-				if bf_case == 5:
-					beam_factor_filename = 'table_hires_mid_band_50-200MHz_90deg_alan0_guzman_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz.hdf5'
+				#if bf_case == 3:
+					#beam_factor_filename = 'table_hires_mid_band_50-200MHz_90deg_alan0_haslam_flat_index_2.56_reffreq_90MHz.hdf5'				
+					
+				#if bf_case == 4:
+					#beam_factor_filename = 'table_hires_mid_band_50-200MHz_90deg_alan0_LW_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz.hdf5'					
+					
+				#if bf_case == 5:
+					#beam_factor_filename = 'table_hires_mid_band_50-200MHz_90deg_alan0_guzman_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz.hdf5'
 					
 
 				
@@ -1347,7 +1353,14 @@ def rms_filter_computation(band, case, save_parameters='no'):
 			save_folder = edges_folder + '/mid_band/rms_filters/case_nominal_14_14_terms_55-150MHz_no_ground_loss_no_beam_corrections/'
 
 
-		
+		if case == 501:
+			path_files  = edges_folder + '/mid_band/spectra/level3/case_nominal_50-150MHz_LNA2_a2_h2_o2_s1_sim2_all_lc_yes_bc/'
+			save_folder = edges_folder + '/mid_band/rms_filters/case_nominal_50-150MHz_LNA2_a2_h2_o2_s1_sim2_all_lc_yes_bc/'		
+
+
+
+
+
 		
 	
 	if band == 'low_band3':
@@ -1684,6 +1697,12 @@ def rms_filter(band, case, gx, rms, Nsigma):
 			file_path = edges_folder + band + '/rms_filters/case_nominal_14_14_terms_55-150MHz_no_ground_loss_no_beam_corrections/'
 
 
+		if case == 501:
+			file_path = edges_folder + band + '/rms_filters/case_nominal_50-150MHz_LNA2_a2_h2_o2_s1_sim2_all_lc_yes_bc/'
+
+
+
+
 
 		
 		
@@ -1923,6 +1942,17 @@ def level3_to_level4(band, case, GHA_edges, sun_el_max, moon_el_max, save_folder
 		# Calibration: Receiver 2018, Switch 2018, AGAIN, LNA1		
 		if case == 406:
 			path_files  = edges_folder + 'mid_band/spectra/level3/case_nominal_50-150MHz_LNA1_a2_h2_o2_s1_sim2/'
+
+
+
+
+		# Calibration: Receiver 2018, Switch 2018, all corrections		
+		if case == 501:
+			path_files  = edges_folder + 'mid_band/spectra/level3/case_nominal_50-150MHz_LNA2_a2_h2_o2_s1_sim2_all_lc_yes_bc/'
+
+
+
+
 
 
 			
@@ -2390,6 +2420,20 @@ def level4_binned_residuals(case, FLOW, FHIGH, output_file_name_hdf5):
 
 
 
+
+	elif case == 501:	
+		f, p, r, w, index, gha, yy = level4read(edges_folder + 'mid_band/spectra/level4/case_nominal_50-150MHz_LNA2_a2_h2_o2_s1_sim2_all_lc_yes_bc/case_nominal_50-150MHz_LNA2_a2_h2_o2_s1_sim2_all_lc_yes_bc.hdf5')
+		save_folder                = edges_folder + 'mid_band/spectra/level4/case_nominal_50-150MHz_LNA2_a2_h2_o2_s1_sim2_all_lc_yes_bc/binned_residuals/'
+
+
+
+
+
+
+
+
+
+
 	
 	# Computing the residuals
 	# -----------------------
@@ -2510,6 +2554,19 @@ def level4_plot_residuals(case, GHA_index, TITLE, figure_save_name, DY):
 		figure_save_path_subfolder = edges_folder + 'mid_band/spectra/level4/case_nominal_50-150MHz_LNA1_a2_h2_o2_s1_sim2/binned_plots/'
 		
 	
+	elif case == 501:
+		filename = edges_folder + 'mid_band/spectra/level4/case_nominal_50-150MHz_LNA2_a2_h2_o2_s1_sim2_all_lc_yes_bc/binned_residuals/binned_residuals_one_hour_GHA.hdf5'
+		figure_save_path_subfolder = edges_folder + 'mid_band/spectra/level4/case_nominal_50-150MHz_LNA2_a2_h2_o2_s1_sim2_all_lc_yes_bc/binned_plots/'	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
 	
 	fb, rb, wb, sb, gha, yd = level4_binned_read(filename) 
 	#Nfg = 5
@@ -2575,7 +2632,7 @@ def level4_good_days_GHA(GHA, first_day, last_day):
 	
 	# Data filter
 	if GHA == 0:
-		good_days = np.arange(140, 300, 1) 
+		good_days = np.arange(140, 153, 1) 
 
 	if GHA == 1:
 		good_days = np.concatenate((np.arange(148, 160, 1), np.arange(161, 220, 1)))
@@ -2687,7 +2744,12 @@ def level4_integration(case, GHA_list, first_day, last_day, FLOW, FHIGH, Nfg): #
 		f, p, r, w, index, gha, yy = level4read(edges_folder + 'mid_band/spectra/level4/case_nominal_14_14_terms_55-150MHz_no_ground_loss_no_beam_corrections/case_nominal_14_14_terms_55-150MHz_no_ground_loss_no_beam_corrections.hdf5')		
 		
 	elif case == 406:
-		f, p, r, w, index, gha, yy = level4read(edges_folder + 'mid_band/spectra/level4/case_nominal_50-150MHz_LNA1_a2_h2_o2_s1_sim2/case_nominal_50-150MHz_LNA1_a2_h2_o2_s1_sim2.hdf5')		
+		f, p, r, w, index, gha, yy = level4read(edges_folder + 'mid_band/spectra/level4/case_nominal_50-150MHz_LNA1_a2_h2_o2_s1_sim2/case_nominal_50-150MHz_LNA1_a2_h2_o2_s1_sim2.hdf5')
+		
+
+	elif case == 501:
+		f, p, r, w, index, gha, yy = level4read(edges_folder + 'mid_band/spectra/level4/case_nominal_50-150MHz_LNA2_a2_h2_o2_s1_sim2_all_lc_yes_bc/case_nominal_50-150MHz_LNA2_a2_h2_o2_s1_sim2_all_lc_yes_bc.hdf5')
+		
 		
 		
 	
@@ -2791,6 +2853,11 @@ def level4_save_averaged_spectra(case, GHA_case, first_day, last_day):
 		file_path = edges_folder + 'mid_band/spectra/level4/case_nominal_50-150MHz_LNA1_a2_h2_o2_s1_sim2/binned_averages/'
 		file_name = 'GHA_every_1hr.txt'
 	
+
+	if case == 501:
+		header_text = 'f [MHz], t_ant (GHA=0-23) [K], std (GHA=0-23) [K], Nsamples (GHA=0-23)'
+		file_path = edges_folder + 'mid_band/spectra/level4/case_nominal_50-150MHz_LNA2_a2_h2_o2_s1_sim2_all_lc_yes_bc/binned_averages/'
+		file_name = 'GHA_every_1hr.txt'
 	
 	start = 0
 	
@@ -2839,7 +2906,8 @@ def level4_plot_integrated_residuals(case, FLOW=60, FHIGH=150):
 		d = np.genfromtxt(edges_folder + 'mid_band/spectra/level4/case_nominal_50-150MHz_LNA1_a2_h2_o2_s1_sim2/binned_averages/GHA_every_1hr.txt')	
 	
 	
-	
+	elif case == 501:
+		d = np.genfromtxt(edges_folder + 'mid_band/spectra/level4/case_nominal_50-150MHz_LNA2_a2_h2_o2_s1_sim2_all_lc_yes_bc/binned_averages/GHA_every_1hr.txt')	
 	
 	f = d[:,0] 
 	
@@ -2920,7 +2988,7 @@ def level4_plot_integrated_residuals(case, FLOW=60, FHIGH=150):
 	
 	
 	
-	plt.savefig(edges_folder + 'plots/20191214/data_residuals_no_ground_loss_no_beam_correction.pdf', bbox_inches='tight')
+	plt.savefig(edges_folder + 'plots/20191218/data_residuals_no_ground_loss_no_beam_correction.pdf', bbox_inches='tight')
 	plt.close()
 	plt.close()
 	plt.close()

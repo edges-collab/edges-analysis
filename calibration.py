@@ -27,7 +27,7 @@ from os.path import expanduser
 home_folder = expanduser("~")
 
 import os, sys
-edges_folder       = os.environ['EDGES_vol2']
+edges_folder       = os.environ['EDGES_vol3']
 print('EDGES Folder: ' + edges_folder)
 
 edges_folder_v1       = os.environ['EDGES_vol1']
@@ -2195,6 +2195,62 @@ def haslam_408MHz_map():
 
 
 
+
+
+def remazeilles_408MHz_map():
+
+	'''
+	
+	This function will return the Haslam map reprocessd by Remazeilles et al. (2014). It is in RING Galactic Coordinates.
+	
+	This versino is only destriped, not desourced.
+	
+	'''
+
+
+	# Loading NESTED galactic coordinates
+	# -----------------------------------
+	coord              = fits.open(edges_folder + '/sky_models/coordinate_maps/pixel_coords_map_ring_galactic_res9.fits')
+	coord_array        = coord[1].data
+	lon_ring           = coord_array['LONGITUDE']
+	lat_ring           = coord_array['LATITUDE']
+	
+	lon = hp.reorder(lon_ring, r2n=True)
+	lat = hp.reorder(lat_ring, r2n=True)
+	
+	
+	GALAC_COORD_object = apc.SkyCoord(lon, lat, frame='galactic', unit='deg')  # defaults to ICRS frame
+	
+	
+	
+	# Loading Haslam map
+	# ------------------
+	haslam_map = fits.open(edges_folder + '/sky_models/haslam_map/haslam408_ds_Remazeilles2014.fits')
+	x  = (haslam_map[1].data)['temperature']
+	haslam408_ring = x.flatten()
+	
+	haslam408 = hp.reorder(haslam408_ring, r2n=True)
+
+
+	print('REMAZEILLES 408MHz MAP')
+
+
+	return haslam408, lon, lat, GALAC_COORD_object
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 def LW_150MHz_map():
 	
 	'''
@@ -2347,8 +2403,9 @@ def antenna_beam_factor(band, name_save, FLOW=50, FHIGH=200, beam_file=0, normal
 
 
 	# Data paths
-	path_data = edges_folder + 'sky_models/'
-	path_save = edges_folder + band + '/calibration/beam_factors/raw/'
+	path_data  = edges_folder + 'sky_models/'
+	path_save  = edges_folder + band + '/calibration/beam_factors/raw/'
+	path_plots = path_save + 'plots/'
 
 
 
@@ -2471,6 +2528,13 @@ def antenna_beam_factor(band, name_save, FLOW=50, FHIGH=200, beam_file=0, normal
 		# Loading Haslam map
 		map_orig, lon, lat, GALAC_COORD_object = haslam_408MHz_map()
 		v0 = 408
+
+
+	if sky_model == 'remazeilles':
+
+		# Loading Remazeilles map
+		map_orig, lon, lat, GALAC_COORD_object = remazeilles_408MHz_map()
+		v0 = 408		
 		
 		
 	elif sky_model == 'LW': 
@@ -2529,7 +2593,7 @@ def antenna_beam_factor(band, name_save, FLOW=50, FHIGH=200, beam_file=0, normal
 	# --------------------------------------------------------------------------------------
 
 	# EDGES location	
-	EDGES_lat_deg  = -26.714778
+	EDGES_lat_deg  = 79.43 #29 #-47.1 #-26.714778  # 
 	EDGES_lon_deg  = 116.605528 
 	EDGES_location = apc.EarthLocation(lat=EDGES_lat_deg*apu.deg, lon=EDGES_lon_deg*apu.deg)
 
@@ -2588,108 +2652,188 @@ def antenna_beam_factor(band, name_save, FLOW=50, FHIGH=200, beam_file=0, normal
 		# Selecting sky data above the horizon
 		sky_above_horizon     = sky_map[EL>=0,:]	
 		sky_ref_above_horizon = sky_above_horizon[:, irf].flatten()
-
-
-
-		# Arranging AZ and EL arrays corresponding to beam model
-		az_array            = np.tile(AZ_beam,91)
-		el_array            = np.repeat(EL_beam,360)
-		az_el_original      = np.array([az_array, el_array]).T
-		az_el_above_horizon = np.array([AZ_above_horizon, EL_above_horizon]).T
-
-
-
-		# Loop over frequency
-		for j in range(len(freq_array)):
-
-			print(name_save + ', Freq: ' + str(j) + ' out of ' + str(len(beam_all[:,0,0])))
+		
+		
+		
+		
+		
+		
+		
+		
+		# Plotting sky in local coordinates
+		LAT_DEG = np.copy(EDGES_lat_deg)
+		
+		AZ_plot = np.copy(AZ_above_horizon)
+		AZ_plot[AZ_plot>180] = AZ_plot[AZ_plot>180] - 360 
+		
+		EL_plot  = np.copy(EL_above_horizon)
+		SKY_plot = np.copy(sky_ref_above_horizon)
+		
+		max_log10sky = np.max(np.log10(sky_map[:,irf]))
+		min_log10sky = np.min(np.log10(sky_map[:,irf]))
+		
+		
+		
+		
+		
+		marker_size=10
+		
+		LST_gc = 17 + (45/60) + (40.04/(60*60))    # LST of Galactic Center
+		GHA    = LST[i] - LST_gc
+		if GHA < 0:
+			GHA = GHA + 24
 			
+		plot_format = 'polar'
+		
+		if plot_format == 'rect':
+			plt.close()
+			fig = plt.figure(figsize=[19,6])			
+			plt.scatter(AZ_plot, EL_plot, edgecolors='none', s=marker_size, c=np.log10(SKY_plot), vmin=min_log10sky, vmax=max_log10sky)
+			plt.xticks(np.arange(-180, 181, 30))
+			plt.yticks([0,15,30,45,60,75,90])
+			cbar = plt.colorbar()
+			cbar.set_label('log10( Tsky @ 50MHz [K] )', rotation=90)
+			plt.xlabel('AZ [deg]')
+			plt.ylabel('EL [deg]')
+			plt.title('LAT=' + str(np.round(LAT_DEG,3)) + ' [deg] \n\n LST=' + str(np.round(LST[i],3)).ljust(5,'0') + ' hr        GHA=' + str(np.round(GHA,3)).ljust(5,'0') + ' hr')
+
+
+		if plot_format == 'polar':
+			plt.close()
+			fig = plt.figure(figsize=[11.5,10])
+			ax = fig.add_subplot(111, projection='polar')
+			c = ax.scatter((np.pi/180)*AZ_plot, 90-EL_plot, edgecolors='none', s=marker_size, c=np.log10(SKY_plot), vmin=min_log10sky, vmax=5) #, vmin=min_log10sky, vmax=max_log10sky)
+			ax.set_theta_offset(-np.pi/2)
+			ax.set_ylim([0,90])
+			ax.set_yticks([0,30,60,90])
+			ax.set_yticklabels(['90', '60', '30', '0'])
+			plt.text(-2*(np.pi/180), 101, 'AZ', fontsize=14, fontweight='bold')
+			plt.text(22*(np.pi/180),  95, 'EL', fontsize=14, fontweight='bold')
+			plt.text(45*(np.pi/180),  143, 'Raul Monsalve', fontsize=8, color=[0.5, 0.5, 0.5])
+			plt.title('LAT=' + str(np.round(LAT_DEG,3)) + ' [deg] \n\n LST=' + str(np.round(LST[i],3)).ljust(5,'0') + ' [hr]        GHA=' + str(np.round(GHA,3)).ljust(5,'0') + ' [hr]', fontsize=14, fontweight='bold')
+			#plt.xticks(np.arange(-180, 181, 30))
+			#plt.yticks([0,15,30,45,60,75,90])
+			cbar_ax = fig.add_axes([0.9, 0.3, 0.02, 0.4])
+			hcbar   = fig.colorbar(c, cax=cbar_ax)
+			#cbar = ax.colorbar()
+			hcbar.set_label('log10( Tsky @ 50MHz [K] )', rotation=90)
+			#plt.xlabel('AZ [deg]')
+			#plt.ylabel('EL [deg]')
 			
-			beam_array         = beam_all[j,:,:].reshape(1,-1)[0]
-			beam_above_horizon = spi.griddata(az_el_original, beam_array, az_el_above_horizon, method='cubic')  # interpolated beam
 
 
-			no_nan_array = np.ones(len(AZ_above_horizon)) - np.isnan(beam_above_horizon)
-			index_no_nan = np.nonzero(no_nan_array)[0]
-			
-			sky_above_horizon_ff = sky_above_horizon[:, j].flatten()
-
-
-
-			## Convolution and Antenna temperature OLD 'incorrect' WAY
-			## -------------------------------------------------------
 	
-			## Convolution between (beam at all frequencies) and (sky at reference frequency)
-			#convolution_ref[i, j] = np.sum(beam_above_horizon[index_no_nan]*sky_ref_above_horizon[index_no_nan])/np.sum(beam_above_horizon[index_no_nan])
+		plt.savefig(path_plots + 'LST_' + str(np.round(LST[i],3)).ljust(5,'0') + 'hr.png', bbox_inches='tight')
+		plt.close()
 
-			## Antenna temperature, i.e., Convolution between (beam at all frequencies) and (sky at all frequencies)
-			#antenna_temperature_above_horizon[i, j] = np.sum(beam_above_horizon[index_no_nan]*sky_above_horizon_ff[index_no_nan]) / np.sum(beam_above_horizon[index_no_nan])
+
+
+
+
+		
+
+
+
+
+		## Arranging AZ and EL arrays corresponding to beam model
+		#az_array            = np.tile(AZ_beam,91)
+		#el_array            = np.repeat(EL_beam,360)
+		#az_el_original      = np.array([az_array, el_array]).T
+		#az_el_above_horizon = np.array([AZ_above_horizon, EL_above_horizon]).T
+
+
+
+		## Loop over frequency
+		#for j in range(len(freq_array)):
+
+			#print(name_save + ', Freq: ' + str(j) + ' out of ' + str(len(beam_all[:,0,0])))
 			
-			#loss_fraction[i, j] = 0
+			
+			#beam_array         = beam_all[j,:,:].reshape(1,-1)[0]
+			#beam_above_horizon = spi.griddata(az_el_original, beam_array, az_el_above_horizon, method='cubic')  # interpolated beam
+
+
+			#no_nan_array = np.ones(len(AZ_above_horizon)) - np.isnan(beam_above_horizon)
+			#index_no_nan = np.nonzero(no_nan_array)[0]
+			
+			#sky_above_horizon_ff = sky_above_horizon[:, j].flatten()
+
+
+
+			### Convolution and Antenna temperature OLD 'incorrect' WAY
+			### -------------------------------------------------------
+	
+			### Convolution between (beam at all frequencies) and (sky at reference frequency)
+			##convolution_ref[i, j] = np.sum(beam_above_horizon[index_no_nan]*sky_ref_above_horizon[index_no_nan])/np.sum(beam_above_horizon[index_no_nan])
+
+			### Antenna temperature, i.e., Convolution between (beam at all frequencies) and (sky at all frequencies)
+			##antenna_temperature_above_horizon[i, j] = np.sum(beam_above_horizon[index_no_nan]*sky_above_horizon_ff[index_no_nan]) / np.sum(beam_above_horizon[index_no_nan])
+			
+			##loss_fraction[i, j] = 0
 			
 			
 			
 			
-			# Convolution and Antenna temperature NEW 'correct' WAY
-			# -----------------------------------------------------
-			# Number of pixels over 4pi that are not 'nan'
-			Npixels_total             = len(EL)
-			Npixels_above_horizon_nan = len(EL_above_horizon) - len(EL_above_horizon[index_no_nan])  # The nans are only above the horizon
-			Npixels_total_no_nan      = Npixels_total - Npixels_above_horizon_nan			
+			## Convolution and Antenna temperature NEW 'correct' WAY
+			## -----------------------------------------------------
+			## Number of pixels over 4pi that are not 'nan'
+			#Npixels_total             = len(EL)
+			#Npixels_above_horizon_nan = len(EL_above_horizon) - len(EL_above_horizon[index_no_nan])  # The nans are only above the horizon
+			#Npixels_total_no_nan      = Npixels_total - Npixels_above_horizon_nan			
 			
 					
-			if normalize_mid_band_beam == 'yes':
-				SOLID_ANGLE     = (np.sum(beam_above_horizon[index_no_nan]) / Npixels_total_no_nan)
-				NORMALIZED_BEAM_ABOVE_HORIZON = (ground_gain[j]/SOLID_ANGLE)*beam_above_horizon
-			else:
-				NORMALIZED_BEAM_ABOVE_HORIZON = np.copy(beam_above_horizon)
+			#if normalize_mid_band_beam == 'yes':
+				#SOLID_ANGLE     = (np.sum(beam_above_horizon[index_no_nan]) / Npixels_total_no_nan)
+				#NORMALIZED_BEAM_ABOVE_HORIZON = (ground_gain[j]/SOLID_ANGLE)*beam_above_horizon
+			#else:
+				#NORMALIZED_BEAM_ABOVE_HORIZON = np.copy(beam_above_horizon)
 						
 			
 			
-			# Convolution between (beam at all frequencies) and (sky at reference frequency)
-			convolution_ref[i, j] = np.sum(NORMALIZED_BEAM_ABOVE_HORIZON[index_no_nan]*sky_ref_above_horizon[index_no_nan])			
+			## Convolution between (beam at all frequencies) and (sky at reference frequency)
+			#convolution_ref[i, j] = np.sum(NORMALIZED_BEAM_ABOVE_HORIZON[index_no_nan]*sky_ref_above_horizon[index_no_nan])			
 									
-			# 'Correct' antenna temperature above the horizon, i.e., Convolution between (beam at all frequencies) and (sky at all frequencies)			
-			antenna_temperature_above_horizon[i, j] = np.sum(NORMALIZED_BEAM_ABOVE_HORIZON[index_no_nan]*sky_above_horizon_ff[index_no_nan]) / Npixels_total_no_nan
+			## 'Correct' antenna temperature above the horizon, i.e., Convolution between (beam at all frequencies) and (sky at all frequencies)			
+			#antenna_temperature_above_horizon[i, j] = np.sum(NORMALIZED_BEAM_ABOVE_HORIZON[index_no_nan]*sky_above_horizon_ff[index_no_nan]) / Npixels_total_no_nan
 			
-			# Loss fraction
-			loss_fraction[i, j] = 1 - (np.sum(NORMALIZED_BEAM_ABOVE_HORIZON[index_no_nan]) / Npixels_total_no_nan)
+			## Loss fraction
+			#loss_fraction[i, j] = 1 - (np.sum(NORMALIZED_BEAM_ABOVE_HORIZON[index_no_nan]) / Npixels_total_no_nan)
 			
 			
 			
 
-			#if i == 0:
-				#integrated_gain_above_horizon[j] = np.sum(beam_above_horizon[index_no_nan])
+			##if i == 0:
+				##integrated_gain_above_horizon[j] = np.sum(beam_above_horizon[index_no_nan])
 				
-			#if j == 0:
-				#pixels_above_horizon[i]          = len(beam_above_horizon[index_no_nan])
+			##if j == 0:
+				##pixels_above_horizon[i]          = len(beam_above_horizon[index_no_nan])
 				
-			#numerator[i,j] = np.sum(beam_above_horizon[index_no_nan]*sky_above_horizon_ff[index_no_nan])
+			##numerator[i,j] = np.sum(beam_above_horizon[index_no_nan]*sky_above_horizon_ff[index_no_nan])
 
 			
 
-	# Beam factor 
-	# -------------------------------	
-	beam_factor_T = convolution_ref.T/convolution_ref[:,irf].T
-	beam_factor   = beam_factor_T.T
+	## Beam factor 
+	## -------------------------------	
+	#beam_factor_T = convolution_ref.T/convolution_ref[:,irf].T
+	#beam_factor   = beam_factor_T.T
 
 
 	
 	
 
 
-	# Saving
-	# ---------------------------------------------------------
-	np.savetxt(path_save + name_save + '_freq.txt', freq_array)
-	np.savetxt(path_save + name_save + '_LST.txt',  LST)
-	np.savetxt(path_save + name_save + '_tant.txt', antenna_temperature_above_horizon)
-	np.savetxt(path_save + name_save + '_loss.txt', loss_fraction)
-	np.savetxt(path_save + name_save + '_beam_factor.txt', beam_factor)
+	## Saving
+	## ---------------------------------------------------------
+	#np.savetxt(path_save + name_save + '_freq.txt', freq_array)
+	#np.savetxt(path_save + name_save + '_LST.txt',  LST)
+	#np.savetxt(path_save + name_save + '_tant.txt', antenna_temperature_above_horizon)
+	#np.savetxt(path_save + name_save + '_loss.txt', loss_fraction)
+	#np.savetxt(path_save + name_save + '_beam_factor.txt', beam_factor)
 	
 
 
 
-	return freq_array, LST, antenna_temperature_above_horizon, loss_fraction, beam_factor           #, convolution, numerator, pixels_above_horizon #convolution, beam_factor, integrated_gain_above_horizon
+	return 0 #freq_array, LST, antenna_temperature_above_horizon, loss_fraction, beam_factor           #, convolution, numerator, pixels_above_horizon #convolution, beam_factor, integrated_gain_above_horizon
 
 
 
@@ -2843,7 +2987,43 @@ def antenna_beam_factor_interpolation(band, case, lst_hires, fnew, Npar_freq=15)
 
 
 
+def antenna_beam_factor_interpolation_v2(band, case, lst_hires, fnew):
+	
+	"""
+	2019-12-17
+	
+	"""
+	
+	
 
+	if band == 'mid_band':
+		file_path = edges_folder + 'mid_band/calibration/beam_factors/raw/'
+		
+		if case == 1:
+			bf_old  = np.genfromtxt(file_path + 'NORMALIZED_mid_band_50-150MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_beam_factor.txt')
+			freq    = np.genfromtxt(file_path + 'NORMALIZED_mid_band_50-150MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_freq.txt')
+			lst_old = np.genfromtxt(file_path + 'NORMALIZED_mid_band_50-150MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_LST.txt')		
+	
+		
+	# Wrap beam factor and LST for 24-hr interpolation 
+	bf   = np.vstack((bf_old[-1,:], bf_old, bf_old[0,:]))
+	lst0 = np.append(lst_old[-1]-24, lst_old)
+	lst  = np.append(lst0, lst_old[0]+24)
+
+	new_bf = np.zeros((len(lst_hires), len(freq)))
+	for i in range(len(freq)):
+		fun = spi.interp1d(lst, bf[:,i], kind='cubic')
+		new_bf[:,i] = fun(lst_hires)
+		
+	new_bf2 = np.zeros((len(lst_hires), len(fnew)))
+	for i in range(len(lst_hires)):
+		fun = spi.interp1d(freq, new_bf[i,:], kind='cubic', fill_value='extrapolate')
+		new_bf2[i,:] = fun(fnew)
+		
+	
+		
+		
+	return new_bf2, bf_old, freq, lst_old 
 
 
 
@@ -2857,8 +3037,8 @@ def beam_factor_table_computation(band, case, f, N_lst, file_name_hdf5):
 	"""
 	Frequency vector
 	------------------
-	ff, i1, i2 = ba.frequency_edges(50, 199)
-	f = ff[i1::]
+	ff, i1, i2 = ba.frequency_edges(50, 150)
+	f = ff[i1:i2]
 	
 	
 	High and Low LST resolution
@@ -2872,7 +3052,7 @@ def beam_factor_table_computation(band, case, f, N_lst, file_name_hdf5):
 	
 	
 	lst_hires    = np.arange(0,24,24/N_lst)
-	bf, bf_orig  = antenna_beam_factor_interpolation(band, case, lst_hires, f)
+	bf, bf_orig, f_orig, lst_orig = antenna_beam_factor_interpolation_v2(band, case, lst_hires, f)
 	
 	
 	

@@ -27,7 +27,7 @@ from os import listdir
 
 
 import os, sys
-edges_folder       = os.environ['EDGES_vol2']
+edges_folder       = os.environ['EDGES_vol3']
 print('EDGES Folder: ' + edges_folder)
 
 sys.path.insert(0, "/home/raul/edges/old")
@@ -1803,7 +1803,24 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
 
 
 
-
+	if case == 501:
+		flag_folder       = 'case_nominal_50-150MHz_LNA2_a2_h2_o2_s1_sim2_all_lc_yes_bc' #'case_nominal_50-150MHz_LNA1_a2_h2_o2_s1_sim2_all_corrections'
+		
+		receiver_cal_file = 2   # cterms=7, wterms=8 terms over 50-150 MHz
+		
+		antenna_s11_day   = 147
+		antenna_s11_case  = 3   # taken 2+ minutes after turning on the switch
+		antenna_s11_Nfit  = 14  # 14 terms over 55-150 MHz
+		
+		antenna_correction = 1
+		balun_correction   = 1
+		ground_correction  = 1
+		beam_correction    = 1
+		bf_case            = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
+		
+		FLOW  = 50
+		FHIGH = 150
+		Nfg   = 5
 
 
 
