@@ -31,7 +31,7 @@ import os, sys
 #edges_code_folder = os.environ['EDGES_CODE']
 #sys.path.insert(0, edges_code_folder)
 
-edges_folder       = os.environ['EDGES_vol3']
+edges_folder       = os.environ['EDGES_vol2']
 print('EDGES Folder: ' + edges_folder)
 
 
@@ -855,9 +855,13 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 		if beam_correction == 1:
 			if band == 'mid_band':
 				if bf_case == 0:
-					beam_factor_filename = 'table_hires_NORMALIZED_mid_band_50-150MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz.hdf5'
+					#beam_factor_filename = 'table_hires_NORMALIZED_mid_band_50-150MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz.hdf5'
+					beam_factor_filename = 'old_way_2019-12-27.hdf5'
 					
-					
+				if bf_case == 1:
+					beam_factor_filename = 'new_way_2019-12-27.hdf5'
+
+
 				
 				# All beam correction tables
 				# --------------------------------------------------
@@ -1205,7 +1209,7 @@ def level3_single_file_test(path_file, GHA_1, GHA_2, FLOW, FHIGH, plot_residuals
 		plt.figure()
 		plt.plot(ff[ww>0], (tt-model)[ww>0])
 		plt.ylim([-1, 1])
-		plt.xlim([60, 150])
+		plt.xlim([60, 120])
 
 
 		
@@ -3006,6 +3010,10 @@ def level4_plot_integrated_residuals(case, FLOW=60, FHIGH=150):
 
 def residuals_of_simulations(case, name_flag, Nfg=5, FLOW=60, FHIGH=150):
 	
+	folder_plot = edges_folder + 'plots/20191227/'
+	
+	
+	
 	#t_all = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_120MHz_tant.txt')
 	#f = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_120MHz_freq.txt')
 	#LST = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_120MHz_LST.txt')
@@ -3089,7 +3097,14 @@ def residuals_of_simulations(case, name_flag, Nfg=5, FLOW=60, FHIGH=150):
 		bf_all = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/CORRECT_mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_beam_factor.txt')
 
 
-		
+
+	elif case == '51': # 30x30 m,   SAME AS CASE 12 BUT WITH CORRECT AND "LOSS-NORMALIZED" COMPUTATION OF ANTENNA TEMPERATURE AND BEAM FACTOR
+		t_all = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/NORMALIZED_mid_band_50-150MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_tant.txt')
+		f     = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/NORMALIZED_mid_band_50-150MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_freq.txt')
+		LST   = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/NORMALIZED_mid_band_50-150MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_LST.txt')
+		bf_all = np.genfromtxt('/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/NORMALIZED_mid_band_50-150MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz_beam_factor.txt')
+
+	
 		
 	fc = f[(f>=FLOW) & (f<=FHIGH)]
 	tc = t_all[:,(f>=FLOW) & (f<=FHIGH)]
@@ -3221,7 +3236,7 @@ def residuals_of_simulations(case, name_flag, Nfg=5, FLOW=60, FHIGH=150):
 	plt.yticks(np.arange(-22, 0.1, 2), np.arange(5, -7, -1))
 	
 	
-	plt.savefig(edges_folder + 'plots/20191127/' + name_flag + '_simulated_residuals.pdf', bbox_inches='tight')
+	plt.savefig(folder_plot + name_flag + '_simulated_residuals.pdf', bbox_inches='tight')
 	plt.close()
 	plt.close()
 	plt.close()
@@ -3269,7 +3284,7 @@ def residuals_of_simulations(case, name_flag, Nfg=5, FLOW=60, FHIGH=150):
 	plt.yticks(np.arange(-0.1, 1.01, 0.1), np.arange(5, -7, -1))
 	
 	
-	plt.savefig(edges_folder + 'plots/20191127/' + name_flag + '_simulated_correction.pdf', bbox_inches='tight')
+	plt.savefig(folder_plot + name_flag + '_simulated_correction.pdf', bbox_inches='tight')
 	plt.close()
 	plt.close()
 	plt.close()
@@ -3320,7 +3335,7 @@ def residuals_of_simulations(case, name_flag, Nfg=5, FLOW=60, FHIGH=150):
 	plt.yticks(np.arange(-0.055, 0.0025, 0.005), np.arange(5, -7, -1))
 	
 	
-	plt.savefig(edges_folder + 'plots/20191127/' + name_flag + '_simulated_correction_residuals.pdf', bbox_inches='tight')
+	plt.savefig(folder_plot + name_flag + '_simulated_correction_residuals.pdf', bbox_inches='tight')
 	plt.close()
 	plt.close()
 	plt.close()
