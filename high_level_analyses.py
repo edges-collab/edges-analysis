@@ -27,7 +27,7 @@ from os import listdir
 
 
 import os, sys
-edges_folder       = os.environ['EDGES_vol2']
+edges_folder       = os.environ['EDGES_vol3']
 print('EDGES Folder: ' + edges_folder)
 
 sys.path.insert(0, "/home/raul/edges/old")
@@ -1835,7 +1835,7 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
 		balun_correction   = 1
 		ground_correction  = 1
 		beam_correction    = 1
-		bf_case            = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
+		beam_correction_case = 0   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
 		
 		FLOW  = 50
 		FHIGH = 150
@@ -1854,7 +1854,7 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
 		balun_correction   = 1
 		ground_correction  = 1
 		beam_correction    = 1
-		bf_case            = 1   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
+		beam_correction_case = 1   # alan0 beam (30x30m ground plane), haslam map with gaussian lat-function for spectral index
 		
 		FLOW  = 50
 		FHIGH = 150
@@ -1894,7 +1894,7 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
 		if (day >= first_day) & (day <= last_day):
 			print(day)
 			
-			o = eg.level2_to_level3('mid_band', new_list[i], flag_folder=flag_folder, receiver_cal_file=receiver_cal_file, antenna_s11_year=2018, antenna_s11_day=antenna_s11_day, antenna_s11_case=antenna_s11_case, antenna_s11_Nfit=antenna_s11_Nfit, antenna_correction=antenna_correction, balun_correction=balun_correction, ground_correction=ground_correction, beam_correction=beam_correction, FLOW=FLOW, FHIGH=FHIGH, Nfg=Nfg)
+			o = eg.level2_to_level3('mid_band', new_list[i], flag_folder=flag_folder, receiver_cal_file=receiver_cal_file, antenna_s11_year=2018, antenna_s11_day=antenna_s11_day, antenna_s11_case=antenna_s11_case, antenna_s11_Nfit=antenna_s11_Nfit, antenna_correction=antenna_correction, balun_correction=balun_correction, ground_correction=ground_correction, beam_correction=beam_correction, beam_correction_case=beam_correction_case, FLOW=FLOW, FHIGH=FHIGH, Nfg=Nfg)
 		
 	return 0  # new_list #
 
@@ -11289,17 +11289,51 @@ def plot_mid_band_GHA_14_16():
 	plt.close()		
 	
 	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
 	return 0
+
+
+
+
+
+
+
+def plot_signal_residuals(FLOW, FHIGH, A21, model_type, Ntotal):
+	
+	
+	#f, t, r, w, s = eg.level4_integration(501, [18,19,20,21,22,23,0,1,2,3,4,5], 148, 167, FLOW, FHIGH, Nfg)
+	
+	#pc       = ba.fit_polynomial_fourier(model_type, f/200, t, Nfg)
+	#model_fg = ba.model_evaluate(model_type, pc[0], f/200)	
+	
+	
+	
+	
+	
+	f  = np.arange(FLOW, FHIGH+1, 1)
+	A  = 1500
+	f0 = 75
+	model_fg = A*(f/f0)** ( (-2.5) + 0.1*np.log(f/f0) )
+	
+	sig   = dm.signal_model('exp', [A21,79,19,7], f)
+	
+	total = model_fg + sig
+	
+	
+	pc = ba.fit_polynomial_fourier(model_type, f/200, total, Ntotal)
+	m  = ba.model_evaluate(model_type, pc[0], f/200)
+	r  = total - m
+	
+	
+	return f, r, model_fg
+
+
+
+
+
+
+
+
+
 
 
 

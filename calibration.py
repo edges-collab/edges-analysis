@@ -27,7 +27,7 @@ from os.path import expanduser
 home_folder = expanduser("~")
 
 import os, sys
-edges_folder       = os.environ['EDGES_vol2']
+edges_folder       = os.environ['EDGES_vol3']
 print('EDGES Folder: ' + edges_folder)
 
 edges_folder_v1       = os.environ['EDGES_vol1']

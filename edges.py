@@ -31,7 +31,7 @@ import os, sys
 #edges_code_folder = os.environ['EDGES_CODE']
 #sys.path.insert(0, edges_code_folder)
 
-edges_folder       = os.environ['EDGES_vol2']
+edges_folder       = os.environ['EDGES_vol3']
 print('EDGES Folder: ' + edges_folder)
 
 
@@ -464,7 +464,7 @@ def antenna_efficiency(band, f):
 
 
 
-def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=1, antenna_s11_year=2018, antenna_s11_day=147, antenna_s11_case=5, antenna_s11_Nfit=15, antenna_correction=1, balun_correction=1, ground_correction=1, beam_correction=1, bf_case=0, FLOW=50, FHIGH=150, Nfg=7):
+def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=1, antenna_s11_year=2018, antenna_s11_day=147, antenna_s11_case=5, antenna_s11_Nfit=15, antenna_correction=1, balun_correction=1, ground_correction=1, beam_correction=1, beam_correction_case=0, FLOW=50, FHIGH=150, Nfg=7):
 	
 	"""
 
@@ -854,12 +854,14 @@ def level2_to_level3(band, year_day_hdf5, flag_folder='test', receiver_cal_file=
 			
 		if beam_correction == 1:
 			if band == 'mid_band':
-				if bf_case == 0:
+				if beam_correction_case == 0:
 					#beam_factor_filename = 'table_hires_NORMALIZED_mid_band_50-150MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz.hdf5'
-					beam_factor_filename = 'old_way_2019-12-27.hdf5'
+					beam_factor_filename = 'old_case.hdf5'
+					print('OLD BEAM FACTOR !!!')
 					
-				if bf_case == 1:
-					beam_factor_filename = 'new_way_2019-12-27.hdf5'
+				if beam_correction_case == 1:
+					beam_factor_filename = 'new_case.hdf5'
+					print('NEW BEAM FACTOR !!!')
 
 
 				
@@ -2538,40 +2540,37 @@ def level4_binned_read(path_file):
 
 
 
-def level4_plot_residuals(case, GHA_index, TITLE, figure_save_name, DY):
+def level4_plot_residuals(case, GHA_index, TITLE, subfolder, figure_save_name, DY):
 
 	if case == 2:
 		filename = edges_folder + 'mid_band/spectra/level4/calibration_2019_10_no_ground_loss_no_beam_corrections/binned_residuals/binned_residuals_one_hour_GHA.hdf5'
-		figure_save_path_subfolder = edges_folder + 'mid_band/spectra/level4/calibration_2019_10_no_ground_loss_no_beam_corrections/binned_plots/'
+		figure_save_path_subfolder = edges_folder + 'mid_band/spectra/level4/calibration_2019_10_no_ground_loss_no_beam_corrections/binned_plots/' + subfolder + '/'
 
 	elif case == 3:
 		filename = edges_folder + 'mid_band/spectra/level4/case_nominal_50-150MHz_no_ground_loss_no_beam_corrections/binned_residuals/binned_residuals_one_hour_GHA.hdf5'
-		figure_save_path_subfolder = edges_folder + 'mid_band/spectra/level4/case_nominal_50-150MHz_no_ground_loss_no_beam_corrections/binned_plots/'
-		
+		figure_save_path_subfolder = edges_folder + 'mid_band/spectra/level4/case_nominal_50-150MHz_no_ground_loss_no_beam_corrections/binned_plots/' + subfolder + '/'
 		
 	elif case == 5:
 		filename = edges_folder + 'mid_band/spectra/level4/case_nominal_14_14_terms_55-150MHz_no_ground_loss_no_beam_corrections/binned_residuals/binned_residuals_one_hour_GHA.hdf5'
-		figure_save_path_subfolder = edges_folder + 'mid_band/spectra/level4/case_nominal_14_14_terms_55-150MHz_no_ground_loss_no_beam_corrections/binned_plots/'
+		figure_save_path_subfolder = edges_folder + 'mid_band/spectra/level4/case_nominal_14_14_terms_55-150MHz_no_ground_loss_no_beam_corrections/binned_plots/' + subfolder + '/'
 		
 	elif case == 406:
 		filename = edges_folder + 'mid_band/spectra/level4/case_nominal_50-150MHz_LNA1_a2_h2_o2_s1_sim2/binned_residuals/binned_residuals_one_hour_GHA.hdf5'
-		figure_save_path_subfolder = edges_folder + 'mid_band/spectra/level4/case_nominal_50-150MHz_LNA1_a2_h2_o2_s1_sim2/binned_plots/'
+		figure_save_path_subfolder = edges_folder + 'mid_band/spectra/level4/case_nominal_50-150MHz_LNA1_a2_h2_o2_s1_sim2/binned_plots/' + subfolder + '/'
 		
-	
 	elif case == 501:
 		filename = edges_folder + 'mid_band/spectra/level4/case_nominal_50-150MHz_LNA2_a2_h2_o2_s1_sim2_all_lc_yes_bc/binned_residuals/binned_residuals_one_hour_GHA.hdf5'
-		figure_save_path_subfolder = edges_folder + 'mid_band/spectra/level4/case_nominal_50-150MHz_LNA2_a2_h2_o2_s1_sim2_all_lc_yes_bc/binned_plots/'	
+		figure_save_path_subfolder = edges_folder + 'mid_band/spectra/level4/case_nominal_50-150MHz_LNA2_a2_h2_o2_s1_sim2_all_lc_yes_bc/binned_plots/' + subfolder + '/'	
 	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
+	elif case == 5011:
+		filename = edges_folder + 'mid_band/spectra/level4/case_nominal_50-150MHz_LNA2_a2_h2_o2_s1_sim2_all_lc_yes_bc/binned_residuals/binned_residuals_one_hour_GHA_60-120MHz.hdf5'
+		figure_save_path_subfolder = edges_folder + 'mid_band/spectra/level4/case_nominal_50-150MHz_LNA2_a2_h2_o2_s1_sim2_all_lc_yes_bc/binned_plots/' + subfolder + '/'
+		
+		
+	if not exists(figure_save_path_subfolder):
+		makedirs(figure_save_path_subfolder)
+		
+		
 	fb, rb, wb, sb, gha, yd = level4_binned_read(filename) 
 	#Nfg = 5
 	
@@ -2581,11 +2580,31 @@ def level4_plot_residuals(case, GHA_index, TITLE, figure_save_name, DY):
 			
 			std_x = np.std(rb[i,GHA_index,:][wb[i,GHA_index,:]>0])
 			
+			
+			path_file = edges_folder + 'mid_band/spectra/level3/case_nominal_50-150MHz_LNA2_a2_h2_o2_s1_sim2_all_lc_yes_bc/' + str(int(yd[i,0])) + '_' + str(int(yd[i,1])) + '_00.hdf5'
+			f, t, p, r, w, rms, tp, m = level3read(path_file, print_key='no')
+			
+			GHA_level3 = m[:,4]
+			GHA_level3[GHA_level3<0] = GHA_level3[GHA_level3<0] + 24
+			SUNEL = m[(GHA_level3>=GHA_index) & (GHA_level3<=(GHA_index+1)), 6]
+			if len(SUNEL) > 0:
+				EL = str(int(np.max(SUNEL)))
+				
+			else:
+				EL = 'X'
+				
+			
+			
+			
+			
+			
+			
 			if start == 0:
 				rb_new  = rb[i,GHA_index,:]
 				wb_new  = wb[i,GHA_index,:]
 				yd_new  = yd[i]
 				std_new = np.copy(std_x)
+				EL_new  = [EL]
 						
 				start = 1
 				
@@ -2595,26 +2614,46 @@ def level4_plot_residuals(case, GHA_index, TITLE, figure_save_name, DY):
 				wb_new  = np.vstack((wb_new, wb[i,GHA_index,:]))
 				yd_new  = np.vstack((yd_new, yd[i]))
 				std_new = np.append(std_new, std_x)
+				EL_new.append(EL)
 				
-		
+			
+			print(EL_new)
+
+			
+			
+				
 		
 	# Plots
 	# ---------------------
+	#EL_text ='x'
 
 	# Settings
-	LST_text    = [str(int(yd_new[i,1])) + ': ' + str(int(1000*std_new[i])) + ' mK' for i in range(len(yd_new))]
+	LST_text    = [str(int(yd_new[i,1])) + ': ' + EL_new[i] + ' deg, ' + str(int(1000*std_new[i])) + ' mK' for i in range(len(yd_new))]
 
 	#DY          =   2
-	FIG_SX      =   8.5
-	FIG_SY      =  20 
-	FLOW_plot   =  35
-	FHIGH_plot  = 152
-	XTICKS      = np.arange(60, 151, 10)
-	XTEXT       =  35.5
+	FIG_SX      =  10
+	FIG_SY      =  20
+	
 	YLABEL      = str(DY)  + ' K per division'
 	#TITLE       = str(Nfg) + ' LINLOG terms'
 	#figure_save_name = 'test'
 	FIGURE_FORMAT = 'pdf' #'png'			
+
+
+
+	if case == 5011:
+		FLOW_plot   =  40
+		FHIGH_plot  = 122
+		XTICKS      = np.arange(60, 121, 10)
+		XTEXT       =  40.5
+
+	else:
+		FLOW_plot   =  35
+		FHIGH_plot  = 152
+		XTICKS      = np.arange(60, 151, 10)
+		XTEXT       =  35.5
+
+
 
 
 	# Plotting
@@ -2636,7 +2675,7 @@ def level4_good_days_GHA(GHA, first_day, last_day):
 	
 	# Data filter
 	if GHA == 0:
-		good_days = np.arange(140, 153, 1) 
+		good_days = np.arange(140, 300, 1) 
 
 	if GHA == 1:
 		good_days = np.concatenate((np.arange(148, 160, 1), np.arange(161, 220, 1)))
@@ -2649,13 +2688,13 @@ def level4_good_days_GHA(GHA, first_day, last_day):
 
 	if GHA == 4:
 		good_days = np.arange(140, 300, 1) 
-
-
-
-
 		
 	if GHA == 5:
 		good_days = np.arange(140, 300, 1) 		
+
+
+
+
 		
 	if GHA == 6:
 		good_days = np.arange(147, 300, 1) # np.arange(186, 300, 1)
@@ -2684,11 +2723,6 @@ def level4_good_days_GHA(GHA, first_day, last_day):
 		
 		#good_days = np.concatenate((np.arange(140, 176, 1), np.arange(177, 183, 1), np.arange(187, 194, 1), np.arange(197, 206, 1), np.arange(210, 300, 1)))
 
-
-
-
-
-
 	if GHA == 14:
 		good_days = np.arange(148, 183, 1)  # np.concatenate((np.arange(140, 183, 1), np.arange(187, 206, 1), np.arange(210, 300, 1))) 
 
@@ -2700,6 +2734,11 @@ def level4_good_days_GHA(GHA, first_day, last_day):
 	
 	if GHA == 17:
 		good_days = np.arange(140, 300, 1)
+	
+	
+	
+	
+	
 	
 	if GHA == 18:
 		good_days = np.arange(140, 300, 1)
@@ -2795,12 +2834,12 @@ def level4_integration(case, GHA_list, first_day, last_day, FLOW, FHIGH, Nfg): #
 	tc = avt[(f>FLOW) & (f<FHIGH)]
 	wc = avw[(f>FLOW) & (f<FHIGH)]
 	
-	
-	pc = ba.fit_polynomial_fourier('LINLOG', fc/200, tc, Nfg, Weights=wc)
-	mc = ba.model_evaluate('LINLOG', pc[0], fc/200)
+	model_type = 'LINLOG'
+	pc = ba.fit_polynomial_fourier(model_type, fc/200, tc, Nfg, Weights=wc)
+	mc = ba.model_evaluate(model_type, pc[0], fc/200)
 	rc = tc - mc
 	fb, rb, wb, sb = ba.spectral_binning_number_of_samples(fc, rc, wc)
-	mb = ba.model_evaluate('LINLOG', pc[0], fb/200)
+	mb = ba.model_evaluate(model_type, pc[0], fb/200)
 	tb = rb + mb
 	tb[wb == 0] = 0
 	
