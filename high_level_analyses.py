@@ -3912,6 +3912,236 @@ def VNA_comparison4():
 def plots_midband_paper(plot_number):
 	
 	
+	if plot_number == 12:
+		
+		# Paths
+		path_plot_save = edges_folder + 'plots/20200108/'
+		
+		FS_LABELS = 12
+		FS_PANELS = 14
+		
+		
+		
+		
+		f = plt.figure()
+		plt.close()
+		
+		
+		
+		
+		# Antenna S11
+		# -----------		
+		f, il, ih = ba.frequency_edges(50, 130)
+		fe = f[il:ih+1]			
+
+		ra = cal.models_antenna_s11_remove_delay('mid_band', fe, year=2018, day=147, case=5, delay_0=0.17, model_type='polynomial', Nfit=15, plot_fit_residuals='no')
+
+		xlb1  = np.genfromtxt('/run/media/raul/SSD_4TB/EDGES_vol1/calibration/antenna_s11/low_band1/s11/corrected/2016_243/S11_blade_low_band_2016_243.txt')
+		flb1  = xlb1[:,0]/1e6
+		ralb1 = xlb1[:,1] + 1j*xlb1[:,2]
+		
+		xlb2  = np.genfromtxt('/run/media/raul/SSD_4TB/EDGES_vol1/calibration/antenna_s11/low_band2/s11/corrected/2017-06-29-low2-noshield_average/S11_blade_low_band_2017_180_NO_SHIELD.txt')		
+		flb2  = xlb2[:,0]/1e6
+		ralb2 = xlb2[:,1] + 1j*xlb2[:,2]		
+		
+		
+		
+		
+		# Subplot 1
+		# ---------
+		plt.subplot(4,2,1)
+		plt.plot(fe, 20*np.log10(np.abs(ra)), 'b',                              linewidth=1.3, label='')
+		plt.plot(flb1[flb1<=100], 20*np.log10(np.abs(ralb1[flb1<=100])), 'r',   linewidth=1.3, label='')
+		plt.plot(flb2[flb2<=100], 20*np.log10(np.abs(ralb2[flb2<=100])), 'r--', linewidth=1.3, label='')
+		
+		plt.ylabel('$|\Gamma_{\mathrm{ant}}|$ [dB]', fontsize=FS_LABELS)
+		
+		plt.xlim([48, 132])
+		plt.ylim([-17, -1])
+		plt.xticks(np.arange(50, 131, 10), '')		
+		plt.yticks(np.arange(-16,-1,2))
+		plt.text(122, -15.6, '(a)', fontsize=14)
+		
+		
+		
+		
+		
+		# Subplot 2
+		# ---------
+		plt.subplot(4,2,2)
+		plt.plot(fe, (180/np.pi)*np.unwrap(np.angle(ra)), 'b',                              linewidth=1.3, label=r'')
+		plt.plot(flb1[flb1<=100], (180/np.pi)*np.unwrap(np.angle(ralb1[flb1<=100])), 'r',   linewidth=1.3, label=r'')
+		plt.plot(flb2[flb2<=100], (180/np.pi)*np.unwrap(np.angle(ralb2[flb2<=100])), 'r--', linewidth=1.3, label=r'')
+	
+		plt.ylabel(r'$\angle\/\Gamma_{\mathrm{ant}}$ [ $^\mathrm{o}$]', fontsize=FS_LABELS)
+		plt.legend(['Mid-Band','Low-Band 1','Low-Band 2'], fontsize=9)
+		
+		plt.xlim([48, 132])
+		plt.ylim([-700, 300])
+		plt.xticks(np.arange(50, 131, 10), '')		
+		plt.yticks(np.arange(-600,201,200))			
+		plt.text(122, -620, '(b)', fontsize=FS_PANELS)
+
+
+
+
+
+
+		# Receiver calibration parameters
+		# -------------------------------
+		rcv_file = edges_folder + 'mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/calibration_file_receiver1_cterms7_wterms8.txt'
+
+		rcv = np.genfromtxt(rcv_file)
+	
+		FLOW  = 50
+		FHIGH = 130
+		
+		fX      = rcv[:,0]
+		rcv2    = rcv[(fX>=FLOW) & (fX<=FHIGH),:]
+		
+		fe      = rcv2[:,0]
+		rl      = rcv2[:,1] + 1j*rcv2[:,2]
+		sca     = rcv2[:,3]
+		off     = rcv2[:,4]
+		TU      = rcv2[:,5]
+		TC      = rcv2[:,6]
+		TS      = rcv2[:,7]
+
+
+
+
+		# Low-Band
+		rcv1 = np.genfromtxt('/home/raul/DATA1/EDGES_vol1/calibration/receiver_calibration/low_band1/2015_08_25C/results/nominal/calibration_files/calibration_file_low_band_2015_nominal.txt')
+
+
+
+
+		# Subplot 3
+		# ---------
+		plt.subplot(4,2,3)
+		plt.plot(fe, 20*np.log10(np.abs(rl)), 'b', linewidth=1.3)
+		plt.plot(rcv1[:,0], 20*np.log10(np.abs(rcv1[:,1]+1j*rcv1[:,2])))
+		
+		plt.xlim([48, 132])
+		plt.ylim([-40, -30])
+		plt.xticks(np.arange(50, 131, 10), '')
+		plt.yticks(np.arange(-39,-30,2))
+		plt.ylabel('$|\Gamma_{\mathrm{rec}}|$ [dB]', fontsize=FS_LABELS)
+		plt.text(48.5, -39.55, '(c)', fontsize=FS_PANELS)
+		#plt.text(105, -38.9, 'Mid-Band', fontweight='bold', color='b')
+		#plt.text(105, -39.5, 'Low-Band 1', fontweight='bold', color='r')			
+			
+			
+				
+		# Subplot 4
+		# ---------
+		plt.subplot(4,2,4)
+		plt.plot(fe, (180/np.pi)*np.unwrap(np.angle(rl)), 'b--', linewidth=1.3)
+		plt.plot(rcv1[:,0], (180/np.pi)*np.unwrap(np.angle(rcv1[:,1]+1j*rcv1[:,2])), 'r--', linewidth=1.3)
+		
+		plt.xlim([48, 132])
+		plt.ylim([70, 130])
+		plt.xticks(np.arange(50, 131, 10), '')
+		plt.yticks(np.arange(80,121,10))		
+		plt.ylabel(r'$\angle\/\Gamma_{\mathrm{rec}}$ [ $^\mathrm{o}$]', fontsize=FS_LABELS)
+		plt.text(48.5, 100, '(d)', fontsize=FS_PANELS)
+		
+		
+		
+		# Subplot 5
+		# ---------
+		plt.subplot(4,2,5)
+		plt.plot(fe, sca,'b',linewidth=1.3)
+		plt.plot(rcv1[:,0], rcv1[:,3],'r', linewidth=1.3)
+		
+		plt.xlim([48, 132])
+		plt.xticks(np.arange(50, 131, 10), '')
+		plt.ylim([3.3, 5.2])
+		plt.yticks(np.arange(3.5,5.1,0.5))
+		plt.ylabel('$C_1$', fontsize=FS_LABELS)
+		plt.text(48.5, 3.38, '(e)', fontsize=FS_PANELS)		
+		
+		
+		
+		# Subplot 6
+		# ---------
+		plt.subplot(4,2,6)
+		plt.plot(fe, off,'b--',linewidth=1.3)
+		plt.plot(rcv1[:,0], rcv1[:,4],'r--', linewidth=1.3)
+		
+		plt.xlim([48, 132])
+		plt.xticks(np.arange(50, 131, 10), '')		
+		plt.ylim([-2.75, -0.75])
+		plt.yticks(np.arange(-2.5, -0.85, 0.5))
+		plt.ylabel('$C_2$ [K]', fontsize=FS_LABELS)
+		plt.text(48.5, -1, '(f)', fontsize=FS_PANELS)	
+
+		
+
+
+		# Subplot 7
+		# ---------
+		plt.plot(fe, TU,'b', linewidth=1.3)
+		plt.plot(rcv1[:,0], rcv1[:,5],'r', linewidth=1.3)
+		
+		plt.xlim([48, 132])
+		plt.xticks(np.arange(50, 131, 10))		
+		plt.ylim([178, 190])
+		plt.yticks(np.arange(180, 189, 2))
+		plt.ylabel('$T_{\mathrm{U}}$ [K]', fontsize=FS_LABELS)
+		plt.xlabel('$\\nu$ [MHz]', fontsize=FS_LABELS)
+		plt.text(48.5, 178.5, '(g)', fontsize=FS_PANELS)		
+		
+		
+		
+		
+		# Subplot 8
+		# ---------
+		plt.plot(fe, TC,'b--', linewidth=1.3)
+		plt.plot(rcv1[:,0], rcv1[:,6],'r--', linewidth=1.3)
+		
+		plt.plot(fe, TS,'b:', linewidth=1.3)
+		plt.plot(rcv1[:,0], rcv1[:,7],'r:', linewidth=1.3)
+
+		plt.xlim([48, 132])
+		plt.xticks(np.arange(50, 131, 10))		
+		plt.ylim([-55, 35])
+		plt.yticks(np.arange(-40, 21, 20))
+		plt.ylabel('$T_{\mathrm{C}}, T_{\mathrm{S}}$ [K]', fontsize=FS_LABELS)
+		plt.xlabel('$\\nu$ [MHz]', fontsize=FS_LABELS)
+		plt.text(48.5, 20, '(h)', fontsize=FS_PANELS)		
+	
+
+
+
+
+
+
+		plt.savefig(path_plot_save + 'calibration_parameters.pdf', bbox_inches='tight')
+		plt.close()	
+		plt.close()
+		plt.close()
+		plt.close()
+
+
+		
+		
+		
+		
+		
+		
+		
+		
+		
+
+
+		
+		
+		
+		
+	
+	
+	
 	# Receiver calibration parameters
 	if plot_number==1:
 	
