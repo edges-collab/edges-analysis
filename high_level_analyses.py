@@ -27,7 +27,7 @@ from os import listdir
 
 
 import os, sys
-edges_folder       = os.environ['EDGES_vol3']
+edges_folder       = os.environ['EDGES_vol2']
 print('EDGES Folder: ' + edges_folder)
 
 sys.path.insert(0, "/home/raul/edges/old")
@@ -3912,7 +3912,7 @@ def VNA_comparison4():
 def plots_midband_paper(plot_number):
 	
 	
-	if plot_number == 12:
+	if plot_number == 500:
 		
 		# Paths
 		path_plot_save = edges_folder + 'plots/20200108/'
@@ -3923,8 +3923,13 @@ def plots_midband_paper(plot_number):
 		
 		
 		
-		f = plt.figure()
+		
 		plt.close()
+		fig = plt.figure(figsize=[12,12])
+		
+		
+		
+		
 		
 		
 		
@@ -3960,7 +3965,7 @@ def plots_midband_paper(plot_number):
 		plt.ylim([-17, -1])
 		plt.xticks(np.arange(50, 131, 10), '')		
 		plt.yticks(np.arange(-16,-1,2))
-		plt.text(122, -15.6, '(a)', fontsize=14)
+		plt.text(48.5, -16.2, '(a)', fontsize=14)
 		
 		
 		
@@ -3980,7 +3985,7 @@ def plots_midband_paper(plot_number):
 		plt.ylim([-700, 300])
 		plt.xticks(np.arange(50, 131, 10), '')		
 		plt.yticks(np.arange(-600,201,200))			
-		plt.text(122, -620, '(b)', fontsize=FS_PANELS)
+		plt.text(48.5, -650, '(b)', fontsize=FS_PANELS)
 
 
 
@@ -4020,7 +4025,7 @@ def plots_midband_paper(plot_number):
 		# ---------
 		plt.subplot(4,2,3)
 		plt.plot(fe, 20*np.log10(np.abs(rl)), 'b', linewidth=1.3)
-		plt.plot(rcv1[:,0], 20*np.log10(np.abs(rcv1[:,1]+1j*rcv1[:,2])))
+		plt.plot(rcv1[:,0], 20*np.log10(np.abs(rcv1[:,1]+1j*rcv1[:,2])), 'r')
 		
 		plt.xlim([48, 132])
 		plt.ylim([-40, -30])
@@ -4036,15 +4041,15 @@ def plots_midband_paper(plot_number):
 		# Subplot 4
 		# ---------
 		plt.subplot(4,2,4)
-		plt.plot(fe, (180/np.pi)*np.unwrap(np.angle(rl)), 'b--', linewidth=1.3)
-		plt.plot(rcv1[:,0], (180/np.pi)*np.unwrap(np.angle(rcv1[:,1]+1j*rcv1[:,2])), 'r--', linewidth=1.3)
+		plt.plot(fe, (180/np.pi)*np.unwrap(np.angle(rl)), 'b', linewidth=1.3)
+		plt.plot(rcv1[:,0], (180/np.pi)*np.unwrap(np.angle(rcv1[:,1]+1j*rcv1[:,2])), 'r', linewidth=1.3)
 		
 		plt.xlim([48, 132])
 		plt.ylim([70, 130])
 		plt.xticks(np.arange(50, 131, 10), '')
 		plt.yticks(np.arange(80,121,10))		
 		plt.ylabel(r'$\angle\/\Gamma_{\mathrm{rec}}$ [ $^\mathrm{o}$]', fontsize=FS_LABELS)
-		plt.text(48.5, 100, '(d)', fontsize=FS_PANELS)
+		plt.text(48.5, 73, '(d)', fontsize=FS_PANELS)
 		
 		
 		
@@ -4066,21 +4071,22 @@ def plots_midband_paper(plot_number):
 		# Subplot 6
 		# ---------
 		plt.subplot(4,2,6)
-		plt.plot(fe, off,'b--',linewidth=1.3)
-		plt.plot(rcv1[:,0], rcv1[:,4],'r--', linewidth=1.3)
+		plt.plot(fe, off,'b',linewidth=1.3)
+		plt.plot(rcv1[:,0], rcv1[:,4],'r', linewidth=1.3)
 		
 		plt.xlim([48, 132])
 		plt.xticks(np.arange(50, 131, 10), '')		
 		plt.ylim([-2.75, -0.75])
 		plt.yticks(np.arange(-2.5, -0.85, 0.5))
 		plt.ylabel('$C_2$ [K]', fontsize=FS_LABELS)
-		plt.text(48.5, -1, '(f)', fontsize=FS_PANELS)	
+		plt.text(48.5, -2.65, '(f)', fontsize=FS_PANELS)	
 
 		
 
 
 		# Subplot 7
 		# ---------
+		plt.subplot(4,2,7)
 		plt.plot(fe, TU,'b', linewidth=1.3)
 		plt.plot(rcv1[:,0], rcv1[:,5],'r', linewidth=1.3)
 		
@@ -4097,11 +4103,12 @@ def plots_midband_paper(plot_number):
 		
 		# Subplot 8
 		# ---------
-		plt.plot(fe, TC,'b--', linewidth=1.3)
-		plt.plot(rcv1[:,0], rcv1[:,6],'r--', linewidth=1.3)
+		plt.subplot(4,2,8)
+		plt.plot(fe, TC,'b', linewidth=1.3)
+		plt.plot(rcv1[:,0], rcv1[:,6],'r', linewidth=1.3)
 		
-		plt.plot(fe, TS,'b:', linewidth=1.3)
-		plt.plot(rcv1[:,0], rcv1[:,7],'r:', linewidth=1.3)
+		plt.plot(fe, TS,'b', linewidth=1.3)
+		plt.plot(rcv1[:,0], rcv1[:,7],'r', linewidth=1.3)
 
 		plt.xlim([48, 132])
 		plt.xticks(np.arange(50, 131, 10))		
@@ -4109,7 +4116,10 @@ def plots_midband_paper(plot_number):
 		plt.yticks(np.arange(-40, 21, 20))
 		plt.ylabel('$T_{\mathrm{C}}, T_{\mathrm{S}}$ [K]', fontsize=FS_LABELS)
 		plt.xlabel('$\\nu$ [MHz]', fontsize=FS_LABELS)
-		plt.text(48.5, 20, '(h)', fontsize=FS_PANELS)		
+		plt.text(48.5, -50, '(h)', fontsize=FS_PANELS)
+		
+		plt.text(80, 18, '$T_{\mathrm{S}}$', fontsize=FS_PANELS)
+		plt.text(90, -10, '$T_{\mathrm{C}}$', fontsize=FS_PANELS)
 	
 
 
@@ -4126,7 +4136,120 @@ def plots_midband_paper(plot_number):
 
 		
 		
+	
+	# Balun loss
+	if plot_number == 501:
+
+
+		# Paths
+		path_plot_save = edges_folder + 'plots/20200108/'
+
+
+
+
+		# Plot
 		
+		FS_LABELS = 12
+
+		size_x = 4.5
+		size_y = 2.7 #10.5
+		x0 = 0.15
+		y0 = 0.09
+		dx = 0.8
+		dy = 0.8 #18
+
+
+		f1  = plt.figure(num=1, figsize=(size_x, size_y))		
+
+
+
+
+
+
+		# Frequency
+		f, il, ih = ba.frequency_edges(50, 130)
+		fe = f[il:ih+1]	
+
+
+		# Antenna S11
+		# -----------
+		ra = cal.models_antenna_s11_remove_delay('mid_band', fe, year=2018, day=147, case=5, delay_0=0.17, model_type='polynomial', Nfit=15, plot_fit_residuals='no')
+
+		xlb1  = np.genfromtxt('/run/media/raul/SSD_4TB/EDGES_vol1/calibration/antenna_s11/low_band1/s11/corrected/2016_243/S11_blade_low_band_2016_243.txt')
+		flb1  = xlb1[:,0]/1e6
+		ralb1 = xlb1[:,1] + 1j*xlb1[:,2]
+		
+		xlb2  = np.genfromtxt('/run/media/raul/SSD_4TB/EDGES_vol1/calibration/antenna_s11/low_band2/s11/corrected/2017-06-29-low2-noshield_average/S11_blade_low_band_2017_180_NO_SHIELD.txt')		
+		flb2  = xlb2[:,0]/1e6
+		ralb2 = xlb2[:,1] + 1j*xlb2[:,2]	
+
+
+
+
+
+		Gb, Gc = cal.balun_and_connector_loss('mid_band', fe, ra)
+		Gbc    = Gb*Gc
+		
+		Gblb, Gclb = oeg.balun_and_connector_loss('low_band_2015', flb1, ralb1)
+		Gbclb   = Gblb*Gclb
+		
+		Gblb2, Gclb2 = oeg.balun_and_connector_loss('low_band2_2017', flb2, ralb2)
+		Gbclb2   = Gblb2*Gclb2
+
+
+		# Figure
+		# ---------------------
+		fig = plt.figure(figsize=[6,7])
+		
+		# Subplot 1
+		# ---------
+		plt.subplot(2,1,1)
+		plt.plot(fe, (1-Gbc)*100, 'b',                              linewidth=1.3, label='')
+		plt.plot(flb1[flb1<=100], (1-Gbclb)[flb1<=100]*100,  'r',   linewidth=1.3, label='')
+		plt.plot(flb1[flb1<=100], (1-Gbclb2)[flb1<=100]*100, 'r--', linewidth=1.3, label='')
+		plt.legend(['Mid-Band','Low-Band 1','Low-Band 2'], fontsize=9)
+		
+		plt.xlim([48, 132])
+		plt.xticks(np.arange(50, 131, 10), '')
+		
+		plt.ylim([0, 1])
+		plt.yticks(np.arange(0.0,0.9,0.2))
+		plt.ylabel(r'balun loss [%]')
+		
+		plt.text(48.5, 0.05, '(a)', fontsize=15)
+
+		
+		
+		
+		Ga = cal.antenna_loss('mid_band', fe)
+		
+		# Subplot 2
+		# ---------
+		plt.subplot(2,1,2)
+		plt.plot(fe, (1-Ga)*100, 'b', linewidth=1.3)
+		
+		plt.xlim([48, 132])
+		plt.xticks(np.arange(50, 131, 10))
+		plt.xlabel('$\\nu$ [MHz]', fontsize=13)
+		
+		plt.ylim([0, 0.12])
+		plt.yticks(np.arange(0.0,0.11,0.02))
+		plt.ylabel(r'antenna loss [%]')
+		
+		plt.text(48.5, 0.007, '(b)', fontsize=15)
+
+
+
+		plt.savefig(path_plot_save + 'loss.pdf', bbox_inches='tight')
+		plt.close()	
+		plt.close()
+		plt.close()
+		plt.close()
+
+
+
+
+
 		
 		
 		
@@ -4575,7 +4698,9 @@ def plots_midband_paper(plot_number):
 		
 		ax.set_xlabel('$\\nu$ [MHz]', fontsize=13)
 		ax.legend(['Mid-Band','Low-Band 1','Low-Band 2'], fontsize=9)
-
+		
+		
+		
 
 
 		plt.savefig(path_plot_save + 'balun_loss.pdf', bbox_inches='tight')
@@ -4611,12 +4736,12 @@ def plots_midband_paper(plot_number):
 	if plot_number == 4:
 
 		# Paths
-		path_plot_save = edges_folder + 'plots/20190917/'
+		path_plot_save = edges_folder + 'plots/20200108/'
 
 
 		# Plot
 
-		size_x = 7.2
+		size_x = 8.2
 		size_y = 6 #10.5
 		x0 = 0.15
 		y0 = 0.09
@@ -4754,7 +4879,7 @@ def plots_midband_paper(plot_number):
 		ax.text(50, 0.9, r'$\theta=45^{\circ}$, E-plane', fontsize=10)
 		
 		
-		ax.legend([r'Mid-Band 30x30 m$^2$ GP', 'Mid-Band infinite GP', r'Low-Band 30x30 m$^2$ GP', r'Low-Band 10x10 m$^2$ GP'], fontsize=7, ncol=2)
+		ax.legend([r'Mid-Band 30m x 30m GP', 'Mid-Band infinite GP', r'Low-Band 30m x 30m GP', r'Low-Band 10m x 10m GP'], fontsize=7, ncol=2)
 	
 	
 	
@@ -4868,6 +4993,78 @@ def plots_midband_paper(plot_number):
 
 
 
+		ax     = f1.add_axes([x0 + 1*dx + xoff, y0 + 1*dy, dx, dy])
+	
+	
+		Gg   = cal.ground_loss('mid_band', fe)
+		flb  = np.arange(50, 121, 1)
+		Gglb = cal.ground_loss('low_band', flb)
+	
+		h      = ax.plot(fe, (1-Gg)*100, 'b', linewidth=1.0, label='ground loss [%]')
+		h      = ax.plot(flb, (1-Gglb)*100, 'r', linewidth=1.0, label='ground loss [%]')
+	
+		#ax.set_xlabel('$\\nu$ [MHz]')#, fontsize=15)
+		#ax.set_ylim([-41, -25])
+		#ax.set_xticklabels('')
+		#ax.set_yticks(np.arange(-39,-26,3))
+		#ax.set_ylabel('$|\Gamma_{\mathrm{rec}}|$ [dB]', fontsize=16)
+		#ax.text(42, -39.6, '(a)', fontsize=20)
+		ax.set_ylabel(r'ground loss [%]')#, fontsize=15)
+	
+	
+	
+		ax.set_xlim([48, 122])
+		xt = np.arange(50, 121, 10)
+		ax.set_xticks(xt)
+		ax.set_xticklabels('')
+		ax.tick_params(axis='x', direction='in')
+		#ax.set_xticklabels(['' for i in range(len(xt))], fontsize=15)
+		#ax.set_xticklabels(xt, fontsize=10)
+		ax.set_ylim([0.1, 0.5])
+		ax.set_yticks(np.arange(0.15,0.46,0.05))
+	
+		ax.text(115, 0.118, '(c)', fontsize=14)
+	
+
+
+
+
+		ax     = f1.add_axes([x0 + 1*dx + xoff, y0 + 0*dy, dx, dy])
+		x1 = (1-Gg)*100
+		x2 = (1-Gglb)*100
+		
+		p1 = np.polyfit(fe, x1, Nfg)
+		p2 = np.polyfit(flb, x2, Nfg)
+		
+		m1 = np.polyval(p1, fe)
+		m2 = np.polyval(p2, flb)
+		
+		ax.plot(fe, x1-m1, 'b', linewidth=1)
+		ax.plot(flb, x2-m2, 'r', linewidth=1)
+
+		ax.set_xticks(xt)
+		ax.set_ylim([-0.006, 0.006])
+		
+		ax.set_yticks(np.arange(-0.004,0.0041,0.002))
+		
+		ax.set_ylabel(r'ground loss residuals [%]')
+
+		ax.set_xlabel('$\\nu$ [MHz]')
+		ax.text(115, -0.0055, '(d)', fontsize=14)
+
+
+
+
+
+
+
+
+
+		plt.savefig(path_plot_save + 'beam_gain.pdf', bbox_inches='tight')
+		plt.close()	
+		plt.close()
+		plt.close()
+		plt.close()
 
 
 
@@ -4879,7 +5076,11 @@ def plots_midband_paper(plot_number):
 
 
 
+	if plot_number == 121:
 
+
+
+		
 
 
 		# ########################################################

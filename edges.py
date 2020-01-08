@@ -31,7 +31,7 @@ import os, sys
 #edges_code_folder = os.environ['EDGES_CODE']
 #sys.path.insert(0, edges_code_folder)
 
-edges_folder       = os.environ['EDGES_vol3']
+edges_folder       = os.environ['EDGES_vol2']
 print('EDGES Folder: ' + edges_folder)
 
 
