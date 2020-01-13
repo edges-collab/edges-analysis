@@ -2176,122 +2176,10 @@ def level3_to_level4(band, case, GHA_edges, sun_el_max, moon_el_max, save_folder
 
 	
 	
-	## Producing plots with daily residuals
-	## ------------------------------------
-	#Ngha = len(GHA_edges)-1
-	
-	## Loop over days
-	#for i in index_new_list:  # range(4):  #  
-		
-		## Loop over number of foreground terms
-		#for Nfg in [3,4,5]:
-			
-			## Loop over GHA
-			#for j in range(Ngha):
-				
-				#print('Nfg: ' + str(Nfg) + '. GHA: ' + str(GHA_edges[j]) + '-' + str(GHA_edges[j+1]) + ' hr')
-				
-				#yp = avp_all[i,j,:]
-				#yr = avr_all[i,j,:]
-				#yw = avw_all[i,j,:]
-							
-				#fb, yrb, ywb, ysb = ba.spectral_binning_number_of_samples(f, yr, yw)
-				
-				
-				## Creating arrays with residuals to plot
-				#if j == 0:
-					#qrb_all = np.zeros((Ngha, len(fb)))
-					#qwb_all = np.zeros((Ngha, len(fb)))					
-					
-				
-				#if np.sum(yw>0):
-					
-					#model        = ba.model_evaluate('LINLOG', yp, fb/200)
-					#ytb          = model + yrb
-					
-					#ytb[ywb==0]  = 0
-									
-					#par  = ba.fit_polynomial_fourier('LINLOG', fb/200, ytb, Nfg, Weights=ywb)
-					#qrb  = ytb - par[1]
-					
-					#qrb_all[j,:] = qrb
-					#qwb_all[j,:] = ywb
-			
-			
-					
-			## Plotting residuals for each day
-			
-			## Settings
-			## ----------------------------------
-			#LST_text    = ['GHA=' + str(GHA_edges[k]) + '-' + str(GHA_edges[k+1]) + ' hr' for k in range(Ngha)]
-			
-			
-			#if band == 'mid_band':
-				#if Nfg == 3:
-					#DY = 8
-					
-				#elif Nfg == 4:
-					#DY = 3
-					
-				#elif Nfg == 5:
-					#DY = 2
-					
-				#FIG_SX      =   10
-				#FIG_SY      =   1 * len(GHA_edges)
-				#FLOW_plot   =  30
-				#FHIGH_plot  = 152
-				#XTICKS      = np.arange(50, 151, 10)
-				#XTEXT       =  30.5
-				#YLABEL      = str(DY)  + ' K per division'
-				#TITLE       = str(Nfg) + ' LINLOG terms'
-				#FIGURE_FORMAT = 'png'			
 
-			
-			
-			
-			
-			#elif band == 'low_band3':
-				#if Nfg == 3:
-					#DY = 8
-					
-				#elif Nfg == 4:
-					#DY = 4
-					
-				#elif Nfg == 5:
-					#DY = 3
-				
-				#FIG_SX      =   7
-				#FIG_SY      =  20				
-				#FLOW_plot   =  30
-				#FHIGH_plot  = 125
-				#XTICKS      = np.arange(50, 121, 10)
-				#XTEXT       =  31
-				#YLABEL      = str(DY)  + ' K per division'
-				#TITLE       = str(Nfg) + ' LINLOG terms'
-				#FIGURE_FORMAT = 'png'
-				
-			
-			
-			
-			## Creating folder
-			#figure_save_path_subfolder = save_folder + '/plots/Nfg_' + str(Nfg) + '/'
-			#if not exists(figure_save_path_subfolder):
-				#makedirs(figure_save_path_subfolder)
-			
-			#figure_save_name = new_list[i][:-5]
-			
-			
-			## Plotting
-			#x = plot_residuals(fb, qrb_all, qwb_all, LST_text, FIG_SX=FIG_SX, FIG_SY=FIG_SY, DY=DY, FLOW=FLOW_plot, FHIGH=FHIGH_plot, XTICKS=XTICKS, XTEXT=XTEXT, YLABEL=YLABEL, TITLE=TITLE, save='yes', figure_path=figure_save_path_subfolder, figure_name=figure_save_name, figure_format=FIGURE_FORMAT)
-			
-						
 			
 	
 
-		
-	
-
-	
 	
 	# Save
 	# ----
@@ -2311,49 +2199,6 @@ def level3_to_level4(band, case, GHA_edges, sun_el_max, moon_el_max, save_folder
 
 
 
-		
-		## Producing total integrated average
-		#for i in range(Ngha):
-			
-			#print('GHA bin ' + str(i+1) + ' of ' + str(len(GHA_edges)-1))
-			
-			
-			#zp = np.mean(avp_all[:,i,:], axis=0)
-			
-			#zr, zw = ba.weighted_mean(avr_all[:,i,:], avw_all[:,i,:])
-			
-			#print(np.sum(zw))
-			#avr_no_rfi, avw_no_rfi = rfi.cleaning_sweep(f, zr, zw, window_width_MHz=5, Npolyterms_block=3, N_choice=20, N_sigma=3)
-			
-			
-			#fb, rb, wb = ba.spectral_binning_number_of_samples(f, avr_no_rfi, avw_no_rfi)
-			#model      = ba.model_evaluate('LINLOG', zp, fb/200)
-			#tb         = model + rb
-		
-			#tb[wb==0]  = 0
-			
-			#if i == 0:
-				#tb_all = np.zeros((len(GHA_edges)-1, len(tb)))
-				#wb_all = np.zeros((len(GHA_edges)-1, len(wb)))
-				
-				
-			#tb_all[i,:] = tb
-			#wb_all[i,:] = wb
-	
-	
-		## Formatting output data
-		#gha_edges_column = np.reshape(GHA_edges, -1, 1)
-		
-		#dataT = np.array([fb, tb_all[0,:], wb_all[0,:]])
-		#for i in range(len(tb_all[:,0])-1):
-			#dataT = np.vstack((dataT, tb_all[i+1,:], wb_all[i+1,:]))
-			
-		#data = dataT.T
-						
-		#np.savetxt(data_save_path + data_save_name + '_gha_edges' + '.txt', gha_edges_column,  header = 'GHA edges of integrated spectra [hr]')
-		#np.savetxt(data_save_path + data_save_name + '_data' + '.txt',      data,              header = 'Frequency [MHz],\t Temperature [K],\t Weights')
-		
-		
 
 		
 		
@@ -3401,6 +3246,208 @@ def residuals_of_simulations(case, name_flag, Nfg=5, FLOW=60, FHIGH=150):
 
 
 
+
+def level4_foreground_fits(case, FLOW, FHIGH, FNORM, output_file_name_hdf5='foreground_fits.hdf5'):
+
+	if case == 501:	
+		f, p, r, w, index, gha, yy = level4read(edges_folder + 'mid_band/spectra/level4/case_nominal_50-150MHz_LNA2_a2_h2_o2_s1_sim2_all_lc_yes_bc/case_nominal_50-150MHz_LNA2_a2_h2_o2_s1_sim2_all_lc_yes_bc.hdf5')
+		save_folder                = edges_folder + 'mid_band/spectra/level4/case_nominal_50-150MHz_LNA2_a2_h2_o2_s1_sim2_all_lc_yes_bc/binned_residuals/'
+
+	if case == 502:	
+		f, p, r, w, index, gha, yy = level4read(edges_folder + 'mid_band/spectra/level4/case_nominal_50-150MHz_LNA2_a2_h2_o2_s1_sim2_all_lc_yes_bc_20min/case_nominal_50-150MHz_LNA2_a2_h2_o2_s1_sim2_all_lc_yes_bc_20min.hdf5')
+		save_folder                = edges_folder + 'mid_band/spectra/level4/case_nominal_50-150MHz_LNA2_a2_h2_o2_s1_sim2_all_lc_yes_bc_20min/'
+
+	# Computing the foreground parameters
+	# -----------------------------------
+	fit2 = np.zeros((len(r[:,0,0]), len(r[0,:,0]), 11))
+	fit3 = np.zeros((len(r[:,0,0]), len(r[0,:,0]), 12))
+	fit4 = np.zeros((len(r[:,0,0]), len(r[0,:,0]), 13))
+	fit5 = np.zeros((len(r[:,0,0]), len(r[0,:,0]), 14))
+	
+	start = 0
+	#Ndays = 6
+	for i in range(len(r[:,0,0])):  # range(Ndays): #
+		
+		# Loading data
+		if int(yy[i,1]) == 147:
+			path_level3_file = edges_folder + 'mid_band/spectra/level3/case_nominal_50-150MHz_LNA2_a2_h2_o2_s1_sim2_all_lc_yes_bc/2018_147_00.hdf5'
+		else:
+			path_level3_file = edges_folder + 'mid_band/spectra/level3/case_nominal_50-150MHz_LNA2_a2_h2_o2_s1_sim2_all_lc_yes_bc/2018_' + str(int(yy[i,1])) + '_00.hdf5'
+			
+		xf, xt, xp, xr, xw, xrms, xtp, xm = level3read(path_level3_file)
+		print('----------------------------------------------')
+	
+		
+
+		for k in range(len(r[0,:,0])):
+			IX = np.arange(0,len(index[0,0,:]))
+			new_meta = xm[IX[index[i,k,:]==1],:]
+			
+			
+			# If there are enough data points
+			if (np.sum(w[i,k,:]) > 100) and (len(new_meta) > 0):
+				
+				
+				av_SUNEL  = np.mean(new_meta[:,6])
+				av_MOONEL = np.mean(new_meta[:,8])
+				
+							
+			
+				fb, rb, wb, sb = ba.spectral_binning_number_of_samples(f, r[i,k,:], w[i,k,:])
+				
+				mb  = ba.model_evaluate('LINLOG', p[i,k,:], fb/200)
+				tb = rb + mb
+								
+				fc = fb[(fb>FLOW) & (fb<FHIGH)]
+				tc = tb[(fb>FLOW) & (fb<FHIGH)]
+				wc = wb[(fb>FLOW) & (fb<FHIGH)]
+				sc = sb[(fb>FLOW) & (fb<FHIGH)]
+
+				for Nfg in [2,3,4,5]:
+						
+					logf = np.log(fc/FNORM)
+					logt = np.log(tc)
+					
+					par  = np.polyfit(logf[wc>0], logt[wc>0], Nfg-1)
+					logm = np.polyval(par, logf)
+					m    = np.exp(logm)
+					
+					rms  = np.std((tc-m)[wc>0])
+					
+					chi2 = np.sum(((tc-m)[wc>0]/sc[wc>0])**2)
+					LEN  = len(fc[wc>0])
+					BIC  = chi2 + Nfg*np.log(LEN)
+					
+					
+					if Nfg == 2:
+						fit2[i,k,0] = yy[i,0]
+						fit2[i,k,1] = yy[i,1]
+						fit2[i,k,2] = gha[k]
+						fit2[i,k,3] = av_SUNEL
+						fit2[i,k,4] = av_MOONEL
+						
+						fit2[i,k,5] = np.exp(par[1])
+						fit2[i,k,6] = par[0]
+						
+						fit2[i,k,7] = rms
+						fit2[i,k,8] = chi2
+						fit2[i,k,9] = LEN
+						fit2[i,k,10] = BIC
+						
+						
+					if Nfg == 3:
+						fit3[i,k,0] = yy[i,0]
+						fit3[i,k,1] = yy[i,1]
+						fit3[i,k,2] = gha[k]
+						fit3[i,k,3] = av_SUNEL
+						fit3[i,k,4] = av_MOONEL
+						
+						fit3[i,k,5] = np.exp(par[2])
+						fit3[i,k,6] = par[1]
+						fit3[i,k,7] = par[0]
+						
+						fit3[i,k,8] = rms
+						fit3[i,k,9] = chi2
+						fit3[i,k,10] = LEN
+						fit3[i,k,11] = BIC						
+						
+						
+					if Nfg == 4:
+						fit4[i,k,0] = yy[i,0]
+						fit4[i,k,1] = yy[i,1]
+						fit4[i,k,2] = gha[k]
+						fit4[i,k,3] = av_SUNEL
+						fit4[i,k,4] = av_MOONEL
+						
+						fit4[i,k,5] = np.exp(par[3])
+						fit4[i,k,6] = par[2]
+						fit4[i,k,7] = par[1]
+						fit4[i,k,8] = par[0]
+						
+						fit4[i,k,9] = rms
+						fit4[i,k,10] = chi2
+						fit4[i,k,11] = LEN
+						fit4[i,k,12] = BIC
+						
+						
+					if Nfg == 5:
+						fit5[i,k,0] = yy[i,0]
+						fit5[i,k,1] = yy[i,1]
+						fit5[i,k,2] = gha[k]
+						fit5[i,k,3] = av_SUNEL
+						fit5[i,k,4] = av_MOONEL
+						
+						fit5[i,k,5] = np.exp(par[4])
+						fit5[i,k,6] = par[3]
+						fit5[i,k,7] = par[2]
+						fit5[i,k,8] = par[1]
+						fit5[i,k,9] = par[0]
+						
+						fit5[i,k,10] = rms
+						fit5[i,k,11] = chi2
+						fit5[i,k,12] = LEN
+						fit5[i,k,13] = BIC						
+					
+					print(str(int(yy[i,1])))
+				
+				
+				#if Nfg == 2:
+					#print(str(int(yy[i,1])) + ', ' + str(np.round(gha[k],1)) + ': ' + str(np.exp(par[1])) + ', ' + str(par[0]) + ', RMS: ' + str(rms) + ', chi2: ' + str(chi2) + ', BIC: ' + str(BIC) + ', N: ' + str(len(fc[wc>0])))
+					
+				#elif Nfg == 3:
+					#print(str(int(yy[i,1])) + ', ' + str(np.round(gha[k],1)) + ': ' + str(np.exp(par[2])) + ', ' + str(par[1]) + ', ' + str(par[0]) + ', RMS: ' + str(rms) + ', chi2: ' + str(chi2) + ', BIC: ' + str(BIC) + ', N: ' + str(len(fc[wc>0])))
+					
+				#elif Nfg == 4:
+					#print(str(int(yy[i,1])) + ', ' + str(np.round(gha[k],1)) + ': ' + str(np.exp(par[3])) + ', ' + str(par[2]) + ', ' + str(par[1]) + ', ' + str(par[0]) + ', RMS: ' + str(rms) + ', chi2: ' + str(chi2) + ', BIC: ' + str(BIC) + ', N: ' + str(len(fc[wc>0])))
+				
+				#elif Nfg == 5:
+					#print(str(int(yy[i,1])) + ', ' + str(np.round(gha[k],1)) + ': ' + str(np.exp(par[4])) + ', ' + str(par[3]) + ', ' + str(par[2]) + ', ' + str(par[1]) + ', ' + str(par[0]) + ', RMS: ' + str(rms) + ', chi2: ' + str(chi2) + ', BIC: ' + str(BIC) + ', N: ' + str(len(fc[wc>0])))
+	
+	#plt.plot(fc[wc>0], sc[wc>0])
+	#plt.plot(fc[wc>0], tc[wc>0] - m[wc>0])	
+	#plt.grid()
+					
+	
+	# Save
+	# ----		
+	with h5py.File(save_folder + output_file_name_hdf5, 'w') as hf:
+		hf.create_dataset('fref',    data = np.array([FNORM]))
+		hf.create_dataset('fit2',    data = fit2)
+		hf.create_dataset('fit3',    data = fit3)
+		hf.create_dataset('fit4',    data = fit4)
+		hf.create_dataset('fit5',    data = fit5)
+		
+
+
+	return fit2, fit3, fit4, fit5   #fb, binned_residuals
+
+
+
+
+
+
+
+def level4_foreground_fits_read(path_file):
+
+	with h5py.File(path_file,'r') as hf:
+
+		hfX    = hf.get('fref')
+		fref   = np.array(hfX)
+
+		hfX    = hf.get('fit2')
+		fit2   = np.array(hfX)
+
+		hfX    = hf.get('fit3')
+		fit3   = np.array(hfX)
+		
+		hfX    = hf.get('fit4')
+		fit4   = np.array(hfX)
+		
+		hfX    = hf.get('fit5')
+		fit5   = np.array(hfX)
+
+
+	return fref, fit2, fit3, fit4, fit5	
 
 
 

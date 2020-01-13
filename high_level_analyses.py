@@ -11762,7 +11762,127 @@ def plot_signal_residuals(FLOW, FHIGH, A21, model_type, Ntotal):
 
 
 
+def plot_foreground_analysis():
+	
+	path_file = '/media/raul/DATA/EDGES_vol2/mid_band/spectra/level4/case_nominal_50-150MHz_LNA2_a2_h2_o2_s1_sim2_all_lc_yes_bc_20min/foreground_fits.hdf5'
+	
+	fref, fit2, fit3, fit4, fit5 = eg.level4_foreground_fits_read(path_file)
+	
+	plt.figure(1)
+	
+	new_fit2 = np.copy(fit2)
+	new_fit3 = np.copy(fit3)
+	new_fit4 = np.copy(fit4)
+	new_fit5 = np.copy(fit5)
+	
+	
+	fit2[:,:,2] = fit2[:,:,2] + 17.76
+	fit3[:,:,2] = fit3[:,:,2] + 17.76
+	fit4[:,:,2] = fit4[:,:,2] + 17.76
+	fit5[:,:,2] = fit5[:,:,2] + 17.76
+	
+	fit2[:,:,2][fit2[:,:,2]>24] = fit2[:,:,2][fit2[:,:,2]>24] - 24
+	fit3[:,:,2][fit3[:,:,2]>24] = fit3[:,:,2][fit3[:,:,2]>24] - 24
+	fit4[:,:,2][fit4[:,:,2]>24] = fit4[:,:,2][fit4[:,:,2]>24] - 24
+	fit5[:,:,2][fit5[:,:,2]>24] = fit5[:,:,2][fit5[:,:,2]>24] - 24
+	
+	
+	plt.subplot(2,1,1)
+	for k in range(len(fit2[0,:,0])):
+		for i in range(len(fit2[:,0,0])):
+			if (fit2[i,k,3]< 0) and (fit3[i,k,3]< 0) and (fit4[i,k,3]< 0) and (fit5[i,k,3]< 0):
+				#new_fit2[i,k,5] = np.nan
+				#new_fit2[i,k,6] = np.nan				
+				
+				#new_fit3[i,k,5] = np.nan
+				#new_fit3[i,k,6] = np.nan
+				#new_fit3[i,k,7] = np.nan				
+				
+				#new_fit4[i,k,5] = np.nan
+				#new_fit4[i,k,6] = np.nan
+				#new_fit4[i,k,7] = np.nan
+				#new_fit4[i,k,8] = np.nan
+				
+				#new_fit5[i,k,5] = np.nan
+				#new_fit5[i,k,6] = np.nan
+				#new_fit5[i,k,7] = np.nan
+				#new_fit5[i,k,8] = np.nan
+				#new_fit5[i,k,9] = np.nan
+				
+				#print(fit2[i,k,3])
+			
+				plt.plot(fit2[i,k,2], np.abs(fit2[i,k,6]), 'b.')
+				plt.plot(fit3[i,k,2], np.abs(fit3[i,k,6]), 'g.')
+				plt.plot(fit4[i,k,2], np.abs(fit4[i,k,6]), 'y.')
+				plt.plot(fit5[i,k,2], np.abs(fit5[i,k,6]), 'r.')
 
+	plt.grid()
+	plt.legend(['2par','3par','4par','5par'])
+	plt.ylabel('beta')
+	plt.ylim([2.48, 2.62])
+	plt.xticks(np.arange(0,25,2))
+	plt.xlim([0, 24])
+	plt.title('Mid-Band Normalized at 90 MHz')
+
+
+	plt.subplot(2,1,2)
+	for k in range(len(fit2[0,:,0])):
+		for i in range(len(fit2[:,0,0])):
+			if (fit2[i,k,3]< 0) and (fit3[i,k,3]< 0) and (fit4[i,k,3]< 0) and (fit5[i,k,3]< 0):
+				#new_fit2[i,k,5] = np.nan
+				#new_fit2[i,k,6] = np.nan				
+				
+				#new_fit3[i,k,5] = np.nan
+				#new_fit3[i,k,6] = np.nan
+				#new_fit3[i,k,7] = np.nan				
+				
+				#new_fit4[i,k,5] = np.nan
+				#new_fit4[i,k,6] = np.nan
+				#new_fit4[i,k,7] = np.nan
+				#new_fit4[i,k,8] = np.nan
+				
+				#new_fit5[i,k,5] = np.nan
+				#new_fit5[i,k,6] = np.nan
+				#new_fit5[i,k,7] = np.nan
+				#new_fit5[i,k,8] = np.nan
+				#new_fit5[i,k,9] = np.nan
+				
+				#print(fit2[i,k,3])
+			
+				plt.plot(fit3[i,k,2], fit3[i,k,7], 'g.')
+				plt.plot(fit4[i,k,2], fit4[i,k,7], 'y.')
+				plt.plot(fit5[i,k,2], fit5[i,k,7], 'r.')
+
+	plt.grid()
+	plt.ylabel('gamma')
+	plt.xlabel('LST [hr]')
+	plt.xticks(np.arange(0,25,2))
+	plt.xlim([0, 24])
+	
+
+
+
+
+
+	
+	#plt.figure(1)
+	
+	#plt.subplot(2,1,1)
+	#plt.plot(np.abs(new_fit2[:,:,6].T), 'b.')
+	#plt.plot(np.abs(new_fit3[:,:,6].T), 'g.')
+	#plt.plot(np.abs(new_fit4[:,:,6].T), 'r.')
+	#plt.plot(np.abs(new_fit5[:,:,6].T), 'y.')
+	#plt.ylabel('beta')
+	
+	
+	#plt.subplot(2,1,2)
+	#plt.plot(new_fit3[:,:,7].T, 'g.')
+	#plt.plot(new_fit4[:,:,7].T, 'r.')
+	#plt.plot(new_fit5[:,:,7].T, 'y.')	
+	#plt.xlabel('GHA [hr]')
+	#plt.ylabel('gamma')
+	
+	return
 
 
 
