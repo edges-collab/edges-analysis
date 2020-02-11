@@ -1,42 +1,21 @@
 
 import numpy as np
-import scipy as sp
-import reflection_coefficient as rc
 import time  as tt
-import edges as eg
-import datetime as dt
 #import receiver_calibration as rcv
 
 
-import basic as ba
-import calibration as cal
-
-import scipy.io as sio
-import scipy.interpolate as spi
+from src.edges_analysis import (
+	basic as ba, calibration as cal, rfi as rfi,
+	reflection_coefficient as rc
+)
 
 import matplotlib.pyplot as plt
 
-import astropy.units as apu
-import astropy.time as apt
-import astropy.coordinates as apc
-
 import h5py
-
-import rfi as rfi
-
-
-
 
 from os.path import expanduser
 from os.path import exists
-from os import listdir, makedirs, system
-
-from astropy.io import fits
-
-
-
-
-
+from os import makedirs
 
 # Determining home folder
 home_folder = expanduser("~")

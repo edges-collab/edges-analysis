@@ -3,9 +3,10 @@
 import numpy as np
 import scipy as sp
 import matplotlib.pyplot as plt
-import basic as ba
-import reflection_coefficient as rc
-import calibration_receiver1 as cr1
+from src.edges_analysis import (
+	calibration_receiver1 as cr1, basic as ba,
+	reflection_coefficient as rc
+)
 
 import astropy.units as apu
 import astropy.time as apt

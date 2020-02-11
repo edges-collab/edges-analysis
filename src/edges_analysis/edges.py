@@ -1,19 +1,8 @@
 
 import numpy as np
-import basic as ba
-import rfi as rfi
-import reflection_coefficient as rc
-
-import scipy.io as sio
-import scipy.interpolate as spi
+from src.edges_analysis import basic as ba, calibration as cal, rfi as rfi
 
 import matplotlib.pyplot as plt
-import datetime as dt
-
-import astropy.time as apt
-import ephem as eph	# to install, at the bash terminal type $ conda install ephem
-
-import calibration as cal
 
 import h5py
 
@@ -36,9 +25,6 @@ print('EDGES Folder: ' + edges_folder)
 
 
 sys.path.insert(0, "/home/raul/edges/old")
-import old_edges as oeg
-
-
 
 
 def auxiliary_data(weather_file, thermlog_file, band, year, day):

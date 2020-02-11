@@ -12,13 +12,12 @@ $ python mid_band_polychord.py 0 5
 
 import sys
 import numpy as np
-import scipy as sp
-import data_models as dm
+from src.edges_analysis import data_models as dm
 import os
 
 import PyPolyChord
 
-from os import makedirs, listdir
+from os import makedirs
 from os.path import exists
 
 from PyPolyChord.settings import PolyChordSettings

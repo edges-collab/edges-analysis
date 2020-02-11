@@ -3,17 +3,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 import scipy.interpolate as sci
 
-import edges as eg
-import basic as ba
-import rfi as rfi
-
-import calibration as cal
-import calibration_receiver1 as cr1
-
-import reflection_coefficient as rc
-
-import data_models as dm
-import getdist_plots as gp
+from src.edges_analysis import (
+	getdist_plots as gp, calibration_receiver1 as cr1, data_models as dm,
+	basic as ba,
+	edges as eg,
+	calibration as cal,
+	reflection_coefficient as rc
+)
 
 import healpy as hp
 

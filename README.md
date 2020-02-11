@@ -1,8 +1,12 @@
 # edges-analysis
 
-**Code for analysing EDGES data (from calibration through to cosmology).**
+**Code for analysing EDGES field data.**
 
-This is @gitul's version of the analysis pipeline. 
+This is the code that originated with @gitul's private repo, and has been 
+extensively modified and formatted to fit the new code structure in the EDGES
+collaboration.
+
+The original code before modification is tagged as `original_version`.
 
 ## Installation
 

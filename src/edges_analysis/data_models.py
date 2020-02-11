@@ -1,9 +1,8 @@
-
-import basic as ba
+from src.edges_analysis import basic as ba
 import numpy as np
-import os, sys
+import os
 
-from os import listdir, makedirs, system
+from os import listdir
 
 edges_folder       = os.environ['EDGES_vol2']
 print('EDGES Folder: ' + edges_folder)

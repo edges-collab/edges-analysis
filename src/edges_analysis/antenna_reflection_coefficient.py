@@ -1,10 +1,10 @@
 
 import numpy as np
-import reflection_coefficient as rc
+from src.edges_analysis import reflection_coefficient as rc
 import receiver_calibration as rcv
 
 from os.path import exists
-from os import listdir, makedirs, system
+from os import makedirs
 
 home_folder = '/data5/raul'
 

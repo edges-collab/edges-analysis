@@ -10,15 +10,7 @@ import datetime as dt
 import astropy.time as apt
 import ephem as eph
 
-import basic as ba
-import rfi as rfi
-
-import data_models as dm
-
-
-
-
-
+from src.edges_analysis import data_models as dm, rfi as rfi
 
 
 def fit_polynomial_fourier(model_type, xdata, ydata, nterms, Weights=1, plot='no', fr=150, df=10, zr=8, dz=2, z_alpha=0, anastasia_model_number=0, jordan_model_number=0, xi_min=0.9, jordan_tau_e_min=0.02, jordan_tau_e_max=0.25, gaussian_flatness_tau=0, gaussian_flatness_tilt=0, external_model_in_K=0):
@@ -1061,9 +1053,9 @@ def average_calibration_spectrum(spectrum_files, RFI_cleaning, FLOW, FHIGH, ther
 		for i in range(len(IN_good)):  # range(2): #
 			
 			print('RFI trace: ' + str(i+1) + ' of ' + str(len(IN_good)))
-			ti1, wi1  = rfi.cleaning_sweep(f, ta_sel2[i,:], np.ones(len(f)), window_width_MHz=4, Npolyterms_block=4, N_choice=20, N_sigma=Nsigma_RFI)
+			ti1, wi1  = rfi.cleaning_sweep(f, ta_sel2[i, :], np.ones(len(f)), window_width_MHz=4, Npolyterms_block=4, N_choice=20, N_sigma=Nsigma_RFI)
 	
-			flip_ti2, flip_wi2  = rfi.cleaning_sweep(f, np.flip(ta_sel2[i,:]), np.ones(len(f)), window_width_MHz=4, Npolyterms_block=4, N_choice=20, N_sigma=Nsigma_RFI)
+			flip_ti2, flip_wi2  = rfi.cleaning_sweep(f, np.flip(ta_sel2[i, :]), np.ones(len(f)), window_width_MHz=4, Npolyterms_block=4, N_choice=20, N_sigma=Nsigma_RFI)
 			ti2 = np.flip(flip_ti2)
 			wi2 = np.flip(flip_wi2)
 	

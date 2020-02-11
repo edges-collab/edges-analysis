@@ -5,9 +5,7 @@
 import numpy as np
 import os
 
-import edges as eg
-import basic as ba
-
+from src.edges_analysis import basic as ba, edges as eg
 
 edges_folder       = os.environ['EDGES']
 
