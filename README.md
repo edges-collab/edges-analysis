@@ -2,7 +2,7 @@
 
 **Code for analysing EDGES field data.**
 
-This is the code that originated with @gitul's private repo, and has been 
+This is the code that originated with @gitul's private repo, and has been
 extensively modified and formatted to fit the new code structure in the EDGES
 collaboration.
 
