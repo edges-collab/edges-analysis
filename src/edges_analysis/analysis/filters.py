@@ -9,85 +9,53 @@ edges_folder = ""  # TODO: remove this
 
 def rms_filter_computation(band, case, save_parameters=False):
     """
-
-    Last modification:  2019-09-02
-
     Computation of the RMS filter
-
     """
-
     # Listing files available
-    # ------------------------
+    path_files_direc = edges_folder + "/{}/spectra/level3/".format(band)
+    save_direc = edges_folder + "/{}/rms_filters/".format(band)
+
     if band == "mid_band":
+        paths = {
+            10: "rcv18_sw18_nominal/",
+            20: "rcv18_sw19_nominal/",
+            2: "calibration_2019_10_no_ground_loss_no_beam_corrections/",
+            3: "case_nominal_50-150MHz_no_ground_loss_no_beam_corrections/",
+            5: "case_nominal_14_14_terms_55-150MHz_no_ground_loss_no_beam_corrections/",
+            501: "case_nominal_50-150MHz_LNA2_a2_h2_o2_s1_sim2_all_lc_yes_bc/",
+        }
+        if case not in paths:
+            raise ValueError(
+                "for mid_band, case must be one of {}".format(paths.keys())
+            )
 
-        if case == 10:
-            path_files = edges_folder + "/mid_band/spectra/level3/rcv18_sw18_nominal/"
-            save_folder = edges_folder + "/mid_band/rms_filters/rcv18_sw18_nominal/"
+        pth = paths[case]
 
-        if case == 20:
-            path_files = edges_folder + "/mid_band/spectra/level3/rcv18_sw19_nominal/"
-            save_folder = edges_folder + "/mid_band/rms_filters/rcv18_sw19_nominal/"
-
+    elif band == "low_band3":
         if case == 2:
-            path_files = (
-                edges_folder
-                + "/mid_band/spectra/level3/calibration_2019_10_no_ground_loss_no_beam_corrections/"
-            )
-            save_folder = (
-                edges_folder
-                + "/mid_band/rms_filters/calibration_2019_10_no_ground_loss_no_beam_corrections/"
-            )
+            pth = "case2/"
+    else:
+        raise ValueError("band must be 'mid_band' or 'low_band3'.")
 
-        if case == 3:
-            path_files = (
-                edges_folder + "/mid_band/spectra/level3/case_nominal_50"
-                "-150MHz_no_ground_loss_no_beam_corrections/"
-            )
-            save_folder = (
-                edges_folder
-                + "/mid_band/rms_filters/case_nominal_50-150MHz_no_ground_loss_no_beam_corrections/"
-            )
-
-        if case == 5:
-            path_files = (
-                edges_folder + "/mid_band/spectra/level3/case_nominal_14_14_terms_55"
-                "-150MHz_no_ground_loss_no_beam_corrections/"
-            )
-            save_folder = (
-                edges_folder + "/mid_band/rms_filters/case_nominal_14_14_terms_55"
-                "-150MHz_no_ground_loss_no_beam_corrections/"
-            )
-
-        if case == 501:
-            path_files = (
-                edges_folder + "/mid_band/spectra/level3/case_nominal_50"
-                "-150MHz_LNA2_a2_h2_o2_s1_sim2_all_lc_yes_bc/"
-            )
-            save_folder = (
-                edges_folder
-                + "/mid_band/rms_filters/case_nominal_50-150MHz_LNA2_a2_h2_o2_s1_sim2_all_lc_yes_bc/"
-            )
-
-    if band == "low_band3":
-        if case == 2:
-            path_files = "/media/raul/EXTERNAL_2TB/low_band3/spectra/level3/case2/"
-            save_folder = edges_folder + "/low_band3/rms_filters/case2/"
+    path_files = path_files_direc + pth
+    save_folder = save_direc + pth
 
     new_list = os.listdir(path_files)
     new_list.sort()
 
     # Loading data used to compute filter
     # -----------------------------------
-    N_files = 8  # Only using the first "N_files" to compute the filter
-    for i in range(N_files):  #
+    n_files = 8  # Only using the first "N_files" to compute the filter
+    rms_all, m_all = [], []
+    for i in range(n_files):  #
         print(new_list[i])
 
         # Loading data
         f, t, p, r, w, rms, tp, m = level3read(path_files + new_list[i])
 
-        # Filtering out high humidity
+        # Filter out high humidity
         amb_hum_max = 40
-        IX = data_selection(
+        indices = data_selection(
             m,
             GHA_or_LST="GHA",
             TIME_1=0,
@@ -99,489 +67,256 @@ def rms_filter_computation(band, case, save_parameters=False):
             max_receiver_temp=100,
         )
 
-        px = p[IX, :]
-        rx = r[IX, :]
-        wx = w[IX, :]
-        rmsx = rms[IX, :]
-        mx = m[IX, :]
+        # Accumulatee data
+        rms_all.append(rms[indices])
+        m_all.append(m[indices])
 
-        # Accumulating data
-        if i == 0:
-            p_all = np.copy(px)
-            r_all = np.copy(rx)
-            w_all = np.copy(wx)
-            rms_all = np.copy(rmsx)
-            m_all = np.copy(mx)
-
-        elif i > 0:
-            p_all = np.vstack((p_all, px))
-            r_all = np.vstack((r_all, rx))
-            w_all = np.vstack((w_all, wx))
-            rms_all = np.vstack((rms_all, rmsx))
-            m_all = np.vstack((m_all, mx))
+    rms_all = np.vstack(rms_all)
+    m_all = np.vstack(m_all)
 
     # Columns necessary for analysis
     # ------------------------------
-    GHA = m_all[:, 4]
-    GHA[GHA < 0] = GHA[GHA < 0] + 24
+    gha = m_all[:, 4]
+    gha[gha < 0] += 24
 
-    RMS1 = rms_all[:, 0]
-    RMS2 = rms_all[:, 1]
-    RMS3 = rms_all[:, 2]
+    indices = np.arange(0, len(gha))
 
-    IN = np.arange(0, len(GHA))
-
-    # Number of polynomial terms used to fit each 1-hour bins
+    # Number of polynomial terms used to fit each 1-hour bin
     # and number of sigma threshold
-    # -------------------------------------------------------
-    Npoly = 3
-    Nsigma = 3
-
-    # Analysis for low-frequency half of the spectrum
-    # -----------------------------------------------
+    n_poly = 3
+    n_sigma = 3
+    n_terms = 16
+    n_std = 6
 
     # Identification of bad data, within 1-hour "bins", across 24 hours
-    # -----------------------------------------------------------------
-    for i in range(24):
-        GHA_x = GHA[(GHA >= i) & (GHA < (i + 1))]
-        RMS_x = RMS1[(GHA >= i) & (GHA < (i + 1))]
-        IN_x = IN[(GHA >= i) & (GHA < (i + 1))]
+    out = [
+        perform_rms_filter(rms_all[:, i], indices, gha, n_poly, n_sigma, n_terms, n_std)
+        for i in range(3)
+    ]
 
-        W = np.ones(len(GHA_x))
-        bad_old = -1
-        bad = 0
-        iteration = 0
-
-        while bad > bad_old:
-            iteration = iteration + 1
-
-            print(" ")
-            print("------------")
-            print("GHA: " + str(i) + "-" + str(i + 1) + "hr")
-            print("Iteration: " + str(iteration))
-
-            par = np.polyfit(GHA_x[W > 0], RMS_x[W > 0], Npoly - 1)
-            model = np.polyval(par, GHA_x)
-            res = RMS_x - model
-            std = np.std(res[W > 0])
-
-            IN_x_bad = IN_x[np.abs(res) > Nsigma * std]
-            W[np.abs(res) > Nsigma * std] = 0
-
-            bad_old = np.copy(bad)
-            bad = len(IN_x_bad)
-
-            print("STD: " + str(np.round(std, 3)) + " K")
-            print("Number of bad points excised: " + str(bad))
-
-        # Indices of bad data points
-        # --------------------------
-        if i == 0:
-            IN1_bad = np.copy(IN_x_bad)
-
-        else:
-            IN1_bad = np.append(IN1_bad, IN_x_bad)
-
-    # Analysis for high-frequency half of the spectrum
-    # ------------------------------------------------
-
-    # Identification of bad data, within 1-hour "bins", across 24 hours
-    # -----------------------------------------------------------------
-    for i in range(24):
-        GHA_x = GHA[(GHA >= i) & (GHA < (i + 1))]
-        RMS_x = RMS2[(GHA >= i) & (GHA < (i + 1))]
-        IN_x = IN[(GHA >= i) & (GHA < (i + 1))]
-
-        W = np.ones(len(GHA_x))
-        bad_old = -1
-        bad = 0
-        iteration = 0
-
-        while bad > bad_old:
-            iteration = iteration + 1
-
-            print(" ")
-            print("------------")
-            print("GHA: " + str(i) + "-" + str(i + 1) + "hr")
-            print("Iteration: " + str(iteration))
-
-            par = np.polyfit(GHA_x[W > 0], RMS_x[W > 0], Npoly - 1)
-            model = np.polyval(par, GHA_x)
-            res = RMS_x - model
-            std = np.std(res[W > 0])
-
-            IN_x_bad = IN_x[np.abs(res) > Nsigma * std]
-            W[np.abs(res) > Nsigma * std] = 0
-
-            bad_old = np.copy(bad)
-            bad = len(IN_x_bad)
-
-            print("STD: " + str(np.round(std, 3)) + " K")
-            print("Number of bad points excised: " + str(bad))
-
-        # Indices of bad data points
-        # --------------------------
-        if i == 0:
-            IN2_bad = np.copy(IN_x_bad)
-
-        else:
-            IN2_bad = np.append(IN2_bad, IN_x_bad)
-
-    # Analysis for 3-term residuals
-    # ------------------------------------------------
-
-    # Identification of bad data, within 1-hour "bins", across 24 hours
-    # -----------------------------------------------------------------
-    for i in range(24):
-        GHA_x = GHA[(GHA >= i) & (GHA < (i + 1))]
-        RMS_x = RMS3[(GHA >= i) & (GHA < (i + 1))]
-        IN_x = IN[(GHA >= i) & (GHA < (i + 1))]
-
-        W = np.ones(len(GHA_x))
-        bad_old = -1
-        bad = 0
-        iteration = 0
-
-        while bad > bad_old:
-            iteration = iteration + 1
-
-            print(" ")
-            print("------------")
-            print("GHA: " + str(i) + "-" + str(i + 1) + "hr")
-            print("Iteration: " + str(iteration))
-
-            par = np.polyfit(GHA_x[W > 0], RMS_x[W > 0], Npoly - 1)
-            model = np.polyval(par, GHA_x)
-            res = RMS_x - model
-            std = np.std(res[W > 0])
-
-            IN_x_bad = IN_x[np.abs(res) > Nsigma * std]
-            W[np.abs(res) > Nsigma * std] = 0
-
-            bad_old = np.copy(bad)
-            bad = len(IN_x_bad)
-
-            print("STD: " + str(np.round(std, 3)) + " K")
-            print("Number of bad points excised: " + str(bad))
-
-        # Indices of bad data points
-        # --------------------------
-        if i == 0:
-            IN3_bad = np.copy(IN_x_bad)
-
-        else:
-            IN3_bad = np.append(IN3_bad, IN_x_bad)
-
-    # All bad/good spectra indices
-    # ----------------------------
-    # IN_bad = np.union1d(IN1_bad, IN2_bad)
-    # IN_good  = np.setdiff1d(IN, IN_bad)
-
-    # Indices of good spectra
-    # -----------------------
-    IN1_good = np.setdiff1d(IN, IN1_bad)
-    IN2_good = np.setdiff1d(IN, IN2_bad)
-    IN3_good = np.setdiff1d(IN, IN3_bad)
-
-    # Number of terms for the polynomial fit of the RMS across 24 hours
-    # and number of terms for the polynomial fit of the standard deviation across 24 hours
-    # ------------------------------------------------------------------------------------
-    Nterms = 16
-    Nstd = 6
-
-    # Parameters and models from the RMS and STD polynomial fits
-    # ----------------------------------------------------------
-    par1 = np.polyfit(GHA[IN1_good], RMS1[IN1_good], Nterms - 1)
-    model1 = np.polyval(par1, GHA)
-    abs_res1 = np.abs(RMS1 - model1)
-    par1_std = np.polyfit(GHA[IN1_good], abs_res1[IN1_good], Nstd - 1)
-    model1_std = np.polyval(par1_std, GHA)
-
-    par2 = np.polyfit(GHA[IN2_good], RMS2[IN2_good], Nterms - 1)
-    model2 = np.polyval(par2, GHA)
-    abs_res2 = np.abs(RMS2 - model2)
-    par2_std = np.polyfit(GHA[IN2_good], abs_res2[IN2_good], Nstd - 1)
-    model2_std = np.polyval(par2_std, GHA)
-
-    par3 = np.polyfit(GHA[IN3_good], RMS3[IN3_good], Nterms - 1)
-    model3 = np.polyval(par3, GHA)
-    abs_res3 = np.abs(RMS3 - model3)
-    par3_std = np.polyfit(GHA[IN3_good], abs_res3[IN3_good], Nstd - 1)
-    model3_std = np.polyval(par3_std, GHA)
-
-    par = np.array([par1, par2, par3])
-    par_std = np.array([par1_std, par2_std, par3_std])
-
-    # Saving polynomial parameters
-    # ----------------------------
     if save_parameters:
+        par = np.array([o[-2] for o in out])
+        par_std = np.array([o[-1] for o in out])
+
         np.savetxt(save_folder + "rms_polynomial_parameters.txt", par)
         np.savetxt(save_folder + "rms_std_polynomial_parameters.txt", par_std)
 
-    return (
-        GHA,
-        RMS1,
-        RMS2,
-        RMS3,
-        IN1_good,
-        IN2_good,
-        IN3_good,
-        model1,
-        model2,
-        model3,
-        abs_res1,
-        abs_res2,
-        abs_res3,
-        model1_std,
-        model2_std,
-        model3_std,
-    )
+    out = [gha] + [out[i][j] for i in range(3) for j in range(5)]
+    return tuple(out)
 
 
-def rms_filter(band, case, gx, rms, Nsigma):
-    # if (case == 0):
-    # file_path = edges_folder + band + '/rms_filters/case_nominal/'
+def perform_rms_filter(rms, indices, gha, n_poly, n_sigma, n_terms, n_std):
+    for i in range(24):
+        GHA_x = gha[(gha >= i) & (gha < (i + 1))]
+        RMS_x = rms[(gha >= i) & (gha < (i + 1))]
+        IN_x = indices[(gha >= i) & (gha < (i + 1))]
+
+        W = np.ones(len(GHA_x))
+        bad_old = -1
+        bad = 0
+        iteration = 0
+
+        while bad > bad_old:
+            res, std, iteration = get_model_residual_iter(
+                W, i, iteration, n_poly, GHA_x, RMS_x
+            )
+
+            IN_x_bad = IN_x[np.abs(res) > n_sigma * std]
+            W[np.abs(res) > n_sigma * std] = 0
+
+            bad_old = np.copy(bad)
+            bad = len(IN_x_bad)
+
+            print("STD: " + str(np.round(std, 3)) + " K")
+            print("Number of bad points excised: " + str(bad))
+
+        # Indices of bad data points
+        if i == 0:
+            bad = np.copy(IN_x_bad)
+        else:
+            bad = np.append(bad, IN_x_bad)
+
+    good = np.setdiff1d(indices, bad)
+
+    par = np.polyfit(gha[good], rms[good], n_terms - 1)
+    model = np.polyval(par, gha)
+    abs_res = np.abs(rms - model)
+    par_std = np.polyfit(gha[good], abs_res[good], n_std - 1)
+    model_std = np.polyval(par_std, gha)
+
+    return rms, good, model, abs_res, model_std, par, par_std
+
+
+def rms_filter(band, case, gx, rms, n_sigma):
+    prefix = edges_folder + band + "/rms_filters/"
 
     if band == "mid_band":
-        if (case >= 10) and (case <= 19):
-            file_path = edges_folder + band + "/rms_filters/rcv18_sw18_nominal/"
-
-        if (case >= 20) and (case <= 29):
-            file_path = edges_folder + band + "/rms_filters/rcv18_sw19_nominal/"
-
-        if case == 2:
+        if 10 <= case <= 19:
+            file_path = "rcv18_sw18_nominal/"
+        elif 20 <= case <= 29:
+            file_path = "rcv18_sw19_nominal/"
+        elif case == 2:
+            file_path = "calibration_2019_10_no_ground_loss_no_beam_corrections/"
+        elif case in [3, 406]:
+            file_path = "case_nominal_50-150MHz_no_ground_loss_no_beam_corrections/"
+        elif case == 5:
             file_path = (
-                edges_folder
-                + band
-                + "/rms_filters/calibration_2019_10_no_ground_loss_no_beam_corrections/"
-            )
-
-        if case in [3, 406]:
-            file_path = (
-                edges_folder
-                + band
-                + "/rms_filters/case_nominal_50-150MHz_no_ground_loss_no_beam_corrections/"
-            )
-
-        if case == 5:
-            file_path = (
-                edges_folder + band + "/rms_filters/case_nominal_14_14_terms_55"
-                "-150MHz_no_ground_loss_no_beam_corrections/"
+                "case_nominal_14_14_terms_55-150MHz_no_ground_loss_no_beam_corrections/"
             )
         elif case == 501:
-            file_path = (
-                edges_folder
-                + band
-                + "/rms_filters/case_nominal_50-150MHz_LNA2_a2_h2_o2_s1_sim2_all_lc_yes_bc/"
-            )
-    p = np.genfromtxt(file_path + "rms_polynomial_parameters.txt")
-    ps = np.genfromtxt(file_path + "rms_std_polynomial_parameters.txt")
+            file_path = "case_nominal_50-150MHz_LNA2_a2_h2_o2_s1_sim2_all_lc_yes_bc/"
+        else:
+            raise ValueError("case {} does not exist".format(case))
+    else:
+        raise ValueError("band must be mid_band")
 
-    rms1 = rms[:, 0]
-    rms2 = rms[:, 1]
-    rms3 = rms[:, 2]
+    p = np.genfromtxt(prefix + file_path + "rms_polynomial_parameters.txt")
+    ps = np.genfromtxt(prefix + file_path + "rms_std_polynomial_parameters.txt")
 
-    m1 = np.polyval(p[0, :], gx)
-    m2 = np.polyval(p[1, :], gx)
-    m3 = np.polyval(p[2, :], gx)
+    m = [np.polyval(pp, gx) for pp in p]
+    ms = [np.polyval(pp, gx) for pp in ps]
 
-    ms1 = np.polyval(ps[0, :], gx)
-    ms2 = np.polyval(ps[1, :], gx)
-    ms3 = np.polyval(ps[2, :], gx)
+    index = np.arange(0, len(rms))
 
-    index = np.arange(0, len(rms1))
+    diff = [np.abs(rr - mm) for rr, mm in zip(rms, m)]
+    good_indices = [index[d <= n_sigma * mm] for d, mm in zip(diff, ms)]
 
-    diff1 = np.abs(rms1 - m1)
-    diff2 = np.abs(rms2 - m2)
-    diff3 = np.abs(rms3 - m3)
+    index_good = np.intersect1d(good_indices[0], good_indices[1])
+    index_good = np.intersect1d(index_good, good_indices[2])
 
-    index_good_1 = index[diff1 <= Nsigma * ms1]
-    index_good_2 = index[diff2 <= Nsigma * ms2]
-    index_good_3 = index[diff3 <= Nsigma * ms3]
-
-    index_good_A = np.intersect1d(index_good_1, index_good_2)
-    index_good = np.intersect1d(index_good_A, index_good_3)
-
-    return index_good, index_good_1, index_good_2, index_good_3
+    return (index_good, *good_indices)
 
 
-def tp_filter(band, GHA, tp):
-    IN = np.arange(0, len(GHA))
-    Npoly = 3
-    Nsigma = 3
+def tp_filter(gha, tp):
+    """
+    Filter on total power.
 
-    for j in range(3):
+    Parameters
+    ----------
+    gha : array_like
+        1D array of galactic hour angles
+    tp : array_like
+        2D array where first dimension corresponds to gha, and second dimension is
+        length 3 and corresponds to different frequency ranges (60-90, 90-120, 60-120).
+    """
+    indices = np.arange(0, len(gha))
+    n_poly = 3
+    n_sigma = 3
 
-        if j == 0:
-            std_threshold = 5e4  # 60-90 MHz
-        elif j == 1:
-            std_threshold = 2e4  # 90-120 MHz
-        elif j == 2:
-            std_threshold = 1e5  # 60-120 MHz
-        flag = 0
+    assert tp.shape == (len(gha), 3)
+
+    std_thresholds = [5e4, 2e4, 1e5]
+    good_indx = []
+    for j, (tpi, std_threshold) in enumerate(zip(tp, std_thresholds)):
+
+        flag = False
+
         for i in range(24):
-            GHA_x = GHA[(GHA >= i) & (GHA < (i + 1))]
-            tp_x = tp[
-                (GHA >= i) & (GHA < (i + 1)), j
-            ]  # one of the three tps (60-90, 90-120, 60-120 MHz)
-            IN_x = IN[(GHA >= i) & (GHA < (i + 1))]
+            mask = (gha >= i) & (gha < (i + 1))
+            this_gha = gha[mask]
+
+            this_tp = tpi[mask]
+            this_indx = indices[mask]
 
             # If enough data points available per hour
-            lx = len(tp_x)
-            if lx > 10:
-                W = np.ones(len(GHA_x))
-                bad_old = -1
-                bad = 0
-                iteration = 0
+            lx = len(this_tp)
+            if lx <= 10:
+                continue
 
-                while (bad > bad_old) and (bad < int(lx / 2)):
+            W = np.ones(len(this_gha))
+            bad_old = -1
+            bad = 0
+            iteration = 0
 
-                    iteration += 1
-                    print(" ")
-                    print("------------")
-                    print("GHA: " + str(i) + "-" + str(i + 1) + "hr")
-                    print("Iteration: " + str(iteration))
+            while bad_old < bad < int(lx / 2):
+                res, std, iteration = get_model_residual_iter(
+                    W, i, iteration, n_poly, this_gha, this_tp
+                )
 
-                    par = np.polyfit(GHA_x[W > 0], tp_x[W > 0], Npoly - 1)
-                    model = np.polyval(par, GHA_x)
-                    res = tp_x - model
-                    std = np.std(res[W > 0])
+                if std <= std_threshold:
+                    mask = np.abs(res) > n_sigma * std
+                else:
+                    mask = np.abs(res) > std
 
-                    if std < std_threshold:
-                        IN_x_bad = IN_x[(np.abs(res) > Nsigma * std)]
-                        W[np.abs(res) > Nsigma * std] = 0
+                bad_indx = this_indx[mask]
+                W[mask] = 0
 
-                    elif std > std_threshold:
-                        IN_x_bad = IN_x[(np.abs(res) > 1 * std)]
-                        W[np.abs(res) > 1 * std] = 0
+                bad_old = np.copy(bad)
+                bad = len(bad_indx)
 
-                    bad_old = np.copy(bad)
-                    bad = len(IN_x_bad)
+                if bad >= int(lx / 2):
+                    bad_indx = np.copy(this_indx)
 
-                    if bad >= int(lx / 2):
-                        IN_x_bad = np.copy(IN_x)
-                        print(
-                            "TANTANTANTANTANTANTANTANTANTANTANTANTANTANTANTANTANTANTANTANTANTANTANTAN"
-                        )
+                print("STD: " + str(np.round(std, 3)) + " K")
+                print("Number of bad points excised: " + str(bad))
 
-                    print("STD: " + str(np.round(std, 3)) + " K")
-                    print("Number of bad points excised: " + str(bad))
+            # Indices of bad data points
+            if not flag:
+                IN_bad = np.copy(bad_indx)
+                flag = True
+            else:
+                IN_bad = np.append(IN_bad, bad_indx)
 
-                # Indices of bad data points
-                # --------------------------
-                if flag == 0:
-                    IN_bad = np.copy(IN_x_bad)
-                    flag = 1
-
-                elif flag == 1:
-                    IN_bad = np.append(IN_bad, IN_x_bad)
-
-        if j == 0:
-            IN_bad1 = np.copy(IN_bad)
-            IN_good1 = np.setdiff1d(IN, IN_bad1)
-
-        elif j == 1:
-            IN_bad2 = np.copy(IN_bad)
-            IN_good2 = np.setdiff1d(IN, IN_bad2)
-
-        elif j == 2:
-            IN_bad3 = np.copy(IN_bad)
-            IN_good3 = np.setdiff1d(IN, IN_bad3)
+        bad = np.copy(IN_bad)
+        good_indx.append(np.setdiff1d(indices, bad))
 
     # Combined index of good data points
-    # ----------------------------------
-    IG_A = np.intersect1d(IN_good1, IN_good2)
-    IN_good = np.intersect1d(IG_A, IN_good3)
+    good = np.intersect1d(good_indx[0], good_indx[1])
+    good = np.intersect1d(good, good_indx[2])
 
-    return IN_good, IN_good1, IN_good2, IN_good3
+    return (good, *good_indx)
 
 
-def daily_nominal_filter(band, case, index_GHA, year_day_list):
-    n_days = len(year_day_list)
-    keep_all = np.zeros(n_days)
+def get_model_residual_iter(W, i, iteration, n_poly, this_gha, this_tp, verbose=False):
+    iteration += 1
 
-    # Choosing case
+    if verbose:
+        print(" ")
+        print("------------")
+        print("GHA: " + str(i) + "-" + str(i + 1) + "hr")
+        print("Iteration: " + str(iteration))
+
+    par = np.polyfit(this_gha[W > 0], this_tp[W > 0], n_poly - 1)
+    model = np.polyval(par, this_gha)
+    res = this_tp - model
+    std = np.std(res[W > 0])
+
+    return res, std, iteration
+
+
+def daily_nominal_filter(band, case, index_gha, year_day_list):
+    assert index_gha in range(24)
+
     if band == "mid_band":
-
-        # Calibration from 2018
         if case == 101:
-            if index_GHA == 0:
-                bad0 = np.array([])
-
-            if index_GHA == 1:
-                bad0 = np.array([])
-
-            if index_GHA == 2:
-                bad0 = np.array([])
-
-            if index_GHA == 3:
-                bad0 = np.array([[2018, 161]])
-
-            if index_GHA == 4:
-                bad0 = np.array([[2018, 204], [2018, 205]])
-
-            if index_GHA == 5:
-                bad0 = np.array([[2018, 167], [2018, 200]])
-
-            if index_GHA == 6:
-                bad0 = np.array([])
-
-            if index_GHA == 7:
-                bad0 = np.array([[2018, 146], [2018, 157], [2018, 209]])
-
-            if index_GHA == 8:
-                bad0 = np.array(
-                    [[2018, 146], [2018, 152], [2018, 159], [2018, 162], [2018, 192]]
-                )
-
-            if index_GHA == 9:
-                bad0 = np.array([[2018, 159], [2018, 196]])
-
-            if index_GHA == 10:
-                bad0 = np.array(
+            if index_gha in [0, 1, 2, 6, 16, 19]:
+                bad = np.array([])
+            elif index_gha == 10:
+                bad = np.array(
                     [[2018, 176], [2018, 196], [2018, 201], [2018, 204], [2018, 218]]
                 )
-
-            if index_GHA == 11:
-                bad0 = np.array([[2018, 149], [2018, 204], [2018, 216]])
-
-            if index_GHA == 12:
-                bad0 = np.array([[2018, 176], [2018, 195], [2018, 204]])
-
-            if index_GHA == 13:
-                bad0 = np.array(
+            elif index_gha == 11:
+                bad = np.array([[2018, 149], [2018, 204], [2018, 216]])
+            elif index_gha == 12:
+                bad = np.array([[2018, 176], [2018, 195], [2018, 204]])
+            elif index_gha == 13:
+                bad = np.array(
                     [[2018, 176], [2018, 185], [2018, 195], [2018, 204], [2018, 208]]
                 )
-
-            if index_GHA == 14:
-                bad0 = np.array([[2018, 185], [2018, 208]])
-
-            if index_GHA == 15:
-                bad0 = np.array([[2018, 185]])
-
-            if index_GHA == 16:
-                bad0 = np.array([])
-
-            if index_GHA == 17:
-                bad0 = np.array([[2018, 185]])
-
-            if index_GHA == 18:
-                bad0 = np.array([[2018, 192]])
-
-            if index_GHA == 19:
-                bad0 = np.array([])
-
-            if index_GHA == 20:
-                bad0 = np.array([[2018, 185], [2018, 198], [2018, 216]])
-
-            if index_GHA == 21:
-                bad0 = np.array([[2018, 148], [2018, 160]])
-
-            if index_GHA == 22:
-                bad0 = np.array([[2018, 146]])
-
-            if index_GHA == 23:
-                bad0 = np.array(
+            elif index_gha == 14:
+                bad = np.array([[2018, 185], [2018, 208]])
+            elif index_gha in [15, 17]:
+                bad = np.array([[2018, 185]])
+            elif index_gha == 18:
+                bad = np.array([[2018, 192]])
+            elif index_gha == 20:
+                bad = np.array([[2018, 185], [2018, 198], [2018, 216]])
+            elif index_gha == 21:
+                bad = np.array([[2018, 148], [2018, 160]])
+            elif index_gha == 22:
+                bad = np.array([[2018, 146]])
+            elif index_gha == 23:
+                bad = np.array(
                     [
                         [2018, 146],
                         [2018, 170],
@@ -592,95 +327,49 @@ def daily_nominal_filter(band, case, index_GHA, year_day_list):
                         [2018, 220],
                     ]
                 )
-
-        # Calibration from 2019
-
-        if case == 2:
-            if index_GHA == 0:
-                bad0 = np.array([[2018, 146], [2018, 220]])
-
-            if index_GHA == 1:
-                bad0 = np.array([[2018, 147], [2018, 180], [2018, 185]])
-
-            if index_GHA == 2:
-                bad0 = np.array([])
-
-            if index_GHA == 3:
-                bad0 = np.array([])
-
-            if index_GHA == 4:
-                bad0 = np.array([[2018, 204]])
-
-            if index_GHA == 5:
-                bad0 = np.array([])
-
-            if index_GHA == 6:
-                bad0 = np.array([])
-
-            if index_GHA == 7:
-                bad0 = np.array([[2018, 146], [2018, 215]])
-
-            if index_GHA == 8:
-                bad0 = np.array([[2018, 146], [2018, 159], [2018, 211], [2018, 212]])
-
-            if index_GHA == 9:
-                bad0 = np.array(
-                    [
-                        [2018, 146],
-                        [2018, 147],
-                        [2018, 159],
-                        [2018, 190],
-                        [2018, 192],
-                        [2018, 193],
-                        [2018, 212],
-                    ]
+            elif index_gha == 3:
+                bad = np.array([[2018, 161]])
+            elif index_gha == 4:
+                bad = np.array([[2018, 204], [2018, 205]])
+            elif index_gha == 5:
+                bad = np.array([[2018, 167], [2018, 200]])
+            elif index_gha == 7:
+                bad = np.array([[2018, 146], [2018, 157], [2018, 209]])
+            elif index_gha == 8:
+                bad = np.array(
+                    [[2018, 146], [2018, 152], [2018, 159], [2018, 162], [2018, 192]]
                 )
-
-            if index_GHA == 10:
-                bad0 = np.array([[2018, 159], [2018, 196], [2018, 199]])
-
-            if index_GHA == 11:
-                bad0 = np.array(
+            elif index_gha == 9:
+                bad = np.array([[2018, 159], [2018, 196]])
+        elif case == 2:
+            if index_gha == 0:
+                bad = np.array([[2018, 146], [2018, 220]])
+            elif index_gha == 1:
+                bad = np.array([[2018, 147], [2018, 180], [2018, 185]])
+            elif index_gha == 10:
+                bad = np.array([[2018, 159], [2018, 196], [2018, 199]])
+            elif index_gha == 11:
+                bad = np.array(
                     [[2018, 149], [2018, 152], [2018, 176], [2018, 204], [2018, 209]]
                 )
-
-            if index_GHA == 12:
-                bad0 = np.array([[2018, 175], [2018, 195], [2018, 204], [2018, 216]])
-
-            if index_GHA == 13:
-                bad0 = np.array(
+            elif index_gha == 12:
+                bad = np.array([[2018, 175], [2018, 195], [2018, 204], [2018, 216]])
+            elif index_gha == 13:
+                bad = np.array(
                     [[2018, 176], [2018, 185], [2018, 195], [2018, 204], [2018, 208]]
                 )
-
-            if index_GHA == 14:
-                bad0 = np.array([[2018, 176], [2018, 185], [2018, 208]])
-
-            if index_GHA == 15:
-                bad0 = np.array([[2018, 185]])
-
-            if index_GHA == 16:
-                bad0 = np.array([[2018, 185]])
-
-            if index_GHA == 17:
-                bad0 = np.array([[2018, 216]])
-
-            if index_GHA == 18:
-                bad0 = np.array([[2018, 146], [2018, 192], [2018, 196]])
-
-            if index_GHA == 19:
-                bad0 = np.array([])
-
-            if index_GHA == 20:
-                bad0 = np.array([])
-
-            if index_GHA == 21:
-                bad0 = np.array([])
-
-            if index_GHA == 22:
-                bad0 = np.array([])
-
-            if index_GHA == 23:
-                bad0 = np.array(
+            elif index_gha == 14:
+                bad = np.array([[2018, 176], [2018, 185], [2018, 208]])
+            elif index_gha in [15, 16]:
+                bad = np.array([[2018, 185]])
+            elif index_gha == 17:
+                bad = np.array([[2018, 216]])
+            elif index_gha == 18:
+                bad = np.array([[2018, 146], [2018, 192], [2018, 196]])
+            elif index_gha in [2, 3, 5, 6, 19, 20, 21, 22]:
+                bad = np.array([])
+            elif index_gha == 23:
+                bad = np.array(
                     [
                         [2018, 147],
                         [2018, 152],
@@ -693,25 +382,38 @@ def daily_nominal_filter(band, case, index_GHA, year_day_list):
                         [2018, 220],
                     ]
                 )
+            elif index_gha == 4:
+                bad = np.array([[2018, 204]])
+            elif index_gha == 7:
+                bad = np.array([[2018, 146], [2018, 215]])
+            elif index_gha == 8:
+                bad = np.array([[2018, 146], [2018, 159], [2018, 211], [2018, 212]])
+            elif index_gha == 9:
+                bad = np.array(
+                    [
+                        [2018, 146],
+                        [2018, 147],
+                        [2018, 159],
+                        [2018, 190],
+                        [2018, 192],
+                        [2018, 193],
+                        [2018, 212],
+                    ]
+                )
+        else:
+            raise ValueError("case must be 1 or 2")
+    else:
+        raise ValueError("band must be mid_band")
 
-    if band == "mid_band":
-        bad = bad0.copy()
-
-    for j in range(n_days):
-        keep = 1
-        for i in range(len(bad)):
-            if (year_day_list[j, 0] == bad[i, 0]) and (
-                year_day_list[j, 1] == bad[i, 1]
-            ):
-                keep = 0
-
-        keep_all[j] = keep
+    return np.array(
+        [
+            not any(year_day[0] == b[0] and year_day[1] == b[1] for b in bad)
+            for year_day in year_day_list
+        ]
+    )
 
 
 def daily_strict_filter(band, year_day_list):
-    n_days = len(year_day_list)
-    keep_all = np.zeros(n_days)
-
     if band == "mid_band":
         good = np.array(
             [
@@ -742,24 +444,18 @@ def daily_strict_filter(band, year_day_list):
                 [2018, 182],
             ]
         )
+    else:
+        raise ValueError("band must be mid_band")
 
-    for j in range(n_days):
-        keep = 0
-        for i in range(len(good)):
-            if (year_day_list[j, 0] == good[i, 0]) and (
-                year_day_list[j, 1] == good[i, 1]
-            ):
-                keep = 1
-
-        keep_all[j] = keep
-
-    return keep_all
+    return np.array(
+        [
+            any(year_day[0] == b[0] and year_day[1] == b[1] for b in good)
+            for year_day in year_day_list
+        ]
+    )
 
 
 def daily_rms_filter(band, case, index_GHA, year_day_list, rms_threshold):
-    n_days = len(year_day_list)
-    keep_all = np.zeros(n_days)
-
     if band == "mid_band" and case == 1:
         d = np.genfromtxt(
             edges_folder
@@ -769,19 +465,13 @@ def daily_rms_filter(band, case, index_GHA, year_day_list, rms_threshold):
         )
         rms_original = d[:, -1]
         good = d[rms_original <= rms_threshold, :]
-        lg = len(good[:, 0])
 
-    for j in range(n_days):
-        keep = 0
-        for i in range(lg):
-            if (year_day_list[j, 0] == good[i, 0]) and (
-                year_day_list[j, 1] == good[i, 1]
-            ):
-                keep = 1
-
-        keep_all[j] = keep
-
-    return keep_all
+    return np.array(
+        [
+            any(year_day[0] == b[0] and year_day[1] == b[1] for b in good)
+            for year_day in year_day_list
+        ]
+    )
 
 
 def one_hour_filter(band, case, year, day, gha):
@@ -1258,8 +948,8 @@ def one_hour_filter(band, case, year, day, gha):
         else:
             raise ValueError("wrong case")
     else:
-        raise ValueError("should be mid band or lowband3")
-    return not any(
-        (year == bad[i, 0]) and (day == bad[i, 1]) and (gha == bad[i, 2])
-        for i in range(len(bad))
+        raise ValueError("band should be 'mid_band' or 'low_band3'")
+
+    return np.array(
+        [not any(y == b[0] and d == b[1] for b in bad) for y, d in zip(year, day)]
     )

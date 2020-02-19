@@ -2213,7 +2213,7 @@ def level3_to_level4(
         index_good_rms, i1, i2, i3 = filters.rms_filter(band, case, gx, rmsx, Nsigma)
 
         # Applying total-power filter
-        index_good_total_power, i1, i2, i3 = filters.tp_filter(band, gx, tpx)
+        index_good_total_power, i1, i2, i3 = filters.tp_filter(gx, tpx)
 
         # Combined filters
         index_good = np.intersect1d(index_good_rms, index_good_total_power)

@@ -509,7 +509,7 @@ def cleaning_polynomial(
 
     This function fits a log-log polynomial to spectrum, and then, iteratively, removes the points
     that fall outside the allowed range.
-    The allowed range is determined as Nsigma x a polynomial with terms Nterms_std
+    The allowed range is determined as n_sigma x a polynomial with terms Nterms_std
     """
 
     f = np.copy(fin)
