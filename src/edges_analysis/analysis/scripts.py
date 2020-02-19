@@ -1338,7 +1338,7 @@ def level1_to_level2(band, year, day_hour, low2_flag="_low2"):
             GHA[i] = GHA[i] + 24
     GHA_column = GHA.reshape(-1, 1)
 
-    sun_moon_azel = src.edges_analysis.analysis.coordinates.SUN_MOON_azel(
+    sun_moon_azel = src.edges_analysis.analysis.coordinates.sun_moon_azel(
         EDGES_LAT, EDGES_LON, dd
     )
     # Sun/Moon coordinates
