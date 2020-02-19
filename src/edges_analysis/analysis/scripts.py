@@ -6777,7 +6777,7 @@ def plots_of_absorption_glitch(part_number):
         rr3 = np.copy(rr)
         # Low-Band 3, Blade on Plus-Sign GP
         b_all = beams.feko_blade_beam(
-            "low_band3", 1, frequency_interpolation=False, AZ_antenna_axis=90
+            "low_band3", 1, frequency_interpolation=False, az_antenna_axis=90
         )
         f = np.arange(50, 121, 2)
 
@@ -6808,7 +6808,7 @@ def plots_of_absorption_glitch(part_number):
 
         # Mid-Band, Blade, infinite GP
         b_all = beams.feko_blade_beam(
-            "mid_band", 1, frequency_interpolation=False, AZ_antenna_axis=90
+            "mid_band", 1, frequency_interpolation=False, az_antenna_axis=90
         )
         f = np.arange(50, 201, 2)
 
@@ -6923,7 +6923,7 @@ def plots_of_absorption_glitch(part_number):
 
         # Mid-Band, Blade, on 30m x 30m GP
         b_all = beams.feko_blade_beam(
-            "mid_band", 0, frequency_interpolation=False, AZ_antenna_axis=90
+            "mid_band", 0, frequency_interpolation=False, az_antenna_axis=90
         )
         f = np.arange(50, 201, 2)
 
@@ -6951,7 +6951,7 @@ def plots_of_absorption_glitch(part_number):
 
         # Mid-Band, Blade, on 30m x 30m GP, NIVEDITA
         b_all = beams.feko_blade_beam(
-            "mid_band", 100, frequency_interpolation=False, AZ_antenna_axis=90
+            "mid_band", 100, frequency_interpolation=False, az_antenna_axis=90
         )
         f = np.arange(60, 201, 2)
 
@@ -7357,7 +7357,7 @@ def comparison_FEKO_HFSS():
         1,
         frequency_interpolation=False,
         frequency=np.array([0]),
-        AZ_antenna_axis=0,
+        az_antenna_axis=0,
     )
     F60 = np.flipud(bm[5])
     F90 = np.flipud(bm[20])
@@ -7714,7 +7714,7 @@ def comparison_FEKO_WIPLD():
         1,
         frequency_interpolation=False,
         frequency=np.array([0]),
-        AZ_antenna_axis=0,
+        az_antenna_axis=0,
     )
     F60 = np.flipud(bm[5])
     F90 = np.flipud(bm[20])
@@ -8578,7 +8578,7 @@ def plots_for_memo_155():
 
     # Mid-Band, Blade, on 30m x 30m GP
     b_all = beams.feko_blade_beam(
-        "mid_band", 0, frequency_interpolation=False, AZ_antenna_axis=90
+        "mid_band", 0, frequency_interpolation=False, az_antenna_axis=90
     )
     f = np.arange(50, 201, 2)
 

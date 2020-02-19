@@ -1663,7 +1663,7 @@ def plot_sky_model():
     # min=2.3, max=2.6, unit=r'$\beta$'), , rot=[180,0,0]
     hp.graticule(local=True)
     beam = beams.feko_blade_beam(
-        "mid_band", 0, frequency_interpolation=False, AZ_antenna_axis=90
+        "mid_band", 0, frequency_interpolation=False, az_antenna_axis=90
     )
     beam90 = beam[20, :, :]
     beam90n = beam90 / np.max(beam90)
@@ -1971,7 +1971,7 @@ def plot_low_mid_comparison():
 
 def plot_beam_power():
     bm_all = beams.feko_blade_beam(
-        "mid_band", 0, frequency_interpolation=False, AZ_antenna_axis=90
+        "mid_band", 0, frequency_interpolation=False, az_antenna_axis=90
     )
     f = np.arange(50, 201, 2)
     el = np.arange(0, 91)
@@ -1989,7 +1989,7 @@ def plot_beam_power():
         s_sq_deg = np.sum(nb * sin_theta_2D)
         sm[i] = s_sq_deg / ((180 / np.pi) ** 2)
     bm_all = beams.feko_blade_beam(
-        "mid_band", 1, frequency_interpolation=False, AZ_antenna_axis=90
+        "mid_band", 1, frequency_interpolation=False, az_antenna_axis=90
     )
     f = np.arange(50, 201, 2)
     el = np.arange(0, 91)
@@ -2050,7 +2050,7 @@ def plot_beam_power():
     plt.ylabel("residuals to\n 5-term polynomial [sr]")
     plt.xlabel("frequency [MHz]")
     bm_all = beams.feko_blade_beam(
-        "mid_band", 0, frequency_interpolation=False, AZ_antenna_axis=90
+        "mid_band", 0, frequency_interpolation=False, az_antenna_axis=90
     )
     f = np.arange(50, 201, 2)
     el = np.arange(0, 91)
@@ -2068,7 +2068,7 @@ def plot_beam_power():
         s_sq_deg = np.sum(nb * sin_theta_2D)
         sm[i] = s_sq_deg / ((180 / np.pi) ** 2)
     bm_all = beams.feko_blade_beam(
-        "mid_band", 1, frequency_interpolation=False, AZ_antenna_axis=90
+        "mid_band", 1, frequency_interpolation=False, az_antenna_axis=90
     )
     f = np.arange(50, 201, 2)
     el = np.arange(0, 91)
@@ -2381,7 +2381,7 @@ def plot_beam_gain(path_plot_save):
     sin_theta_2D_T = np.tile(sin_theta, (360, 1))
     sin_theta_2D = sin_theta_2D_T.T
     b_all = beams.feko_blade_beam(
-        "mid_band", 0, frequency_interpolation=False, AZ_antenna_axis=90
+        "mid_band", 0, frequency_interpolation=False, az_antenna_axis=90
     )
     f = np.arange(50, 201, 2)
     bint = np.zeros(len(f))
@@ -2397,7 +2397,7 @@ def plot_beam_gain(path_plot_save):
     m = np.polyval(x, ff1)
     r1 = bb1 - m
     b_all = beams.feko_blade_beam(
-        "mid_band", 1, frequency_interpolation=False, AZ_antenna_axis=90
+        "mid_band", 1, frequency_interpolation=False, az_antenna_axis=90
     )
     f = np.arange(50, 201, 2)
     bint = np.zeros(len(f))
@@ -2497,7 +2497,7 @@ def plot_antenna_beam():
         0,
         frequency_interpolation=False,
         frequency=np.array([0]),
-        AZ_antenna_axis=0,
+        az_antenna_axis=0,
     )
     ff = np.arange(50, 201, 2)
     fe = ff[(ff >= flow) & (ff <= fhigh)]
@@ -2509,7 +2509,7 @@ def plot_antenna_beam():
         1,
         frequency_interpolation=False,
         frequency=np.array([0]),
-        AZ_antenna_axis=0,
+        az_antenna_axis=0,
     )
     ff = np.arange(50, 201, 2)
     g_inf_zenith = bm_inf[:, 90, 0][(ff >= flow) & (ff <= fhigh)]
