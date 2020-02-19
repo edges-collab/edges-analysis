@@ -2186,9 +2186,9 @@ def level3_to_level4(
         amb_hum_max = 40
         IX = io.data_selection(
             my,
-            GHA_or_LST="GHA",
-            TIME_1=0,
-            TIME_2=24,
+            use_gha="GHA",
+            time_1=0,
+            time_2=24,
             sun_el_max=sun_el_max,
             moon_el_max=moon_el_max,
             amb_hum_max=amb_hum_max,
@@ -5556,7 +5556,7 @@ def VNA_comparison4():
 
 
 def plot_number_of_cterms_wterms():
-    rms, cterms, wterms = io.calibration_RMS_read(
+    rms, cterms, wterms = io.calibration_rms_read(
         "/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/receiver_calibration"
         "/receiver1/2018_01_25C/results/nominal/calibration_files"
         "/calibration_term_sweep_50_150MHz/calibration_term_sweep_50_150MHz.hdf5"
@@ -6355,8 +6355,8 @@ def plots_for_memo148(plot_number):
         "name",
     )
     fx, t188_low_case3, w, s188_low_case3 = io.level3_single_file_test(
-        edges_folder
-        + "mid_band/spectra/level3/tests_55_150MHz/rcv19_sw18/2018_188_00.hdf5",
+        edges_folder + "mid_band/spectra/level3"
+        "/tests_55_150MHz/rcv19_sw18/2018_188_00.hdf5",
         GHA1,
         GHA2,
         55,

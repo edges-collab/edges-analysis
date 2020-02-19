@@ -57,9 +57,9 @@ def rms_filter_computation(band, case, save_parameters=False):
         amb_hum_max = 40
         indices = data_selection(
             m,
-            GHA_or_LST="GHA",
-            TIME_1=0,
-            TIME_2=24,
+            use_gha="GHA",
+            time_1=0,
+            time_2=24,
             sun_el_max=90,
             moon_el_max=90,
             amb_hum_max=amb_hum_max,

@@ -489,8 +489,6 @@ def daily_residuals_LST(
 
         IX = data_selection(
             m,
-            LST_1=LST_boundaries[i],
-            LST_2=LST_boundaries[i + 1],
             sun_el_max=SUN_EL_max,
             moon_el_max=MOON_EL_max,
             amb_hum_max=200,
@@ -593,8 +591,6 @@ def average_level3_mid_band(case, LST_1=0, LST_2=24, sun_el_max=90, moon_el_max=
 
         IX = data_selection(
             m,
-            LST_1=LST_1,
-            LST_2=LST_2,
             sun_el_max=sun_el_max,
             moon_el_max=moon_el_max,
             amb_hum_max=200,
