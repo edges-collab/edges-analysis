@@ -691,7 +691,7 @@ def MC_error_propagation():
         delay_0=0.17,
         model_type="polynomial",
         Nfit=14,
-        plot_fit_residuals="no",
+        plot_fit_residuals=False,
     )
     rant2_X = models_antenna_s11_remove_delay(
         "low_band3",
@@ -701,7 +701,7 @@ def MC_error_propagation():
         delay_0=0.17,
         model_type="polynomial",
         Nfit=14,
-        plot_fit_residuals="no",
+        plot_fit_residuals=False,
     )
 
     Gb, Gc = balun_and_connector_loss("mid_band", ff, rant1_X)

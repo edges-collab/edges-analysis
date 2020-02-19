@@ -584,7 +584,7 @@ def average_level3_mid_band(case, LST_1=0, LST_2=24, sun_el_max=90, moon_el_max=
 
     for i in range(10):  # (lf):
         print(str(i + 1) + " of " + str(lf))
-        f, t, p, r, w, rms, m = level3read(path_files + list_files[i], print_key="no")
+        f, t, p, r, w, rms, m = level3read(path_files + list_files[i], print_key=False)
 
         if i == 0:
             RX_all = np.zeros((0, len(f)))

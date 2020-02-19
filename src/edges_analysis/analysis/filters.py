@@ -7,7 +7,7 @@ from .io import data_selection, level3read
 edges_folder = ""  # TODO: remove this
 
 
-def rms_filter_computation(band, case, save_parameters="no"):
+def rms_filter_computation(band, case, save_parameters=False):
     """
 
     Last modification:  2019-09-02
@@ -314,7 +314,7 @@ def rms_filter_computation(band, case, save_parameters="no"):
 
     # Saving polynomial parameters
     # ----------------------------
-    if save_parameters == "yes":
+    if save_parameters:
         np.savetxt(save_folder + "rms_polynomial_parameters.txt", par)
         np.savetxt(save_folder + "rms_std_polynomial_parameters.txt", par_std)
 

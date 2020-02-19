@@ -40,11 +40,11 @@ def calibration_file_computation(
     FMAX,
     cterms_nominal,
     wterms_nominal,
-    save_nominal="no",
+    save_nominal=False,
     save_nominal_flag="",
-    term_sweep="no",
+    term_sweep=False,
     panels=4,
-    plot_nominal="no",
+    plot_nominal=False,
 ):
     """
     calibration_date:  '2018_01_25C', '2019_04_25C'
@@ -742,7 +742,7 @@ def calibration_file_computation(
     index_cterms = np.arange(1, 15, 1)
     index_wterms = np.arange(1, 15, 1)
 
-    if term_sweep == "yes":
+    if term_sweep:
         RMS = np.zeros((4, len(index_wterms), len(index_cterms)))
         for j in range(len(index_cterms)):
             for i in range(len(index_wterms)):
@@ -1063,7 +1063,7 @@ def calibration_file_computation(
     print("LENGTH of C1: " + str(len(C1)))
 
     # Saving results
-    if save_nominal == "yes":
+    if save_nominal:
         # Array
         save_array = np.zeros((len(ff), 8))
         save_array[:, 0] = ff
@@ -1082,7 +1082,7 @@ def calibration_file_computation(
             fmt="%1.8f",
         )
 
-    if plot_nominal == "yes":
+    if plot_nominal:
         # Plotting cross-check
         TTac = rcf.calibrated_antenna_temperature(
             TTae, rra, rrl, C1, C2, TU, TC, TS, T_load=Tamb_internal
@@ -2460,7 +2460,7 @@ def integrated_spectrum_level4(
     day_max2,
     Nfg,
     rms_threshold,
-    save_yes_no,
+    save,
     filename_flag,
 ):
     if case == 100:
@@ -2609,7 +2609,7 @@ def integrated_spectrum_level4(
     out = outT.T
 
     # Saving spectrum
-    if (save_yes_no == "yes") and (day_range != "daily"):
+    if save and (day_range != "daily"):
         np.savetxt(
             save_path + save_spectrum,
             out,
@@ -2841,7 +2841,7 @@ def integrated_half_hour_level4(band, case, first_day, last_day, GHA_start=13.5)
 
 
 def integrated_half_hour_level4_many(
-    band, case, GHA_start=[13.5, 14.0], save="no", filename="test.txt"
+    band, case, GHA_start=[13.5, 14.0], save=False, filename="test.txt"
 ):
     for i in range(len(GHA_start)):
 
@@ -4847,7 +4847,7 @@ def batch_plot_daily_residuals_LST():
             XTEXT=XTEXT,
             YLABEL=YLABEL,
             TITLE=str(Nfg) + " TERMS:  " + new_list[i][0:-5],
-            save="yes",
+            save=True,
             figure_path=figure_path,
             figure_name=new_list[i][0:-5],
         )
@@ -4885,7 +4885,7 @@ def plot_residuals_GHA_1hr_bin(f, r, w):
         XTEXT=XTEXT,
         YLABEL=YLABEL,
         TITLE=TITLE,
-        save="yes",
+        save=True,
         figure_path=figure_path,
         figure_name=figure_name,
     )
@@ -4922,7 +4922,7 @@ def plot_residuals_GHA_Xhr_bin(f, r, w):
         XTEXT=XTEXT,
         YLABEL=YLABEL,
         TITLE=TITLE,
-        save="yes",
+        save=True,
         figure_path=figure_path,
         figure_name=figure_name,
     )
@@ -6112,10 +6112,10 @@ def plots_for_memo148(plot_number):
             GHA2,
             60,
             150,
-            "no",
+            False,
             "LINLOG",
             5,
-            "no",
+            False,
             "name",
         )
         f, t150_low_case2, w, s150_low_case2 = io.level3_single_file_test(
@@ -6126,10 +6126,10 @@ def plots_for_memo148(plot_number):
             GHA2,
             60,
             150,
-            "no",
+            False,
             "LINLOG",
             5,
-            "no",
+            False,
             "name",
         )
         f, t150_low_case3, w, s150_low_case3 = io.level3_single_file_test(
@@ -6140,10 +6140,10 @@ def plots_for_memo148(plot_number):
             GHA2,
             60,
             150,
-            "no",
+            False,
             "LINLOG",
             5,
-            "no",
+            False,
             "name",
         )
         f, t150_low_case4, w, s150_low_case4 = io.level3_single_file_test(
@@ -6154,10 +6154,10 @@ def plots_for_memo148(plot_number):
             GHA2,
             60,
             150,
-            "no",
+            False,
             "LINLOG",
             5,
-            "no",
+            False,
             "name",
         )
 
@@ -6203,10 +6203,10 @@ def plots_for_memo148(plot_number):
             GHA2,
             55,
             150,
-            "no",
+            False,
             "LINLOG",
             5,
-            "no",
+            False,
             "name",
         )
         fx, t150_low_case2, w, s150_low_case2 = io.level3_single_file_test(
@@ -6216,10 +6216,10 @@ def plots_for_memo148(plot_number):
             GHA2,
             55,
             150,
-            "no",
+            False,
             "LINLOG",
             5,
-            "no",
+            False,
             "name",
         )
         fx, t150_low_case3, w, s150_low_case3 = io.level3_single_file_test(
@@ -6229,10 +6229,10 @@ def plots_for_memo148(plot_number):
             GHA2,
             55,
             150,
-            "no",
+            False,
             "LINLOG",
             5,
-            "no",
+            False,
             "name",
         )
         fx, t150_low_case4, w, s150_low_case4 = io.level3_single_file_test(
@@ -6242,10 +6242,10 @@ def plots_for_memo148(plot_number):
             GHA2,
             55,
             150,
-            "no",
+            False,
             "LINLOG",
             5,
-            "no",
+            False,
             "name",
         )
 
@@ -6335,10 +6335,10 @@ def plots_for_memo148(plot_number):
         GHA2,
         55,
         150,
-        "no",
+        False,
         "LINLOG",
         5,
-        "no",
+        False,
         "name",
     )
     fx, t188_low_case2, w, s188_low_case2 = io.level3_single_file_test(
@@ -6348,10 +6348,10 @@ def plots_for_memo148(plot_number):
         GHA2,
         55,
         150,
-        "no",
+        False,
         "LINLOG",
         5,
-        "no",
+        False,
         "name",
     )
     fx, t188_low_case3, w, s188_low_case3 = io.level3_single_file_test(
@@ -6361,10 +6361,10 @@ def plots_for_memo148(plot_number):
         GHA2,
         55,
         150,
-        "no",
+        False,
         "LINLOG",
         5,
-        "no",
+        False,
         "name",
     )
     fx, t188_low_case4, w, s188_low_case4 = io.level3_single_file_test(
@@ -6374,10 +6374,10 @@ def plots_for_memo148(plot_number):
         GHA2,
         55,
         150,
-        "no",
+        False,
         "LINLOG",
         5,
-        "no",
+        False,
         "name",
     )
 
@@ -6468,10 +6468,10 @@ def plots_for_memo148(plot_number):
         GHA2,
         55,
         150,
-        "no",
+        False,
         "LINLOG",
         5,
-        "no",
+        False,
         "name",
     )
     fx, t150_low_case2, w, s150_low_case2 = io.level3_single_file_test(
@@ -6481,10 +6481,10 @@ def plots_for_memo148(plot_number):
         GHA2,
         55,
         150,
-        "no",
+        False,
         "LINLOG",
         5,
-        "no",
+        False,
         "name",
     )
     fx, t150_low_case3, w, s150_low_case3 = io.level3_single_file_test(
@@ -6494,10 +6494,10 @@ def plots_for_memo148(plot_number):
         GHA2,
         55,
         150,
-        "no",
+        False,
         "LINLOG",
         5,
-        "no",
+        False,
         "name",
     )
 
@@ -6577,10 +6577,10 @@ def plots_for_memo148(plot_number):
         GHA2,
         55,
         150,
-        "no",
+        False,
         "LINLOG",
         5,
-        "no",
+        False,
         "name",
     )
     fx, t188_low_case2, w, s188_low_case2 = io.level3_single_file_test(
@@ -6590,10 +6590,10 @@ def plots_for_memo148(plot_number):
         GHA2,
         55,
         150,
-        "no",
+        False,
         "LINLOG",
         5,
-        "no",
+        False,
         "name",
     )
     fx, t188_low_case3, w, s188_low_case3 = io.level3_single_file_test(
@@ -6603,10 +6603,10 @@ def plots_for_memo148(plot_number):
         GHA2,
         55,
         150,
-        "no",
+        False,
         "LINLOG",
         5,
-        "no",
+        False,
         "name",
     )
 
@@ -6689,7 +6689,7 @@ def plots_of_absorption_glitch(part_number):
         # High-Band Blade on Soil, no GP
         b_all = beams.FEKO_high_band_blade_beam_plus_shaped_finite_ground_plane(
             beam_file=21,
-            frequency_interpolation="no",
+            frequency_interpolation=False,
             frequency=np.array([0]),
             AZ_antenna_axis=0,
         )
@@ -6719,7 +6719,7 @@ def plots_of_absorption_glitch(part_number):
 
         # High-Band Fourpoint on Plus-Sign GP
         b_all = beams.FEKO_high_band_fourpoint_beam(
-            2, frequency_interpolation="no", frequency=np.array([0]), AZ_antenna_axis=0
+            2, frequency_interpolation=False, frequency=np.array([0]), AZ_antenna_axis=0
         )
         f = np.arange(65, 201, 1)
 
@@ -6748,7 +6748,7 @@ def plots_of_absorption_glitch(part_number):
         # High-Band Blade on Plus-Sign GP
         b_all = beams.FEKO_high_band_blade_beam_plus_shaped_finite_ground_plane(
             beam_file=20,
-            frequency_interpolation="no",
+            frequency_interpolation=False,
             frequency=np.array([0]),
             AZ_antenna_axis=0,
         )
@@ -6777,7 +6777,7 @@ def plots_of_absorption_glitch(part_number):
         rr3 = np.copy(rr)
         # Low-Band 3, Blade on Plus-Sign GP
         b_all = beams.feko_blade_beam(
-            "low_band3", 1, frequency_interpolation="no", AZ_antenna_axis=90
+            "low_band3", 1, frequency_interpolation=False, AZ_antenna_axis=90
         )
         f = np.arange(50, 121, 2)
 
@@ -6808,7 +6808,7 @@ def plots_of_absorption_glitch(part_number):
 
         # Mid-Band, Blade, infinite GP
         b_all = beams.feko_blade_beam(
-            "mid_band", 1, frequency_interpolation="no", AZ_antenna_axis=90
+            "mid_band", 1, frequency_interpolation=False, AZ_antenna_axis=90
         )
         f = np.arange(50, 201, 2)
 
@@ -6837,7 +6837,7 @@ def plots_of_absorption_glitch(part_number):
         # Low-Band, Blade on 10m x 10m GP
         b_all = beams.FEKO_low_band_blade_beam(
             beam_file=5,
-            frequency_interpolation="no",
+            frequency_interpolation=False,
             frequency=np.array([0]),
             AZ_antenna_axis=0,
         )
@@ -6867,7 +6867,7 @@ def plots_of_absorption_glitch(part_number):
 
         # Low-Band, Blade on 30m x 30m GP
         b_all = beams.FEKO_low_band_blade_beam(
-            beam_file=2, frequency_interpolation="no", AZ_antenna_axis=0
+            beam_file=2, frequency_interpolation=False, AZ_antenna_axis=0
         )
         f = np.arange(40, 121, 2)
 
@@ -6895,7 +6895,7 @@ def plots_of_absorption_glitch(part_number):
 
         # Low-Band, Blade on 30m x 30m GP, NIVEDITA
         b_all = beams.FEKO_low_band_blade_beam(
-            beam_file=0, frequency_interpolation="no", AZ_antenna_axis=0
+            beam_file=0, frequency_interpolation=False, AZ_antenna_axis=0
         )
         f = np.arange(40, 101, 2)
 
@@ -6923,7 +6923,7 @@ def plots_of_absorption_glitch(part_number):
 
         # Mid-Band, Blade, on 30m x 30m GP
         b_all = beams.feko_blade_beam(
-            "mid_band", 0, frequency_interpolation="no", AZ_antenna_axis=90
+            "mid_band", 0, frequency_interpolation=False, AZ_antenna_axis=90
         )
         f = np.arange(50, 201, 2)
 
@@ -6951,7 +6951,7 @@ def plots_of_absorption_glitch(part_number):
 
         # Mid-Band, Blade, on 30m x 30m GP, NIVEDITA
         b_all = beams.feko_blade_beam(
-            "mid_band", 100, frequency_interpolation="no", AZ_antenna_axis=90
+            "mid_band", 100, frequency_interpolation=False, AZ_antenna_axis=90
         )
         f = np.arange(60, 201, 2)
 
@@ -7355,7 +7355,7 @@ def comparison_FEKO_HFSS():
     bm = beams.feko_blade_beam(
         "mid_band",
         1,
-        frequency_interpolation="no",
+        frequency_interpolation=False,
         frequency=np.array([0]),
         AZ_antenna_axis=0,
     )
@@ -7712,7 +7712,7 @@ def comparison_FEKO_WIPLD():
     bm = beams.feko_blade_beam(
         "mid_band",
         1,
-        frequency_interpolation="no",
+        frequency_interpolation=False,
         frequency=np.array([0]),
         AZ_antenna_axis=0,
     )
@@ -7800,7 +7800,7 @@ def plots_beam_gain_derivative():
 
     b_all = beams.FEKO_low_band_blade_beam(
         beam_file=5,
-        frequency_interpolation="no",
+        frequency_interpolation=False,
         frequency=np.array([0]),
         AZ_antenna_axis=0,
     )
@@ -8537,7 +8537,7 @@ def plots_for_memo_155():
     # Low-Band, Blade on 10m x 10m GP
     b_all = beams.FEKO_low_band_blade_beam(
         beam_file=5,
-        frequency_interpolation="no",
+        frequency_interpolation=False,
         frequency=np.array([0]),
         AZ_antenna_axis=0,
     )
@@ -8559,7 +8559,7 @@ def plots_for_memo_155():
 
     # Low-Band, Blade on 30m x 30m GP
     b_all = beams.FEKO_low_band_blade_beam(
-        beam_file=2, frequency_interpolation="no", AZ_antenna_axis=0
+        beam_file=2, frequency_interpolation=False, AZ_antenna_axis=0
     )
     f = np.arange(40, 121, 2)
 
@@ -8578,7 +8578,7 @@ def plots_for_memo_155():
 
     # Mid-Band, Blade, on 30m x 30m GP
     b_all = beams.feko_blade_beam(
-        "mid_band", 0, frequency_interpolation="no", AZ_antenna_axis=90
+        "mid_band", 0, frequency_interpolation=False, AZ_antenna_axis=90
     )
     f = np.arange(50, 201, 2)
 
@@ -9530,9 +9530,9 @@ def beam_correction_check(FLOW, FHIGH):
 
 
 def plots_for_midband_verification_paper(
-    antenna_reflection_loss="no", beam_factor="no"
+    antenna_reflection_loss=False, beam_factor=False
 ):
-    if antenna_reflection_loss == "yes":
+    if antenna_reflection_loss:
         # Plot
         # ---------------------------------------
         f1 = plt.figure(num=1, figsize=(5.5, 6))
@@ -9548,7 +9548,7 @@ def plots_for_midband_verification_paper(
             delay_0=0.17,
             model_type="polynomial",
             Nfit=14,
-            plot_fit_residuals="no",
+            plot_fit_residuals=False,
         )
 
         Gb, Gc = loss.balun_and_connector_loss(f, s11_ant)
@@ -9614,7 +9614,7 @@ def plots_for_midband_verification_paper(
         bbox_inches="tight",
     )
 
-    if beam_factor == "yes":
+    if beam_factor:
         plt.figure(figsize=(11, 4))
 
         # ---------------------------------------

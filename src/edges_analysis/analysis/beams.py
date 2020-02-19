@@ -181,7 +181,7 @@ def antenna_beam_factor(
     FLOW=50,
     FHIGH=200,
     beam_file=0,
-    normalize_mid_band_beam="yes",
+    normalize_mid_band_beam=True,
     sky_model="haslam",
     rotation_from_north=90,
     index_model="gaussian",
@@ -193,7 +193,7 @@ def antenna_beam_factor(
     index_outband=2.6,
     reference_frequency=100,
     convolution_computation="old",
-    sky_plots="no",
+    sky_plots=False,
 ):
     """
     2019-04-16
@@ -285,9 +285,7 @@ def antenna_beam_factor(
             freq_array_X = np.arange(40, 121, 2, dtype="uint32")
 
     # Selecting frequency range
-    if (band == "mid_band") and (
-        normalize_mid_band_beam == "yes"
-    ):  # Beam normalization
+    if band == "mid_band" and normalize_mid_band_beam:  # Beam normalization
         FLOW = 50
         FHIGH = 150
     freq_array = freq_array_X[(freq_array_X >= FLOW) & (freq_array_X <= FHIGH)]
@@ -430,7 +428,7 @@ def antenna_beam_factor(
         sky_ref_above_horizon = sky_above_horizon[:, irf].flatten()
 
         # Plotting sky in local coordinates
-        if sky_plots == "yes":
+        if sky_plots:
 
             LAT_DEG = np.copy(EDGES_lat_deg)
 
@@ -454,7 +452,7 @@ def antenna_beam_factor(
 
             if plot_format == "rect":
                 plt.close()
-                fig = plt.figure(figsize=[19, 6])
+                plt.figure(figsize=[19, 6])
                 plt.scatter(
                     AZ_plot,
                     EL_plot,
@@ -592,7 +590,7 @@ def antenna_beam_factor(
                 )  # The nans are only above the horizon
                 Npixels_total_no_nan = Npixels_total - Npixels_above_horizon_nan
 
-                if normalize_mid_band_beam == "yes":
+                if normalize_mid_band_beam:
                     SOLID_ANGLE = (
                         np.sum(beam_above_horizon[index_no_nan]) / Npixels_total_no_nan
                     )
@@ -909,9 +907,6 @@ def beam_factor_table_read(path_file):
 
 
 def beam_factor_table_evaluate(f_table, lst_table, bf_table, lst_in):
-    # f_table, lst_table, bf_table = eg.beam_factor_table_read(
-    # '/data5/raul/EDGES/calibration/beam_factors/mid_band/beam_factor_table_hires.hdf5')
-
     beam_factor = np.zeros((len(lst_in), len(f_table)))
 
     for i in range(len(lst_in)):
@@ -926,41 +921,6 @@ def beam_factor_table_evaluate(f_table, lst_table, bf_table, lst_in):
 
 
 def HFSS_integrated_beam_directivity():
-    # if case == 1:
-    # path_to_file = '/home/raul/Desktop/beam/beam_75MHz_pec.csv'
-
-    # if case == 2:
-    # path_to_file = '/home/raul/Desktop/beam/beam_75MHz_MROsoil.csv'
-
-    # if case == 3:
-    # path_to_file =
-    # '/home/raul/Desktop/beam/beam_60MHz_30mx30m_stainless_steel_groundplane_halfspace_MROsoil
-    # .csv'
-
-    # if case == 4:
-    # path_to_file =
-    # '/home/raul/Desktop/beam/beam_75MHz_30mx30m_stainless_steel_groundplane_halfspace_MROsoil
-    # .csv'
-
-    # if case == 5:
-    # path_to_file =
-    # '/home/raul/Desktop/beam/beam_120MHz_30mx30m_stainless_steel_groundplane_halfspace_MROsoil
-    # .csv'
-
-    # if case == 6:
-    # path_to_file = '/home/raul/Desktop/beam/beam_75MHz_30mx30m_PEC_groundplane_halfspace_MROsoil
-    # .csv'
-
-    # if case == 10:
-    # path_to_file = '/run/media/raul/WD_RED_6TB/EDGES_vol2/others/beam_simulations
-    # /MROsoil_55MHz_MROsoil_global_material.csv'
-    # dB_or_linear = 'linear'
-
-    # if case == 11:
-    # path_to_file = '/run/media/raul/WD_RED_6TB/EDGES_vol2/others/beam_simulations
-    # /MROsoil_55MHz_vacuum_global_material.csv'
-    # dB_or_linear = 'linear'
-
     path_to_file = (
         "/run/media/raul/WD_RED_6TB/EDGES_vol2/others/beam_simulations/20190911"
         "/test4_0.04Sm/MROsoil_vacuum_120MHz.csv"
@@ -1057,7 +1017,7 @@ def beam_normalization(f_X, input_beam_X, FLOW=50, FHIGH=150):
 def feko_blade_beam(
     band,
     beam_file,
-    frequency_interpolation="no",
+    frequency_interpolation=False,
     frequency=np.array([0]),
     AZ_antenna_axis=0,
 ):
@@ -1115,7 +1075,7 @@ def feko_blade_beam(
         beam_maps[i, :, :] = (10 ** (data[(i * 360) : ((i + 1) * 360), 2::] / 10)).T
 
     # Frequency interpolation
-    if frequency_interpolation == "yes":
+    if frequency_interpolation:
 
         interp_beam = np.zeros(
             (len(frequency), len(beam_maps[0, :, 0]), len(beam_maps[0, 0, :]))

@@ -55,7 +55,7 @@ def test(
         delay_0=0.17,
         model_type="polynomial",
         Nfit=antenna_s11_nfit,
-        plot_fit_residuals="no",
+        plot_fit_residuals=False,
     )
 
     # Balun+Connector Loss

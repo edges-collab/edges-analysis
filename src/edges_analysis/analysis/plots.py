@@ -75,7 +75,7 @@ def plot_daily_residuals_nominal(f, rx, wx, ydx):
         XTEXT=XTEXT,
         YLABEL=YLABEL,
         TITLE=TITLE,
-        save="yes",
+        save=True,
         figure_path=figure_path,
         figure_name=figure_name,
     )
@@ -404,7 +404,7 @@ def plot_season_average_residuals(
             XTEXT=32,
             YLABEL=str(DDY) + " K per division",
             TITLE=TITLE,
-            save="yes",
+            save=True,
             figure_name=figure_name,
             figure_format="pdf",
         )
@@ -442,7 +442,7 @@ def plot_season_average_residuals(
             XTEXT=32,
             YLABEL=str(DDY) + " K per division",
             TITLE=TITLE,
-            save="yes",
+            save=True,
             figure_name=figure_name,
             figure_format="pdf",
         )
@@ -480,7 +480,7 @@ def plot_season_average_residuals(
             XTEXT=72,
             YLABEL=str(DDY) + " K per division",
             TITLE=TITLE,
-            save="yes",
+            save=True,
             figure_name=figure_name,
             figure_format="pdf",
         )
@@ -518,7 +518,7 @@ def plot_season_average_residuals(
             XTEXT=32,
             YLABEL=str(DDY) + " K per division",
             TITLE=TITLE,
-            save="yes",
+            save=True,
             figure_name=figure_name,
             figure_format="pdf",
         )
@@ -556,7 +556,7 @@ def plot_season_average_residuals(
             XTEXT=32,
             YLABEL=str(DDY) + " K per division",
             TITLE=TITLE,
-            save="yes",
+            save=True,
             figure_name=figure_name,
             figure_format="pdf",
         )
@@ -594,7 +594,7 @@ def plot_season_average_residuals(
             XTEXT=32,
             YLABEL=str(DDY) + " K per division",
             TITLE=TITLE,
-            save="yes",
+            save=True,
             figure_name=figure_name,
             figure_format="pdf",
         )
@@ -632,7 +632,7 @@ def plot_season_average_residuals(
             XTEXT=32,
             YLABEL=str(DDY) + " K per division",
             TITLE=TITLE,
-            save="yes",
+            save=True,
             figure_name=figure_name,
             figure_format="pdf",
         )
@@ -672,7 +672,7 @@ def plot_season_average_residuals(
             XTEXT=32,
             YLABEL=str(DDY) + " K per division",
             TITLE=TITLE,
-            save="yes",
+            save=True,
             figure_name=figure_name,
             figure_format="pdf",
         )
@@ -712,7 +712,7 @@ def plot_season_average_residuals(
             XTEXT=32,
             YLABEL=str(DDY) + " K per division",
             TITLE=TITLE,
-            save="yes",
+            save=True,
             figure_name=figure_name,
             figure_format="pdf",
         )
@@ -784,7 +784,7 @@ def plot_residuals_simulated_antenna_temperature(model, title):
         XTEXT=32,
         YLABEL="1.5 K per division",
         TITLE=title,
-        save="yes",
+        save=True,
         figure_name="simulation",
         figure_format="pdf",
     )
@@ -928,7 +928,6 @@ def plot_level4(
 ):
     """
     model: 'LINLOG', 'LOGLOG'
-
     """
 
     # Load Level 4 data
@@ -981,7 +980,7 @@ def plot_level4(
         rx[1, i, :] = r147
         wx[1, i, :] = w147
 
-    if averaged_146 == "yes":
+    if averaged_146:
 
         ldays = len(rx[:, 0, 0])
         lgha = len(rx[0, :, 0])
@@ -1171,7 +1170,7 @@ def plot_residuals(
     XTEXT=160,
     YLABEL="ylabel",
     TITLE="hello",
-    save="no",
+    save=False,
     figure_path="/home/raul/Desktop/",
     figure_name="2018_150_00",
     figure_format="png",
@@ -1204,7 +1203,7 @@ def plot_residuals(
 
     plt.title(TITLE)
 
-    if save == "yes":
+    if save:
         plt.savefig(
             figure_path + figure_name + "." + figure_format, bbox_inches="tight"
         )
@@ -1256,7 +1255,7 @@ def plot_level4_second_approach(
         rx[1, i, :] = r147
         wx[1, i, :] = w147
 
-    if averaged_146 == "yes":
+    if averaged_146:
 
         ldays = len(rx[:, 0, 0])
         lgha = len(rx[0, :, 0])
@@ -1441,7 +1440,7 @@ def plots_level3_rms_folder(
     lf = len(list_files)
     for i in range(lf):
         f, t, p, r, w, rms, m = io.level3read(
-            path_files + list_files[i], print_key="no"
+            path_files + list_files[i], print_key=False
         )
 
         plt.figure()
@@ -1562,7 +1561,7 @@ def level4_plot_residuals(case, GHA_index, TITLE, subfolder, figure_save_name, D
                 + str(int(yd[i, 1]))
                 + "_00.hdf5"
             )
-            f, t, p, r, w, rms, tp, m = io.level3read(path_file, print_key="no")
+            f, t, p, r, w, rms, tp, m = io.level3read(path_file, print_key=False)
 
             GHA_level3 = m[:, 4]
             GHA_level3[GHA_level3 < 0] = GHA_level3[GHA_level3 < 0] + 24
@@ -1630,7 +1629,7 @@ def level4_plot_residuals(case, GHA_index, TITLE, subfolder, figure_save_name, D
         XTEXT=XTEXT,
         YLABEL=YLABEL,
         TITLE=TITLE,
-        save="yes",
+        save=True,
         figure_path=figure_save_path_subfolder,
         figure_name=figure_save_name,
         figure_format=FIGURE_FORMAT,
@@ -1664,7 +1663,7 @@ def plot_sky_model():
     # min=2.3, max=2.6, unit=r'$\beta$'), , rot=[180,0,0]
     hp.graticule(local=True)
     beam = beams.feko_blade_beam(
-        "mid_band", 0, frequency_interpolation="no", AZ_antenna_axis=90
+        "mid_band", 0, frequency_interpolation=False, AZ_antenna_axis=90
     )
     beam90 = beam[20, :, :]
     beam90n = beam90 / np.max(beam90)
@@ -1821,14 +1820,14 @@ def plot_sky_model_comparison():
     s5 = (map3 - Tcmb) * (90 / 45) ** (-i3) + Tcmb
     ss4 = hp.pixelfunc.ud_grade(s4, 512, order_in="NESTED")
     ss5 = hp.pixelfunc.ud_grade(s5, 512, order_in="NESTED")
-    hp.cartview(s1, nest="yes", min=500, max=2000, cbar=False, coord="GC")
-    hp.cartview(s2, nest="yes", min=500, max=2000, cbar=False, coord="GC")
-    hp.cartview(ss4, nest="yes", min=500, max=2000, cbar=False, coord="GC")
-    hp.cartview(ss5, nest="yes", min=500, max=2000, cbar=False, coord="GC")
+    hp.cartview(s1, nest=True, min=500, max=2000, cbar=False, coord="GC")
+    hp.cartview(s2, nest=True, min=500, max=2000, cbar=False, coord="GC")
+    hp.cartview(ss4, nest=True, min=500, max=2000, cbar=False, coord="GC")
+    hp.cartview(ss5, nest=True, min=500, max=2000, cbar=False, coord="GC")
     dLIM = 500
-    hp.cartview(s2 - s1, nest="yes", min=-dLIM, max=dLIM, cbar=False, coord="GC")
-    hp.cartview(ss4 - s1, nest="yes", min=-dLIM, max=dLIM, cbar=False, coord="GC")
-    hp.cartview(ss5 - s1, nest="yes", min=-dLIM, max=dLIM, cbar=False, coord="GC")
+    hp.cartview(s2 - s1, nest=True, min=-dLIM, max=dLIM, cbar=False, coord="GC")
+    hp.cartview(ss4 - s1, nest=True, min=-dLIM, max=dLIM, cbar=False, coord="GC")
+    hp.cartview(ss5 - s1, nest=True, min=-dLIM, max=dLIM, cbar=False, coord="GC")
 
 
 def plot_data_stats():
@@ -1972,7 +1971,7 @@ def plot_low_mid_comparison():
 
 def plot_beam_power():
     bm_all = beams.feko_blade_beam(
-        "mid_band", 0, frequency_interpolation="no", AZ_antenna_axis=90
+        "mid_band", 0, frequency_interpolation=False, AZ_antenna_axis=90
     )
     f = np.arange(50, 201, 2)
     el = np.arange(0, 91)
@@ -1990,7 +1989,7 @@ def plot_beam_power():
         s_sq_deg = np.sum(nb * sin_theta_2D)
         sm[i] = s_sq_deg / ((180 / np.pi) ** 2)
     bm_all = beams.feko_blade_beam(
-        "mid_band", 1, frequency_interpolation="no", AZ_antenna_axis=90
+        "mid_band", 1, frequency_interpolation=False, AZ_antenna_axis=90
     )
     f = np.arange(50, 201, 2)
     el = np.arange(0, 91)
@@ -2008,7 +2007,7 @@ def plot_beam_power():
         s_sq_deg = np.sum(nb * sin_theta_2D)
         smi[i] = s_sq_deg / ((180 / np.pi) ** 2)
     bmlb_all = beams.FEKO_low_band_blade_beam(
-        beam_file=2, frequency_interpolation="no", AZ_antenna_axis=0
+        beam_file=2, frequency_interpolation=False, AZ_antenna_axis=0
     )
     fl = np.arange(40, 121, 2)
     sl = np.zeros(len(fl))
@@ -2051,7 +2050,7 @@ def plot_beam_power():
     plt.ylabel("residuals to\n 5-term polynomial [sr]")
     plt.xlabel("frequency [MHz]")
     bm_all = beams.feko_blade_beam(
-        "mid_band", 0, frequency_interpolation="no", AZ_antenna_axis=90
+        "mid_band", 0, frequency_interpolation=False, AZ_antenna_axis=90
     )
     f = np.arange(50, 201, 2)
     el = np.arange(0, 91)
@@ -2069,7 +2068,7 @@ def plot_beam_power():
         s_sq_deg = np.sum(nb * sin_theta_2D)
         sm[i] = s_sq_deg / ((180 / np.pi) ** 2)
     bm_all = beams.feko_blade_beam(
-        "mid_band", 1, frequency_interpolation="no", AZ_antenna_axis=90
+        "mid_band", 1, frequency_interpolation=False, AZ_antenna_axis=90
     )
     f = np.arange(50, 201, 2)
     el = np.arange(0, 91)
@@ -2087,7 +2086,7 @@ def plot_beam_power():
         s_sq_deg = np.sum(nb * sin_theta_2D)
         smi[i] = s_sq_deg / ((180 / np.pi) ** 2)
     bmlb_all = beams.FEKO_low_band_blade_beam(
-        beam_file=2, frequency_interpolation="no", AZ_antenna_axis=0
+        beam_file=2, frequency_interpolation=False, AZ_antenna_axis=0
     )
     fl = np.arange(40, 121, 2)
     sl = np.zeros(len(fl))
@@ -2382,7 +2381,7 @@ def plot_beam_gain(path_plot_save):
     sin_theta_2D_T = np.tile(sin_theta, (360, 1))
     sin_theta_2D = sin_theta_2D_T.T
     b_all = beams.feko_blade_beam(
-        "mid_band", 0, frequency_interpolation="no", AZ_antenna_axis=90
+        "mid_band", 0, frequency_interpolation=False, AZ_antenna_axis=90
     )
     f = np.arange(50, 201, 2)
     bint = np.zeros(len(f))
@@ -2398,7 +2397,7 @@ def plot_beam_gain(path_plot_save):
     m = np.polyval(x, ff1)
     r1 = bb1 - m
     b_all = beams.feko_blade_beam(
-        "mid_band", 1, frequency_interpolation="no", AZ_antenna_axis=90
+        "mid_band", 1, frequency_interpolation=False, AZ_antenna_axis=90
     )
     f = np.arange(50, 201, 2)
     bint = np.zeros(len(f))
@@ -2414,7 +2413,7 @@ def plot_beam_gain(path_plot_save):
     m = np.polyval(x, ff2)
     r2 = bb2 - m
     b_all = beams.FEKO_low_band_blade_beam(
-        beam_file=2, frequency_interpolation="no", AZ_antenna_axis=0
+        beam_file=2, frequency_interpolation=False, AZ_antenna_axis=0
     )
     f = np.arange(40, 121, 2)
     bint = np.zeros(len(f))
@@ -2431,7 +2430,7 @@ def plot_beam_gain(path_plot_save):
     r3 = bb3 - m
     b_all = beams.FEKO_low_band_blade_beam(
         beam_file=5,
-        frequency_interpolation="no",
+        frequency_interpolation=False,
         frequency=np.array([0]),
         AZ_antenna_axis=0,
     )
@@ -2496,7 +2495,7 @@ def plot_antenna_beam():
     bm = beams.feko_blade_beam(
         "mid_band",
         0,
-        frequency_interpolation="no",
+        frequency_interpolation=False,
         frequency=np.array([0]),
         AZ_antenna_axis=0,
     )
@@ -2508,7 +2507,7 @@ def plot_antenna_beam():
     bm_inf = beams.feko_blade_beam(
         "mid_band",
         1,
-        frequency_interpolation="no",
+        frequency_interpolation=False,
         frequency=np.array([0]),
         AZ_antenna_axis=0,
     )
@@ -2518,7 +2517,7 @@ def plot_antenna_beam():
     g_inf_45_H = bm_inf[:, 45, 90][(ff >= flow) & (ff <= fhigh)]
     bm_lb = beams.FEKO_low_band_blade_beam(
         beam_file=2,
-        frequency_interpolation="no",
+        frequency_interpolation=False,
         frequency=np.array([0]),
         AZ_antenna_axis=0,
     )
@@ -2529,7 +2528,7 @@ def plot_antenna_beam():
     glb_45_H = bm_lb[:, 45, 90][(fcuec >= flow) & (fcuec <= fhigh)]
     bm_10 = beams.FEKO_low_band_blade_beam(
         beam_file=5,
-        frequency_interpolation="no",
+        frequency_interpolation=False,
         frequency=np.array([0]),
         AZ_antenna_axis=0,
     )
@@ -3107,7 +3106,7 @@ def plot_calibration_parameters(s11_path):
         delay_0=0.17,
         model_type="polynomial",
         Nfit=15,
-        plot_fit_residuals="no",
+        plot_fit_residuals=False,
     )
 
     xlb1 = np.genfromtxt(
