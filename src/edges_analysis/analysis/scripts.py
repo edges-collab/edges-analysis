@@ -8280,7 +8280,7 @@ def integrated_antenna_gain_WIPLD(case, Nfg):
         bint[i] = np.sum(bt * sin_theta_2D)
         b = (1 / (4 * np.pi)) * ((np.pi / 180) ** 2) * bint  # /np.mean(bx)
 
-    # Nfg   = 5
+    # n_fg   = 5
     fLOW = 50
     fHIGH = 200
     fX = f[(f >= fLOW) & (f <= fHIGH)]
