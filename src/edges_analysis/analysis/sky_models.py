@@ -6,32 +6,35 @@ from astropy import io as fits
 edges_folder = ""  # TODO: remove
 
 
-def haslam_408MHz_map():
-    """
-    This function will return the Haslam map in NESTED Galactic Coordinates
-    """
-
-    # Loading NESTED galactic coordinates
-    # -----------------------------------
+def get_map_coords(reorder=False, res=9):
     coord = fits.open(
         edges_folder
-        + "/sky_models/coordinate_maps/pixel_coords_map_nested_galactic_res9.fits"
+        + "/sky_models/coordinate_maps/pixel_coords_map_nested_galactic_res{}.fits".format(
+            res
+        )
     )
     coord_array = coord[1].data
     lon = coord_array["LONGITUDE"]
     lat = coord_array["LATITUDE"]
-    GALAC_COORD_object = apc.SkyCoord(
-        lon, lat, frame="galactic", unit="deg"
-    )  # defaults to ICRS frame
 
+    if reorder:
+        lon = hp.reorder(lon, r2n=True)
+        lat = hp.reorder(lat, r2n=True)
+
+    # defaults to ICRS frame
+    return lon, lat, apc.SkyCoord(lon, lat, frame="galactic", unit="deg")
+
+
+def haslam_408MHz_map():
+    """
+    This function will return the Haslam map in NESTED Galactic Coordinates
+    """
     # Loading Haslam map
     # ------------------
     haslam_map = fits.open(
         edges_folder + "/sky_models/haslam_map/lambda_haslam408_dsds.fits"
     )
-    haslam408 = (haslam_map[1].data)["temperature"]
-
-    return haslam408, lon, lat, GALAC_COORD_object
+    return (haslam_map[1].data)["temperature"], get_map_coords()
 
 
 def remazeilles_408MHz_map():
@@ -41,24 +44,6 @@ def remazeilles_408MHz_map():
 
     This version is only destriped, not desourced.
     """
-
-    # Loading NESTED galactic coordinates
-    # -----------------------------------
-    coord = fits.open(
-        edges_folder
-        + "/sky_models/coordinate_maps/pixel_coords_map_ring_galactic_res9.fits"
-    )
-    coord_array = coord[1].data
-    lon_ring = coord_array["LONGITUDE"]
-    lat_ring = coord_array["LATITUDE"]
-
-    lon = hp.reorder(lon_ring, r2n=True)
-    lat = hp.reorder(lat_ring, r2n=True)
-
-    GALAC_COORD_object = apc.SkyCoord(
-        lon, lat, frame="galactic", unit="deg"
-    )  # defaults to ICRS frame
-
     # Loading Haslam map
     # ------------------
     haslam_map = fits.open(
@@ -67,57 +52,26 @@ def remazeilles_408MHz_map():
     x = (haslam_map[1].data)["temperature"]
     haslam408_ring = x.flatten()
 
-    haslam408 = hp.reorder(haslam408_ring, r2n=True)
-
-    return haslam408, lon, lat, GALAC_COORD_object
+    return hp.reorder(haslam408_ring, r2n=True), get_map_coords(reorder=True)
 
 
 def LW_150MHz_map():
     """
     This function will return the Haslam map in NESTED Galactic Coordinates
     """
-
-    # Loading NESTED galactic coordinates
-    # -----------------------------------
-    coord = fits.open(
-        edges_folder
-        + "/sky_models/coordinate_maps/pixel_coords_map_nested_galactic_res8.fits"
+    # Here we use the raw map, without destriping
+    return (
+        np.genfromtxt(
+            edges_folder + "/sky_models/LW_150MHz_map/150_healpix_gal_nested_R8.txt"
+        ),
+        get_map_coords(res=8),
     )
-    coord_array = coord[1].data
-    lon = coord_array["LONGITUDE"]
-    lat = coord_array["LATITUDE"]
-    GALAC_COORD_object = apc.SkyCoord(
-        lon, lat, frame="galactic", unit="deg"
-    )  # defaults to ICRS frame
-
-    # Loading LW map
-    # --------------
-    LW150 = np.genfromtxt(
-        edges_folder + "/sky_models/LW_150MHz_map/150_healpix_gal_nested_R8.txt"
-    )  # Here we use
-    # the raw map, without destriping
-
-    return LW150, lon, lat, GALAC_COORD_object
 
 
 def guzman_45MHz_map():
     """
     This function will return the Guzman map in NESTED Galactic Coordinates
     """
-
-    # Loading NESTED galactic coordinates
-    # -----------------------------------
-    coord = fits.open(
-        edges_folder
-        + "/sky_models/coordinate_maps/pixel_coords_map_nested_galactic_res9.fits"
-    )
-    coord_array = coord[1].data
-    lon_raw = coord_array["LONGITUDE"]
-    lat_raw = coord_array["LATITUDE"]
-    GALAC_COORD_object = apc.SkyCoord(
-        lon_raw, lat_raw, frame="galactic", unit="deg"
-    )  # defaults to ICRS frame
-
     # 45-MHz map. The map is in Plate Caree projection (unprojected,
     # see https://en.wikipedia.org/wiki/Equirectangular_projection)
     map45_fit = fits.open(edges_folder + "/sky_models/map_45MHz/wlb45.fits")
@@ -161,4 +115,4 @@ def guzman_45MHz_map():
     # Filling the hole
     m[DEC > 68] = np.mean(m[(DEC > 60) & (DEC < 68)])
 
-    return m, lon_raw, lat_raw, GALAC_COORD_object
+    return m, get_map_coords()

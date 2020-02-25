@@ -966,7 +966,7 @@ def level4_plot_residuals(case, gha_index, title, subfolder, figure_save_name, d
 
 def plot_sky_model():
     # Loading Haslam map
-    map408, lon, lat, gc = sky_models.haslam_408MHz_map()
+    map408, (lon, lat, gc) = sky_models.haslam_408MHz_map()
     ipole = 2.65
     icenter = 2.4
     sigma_deg = 8.5
@@ -1058,11 +1058,11 @@ def plot_sky_model():
 
 def plot_sky_model_comparison():
     # Loading Haslam map
-    map1, lon1, lat1, gc1 = sky_models.haslam_408MHz_map()
+    map1, (lon1, lat1, gc1) = sky_models.haslam_408MHz_map()
     # Loading LW map
-    map2, lon2, lat2, gc2 = sky_models.LW_150MHz_map()
+    map2, (lon2, lat2, gc2) = sky_models.LW_150MHz_map()
     # Loading Guzman map
-    map3, lon3, lat3, gc3 = sky_models.guzman_45MHz_map()
+    map3, (lon3, lat3, gc3) = sky_models.guzman_45MHz_map()
 
     # Scaling sky map (the map contains the CMB, which has to be removed and then added back)
     ipole = 2.65

@@ -16,6 +16,7 @@ from .sky_models import (
     guzman_45MHz_map,
     haslam_408MHz_map,
     remazeilles_408MHz_map,
+    get_map_coords,
 )
 
 edges_folder = ""  # TODO: get rid of this
@@ -279,7 +280,7 @@ def antenna_beam_factor(
     if sky_model not in sky_models:
         raise ValueError("sky_model must be one of {}".format(sky_models.keys()))
 
-    map_orig, lon, lat, galac_coord_object = sky_models[sky_model][0]()
+    map_orig, (lon, lat, galac_coord_object) = sky_models[sky_model][0]()
     v0 = sky_models[sky_model][1]
 
     # Scale sky map (the map contains the CMB, which has to be removed and then added back)
