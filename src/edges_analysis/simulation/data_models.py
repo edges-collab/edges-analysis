@@ -8,6 +8,7 @@ from edges_cal.cal_coefficients import EdgesFrequencyRange
 
 from ..analysis.loss import balun_and_connector_loss
 from ..analysis.scripts import models_antenna_s11_remove_delay
+from ..estimation import models
 
 edges_folder = ""  # TODO: remove
 
@@ -126,37 +127,9 @@ def foreground_model(
 
 
 def signal_model(model_type, theta, v):
-    # Parameter assignment
-    T21 = theta[0]
-    vr = theta[1]
-    dv = theta[2]
-    tau0 = theta[3]
-
-    if model_type == "exp":
-        if len(theta) == 4:
-            tilt = 0
-
-        elif len(theta) == 5:
-            tilt = theta[4]
-
-        b = -np.log(-np.log((1 + np.exp(-tau0)) / 2) / tau0)
-        K1 = T21 * (1 - np.exp(-tau0 * np.exp((-b * (v - vr) ** 2) / ((dv ** 2) / 4))))
-        K2 = 1 + (tilt * (v - vr) / dv)
-        K3 = 1 - np.exp(-tau0)
-        T = K1 * K2 / K3
-    elif model_type == "tanh":
-        if len(theta) == 4:
-            tau1 = np.copy(tau0)
-        elif len(theta) == 5:
-            tau1 = theta[4]
-
-        K1 = np.tanh((1 / (v + dv / 2) - 1 / vr) / (dv / (tau0 * (vr ** 2))))
-        K2 = np.tanh((1 / (v - dv / 2) - 1 / vr) / (dv / (tau1 * (vr ** 2))))
-        T = -(T21 / 2) * (K1 - K2)
-    else:
-        raise ValueError("model_type must be exp or tanh")
-
-    return T  # The amplitude is equal to T21, not to -T21
+    return models.model_eor_flattened_gaussian(
+        v, model_type=["exp", "tanh"].index(model_type), *theta
+    )
 
 
 def full_model(

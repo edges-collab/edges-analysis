@@ -38,22 +38,9 @@ def model_mirocha2016(theta, pars=None, hmf=None, src=None):
     }
 
     # New list of parameter values
-    updates = {}
-
-    for parameter in theta_list:
-        # Copy new value in log or linear  scale
-        if is_log[parameter]:
-            # New value of parameter in log scale
-            value_log = theta_list[parameter]
-
-            # Store parameter in linear scale
-            updates[parameter] = 10 ** (value_log)
-        else:
-            # New value of parameter in linear scale
-            value_linear = theta_list[parameter]
-
-            # Store parameter in linear scale
-            updates[parameter] = value_linear
+    updates = {
+        par: (10 ** val if is_log[par] else val) for par, val in theta_list.items()
+    }
 
     # Create new parameter object
     p = pars.copy()
@@ -86,44 +73,21 @@ def model_eor_flattened_gaussian(v, model_type=1, T21=1, vr=75, dv=20, tau0=4, t
         K3 = 1 - np.exp(-tau0)
         T = K1 * K2 / K3
     elif model_type == 2:
+        tau1 = tau0 if tilt == 0 else tilt
         K1 = np.tanh((1 / (v + dv / 2) - 1 / vr) / (dv / (tau0 * (vr ** 2))))
-        K2 = np.tanh((1 / (v - dv / 2) - 1 / vr) / (dv / (tau0 * (vr ** 2))))
+        K2 = np.tanh((1 / (v - dv / 2) - 1 / vr) / (dv / (tau1 * (vr ** 2))))
         T = -(T21 / 2) * (K1 - K2)
     else:
         raise ValueError("model_type must be 1 or 2")
-
     return T  # The amplitude is equal to T21, not to -T21
 
 
-def model_flattened_gaussian_linlog(theta, v, v0, Nfg, N21=4):
-    model_21 = "flattened_gaussian"
-    model_fg = "LINLOG"  # 'NONE'
+def model_flattened_gaussian_linlog(theta, v, v0, n_fg, n_21=4):
+    model_21 = model_eor_flattened_gaussian(model_type=1, *theta[:n_fg])
 
-    if model_21 == "flattened_gaussian":
-        if N21 == 4:
-            model_21 = model_eor_flattened_gaussian(
-                model_type=1,
-                T21=theta[0],
-                vr=theta[1],
-                dv=theta[2],
-                tau0=theta[3],
-                tilt=0,
-            )
-        elif N21 == 5:
-            model_21 = model_eor_flattened_gaussian(
-                model_type=1,
-                T21=theta[0],
-                vr=theta[1],
-                dv=theta[2],
-                tau0=theta[3],
-                tilt=theta[4],
-            )
-    if model_fg == "LINLOG":
-        model_fg = 0
-        for i in range(Nfg):
-            j = N21 + i
-            model_fg += theta[j] * ((v / v0) ** (-2.5)) * ((np.log(v / v0)) ** i)
-    elif model_fg == "NONE":
-        model_fg = 0
+    model_fg = 0
+    if n_fg:
+        for i in range(n_fg):
+            model_fg += theta[n_21 + i] * ((v / v0) ** (-2.5)) * ((np.log(v / v0)) ** i)
 
     return model_21 + model_fg
