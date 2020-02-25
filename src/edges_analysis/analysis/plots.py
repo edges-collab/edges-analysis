@@ -432,11 +432,11 @@ def level4_plot_integrated_residuals(case, FLOW=60, FHIGH=150):
             f,
             d[:, i + 1],
             d[:, i + 1 + 48],
-            Nfg=5,
-            F1_LOW=FLOW,
-            F1_HIGH=FHIGH,
-            F2_LOW=FLOW,
-            F2_HIGH=FHIGH,
+            n_poly=5,
+            f1_low=FLOW,
+            f1_high=FHIGH,
+            f2_low=FLOW,
+            f2_high=FHIGH,
         )
         if r_full is None:
             r_full = r
