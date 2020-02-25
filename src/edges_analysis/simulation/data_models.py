@@ -631,7 +631,7 @@ def MC_receiver(
 
 def MC_antenna_s11(f, rant, s11_Npar_max=14):
     # rant = models_antenna_s11_remove_delay(band, f, year=2018, day=147, delay_0=0.17,
-    # model_type='polynomial', Nfit=14, plot_fit_residuals='no')
+    # model_type='polynomial', n_fit=14, plot_fit_residuals='no')
 
     # Producing perturbed antenna reflection coefficient
 

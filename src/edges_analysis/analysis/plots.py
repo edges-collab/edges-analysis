@@ -1710,9 +1710,7 @@ def plot_antenna_calibration_params(s11_path):
 
 def _get_ra(s11_path):
     fe = EdgesFrequencyRange(f_low=50, f_high=130).freq
-    ra = s11m.antenna_s11_remove_delay(
-        s11_path, fe, delay_0=0.17, model_type="polynomial", Nfit=15
-    )
+    ra = s11m.antenna_s11_remove_delay(s11_path, fe, delay_0=0.17, n_fit=15)
     flb1, ralb1 = _get_xf(fe, "/2016_243/S11_blade_low_band_2016_243.txt", f_high=100)
     flb2, ralb2 = _get_xf(
         fe,

@@ -208,7 +208,7 @@ def _get_loss(fname, f_MHz, n_terms):
 
 def ground_loss(band, f_MHz):
     """
-    f_MHz: frequency in MHz. For mid-band (low-band), between 50 and 150 (120) MHz.
+    f: frequency in MHz. For mid-band (low-band), between 50 and 150 (120) MHz.
     """
     if band == "low_band":
         fname = (
@@ -225,7 +225,7 @@ def ground_loss(band, f_MHz):
 
 def antenna_loss(band, f_MHz):
     """
-    f_MHz: frequency in MHz. For mid-band (low-band), between 50 and 150 (120) MHz.
+    f: frequency in MHz. For mid-band (low-band), between 50 and 150 (120) MHz.
     """
     if band == "mid_band":
         fname = (

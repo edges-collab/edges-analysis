@@ -10,7 +10,7 @@ from edges_cal import receiver_calibration_func as rcf
 from edges_cal import reflection_coefficient as rc
 from edges_cal import s11_correction as s11c
 from edges_cal.cal_coefficients import EdgesFrequencyRange
-from edges_io.io import Spectrum
+from edges_io.io import Spectrum, SwitchingState
 from matplotlib import pyplot as plt
 
 from . import beams, filters, io, loss, plots, rfi
@@ -1811,7 +1811,7 @@ def level2_to_level3(
         # Antenna S11
         # -----------
         s11_ant = s11m.antenna_s11_remove_delay(
-            s11_path, fin, delay_0=0.17, model_type="polynomial", Nfit=antenna_s11_Nfit
+            s11_path, fin, delay_0=0.17, n_fit=antenna_s11_Nfit
         )
 
         # Calibrated antenna temperature with losses and beam chromaticity
@@ -5800,46 +5800,62 @@ def plots_for_memo148(plot_number):
         f = np.arange(50, 151, 1)
         ant_s11 = np.ones(len(f))
 
-        o = s11c.low_band_switch_correction(alb, 27.16, f_in=flb)
-        v1 = o[1]
-        v2 = o[2]
-        v3 = o[3]
+        corrections = [s11c.low_band_switch_correction(alb, 27.16, f_in=flb)[1]]
 
-        w1, w2, w3 = s11m.switch_correction_receiver1(
-            ant_s11,
-            f_in=f,
-            base_path=edges_folder_v1
-            + "calibration/receiver_calibration/mid_band/2017_11_15C_25C_35C/data/s11/raw/25C/receiver_MRO_fieldfox_40-200MHz/",
-        )
+        paths = [
+            (
+                edges_folder_v1
+                + "calibration/receiver_calibration/mid_band/2017_11_15C_25C_35C/data/s11/raw/25C"
+                "/receiver_MRO_fieldfox_40-200MHz/"
+            ),
+            (
+                edges_folder
+                + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/data/s11/raw"
+                "/InternalSwitch/"
+            ),
+            (
+                edges_folder
+                + "mid_band/calibration/receiver_calibration/receiver1/2019_03_25C/data/s11/raw"
+                "/SwitchingState01/"
+            ),
+        ]
 
-        x1, x2, x3 = s11m.switch_correction_receiver1(
-            ant_s11,
-            f_in=f,
-            base_path=edges_folder
-            + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/data/s11/raw/InternalSwitch/",
-        )
-
-        y1, y2, y3 = s11m.switch_correction_receiver1(
-            ant_s11,
-            f_in=f,
-            base_path=edges_folder
-            + "mid_band/calibration/receiver_calibration/receiver1/2019_03_25C/data/s11/raw/SwitchingState01/",
-        )
+        for path in paths:
+            corrections.append(
+                s11c.low_band_switch_correction(
+                    ant_s11,
+                    internal_switch=SwitchingState(path, run_num=1),
+                    f_in=f,
+                    poly_order=23,
+                )[1]
+            )
 
         size_x = 11
         size_y = 13.0
 
-        plt.figure(num=1, figsize=(size_x, size_y))
+        fig, ax = plt.subplots(3, 2, figsize=(size_x, size_y))
 
-        plt.subplot(3, 2, 1)
-        plt.plot(flb, 20 * np.log10(np.abs(v1)), "k--")
-        plt.plot(f, 20 * np.log10(np.abs(w1)), "k:")
-        plt.plot(f, 20 * np.log10(np.abs(x1)), "b")
-        plt.plot(f, 20 * np.log10(np.abs(y1)), "r--")
-        plt.xticks(np.arange(50, 151, 10), labels="")
-        plt.ylabel(r"$|S_{11}|$ [dB]")
-        plt.grid()
-        plt.legend(
+        for i, (correction, style) in enumerate(
+            zip(corrections, ["k--", "k:", "b", "r--"])
+        ):
+            for k, label in enumerate(["s11", "s12s21", "s22"]):
+                for j, fnc in enumerate(
+                    (
+                        lambda x: 20 * np.log10(np.abs(x)),
+                        lambda x: (180 / np.pi) * np.unwrap(np.angle(x)),
+                    )
+                ):
+                    ax[k, j].plot(flb if not i else f, fnc(correction[label]), style)
+
+                    ax[k, j].xaxis.set_xticks(np.arange(50, 151, 10), labels="")
+                    ax[k, j].grid()
+
+                    if j == 0:
+                        ax[k, j].set_ylabel(r"$|{}|$ [dB]".format(label))
+                    else:
+                        ax[k, j].set_ylabel(r"$\angle {}$ [deg]".format(label))
+
+        ax[0, 0].legend(
             [
                 r"sw 2015, 50.12$\Omega$",
                 r"sw 2017, 49.85$\Omega$",
@@ -5847,53 +5863,6 @@ def plots_for_memo148(plot_number):
                 r"sw 2019, 50.15$\Omega$",
             ]
         )
-
-        plt.subplot(3, 2, 2)
-        plt.plot(flb, (180 / np.pi) * np.unwrap(np.angle(v1)), "k--")
-        plt.plot(f, (180 / np.pi) * np.unwrap(np.angle(w1)), "k:")
-        plt.plot(f, (180 / np.pi) * np.unwrap(np.angle(x1)), "b")
-        plt.plot(f, (180 / np.pi) * np.unwrap(np.angle(y1)), "r--")
-        plt.xticks(np.arange(50, 151, 10), labels="")
-        plt.ylabel(r"$\angle S_{11}$ [deg]")
-        plt.grid()
-
-        plt.subplot(3, 2, 3)
-        plt.plot(flb, 20 * np.log10(np.abs(v2)), "k--")
-        plt.plot(f, 20 * np.log10(np.abs(w2)), "k:")
-        plt.plot(f, 20 * np.log10(np.abs(x2)), "b")
-        plt.plot(f, 20 * np.log10(np.abs(y2)), "r--")
-        plt.xticks(np.arange(50, 151, 10), labels="")
-        plt.ylabel(r"$|S_{12}S_{21}|$ [dB]")
-        plt.grid()
-
-        plt.subplot(3, 2, 4)
-        plt.plot(flb, (180 / np.pi) * np.unwrap(np.angle(v2)), "k--")
-        plt.plot(f, (180 / np.pi) * np.unwrap(np.angle(w2)), "k:")
-        plt.plot(f, (180 / np.pi) * np.unwrap(np.angle(x2)), "b")
-        plt.plot(f, (180 / np.pi) * np.unwrap(np.angle(y2)), "r--")
-        plt.xticks(np.arange(50, 151, 10), labels="")
-        plt.ylabel(r"$\angle S_{12}S_{21}$ [deg]")
-        plt.grid()
-
-        plt.subplot(3, 2, 5)
-        plt.plot(flb, 20 * np.log10(np.abs(v3)), "k--")
-        plt.plot(f, 20 * np.log10(np.abs(w3)), "k:")
-        plt.plot(f, 20 * np.log10(np.abs(x3)), "b")
-        plt.plot(f, 20 * np.log10(np.abs(y3)), "r--")
-        plt.xticks(np.arange(50, 151, 10))
-        plt.ylabel(r"$|S_{22}|$ [dB]")
-        plt.xlabel(r"$\nu$ [MHz]", fontsize=14)
-        plt.grid()
-
-        plt.subplot(3, 2, 6)
-        plt.plot(flb, (180 / np.pi) * np.unwrap(np.angle(v3)), "k--")
-        plt.plot(f, (180 / np.pi) * np.unwrap(np.angle(w3)), "k:")
-        plt.plot(f, (180 / np.pi) * np.unwrap(np.angle(x3)), "b")
-        plt.plot(f, (180 / np.pi) * np.unwrap(np.angle(y3)), "r--")
-        plt.xticks(np.arange(50, 151, 10))
-        plt.ylabel(r"$\angle S_{22}$ [deg]")
-        plt.xlabel(r"$\nu$ [MHz]", fontsize=14)
-        plt.grid()
 
         plt.savefig(path_plot_save + "sw_parameters.pdf", bbox_inches="tight")
 
@@ -5912,48 +5881,39 @@ def plots_for_memo148(plot_number):
         # fe = f[il : ih + 1]
 
         ra1 = s11m.antenna_s11_remove_delay(
-            "antenna_s11_2018_147_16_52_34.txt",
-            fe,
-            delay_0=0.17,
-            model_type="polynomial",
-            Nfit=15,
+            "antenna_s11_2018_147_16_52_34.txt", fe, delay_0=0.17, n_fit=15
         )
         ra2 = s11m.antenna_s11_remove_delay(
             "antenna_s11_mid_band_2018_147_switch_calibration_2019_03_case6.txt",
             fe,
             delay_0=0.17,
-            model_type="polynomial",
-            Nfit=15,
+            n_fit=15,
         )
 
         ra3 = s11m.antenna_s11_remove_delay(
             "antenna_s11_mid_band_2018_147_switch_calibration_2018_01_5012_case3.txt",
             fe,
             delay_0=0.17,
-            model_type="polynomial",
-            Nfit=15,
+            n_fit=15,
         )
         ra4 = s11m.antenna_s11_remove_delay(
             "antenna_s11_mid_band_2018_147_switch_calibration_2019_03_5012_case3.txt",
             fe,
             delay_0=0.17,
-            model_type="polynomial",
-            Nfit=15,
+            n_fit=15,
         )
 
         ra11 = s11m.antenna_s11_remove_delay(
             "antenna_s11_mid_band_2018_222_case1_switch_calibration_2018_01.txt",
             fe,
             delay_0=0.17,
-            model_type="polynomial",
-            Nfit=15,
+            n_fit=15,
         )
         ra31 = s11m.antenna_s11_remove_delay(
             "antenna_s11_mid_band_2018_222_case1_switch_calibration_2019_03.txt",
             fe,
             delay_0=0.17,
-            model_type="polynomial",
-            Nfit=15,
+            n_fit=15,
         )
 
         plt.subplot(3, 2, 1)
