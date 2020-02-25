@@ -18,8 +18,10 @@ from .analysis.plots import (
 from .estimation.plots import (
     plot_absorption_model_comparison,
     plot_foreground_polychord_fit,
-    plot_triangle_plot,
+    triangle_plot,
 )
+
+edges_folder = ""  # TODO: remove.
 
 
 def plots_midband_paper(plot_number, s11_path="antenna_s11_2018_147_17_04_33.txt"):
@@ -56,6 +58,30 @@ def plots_midband_paper(plot_number, s11_path="antenna_s11_2018_147_17_04_33.txt
     elif plot_number == 7:
         plot_beam_power()
     elif plot_number == 8:
-        plot_foreground_polychord_fit()
+        plot_foreground_polychord_fit(
+            datafile=(
+                edges_folder + "mid_band/spectra/level5/case_nominal"
+                "/integrated_spectrum_case_nominal_days_186_219_58-120MHz.txt"
+            ),
+            fg_chain_root=(
+                edges_folder
+                + "mid_band/polychord/20190815/case_nominal/foreground_powerlog_5par/chain"
+            ),
+            full_chain_root=(
+                edges_folder + "mid_band/polychord/20190815/case_nominal"
+                "/foreground_powerlog_5par_signal_exp_4par/chain"
+            ),
+            f_low=58,
+            f_high=120,
+            save_path=edges_folder + "plots/20190815/",
+        )
     elif plot_number == 9:
-        plot_triangle_plot()
+        triangle_plot(
+            file_root=(
+                edges_folder + "mid_band/polychord/20190617/case2"
+                "/foreground_exp_signal_exp_4par_60_120MHz/chain"
+            ),
+            output_file=(
+                edges_folder + "plots/20190617/triangle_plot_exp_exp_4par_60_120MHz.pdf"
+            ),
+        )
