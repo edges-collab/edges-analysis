@@ -725,13 +725,7 @@ def _scroll_through_i(
         if lw > 0:
             ii = ii + 1
             rr, wr = rfi.cleaning_sweep(
-                f,
-                avr,
-                avw,
-                window_width_MHz=3,
-                Npolyterms_block=2,
-                N_choice=20,
-                N_sigma=3.5,
+                f, avr, avw, window_width=3, n_poly=2, n_bootstrap=20, n_sigma=3.5,
             )
 
             m = mdl.model_evaluate("LINLOG", avp, f / 200)

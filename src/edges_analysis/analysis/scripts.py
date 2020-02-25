@@ -153,22 +153,16 @@ def calibration_file_computation(
 
     print("RFI cleaning Ambient")
     tax1, wax1 = rfi.cleaning_sweep(
-        ff,
-        TTae,
-        WWae,
-        window_width_MHz=4,
-        Npolyterms_block=4,
-        N_choice=20,
-        N_sigma=N_sigma,
+        ff, TTae, WWae, window_width=4, n_poly=4, n_bootstrap=20, n_sigma=N_sigma,
     )
     flip1, flip2 = rfi.cleaning_sweep(
         ff,
         np.flip(TTae),
         np.flip(WWae),
-        window_width_MHz=4,
-        Npolyterms_block=4,
-        N_choice=20,
-        N_sigma=N_sigma,
+        window_width=4,
+        n_poly=4,
+        n_bootstrap=20,
+        n_sigma=N_sigma,
     )
     wax2 = np.flip(flip2)
 
@@ -176,22 +170,16 @@ def calibration_file_computation(
 
     print("RFI cleaning Hot")
     thx1, whx1 = rfi.cleaning_sweep(
-        ff,
-        TThe,
-        WWhe,
-        window_width_MHz=4,
-        Npolyterms_block=4,
-        N_choice=20,
-        N_sigma=N_sigma,
+        ff, TThe, WWhe, window_width=4, n_poly=4, n_bootstrap=20, n_sigma=N_sigma,
     )
     flip1, flip2 = rfi.cleaning_sweep(
         ff,
         np.flip(TThe),
         np.flip(WWhe),
-        window_width_MHz=4,
-        Npolyterms_block=4,
-        N_choice=20,
-        N_sigma=N_sigma,
+        window_width=4,
+        n_poly=4,
+        n_bootstrap=20,
+        n_sigma=N_sigma,
     )
     whx2 = np.flip(flip2)
 
@@ -199,22 +187,16 @@ def calibration_file_computation(
 
     print("RFI cleaning Open")
     tox1, wox1 = rfi.cleaning_sweep(
-        ff,
-        TToe,
-        WWoe,
-        window_width_MHz=4,
-        Npolyterms_block=4,
-        N_choice=20,
-        N_sigma=N_sigma,
+        ff, TToe, WWoe, window_width=4, n_poly=4, n_bootstrap=20, n_sigma=N_sigma,
     )
     flip1, flip2 = rfi.cleaning_sweep(
         ff,
         np.flip(TToe),
         np.flip(WWoe),
-        window_width_MHz=4,
-        Npolyterms_block=4,
-        N_choice=20,
-        N_sigma=N_sigma,
+        window_width=4,
+        n_poly=4,
+        n_bootstrap=20,
+        n_sigma=N_sigma,
     )
     wox2 = np.flip(flip2)
 
@@ -222,22 +204,16 @@ def calibration_file_computation(
 
     print("RFI cleaning Shorted")
     tsx1, wsx1 = rfi.cleaning_sweep(
-        ff,
-        TTse,
-        WWse,
-        window_width_MHz=4,
-        Npolyterms_block=4,
-        N_choice=20,
-        N_sigma=N_sigma,
+        ff, TTse, WWse, window_width=4, n_poly=4, n_bootstrap=20, n_sigma=N_sigma,
     )
     flip1, flip2 = rfi.cleaning_sweep(
         ff,
         np.flip(TTse),
         np.flip(WWse),
-        window_width_MHz=4,
-        Npolyterms_block=4,
-        N_choice=20,
-        N_sigma=N_sigma,
+        window_width=4,
+        n_poly=4,
+        n_bootstrap=20,
+        n_sigma=N_sigma,
     )
     wsx2 = np.flip(flip2)
 
@@ -245,22 +221,16 @@ def calibration_file_computation(
 
     print("RFI cleaning Simulator")
     tqx1, wqx1 = rfi.cleaning_sweep(
-        ff,
-        TTqe,
-        WWqe,
-        window_width_MHz=4,
-        Npolyterms_block=4,
-        N_choice=20,
-        N_sigma=N_sigma,
+        ff, TTqe, WWqe, window_width=4, n_poly=4, n_bootstrap=20, n_sigma=N_sigma,
     )
     flip1, flip2 = rfi.cleaning_sweep(
         ff,
         np.flip(TTqe),
         np.flip(WWqe),
-        window_width_MHz=4,
-        Npolyterms_block=4,
-        N_choice=20,
-        N_sigma=N_sigma,
+        window_width=4,
+        n_poly=4,
+        n_bootstrap=20,
+        n_sigma=N_sigma,
     )
     wqx2 = np.flip(flip2)
 
@@ -2287,13 +2257,7 @@ def level3_to_level4(
 
                 # RFI cleaning of average spectra
                 avr_no_rfi, avw_no_rfi = rfi.cleaning_sweep(
-                    f,
-                    avr,
-                    avw,
-                    window_width_MHz=3,
-                    Npolyterms_block=2,
-                    N_choice=20,
-                    N_sigma=2.5,
+                    f, avr, avw, window_width=3, n_poly=2, n_bootstrap=20, n_sigma=2.5,
                 )
 
                 # Storing averages
@@ -2583,7 +2547,7 @@ def integrated_spectrum_level4(
 
     avr, avw = tools.spectral_averaging(r, w)
     rr, wr = rfi.cleaning_sweep(
-        f, avr, avw, window_width_MHz=3, Npolyterms_block=2, N_choice=20, N_sigma=3
+        f, avr, avw, window_width=3, n_poly=2, n_bootstrap=20, n_sigma=3
     )
 
     tr = m + rr
@@ -2826,13 +2790,13 @@ def integrated_half_hour_level4(band, case, first_day, last_day, GHA_start=13.5)
     # For the 10.5 and 11 averages, DO NOT USE THIS CLEANING. ONLY use the 2.5sigma filter in the
     # INTEGRATED 10.5-11.5 spectrum, AFTER integration
     avrn, avwn = rfi.cleaning_sweep(
-        f, avrn, avwn, window_width_MHz=3, Npolyterms_block=2, N_choice=20, N_sigma=3.0
+        f, avrn, avwn, window_width=3, n_poly=2, n_bootstrap=20, n_sigma=3.0
     )
 
     avtn = mdl.model_evaluate("LINLOG", avp, f / 200) + avrn
 
-    # avrn, avwn = rfi.cleaning_sweep(f, avrn, avwn, window_width_MHz=5, Npolyterms_block=2,
-    # N_choice=20, N_sigma=2)
+    # avrn, avwn = rfi.cleaning_sweep(f, avrn, avwn, window_width=5, n_poly=2,
+    # n_bootstrap=20, n_sigma=2)
     fb, rbn, wbn = tools.spectral_binning_number_of_samples(f, avrn, avwn)
 
     tbn = mdl.model_evaluate("LINLOG", avp, fb / 200) + rbn
@@ -2877,7 +2841,7 @@ def integrated_half_hour_level4_many(
     avt = mdl.model_evaluate("LINLOG", avp, f / 200) + avr
 
     avrn, avwn = rfi.cleaning_sweep(
-        f, avr, avw, window_width_MHz=3, Npolyterms_block=2, N_choice=20, N_sigma=2.5
+        f, avr, avw, window_width=3, n_poly=2, n_bootstrap=20, n_sigma=2.5
     )
     fb, rb, wbn = tools.spectral_binning_number_of_samples(f, avrn, avwn)
     tbn = mdl.model_evaluate("LINLOG", avp, fb / 200) + rb
@@ -2933,13 +2897,7 @@ def season_integrated_spectra_GHA(
 
         # RFI cleaning of 1-hr season average spectra
         avr_no_rfi, avw_no_rfi = rfi.cleaning_sweep(
-            f,
-            avr,
-            avw,
-            window_width_MHz=3,
-            Npolyterms_block=2,
-            N_choice=20,
-            N_sigma=2.5,
+            f, avr, avw, window_width=3, n_poly=2, n_bootstrap=20, n_sigma=2.5,
         )  # 3
 
         # Storing season 1hr-average spectra
@@ -3011,13 +2969,7 @@ def season_integrated_spectra_GHA(
             avrx, avwx = tools.weighted_mean(rx_all, wx_all)
 
         avrx_no_rfi, avwx_no_rfi = rfi.cleaning_sweep(
-            f,
-            avrx,
-            avwx,
-            window_width_MHz=3,
-            Npolyterms_block=2,
-            N_choice=20,
-            N_sigma=2.5,
+            f, avrx, avwx, window_width=3, n_poly=2, n_bootstrap=20, n_sigma=2.5,
         )
 
         # Frequency binning
