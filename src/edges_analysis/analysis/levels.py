@@ -217,7 +217,6 @@ def level2_to_level3(
                     beam_factor_filename = "old_case.hdf5"
                 elif beam_correction_case == 1:
                     beam_factor_filename = "new_case.hdf5"
-                    print("NEW BEAM FACTOR !!!")
                 else:
                     raise ValueError("beam_correction_case must be 0 or 1")
             elif band == "low_band3":
@@ -463,7 +462,6 @@ def level3_to_level4(
 
         # Loading data
         f, ty, py, ry, wy, rmsy, tpy, my = io.level3read(path_files + new_list[i])
-        print("----------------------------------------------")
 
         # Daily index
         daily_index1 = np.arange(len(f))
@@ -557,16 +555,6 @@ def level3_to_level4(
                 # m1 = m[(GHA >= GHA_LOW) | (GHA < GHA_HIGH), :]
                 daily_index4 = daily_index3[(GHA >= GHA_LOW) | (GHA < GHA_HIGH)]
 
-            print(
-                str(new_list[i])
-                + ". GHA: "
-                + str(GHA_LOW)
-                + "-"
-                + str(GHA_HIGH)
-                + " hr. Number of spectra: "
-                + str(len(r1))
-            )
-
             if len(r1) > 0:
                 avp = np.mean(p1, axis=0)
                 avr, avw = tools.weighted_mean(r1, w1)
@@ -581,9 +569,6 @@ def level3_to_level4(
                 avr_all[i, j, :] = avr_no_rfi
                 avw_all[i, j, :] = avw_no_rfi
                 master_index[i, j, daily_index4] = 1
-
-    print()
-    print()
 
     # Save
     # ----

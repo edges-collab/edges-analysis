@@ -297,10 +297,6 @@ def calibration_file_computation(
                     Tamb_internal=Tamb_internal,
                 )
 
-                # Only open cable
-                print("---------------------------------------------------")
-                print(j + 1, i + 1)
-
                 # Cross-check
                 tcal = {}
                 for k, (load, s11) in enumerate(
@@ -747,7 +743,6 @@ def integrated_half_hour_level4_many(band, case, GHA_starts=[(13, 1), (14, 0)]):
     for i, GHA_start in enumerate(GHA_starts):
         discarded_days = discard[GHA_start]
 
-        print("------------------------------- " + str(GHA_start))
         (
             fb,
             rb_all,
@@ -846,14 +841,10 @@ def season_integrated_spectra_GHA(
             tb_all[j] = tb
             wb_all[j] = wb
 
-    print("-------------------------------")
-
     # Averaging data within new GHA edges
     for j in range(len(new_gha_edges) - 1):
         new_gha_start = new_gha_edges[j]
         new_gha_end = new_gha_edges[j + 1]
-
-        print(str(new_gha_start) + " " + str(new_gha_end))
 
         flag = True
         for i in range(len(gha_edges) - 1):
@@ -861,8 +852,6 @@ def season_integrated_spectra_GHA(
                 new_gha_start < new_gha_end
                 and ((gha_edges[i] >= new_gha_start) and (gha_edges[i] < new_gha_end))
             ) or ((gha_edges[i] >= new_gha_start) or (gha_edges[i] < new_gha_end)):
-
-                print(gha_edges[i])
                 if flag:
                     px_all = pr_all[i]
                     rx_all = rr_all[i]
@@ -1010,8 +999,6 @@ def batch_level2_to_level3(
         day = int(fl[5:8])
 
         if (day >= first_day) & (day <= last_day):
-            print(day)
-
             level2_to_level3(
                 band,
                 fl,
@@ -2621,8 +2608,6 @@ def high_band_2015_reanalysis():
     ]
 
     for i in range(len(filename_list)):
-        print(filename_list[i])
-
         f, r, p, w, rms, m = io.level3read(
             "/run/media/raul/WD_BLACK_6TB/EDGES_vol1/spectra/level3/high_band_2015/2018_analysis"
             "/case101/" + filename_list[i]

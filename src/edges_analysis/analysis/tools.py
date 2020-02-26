@@ -204,7 +204,6 @@ def level4_foreground_fits(
         )
 
         xf, xt, xp, xr, xw, xrms, xtp, xm = level3read(path_level3_file)
-        print("----------------------------------------------")
 
         for k in range(len(r[0, :, 0])):
             IX = np.arange(0, len(index[0, 0, :]))
@@ -257,8 +256,6 @@ def level4_foreground_fits(
                     fits[i_fg][i, k, -3] = chi2
                     fits[i_fg][i, k, -2] = LEN
                     fits[i_fg][i, k, -1] = BIC
-
-                    print(yyi[1])
 
     # Save to file.
     with h5py.File(save_folder + output_file_name_hdf5, "w") as hf:
@@ -411,13 +408,11 @@ def average_level3_mid_band(case, sun_el_max=90, moon_el_max=90):
     path_files = "/EDGES/spectra/level3/mid_band/" + flag_folder + "/"
     list_files = os.listdir(path_files)
     list_files.sort()
-    lf = len(list_files)
 
     rx_all, wx_all, px_all = [], [], []
     rb_all, wb_all = [], []
     for i in range(10):
-        print(str(i + 1) + " of " + str(lf))
-        f, t, p, r, w, rms, m = level3read(path_files + list_files[i], print_key=False)
+        f, t, p, r, w, rms, m = level3read(path_files + list_files[i])
 
         indx = data_selection(
             m,
@@ -563,8 +558,6 @@ def integrate_level4_half_hour(
     for i, (d, ww, pp, rr) in enumerate(day, w, p, r):
         if np.sum(ww) == 0 or d in discarded_days or d < first_day or d > last_day:
             continue
-
-        print(d)
 
         t = mdl.model_evaluate("LINLOG", pp, f / 200) + rr
         par = mdl.fit_polynomial_fourier("LINLOG", f / 200, t, 4, Weights=ww)

@@ -630,8 +630,6 @@ def _average_days(averaged_146, gha, py, ry, wy, yy):
 
         for i in range(ldays - 1):
             for j in range(lgha):
-                print([i, j])
-
                 pa = np.array((px[0, j, :], px[i + 1, j, :]))
                 ra = np.array((rx[0, j, :], rx[i + 1, j, :]))
                 wa = np.array((wx[0, j, :], wx[i + 1, j, :]))
@@ -648,10 +646,6 @@ def _average_days(averaged_146, gha, py, ry, wy, yy):
         wx = np.copy(wb)
         yx = np.delete(yx, 0, axis=0)
 
-        print(px.shape)
-        print(rx.shape)
-        print(wx.shape)
-        print(yx.shape)
     return px, rb, rx, wb, wx, yx
 
 
@@ -778,7 +772,6 @@ def _scroll_through_i(
 
             RMS = 1000 * np.std(rb[wb > 0])
             RMS_text = str(int(RMS)) + " mK"
-            print(RMS_text)
 
             ax.text(
                 50, -ii * K_per_division - (1 / 6) * K_per_division, str(int(yd[i, 1]))
@@ -824,9 +817,7 @@ def plots_level3_rms_folder(
     # Loading data and plotting RMS
     lf = len(list_files)
     for i in range(lf):
-        f, t, p, r, w, rms, m = io.level3read(
-            path_files + list_files[i], print_key=False
-        )
+        f, t, p, r, w, rms, m = io.level3read(path_files + list_files[i])
 
         plt.figure()
 
@@ -900,7 +891,7 @@ def level4_plot_residuals(case, gha_index, title, subfolder, figure_save_name, d
                 os.path.dirname(filename), f"{int(yi[0])}_{int(yi[1])}_00.hdf5"
             )
 
-            f, t, p, r, w, rms, tp, m = io.level3read(path_file, print_key=False)
+            f, t, p, r, w, rms, tp, m = io.level3read(path_file)
 
             gha_level3 = m[:, 4]
             gha_level3[gha_level3 < 0] += 24
@@ -1119,7 +1110,6 @@ def plot_data_stats():
         Q = ix[ydy[:, 1] == day]
 
         if len(Q) > 0:
-            print(new_list[i])
             f, ty, py, ry, wy, rmsy, tpy, my = io.level3read(path_files + new_list[i])
             ii = index[i, 0, 0 : len(my)]
             gha_i = my[ii > 0, 4]
@@ -1377,7 +1367,6 @@ def plot_beam_chromaticity_correction():
     gha[gha >= 24] = gha[gha >= 24] - 24
     IX = np.argsort(gha)
     bx1 = bf[IX]
-    print(gha[IX][175])
 
     f1 = plt.figure(num=1, figsize=(size_x, size_y))
     ax = f1.add_axes([x0, y0 + 1 * (yoff + dy1), dx, dy])

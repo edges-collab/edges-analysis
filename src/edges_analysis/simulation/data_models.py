@@ -228,7 +228,6 @@ def signal_edges2018_uncertainties(v):
         cx = np.abs(np.cumsum(x_increasing))
         norm_cx = cx / np.max(cx)
         for j in range(len(norm_cx) - 1):
-            # print(norm_cx[j])
             if (norm_cx[j] < dx) and (norm_cx[j + 1] >= dx):
                 x_low = x_increasing[j + 1]
 

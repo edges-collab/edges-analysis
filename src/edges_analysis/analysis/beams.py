@@ -730,10 +730,6 @@ def feko_blade_beam(
     frequency=np.array([0]),
     az_antenna_axis=0,
 ):
-    """
-    az_antenna_axis = 0    #  Angle of orientation (in integer degrees) of excited antenna panels
-    relative to due North. Best value is around X ???
-    """
     data_folder = config["edges_folder"] + f"/{band}/calibration/beam/alan/"
 
     if band == "low_band3":
@@ -775,7 +771,6 @@ def feko_blade_beam(
         )
         for j in range(len(beam_maps[0, :, 0])):
             for i in range(len(beam_maps[0, 0, :])):
-                # print('Elevation: ' + str(j) + ', Azimuth: ' + str(i))
                 par = np.polyfit(f_original / 200, beam_maps[:, j, i], 13)
                 model = np.polyval(par, frequency / 200)
                 interp_beam[:, j, i] = model

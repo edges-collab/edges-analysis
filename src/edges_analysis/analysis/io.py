@@ -133,22 +133,19 @@ def read_weather_file(day, weather_file, year):
     return array1
 
 
-def _levelxread(path_file, out_keys, print_key=False):
+def _levelxread(path_file, out_keys):
     with h5py.File(path_file, "r") as hf:
-        if print_key:
-            print([key for key in hf.keys()])
-
         out = tuple(np.array(hf.get(k)) for k in out_keys)
 
     return out
 
 
-def level2read(path_file, print_key=False):
+def level2read(path_file):
     out_keys = ["frequency", "antenna_temperature", "metadata", "weights"]
-    return _levelxread(path_file, out_keys, print_key)
+    return _levelxread(path_file, out_keys)
 
 
-def level3read(path_file, print_key=False):
+def level3read(path_file):
     out_keys = [
         "frequency",
         "antenna_temperature",
@@ -159,7 +156,7 @@ def level3read(path_file, print_key=False):
         "total_power",
         "metadata",
     ]
-    return _levelxread(path_file, out_keys, print_key)
+    return _levelxread(path_file, out_keys)
 
 
 def level3_single_file_test(
@@ -243,7 +240,7 @@ def data_selection(
     # return np.intersect1d(index1, index4)
 
 
-def level4read(path_file, print_key=False):
+def level4read(path_file):
     out_keys = [
         "frequency",
         "parameters",
@@ -253,12 +250,12 @@ def level4read(path_file, print_key=False):
         "gha_edges",
         "year_day",
     ]
-    return _levelxread(path_file, out_keys, print_key)
+    return _levelxread(path_file, out_keys)
 
 
-def level4_binned_read(path_file, print_key=False):
+def level4_binned_read(path_file):
     out_keys = ["frequency", "residuals", "weights", "stddev", "gha_edges", "year_day"]
-    return _levelxread(path_file, out_keys, print_key)
+    return _levelxread(path_file, out_keys)
 
 
 def level4_save_averaged_spectra(case, gha_case, first_day, last_day):
