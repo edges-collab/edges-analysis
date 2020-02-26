@@ -5,7 +5,7 @@ import h5py
 import numpy as np
 from edges_cal import modelling as mdl
 
-from . import tools
+from . import tools, io, rfi
 from .io import data_selection, level3read, level4read
 
 edges_folder = ""  # TODO: remove
@@ -531,3 +531,79 @@ def weighted_standard_deviation(av, data, std, axis=0):
 
 
 spectral_averaging = weighted_mean
+
+
+def integrate_level4_half_hour(
+    band, case, first_day, last_day, discarded_days, GHA_start=13.5
+):
+    if band == "mid_band":
+        f, p_all, r_all, w_all, gha, yd = io.level4read(
+            f"/home/raul/DATA/EDGES/mid_band/spectra/level4/case{case}/case{case}.hdf5"
+        )
+
+        index = np.arange(0, len(gha))
+        IX = int(index[gha == GHA_start])
+
+        p = p_all[:, IX]
+        r = r_all[:, IX]
+        w = w_all[:, IX]
+
+        day = yd[:, 1]
+    else:
+        raise ValueError("band must be mid_band")
+
+    flag = False
+    for disc in discarded_days:
+        if hasattr(disc, "__len__"):
+            # The discard is frequency-dependent
+            indx = disc[0] or slice(None)
+            w[indx, disc[1]] = 0
+
+    # Remove non-wholly-discarded days
+    discarded_days = [d for d in discarded_days if isinstance(d, int)]
+
+    for i, (d, ww, pp, rr) in enumerate(day, w, p, r):
+        if np.sum(ww) == 0 or d in discarded_days or d < first_day or d > last_day:
+            continue
+
+        print(d)
+
+        t = mdl.model_evaluate("LINLOG", pp, f / 200) + rr
+        par = mdl.fit_polynomial_fourier("LINLOG", f / 200, t, 4, Weights=ww)
+        r_raw = t - par[1]
+        w_raw = ww
+
+        fb, rb, wb = spectral_binning_number_of_samples(f, r_raw, w_raw)
+
+        if not flag:
+            rr_all = np.copy(r_raw)
+            wr_all = np.copy(w_raw)
+            pr_all = np.copy(par[0])
+
+            rb_all = np.copy(rb)
+            wb_all = np.copy(wb)
+            d_all = np.copy(d)
+            flag = True
+        else:
+            rr_all = np.vstack((rr_all, r_raw))
+            wr_all = np.vstack((wr_all, w_raw))
+            pr_all = np.vstack((pr_all, par[0]))
+
+            rb_all = np.vstack((rb_all, rb))
+            wb_all = np.vstack((wb_all, wb))
+            d_all = np.append(d_all, d)
+
+    avrn, avwn = spectral_averaging(rr_all, wr_all)
+    avp = np.mean(pr_all, axis=0)
+
+    # For the 10.5 and 11 averages, DO NOT USE THIS CLEANING. ONLY use the 2.5sigma filter in the
+    # INTEGRATED 10.5-11.5 spectrum, AFTER integration
+    avrn, avwn = rfi.cleaning_sweep(
+        f, avrn, avwn, window_width=3, n_poly=2, n_bootstrap=20, n_sigma=3.0
+    )
+
+    avtn = mdl.model_evaluate("LINLOG", avp, f / 200) + avrn
+    fb, rbn, wbn = spectral_binning_number_of_samples(f, avrn, avwn)
+    tbn = mdl.model_evaluate("LINLOG", avp, fb / 200) + rbn
+
+    return fb, rb_all, wb_all, d_all, tbn, wbn, f, rr_all, wr_all, avrn, avwn, avp, avtn

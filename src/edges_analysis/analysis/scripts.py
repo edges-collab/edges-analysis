@@ -1,14 +1,14 @@
 from os import listdir, makedirs
-from os.path import exists
+from os.path import exists, dirname
 
 import h5py
 import numpy as np
+import yaml
 import src.edges_analysis
 import src.edges_analysis.analysis.levels
 import src.edges_analysis.analysis.tools
 from edges_cal import modelling as mdl
 from edges_cal import receiver_calibration_func as rcf
-from edges_cal import reflection_coefficient as rc
 from edges_cal import s11_correction as s11c
 from edges_cal.cal_coefficients import EdgesFrequencyRange, HotLoadCorrection
 from edges_io.io import SwitchingState
@@ -458,7 +458,7 @@ def calibration_file_computation(
 
 def daily_integrations_and_residuals():
     f, pz, rz, wz, index, gha, ydz = io.level4read(
-        edges_folder + "mid_band/spectra/level4" "/case_nominal/case_nominal.hdf5"
+        edges_folder + "mid_band/spectra/level4/case_nominal/case_nominal.hdf5"
     )
 
     px = np.delete(pz, 1, axis=0)
@@ -490,26 +490,17 @@ def daily_integrations_and_residuals():
             [2018, 216],
             [2018, 220],
         ]
-    )  #
+    )
 
-    #
-    f_low = 57  # 60
+    f_low = 57
     f_high = 120
     n_fg = 5
     Nsp = 1
 
-    ll = len(px[:, 0, 0])
-    j = -1
-
+    ll = len(px)
+    j = 0
     for i in range(ll):
-
-        if (ydx[i, 0] in bad_days[:, 0]) and (ydx[i, 1] in bad_days[:, 1]):  # print(i)
-
-            print(ydx[i, :])
-
-        else:
-            j = j + 1
-
+        if not (ydx[i, 0] in bad_days[:, 0]) and (ydx[i, 1] in bad_days[:, 1]):
             mx = mdl.model_evaluate("LINLOG", px[i, 0, :], f / 200)
             tx = mx + rx[i, 0, :]
 
@@ -521,12 +512,7 @@ def daily_integrations_and_residuals():
             my = mdl.model_evaluate("LINLOG", p[0], fy / 200)
             ry = ty - my
 
-            (
-                fb,
-                rb,
-                wb,
-                sb,
-            ) = src.edges_analysis.analysis.tools.spectral_binning_number_of_samples(
+            fb, rb, wb, sb = tools.spectral_binning_number_of_samples(
                 fy, ry, wy, nsamples=128
             )
 
@@ -539,12 +525,14 @@ def daily_integrations_and_residuals():
                 wb_all = np.zeros((ll - len(bad_days), len(fb)))
                 sb_all = np.zeros((ll - len(bad_days), len(fb)))
                 yd_all = np.zeros((ll - len(bad_days), 2))
+            else:
+                tb_all[j] = tb
+                rb_all[j] = rb
+                wb_all[j] = wb
+                sb_all[j] = sb
+                yd_all[j] = ydx[i, :]
 
-            tb_all[j, :] = tb
-            rb_all[j, :] = rb
-            wb_all[j, :] = wb
-            sb_all[j, :] = sb
-            yd_all[j, :] = ydx[i, :]
+            j += 1
 
     K = 0.5
     lb = int(np.floor(len(tb_all[:, 0]) / Nsp))
@@ -566,7 +554,7 @@ def daily_integrations_and_residuals():
 
         if Nsp == 1:
             plt.text(54, -K * i - 0.3 * K, str(int(yd_all[i, 1])))
-        elif Nsp > 1:
+        else:
             plt.text(
                 52,
                 -K * i - 0.3 * K,
@@ -594,125 +582,51 @@ def integrated_spectrum_level4(
     day_min2,
     day_max2,
     n_fg,
-    rms_threshold,
     save,
     filename_flag,
 ):
-    if case == 100:
-        f, px, rx, wx, index, gha, ydx = io.level4read(
-            edges_folder + "mid_band/spectra/level4/rcv18_sw18_nominal_GHA_6_18hr"
-            "/rcv18_sw18_nominal_GHA_6_18hr.hdf5"
-        )
+    cases = {
+        100: "rcv18_sw18_nominal_GHA_6_18hr",
+        101: "rcv18_sw18_nominal_GHA_every_1hr",
+        21: "rcv18_ant19_nominal",
+        22: "rcv18_ant19_every_1hr_GHA",
+    }
+
+    in_file = f"{edges_folder}mid_band/spectra/level4/{cases[case]}/{cases[case]}.hdf5"
+    save_path = dirname(in_file).replace("level4", "level5")
+    f, px, rx, wx, index, gha, ydx = io.level4read(in_file)
+
     if case == 101:
-        f, px, rx, wx, index, gha, ydx = io.level4read(
-            edges_folder + "mid_band/spectra/level4/rcv18_sw18_nominal_GHA_every_1hr"
-            "/rcv18_sw18_nominal_GHA_every_1hr.hdf5"
-        )
-        save_path = (
-            edges_folder + "mid_band/spectra/level5/rcv18_sw18_nominal_GHA_every_1hr/"
-        )
         save_spectrum = (
             "integrated_spectrum_rcv18_sw18_every_1hr_GHA" + filename_flag + ".txt"
         )
-
-    if case == 21:
-        f, px, rx, wx, index, gha, ydx = io.level4read(
-            edges_folder
-            + "mid_band/spectra/level4/rcv18_ant19_nominal/rcv18_ant19_nominal.hdf5"
-        )
-
-    if case == 22:
-
-        f, px, rx, wx, index, gha, ydx = io.level4read(
-            edges_folder + "mid_band/spectra/level4/rcv18_ant19_every_1hr_GHA"
-            "/rcv18_ant19_every_1hr_GHA.hdf5"
-        )
-
-        save_path = (
-            edges_folder + "mid_band/spectra/level5" "/rcv18_ant19_every_1hr_GHA/"
-        )
+    elif case == 22:
         save_spectrum = (
             "integrated_spectrum_rcv18_ant19_every_1hr_GHA" + filename_flag + ".txt"
         )
 
-    # Producing integrated spectrum
-    # ------------------------------------------------
+    # Produce integrated spectrum
+    for i in range(len(index_GHA)):
+        keep_index = filters.daily_nominal_filter("mid_band", case, index_GHA[i], ydx)
 
-    if len(index_GHA) == 1:
-        keep_index = filters.daily_nominal_filter("mid_band", case, index_GHA[0], ydx)
+        mask = (keep_index == 1) & (
+            ((ydx[:, 1] >= day_min1) & (ydx[:, 1] <= day_max1))
+            | ((ydx[:, 1] >= day_min2) & (ydx[:, 1] <= day_max2))
+        )
 
-        p = px[
-            (keep_index == 1)
-            & (
-                ((ydx[:, 1] >= day_min1) & (ydx[:, 1] <= day_max1))
-                | ((ydx[:, 1] >= day_min2) & (ydx[:, 1] <= day_max2))
-            ),
-            index_GHA[0],
-            :,
-        ]
-        r = rx[
-            (keep_index == 1)
-            & (
-                ((ydx[:, 1] >= day_min1) & (ydx[:, 1] <= day_max1))
-                | ((ydx[:, 1] >= day_min2) & (ydx[:, 1] <= day_max2))
-            ),
-            index_GHA[0],
-            :,
-        ]
-        w = wx[
-            (keep_index == 1)
-            & (
-                ((ydx[:, 1] >= day_min1) & (ydx[:, 1] <= day_max1))
-                | ((ydx[:, 1] >= day_min2) & (ydx[:, 1] <= day_max2))
-            ),
-            index_GHA[0],
-            :,
-        ]
-    elif len(index_GHA) > 1:
-        for i in range(len(index_GHA)):
-            keep_index = filters.daily_nominal_filter(
-                "mid_band", case, index_GHA[i], ydx
-            )
+        p_i = px[mask, index_GHA[i]]
+        r_i = rx[mask, index_GHA[i]]
+        w_i = wx[mask, index_GHA[i]]
 
-            p_i = px[
-                (keep_index == 1)
-                & (
-                    ((ydx[:, 1] >= day_min1) & (ydx[:, 1] <= day_max1))
-                    | ((ydx[:, 1] >= day_min2) & (ydx[:, 1] <= day_max2))
-                ),
-                index_GHA[i],
-                :,
-            ]
-            r_i = rx[
-                (keep_index == 1)
-                & (
-                    ((ydx[:, 1] >= day_min1) & (ydx[:, 1] <= day_max1))
-                    | ((ydx[:, 1] >= day_min2) & (ydx[:, 1] <= day_max2))
-                ),
-                index_GHA[i],
-                :,
-            ]
-            w_i = wx[
-                (keep_index == 1)
-                & (
-                    ((ydx[:, 1] >= day_min1) & (ydx[:, 1] <= day_max1))
-                    | ((ydx[:, 1] >= day_min2) & (ydx[:, 1] <= day_max2))
-                ),
-                index_GHA[i],
-                :,
-            ]
+        if i == 0:
+            p = np.copy(p_i)
+            r = np.copy(r_i)
+            w = np.copy(w_i)
+        else:
+            p = np.vstack((p, p_i))
+            r = np.vstack((r, r_i))
+            w = np.vstack((w, w_i))
 
-            if i == 0:
-                p = np.copy(p_i)
-                r = np.copy(r_i)
-                w = np.copy(w_i)
-
-            elif i > 0:
-                p = np.vstack((p, p_i))
-                r = np.vstack((r, r_i))
-                w = np.vstack((w, w_i))
-
-    print(p.shape)
     avp = np.mean(p, axis=0)
     m = mdl.model_evaluate("LINLOG", avp, f / 200)
 
@@ -740,28 +654,18 @@ def integrated_spectrum_level4(
     tb[wb == 0] = 0
     sb[wb == 0] = 0
 
-    outT = np.array([fb, tb, wb, sb])
-    out = outT.T
-
     # Saving spectrum
-    if save and (day_range != "daily"):
+    if save and day_range != "daily":
         np.savetxt(
             save_path + save_spectrum,
-            out,
+            np.array([fb, tb, wb, sb]).T,
             header="freq [MHz], temp [K], weight [K], std dev [K]",
         )
 
     # Computing residuals for plot
-    # ----------------------------------------
-    fx = fb[(fb >= f_low) & (fb <= f_high)]
-    tx = tb[(fb >= f_low) & (fb <= f_high)]
-    wx = wb[(fb >= f_low) & (fb <= f_high)]
-    sx = sb[(fb >= f_low) & (fb <= f_high)]
-
-    ft = fx[wx > 0]
-    tt = tx[wx > 0]
-    # wt = wx[wx > 0]
-    st = sx[wx > 0]
+    mask = (fb >= f_low) & (fb <= f_high)
+    fx, tx, wx, sx = fb[mask], tb[mask], wb[mask], sb[mask]
+    ft, tt, st = fx[wx > 0], tx[wx > 0], sx[wx > 0]
 
     pt = mdl.fit_polynomial_fourier(
         "LINLOG", ft / 200, tt, n_fg, Weights=(1 / (st ** 2))
@@ -777,210 +681,75 @@ def integrated_spectrum_level4(
     return ft, tt, st, rt, rl
 
 
-def integrated_half_hour_level4(band, case, first_day, last_day, GHA_start=13.5):
-    """
-    Feb 6, 2019
-    """
+def integrated_half_hour_level4_many(band, case, GHA_starts=[(13, 1), (14, 0)]):
+    discard = {
+        (6, 0): [146, 164, 167, 169],
+        (6, 1): [146, 147, 174, 179, 181, 198, 211, 215],
+        (7, 0): [146, 147, 157, 166],
+        (7, 1): [146, 159],
+        (8, 0): [146, 151, 159],
+        (8, 1): [146, 159],
+        (9, 0): [146, 151, 152, 157, 159, 163, 185],
+        (9, 1): [
+            146,
+            157,
+            159,
+            167,
+            196,
+            ([149, 150, 152, 163], (104.5, 110)),
+            ([150, 160, 161, 162, 166], (129, 135)),
+            (None, (134.5, 140.5)),
+        ],
+        (10, 0): [152, 157, 166, 159, 196],
+        (10, 1): [
+            174,
+            176,
+            204,
+            218,
+            (None, 101.52, 101.53),
+            (None, (102.5, 102.53)),
+            (None, (153.02, 153.04)),
+            (None, (111.7, 115.4)),
+            (None, (121.47, 121.55)),
+            (None, (146.5, 148)),
+            (None, (150, 150.5)),
+            (None, (105.72, 105.74)),
+            (None, (106.05, 106.15)),
+            (None, (106.42, 106.55)),
+        ],
+        (11, 0): [
+            149,
+            165,
+            176,
+            204,
+            ([151, 161], (129, 135)),
+            (None, (109, 114.2)),
+            (None, (105.72, 105.74)),
+            (None, (106.05, 106.15)),
+            (None, (106.42, 106.55)),
+            (None, (138, 138.4)),
+        ],
+        (11, 1): [175, 176, 177, 200, 204, 216, (149, (110, 118)), (None, (137, 140))],
+        (12, 0): [146, 147, 170, 175, 176, 193, 195, 204, 205, 220],
+        (12, 1): [146, 170, 176, 185, 195, 198, 204, 220],
+        (13, 0): [152, 174, 176, 182, 185, 195, 204, 208, 214],
+        (13, 1): [151, 163, 164, 176, 185, 187, 189, 192, 195, 200, 208, 215, 219],
+        (14, 0): [176, 184, 185, 193, 199, 208, 210],
+        (14, 1): [166, 174, 177, 185, 199, 200, 201, 208],
+        (15, 0): [150, 157, 178, 182, 185, 187, 198, 208],
+        (15, 1): [185],
+        (16, 0): [184],
+        (16, 1): [191, 192],
+        (17, 0): [184, 186, 192, 216],
+        (17, 1): [186, 192, 196],
+        (18, 0): [192, 197],
+        (18, 1): [192, 209, 211],
+    }
 
-    if band == "mid_band":
-        if case == 4:
-            f, p_all, r_all, w_all, gha, yd = io.level4read(
-                "/home/raul/DATA/EDGES/mid_band/spectra/level4/case4/case4.hdf5"
-            )
-        elif case == 41:
-            f, p_all, r_all, w_all, gha, yd = io.level4read(
-                "/home/raul/DATA/EDGES/mid_band/spectra/level4/case41/case41.hdf5"
-            )
-        else:
-            raise ValueError("for mid_band, case must be 4 or 41")
+    for i, GHA_start in enumerate(GHA_starts):
+        discarded_days = discard[GHA_start]
 
-        index = np.arange(0, len(gha))
-        IX = int(index[gha == GHA_start])
-
-        p = p_all[:, IX, :]
-        r = r_all[:, IX, :]
-        w = w_all[:, IX, :]
-
-        day = yd[:, 1]
-        flag = 0
-
-        if GHA_start == 6.0:  # Looks good over 58-118 MHz
-            discarded_days = [146, 164, 167, 169]
-        if GHA_start == 6.5:  # Looks good over 58-118 MHz
-            discarded_days = [146, 147, 174, 179, 181, 198, 211, 215]
-        if GHA_start == 7.0:  # Looks good over 58-118 MHz
-            discarded_days = [146, 147, 157, 166]
-        if GHA_start == 7.5:  # Looks good up to 120 MHz
-            discarded_days = [146, 159]
-        if GHA_start == 8.0:
-            discarded_days = [146, 151, 159]
-        if GHA_start == 8.5:
-            discarded_days = [146, 159]
-        if GHA_start == 9.0:
-            discarded_days = [146, 151, 152, 157, 159, 163, 185]
-        if GHA_start == 9.5:
-            discarded_days = [146, 157, 159, 167, 196]
-            w[day == 149, (f > 104.5) & (f < 110)] = 0
-            w[day == 150, (f > 104.5) & (f < 110)] = 0
-            w[day == 152, (f > 104.5) & (f < 110)] = 0
-            w[day == 163, (f > 104.5) & (f < 110)] = 0
-
-            w[day == 150, (f > 129.0) & (f < 135)] = 0
-            w[day == 160, (f > 129.0) & (f < 135)] = 0
-            w[day == 161, (f > 129.0) & (f < 135)] = 0
-            w[day == 162, (f > 129.0) & (f < 135)] = 0
-            w[day == 166, (f > 129.0) & (f < 135)] = 0
-
-            w[:, (f > 134.5) & (f < 140.5)] = 0
-
-        if GHA_start == 10.0:
-            discarded_days = [152, 157, 166, 159, 196]  # , 176, 180, 181, 185]
-
-        if GHA_start == 10.5:
-            discarded_days = [174, 176, 204, 218]  # , 151, 162, 189, 210
-            w[:, (f > 101.52) & (f < 101.53)] = 0
-            w[:, (f > 102.50) & (f < 102.53)] = 0
-            w[:, (f > 153.02) & (f < 153.04)] = 0
-
-            w[:, (f > 111.7) & (f < 115.4)] = 0
-            w[:, (f > 121.47) & (f < 121.55)] = 0
-            w[:, (f > 146.5) & (f < 148.0)] = 0
-            w[:, (f > 150) & (f < 150.5)] = 0
-
-            w[:, (f > 105.72) & (f < 105.74)] = 0
-            w[:, (f > 106.05) & (f < 106.15)] = 0
-            w[:, (f > 106.42) & (f < 106.55)] = 0
-
-        if GHA_start == 11.0:
-            discarded_days = [149, 165, 176, 204]
-
-            # This is the right way of doing it!
-            w[day == 151, (f > 129.0) & (f < 135.0)] = 0
-            w[day == 161, (f > 129.0) & (f < 135.0)] = 0
-
-            w[:, (f > 109) & (f < 114.2)] = 0
-            w[:, (f > 105.72) & (f < 105.74)] = 0
-            w[:, (f > 106.05) & (f < 106.15)] = 0
-            w[:, (f > 106.42) & (f < 106.55)] = 0
-            w[:, (f > 138) & (f < 138.4)] = 0
-
-        if GHA_start == 11.5:
-            discarded_days = [175, 176, 177, 200, 204, 216]
-            w[day == 149, (f > 110.0) & (f < 118.0)] = 0
-            w[:, (f > 137.0) & (f < 140.0)] = 0
-
-        if GHA_start == 12.0:
-            discarded_days = [146, 147, 170, 175, 176, 193, 195, 204, 205, 220]
-        if GHA_start == 12.5:
-            discarded_days = [146, 170, 176, 185, 195, 198, 204, 220]
-        if GHA_start == 13.0:
-            discarded_days = [152, 174, 176, 182, 185, 195, 204, 208, 214]
-        if GHA_start == 13.5:
-            discarded_days = [
-                151,
-                163,
-                164,
-                176,
-                185,
-                187,
-                189,
-                192,
-                195,
-                200,
-                208,
-                215,
-                219,
-            ]
-        if GHA_start == 14:
-            discarded_days = [176, 184, 185, 193, 199, 208, 210]
-        if GHA_start == 14.5:
-            discarded_days = [166, 174, 177, 185, 199, 200, 201, 208]
-        if GHA_start == 15:
-            discarded_days = [
-                150,
-                157,
-                178,
-                182,
-                185,
-                187,
-                198,
-                208,
-            ]  # , 210, 215, 217, 218, 219]
-        if GHA_start == 15.5:
-            discarded_days = [185]
-        if GHA_start == 16.0:
-            discarded_days = [184]
-        if GHA_start == 16.5:
-            discarded_days = [191, 192]
-        if GHA_start == 17.0:
-            discarded_days = [184, 186, 192, 216]
-        if GHA_start == 17.5:
-            discarded_days = [186, 192, 196]
-        if GHA_start == 18.0:
-            discarded_days = [192, 197]
-        if GHA_start == 18.5:
-            discarded_days = [192, 209, 211]
-
-    for i in range(len(p[:, 0])):
-        if (day[i] >= first_day) & (day[i] <= last_day):
-            if (np.sum(w[i, :]) > 0) and (day[i] not in discarded_days):
-
-                print(day[i])
-
-                t = mdl.model_evaluate("LINLOG", p[i, :], f / 200) + r[i, :]
-                par = mdl.fit_polynomial_fourier(
-                    "LINLOG", f / 200, t, 4, Weights=w[i, :]
-                )
-                r_raw = t - par[1]
-                w_raw = w[i, :]
-
-                fb, rb, wb = tools.spectral_binning_number_of_samples(f, r_raw, w_raw)
-
-                if flag == 0:
-                    rr_all = np.copy(r_raw)
-                    wr_all = np.copy(w_raw)
-                    pr_all = np.copy(par[0])
-
-                    rb_all = np.copy(rb)
-                    wb_all = np.copy(wb)
-                    d_all = np.copy(day[i])
-                    flag = 1
-
-                elif flag > 0:
-                    rr_all = np.vstack((rr_all, r_raw))
-                    wr_all = np.vstack((wr_all, w_raw))
-                    pr_all = np.vstack((pr_all, par[0]))
-
-                    rb_all = np.vstack((rb_all, rb))
-                    wb_all = np.vstack((wb_all, wb))
-                    d_all = np.append(d_all, day[i])
-
-    avrn, avwn = tools.spectral_averaging(rr_all, wr_all)
-    avp = np.mean(pr_all, axis=0)
-
-    # For the 10.5 and 11 averages, DO NOT USE THIS CLEANING. ONLY use the 2.5sigma filter in the
-    # INTEGRATED 10.5-11.5 spectrum, AFTER integration
-    avrn, avwn = rfi.cleaning_sweep(
-        f, avrn, avwn, window_width=3, n_poly=2, n_bootstrap=20, n_sigma=3.0
-    )
-
-    avtn = mdl.model_evaluate("LINLOG", avp, f / 200) + avrn
-
-    # avrn, avwn = rfi.cleaning_sweep(f, avrn, avwn, window_width=5, n_poly=2,
-    # n_bootstrap=20, n_sigma=2)
-    fb, rbn, wbn = tools.spectral_binning_number_of_samples(f, avrn, avwn)
-
-    tbn = mdl.model_evaluate("LINLOG", avp, fb / 200) + rbn
-
-    return fb, rb_all, wb_all, d_all, tbn, wbn, f, rr_all, wr_all, avrn, avwn, avp, avtn
-
-
-def integrated_half_hour_level4_many(
-    band, case, GHA_start=[13.5, 14.0], save=False, filename="test.txt"
-):
-    for i in range(len(GHA_start)):
-
-        print("------------------------------- " + str(GHA_start[i]))
+        print("------------------------------- " + str(GHA_start))
         (
             fb,
             rb_all,
@@ -995,7 +764,9 @@ def integrated_half_hour_level4_many(
             avw,
             avp,
             avt,
-        ) = integrated_half_hour_level4(band, case, 140, 170, GHA_start=GHA_start[i])
+        ) = tools.integrate_level4_half_hour(
+            band, case, 140, 170, discarded_days, GHA_start=GHA_start
+        )
 
         if i == 0:
             avr_all = np.copy(avr)
@@ -1023,12 +794,11 @@ def integrated_half_hour_level4_many(
 def season_integrated_spectra_GHA(
     band, case, new_gha_edges=np.arange(0, 25, 2), data_save_name_flag="2hr"
 ):
-    case_str = "case{}".format(case)
-    data_save_path = edges_folder + band + "/spectra/level5/" + case_str + "/"
+    data_save_path = edges_folder + f"{band}/spectra/level5/case{case}/"
 
     # Loading level4 data
     f, p_all, r_all, w_all, gha_edges, yd = io.level4read(
-        edges_folder + band + "/spectra/level4/" + case_str + "/" + case_str + ".hdf5"
+        edges_folder + f"band/spectra/level4/case{case}/case{case}.hdf5"
     )
 
     # Creating intermediate 1hr-average arrays
@@ -1038,29 +808,17 @@ def season_integrated_spectra_GHA(
 
     # Looping over every original GHA edges
     for j in range(len(gha_edges) - 1):
-
         # Looping over day
-        counter = 0
-        for i in range(len(yd)):  # range(38): range(4): #
-
-            # Returns a 1 if the 1hr average tested is good quality, and a 0 if it is not
-            keep = filters.one_hour_filter(band, case, yd[i, 0], yd[i, 1], gha_edges[j])
-            print(yd[i, 1])
-            print(gha_edges[j])
-
-            # Index of good spectra
-            if keep == 1:
-                if counter == 0:
-                    index_good = np.array([i])
-                    counter = counter + 1
-
-                elif counter > 0:
-                    index_good = np.append(index_good, i)
+        index_good = [
+            i
+            for i, (y, d) in enumerate(yd)
+            if filters.one_hour_filter(band, case, y, d, gha_edges[j])
+        ]
 
         # Selecting good parameters and spectra
-        pp = p_all[index_good, j, :]
-        rr = r_all[index_good, j, :]
-        ww = w_all[index_good, j, :]
+        pp = p_all[index_good, j]
+        rr = r_all[index_good, j]
+        ww = w_all[index_good, j]
 
         # Average parameters and spectra
         avp = np.mean(pp, axis=0)
@@ -1069,12 +827,12 @@ def season_integrated_spectra_GHA(
         # RFI cleaning of 1-hr season average spectra
         avr_no_rfi, avw_no_rfi = rfi.cleaning_sweep(
             f, avr, avw, window_width=3, n_poly=2, n_bootstrap=20, n_sigma=2.5,
-        )  # 3
+        )
 
         # Storing season 1hr-average spectra
-        pr_all[j, :] = avp
-        rr_all[j, :] = avr_no_rfi
-        wr_all[j, :] = avw_no_rfi
+        pr_all[j] = avp
+        rr_all[j] = avr_no_rfi
+        wr_all[j] = avw_no_rfi
 
         # Frequency binning
         fb, rb, wb = tools.spectral_binning_number_of_samples(f, avr_no_rfi, avw_no_rfi)
@@ -1086,9 +844,9 @@ def season_integrated_spectra_GHA(
         if j == 0:
             tb_all = np.zeros((len(gha_edges) - 1, len(fb)))
             wb_all = np.zeros((len(gha_edges) - 1, len(fb)))
-
-        tb_all[j, :] = tb
-        wb_all[j, :] = wb
+        else:
+            tb_all[j] = tb
+            wb_all[j] = wb
 
     print("-------------------------------")
 
@@ -1099,42 +857,28 @@ def season_integrated_spectra_GHA(
 
         print(str(new_gha_start) + " " + str(new_gha_end))
 
-        counter = 0
+        flag = True
         for i in range(len(gha_edges) - 1):
-            if new_gha_start < new_gha_end:
-                if (gha_edges[i] >= new_gha_start) and (gha_edges[i] < new_gha_end):
+            if (
+                new_gha_start < new_gha_end
+                and ((gha_edges[i] >= new_gha_start) and (gha_edges[i] < new_gha_end))
+            ) or ((gha_edges[i] >= new_gha_start) or (gha_edges[i] < new_gha_end)):
 
-                    print(gha_edges[i])
-                    if counter == 0:
-                        px_all = pr_all[i, :]
-                        rx_all = rr_all[i, :]
-                        wx_all = wr_all[i, :]
-                        counter = counter + 1
-
-                    elif counter > 0:
-                        px_all = np.vstack((px_all, pr_all[i, :]))
-                        rx_all = np.vstack((rx_all, rr_all[i, :]))
-                        wx_all = np.vstack((wx_all, wr_all[i, :]))
-
-            elif new_gha_start > new_gha_end:
-                if (gha_edges[i] >= new_gha_start) or (gha_edges[i] < new_gha_end):
-                    print(gha_edges[i])
-                    if counter == 0:
-                        px_all = pr_all[i, :]
-                        rx_all = rr_all[i, :]
-                        wx_all = wr_all[i, :]
-                        counter = counter + 1
-
-                    elif counter > 0:
-                        px_all = np.vstack((px_all, pr_all[i, :]))
-                        rx_all = np.vstack((rx_all, rr_all[i, :]))
-                        wx_all = np.vstack((wx_all, wr_all[i, :]))
+                print(gha_edges[i])
+                if flag:
+                    px_all = pr_all[i]
+                    rx_all = rr_all[i]
+                    wx_all = wr_all[i]
+                    flag = False
+                else:
+                    px_all = np.vstack((px_all, pr_all[i, :]))
+                    rx_all = np.vstack((rx_all, rr_all[i, :]))
+                    wx_all = np.vstack((wx_all, wr_all[i, :]))
 
         if len(px_all.shape) == 1:
             avpx = np.copy(px_all)
             avrx = np.copy(rx_all)
             avwx = np.copy(wx_all)
-
         elif len(px_all.shape) == 2:
             avpx = np.mean(px_all, axis=0)
             avrx, avwx = tools.weighted_mean(rx_all, wx_all)
@@ -1161,35 +905,35 @@ def season_integrated_spectra_GHA(
 
         # Saving data
         np.savetxt(
-            data_save_path + case_str + "_frequency.txt", fb, header="Frequency [MHz]."
+            data_save_path + f"case{case}_frequency.txt", fb, header="Frequency [MHz]."
         )
         np.savetxt(
-            data_save_path + case_str + "_1hr_gha_edges.txt",
+            data_save_path + f"case{case}_1hr_gha_edges.txt",
             gha_edges,
             header="GHA edges of integrated spectra from 0hr to 23hr in steps of 1hr [hr].",
         )
         np.savetxt(
-            data_save_path + case_str + "_1hr_temperature.txt",
+            data_save_path + f"case{case}_1hr_temperature.txt",
             tb_all,
             header="Rows correspond to different GHAs from 0hr to 23hr in steps of 1hr. Columns correspond to frequency.",
         )
         np.savetxt(
-            data_save_path + case_str + "_1hr_weights.txt",
+            data_save_path + f"case{case}_1hr_weights.txt",
             wb_all,
             header="Rows correspond to different GHAs from 0hr to 23hr in steps of 1hr. Columns correspond to frequency.",
         )
         np.savetxt(
-            data_save_path + case_str + "_" + data_save_name_flag + "_gha_edges.txt",
+            data_save_path + f"case{case}_{data_save_name_flag}_gha_edges.txt",
             new_gha_edges,
             header="GHA edges of integrated spectra [hr].",
         )
         np.savetxt(
-            data_save_path + case_str + "_" + data_save_name_flag + "_temperature.txt",
+            data_save_path + f"case{case}_{data_save_name_flag}_temperature.txt",
             tbx_all,
             header="Rows correspond to different GHAs. Columns correspond to frequency.",
         )
         np.savetxt(
-            data_save_path + case_str + "_" + data_save_name_flag + "_weights.txt",
+            data_save_path + f"case{case}_{data_save_name_flag}_weights.txt",
             wbx_all,
             header="Rows correspond to different GHAs. Columns correspond to frequency.",
         )
@@ -1197,1668 +941,88 @@ def season_integrated_spectra_GHA(
     return fb, tb_all, wb_all, tbx_all, wbx_all
 
 
-def batch_low_band_level1_to_level2(set_number):
-    # Original 10x10 m^2 ground plane
-    if set_number == 1:
-        level1_to_level2("low_band", "2015", "286_02")
-        level1_to_level2("low_band", "2015", "287_00")
-        level1_to_level2("low_band", "2015", "288_00")
-        level1_to_level2("low_band", "2015", "289_00")
-
-        level1_to_level2("low_band", "2015", "291_00")
-        level1_to_level2("low_band", "2015", "292_00")
-        level1_to_level2("low_band", "2015", "293_00")
-        level1_to_level2("low_band", "2015", "294_00")
-        level1_to_level2("low_band", "2015", "295_00")
-        level1_to_level2("low_band", "2015", "296_00")
-        level1_to_level2("low_band", "2015", "297_00")
-        level1_to_level2("low_band", "2015", "298_00")
-        level1_to_level2("low_band", "2015", "299_00")
-
-        level1_to_level2("low_band", "2015", "300_00")
-        level1_to_level2("low_band", "2015", "301_00")
-        level1_to_level2("low_band", "2015", "302_00")
-        level1_to_level2("low_band", "2015", "303_00")
-
-        level1_to_level2("low_band", "2015", "310_18")
-        level1_to_level2("low_band", "2015", "311_00")
-        level1_to_level2("low_band", "2015", "312_00")
-        level1_to_level2("low_band", "2015", "313_00")
-        level1_to_level2("low_band", "2015", "314_00")
-        level1_to_level2("low_band", "2015", "315_00")
-        level1_to_level2("low_band", "2015", "316_00")
-        level1_to_level2("low_band", "2015", "317_00")
-        level1_to_level2("low_band", "2015", "318_00")
-        level1_to_level2("low_band", "2015", "319_00")
-
-        level1_to_level2("low_band", "2015", "320_00")
-        level1_to_level2("low_band", "2015", "321_00")
-        level1_to_level2("low_band", "2015", "322_00")
-        level1_to_level2("low_band", "2015", "323_00")
-        level1_to_level2("low_band", "2015", "324_00")
-        level1_to_level2("low_band", "2015", "325_00")
-        level1_to_level2("low_band", "2015", "326_00")
-        level1_to_level2("low_band", "2015", "327_00")
-        level1_to_level2("low_band", "2015", "328_00")
-        level1_to_level2("low_band", "2015", "329_00")
-
-        level1_to_level2("low_band", "2015", "330_00")
-        level1_to_level2("low_band", "2015", "331_00")
-        level1_to_level2("low_band", "2015", "332_00")
-        level1_to_level2("low_band", "2015", "333_00")
-        level1_to_level2("low_band", "2015", "334_00")
-        level1_to_level2("low_band", "2015", "335_00")
-        level1_to_level2("low_band", "2015", "336_00")
-        level1_to_level2("low_band", "2015", "337_00")
-        level1_to_level2("low_band", "2015", "338_00")
-        level1_to_level2("low_band", "2015", "339_00")
-
-        level1_to_level2("low_band", "2015", "340_00")
-        level1_to_level2("low_band", "2015", "341_00")
-        level1_to_level2("low_band", "2015", "342_00")
-        level1_to_level2("low_band", "2015", "343_14")
-        level1_to_level2("low_band", "2015", "344_00")
-        level1_to_level2("low_band", "2015", "344_21")
-        level1_to_level2("low_band", "2015", "345_00")
-        level1_to_level2("low_band", "2015", "346_00")
-
-        level1_to_level2("low_band", "2015", "347_00")
-        level1_to_level2("low_band", "2015", "348_00")
-        level1_to_level2("low_band", "2015", "349_00")
-
-        level1_to_level2("low_band", "2015", "350_00")
-        level1_to_level2("low_band", "2015", "351_00")
-        level1_to_level2("low_band", "2015", "352_00")
-        level1_to_level2("low_band", "2015", "353_00")
-        level1_to_level2("low_band", "2015", "354_00")
-
-        level1_to_level2("low_band", "2015", "362_00")
-        level1_to_level2("low_band", "2015", "363_00")
-        level1_to_level2("low_band", "2015", "364_00")
-        level1_to_level2("low_band", "2015", "365_00")
-
-        level1_to_level2("low_band", "2016", "001_00")
-        level1_to_level2("low_band", "2016", "002_00")
-        level1_to_level2("low_band", "2016", "003_00")
-        level1_to_level2("low_band", "2016", "004_00")
-        level1_to_level2("low_band", "2016", "005_00")
-        level1_to_level2("low_band", "2016", "006_00")
-        level1_to_level2("low_band", "2016", "007_00")
-        level1_to_level2("low_band", "2016", "008_00")
-        level1_to_level2("low_band", "2016", "009_00")
-
-        level1_to_level2("low_band", "2016", "010_00")
-        level1_to_level2("low_band", "2016", "011_00")
-        level1_to_level2("low_band", "2016", "012_00")
-        level1_to_level2("low_band", "2016", "013_00")
-        level1_to_level2("low_band", "2016", "014_00")
-        level1_to_level2("low_band", "2016", "015_00")
-        level1_to_level2("low_band", "2016", "016_00")
-        level1_to_level2("low_band", "2016", "017_00")
-        level1_to_level2("low_band", "2016", "018_00")
-        level1_to_level2("low_band", "2016", "019_00")
-
-        level1_to_level2("low_band", "2016", "020_00")
-        level1_to_level2("low_band", "2016", "028_00")
-        level1_to_level2("low_band", "2016", "029_00")
-
-        level1_to_level2("low_band", "2016", "030_00")
-        level1_to_level2("low_band", "2016", "031_00")
-        level1_to_level2("low_band", "2016", "032_00")
-        level1_to_level2("low_band", "2016", "033_00")
-        level1_to_level2("low_band", "2016", "034_00")
-        level1_to_level2("low_band", "2016", "035_00")
-        level1_to_level2("low_band", "2016", "036_00")
-        level1_to_level2("low_band", "2016", "037_00")
-        level1_to_level2("low_band", "2016", "038_00")
-        level1_to_level2("low_band", "2016", "039_00")
-
-        level1_to_level2("low_band", "2016", "040_00")
-        level1_to_level2("low_band", "2016", "041_00")
-        level1_to_level2("low_band", "2016", "042_00")
-        level1_to_level2("low_band", "2016", "043_00")
-        level1_to_level2("low_band", "2016", "044_00")
-        level1_to_level2("low_band", "2016", "045_00")
-        level1_to_level2("low_band", "2016", "046_00")
-        level1_to_level2("low_band", "2016", "047_00")
-        level1_to_level2("low_band", "2016", "048_00")
-        level1_to_level2("low_band", "2016", "049_00")
-
-        level1_to_level2("low_band", "2016", "050_00")
-        level1_to_level2("low_band", "2016", "051_00")
-        level1_to_level2("low_band", "2016", "052_00")
-        level1_to_level2("low_band", "2016", "053_00")
-        level1_to_level2("low_band", "2016", "055_21")
-        level1_to_level2("low_band", "2016", "056_00")
-        level1_to_level2("low_band", "2016", "057_00")
-        level1_to_level2("low_band", "2016", "058_00")
-        level1_to_level2("low_band", "2016", "059_00")
-
-        level1_to_level2("low_band", "2016", "060_00")
-        level1_to_level2("low_band", "2016", "061_00")
-        level1_to_level2("low_band", "2016", "062_00")
-        level1_to_level2("low_band", "2016", "063_00")
-        level1_to_level2("low_band", "2016", "064_00")
-        level1_to_level2("low_band", "2016", "065_00")
-        level1_to_level2("low_band", "2016", "066_00")
-        level1_to_level2("low_band", "2016", "067_00")
-        level1_to_level2("low_band", "2016", "068_00")
-        level1_to_level2("low_band", "2016", "069_00")
-
-        level1_to_level2("low_band", "2016", "070_00")
-        level1_to_level2("low_band", "2016", "071_00")
-        level1_to_level2("low_band", "2016", "072_00")
-        level1_to_level2("low_band", "2016", "073_00")
-        level1_to_level2("low_band", "2016", "074_00")
-        level1_to_level2("low_band", "2016", "075_00")
-        level1_to_level2("low_band", "2016", "076_00")
-        level1_to_level2("low_band", "2016", "077_00")
-        level1_to_level2("low_band", "2016", "078_00")
-        level1_to_level2("low_band", "2016", "079_00")
-
-        level1_to_level2("low_band", "2016", "080_00")
-        level1_to_level2("low_band", "2016", "081_00")
-        level1_to_level2("low_band", "2016", "082_00")
-
-        level1_to_level2("low_band", "2016", "083_00")
-        level1_to_level2("low_band", "2016", "084_00")
-        level1_to_level2("low_band", "2016", "085_00")
-        level1_to_level2("low_band", "2016", "086_00")
-        level1_to_level2("low_band", "2016", "087_00")
-        level1_to_level2("low_band", "2016", "088_00")
-        level1_to_level2("low_band", "2016", "089_00")
-
-        level1_to_level2("low_band", "2016", "090_00")
-        level1_to_level2("low_band", "2016", "091_00")
-        level1_to_level2("low_band", "2016", "092_00")
-        level1_to_level2("low_band", "2016", "093_00")
-        level1_to_level2("low_band", "2016", "094_00")
-        level1_to_level2("low_band", "2016", "095_00")
-        level1_to_level2("low_band", "2016", "096_00")
-        level1_to_level2("low_band", "2016", "097_00")
-        level1_to_level2("low_band", "2016", "098_00")
-        level1_to_level2("low_band", "2016", "099_00")
-        level1_to_level2("low_band", "2016", "100_00")
-
-        level1_to_level2("low_band", "2016", "101_00")
-        level1_to_level2("low_band", "2016", "102_00")
-        level1_to_level2("low_band", "2016", "103_00")
-        level1_to_level2("low_band", "2016", "104_00")
-
-        level1_to_level2("low_band", "2016", "106_13")
-        level1_to_level2("low_band", "2016", "107_00")
-        level1_to_level2("low_band", "2016", "108_00")
-        level1_to_level2("low_band", "2016", "109_00")
-        level1_to_level2("low_band", "2016", "110_00")
-
-        level1_to_level2("low_band", "2016", "111_00")
-        level1_to_level2("low_band", "2016", "112_00")
-        level1_to_level2("low_band", "2016", "113_00")
-        level1_to_level2("low_band", "2016", "114_00")
-        level1_to_level2("low_band", "2016", "115_00")
-        level1_to_level2("low_band", "2016", "116_00")
-        level1_to_level2("low_band", "2016", "117_00")
-        level1_to_level2("low_band", "2016", "118_00")
-
-        level1_to_level2("low_band", "2016", "122_16")
-        level1_to_level2("low_band", "2016", "123_00")
-        level1_to_level2("low_band", "2016", "124_00")
-        level1_to_level2("low_band", "2016", "125_00")
-        level1_to_level2("low_band", "2016", "126_00")
-        level1_to_level2("low_band", "2016", "127_00")
-
-        level1_to_level2("low_band", "2016", "128_00")
-        level1_to_level2("low_band", "2016", "129_00")
-
-        level1_to_level2("low_band", "2016", "130_00")
-        level1_to_level2("low_band", "2016", "131_00")
-        level1_to_level2("low_band", "2016", "132_00")
-        level1_to_level2("low_band", "2016", "133_00")
-        level1_to_level2("low_band", "2016", "134_00")
-        level1_to_level2("low_band", "2016", "135_00")
-        level1_to_level2("low_band", "2016", "136_00")
-        level1_to_level2("low_band", "2016", "137_00")
-        level1_to_level2("low_band", "2016", "138_00")
-        level1_to_level2("low_band", "2016", "139_00")
-
-        level1_to_level2("low_band", "2016", "140_00")
-        level1_to_level2("low_band", "2016", "141_00")
-        level1_to_level2("low_band", "2016", "142_00")
-        level1_to_level2("low_band", "2016", "143_00")
-        level1_to_level2("low_band", "2016", "144_00")
-        level1_to_level2("low_band", "2016", "145_00")
-        level1_to_level2("low_band", "2016", "146_00")
-        level1_to_level2("low_band", "2016", "147_00")
-        level1_to_level2("low_band", "2016", "148_00")
-        level1_to_level2("low_band", "2016", "149_00")
-
-        level1_to_level2("low_band", "2016", "150_00")
-        level1_to_level2("low_band", "2016", "151_00")
-        level1_to_level2("low_band", "2016", "152_00")
-        level1_to_level2("low_band", "2016", "153_00")
-        level1_to_level2("low_band", "2016", "154_00")
-        level1_to_level2("low_band", "2016", "155_00")
-        level1_to_level2("low_band", "2016", "156_00")
-        level1_to_level2("low_band", "2016", "157_00")
-        level1_to_level2("low_band", "2016", "158_00")
-        level1_to_level2("low_band", "2016", "159_00")
-
-        level1_to_level2("low_band", "2016", "160_00")
-        level1_to_level2("low_band", "2016", "167_00")
-        level1_to_level2("low_band", "2016", "168_00")
-        level1_to_level2("low_band", "2016", "169_00")
-
-        level1_to_level2("low_band", "2016", "170_00")
-        level1_to_level2("low_band", "2016", "171_00")
-        level1_to_level2("low_band", "2016", "172_00")
-        level1_to_level2("low_band", "2016", "173_00")
-
-        level1_to_level2("low_band", "2016", "180_15")
-        level1_to_level2("low_band", "2016", "181_00")
-        level1_to_level2("low_band", "2016", "182_00")
-        level1_to_level2("low_band", "2016", "183_00")
-        level1_to_level2("low_band", "2016", "184_00")
-        level1_to_level2("low_band", "2016", "185_00")
-        level1_to_level2("low_band", "2016", "186_00")
-        level1_to_level2("low_band", "2016", "187_00")
-        level1_to_level2("low_band", "2016", "188_00")
-        level1_to_level2("low_band", "2016", "189_00")
-
-        level1_to_level2("low_band", "2016", "190_00")
-        level1_to_level2("low_band", "2016", "191_00")
-        level1_to_level2("low_band", "2016", "192_00")
-        level1_to_level2("low_band", "2016", "193_00")
-        level1_to_level2("low_band", "2016", "194_00")
-        level1_to_level2("low_band", "2016", "195_00")
-        level1_to_level2("low_band", "2016", "196_00")
-        level1_to_level2("low_band", "2016", "197_00")
-        level1_to_level2("low_band", "2016", "198_00")
-        level1_to_level2("low_band", "2016", "199_00")
-
-        level1_to_level2("low_band", "2016", "200_00")
-        level1_to_level2("low_band", "2016", "201_00")
-        level1_to_level2("low_band", "2016", "202_00")
-        level1_to_level2("low_band", "2016", "203_00")
-        level1_to_level2("low_band", "2016", "204_00")
-        level1_to_level2("low_band", "2016", "210_14")
-        level1_to_level2("low_band", "2016", "211_00")
-        level1_to_level2("low_band", "2016", "212_00")
-
-        level1_to_level2("low_band", "2016", "217_00")
-        level1_to_level2("low_band", "2016", "218_00")
-        level1_to_level2("low_band", "2016", "219_00")
-        level1_to_level2("low_band", "2016", "220_00")
-
-        level1_to_level2("low_band", "2016", "226_19")
-        level1_to_level2("low_band", "2016", "227_00")
-        level1_to_level2("low_band", "2016", "228_00")
-        level1_to_level2("low_band", "2016", "229_00")
-
-        level1_to_level2("low_band", "2016", "230_00")
-
-        level1_to_level2("low_band", "2016", "238_00")
-
-        level1_to_level2("low_band", "2016", "246_07")
-        level1_to_level2("low_band", "2016", "247_00")
-        level1_to_level2("low_band", "2016", "248_00")
-        level1_to_level2("low_band", "2016", "249_00")
-
-        level1_to_level2("low_band", "2016", "250_02")
-        level1_to_level2("low_band", "2016", "251_00")
-        level1_to_level2("low_band", "2016", "252_00")
-        level1_to_level2("low_band", "2016", "253_13")
-        level1_to_level2("low_band", "2016", "254_00")
-
-    if set_number == 2:
-        # Low Band with NEW GOOD SWITCH and EXTENDED GROUND PLANE
-        # -------------------------------------------------------
-        level1_to_level2("low_band", "2016", "258_13")
-        level1_to_level2("low_band", "2016", "259_00")
-
-        level1_to_level2("low_band", "2016", "260_00")
-        level1_to_level2("low_band", "2016", "261_00")
-        level1_to_level2("low_band", "2016", "262_00")
-        level1_to_level2("low_band", "2016", "263_00")
-        level1_to_level2("low_band", "2016", "264_00")
-        level1_to_level2("low_band", "2016", "265_00")
-        level1_to_level2("low_band", "2016", "266_00")
-        level1_to_level2("low_band", "2016", "267_00")
-        level1_to_level2("low_band", "2016", "268_00")
-        level1_to_level2("low_band", "2016", "269_00")
-
-        level1_to_level2("low_band", "2016", "270_00")
-        level1_to_level2("low_band", "2016", "271_00")
-        level1_to_level2("low_band", "2016", "273_15")
-        level1_to_level2("low_band", "2016", "274_00")
-        level1_to_level2("low_band", "2016", "275_00")
-        level1_to_level2("low_band", "2016", "276_00")
-        level1_to_level2("low_band", "2016", "277_00")
-        level1_to_level2("low_band", "2016", "278_00")
-        level1_to_level2("low_band", "2016", "279_00")
-
-        level1_to_level2("low_band", "2016", "280_00")
-        level1_to_level2("low_band", "2016", "281_00")
-        level1_to_level2("low_band", "2016", "282_00")
-        level1_to_level2("low_band", "2016", "283_00")
-        level1_to_level2("low_band", "2016", "284_00")
-        level1_to_level2("low_band", "2016", "285_00")
-        level1_to_level2("low_band", "2016", "286_00")
-        level1_to_level2("low_band", "2016", "287_00")
-        level1_to_level2("low_band", "2016", "288_00")
-        level1_to_level2("low_band", "2016", "289_00")
-
-        level1_to_level2("low_band", "2016", "290_00")
-        level1_to_level2("low_band", "2016", "291_00")
-        level1_to_level2("low_band", "2016", "292_00")
-        level1_to_level2("low_band", "2016", "293_00")
-        level1_to_level2("low_band", "2016", "294_00")
-        level1_to_level2("low_band", "2016", "295_00")
-        level1_to_level2("low_band", "2016", "296_00")
-        level1_to_level2("low_band", "2016", "297_00")
-        level1_to_level2("low_band", "2016", "298_00")
-        level1_to_level2("low_band", "2016", "299_00")
-
-        level1_to_level2("low_band", "2016", "302_14")
-        level1_to_level2("low_band", "2016", "303_00")
-        level1_to_level2("low_band", "2016", "304_00")
-        level1_to_level2("low_band", "2016", "305_00")
-
-        level1_to_level2("low_band", "2016", "314_15")
-        level1_to_level2("low_band", "2016", "315_00")
-        level1_to_level2("low_band", "2016", "316_00")
-        level1_to_level2("low_band", "2016", "317_00")
-        level1_to_level2("low_band", "2016", "318_00")
-        level1_to_level2("low_band", "2016", "319_00")
-
-        level1_to_level2("low_band", "2016", "320_00")
-        level1_to_level2("low_band", "2016", "321_00")
-        level1_to_level2("low_band", "2016", "322_00")
-        level1_to_level2("low_band", "2016", "323_00")
-        level1_to_level2("low_band", "2016", "324_00")
-        level1_to_level2("low_band", "2016", "325_00")
-        level1_to_level2("low_band", "2016", "326_00")
-        level1_to_level2("low_band", "2016", "327_00")
-        level1_to_level2("low_band", "2016", "328_00")
-        level1_to_level2("low_band", "2016", "329_00")
-
-        level1_to_level2("low_band", "2016", "330_00")
-        level1_to_level2("low_band", "2016", "331_00")
-        level1_to_level2("low_band", "2016", "332_00")
-        level1_to_level2("low_band", "2016", "333_00")
-        level1_to_level2("low_band", "2016", "334_00")
-        level1_to_level2("low_band", "2016", "335_00")
-        level1_to_level2("low_band", "2016", "336_00")
-        level1_to_level2("low_band", "2016", "337_00")
-        level1_to_level2("low_band", "2016", "338_00")
-        level1_to_level2("low_band", "2016", "339_00")
-
-        level1_to_level2("low_band", "2016", "340_00")
-        level1_to_level2("low_band", "2016", "341_00")
-        level1_to_level2("low_band", "2016", "342_00")
-        level1_to_level2("low_band", "2016", "343_00")
-        level1_to_level2("low_band", "2016", "344_00")
-        level1_to_level2("low_band", "2016", "345_00")
-        level1_to_level2("low_band", "2016", "346_00")
-        level1_to_level2("low_band", "2016", "347_00")
-        level1_to_level2("low_band", "2016", "348_00")
-        level1_to_level2("low_band", "2016", "349_00")
-
-        level1_to_level2("low_band", "2016", "350_00")
-        level1_to_level2("low_band", "2016", "351_00")
-        level1_to_level2("low_band", "2016", "352_00")
-        level1_to_level2("low_band", "2016", "353_00")
-        level1_to_level2("low_band", "2016", "354_00")
-        level1_to_level2("low_band", "2016", "355_00")
-        level1_to_level2("low_band", "2016", "356_00")
-        level1_to_level2("low_band", "2016", "356_06")
-        level1_to_level2("low_band", "2016", "357_00")
-        level1_to_level2("low_band", "2016", "357_07")
-        level1_to_level2("low_band", "2016", "358_00")
-        level1_to_level2("low_band", "2016", "359_00")
-
-        level1_to_level2("low_band", "2016", "360_00")
-        level1_to_level2("low_band", "2016", "361_00")
-        level1_to_level2("low_band", "2016", "362_00")
-        level1_to_level2("low_band", "2016", "363_00")
-        level1_to_level2("low_band", "2016", "364_00")
-        level1_to_level2("low_band", "2016", "365_00")
-        level1_to_level2("low_band", "2016", "366_00")
-
-        level1_to_level2("low_band", "2017", "001_15")
-        level1_to_level2("low_band", "2017", "002_00")
-        level1_to_level2("low_band", "2017", "003_00")
-        level1_to_level2("low_band", "2017", "005_00")
-        level1_to_level2("low_band", "2017", "006_00")
-        level1_to_level2("low_band", "2017", "007_00")
-        level1_to_level2("low_band", "2017", "008_00")
-        level1_to_level2("low_band", "2017", "009_00")
-
-        level1_to_level2("low_band", "2017", "010_00")
-        level1_to_level2("low_band", "2017", "011_07")
-        level1_to_level2("low_band", "2017", "012_00")
-        level1_to_level2("low_band", "2017", "013_00")
-        level1_to_level2("low_band", "2017", "014_00")
-        level1_to_level2("low_band", "2017", "015_00")
-        level1_to_level2("low_band", "2017", "016_00")
-        level1_to_level2("low_band", "2017", "017_00")
-        level1_to_level2("low_band", "2017", "018_00")
-        level1_to_level2("low_band", "2017", "019_00")
-
-        level1_to_level2("low_band", "2017", "023_00")
-
-        level1_to_level2("low_band", "2017", "077_07")
-        level1_to_level2("low_band", "2017", "078_00")
-        level1_to_level2("low_band", "2017", "079_00")
-
-        level1_to_level2("low_band", "2017", "080_00")
-        level1_to_level2("low_band", "2017", "081_00")
-        level1_to_level2("low_band", "2017", "081_12")
-        level1_to_level2("low_band", "2017", "082_00")
-        level1_to_level2("low_band", "2017", "082_08")
-        level1_to_level2("low_band", "2017", "083_00")
-        level1_to_level2("low_band", "2017", "084_00")
-        level1_to_level2("low_band", "2017", "085_00")
-        level1_to_level2("low_band", "2017", "086_00")
-        level1_to_level2("low_band", "2017", "087_00")
-        level1_to_level2("low_band", "2017", "087_21")
-        level1_to_level2("low_band", "2017", "088_00")
-        level1_to_level2("low_band", "2017", "089_00")
-
-        level1_to_level2("low_band", "2017", "090_00")
-        level1_to_level2("low_band", "2017", "091_00")
-
-        level1_to_level2("low_band", "2017", "092_00")
-        level1_to_level2("low_band", "2017", "093_00")
-        level1_to_level2("low_band", "2017", "093_17")
-        level1_to_level2("low_band", "2017", "094_00")
-        level1_to_level2("low_band", "2017", "095_00")
-        level1_to_level2("low_band", "2017", "095_15")
-
-        level1_to_level2("low_band", "2017", "153_12")
-        level1_to_level2("low_band", "2017", "154_00")
-        level1_to_level2("low_band", "2017", "155_00")
-        level1_to_level2("low_band", "2017", "156_00")
-
-        level1_to_level2("low_band", "2017", "157_00")
-        level1_to_level2("low_band", "2017", "158_03")
-        level1_to_level2("low_band", "2017", "159_00")
-        level1_to_level2("low_band", "2017", "160_00")
-        level1_to_level2("low_band", "2017", "161_00")
-
-        level1_to_level2("low_band", "2017", "162_00")
-        level1_to_level2("low_band", "2017", "163_00")
-        level1_to_level2("low_band", "2017", "164_00")
-        level1_to_level2("low_band", "2017", "165_00")
-        level1_to_level2("low_band", "2017", "166_00")
-        level1_to_level2("low_band", "2017", "167_00")
-
-        level1_to_level2("low_band", "2017", "168_00")
-        level1_to_level2("low_band", "2017", "169_00")
-        level1_to_level2("low_band", "2017", "170_00")
-        level1_to_level2("low_band", "2017", "171_00")
-
-
-def batch_low_band2_level1_to_level2(set_number):
-    # NS with shield
-    if set_number == 1:
-        level1_to_level2("low_band2", "2017", "082_03", low2_flag="")
-        level1_to_level2("low_band2", "2017", "082_08", low2_flag="")
-        level1_to_level2("low_band2", "2017", "083_00", low2_flag="")
-        level1_to_level2("low_band2", "2017", "084_00")
-        level1_to_level2("low_band2", "2017", "085_00")
-        level1_to_level2("low_band2", "2017", "086_00")
-        level1_to_level2("low_band2", "2017", "086_14")
-        level1_to_level2("low_band2", "2017", "087_00")
-        level1_to_level2("low_band2", "2017", "087_21")
-        level1_to_level2("low_band2", "2017", "088_00")
-        level1_to_level2("low_band2", "2017", "089_00")
-        level1_to_level2("low_band2", "2017", "090_00")
-        level1_to_level2("low_band2", "2017", "091_00")
-        level1_to_level2("low_band2", "2017", "092_00")
-        level1_to_level2("low_band2", "2017", "093_00")
-        level1_to_level2("low_band2", "2017", "093_17")
-        level1_to_level2("low_band2", "2017", "094_00")
-        level1_to_level2("low_band2", "2017", "095_00")
-        level1_to_level2("low_band2", "2017", "096_00")
-        level1_to_level2("low_band2", "2017", "097_00")
-        level1_to_level2("low_band2", "2017", "098_00")
-        level1_to_level2("low_band2", "2017", "099_00")
-        level1_to_level2("low_band2", "2017", "100_00")
-        level1_to_level2("low_band2", "2017", "101_00")
-        level1_to_level2("low_band2", "2017", "102_00")
-        level1_to_level2("low_band2", "2017", "102_15")
-        level1_to_level2("low_band2", "2017", "103_00")
-        level1_to_level2("low_band2", "2017", "103_15")
-        level1_to_level2("low_band2", "2017", "104_00")
-        level1_to_level2("low_band2", "2017", "105_00")
-        level1_to_level2("low_band2", "2017", "106_00")
-        level1_to_level2("low_band2", "2017", "107_00")
-        level1_to_level2("low_band2", "2017", "108_00")
-        level1_to_level2("low_band2", "2017", "109_00")
-        level1_to_level2("low_band2", "2017", "110_00")
-        level1_to_level2("low_band2", "2017", "111_00")
-        level1_to_level2("low_band2", "2017", "112_00")
-        level1_to_level2("low_band2", "2017", "113_00")
-        level1_to_level2("low_band2", "2017", "114_00")
-        level1_to_level2("low_band2", "2017", "115_00")
-        level1_to_level2("low_band2", "2017", "116_00")
-        level1_to_level2("low_band2", "2017", "117_00")
-        level1_to_level2("low_band2", "2017", "117_16")
-        level1_to_level2("low_band2", "2017", "118_00")
-        level1_to_level2("low_band2", "2017", "119_00")
-        level1_to_level2("low_band2", "2017", "120_00")
-        level1_to_level2("low_band2", "2017", "121_00")
-        level1_to_level2("low_band2", "2017", "122_00")
-        level1_to_level2("low_band2", "2017", "123_00")
-        level1_to_level2("low_band2", "2017", "124_00")
-        level1_to_level2("low_band2", "2017", "125_00")
-        level1_to_level2("low_band2", "2017", "126_00")
-        level1_to_level2("low_band2", "2017", "127_00")
-        level1_to_level2("low_band2", "2017", "128_00")
-        level1_to_level2("low_band2", "2017", "129_00")
-        level1_to_level2("low_band2", "2017", "130_00")
-        level1_to_level2("low_band2", "2017", "131_00")
-        level1_to_level2("low_band2", "2017", "132_00")
-        level1_to_level2("low_band2", "2017", "133_00")
-        level1_to_level2("low_band2", "2017", "134_00")
-        level1_to_level2("low_band2", "2017", "135_00")
-        level1_to_level2("low_band2", "2017", "136_00")
-        level1_to_level2("low_band2", "2017", "137_00")
-        level1_to_level2("low_band2", "2017", "138_00")
-        level1_to_level2("low_band2", "2017", "139_00")
-        level1_to_level2("low_band2", "2017", "140_00")
-        level1_to_level2("low_band2", "2017", "141_00")
-        level1_to_level2("low_band2", "2017", "142_00")
-
-    # Rotation of antenna to EW
-    if set_number == 2:
-        level1_to_level2("low_band2", "2017", "154_00")
-        level1_to_level2("low_band2", "2017", "155_00")
-        level1_to_level2("low_band2", "2017", "156_00")
-        level1_to_level2("low_band2", "2017", "157_01")
-        level1_to_level2("low_band2", "2017", "158_03")
-        level1_to_level2("low_band2", "2017", "159_00")
-        level1_to_level2("low_band2", "2017", "160_00")
-        level1_to_level2("low_band2", "2017", "161_00")
-        level1_to_level2("low_band2", "2017", "162_00")
-        level1_to_level2("low_band2", "2017", "163_00")
-        level1_to_level2("low_band2", "2017", "164_00")
-        level1_to_level2("low_band2", "2017", "165_00")
-        level1_to_level2("low_band2", "2017", "166_00")
-        level1_to_level2("low_band2", "2017", "167_00")
-        level1_to_level2("low_band2", "2017", "168_00")
-        level1_to_level2("low_band2", "2017", "169_00")
-        level1_to_level2("low_band2", "2017", "170_00")
-        level1_to_level2("low_band2", "2017", "171_00")
-
-    # Removing the Balun Shield
-    if set_number == 3:
-        level1_to_level2("low_band2", "2017", "181_00")
-        level1_to_level2("low_band2", "2017", "182_00")
-        level1_to_level2("low_band2", "2017", "183_00")
-        level1_to_level2("low_band2", "2017", "184_00")
-        level1_to_level2("low_band2", "2017", "184_17")
-        level1_to_level2("low_band2", "2017", "185_00")
-        level1_to_level2("low_band2", "2017", "186_00")
-        level1_to_level2("low_band2", "2017", "187_00")
-        level1_to_level2("low_band2", "2017", "188_00")
-        level1_to_level2("low_band2", "2017", "189_00")
-        level1_to_level2("low_band2", "2017", "190_00")
-        level1_to_level2("low_band2", "2017", "191_00")
-        level1_to_level2("low_band2", "2017", "192_00")
-        level1_to_level2("low_band2", "2017", "193_00")
-        level1_to_level2("low_band2", "2017", "194_00")
-        level1_to_level2("low_band2", "2017", "195_00")
-        level1_to_level2("low_band2", "2017", "196_00")
-        level1_to_level2("low_band2", "2017", "197_00")
-        level1_to_level2("low_band2", "2017", "198_00")
-        level1_to_level2("low_band2", "2017", "199_00")
-        level1_to_level2("low_band2", "2017", "200_00")
-        level1_to_level2("low_band2", "2017", "201_00")
-        level1_to_level2("low_band2", "2017", "202_00")
-        level1_to_level2("low_band2", "2017", "203_00")
-        level1_to_level2("low_band2", "2017", "204_00")
-        level1_to_level2("low_band2", "2017", "205_00")
-        level1_to_level2("low_band2", "2017", "206_00")
-        level1_to_level2("low_band2", "2017", "207_00")
-        level1_to_level2("low_band2", "2017", "208_00")
-        level1_to_level2("low_band2", "2017", "209_00")
-        level1_to_level2("low_band2", "2017", "210_00")
-        level1_to_level2("low_band2", "2017", "211_00")
-        level1_to_level2("low_band2", "2017", "212_00")
-        level1_to_level2("low_band2", "2017", "213_00")
-        level1_to_level2("low_band2", "2017", "214_00")
-        level1_to_level2("low_band2", "2017", "215_00")
-        level1_to_level2("low_band2", "2017", "216_00")
-        level1_to_level2("low_band2", "2017", "217_00")
-        level1_to_level2("low_band2", "2017", "218_16")
-        level1_to_level2("low_band2", "2017", "219_00")
-        level1_to_level2("low_band2", "2017", "220_00")
-        level1_to_level2("low_band2", "2017", "221_00")
-        level1_to_level2("low_band2", "2017", "222_00")
-        level1_to_level2("low_band2", "2017", "223_00")
-        level1_to_level2("low_band2", "2017", "224_00")
-        level1_to_level2("low_band2", "2017", "225_00")
-        level1_to_level2("low_band2", "2017", "226_00")
-        level1_to_level2("low_band2", "2017", "227_00")
-        level1_to_level2("low_band2", "2017", "228_00")
-        level1_to_level2("low_band2", "2017", "229_00")
-        level1_to_level2("low_band2", "2017", "230_00")
-        level1_to_level2("low_band2", "2017", "231_00")
-        level1_to_level2("low_band2", "2017", "232_00")
-        level1_to_level2("low_band2", "2017", "233_00")
-        level1_to_level2("low_band2", "2017", "234_00")
-        level1_to_level2("low_band2", "2017", "235_00")
-        level1_to_level2("low_band2", "2017", "236_00")
-        level1_to_level2("low_band2", "2017", "237_00")
-        level1_to_level2("low_band2", "2017", "238_00")
-        level1_to_level2("low_band2", "2017", "239_00")
-        level1_to_level2("low_band2", "2017", "240_00")
-        level1_to_level2("low_band2", "2017", "241_00")
-        level1_to_level2("low_band2", "2017", "242_00")
-        level1_to_level2("low_band2", "2017", "243_00")
-        level1_to_level2("low_band2", "2017", "244_00")
-        level1_to_level2("low_band2", "2017", "245_00")
-        level1_to_level2("low_band2", "2017", "246_00")
-        level1_to_level2("low_band2", "2017", "247_00")
-        level1_to_level2("low_band2", "2017", "248_00")
-        level1_to_level2("low_band2", "2017", "249_00")
-        level1_to_level2("low_band2", "2017", "250_00")
-        level1_to_level2("low_band2", "2017", "251_00")
-        level1_to_level2("low_band2", "2017", "252_00")
-        level1_to_level2("low_band2", "2017", "253_00")
-        level1_to_level2("low_band2", "2017", "254_00")
-        level1_to_level2("low_band2", "2017", "255_00")
-        level1_to_level2("low_band2", "2017", "256_00")
-        level1_to_level2("low_band2", "2017", "257_00")
-        level1_to_level2("low_band2", "2017", "258_00")
-        level1_to_level2("low_band2", "2017", "259_00")
-        level1_to_level2("low_band2", "2017", "260_00")
-        level1_to_level2("low_band2", "2017", "261_00")
-        level1_to_level2("low_band2", "2017", "262_00")
-        level1_to_level2("low_band2", "2017", "263_00")
-        level1_to_level2("low_band2", "2017", "264_00")
-        level1_to_level2("low_band2", "2017", "265_00")
-        level1_to_level2("low_band2", "2017", "266_00")
-        level1_to_level2("low_band2", "2017", "267_00")
-        level1_to_level2("low_band2", "2017", "268_00")
-        level1_to_level2("low_band2", "2017", "269_00")
-        level1_to_level2("low_band2", "2017", "270_00")
-        level1_to_level2("low_band2", "2017", "271_00")
-        level1_to_level2("low_band2", "2017", "272_00")
-        level1_to_level2("low_band2", "2017", "273_00")
-        level1_to_level2("low_band2", "2017", "274_00")
-        level1_to_level2("low_band2", "2017", "275_00")
-        level1_to_level2("low_band2", "2017", "276_00")
-        level1_to_level2("low_band2", "2017", "277_00")
-        level1_to_level2("low_band2", "2017", "278_00")
-        level1_to_level2("low_band2", "2017", "279_00")
-        level1_to_level2("low_band2", "2017", "280_00")
-        level1_to_level2("low_band2", "2017", "281_00")
-        level1_to_level2("low_band2", "2017", "282_00")
-        level1_to_level2("low_band2", "2017", "283_00")
-        level1_to_level2("low_band2", "2017", "284_00")
-        level1_to_level2("low_band2", "2017", "285_00")
-        level1_to_level2("low_band2", "2017", "286_00")
-        level1_to_level2("low_band2", "2017", "287_00")
-        level1_to_level2("low_band2", "2017", "288_00")
-        level1_to_level2("low_band2", "2017", "289_00")
-        level1_to_level2("low_band2", "2017", "290_00")
-        level1_to_level2("low_band2", "2017", "291_00")
-        level1_to_level2("low_band2", "2017", "291_21")
-        level1_to_level2("low_band2", "2017", "292_00")
-        level1_to_level2("low_band2", "2017", "293_00")
-        level1_to_level2("low_band2", "2017", "294_00")
-        level1_to_level2("low_band2", "2017", "295_00")
-        level1_to_level2("low_band2", "2017", "296_00")
-        level1_to_level2("low_band2", "2017", "297_00")
-        level1_to_level2("low_band2", "2017", "298_00")
-        level1_to_level2("low_band2", "2017", "300_18")
-        level1_to_level2("low_band2", "2017", "301_00")
-        level1_to_level2("low_band2", "2017", "302_00")
-        level1_to_level2("low_band2", "2017", "303_00")
-        level1_to_level2("low_band2", "2017", "310_04")
-        level1_to_level2("low_band2", "2017", "311_00")
-        level1_to_level2("low_band2", "2017", "312_00")
-        level1_to_level2("low_band2", "2017", "313_00")
-        level1_to_level2("low_band2", "2017", "314_19")
-        level1_to_level2("low_band2", "2017", "315_00")
-        level1_to_level2("low_band2", "2017", "316_00")
-        level1_to_level2("low_band2", "2017", "317_00")
-        level1_to_level2("low_band2", "2017", "332_04")
-        level1_to_level2("low_band2", "2017", "333_00")
-        level1_to_level2("low_band2", "2017", "334_00")
-        level1_to_level2("low_band2", "2017", "335_00")
-        level1_to_level2("low_band2", "2017", "336_00")
-        level1_to_level2("low_band2", "2017", "337_20")
-        level1_to_level2("low_band2", "2017", "338_00")
-        level1_to_level2("low_band2", "2017", "339_03")
-        level1_to_level2("low_band2", "2017", "340_00")
-        level1_to_level2("low_band2", "2017", "341_00")
-        level1_to_level2("low_band2", "2017", "342_00")
-        level1_to_level2("low_band2", "2017", "343_00")
-        level1_to_level2("low_band2", "2017", "344_00")
-        level1_to_level2("low_band2", "2017", "345_00")
-        level1_to_level2("low_band2", "2017", "346_00")
-        level1_to_level2("low_band2", "2017", "347_00")
-        level1_to_level2("low_band2", "2017", "348_00")
-        level1_to_level2("low_band2", "2017", "349_00")
-        level1_to_level2("low_band2", "2017", "350_00")
-        level1_to_level2("low_band2", "2017", "351_00")
-        level1_to_level2("low_band2", "2017", "352_00")
-        level1_to_level2("low_band2", "2017", "353_00")
-        level1_to_level2("low_band2", "2017", "354_00")
-        level1_to_level2("low_band2", "2017", "355_00")
-        level1_to_level2("low_band2", "2017", "356_00")
-        level1_to_level2("low_band2", "2017", "357_00")
-        level1_to_level2("low_band2", "2017", "358_00")
-        level1_to_level2("low_band2", "2017", "359_00")
-        level1_to_level2("low_band2", "2017", "360_00")
-        level1_to_level2("low_band2", "2017", "361_00")
-        level1_to_level2("low_band2", "2017", "362_00")
-        level1_to_level2("low_band2", "2017", "363_00")
-        level1_to_level2("low_band2", "2017", "364_00")
-        level1_to_level2("low_band2", "2017", "365_00")
-
-    if set_number == 4:
-        level1_to_level2("low_band2", "2018", "001_00")
-        level1_to_level2("low_band2", "2018", "002_00")
-        level1_to_level2("low_band2", "2018", "003_00")
-        level1_to_level2("low_band2", "2018", "004_00")
-        level1_to_level2("low_band2", "2018", "005_00")
-        level1_to_level2("low_band2", "2018", "006_00")
-        level1_to_level2("low_band2", "2018", "007_00")
-        level1_to_level2("low_band2", "2018", "008_00")
-        level1_to_level2("low_band2", "2018", "009_00")
-        level1_to_level2("low_band2", "2018", "010_00")
-        level1_to_level2("low_band2", "2018", "011_00")
-        level1_to_level2("low_band2", "2018", "012_00")
-        level1_to_level2("low_band2", "2018", "013_00")
-        level1_to_level2("low_band2", "2018", "014_00")
-        level1_to_level2("low_band2", "2018", "015_00")
-        level1_to_level2("low_band2", "2018", "016_00")
-        level1_to_level2("low_band2", "2018", "017_00")
-        level1_to_level2("low_band2", "2018", "018_00")
-        level1_to_level2("low_band2", "2018", "019_00")
-        level1_to_level2("low_band2", "2018", "020_00")
-        level1_to_level2("low_band2", "2018", "021_00")
-        level1_to_level2("low_band2", "2018", "022_00")
-        level1_to_level2("low_band2", "2018", "023_00")
-        level1_to_level2("low_band2", "2018", "024_00")
-        level1_to_level2("low_band2", "2018", "025_00")
-        level1_to_level2("low_band2", "2018", "026_00")
-        level1_to_level2("low_band2", "2018", "027_00")
-        level1_to_level2("low_band2", "2018", "028_00")
-        level1_to_level2("low_band2", "2018", "029_00")
-        level1_to_level2("low_band2", "2018", "030_00")
-        level1_to_level2("low_band2", "2018", "031_00")
-        level1_to_level2("low_band2", "2018", "032_00")
-        level1_to_level2("low_band2", "2018", "033_00")
-        level1_to_level2("low_band2", "2018", "034_00")
-        level1_to_level2("low_band2", "2018", "035_00")
-        level1_to_level2("low_band2", "2018", "036_00")
-        level1_to_level2("low_band2", "2018", "037_00")
-        level1_to_level2("low_band2", "2018", "038_00")
-        level1_to_level2("low_band2", "2018", "040_00")
-        level1_to_level2("low_band2", "2018", "041_00")
-        level1_to_level2("low_band2", "2018", "042_00")
-        level1_to_level2("low_band2", "2018", "043_00")
-        level1_to_level2("low_band2", "2018", "044_00")
-        level1_to_level2("low_band2", "2018", "045_00")
-        level1_to_level2("low_band2", "2018", "046_00")
-        level1_to_level2("low_band2", "2018", "047_00")
-        level1_to_level2("low_band2", "2018", "048_00")
-        level1_to_level2("low_band2", "2018", "049_00")
-        level1_to_level2("low_band2", "2018", "050_00")
-        level1_to_level2("low_band2", "2018", "051_00")
-        level1_to_level2("low_band2", "2018", "052_00")
-        level1_to_level2("low_band2", "2018", "053_00")
-        level1_to_level2("low_band2", "2018", "054_00")
-        level1_to_level2("low_band2", "2018", "060_17")
-        level1_to_level2("low_band2", "2018", "061_00")
-        level1_to_level2("low_band2", "2018", "062_14")
-        level1_to_level2("low_band2", "2018", "063_00")
-        level1_to_level2("low_band2", "2018", "064_00")
-        level1_to_level2("low_band2", "2018", "065_00")
-        level1_to_level2("low_band2", "2018", "066_00")
-        level1_to_level2("low_band2", "2018", "067_00")
-        level1_to_level2("low_band2", "2018", "068_00")
-        level1_to_level2("low_band2", "2018", "073_19")
-        level1_to_level2("low_band2", "2018", "074_00")
-        level1_to_level2("low_band2", "2018", "079_04")
-        level1_to_level2("low_band2", "2018", "080_00")
-        level1_to_level2("low_band2", "2018", "084_00")
-        level1_to_level2("low_band2", "2018", "085_00")
-        level1_to_level2("low_band2", "2018", "085_06")
-        level1_to_level2("low_band2", "2018", "086_00")
-        level1_to_level2("low_band2", "2018", "087_00")
-        level1_to_level2("low_band2", "2018", "088_00")
-        level1_to_level2("low_band2", "2018", "089_00")
-        level1_to_level2("low_band2", "2018", "095_04")
-        level1_to_level2("low_band2", "2018", "096_00")
-        level1_to_level2("low_band2", "2018", "097_00")
-        level1_to_level2("low_band2", "2018", "097_15")
-        level1_to_level2("low_band2", "2018", "098_00")
-        level1_to_level2("low_band2", "2018", "099_00")
-        level1_to_level2("low_band2", "2018", "100_00")
-        level1_to_level2("low_band2", "2018", "101_00")
-        level1_to_level2("low_band2", "2018", "102_00")
-        level1_to_level2("low_band2", "2018", "103_00")
-        level1_to_level2("low_band2", "2018", "104_00")
-        level1_to_level2("low_band2", "2018", "105_00")
-        level1_to_level2("low_band2", "2018", "106_00")
-        level1_to_level2("low_band2", "2018", "107_00")
-        level1_to_level2("low_band2", "2018", "108_00")
-        level1_to_level2("low_band2", "2018", "109_00")
-        level1_to_level2("low_band2", "2018", "110_00")
-        level1_to_level2("low_band2", "2018", "111_00")
-        level1_to_level2("low_band2", "2018", "112_00")
-        level1_to_level2("low_band2", "2018", "113_00")
-        level1_to_level2("low_band2", "2018", "114_00")
-        level1_to_level2("low_band2", "2018", "115_00")
-        level1_to_level2("low_band2", "2018", "116_00")
-        level1_to_level2("low_band2", "2018", "117_00")
-        level1_to_level2("low_band2", "2018", "118_00")
-        level1_to_level2("low_band2", "2018", "119_00")
-        level1_to_level2("low_band2", "2018", "120_00")
-        level1_to_level2("low_band2", "2018", "121_00")
-        level1_to_level2("low_band2", "2018", "122_00")
-        level1_to_level2("low_band2", "2018", "123_00")
-        level1_to_level2("low_band2", "2018", "124_00")
-        level1_to_level2("low_band2", "2018", "125_00")
-        level1_to_level2("low_band2", "2018", "126_00")
-        level1_to_level2("low_band2", "2018", "127_00")
-        level1_to_level2("low_band2", "2018", "128_00")
-        level1_to_level2("low_band2", "2018", "129_00")
-        level1_to_level2("low_band2", "2018", "130_00")
-        level1_to_level2("low_band2", "2018", "131_00")
-        level1_to_level2("low_band2", "2018", "132_00")
-        level1_to_level2("low_band2", "2018", "133_00")
-        level1_to_level2("low_band2", "2018", "134_00")
-        level1_to_level2("low_band2", "2018", "135_00")
-        level1_to_level2("low_band2", "2018", "136_00")
-        level1_to_level2("low_band2", "2018", "137_00")
-        level1_to_level2("low_band2", "2018", "138_00")
-        level1_to_level2("low_band2", "2018", "139_00")
-        level1_to_level2("low_band2", "2018", "140_00")
-        level1_to_level2("low_band2", "2018", "141_00")
-        level1_to_level2("low_band2", "2018", "142_00")
-        level1_to_level2("low_band2", "2018", "143_00")
-        level1_to_level2("low_band2", "2018", "144_00")
-        level1_to_level2("low_band2", "2018", "145_00")
-        level1_to_level2("low_band2", "2018", "146_00")
-        level1_to_level2("low_band2", "2018", "147_00")
-        level1_to_level2("low_band2", "2018", "147_17")
-        level1_to_level2("low_band2", "2018", "148_00")
-        level1_to_level2("low_band2", "2018", "149_00")
-        level1_to_level2("low_band2", "2018", "150_00")
-        level1_to_level2("low_band2", "2018", "151_00")
-        level1_to_level2("low_band2", "2018", "152_00")
-        level1_to_level2("low_band2", "2018", "152_19")
-        level1_to_level2("low_band2", "2018", "153_00")
-        level1_to_level2("low_band2", "2018", "154_00")
-        level1_to_level2("low_band2", "2018", "155_00")
-        level1_to_level2("low_band2", "2018", "156_00")
-        level1_to_level2("low_band2", "2018", "157_00")
-        level1_to_level2("low_band2", "2018", "158_00")
-        level1_to_level2("low_band2", "2018", "159_00")
-        level1_to_level2("low_band2", "2018", "160_00")
-        level1_to_level2("low_band2", "2018", "161_00")
-        level1_to_level2("low_band2", "2018", "162_00")
-        level1_to_level2("low_band2", "2018", "163_00")
-        level1_to_level2("low_band2", "2018", "164_00")
-        level1_to_level2("low_band2", "2018", "165_00")
-        level1_to_level2("low_band2", "2018", "166_00")
-        level1_to_level2("low_band2", "2018", "167_00")
-        level1_to_level2("low_band2", "2018", "168_00")
-        level1_to_level2("low_band2", "2018", "169_00")
-        level1_to_level2("low_band2", "2018", "170_00")
-        level1_to_level2("low_band2", "2018", "171_00")
-        level1_to_level2("low_band2", "2018", "181")
-        level1_to_level2("low_band2", "2018", "182")
-        level1_to_level2("low_band2", "2018", "183")
-        level1_to_level2("low_band2", "2018", "184")
-        level1_to_level2("low_band2", "2018", "185")
-        level1_to_level2("low_band2", "2018", "186")
-        level1_to_level2("low_band2", "2018", "187")
-        level1_to_level2("low_band2", "2018", "188")
-        level1_to_level2("low_band2", "2018", "189")
-        level1_to_level2("low_band2", "2018", "190")
-        level1_to_level2("low_band2", "2018", "191")
-        level1_to_level2("low_band2", "2018", "192")
-        level1_to_level2("low_band2", "2018", "193")
-        level1_to_level2("low_band2", "2018", "194")
-        level1_to_level2("low_band2", "2018", "195")
-        level1_to_level2("low_band2", "2018", "196")
-        level1_to_level2("low_band2", "2018", "197")
-        level1_to_level2("low_band2", "2018", "198")
-        level1_to_level2("low_band2", "2018", "199")
-        level1_to_level2("low_band2", "2018", "200")
-        level1_to_level2("low_band2", "2018", "201")
-        level1_to_level2("low_band2", "2018", "202")
-        level1_to_level2("low_band2", "2018", "203")
-        level1_to_level2("low_band2", "2018", "204")
-        level1_to_level2("low_band2", "2018", "205")
-        level1_to_level2("low_band2", "2018", "206")
-        level1_to_level2("low_band2", "2018", "207")
-        level1_to_level2("low_band2", "2018", "208")
-        level1_to_level2("low_band2", "2018", "209")
-        level1_to_level2("low_band2", "2018", "210")
-        level1_to_level2("low_band2", "2018", "211")
-        level1_to_level2("low_band2", "2018", "212")
-        level1_to_level2("low_band2", "2018", "213")
-        level1_to_level2("low_band2", "2018", "214")
-        level1_to_level2("low_band2", "2018", "215")
-        level1_to_level2("low_band2", "2018", "216")
-        level1_to_level2("low_band2", "2018", "217")
-        level1_to_level2("low_band2", "2018", "218")
+def batch_level1_to_level2(
+    band, batch_file=None, path=None, omit_days=None, day_indx=12
+):
+    if batch_file:
+        with open(batch_file) as fl:
+            days = yaml.load(fl, Loader=yaml.FullLoader)["days"]
+    else:
+        fl_list = sorted(listdir(path))
+        days = [fl[day_indx : day_indx + 6] for fl in fl_list]
+        if omit_days:
+            days = [d for d in days if int(d[:3]) not in omit_days]
+
+    for year, day in days:
+        level1_to_level2(band, year, day)
 
 
 def batch_mid_band_level1_to_level2():
-    # Listing files to be processed
-    path_files = home_folder + "/EDGES/spectra/level1/mid_band/300_350/"
-    new_list = listdir(path_files)
-    new_list.sort()
-
-    for i in range(26, len(new_list)):
-
-        day = new_list[i][12:18]
-        print(day)
-
-        if (int(day[0:3]) <= 170) or (
-            int(day[0:3]) >= 174
-        ):  # files in this range have problems
-            src.edges_analysis.analysis.levels.level1_to_level2("mid_band", "2018", day)
+    batch_level1_to_level2(
+        "mid_band",
+        path=home_folder + "/EDGES/spectra/level1/mid_band/300_350/",
+        omit_days=range(170, 175),
+    )
 
 
 def batch_low_band3_level1_to_level2():
-    # Listing files to be processed
-    path_files = home_folder + "/EDGES/spectra/level1/low_band3/300_350/"
-    new_list = listdir(path_files)
-    new_list.sort()
-
-    for i in range(len(new_list)):  # range(26, len(new_list)):
-
-        year = new_list[i][7:11]
-        day = new_list[i][12:15]
-
-        if (int(year) == 2018) and (
-            int(day) == 225
-        ):  # files in this range have problems
-            print(year + " " + day + ": bad file")
-
-        else:
-            print(year + " " + day)
-            src.edges_analysis.analysis.levels.level1_to_level2("low_band3", year, day)
-
-
-def batch_mid_band_level2_to_level3(case, first_day, last_day):
-    # Case selection
-    # --------------------------------
-
-    if case == 0:
-        flag_folder = "case_nominal"
-
-        receiver_cal_file = 2  # cterms=7, wterms=8 terms over 50-150 MHz
-
-        antenna_s11_day = 147
-        antenna_s11_case = 3  # taken 2+ minutes after turning on the switch
-        antenna_s11_Nfit = 13  # 13 terms over 55-120 MHz
-
-        balun_correction = 1
-        ground_correction = 1
-        beam_correction = 1
-
-        f_low = 55
-        f_high = 120
-        n_fg = 5
-
-    if case == 1:
-        flag_folder = "test_rcv18_sw18_no_beam_correction"  # 'case_nominal_55_150MHz'
-
-        receiver_cal_file = 2  # cterms=7, wterms=8 terms over 50-150 MHz
-
-        antenna_s11_day = 147
-        antenna_s11_case = 3  # taken 2+ minutes after turning on the switch
-        antenna_s11_Nfit = 14  # 14 terms over 55-150 MHz
-
-        balun_correction = 1
-        ground_correction = 1
-        beam_correction = 0  # 1
-
-        f_low = 55
-        f_high = 150
-        n_fg = 5
-
-    if case == 2:
-        flag_folder = "calibration_2019_10_no_ground_loss_no_beam_corrections"
-
-        receiver_cal_file = 100  # cterms=10, wterms=13 terms over 50-190 MHz
-
-        antenna_s11_day = 147
-        antenna_s11_case = 3  # taken 2+ minutes after turning on the switch
-        antenna_s11_Nfit = 14  # 14 terms over 55-150 MHz, 13 terms over 55-120 MHz
-
-        balun_correction = 1
-        ground_correction = 0
-        beam_correction = 0
-
-        f_low = 55
-        f_high = 150
-        n_fg = 5
-
-    if case == 3:
-        flag_folder = "case_nominal_50-150MHz_no_ground_loss_no_beam_corrections"
-
-        receiver_cal_file = 2  # cterms=7, wterms=8 terms over 50-150 MHz
-
-        antenna_s11_day = 147
-        antenna_s11_case = 3  # taken 2+ minutes after turning on the switch
-        antenna_s11_Nfit = 14  # 14 terms over 55-150 MHz
-
-        balun_correction = 1
-        ground_correction = 0
-        beam_correction = 0
-
-        f_low = 50
-        f_high = 150
-        n_fg = 5
-
-    if case == 4:
-        flag_folder = (
-            "case_nominal_8_11_terms_50-150MHz_no_ground_loss_no_beam_corrections"
-        )
-
-        receiver_cal_file = 26  # cterms=8, wterms=11 terms over 50-150 MHz
-
-        antenna_s11_day = 147
-        antenna_s11_case = 3  # taken 2+ minutes after turning on the switch
-        antenna_s11_Nfit = 14  # 14 terms over 55-150 MHz
-
-        balun_correction = 1
-        ground_correction = 0
-        beam_correction = 0
-
-        f_low = 50
-        f_high = 150
-        n_fg = 5
-
-    if case == 5:
-        flag_folder = (
-            "case_nominal_14_14_terms_55-150MHz_no_ground_loss_no_beam_corrections"
-        )
-
-        receiver_cal_file = 200  # cterms=8, wterms=11 terms over 50-150 MHz
-
-        antenna_s11_day = 147
-        antenna_s11_case = 3  # taken 2+ minutes after turning on the switch
-        antenna_s11_Nfit = 14  # 14 terms over 55-150 MHz
-
-        balun_correction = 1
-        ground_correction = 0
-        beam_correction = 0
-
-        f_low = 55
-        f_high = 150
-        n_fg = 5
-
-    if case == 61:
-        flag_folder = "case_nominal_60-120MHz_7_4"
-
-        receiver_cal_file = 301  # cterms=8, wterms=11 terms over 50-150 MHz
-
-        antenna_s11_day = 147
-        antenna_s11_case = 3  # taken 2+ minutes after turning on the switch
-        antenna_s11_Nfit = 13  # 13 terms over 60-120 MHz
-
-        balun_correction = 1
-        ground_correction = 0
-        beam_correction = 0
-
-        f_low = 60
-        f_high = 120
-        n_fg = 5
-
-    if case == 62:
-        flag_folder = "case_nominal_60-120MHz_7_5"
-
-        receiver_cal_file = 302  # cterms=8, wterms=11 terms over 50-150 MHz
-
-        antenna_s11_day = 147
-        antenna_s11_case = 3  # taken 2+ minutes after turning on the switch
-        antenna_s11_Nfit = 13  # 13 terms over 60-120 MHz
-
-        balun_correction = 1
-        ground_correction = 0
-        beam_correction = 0
-
-        f_low = 60
-        f_high = 120
-        n_fg = 5
-
-    if case == 63:
-        flag_folder = "case_nominal_60-120MHz_7_9"
-
-        receiver_cal_file = 303  # cterms=8, wterms=11 terms over 50-150 MHz
-
-        antenna_s11_day = 147
-        antenna_s11_case = 3  # taken 2+ minutes after turning on the switch
-        antenna_s11_Nfit = 13  # 13 terms over 60-120 MHz
-
-        balun_correction = 1
-        ground_correction = 0
-        beam_correction = 0
-
-        f_low = 60
-        f_high = 120
-        n_fg = 5
-
-    if case == 64:
-        flag_folder = "case_nominal_60-120MHz_8_4"
-
-        receiver_cal_file = 304  # cterms=8, wterms=11 terms over 50-150 MHz
-
-        antenna_s11_day = 147
-        antenna_s11_case = 3  # taken 2+ minutes after turning on the switch
-        antenna_s11_Nfit = 13  # 13 terms over 60-120 MHz
-
-        balun_correction = 1
-        ground_correction = 0
-        beam_correction = 0
-
-        f_low = 60
-        f_high = 120
-        n_fg = 5
-
-    if case == 65:
-        flag_folder = "case_nominal_60-120MHz_8_5"
-
-        receiver_cal_file = 305  # cterms=8, wterms=11 terms over 50-150 MHz
-
-        antenna_s11_day = 147
-        antenna_s11_case = 3  # taken 2+ minutes after turning on the switch
-        antenna_s11_Nfit = 13  # 13 terms over 60-120 MHz
-
-        balun_correction = 1
-        ground_correction = 0
-        beam_correction = 0
-
-        f_low = 60
-        f_high = 120
-        n_fg = 5
-
-    if case == 66:
-        flag_folder = "case_nominal_60-120MHz_8_9"
-
-        receiver_cal_file = 306  # cterms=8, wterms=11 terms over 50-150 MHz
-
-        antenna_s11_day = 147
-        antenna_s11_case = 3  # taken 2+ minutes after turning on the switch
-        antenna_s11_Nfit = 13  # 13 terms over 60-120 MHz
-
-        balun_correction = 1
-        ground_correction = 0
-        beam_correction = 0
-
-        f_low = 60
-        f_high = 120
-        n_fg = 5
-
-    if case == 67:
-        flag_folder = "case_nominal_60-120MHz_5_4"
-
-        receiver_cal_file = 307  # cterms=8, wterms=11 terms over 50-150 MHz
-
-        antenna_s11_day = 147
-        antenna_s11_case = 3  # taken 2+ minutes after turning on the switch
-        antenna_s11_Nfit = 13  # 13 terms over 60-120 MHz
-
-        balun_correction = 1
-        ground_correction = 0
-        beam_correction = 0
-
-        f_low = 60
-        f_high = 120
-        n_fg = 5
-
-    if case == 68:
-        flag_folder = "case_nominal_60-120MHz_6_4"
-
-        receiver_cal_file = 308  # cterms=8, wterms=11 terms over 50-150 MHz
-
-        antenna_s11_day = 147
-        antenna_s11_case = 3  # taken 2+ minutes after turning on the switch
-        antenna_s11_Nfit = 13  # 13 terms over 60-120 MHz
-
-        balun_correction = 1
-        ground_correction = 0
-        beam_correction = 0
-
-        f_low = 60
-        f_high = 120
-        n_fg = 5
-
-    if case == 69:
-        flag_folder = "case_nominal_55-150MHz_7_7"
-
-        receiver_cal_file = 21  # cterms=8, wterms=11 terms over 50-150 MHz
-
-        antenna_s11_day = 147
-        antenna_s11_case = 3  # taken 2+ minutes after turning on the switch
-        antenna_s11_Nfit = 14  # 13 terms over 60-120 MHz
-
-        balun_correction = 1
-        ground_correction = 0
-        beam_correction = 0
-
-        f_low = 55
-        f_high = 150
-        n_fg = 5
-
-    if case == 70:
-        flag_folder = "case_nominal_55-150MHz_7_10"
-
-        receiver_cal_file = 24  # cterms=8, wterms=11 terms over 50-150 MHz
-
-        antenna_s11_day = 147
-        antenna_s11_case = 3  # taken 2+ minutes after turning on the switch
-        antenna_s11_Nfit = 14  # 13 terms over 60-120 MHz
-
-        balun_correction = 1
-        ground_correction = 0
-        beam_correction = 0
-
-        f_low = 55
-        f_high = 150
-        n_fg = 5
-
-    if case == 71:
-        flag_folder = "case_nominal_50-150MHz_7_8"
-
-        receiver_cal_file = 201  # cterms=7, wterms=8 terms over 50-150 MHz
-
-        antenna_s11_day = 147
-        antenna_s11_case = 3  # taken 2+ minutes after turning on the switch
-        antenna_s11_Nfit = 14  # 14 terms over 55-150 MHz
-
-        balun_correction = 1
-        ground_correction = 0
-        beam_correction = 0
-
-        f_low = 50
-        f_high = 150
-        n_fg = 5
-
-    if case == 72:
-        flag_folder = "case_nominal_50-150MHz_7_11"
-
-        receiver_cal_file = 202  # cterms=7, wterms=8 terms over 50-150 MHz
-
-        antenna_s11_day = 147
-        antenna_s11_case = 3  # taken 2+ minutes after turning on the switch
-        antenna_s11_Nfit = 14  # 14 terms over 55-150 MHz
-
-        balun_correction = 1
-        ground_correction = 0
-        beam_correction = 0
-
-        f_low = 50
-        f_high = 150
-        n_fg = 5
-
-    if case == 73:
-        flag_folder = "case_nominal_50-150MHz_7_8_LNA_rep1"
-
-        receiver_cal_file = 203  # cterms=7, wterms=8 terms over 50-150 MHz
-
-        antenna_s11_day = 147
-        antenna_s11_case = 3  # taken 2+ minutes after turning on the switch
-        antenna_s11_Nfit = 14  # 14 terms over 55-150 MHz
-
-        balun_correction = 1
-        ground_correction = 0
-        beam_correction = 0
-
-        f_low = 50
-        f_high = 150
-        n_fg = 5
-
-    if case == 74:
-        flag_folder = "case_nominal_50-150MHz_7_8_LNA_rep2"
-
-        receiver_cal_file = 204  # cterms=7, wterms=8 terms over 50-150 MHz
-
-        antenna_s11_day = 147
-        antenna_s11_case = 3  # taken 2+ minutes after turning on the switch
-        antenna_s11_Nfit = 14  # 14 terms over 55-150 MHz
-
-        balun_correction = 1
-        ground_correction = 0
-        beam_correction = 0
-
-        f_low = 50
-        f_high = 150
-        n_fg = 5
-
-    if case == 75:
-        flag_folder = "case_nominal_50-150MHz_7_8_LNA_rep12"
-
-        receiver_cal_file = 205  # cterms=7, wterms=8 terms over 50-150 MHz
-
-        antenna_s11_day = 147
-        antenna_s11_case = 3  # taken 2+ minutes after turning on the switch
-        antenna_s11_Nfit = 14  # 14 terms over 55-150 MHz
-
-        balun_correction = 1
-        ground_correction = 0
-        beam_correction = 0
-
-        f_low = 50
-        f_high = 150
-        n_fg = 5
-
-    if case == 731:
-        flag_folder = "case_nominal_50-150MHz_7_8_LNA_rep1_ant1"
-
-        receiver_cal_file = 203  # cterms=7, wterms=8 terms over 50-150 MHz
-
-        antenna_s11_day = 147
-        antenna_s11_case = 1  # taken 2+ minutes after turning on the switch
-        antenna_s11_Nfit = 14  # 14 terms over 55-150 MHz
-
-        balun_correction = 1
-        ground_correction = 0
-        beam_correction = 0
-
-        f_low = 50
-        f_high = 150
-        n_fg = 5
-
-    if case == 735:
-        flag_folder = "case_nominal_50-150MHz_7_8_LNA_rep1_ant5"
-
-        receiver_cal_file = 203  # cterms=7, wterms=8 terms over 50-150 MHz
-
-        antenna_s11_day = 147
-        antenna_s11_case = 5  # taken 2+ minutes after turning on the switch
-        antenna_s11_Nfit = 14  # 14 terms over 55-150 MHz
-
-        balun_correction = 1
-        ground_correction = 0
-        beam_correction = 0
-
-        f_low = 50
-        f_high = 150
-        n_fg = 5
-
-    if case == 736:
-        flag_folder = "case_nominal_50-150MHz_7_8_LNA_rep1_ant6"
-
-        receiver_cal_file = 203  # cterms=7, wterms=8 terms over 50-150 MHz
-
-        antenna_s11_day = 147
-        antenna_s11_case = 6  # taken 2+ minutes after turning on the switch
-        antenna_s11_Nfit = 14  # 14 terms over 55-150 MHz
-
-        balun_correction = 1
-        ground_correction = 0
-        beam_correction = 0
-
-        f_low = 50
-        f_high = 150
-        n_fg = 5
-
-    if case == 401:
-        flag_folder = "case_nominal_50-150MHz_LNA1_a1_h1_o1_s1_sim2"
-
-        receiver_cal_file = 401  # cterms=7, wterms=8 terms over 50-150 MHz
-
-        antenna_s11_day = 147
-        antenna_s11_case = 3  # taken 2+ minutes after turning on the switch
-        antenna_s11_Nfit = 14  # 14 terms over 55-150 MHz
-
-        balun_correction = 1
-        ground_correction = 0
-        beam_correction = 0
-
-        f_low = 50
-        f_high = 150
-        n_fg = 5
-
-    if case == 402:
-        flag_folder = "case_nominal_50-150MHz_LNA1_a1_h2_o1_s1_sim2"
-
-        receiver_cal_file = 402  # cterms=7, wterms=8 terms over 50-150 MHz
-
-        antenna_s11_day = 147
-        antenna_s11_case = 3  # taken 2+ minutes after turning on the switch
-        antenna_s11_Nfit = 14  # 14 terms over 55-150 MHz
-
-        balun_correction = 1
-        ground_correction = 0
-        beam_correction = 0
-
-        f_low = 50
-        f_high = 150
-        n_fg = 5
-
-    if case == 403:
-        flag_folder = "case_nominal_50-150MHz_LNA1_a2_h1_o1_s1_sim2"
-
-        receiver_cal_file = 403  # cterms=7, wterms=8 terms over 50-150 MHz
-
-        antenna_s11_day = 147
-        antenna_s11_case = 3  # taken 2+ minutes after turning on the switch
-        antenna_s11_Nfit = 14  # 14 terms over 55-150 MHz
-
-        balun_correction = 1
-        ground_correction = 0
-        beam_correction = 0
-
-        f_low = 50
-        f_high = 150
-        n_fg = 5
-
-    if case == 404:
-        flag_folder = "case_nominal_50-150MHz_LNA1_a2_h2_o1_s1_sim2"
-
-        receiver_cal_file = 404  # cterms=7, wterms=8 terms over 50-150 MHz
-
-        antenna_s11_day = 147
-        antenna_s11_case = 3  # taken 2+ minutes after turning on the switch
-        antenna_s11_Nfit = 14  # 14 terms over 55-150 MHz
-
-        balun_correction = 1
-        ground_correction = 0
-        beam_correction = 0
-
-        f_low = 50
-        f_high = 150
-        n_fg = 5
-
-    if case == 405:
-        flag_folder = "case_nominal_50-150MHz_LNA1_a2_h2_o1_s2_sim2"
-
-        receiver_cal_file = 405  # cterms=7, wterms=8 terms over 50-150 MHz
-
-        antenna_s11_day = 147
-        antenna_s11_case = 3  # taken 2+ minutes after turning on the switch
-        antenna_s11_Nfit = 14  # 14 terms over 55-150 MHz
-
-        balun_correction = 1
-        ground_correction = 0
-        beam_correction = 0
-
-        f_low = 50
-        f_high = 150
-        n_fg = 5
-
-    if case == 406:
-        flag_folder = "case_nominal_50-150MHz_LNA1_a2_h2_o2_s1_sim2"
-
-        receiver_cal_file = 406  # cterms=7, wterms=8 terms over 50-150 MHz
-
-        antenna_s11_day = 147
-        antenna_s11_case = 3  # taken 2+ minutes after turning on the switch
-        antenna_s11_Nfit = 14  # 14 terms over 55-150 MHz
-
-        balun_correction = 1
-        ground_correction = 0
-        beam_correction = 0
-
-        f_low = 50
-        f_high = 150
-        n_fg = 5
-
-    if case == 407:
-        flag_folder = "case_nominal_50-150MHz_LNA1_a2_h2_o2_s2_sim2"
-
-        receiver_cal_file = 407  # cterms=7, wterms=8 terms over 50-150 MHz
-
-        antenna_s11_day = 147
-        antenna_s11_case = 3  # taken 2+ minutes after turning on the switch
-        antenna_s11_Nfit = 14  # 14 terms over 55-150 MHz
-
-        balun_correction = 1
-        ground_correction = 0
-        beam_correction = 0
-
-        f_low = 50
-        f_high = 150
-        n_fg = 5
-
-    if case == 500:
-        flag_folder = "case_nominal_50-150MHz_LNA2_a2_h2_o2_s1_sim2_all_lc_no_bc"  #
-
-        receiver_cal_file = 2  # cterms=7, wterms=8 terms over 50-150 MHz
-
-        antenna_s11_day = 147
-        antenna_s11_case = 3  # taken 2+ minutes after turning on the switch
-        antenna_s11_Nfit = 14  # 14 terms over 55-150 MHz
-
-        antenna_correction = 1
-        balun_correction = 1
-        ground_correction = 1
-        beam_correction = 0
-
-        f_low = 50
-        f_high = 150
-        n_fg = 5
-
-    if case == 501:
-        flag_folder = "case_nominal_50-150MHz_LNA2_a2_h2_o2_s1_sim2_all_lc_yes_bc"  #
-        # 'case_nominal_50-150MHz_LNA1_a2_h2_o2_s1_sim2_all_corrections'
-
-        receiver_cal_file = 2  # cterms=7, wterms=8 terms over 50-150 MHz
-
-        antenna_s11_day = 147
-        antenna_s11_case = 3  # taken 2+ minutes after turning on the switch
-        antenna_s11_Nfit = 14  # 14 terms over 55-150 MHz
-
-        antenna_correction = 1
-        balun_correction = 1
-        ground_correction = 1
-        beam_correction = 1
-
-        f_low = 50
-        f_high = 150
-        n_fg = 5
-
-    if case == 510:
-        flag_folder = (
-            "test_A"  # 'case_nominal_50-150MHz_LNA1_a2_h2_o2_s1_sim2_all_corrections'
-        )
-
-        receiver_cal_file = 2  # cterms=7, wterms=8 terms over 50-150 MHz
-
-        antenna_s11_day = 147
-        antenna_s11_case = 3  # taken 2+ minutes after turning on the switch
-        antenna_s11_Nfit = 14  # 14 terms over 55-150 MHz
-
-        antenna_correction = 1
-        balun_correction = 1
-        ground_correction = 1
-        beam_correction = 1
-        beam_correction_case = (
-            0  # alan0 beam (30x30m ground plane), haslam map with gaussian
-        )
-        # lat-function for spectral index
-
-        f_low = 50
-        f_high = 150
-        n_fg = 5
-
-    if case == 511:
-        flag_folder = (
-            "test_B"  # 'case_nominal_50-150MHz_LNA1_a2_h2_o2_s1_sim2_all_corrections'
-        )
-
-        receiver_cal_file = 2  # cterms=7, wterms=8 terms over 50-150 MHz
-
-        antenna_s11_day = 147
-        antenna_s11_case = 3  # taken 2+ minutes after turning on the switch
-        antenna_s11_Nfit = 14  # 14 terms over 55-150 MHz
-
-        antenna_correction = 1
-        balun_correction = 1
-        ground_correction = 1
-        beam_correction = 1
-        beam_correction_case = (
-            1  # alan0 beam (30x30m ground plane), haslam map with gaussian
-        )
-        # lat-function for spectral index
-
-        f_low = 50
-        f_high = 150
-        n_fg = 5
+    batch_level1_to_level2(
+        "low_band3",
+        path=home_folder + "/EDGES/spectra/level1/low_band3/300_350/",
+        omit_days=[225],
+        day_indx=12,
+    )
+
+
+def batch_level2_to_level3(
+    band,
+    flag_folder,
+    first_day,
+    last_day,
+    receiver_cal_file=2,
+    antenna_s11_Nfit=13,
+    balun_correction=True,
+    ground_correction=True,
+    beam_correction=True,
+    antenna_correction=True,
+    f_low=55,
+    beam_correction_case=1,
+    f_high=120,
+    n_fg=5,
+    bad_files=None,
+):
 
     # Listing files to be processed
-    path_files = edges_folder + "mid_band/spectra/level2/"
-    old_list = listdir(path_files)
-    old_list.sort()
+    path_files = edges_folder + f"{band}/spectra/level2/"
+    files = sorted(listdir(path_files))
 
-    bad_files = [
-        "2018_153_00.hdf5",
-        "2018_154_00.hdf5",
-        "2018_155_00.hdf5",
-        "2018_156_00.hdf5",
-        "2018_158_00.hdf5",
-        "2018_168_00.hdf5",
-        "2018_183_00.hdf5",
-        "2018_194_00.hdf5",
-        "2018_202_00.hdf5",
-        "2018_203_00.hdf5",
-        "2018_206_00.hdf5",
-        "2018_207_00.hdf5",
-        "2018_213_00.hdf5",
-        "2018_214_00.hdf5",
-        "2018_221_00.hdf5",
-        "2018_222_00.hdf5",
-    ]
+    if bad_files is None and band == "mid_band":
+        bad_files = dirname(__file__) + "data/bad_files_mid_band_2to3.yaml"
 
-    new_list = []
-    for i in range(len(old_list)):
-        if old_list[i] not in bad_files:
-            new_list.append(old_list[i])
+    if isinstance(bad_files, str):
+        with open(bad_files) as fl:
+            bad_files = yaml.load(fl, Loader=yaml.FullLoader)["bad_files"]
+
+    bad_files = bad_files or []
+
+    files = [f for f in files if f not in bad_files]
 
     # Processing files
-    for i in range(len(new_list)):
-
-        day = int(new_list[i][5:8])
+    for fl in files:
+        day = int(fl[5:8])
 
         if (day >= first_day) & (day <= last_day):
             print(day)
 
             level2_to_level3(
-                "mid_band",
-                new_list[i],
+                band,
+                fl,
                 flag_folder=flag_folder,
-                receiver_cal_file=edges_folder
-                + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/"
-                + CALFILES[receiver_cal_file],
-                antenna_s11_year=2018,
-                antenna_s11_day=antenna_s11_day,
-                antenna_s11_case=antenna_s11_case,
+                rcv_file=(
+                    edges_folder
+                    + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/"
+                    + CALFILES[receiver_cal_file]
+                ),
                 antenna_s11_Nfit=antenna_s11_Nfit,
                 antenna_correction=antenna_correction,
                 balun_correction=balun_correction,
@@ -2870,920 +1034,87 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
                 n_fg=n_fg,
             )
 
-    return 0
 
-
-def batch_low_band3_level2_to_level3(case):
-    if case == 2:
-        flag_folder = "case2"
-        receiver_cal_file = (
-            edges_folder
-            + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal"
-            "/calibration_files/original/calibration_file_receiver1_cterms7_wterms8.txt"
-        )
-        antenna_s11_day = 227
-        antenna_s11_Nfit = 14
-        beam_correction = 1
-        balun_correction = 1
-        f_low = 50
-        f_high = 120
-        n_fg = 7
-
-    # Listing files to be processed
-    path_files = edges_folder + "low_band3/spectra/level2/"
-    new_list = listdir(path_files)
-    new_list.sort()
-
-    for i in range(len(new_list)):
-
-        level2_to_level3(
-            "low_band3",
-            new_list[i],
-            flag_folder=flag_folder,
-            receiver_cal_file=receiver_cal_file,
-            antenna_s11_year=2018,
-            antenna_s11_day=antenna_s11_day,
-            antenna_s11_Nfit=antenna_s11_Nfit,
-            beam_correction=beam_correction,
-            balun_correction=balun_correction,
-            f_low=f_low,
-            f_high=f_high,
-            n_fg=n_fg,
-        )
-
-    return new_list
-
-
-def batch_plot_daily_residuals_LST():
-    # Listing files to be processed
-    path_files = (
-        home_folder + "/EDGES/spectra/level3/mid_band/nominal_60_160MHz_fullcal/"
-    )
-    new_list = listdir(path_files)
-    new_list.sort()
-
-    # Global settings
-    # ----------------------------------
-
-    # Computation of residuals
-    LST_boundaries = np.arange(0, 25, 1)
-    f_low = 60
-    f_high = 150
-    SUN_EL_max = -20
-    MOON_EL_max = 90
-
-    # Plotting
-    LST_centers = list(np.arange(0.5, 24))
-    LST_text = ["LST=" + str(LST_centers[i]) + " hr" for i in range(len(LST_centers))]
-    DY = 4
-    f_low_plot = 35
-    f_high_plot = 155
-    XTICKS = np.arange(60, 156, 20)
-    XTEXT = 38
-    YLABEL = "4 K per division"
-
-    # 3 foreground terms
-    n_fg = 5
-    figure_path = (
-        "/data5/raul/EDGES/results/plots/20181031/midband_residuals_nighttime_5terms/"
-    )
-
-    for i in range(len(new_list)):  # [len(new_list)-1]:
-        print(new_list[i])
-
-        # Computing residuals
-        fb, rb, wb = tools.daily_residuals_LST(
-            new_list[i],
-            LST_boundaries=LST_boundaries,
-            f_low=f_low,
-            f_high=f_high,
-            n_fg=n_fg,
-            SUN_EL_max=SUN_EL_max,
-            MOON_EL_max=MOON_EL_max,
-        )
-
-        # Plotting
-        plots.plot_daily_residuals_LST(
-            fb,
-            rb,
-            LST_text,
-            DY=DY,
-            f_low=f_low_plot,
-            f_high=f_high_plot,
-            XTICKS=XTICKS,
-            XTEXT=XTEXT,
-            YLABEL=YLABEL,
-            TITLE=str(n_fg) + " TERMS:  " + new_list[i][0:-5],
-            save=True,
-            figure_path=figure_path,
-            figure_name=new_list[i][0:-5],
-        )
-
-
-def plot_residuals_GHA_1hr_bin(f, r, w):
-    # Settings
-    # ----------------------------------
-
+def plot_residuals_GHA_1hr_bin(direc, f, r, w, fname="linlog_5terms_60-120MHz"):
     GHA_edges = list(np.arange(0, 25))
-    GHA_text = [
-        "GHA=" + str(GHA_edges[i]) + "-" + str(GHA_edges[i + 1]) + " hr"
-        for i in range(len(GHA_edges) - 1)
-    ]
     DY = 0.4
-    f_low_plot = 40
-    f_high_plot = 125
-    XTICKS = np.arange(60, 121, 20)
-    XTEXT = 42
-    YLABEL = str(DY) + " K per division"
-    TITLE = "5 LINLOG terms, 60-120 MHz"
-    figure_path = "/home/raul/Desktop/"
-    figure_name = "linlog_5terms_60-120MHz"
 
     # Plotting
-    src.edges_analysis.analysis.tools.plot_residuals(
+    plots.plot_residuals(
         f,
         r,
         w,
-        GHA_text,
+        [f"GHA={gha}-{GHA_edges[i + 1]} hr" for i, gha in enumerate(GHA_edges[:-1])],
         DY=DY,
-        f_low=f_low_plot,
-        f_high=f_high_plot,
-        XTICKS=XTICKS,
-        XTEXT=XTEXT,
-        YLABEL=YLABEL,
-        TITLE=TITLE,
+        f_low=40,
+        f_high=125,
+        XTICKS=np.arange(60, 121, 20),
+        XTEXT=42,
+        YLABEL=f"{DY} K per division",
+        TITLE="5 LINLOG terms, 60-120 MHz",
         save=True,
-        figure_path=figure_path,
-        figure_name=figure_name,
+        figure_path=direc,
+        figure_name=fname,
     )
 
 
-def plot_residuals_GHA_Xhr_bin(f, r, w):
-    # Settings
-    # ----------------------------------
-    LST_text = ["GHA=0-5 hr", "GHA=5-11 hr", "GHA=11-18 hr", "GHA=18-24 hr"]
+def plot_residuals_GHA_Xhr_bin(direc, fname, f, r, w):
     DY = 0.5
-    f_low_plot = 35
-    f_high_plot = 165
-    XTICKS = np.arange(60, 161, 20)
-    XTEXT = 38
-    YLABEL = str(DY) + " K per division"
-    TITLE = "4 LINLOG terms, 62-120 MHz"
-    figure_path = "/home/raul/Desktop/"
-    figure_name = "CASE2_linlog_4terms_62-120MHz"
-    FIG_SX = 8
-    FIG_SY = 7
 
     # Plotting
-    src.edges_analysis.analysis.tools.plot_residuals(
+    plots.plot_residuals(
         f,
         r,
         w,
-        LST_text,
-        FIG_SX=FIG_SX,
-        FIG_SY=FIG_SY,
+        ["GHA=0-5 hr", "GHA=5-11 hr", "GHA=11-18 hr", "GHA=18-24 hr"],
+        FIG_SX=8,
+        FIG_SY=7,
         DY=DY,
-        f_low=f_low_plot,
-        f_high=f_high_plot,
-        XTICKS=XTICKS,
-        XTEXT=XTEXT,
-        YLABEL=YLABEL,
-        TITLE=TITLE,
+        f_low=35,
+        f_high=165,
+        XTICKS=np.arange(60, 161, 20),
+        XTEXT=38,
+        YLABEL=f"{DY} K per division",
+        TITLE="4 LINLOG terms, 62-120 MHz",
         save=True,
-        figure_path=figure_path,
-        figure_name=figure_name,
+        figure_path=direc,
+        figure_name=fname,
     )
 
 
 def vna_comparison():
-    path_folder1 = edges_folder + "others/vna_comparison/keysight_e5061a/"
-    path_folder2 = edges_folder + "others/vna_comparison/copper_mountain_r60/"
-    path_folder3 = edges_folder + "others/vna_comparison/tektronix_ttr506a/"
-    path_folder4 = edges_folder + "others/vna_comparison/copper_mountain_tr1300/"
+    paths = [
+        edges_folder + "others/vna_comparison/keysight_e5061a/",
+        edges_folder + "others/vna_comparison/copper_mountain_r60/",
+        edges_folder + "others/vna_comparison/tektronix_ttr506a/",
+        edges_folder + "others/vna_comparison/copper_mountain_tr1300/",
+    ]
 
-    o_K, f = rc.s1p_read(path_folder1 + "AGILENT_E5061A_OPEN.s1p")
-    s_K, f = rc.s1p_read(path_folder1 + "AGILENT_E5061A_SHORT.s1p")
-    m_K, f = rc.s1p_read(path_folder1 + "AGILENT_E5061A_MATCH.s1p")
-    at3_K, f = rc.s1p_read(path_folder1 + "AGILENT_E5061A_3dB_ATTENUATOR.s1p")
-    at6_K, f = rc.s1p_read(path_folder1 + "AGILENT_E5061A_6dB_ATTENUATOR.s1p")
-    at10_K, f = rc.s1p_read(path_folder1 + "AGILENT_E5061A_10dB_ATTENUATOR.s1p")
-    at15_K, f = rc.s1p_read(path_folder1 + "AGILENT_E5061A_15dB_ATTENUATOR.s1p")
+    labels = ["Keysight E5061A", "CM R60", "Tektronix", "CM TR1300"]
 
-    o_R, f = rc.s1p_read(path_folder2 + "OPEN.s1p")
-    s_R, f = rc.s1p_read(path_folder2 + "SHORT.s1p")
-    m_R, f = rc.s1p_read(path_folder2 + "MATCH.s1p")
-    at3_R, f = rc.s1p_read(path_folder2 + "3dB_ATTENUATOR.s1p")
-    at6_R, f = rc.s1p_read(path_folder2 + "6dB_ATTENUATOR.s1p")
-    at10_R, f = rc.s1p_read(path_folder2 + "10dB_ATTENUATOR.s1p")
-    at15_R, f = rc.s1p_read(path_folder2 + "15dB_ATTENUATOR.s1p")
-
-    o_T, f = rc.s1p_read(path_folder3 + "uncalibrated_Open02.s1p")
-    s_T, f = rc.s1p_read(path_folder3 + "uncalibrated_Short02.s1p")
-    m_T, f = rc.s1p_read(path_folder3 + "uncalibrated_Match02.s1p")
-    at3_T, f = rc.s1p_read(path_folder3 + "uncalibrated_3dB_Measurment2.s1p")
-    at6_T, f = rc.s1p_read(path_folder3 + "uncalibrated_6dB_Measurment2.s1p")
-    at10_T, f = rc.s1p_read(path_folder3 + "uncalibrated_10dB_Measurment2.s1p")
-    at15_T, f = rc.s1p_read(path_folder3 + "uncalibrated_15dB_Measurment2.s1p")
-
-    o_C, f = rc.s1p_read(path_folder4 + "Open_Measurment_01.s1p")
-    s_C, f = rc.s1p_read(path_folder4 + "Short_Measurment_01.s1p")
-    m_C, f = rc.s1p_read(path_folder4 + "Match_Measurment_01.s1p")
-    at3_C, f = rc.s1p_read(path_folder4 + "3dB_Measurment_01.s1p")
-    at6_C, f = rc.s1p_read(path_folder4 + "6dB_Measurment_01.s1p")
-    at10_C, f = rc.s1p_read(path_folder4 + "10dB_Measurment_01.s1p")
-    at15_C, f = rc.s1p_read(path_folder4 + "15dB_Measurment_01.s1p")
-
-    xx = rc.agilent_85033E(f, 50, m=1, md_value_ps=38)
-    o_a = xx[0]
-    s_a = xx[1]
-    m_a = xx[2]
-
-    # Correction
-    at3_Rc, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_R, s_R, m_R, at3_R)
-    at6_Rc, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_R, s_R, m_R, at6_R)
-    at10_Rc, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_R, s_R, m_R, at10_R)
-    at15_Rc, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_R, s_R, m_R, at15_R)
-
-    at3_Tc, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_T, s_T, m_T, at3_T)
-    at6_Tc, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_T, s_T, m_T, at6_T)
-    at10_Tc, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_T, s_T, m_T, at10_T)
-    at15_Tc, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_T, s_T, m_T, at15_T)
-
-    at3_Kc, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_K, s_K, m_K, at3_K)
-    at6_Kc, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_K, s_K, m_K, at6_K)
-    at10_Kc, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_K, s_K, m_K, at10_K)
-    at15_Kc, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_K, s_K, m_K, at15_K)
-
-    at3_Cc, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_C, s_C, m_C, at3_C)
-    at6_Cc, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_C, s_C, m_C, at6_C)
-    at10_Cc, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_C, s_C, m_C, at10_C)
-    at15_Cc, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_C, s_C, m_C, at15_C)
-
-    # Plot
-
-    plt.figure(1)
-
-    plt.subplot(4, 2, 1)
-    plt.plot(f / 1e6, 20 * np.log10(np.abs(at3_Kc)))
-    plt.plot(f / 1e6, 20 * np.log10(np.abs(at3_Rc)))
-    plt.plot(f / 1e6, 20 * np.log10(np.abs(at3_Tc)))
-    plt.plot(f / 1e6, 20 * np.log10(np.abs(at3_Cc)))
-    plt.ylabel("3-dB Attn [dB]")
-    plt.title("MAGNITUDE")
-    plt.legend(["Keysight E5061A", "CM R60", "Tektronix", "CM TR1300"])
-
-    plt.subplot(4, 2, 2)
-    plt.plot(
-        f / 1e6,
-        (180 / np.pi) * np.unwrap(np.angle(at3_Rc))
-        - (180 / np.pi) * np.unwrap(np.angle(at3_Kc)),
-    )
-    plt.plot(
-        f / 1e6,
-        (180 / np.pi) * np.unwrap(np.angle(at3_Rc))
-        - (180 / np.pi) * np.unwrap(np.angle(at3_Kc)),
-    )
-    plt.plot(
-        f / 1e6,
-        (180 / np.pi) * np.unwrap(np.angle(at3_Tc))
-        - (180 / np.pi) * np.unwrap(np.angle(at3_Kc)),
-    )
-    plt.plot(
-        f / 1e6,
-        (180 / np.pi) * np.unwrap(np.angle(at3_Cc))
-        - (180 / np.pi) * np.unwrap(np.angle(at3_Kc)),
-    )
-    plt.ylabel("3-dB Attn [degrees]")
-    plt.title(r"$\Delta$ PHASE")
-
-    plt.subplot(4, 2, 3)
-    plt.plot(f / 1e6, 20 * np.log10(np.abs(at6_Kc)))
-    plt.plot(f / 1e6, 20 * np.log10(np.abs(at6_Rc)))
-    plt.plot(f / 1e6, 20 * np.log10(np.abs(at6_Tc)))
-    plt.plot(f / 1e6, 20 * np.log10(np.abs(at6_Cc)))
-    plt.ylabel("6-dB Attn [dB]")
-
-    plt.subplot(4, 2, 4)
-    plt.plot(
-        f / 1e6,
-        (180 / np.pi) * np.unwrap(np.angle(at6_Rc))
-        - (180 / np.pi) * np.unwrap(np.angle(at6_Kc)),
-    )
-    plt.plot(
-        f / 1e6,
-        (180 / np.pi) * np.unwrap(np.angle(at6_Rc))
-        - (180 / np.pi) * np.unwrap(np.angle(at6_Kc)),
-    )
-    plt.plot(
-        f / 1e6,
-        (180 / np.pi) * np.unwrap(np.angle(at6_Tc))
-        - (180 / np.pi) * np.unwrap(np.angle(at6_Kc)),
-    )
-    plt.plot(
-        f / 1e6,
-        (180 / np.pi) * np.unwrap(np.angle(at6_Cc))
-        - (180 / np.pi) * np.unwrap(np.angle(at6_Kc)),
-    )
-    plt.ylabel("6-dB Attn [degrees]")
-
-    plt.subplot(4, 2, 5)
-    plt.plot(f / 1e6, 20 * np.log10(np.abs(at10_Kc)))
-    plt.plot(f / 1e6, 20 * np.log10(np.abs(at10_Rc)))
-    plt.plot(f / 1e6, 20 * np.log10(np.abs(at10_Tc)))
-    plt.plot(f / 1e6, 20 * np.log10(np.abs(at10_Cc)))
-    plt.ylabel("10-dB Attn [dB]")
-
-    plt.subplot(4, 2, 6)
-    plt.plot(
-        f / 1e6,
-        (180 / np.pi) * np.unwrap(np.angle(at10_Rc))
-        - (180 / np.pi) * np.unwrap(np.angle(at10_Kc)),
-    )
-    plt.plot(
-        f / 1e6,
-        (180 / np.pi) * np.unwrap(np.angle(at10_Rc))
-        - (180 / np.pi) * np.unwrap(np.angle(at10_Kc)),
-    )
-    plt.plot(
-        f / 1e6,
-        (180 / np.pi) * np.unwrap(np.angle(at10_Tc))
-        - (180 / np.pi) * np.unwrap(np.angle(at10_Kc)),
-    )
-    plt.plot(
-        f / 1e6,
-        (180 / np.pi) * np.unwrap(np.angle(at10_Cc))
-        - (180 / np.pi) * np.unwrap(np.angle(at10_Kc)),
-    )
-    plt.ylabel("10-dB Attn [degrees]")
-
-    plt.subplot(4, 2, 7)
-    plt.plot(f / 1e6, 20 * np.log10(np.abs(at15_Kc)))
-    plt.plot(f / 1e6, 20 * np.log10(np.abs(at15_Rc)))
-    plt.plot(f / 1e6, 20 * np.log10(np.abs(at15_Tc)))
-    plt.plot(f / 1e6, 20 * np.log10(np.abs(at15_Cc)))
-    plt.xlabel("frequency [MHz]")
-    plt.ylabel("15-dB Attn [dB]")
-
-    plt.subplot(4, 2, 8)
-    plt.plot(
-        f / 1e6,
-        (180 / np.pi) * np.unwrap(np.angle(at15_Rc))
-        - (180 / np.pi) * np.unwrap(np.angle(at15_Kc)),
-    )
-    plt.plot(
-        f / 1e6,
-        (180 / np.pi) * np.unwrap(np.angle(at15_Rc))
-        - (180 / np.pi) * np.unwrap(np.angle(at15_Kc)),
-    )
-    plt.plot(
-        f / 1e6,
-        (180 / np.pi) * np.unwrap(np.angle(at15_Tc))
-        - (180 / np.pi) * np.unwrap(np.angle(at15_Kc)),
-    )
-    plt.plot(
-        f / 1e6,
-        (180 / np.pi) * np.unwrap(np.angle(at15_Cc))
-        - (180 / np.pi) * np.unwrap(np.angle(at15_Kc)),
-    )
-    plt.xlabel("frequency [MHz]")
-    plt.ylabel("15-dB Attn [degrees]")
-
-    return (
-        f,
-        at3_K,
-        at6_K,
-        at10_K,
-        at15_K,
-        at3_Kc,
-        at6_Kc,
-        at10_Kc,
-        at15_Kc,
-        at3_R,
-        at6_R,
-        at10_R,
-        at15_R,
-        at3_Rc,
-        at6_Rc,
-        at10_Rc,
-        at15_Rc,
-    )
+    plots.plot_vna_comparison(paths, labels)
 
 
 def VNA_comparison2():
-    path_folder1 = edges_folder + "others/vna_comparison/again/ks_e5061a/"
-    path_folder2 = edges_folder + "others/vna_comparison/again/cm_tr1300/"
+    paths = [
+        edges_folder + "others/vna_comparison/again/ks_e5061a/",
+        edges_folder + "others/vna_comparison/again/cm_tr1300/",
+    ]
 
-    o_K1, f = rc.s1p_read(path_folder1 + "Open_Measurment_01.s1p")
-    s_K1, f = rc.s1p_read(path_folder1 + "Short_Measurment_01.s1p")
-    m_K1, f = rc.s1p_read(path_folder1 + "Match_Measurment_01.s1p")
-    at3_K1, f = rc.s1p_read(path_folder1 + "3dB_Mearsurment_01.s1p")
-    at6_K1, f = rc.s1p_read(path_folder1 + "6dB_Mearsurment_01.s1p")
-    at10_K1, f = rc.s1p_read(path_folder1 + "10dB_Mearsurment_01.s1p")
-    at15_K1, f = rc.s1p_read(path_folder1 + "15dB_Mearsurment_01.s1p")
-
-    o_K2, f = rc.s1p_read(path_folder1 + "Open_Measurment_02.s1p")
-    s_K2, f = rc.s1p_read(path_folder1 + "Short_Measurment_02.s1p")
-    m_K2, f = rc.s1p_read(path_folder1 + "Match_Measurment_02.s1p")
-    at3_K2, f = rc.s1p_read(path_folder1 + "3dB_Mearsurment_02.s1p")
-    at6_K2, f = rc.s1p_read(path_folder1 + "6dB_Mearsurment_02.s1p")
-    at10_K2, f = rc.s1p_read(path_folder1 + "10dB_Mearsurment_02.s1p")
-    at15_K2, f = rc.s1p_read(path_folder1 + "15dB_Mearsurment_02.s1p")
-
-    o_C1, f = rc.s1p_read(path_folder2 + "Open_Measurment_01.s1p")
-    s_C1, f = rc.s1p_read(path_folder2 + "Short_Measurment_01.s1p")
-    m_C1, f = rc.s1p_read(path_folder2 + "Match_Measurment_01.s1p")
-    at3_C1, f = rc.s1p_read(path_folder2 + "3dB_Measurment_01.s1p")
-    at6_C1, f = rc.s1p_read(path_folder2 + "6dB_Measurment_01.s1p")
-    at10_C1, f = rc.s1p_read(path_folder2 + "10dB_Measurment_01.s1p")
-    at15_C1, f = rc.s1p_read(path_folder2 + "15dB_Measurment_01.s1p")
-
-    o_C2, f = rc.s1p_read(path_folder2 + "Open_Measurment_02.s1p")
-    s_C2, f = rc.s1p_read(path_folder2 + "Short_Measurment_02.s1p")
-    m_C2, f = rc.s1p_read(path_folder2 + "Match_Measurment_02.s1p")
-    at3_C2, f = rc.s1p_read(path_folder2 + "3dB_Measurment_02.s1p")
-    at6_C2, f = rc.s1p_read(path_folder2 + "6dB_Measurment_02.s1p")
-    at10_C2, f = rc.s1p_read(path_folder2 + "10dB_Measurment_02.s1p")
-    at15_C2, f = rc.s1p_read(path_folder2 + "15dB_Measurment_02.s1p")
-
-    xx = rc.agilent_85033E(f, 50, m=1, md_value_ps=38)
-    o_a = xx[0]
-    s_a = xx[1]
-    m_a = xx[2]
-
-    # Correction
-    at3_Kc, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_K2, s_K2, m_K2, at3_K2)
-    at6_Kc, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_K2, s_K2, m_K2, at6_K2)
-    at10_Kc, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_K2, s_K2, m_K2, at10_K2)
-    at15_Kc, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_K2, s_K2, m_K2, at15_K2)
-
-    at3_Cc, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_C2, s_C2, m_C2, at3_C2)
-    at6_Cc, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_C2, s_C2, m_C2, at6_C2)
-    at10_Cc, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_C2, s_C2, m_C2, at10_C2)
-    at15_Cc, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_C2, s_C2, m_C2, at15_C2)
-
-    # Plot
-
-    plt.figure(1, figsize=(15, 10))
-
-    plt.subplot(4, 2, 1)
-    plt.plot(f / 1e6, 20 * np.log10(np.abs(at3_Kc)), "k")
-    plt.plot(f / 1e6, 20 * np.log10(np.abs(at3_Cc)), "r")
-
-    plt.ylabel("3-dB Attn [dB]")
-    plt.title("MAGNITUDE")
-    plt.legend(["Keysight E5061A", "CM TR1300"])
-
-    plt.subplot(4, 2, 2)
-    plt.plot(
-        f / 1e6,
-        (180 / np.pi) * np.unwrap(np.angle(at3_Cc))
-        - (180 / np.pi) * np.unwrap(np.angle(at3_Kc)),
-        "r",
-    )
-    plt.ylabel("3-dB Attn [degrees]")
-    plt.title(r"$\Delta$ PHASE")
-
-    plt.subplot(4, 2, 3)
-    plt.plot(f / 1e6, 20 * np.log10(np.abs(at6_Kc)), "k")
-    plt.plot(f / 1e6, 20 * np.log10(np.abs(at6_Cc)), "r")
-    plt.ylabel("6-dB Attn [dB]")
-
-    plt.subplot(4, 2, 4)
-    plt.plot(
-        f / 1e6,
-        (180 / np.pi) * np.unwrap(np.angle(at6_Cc))
-        - (180 / np.pi) * np.unwrap(np.angle(at6_Kc)),
-        "r",
-    )
-    plt.ylabel("6-dB Attn [degrees]")
-
-    plt.subplot(4, 2, 5)
-    plt.plot(f / 1e6, 20 * np.log10(np.abs(at10_Kc)), "k")
-    plt.plot(f / 1e6, 20 * np.log10(np.abs(at10_Cc)), "r")
-    plt.ylabel("10-dB Attn [dB]")
-
-    plt.subplot(4, 2, 6)
-    plt.plot(
-        f / 1e6,
-        (180 / np.pi) * np.unwrap(np.angle(at10_Cc))
-        - (180 / np.pi) * np.unwrap(np.angle(at10_Kc)),
-        "r",
-    )
-    plt.ylabel("10-dB Attn [degrees]")
-
-    plt.subplot(4, 2, 7)
-    plt.plot(f / 1e6, 20 * np.log10(np.abs(at15_Kc)), "k")
-    plt.plot(f / 1e6, 20 * np.log10(np.abs(at15_Cc)), "r")
-    plt.xlabel("frequency [MHz]")
-    plt.ylabel("15-dB Attn [dB]")
-
-    plt.subplot(4, 2, 8)
-    plt.plot(
-        f / 1e6,
-        (180 / np.pi) * np.unwrap(np.angle(at15_Cc))
-        - (180 / np.pi) * np.unwrap(np.angle(at15_Kc)),
-        "r",
-    )
-    plt.xlabel("frequency [MHz]")
-    plt.ylabel("15-dB Attn [degrees]")
-
-    plt.savefig(
-        edges_folder + "/results/plots/20190415/vna_comparison.pdf", bbox_inches="tight"
-    )
+    labels = ["Keysight E5061A", "CM TR1300"]
+    plots.plot_vna_comparison(paths, labels)
 
 
 def VNA_comparison3():
-    path_folder1 = (
-        edges_folder + "others/vna_comparison/fieldfox_N9923A/agilent_E5061A_male/"
+
+    paths = (
+        edges_folder + "others/vna_comparison/fieldfox_N9923A/agilent_E5061A_male/",
+        edges_folder + "others/vna_comparison/fieldfox_N9923A/agilent_E5061A_female/",
+        edges_folder + "others/vna_comparison/fieldfox_N9923A/fieldfox_N9923A_male/",
+        edges_folder + "others/vna_comparison/fieldfox_N9923A/fieldfox_N9923A_female/",
     )
-    path_folder2 = (
-        edges_folder + "others/vna_comparison/fieldfox_N9923A/agilent_E5061A_female/"
-    )
-    path_folder3 = (
-        edges_folder + "others/vna_comparison/fieldfox_N9923A/fieldfox_N9923A_male/"
-    )
-    path_folder4 = (
-        edges_folder + "others/vna_comparison/fieldfox_N9923A/fieldfox_N9923A_female/"
-    )
-
-    REP = "02"
-
-    A_o, f = rc.s1p_read(path_folder1 + "Open" + REP + ".s1p")
-    A_s, f = rc.s1p_read(path_folder1 + "Short" + REP + ".s1p")
-    A_m, f = rc.s1p_read(path_folder1 + "Match" + REP + ".s1p")
-    A_at3, f = rc.s1p_read(path_folder1 + "3dB_" + REP + ".s1p")
-    A_at6, f = rc.s1p_read(path_folder1 + "6dB_" + REP + ".s1p")
-    A_at10, f = rc.s1p_read(path_folder1 + "10dB_" + REP + ".s1p")
-    A_at15, f = rc.s1p_read(path_folder1 + "15dB_" + REP + ".s1p")
-
-    B_o, f = rc.s1p_read(path_folder2 + "Open_" + REP + ".s1p")
-    B_s, f = rc.s1p_read(path_folder2 + "Short_" + REP + ".s1p")
-    B_m, f = rc.s1p_read(path_folder2 + "Match_" + REP + ".s1p")
-    B_at3, f = rc.s1p_read(path_folder2 + "3dB_" + REP + ".s1p")
-    B_at6, f = rc.s1p_read(path_folder2 + "6dB_02.s1p")
-    B_at10, f = rc.s1p_read(path_folder2 + "10dB_" + REP + ".s1p")
-    B_at15, f = rc.s1p_read(path_folder2 + "15dB_" + REP + ".s1p")
-
-    C_o, f = rc.s1p_read(path_folder3 + "OPEN" + REP + ".s1p")
-    C_s, f = rc.s1p_read(path_folder3 + "SHORT" + REP + ".s1p")
-    C_m, f = rc.s1p_read(path_folder3 + "MATCH" + REP + ".s1p")
-    C_at3, f = rc.s1p_read(path_folder3 + "3DB_" + REP + ".s1p")
-    C_at6, f = rc.s1p_read(path_folder3 + "6DB_" + REP + ".s1p")
-    C_at10, f = rc.s1p_read(path_folder3 + "10DB_" + REP + ".s1p")
-    C_at15, f = rc.s1p_read(path_folder3 + "15DB_" + REP + ".s1p")
-
-    D_o, f = rc.s1p_read(path_folder4 + "OPEN" + REP + ".s1p")
-    D_s, f = rc.s1p_read(path_folder4 + "SHORT" + REP + ".s1p")
-    D_m, f = rc.s1p_read(path_folder4 + "MATCH" + REP + ".s1p")
-    D_at3, f = rc.s1p_read(path_folder4 + "3DB_" + REP + ".s1p")
-    D_at6, f = rc.s1p_read(path_folder4 + "6DB_02.s1p")
-    D_at10, f = rc.s1p_read(path_folder4 + "10DB_" + REP + ".s1p")
-    D_at15, f = rc.s1p_read(path_folder4 + "15DB_" + REP + ".s1p")
-
-    xx = rc.agilent_85033E(f, 50, m=1, md_value_ps=38)
-    o_a = xx[0]
-    s_a = xx[1]
-    m_a = xx[2]
-
-    # Correction
-    A_at3c, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, A_o, A_s, A_m, A_at3)
-    A_at6c, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, A_o, A_s, A_m, A_at6)
-    A_at10c, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, A_o, A_s, A_m, A_at10)
-    A_at15c, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, A_o, A_s, A_m, A_at15)
-
-    B_at3c, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, B_o, B_s, B_m, B_at3)
-    B_at6c, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, B_o, B_s, B_m, B_at6)
-    B_at10c, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, B_o, B_s, B_m, B_at10)
-    B_at15c, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, B_o, B_s, B_m, B_at15)
-
-    C_at3c, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, C_o, C_s, C_m, C_at3)
-    C_at6c, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, C_o, C_s, C_m, C_at6)
-    C_at10c, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, C_o, C_s, C_m, C_at10)
-    C_at15c, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, C_o, C_s, C_m, C_at15)
-
-    D_at3c, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, D_o, D_s, D_m, D_at3)
-    D_at6c, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, D_o, D_s, D_m, D_at6)
-    D_at10c, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, D_o, D_s, D_m, D_at10)
-    D_at15c, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, D_o, D_s, D_m, D_at15)
-
-    # Plot
-
-    plt.figure(1)
-
-    plt.subplot(4, 2, 1)
-    plt.plot(f / 1e6, 20 * np.log10(np.abs(A_at3c)), "b")
-    plt.plot(f / 1e6, 20 * np.log10(np.abs(C_at3c)), "b--")
-    plt.plot(f / 1e6, 20 * np.log10(np.abs(B_at3c)), "r")
-    plt.plot(f / 1e6, 20 * np.log10(np.abs(D_at3c)), "r--")
-    plt.ylabel("3-dB Attn [dB]")
-    plt.title("MAGNITUDE")
-
-    plt.subplot(4, 2, 2)
-    plt.plot(
-        f / 1e6,
-        (180 / np.pi) * np.unwrap(np.angle(C_at3c))
-        - (180 / np.pi) * np.unwrap(np.angle(A_at3c)),
-        "b--",
-    )
-    plt.plot(
-        f / 1e6,
-        (180 / np.pi) * np.unwrap(np.angle(D_at3c))
-        - (180 / np.pi) * np.unwrap(np.angle(B_at3c)),
-        "r--",
-    )
-    plt.ylabel("3-dB Attn [degrees]")
-    plt.title(r"$\Delta$ PHASE")
-
-    plt.subplot(4, 2, 3)
-    plt.plot(f / 1e6, 20 * np.log10(np.abs(A_at6c)), "b")
-    plt.plot(f / 1e6, 20 * np.log10(np.abs(C_at6c)), "b--")
-    plt.plot(f / 1e6, 20 * np.log10(np.abs(B_at6c)), "r")
-    plt.plot(f / 1e6, 20 * np.log10(np.abs(D_at6c)), "r--")
-    plt.ylabel("6-dB Attn [dB]")
-
-    plt.subplot(4, 2, 4)
-    plt.plot(
-        f / 1e6,
-        (180 / np.pi) * np.unwrap(np.angle(C_at6c))
-        - (180 / np.pi) * np.unwrap(np.angle(A_at6c)),
-        "b--",
-    )
-    plt.plot(
-        f / 1e6,
-        (180 / np.pi) * np.unwrap(np.angle(D_at6c))
-        - (180 / np.pi) * np.unwrap(np.angle(B_at6c)),
-        "r--",
-    )
-    plt.ylabel("6-dB Attn [degrees]")
-
-    plt.subplot(4, 2, 5)
-    plt.plot(f / 1e6, 20 * np.log10(np.abs(A_at10c)), "b")
-    plt.plot(f / 1e6, 20 * np.log10(np.abs(C_at10c)), "b--")
-    plt.plot(f / 1e6, 20 * np.log10(np.abs(B_at10c)), "r")
-    plt.plot(f / 1e6, 20 * np.log10(np.abs(D_at10c)), "r--")
-    plt.ylabel("10-dB Attn [dB]")
-
-    plt.subplot(4, 2, 6)
-    plt.plot(
-        f / 1e6,
-        (180 / np.pi) * np.unwrap(np.angle(C_at10c))
-        - (180 / np.pi) * np.unwrap(np.angle(A_at10c)),
-        "b--",
-    )
-    plt.plot(
-        f / 1e6,
-        (180 / np.pi) * np.unwrap(np.angle(D_at10c))
-        - (180 / np.pi) * np.unwrap(np.angle(B_at10c)),
-        "r--",
-    )
-    plt.ylabel("10-dB Attn [degrees]")
-
-    plt.subplot(4, 2, 7)
-    plt.plot(f / 1e6, 20 * np.log10(np.abs(A_at15c)), "b")
-    plt.plot(f / 1e6, 20 * np.log10(np.abs(C_at15c)), "b--")
-    plt.plot(f / 1e6, 20 * np.log10(np.abs(B_at15c)), "r")
-    plt.plot(f / 1e6, 20 * np.log10(np.abs(D_at15c)), "r--")
-    plt.xlabel("frequency [MHz]")
-    plt.ylabel("15-dB Attn [dB]")
-    plt.legend(["Male E5061A", "Male N9923A", "Female E5061A", "Female N9923A"])
-
-    plt.subplot(4, 2, 8)
-    plt.plot(
-        f / 1e6,
-        (180 / np.pi) * np.unwrap(np.angle(C_at15c))
-        - (180 / np.pi) * np.unwrap(np.angle(A_at15c)),
-        "b--",
-    )
-    plt.plot(
-        f / 1e6,
-        (180 / np.pi) * np.unwrap(np.angle(D_at15c))
-        - (180 / np.pi) * np.unwrap(np.angle(B_at15c)),
-        "r--",
-    )
-    plt.xlabel("frequency [MHz]")
-    plt.ylabel("15-dB Attn [degrees]")
-
-
-def VNA_comparison4():
-    path_folder = edges_folder + "others/vna_comparison/keysight_P9370A/"
-
-    o_p1, fx = rc.s1p_read(path_folder + "open.s1p")
-    s_p1, fx = rc.s1p_read(path_folder + "short.s1p")
-    m_p1, fx = rc.s1p_read(path_folder + "load.s1p")
-    at3_p1, fx = rc.s1p_read(path_folder + "attn3db.s1p")
-    at6_p1, fx = rc.s1p_read(path_folder + "attn6db.s1p")
-    at10_p1, fx = rc.s1p_read(path_folder + "attn10db.s1p")
-
-    o_p2, fx = rc.s1p_read(path_folder + "port2_open.s1p")
-    s_p2, fx = rc.s1p_read(path_folder + "port2_short.s1p")
-    m_p2, fx = rc.s1p_read(path_folder + "port2_load.s1p")
-    at3_p2, fx = rc.s1p_read(path_folder + "port2_attn3db.s1p")
-    at6_p2, fx = rc.s1p_read(path_folder + "port2_attn6db.s1p")
-    at10_p2, fx = rc.s1p_read(path_folder + "port2_attn10db.s1p")
-
-    f_low = 15e6
-    f = fx[(fx >= f_low)]
-
-    o_p1 = o_p1[(fx >= f_low)]
-    s_p1 = s_p1[(fx >= f_low)]
-    m_p1 = m_p1[(fx >= f_low)]
-    at3_p1 = at3_p1[(fx >= f_low)]
-    at6_p1 = at6_p1[(fx >= f_low)]
-    at10_p1 = at10_p1[(fx >= f_low)]
-
-    o_p2 = o_p2[(fx >= f_low)]
-    s_p2 = s_p2[(fx >= f_low)]
-    m_p2 = m_p2[(fx >= f_low)]
-    at3_p2 = at3_p2[(fx >= f_low)]
-    at6_p2 = at6_p2[(fx >= f_low)]
-    at10_p2 = at10_p2[(fx >= f_low)]
-
-    Leads = 0.004
-    R50 = 48.785 - Leads
-    R3 = 163.70 - Leads
-    R6 = 85.04 - Leads
-    R10 = 61.615 - Leads
-
-    g3 = rc.impedance2gamma(R3, 50) * np.ones(len(f))
-    g6 = rc.impedance2gamma(R6, 50) * np.ones(len(f))
-    g10 = rc.impedance2gamma(R10, 50) * np.ones(len(f))
-
-    xx = rc.agilent_85033E(f, R50, m=0, md_value_ps=38)
-    o_a = xx[0]
-    s_a = xx[1]
-    m_a = xx[2]
-
-    # Correction
-    at3_p1c, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_p1, s_p1, m_p1, at3_p1)
-    at6_p1c, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_p1, s_p1, m_p1, at6_p1)
-    at10_p1c, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_p1, s_p1, m_p1, at10_p1)
-
-    at3_p2c, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_p2, s_p2, m_p2, at3_p2)
-    at6_p2c, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_p2, s_p2, m_p2, at6_p2)
-    at10_p2c, xx1, xx2, xx3 = rc.de_embed(o_a, s_a, m_a, o_p2, s_p2, m_p2, at10_p2)
-
-    # Plot
-
-    plt.figure(1, figsize=(12, 10))
-
-    plt.subplot(3, 2, 1)
-    plt.plot(f / 1e6, 20 * np.log10(np.abs(at3_p1c)), "k")
-    plt.plot(f / 1e6, 20 * np.log10(np.abs(at3_p2c)), "r")
-    plt.plot(f / 1e6, 20 * np.log10(np.abs(g3)), "g--")
-
-    plt.ylabel("3-dB Attn [dB]")
-    plt.title("MAGNITUDE")
-    plt.legend(["Port 1", "Port 2", "From DC resistance"])
-
-    plt.subplot(3, 2, 2)
-    plt.plot(
-        f / 1e6,
-        (180 / np.pi) * np.unwrap(np.angle(at3_p2c))
-        - (180 / np.pi) * np.unwrap(np.angle(at3_p1c)),
-        "r",
-    )
-    plt.ylabel("3-dB Attn [degrees]")
-    plt.title(r"$\Delta$ PHASE")
-
-    plt.subplot(3, 2, 3)
-    plt.plot(f / 1e6, 20 * np.log10(np.abs(at6_p1c)), "k")
-    plt.plot(f / 1e6, 20 * np.log10(np.abs(at6_p2c)), "r")
-    plt.plot(f / 1e6, 20 * np.log10(np.abs(g6)), "g--")
-
-    plt.ylabel("6-dB Attn [dB]")
-
-    plt.subplot(3, 2, 4)
-    plt.plot(
-        f / 1e6,
-        (180 / np.pi) * np.unwrap(np.angle(at6_p2c))
-        - (180 / np.pi) * np.unwrap(np.angle(at6_p1c)),
-        "r",
-    )
-    plt.ylabel("6-dB Attn [degrees]")
-
-    plt.subplot(3, 2, 5)
-    plt.plot(f / 1e6, 20 * np.log10(np.abs(at10_p1c)), "k")
-    plt.plot(f / 1e6, 20 * np.log10(np.abs(at10_p2c)), "r")
-    plt.plot(f / 1e6, 20 * np.log10(np.abs(g10)), "g--")
-
-    plt.ylabel("10-dB Attn [dB]")
-    plt.xlabel("frequency [MHz]")
-
-    plt.subplot(3, 2, 6)
-    plt.plot(
-        f / 1e6,
-        (180 / np.pi) * np.unwrap(np.angle(at10_p2c))
-        - (180 / np.pi) * np.unwrap(np.angle(at10_p1c)),
-        "r",
-    )
-    plt.ylabel("10-dB Attn [degrees]")
-    plt.xlabel("frequency [MHz]")
-
-    plt.savefig(edges_folder + "plots/20190612/vna_comparison.pdf", bbox_inches="tight")
-
-
-def plot_number_of_cterms_wterms():
-    rms, cterms, wterms = io.calibration_rms_read(
-        "/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/receiver_calibration"
-        "/receiver1/2018_01_25C/results/nominal/calibration_files"
-        "/calibration_term_sweep_50_150MHz/calibration_term_sweep_50_150MHz.hdf5"
-    )
-
-    plt.figure()
-    plt.imshow(
-        np.flipud(rms[0, :, :]),
-        interpolation="none",
-        vmin=0.016,
-        vmax=0.02,
-        extent=[1, 15, 1, 15],
-    )
-    plt.colorbar()
-    plt.figure()
-    plt.imshow(
-        np.flipud(rms[1, :, :]),
-        interpolation="none",
-        vmin=0.016,
-        vmax=0.02,
-        extent=[1, 15, 1, 15],
-    )
-    plt.colorbar()
-    plt.figure()
-    plt.imshow(
-        np.flipud(rms[2, :, :]),
-        interpolation="none",
-        vmin=0.3,
-        vmax=0.6,
-        extent=[1, 15, 1, 15],
-    )
-    plt.colorbar()
-    plt.figure()
-    plt.imshow(
-        np.flipud(rms[3, :, :]),
-        interpolation="none",
-        vmin=0.3,
-        vmax=0.6,
-        extent=[1, 15, 1, 15],
-    )
-    plt.colorbar()
-
-
-def antsim3_calibration():
-    f_low = 50
-    f_high = 150
-
-    # Spectra
-    d = np.genfromtxt(
-        edges_folder
-        + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results"
-        "/nominal/data/average_spectra_300_350.txt"
-    )
-    ff = d[:, 0]
-    tx = d[:, 5]
-
-    tunc = tx[(ff >= f_low) & (ff <= f_high)]
-
-    (
-        f,
-        s11_LNA,
-        C1,
-        C2,
-        TU,
-        TC,
-        TS,
-    ) = src.edges_analysis.simulation.data_models.MC_receiver(
-        "mid_band",
-        MC_spectra_noise=np.zeros(4),
-        MC_s11_syst=[1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0],
-        MC_temp=np.zeros(4),
-    )
-
-    # AntSim3 S11
-    # -----------
-    path_s11 = (
-        edges_folder + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C"
-        "/results/nominal/s11/"
-    )
-    fn = (f - 120) / 60
-
-    par = np.genfromtxt(path_s11 + "par_s11_simu_mag.txt")
-    rsimu_mag = mdl.model_evaluate("polynomial", par, fn)
-    par = np.genfromtxt(path_s11 + "par_s11_simu_ang.txt")
-    rsimu_ang = mdl.model_evaluate("polynomial", par, fn)
-    rsimu = rsimu_mag * (np.cos(rsimu_ang) + 1j * np.sin(rsimu_ang))
-
-    rsimu_MC = src.edges_analysis.simulation.data_models.MC_antenna_s11(
-        f, rsimu, s11_Npar_max=14
-    )
-
-    # Calibrated antenna temperature with losses and beam chromaticity
-    # ----------------------------------------------------------------
-    tcal = rcf.calibrated_antenna_temperature(
-        tunc, rsimu_MC, s11_LNA, C1, C2, TU, TC, TS
-    )
-
-    fb, tb, wb = tools.spectral_binning_number_of_samples(f, tcal, np.ones(len(f)))
-
-    return f, rsimu, rsimu_MC, fb, tb
+    labels = ["Male E5061A", "Male N9923A", "Female E5061A", "Female N9923A"]
+    plots.plot_vna_comparison(paths, labels, repeat_num=2)
 
 
 def plots_for_memo148(plot_number):
@@ -5320,8 +2651,6 @@ def plots_of_absorption_glitch(part_number):
 
 
 def high_band_2015_reanalysis():
-    # import old_high_band_edges as ohb
-
     LST1 = 1
     LST2 = 11
 
@@ -5903,62 +3232,6 @@ def plots_beam_gain_derivative():
         delta[i, :, :] = XXX
 
     return delta, b_all, f
-
-
-def integrated_antenna_gain_WIPLD_try1():
-    filename = (
-        "/run/media/raul/WD_RED_6TB/EDGES_vol2/others/beam_simulations/wipl-d/20191022"
-        "/blade_dipole_infinite_soil_metal_GP_0.00001m_60-78MHz.ra1"
-    )
-
-    f1, thetaX, phiX, beam1 = beams.wipld_read(filename)
-
-    filename = (
-        "/run/media/raul/WD_RED_6TB/EDGES_vol2/others/beam_simulations/wipl-d/20191022"
-        "/blade_dipole_infinite_soil_metal_GP_0.00001m_80-98MHz.ra1"
-    )
-
-    f2, thetaX, phiX, beam2 = beams.wipld_read(filename)
-
-    filename = (
-        "/run/media/raul/WD_RED_6TB/EDGES_vol2/others/beam_simulations/wipl-d/20191022"
-        "/blade_dipole_infinite_soil_metal_GP_0.00001m_100-108MHz.ra1"
-    )
-
-    f3, thetaX, phiX, beam3 = beams.wipld_read(filename)
-
-    f = np.concatenate((f1, f2, f3))
-    beam = np.concatenate((beam1, beam2, beam3))
-
-    theta = thetaX[thetaX < 90]
-    m = beam[:, thetaX < 90, :]
-
-    sin_theta = np.sin(theta * (np.pi / 180))
-    sin_theta_2D_T = np.tile(sin_theta, (360, 1))
-    sin_theta_2D = sin_theta_2D_T.T
-
-    bint = np.zeros(len(f))
-    for i in range(len(f)):
-        b = m[i, :, :]
-        bint[i] = np.sum(b * sin_theta_2D)
-
-    btW = (1 / (4 * np.pi)) * ((np.pi / 180) ** 2) * bint  # /np.mean(bx)
-
-    n_fg = 5
-    f_low = 50
-    f_high = 120
-    fX = f[(f >= f_low) & (f <= f_high)]
-    btWX = btW[(f >= f_low) & (f <= f_high)]
-
-    x = np.polyfit(fX, btWX, n_fg - 1)
-    model = np.polyval(x, fX)
-    rtWX = btWX - model
-
-    deltaW = np.zeros((len(m[:, 0, 0]) - 1, len(m[0, :, 0]), len(m[0, 0, :])))
-    for i in range(len(f) - 1):
-        deltaW[i, :, :] = m[i + 1, :, :] - m[i, :, :]
-
-    return f, btW, fX, rtWX
 
 
 def integrated_antenna_gain_WIPLD(case, n_fg):
@@ -7272,251 +4545,6 @@ def plots_for_memo_155():
     return fA, beam301, delta, f_low10, beam_low10
 
 
-def plot_calibration_s11():
-    path_plot_save = edges_folder + "plots/20191112/"
-
-    # Main folder
-    main_folder = (
-        edges_folder
-        + "mid_band/calibration/receiver_calibration/receiver1/2019_10_25C/"
-    )
-
-    # Paths for source data
-    path_s11 = main_folder + "data/s11/corrected/"
-
-    d1 = np.genfromtxt(
-        path_s11 + "s11_calibration_mid_band_LNA25degC_2019-11-09-19-13"
-        "-48_second_set_of_measurements.txt"
-    )
-    d2 = np.genfromtxt(
-        path_s11 + "s11_calibration_mid_band_LNA25degC_2019-11-12-21-08"
-        "-17_first_set_of_measurements.txt"
-    )
-
-    plt.figure(1, figsize=(12, 14))
-
-    plt.subplot(3, 2, 1)
-    plt.plot(d2[:, 0], 20 * np.log10(np.abs(d2[:, 3] + 1j * d2[:, 4])), "b")
-    plt.plot(d1[:, 0], 20 * np.log10(np.abs(d1[:, 3] + 1j * d1[:, 4])), "b--")
-    plt.plot(d2[:, 0], 20 * np.log10(np.abs(d2[:, 5] + 1j * d2[:, 6])), "r")
-    plt.plot(d1[:, 0], 20 * np.log10(np.abs(d1[:, 5] + 1j * d1[:, 6])), "r--")
-    plt.ylabel("magnitude [dB]")
-    plt.legend(["ambient rep1", "ambient rep2", "hot rep1", "hot rep2"])
-
-    plt.subplot(3, 2, 2)
-    plt.plot(
-        d1[:, 0], (180 / np.pi) * np.unwrap(np.angle(d1[:, 3] + 1j * d1[:, 4])), "b--"
-    )
-    plt.plot(
-        d2[:, 0], (180 / np.pi) * np.unwrap(np.angle(d2[:, 3] + 1j * d2[:, 4])), "b"
-    )
-    plt.plot(
-        d1[:, 0], (180 / np.pi) * np.unwrap(np.angle(d1[:, 5] + 1j * d1[:, 6])), "r--"
-    )
-    plt.plot(
-        d2[:, 0], (180 / np.pi) * np.unwrap(np.angle(d2[:, 5] + 1j * d2[:, 6])), "r"
-    )
-    plt.ylabel("phase [deg]")
-
-    plt.subplot(3, 2, 3)
-    plt.plot(d2[:, 0], 20 * np.log10(np.abs(d2[:, 7] + 1j * d2[:, 8])), "b")
-    plt.plot(d1[:, 0], 20 * np.log10(np.abs(d1[:, 7] + 1j * d1[:, 8])), "b--")
-    plt.plot(d2[:, 0], 20 * np.log10(np.abs(d2[:, 9] + 1j * d2[:, 10])), "r")
-    plt.plot(d1[:, 0], 20 * np.log10(np.abs(d1[:, 9] + 1j * d1[:, 10])), "r--")
-    plt.legend(["open rep1", "open rep2", "shorted rep1", "shorted rep2"])
-    plt.ylabel("magnitude [dB]")
-
-    plt.subplot(3, 2, 4)
-    plt.plot(
-        d1[:, 0], (180 / np.pi) * np.unwrap(np.angle(d1[:, 7] + 1j * d1[:, 8])), "b--"
-    )
-    plt.plot(
-        d2[:, 0], (180 / np.pi) * np.unwrap(np.angle(d2[:, 7] + 1j * d2[:, 8])), "b"
-    )
-    plt.plot(
-        d1[:, 0], (180 / np.pi) * np.unwrap(np.angle(d1[:, 9] + 1j * d1[:, 10])), "r--"
-    )
-    plt.plot(
-        d2[:, 0], (180 / np.pi) * np.unwrap(np.angle(d2[:, 9] + 1j * d2[:, 10])), "r"
-    )
-    plt.ylabel("phase [deg]")
-
-    plt.subplot(3, 2, 5)
-    plt.plot(d2[:, 0], 20 * np.log10(np.abs(d2[:, 17] + 1j * d2[:, 18])), "b")
-    plt.plot(d1[:, 0], 20 * np.log10(np.abs(d1[:, 17] + 1j * d1[:, 18])), "b--")
-    plt.plot(d2[:, 0], 20 * np.log10(np.abs(d2[:, 19] + 1j * d2[:, 20])), "r")
-    plt.plot(d1[:, 0], 20 * np.log10(np.abs(d1[:, 19] + 1j * d1[:, 20])), "r--")
-    plt.legend(["sim2 rep1", "sim2 rep2", "sim3 rep1", "sim3 rep2"])
-    plt.ylabel("magnitude [dB]")
-    plt.xlabel("frequency [MHz]")
-
-    plt.subplot(3, 2, 6)
-    plt.plot(
-        d2[:, 0], (180 / np.pi) * np.unwrap(np.angle(d2[:, 17] + 1j * d2[:, 18])), "b"
-    )
-    plt.plot(
-        d1[:, 0], (180 / np.pi) * np.unwrap(np.angle(d1[:, 17] + 1j * d1[:, 18])), "b--"
-    )
-    plt.plot(
-        d1[:, 0], (180 / np.pi) * np.unwrap(np.angle(d1[:, 19] + 1j * d1[:, 20])), "r--"
-    )
-    plt.plot(
-        d2[:, 0], (180 / np.pi) * np.unwrap(np.angle(d2[:, 19] + 1j * d2[:, 20])), "r"
-    )
-    plt.ylabel("phase [deg]")
-    plt.xlabel("frequency [MHz]")
-
-    plt.savefig(path_plot_save + "fig1.pdf", bbox_inches="tight")
-    plt.close()
-    plt.close()
-
-    plt.figure(2, figsize=(12, 14))
-
-    plt.subplot(3, 2, 1)
-    plt.plot(
-        d1[:, 0],
-        20 * np.log10(np.abs(d1[:, 3] + 1j * d1[:, 4]))
-        - 20 * np.log10(np.abs(d2[:, 3] + 1j * d2[:, 4])),
-        "b",
-    )
-    plt.plot(
-        d1[:, 0],
-        20 * np.log10(np.abs(d1[:, 5] + 1j * d1[:, 6]))
-        - 20 * np.log10(np.abs(d2[:, 5] + 1j * d2[:, 6])),
-        "r",
-    )
-    plt.ylabel(r"$\Delta$ magnitude [dB]")
-    plt.legend(["ambient", "hot"])
-
-    plt.subplot(3, 2, 2)
-    plt.plot(
-        d1[:, 0],
-        (180 / np.pi) * np.unwrap(np.angle(d1[:, 3] + 1j * d1[:, 4]))
-        - (180 / np.pi) * np.unwrap(np.angle(d2[:, 3] + 1j * d2[:, 4])),
-        "b",
-    )
-    plt.plot(
-        d1[:, 0],
-        (180 / np.pi) * np.unwrap(np.angle(d1[:, 5] + 1j * d1[:, 6]))
-        - (180 / np.pi) * np.unwrap(np.angle(d2[:, 5] + 1j * d2[:, 6])),
-        "r",
-    )
-    plt.ylabel(r"$\Delta$ phase [deg]")
-
-    plt.subplot(3, 2, 3)
-    plt.plot(
-        d1[:, 0],
-        20 * np.log10(np.abs(d1[:, 7] + 1j * d1[:, 8]))
-        - 20 * np.log10(np.abs(d2[:, 7] + 1j * d2[:, 8])),
-        "b",
-    )
-    plt.plot(
-        d1[:, 0],
-        20 * np.log10(np.abs(d1[:, 9] + 1j * d1[:, 10]))
-        - 20 * np.log10(np.abs(d2[:, 9] + 1j * d2[:, 10])),
-        "r",
-    )
-    plt.ylabel(r"$\Delta$ magnitude [dB]")
-    plt.legend(["open", "shorted"])
-    plt.ylim([-0.006, 0.06])
-
-    plt.subplot(3, 2, 4)
-    plt.plot(
-        d1[:, 0],
-        (180 / np.pi) * np.unwrap(np.angle(d1[:, 7] + 1j * d1[:, 8]))
-        - (180 / np.pi) * np.unwrap(np.angle(d2[:, 7] + 1j * d2[:, 8])),
-        "b",
-    )
-    plt.plot(
-        d1[:, 0],
-        (180 / np.pi) * np.unwrap(np.angle(d1[:, 9] + 1j * d1[:, 10]))
-        - (180 / np.pi) * np.unwrap(np.angle(d2[:, 9] + 1j * d2[:, 10])),
-        "r",
-    )
-    plt.ylabel(r"$\Delta$ phase [deg]")
-
-    plt.subplot(3, 2, 5)
-    plt.plot(
-        d1[:, 0],
-        20 * np.log10(np.abs(d1[:, 17] + 1j * d1[:, 18]))
-        - 20 * np.log10(np.abs(d2[:, 17] + 1j * d2[:, 18])),
-        "b",
-    )
-    plt.plot(
-        d1[:, 0],
-        20 * np.log10(np.abs(d1[:, 19] + 1j * d1[:, 20]))
-        - 20 * np.log10(np.abs(d2[:, 19] + 1j * d2[:, 20])),
-        "r",
-    )
-    plt.ylabel(r"$\Delta$ magnitude [dB]")
-    plt.xlabel("frequency [MHz]")
-    plt.legend(["sim2", "sim3"])
-    plt.ylim([-0.02, 0.05])
-
-    plt.subplot(3, 2, 6)
-    plt.plot(
-        d1[:, 0],
-        (180 / np.pi) * np.unwrap(np.angle(d1[:, 17] + 1j * d1[:, 18]))
-        - (180 / np.pi) * np.unwrap(np.angle(d2[:, 17] + 1j * d2[:, 18])),
-        "b",
-    )
-    plt.plot(
-        d1[:, 0],
-        (180 / np.pi) * np.unwrap(np.angle(d1[:, 19] + 1j * d1[:, 20]))
-        - (180 / np.pi) * np.unwrap(np.angle(d2[:, 19] + 1j * d2[:, 20])),
-        "r",
-    )
-    plt.ylabel(r"$\Delta$ phase [deg]")
-    plt.xlabel("frequency [MHz]")
-
-    plt.savefig(path_plot_save + "fig2.pdf", bbox_inches="tight")
-    plt.close()
-    plt.close()
-
-
-def plot_mid_band_GHA_14_16():
-    fb, tb, rb, wb, sb = tools.level4_integration(3, [14, 15], 147, 200, 60, 135, 5)
-
-    plt.figure(1, figsize=[9, 4])
-
-    plt.plot(fb[wb > 0], rb[wb > 0], "b")
-
-    sig = dm.signal_model("tanh", [-0.7, 79, 19.5, 7.5, 4.5], fb)
-    model = mdl.fit_polynomial_fourier("LINLOG", fb, tb - sig, 5, Weights=wb)
-    mb = mdl.model_evaluate("LINLOG", model[0], fb)
-
-    plt.plot(fb[wb > 0], (tb - sig - mb)[wb > 0] - 0.8, "b")
-
-    plt.xticks(np.arange(60, 135, 10), fontsize=12)
-    plt.ylim([-1.1, 0.4])
-    plt.yticks(
-        [-1, -0.8, -0.6, -0.2, 0, 0.2],
-        ["-0.2", "0", "0.2", "-0.2", "0", "0.2"],
-        fontsize=12,
-    )
-    plt.xlabel(r"$\nu$ [MHz]", fontsize=14)
-    plt.ylabel(r"$T_b$ [K]", fontsize=14)
-
-    plt.savefig("/home/raul/Desktop/GHA_14-16hr.pdf", bbox_inches="tight")
-
-
-def plot_signal_residuals(f_low, f_high, A21, model_type, Ntotal):
-    f = np.arange(f_low, f_high + 1, 1)
-    A = 1500
-    f0 = 75
-    model_fg = A * (f / f0) ** ((-2.5) + 0.1 * np.log(f / f0))
-
-    sig = dm.signal_model("exp", [A21, 79, 19, 7], f)
-
-    total = model_fg + sig
-
-    pc = mdl.fit_polynomial_fourier(model_type, f / 200, total, Ntotal)
-    m = mdl.model_evaluate(model_type, pc[0], f / 200)
-    r = total - m
-
-    return f, r, model_fg
-
-
 def plot_foreground_analysis():
     path_file = (
         "/media/raul/DATA/EDGES_vol2/mid_band/spectra/level4/case_nominal_50"
@@ -7527,15 +4555,15 @@ def plot_foreground_analysis():
 
     plt.figure(1)
 
-    fit2[:, :, 2] = fit2[:, :, 2] + 17.76
-    fit3[:, :, 2] = fit3[:, :, 2] + 17.76
-    fit4[:, :, 2] = fit4[:, :, 2] + 17.76
-    fit5[:, :, 2] = fit5[:, :, 2] + 17.76
+    fit2[:, :, 2] += 17.76
+    fit3[:, :, 2] += 17.76
+    fit4[:, :, 2] += 17.76
+    fit5[:, :, 2] += 17.76
 
-    fit2[:, :, 2][fit2[:, :, 2] > 24] = fit2[:, :, 2][fit2[:, :, 2] > 24] - 24
-    fit3[:, :, 2][fit3[:, :, 2] > 24] = fit3[:, :, 2][fit3[:, :, 2] > 24] - 24
-    fit4[:, :, 2][fit4[:, :, 2] > 24] = fit4[:, :, 2][fit4[:, :, 2] > 24] - 24
-    fit5[:, :, 2][fit5[:, :, 2] > 24] = fit5[:, :, 2][fit5[:, :, 2] > 24] - 24
+    fit2[:, :, 2][fit2[:, :, 2] > 24] -= 24
+    fit3[:, :, 2][fit3[:, :, 2] > 24] -= 24
+    fit4[:, :, 2][fit4[:, :, 2] > 24] -= 24
+    fit5[:, :, 2][fit5[:, :, 2] > 24] -= 24
 
     plt.subplot(2, 1, 1)
     for k in range(len(fit2[0, :, 0])):
