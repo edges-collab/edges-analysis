@@ -4,24 +4,76 @@ from os.path import exists
 import h5py
 import numpy as np
 import src.edges_analysis
+import src.edges_analysis.analysis.levels
 import src.edges_analysis.analysis.tools
 from edges_cal import modelling as mdl
 from edges_cal import receiver_calibration_func as rcf
 from edges_cal import reflection_coefficient as rc
 from edges_cal import s11_correction as s11c
-from edges_cal.cal_coefficients import EdgesFrequencyRange
-from edges_io.io import Spectrum, SwitchingState
+from edges_cal.cal_coefficients import EdgesFrequencyRange, HotLoadCorrection
+from edges_io.io import SwitchingState
 from matplotlib import pyplot as plt
 
 from . import beams, filters, io, loss, plots, rfi
 from . import s11 as s11m
 from . import tools
+from .levels import level1_to_level2, level2_to_level3
 from ..simulation import data_models as dm
 
 edges_folder = ""  # TODO: remove
 home_folder = ""  # TODO: remove
 MRO_folder = ""  # TODO: remove
 edges_folder_v1 = ""  # TODO: remove
+
+CALFILES = {
+    1: "nominal/calibration_files/original/calibration_file_receiver1_cterms7_wterms7.txt",
+    2: "nominal/calibration_files/original/calibration_file_receiver1_cterms7_wterms8.txt",
+    3: "nominal/calibration_files/original/calibration_file_receiver1_cterms7_wterms15.txt",
+    4: "nominal/calibration_files/original/calibration_file_receiver1_cterms8_wterms8.txt",
+    5: "nominal/calibration_files/original/calibration_file_receiver1_cterms9_wterms9.txt",
+    6: "nominal/calibration_files/original/calibration_file_receiver1_cterms10_wterms10.txt",
+    7: "nominal_50-150MHz_no_rfi/calibration_files/calibration_file_receiver1_cterms9_wterms9_50-150MHz_no_rfi.txt",
+    8: "nominal_50-150MHz_no_rfi/calibration_files/calibration_file_receiver1_cterms8_wterms8_50-150MHz_no_rfi.txt",
+    30: "nominal_cleaned_60_120MHz/calibration_files/calibration_file_receiver1_cterms7_wterms6.txt",
+    31: "nominal_cleaned_60_120MHz/calibration_files/calibration_file_receiver1_cterms7_wterms8.txt",
+    32: "nominal_cleaned_60_120MHz/calibration_files/calibration_file_receiver1_cterms7_wterms9.txt",
+    33: "nominal_cleaned_60_120MHz/calibration_files/calibration_file_receiver1_cterms6_wterms4.txt",
+    34: "nominal_cleaned_60_120MHz/calibration_files/calibration_file_receiver1_cterms6_wterms8.txt",
+    35: "nominal_cleaned_60_120MHz/calibration_files/calibration_file_receiver1_cterms6_wterms9.txt",
+    39: "nominal_cleaned_60_120MHz/calibration_files/calibration_file_receiver1_cterms5_wterms9.txt",
+    21: "nominal/calibration_files/calibration_file_receiver1_cterms7_wterms7.txt",
+    22: "nominal/calibration_files/calibration_file_receiver1_cterms7_wterms8.txt",
+    23: "nominal/calibration_files/calibration_file_receiver1_cterms7_wterms9.txt",
+    24: "nominal/calibration_files/calibration_file_receiver1_cterms7_wterms10.txt",
+    25: "nominal/calibration_files/calibration_file_receiver1_cterms8_wterms8.txt",
+    26: "nominal/calibration_files/calibration_file_receiver1_cterms8_wterms11.txt",
+    40: "nominal/calibration_files/60_85MHz/calibration_file_receiver1_60_85MHz_cterms4_wterms6.txt",
+    88: "nominal/calibration_files/calibration_file_receiver1_50_150MHz_cterms8_wterms8.txt",
+    810: "nominal/calibration_files/calibration_file_receiver1_50_150MHz_cterms8_wterms10.txt",
+    811: "nominal/calibration_files/calibration_file_receiver1_50_150MHz_cterms8_wterms11.txt",
+    100: "nominal/calibration_files/calibration_file_receiver1_50_190MHz_cterms10_wterms13.txt",
+    200: "/nominal_2019_12_50-150MHz_try1/calibration_files/calibration_file_receiver1_55_150MHz_cterms14_wterms14.txt",
+    201: "/nominal_2019_12_50-150MHz_try1/calibration_files/calibration_file_receiver1_50_150MHz_cterms7_wterms8.txt",
+    202: "/nominal_2019_12_50-150MHz_try1/calibration_files/calibration_file_receiver1_50_150MHz_cterms7_wterms11.txt",
+    203: "/nominal_2019_12_50-150MHz_try1_LNA_rep1/calibration_files/calibration_file_receiver1_50_150MHz_cterms7_wterms8.txt",
+    204: "/nominal_2019_12_50-150MHz_try1_LNA_rep2/calibration_files/calibration_file_receiver1_50_150MHz_cterms7_wterms8.txt",
+    205: "/nominal_2019_12_50-150MHz_try1_LNA_rep12/calibration_files/calibration_file_receiver1_50_150MHz_cterms7_wterms8.txt",
+    301: "/nominal_2019_12_50-150MHz_try1/calibration_files/calibration_file_receiver1_60_120MHz_cterms7_wterms4.txt",
+    302: "/nominal_2019_12_50-150MHz_try1/calibration_files/calibration_file_receiver1_60_120MHz_cterms7_wterms5.txt",
+    303: "/nominal_2019_12_50-150MHz_try1/calibration_files/calibration_file_receiver1_60_120MHz_cterms7_wterms9.txt",
+    304: "/nominal_2019_12_50-150MHz_try1/calibration_files/calibration_file_receiver1_60_120MHz_cterms8_wterms4.txt",
+    305: "/nominal_2019_12_50-150MHz_try1/calibration_files/calibration_file_receiver1_60_120MHz_cterms8_wterms5.txt",
+    306: "/nominal_2019_12_50-150MHz_try1/calibration_files/calibration_file_receiver1_60_120MHz_cterms8_wterms9.txt",
+    307: "/nominal_2019_12_50-150MHz_try1/calibration_files/calibration_file_receiver1_60_120MHz_cterms5_wterms4.txt",
+    308: "/nominal_2019_12_50-150MHz_try1/calibration_files/calibration_file_receiver1_60_120MHz_cterms6_wterms4.txt",
+    401: "/nominal_2019_12_50-150MHz_LNA1_a1_h1_o1_s1_sim2/calibration_files/calibration_file_receiver1_50_150MHz_cterms7_wterms8.txt",
+    402: "/nominal_2019_12_50-150MHz_LNA1_a1_h2_o1_s1_sim2/calibration_files/calibration_file_receiver1_50_150MHz_cterms7_wterms8.txt",
+    403: "/nominal_2019_12_50-150MHz_LNA1_a2_h1_o1_s1_sim2/calibration_files/calibration_file_receiver1_50_150MHz_cterms7_wterms8.txt",
+    404: "/nominal_2019_12_50-150MHz_LNA1_a2_h2_o1_s1_sim2/calibration_files/calibration_file_receiver1_50_150MHz_cterms7_wterms8.txt",
+    405: "/nominal_2019_12_50-150MHz_LNA1_a2_h2_o1_s2_sim2/calibration_files/calibration_file_receiver1_50_150MHz_cterms7_wterms8.txt",
+    406: "/nominal_2019_12_50-150MHz_LNA1_a2_h2_o2_s1_sim2/calibration_files/calibration_file_receiver1_50_150MHz_cterms7_wterms8.txt",
+    407: "/nominal_2019_12_50-150MHz_LNA1_a2_h2_o2_s2_sim2/calibration_files/calibration_file_receiver1_50_150MHz_cterms7_wterms8.txt",
+}
 
 
 def models_antenna_s11_remove_delay(**kwargs):
@@ -36,8 +88,8 @@ def models_antenna_s11_remove_delay(**kwargs):
 def calibration_file_computation(
     calibration_date,
     folder,
-    FMIN,
-    FMAX,
+    f_low,
+    f_high,
     cterms_nominal,
     wterms_nominal,
     save_nominal=False,
@@ -46,60 +98,30 @@ def calibration_file_computation(
     panels=4,
     plot_nominal=False,
 ):
-    """
-    calibration_date:  '2018_01_25C', '2019_04_25C'
-
-    folder: 'nominal', or 'using_50.12ohms', others
-    """
-
-    # Location of saved results
-    path_save = (
+    prefix = (
         edges_folder
         + "mid_band/calibration/receiver_calibration/receiver1/"
         + calibration_date
         + "/results/"
         + folder
-        + "/calibration_files/"
     )
+    # Location of saved results
+    path_save = prefix + "/calibration_files/"
 
     # Spectra
-    TuncV = np.genfromtxt(
-        edges_folder
-        + "mid_band/calibration/receiver_calibration/receiver1/"
-        + calibration_date
-        + "/results/"
-        + folder
-        + "/data/average_spectra_300_350.txt"
-    )
+    TuncV = np.genfromtxt(prefix + "/data/average_spectra_300_350.txt")
 
     # Frequency selection
-    Tunc = TuncV[(TuncV[:, 0] >= FMIN) & (TuncV[:, 0] <= FMAX), :]
+    Tunc = TuncV[(TuncV[:, 0] >= f_low) & (TuncV[:, 0] <= f_high), :]
+
+    ff = Tunc[:, 0]
+    WW_all = np.zeros(len(ff))
 
     if calibration_date == "2018_01_25C" and folder in (
         "nominal_cleaned_60_120MHz",
         "nominal_cleaned_60_90MHz",
     ):
-
-        # Taking the original data
-        ff = Tunc[:, 0]
-
-        TTae = Tunc[:, 1]
-        WWae = Tunc[:, 2]
-
-        TThe = Tunc[:, 3]
-        WWhe = Tunc[:, 4]
-
-        TToe = Tunc[:, 5]
-        WWoe = Tunc[:, 6]
-
-        TTse = Tunc[:, 7]
-        WWse = Tunc[:, 8]
-
-        TTqe = Tunc[:, 9]
-        WWqe = Tunc[:, 10]
-
-        WW_all = np.zeros(len(ff))
-
+        TTae, WWae, TThe, WWhe, TToe, WWoe, TTse, WWse, TTqe, WWqe = Tunc.T[1:]
     elif calibration_date == "2018_01_25C" and folder in (
         "nominal_2019_12_50-150MHz_try1",
         "nominal_2019_12_50-150MHz_try1_LNA_rep1",
@@ -113,251 +135,76 @@ def calibration_file_computation(
         "nominal_2019_12_50-150MHz_LNA1_a2_h2_o2_s1_sim2",
         "nominal_2019_12_50-150MHz_LNA1_a2_h2_o2_s2_sim2",
     ):
-        # Taking the original data
-        ff = Tunc[:, 0]
-        TTae = Tunc[:, 1]
-        TThe = Tunc[:, 2]
-        TToe = Tunc[:, 3]
-        TTse = Tunc[:, 4]
-        TTqe = Tunc[:, 5]
-
-        WWae = np.ones(len(ff))
-        WWhe = np.ones(len(ff))
-        WWoe = np.ones(len(ff))
-        WWse = np.ones(len(ff))
-        WWqe = np.ones(len(ff))
-
-        WW_all = np.zeros(len(ff))
+        TTae, TThe, TToe, TTse, TTqe = Tunc.T[1:6]
+        WWae, WWhe, WWoe, WWse, WWqe = np.ones((5, len(ff)))
     else:
+        TTae, TThe, TToe, TTse, TTqe = Tunc.T[[1, 2, 3, 4, 6]]
+        WWae, WWhe, WWoe, WWse, WWqe = np.ones((5, len(ff)))
 
-        # Taking the original data
-        ff = Tunc[:, 0]
-        TTae = Tunc[:, 1]
-        TThe = Tunc[:, 2]
-        TToe = Tunc[:, 3]
-        TTse = Tunc[:, 4]
-        TTqe = Tunc[:, 6]
+    raw_data = {
+        "amb": {"temp": TTae, "weights": WWae},
+        "hot": {"temp": TThe, "weights": WWhe},
+        "shorted": {"temp": TTse, "weights": WWse},
+        "open": {"temp": TToe, "weights": WWoe},
+        "simu": {"temp": TTqe, "weights": WWqe},
+    }
 
-        WWae = np.ones(len(ff))
-        WWhe = np.ones(len(ff))
-        WWoe = np.ones(len(ff))
-        WWse = np.ones(len(ff))
-        WWqe = np.ones(len(ff))
-
-        WW_all = np.zeros(len(ff))
-
-    # Now, RFI cleaning
-    N_sigma = 4  # 3.5
-
-    ind = np.arange(len(ff))
-
-    print("RFI cleaning Ambient")
-    tax1, wax1 = rfi.cleaning_sweep(
-        ff, TTae, WWae, window_width=4, n_poly=4, n_bootstrap=20, n_sigma=N_sigma,
-    )
-    flip1, flip2 = rfi.cleaning_sweep(
-        ff,
-        np.flip(TTae),
-        np.flip(WWae),
-        window_width=4,
-        n_poly=4,
-        n_bootstrap=20,
-        n_sigma=N_sigma,
-    )
-    wax2 = np.flip(flip2)
-
-    iax = np.union1d(ind[wax1 == 0], ind[wax2 == 0])
-
-    print("RFI cleaning Hot")
-    thx1, whx1 = rfi.cleaning_sweep(
-        ff, TThe, WWhe, window_width=4, n_poly=4, n_bootstrap=20, n_sigma=N_sigma,
-    )
-    flip1, flip2 = rfi.cleaning_sweep(
-        ff,
-        np.flip(TThe),
-        np.flip(WWhe),
-        window_width=4,
-        n_poly=4,
-        n_bootstrap=20,
-        n_sigma=N_sigma,
-    )
-    whx2 = np.flip(flip2)
-
-    ihx = np.union1d(ind[whx1 == 0], ind[whx2 == 0])
-
-    print("RFI cleaning Open")
-    tox1, wox1 = rfi.cleaning_sweep(
-        ff, TToe, WWoe, window_width=4, n_poly=4, n_bootstrap=20, n_sigma=N_sigma,
-    )
-    flip1, flip2 = rfi.cleaning_sweep(
-        ff,
-        np.flip(TToe),
-        np.flip(WWoe),
-        window_width=4,
-        n_poly=4,
-        n_bootstrap=20,
-        n_sigma=N_sigma,
-    )
-    wox2 = np.flip(flip2)
-
-    iox = np.union1d(ind[wox1 == 0], ind[wox2 == 0])
-
-    print("RFI cleaning Shorted")
-    tsx1, wsx1 = rfi.cleaning_sweep(
-        ff, TTse, WWse, window_width=4, n_poly=4, n_bootstrap=20, n_sigma=N_sigma,
-    )
-    flip1, flip2 = rfi.cleaning_sweep(
-        ff,
-        np.flip(TTse),
-        np.flip(WWse),
-        window_width=4,
-        n_poly=4,
-        n_bootstrap=20,
-        n_sigma=N_sigma,
-    )
-    wsx2 = np.flip(flip2)
-
-    isx = np.union1d(ind[wsx1 == 0], ind[wsx2 == 0])
-
-    print("RFI cleaning Simulator")
-    tqx1, wqx1 = rfi.cleaning_sweep(
-        ff, TTqe, WWqe, window_width=4, n_poly=4, n_bootstrap=20, n_sigma=N_sigma,
-    )
-    flip1, flip2 = rfi.cleaning_sweep(
-        ff,
-        np.flip(TTqe),
-        np.flip(WWqe),
-        window_width=4,
-        n_poly=4,
-        n_bootstrap=20,
-        n_sigma=N_sigma,
-    )
-    wqx2 = np.flip(flip2)
-
-    iqx = np.union1d(ind[wqx1 == 0], ind[wqx2 == 0])
-
-    XX = np.union1d(iax, ihx)
-    XX = np.union1d(XX, iox)
-    XX = np.union1d(XX, isx)
-    index_bad = np.union1d(XX, iqx)
-    index_good = np.setdiff1d(ind, index_bad)
+    # RFI cleaning
+    n_sigma = 4
+    index_good = np.zeros(len(ff), dtype=bool)
+    for d in raw_data.values():
+        wghts = rfi.cleaning_sweep(
+            ff,
+            d["temp"],
+            d["weights"],
+            window_width=4,
+            n_poly=4,
+            n_bootstrap=20,
+            n_sigma=n_sigma,
+            flip=True,
+        )[1]
+        index_good &= wghts != 0
 
     # Removing data points with zero weight. But for the rest, not using the weights
     # because they are pretty even across frequency
     f = ff[index_good]
-    Tae = TTae[index_good]
-    The = TThe[index_good]
-    Toe = TToe[index_good]
-    Tse = TTse[index_good]
-    Tqe = TTqe[index_good]
-
+    good_data = {key: val["temp"][index_good] for key, val in raw_data.items()}
     WW_all[index_good] = 1
 
     # Physical temperature
-    Tphys = np.genfromtxt(
-        edges_folder
-        + "mid_band/calibration/receiver_calibration/receiver1/"
-        + calibration_date
-        + "/results/"
-        + folder
-        + "/temp/physical_temperatures.txt"
-    )
+    Tphys = np.genfromtxt(prefix + "/temp/physical_temperatures.txt")
+    phys_temp = {
+        name: t for name, t in zip(["amb", "hot", "open", "shorted"], Tphys[:4])
+    }
 
-    if (calibration_date == "2018_01_25C") and (
-        (folder == "nominal_2019_12_50-150MHz_try1")
-        or (folder == "nominal_2019_12_50-150MHz_try1_LNA_rep1")
-        or (folder == "nominal_2019_12_50-150MHz_try1_LNA_rep2")
-        or (folder == "nominal_2019_12_50-150MHz_try1_LNA_rep12")
-        or (folder == "nominal_2019_12_50-150MHz_LNA1_a1_h1_o1_s1_sim2")
-        or (folder == "nominal_2019_12_50-150MHz_LNA1_a1_h2_o1_s1_sim2")
-        or (folder == "nominal_2019_12_50-150MHz_LNA1_a2_h1_o1_s1_sim2")
-        or (folder == "nominal_2019_12_50-150MHz_LNA1_a2_h2_o1_s1_sim2")
-        or (folder == "nominal_2019_12_50-150MHz_LNA1_a2_h2_o1_s2_sim2")
-        or (folder == "nominal_2019_12_50-150MHz_LNA1_a2_h2_o2_s1_sim2")
-        or (folder == "nominal_2019_12_50-150MHz_LNA1_a2_h2_o2_s2_sim2")
+    #    Ta, Th, To, Ts = Tphys[:4]
+
+    if calibration_date == "2018_01_25C" and folder in (
+        "nominal_2019_12_50-150MHz_try1",
+        "nominal_2019_12_50-150MHz_try1_LNA_rep1",
+        "nominal_2019_12_50-150MHz_try1_LNA_rep2",
+        "nominal_2019_12_50-150MHz_try1_LNA_rep12",
+        "nominal_2019_12_50-150MHz_LNA1_a1_h1_o1_s1_sim2",
+        "nominal_2019_12_50-150MHz_LNA1_a1_h2_o1_s1_sim2",
+        "nominal_2019_12_50-150MHz_LNA1_a2_h1_o1_s1_sim2",
+        "nominal_2019_12_50-150MHz_LNA1_a2_h2_o1_s1_sim2",
+        "nominal_2019_12_50-150MHz_LNA1_a2_h2_o1_s2_sim2",
+        "nominal_2019_12_50-150MHz_LNA1_a2_h2_o2_s1_sim2",
+        "nominal_2019_12_50-150MHz_LNA1_a2_h2_o2_s2_sim2",
     ):
-
-        Ta = Tphys[0]
-        Th = Tphys[1]
-        To = Tphys[2]
-        Ts = Tphys[3]
-        Tsim = Tphys[4]
-
+        phys_temp["simu"] = Tphys[4]
     else:
-        Ta = Tphys[0]
-        Th = Tphys[1]
-        To = Tphys[2]
-        Ts = Tphys[3]
-        Tsim = Tphys[5]
+        phys_temp["simu"] = Tphys[5]
 
     # S11
-    path_s11 = (
-        edges_folder
-        + "mid_band/calibration/receiver_calibration/receiver1/"
-        + calibration_date
-        + "/results/"
-        + folder
-        + "/s11/"
-    )
+    path_s11 = prefix + "/s11/"
 
     # S11 at original frequency array
     if calibration_date == "2019_10_25C":
         ffn = (ff / 200) - 0.5
-
-        par = np.genfromtxt(path_s11 + "par_s11_LNA_mag.txt")
-        rl_mag = mdl.model_evaluate("fourier", par, ffn)
-        par = np.genfromtxt(path_s11 + "par_s11_LNA_ang.txt")
-        rl_ang = mdl.model_evaluate("fourier", par, ffn)
-        rrl = rl_mag * (np.cos(rl_ang) + 1j * np.sin(rl_ang))
-
-        par = np.genfromtxt(path_s11 + "par_s11_amb_mag.txt")
-        ra_mag = mdl.model_evaluate("fourier", par, ffn)
-        par = np.genfromtxt(path_s11 + "par_s11_amb_ang.txt")
-        ra_ang = mdl.model_evaluate("fourier", par, ffn)
-        rra = ra_mag * (np.cos(ra_ang) + 1j * np.sin(ra_ang))
-
-        par = np.genfromtxt(path_s11 + "par_s11_hot_mag.txt")
-        rh_mag = mdl.model_evaluate("fourier", par, ffn)
-        par = np.genfromtxt(path_s11 + "par_s11_hot_ang.txt")
-        rh_ang = mdl.model_evaluate("fourier", par, ffn)
-        rrh = rh_mag * (np.cos(rh_ang) + 1j * np.sin(rh_ang))
-
-        par = np.genfromtxt(path_s11 + "par_s11_open_mag.txt")
-        ro_mag = mdl.model_evaluate("fourier", par, ffn)
-        par = np.genfromtxt(path_s11 + "par_s11_open_ang.txt")
-        ro_ang = mdl.model_evaluate("fourier", par, ffn)
-        rro = ro_mag * (np.cos(ro_ang) + 1j * np.sin(ro_ang))
-
-        par = np.genfromtxt(path_s11 + "par_s11_shorted_mag.txt")
-        rs_mag = mdl.model_evaluate("fourier", par, ffn)
-        par = np.genfromtxt(path_s11 + "par_s11_shorted_ang.txt")
-        rs_ang = mdl.model_evaluate("fourier", par, ffn)
-        rrs = rs_mag * (np.cos(rs_ang) + 1j * np.sin(rs_ang))
-
-        par = np.genfromtxt(path_s11 + "par_s11_sr_mag.txt")
-        s11_sr_mag = mdl.model_evaluate("polynomial", par, ffn)
-        par = np.genfromtxt(path_s11 + "par_s11_sr_ang.txt")
-        s11_sr_ang = mdl.model_evaluate("polynomial", par, ffn)
-        s11_sr = s11_sr_mag * (np.cos(s11_sr_ang) + 1j * np.sin(s11_sr_ang))
-
-        par = np.genfromtxt(path_s11 + "par_s12s21_sr_mag.txt")
-        s12s21_sr_mag = mdl.model_evaluate("polynomial", par, ffn)
-        par = np.genfromtxt(path_s11 + "par_s12s21_sr_ang.txt")
-        s12s21_sr_ang = mdl.model_evaluate("polynomial", par, ffn)
-        s12s21_sr = s12s21_sr_mag * (np.cos(s12s21_sr_ang) + 1j * np.sin(s12s21_sr_ang))
-
-        par = np.genfromtxt(path_s11 + "par_s22_sr_mag.txt")
-        s22_sr_mag = mdl.model_evaluate("polynomial", par, ffn)
-        par = np.genfromtxt(path_s11 + "par_s22_sr_ang.txt")
-        s22_sr_ang = mdl.model_evaluate("polynomial", par, ffn)
-        s22_sr = s22_sr_mag * (np.cos(s22_sr_ang) + 1j * np.sin(s22_sr_ang))
-
-        par = np.genfromtxt(path_s11 + "par_s11_simu3_mag.txt")
-        rsimu_mag = mdl.model_evaluate("fourier", par, ffn)
-        par = np.genfromtxt(path_s11 + "par_s11_simu3_ang.txt")
-        rsimu_ang = mdl.model_evaluate("fourier", par, ffn)
-        rrsimu = rsimu_mag * (np.cos(rsimu_ang) + 1j * np.sin(rsimu_ang))
-
+        fn = (f / 200) - 0.5
+        sim_name = "simu3"
+        sim_basis = "fourier"
     elif (calibration_date == "2018_01_25C") and (
         (folder == "nominal_2019_12_50-150MHz_try1")
         or (folder == "nominal_2019_12_50-150MHz_try1_LNA_rep1")
@@ -372,1917 +219,241 @@ def calibration_file_computation(
         or (folder == "nominal_2019_12_50-150MHz_LNA1_a2_h2_o2_s2_sim2")
     ):
         ffn = (ff / 200) - 0.5
+        fn = (f / 200) - 0.5
 
-        par = np.genfromtxt(path_s11 + "par_s11_LNA_mag.txt")
-        rl_mag = mdl.model_evaluate("fourier", par, ffn)
-        par = np.genfromtxt(path_s11 + "par_s11_LNA_ang.txt")
-        rl_ang = mdl.model_evaluate("fourier", par, ffn)
-        rrl = rl_mag * (np.cos(rl_ang) + 1j * np.sin(rl_ang))
-
-        par = np.genfromtxt(path_s11 + "par_s11_amb_mag.txt")
-        ra_mag = mdl.model_evaluate("fourier", par, ffn)
-        par = np.genfromtxt(path_s11 + "par_s11_amb_ang.txt")
-        ra_ang = mdl.model_evaluate("fourier", par, ffn)
-        rra = ra_mag * (np.cos(ra_ang) + 1j * np.sin(ra_ang))
-
-        par = np.genfromtxt(path_s11 + "par_s11_hot_mag.txt")
-        rh_mag = mdl.model_evaluate("fourier", par, ffn)
-        par = np.genfromtxt(path_s11 + "par_s11_hot_ang.txt")
-        rh_ang = mdl.model_evaluate("fourier", par, ffn)
-        rrh = rh_mag * (np.cos(rh_ang) + 1j * np.sin(rh_ang))
-
-        par = np.genfromtxt(path_s11 + "par_s11_open_mag.txt")
-        ro_mag = mdl.model_evaluate("fourier", par, ffn)
-        par = np.genfromtxt(path_s11 + "par_s11_open_ang.txt")
-        ro_ang = mdl.model_evaluate("fourier", par, ffn)
-        rro = ro_mag * (np.cos(ro_ang) + 1j * np.sin(ro_ang))
-
-        par = np.genfromtxt(path_s11 + "par_s11_shorted_mag.txt")
-        rs_mag = mdl.model_evaluate("fourier", par, ffn)
-        par = np.genfromtxt(path_s11 + "par_s11_shorted_ang.txt")
-        rs_ang = mdl.model_evaluate("fourier", par, ffn)
-        rrs = rs_mag * (np.cos(rs_ang) + 1j * np.sin(rs_ang))
-
-        par = np.genfromtxt(path_s11 + "par_s11_sr_mag.txt")
-        s11_sr_mag = mdl.model_evaluate("polynomial", par, ffn)
-        par = np.genfromtxt(path_s11 + "par_s11_sr_ang.txt")
-        s11_sr_ang = mdl.model_evaluate("polynomial", par, ffn)
-        s11_sr = s11_sr_mag * (np.cos(s11_sr_ang) + 1j * np.sin(s11_sr_ang))
-
-        par = np.genfromtxt(path_s11 + "par_s12s21_sr_mag.txt")
-        s12s21_sr_mag = mdl.model_evaluate("polynomial", par, ffn)
-        par = np.genfromtxt(path_s11 + "par_s12s21_sr_ang.txt")
-        s12s21_sr_ang = mdl.model_evaluate("polynomial", par, ffn)
-        s12s21_sr = s12s21_sr_mag * (np.cos(s12s21_sr_ang) + 1j * np.sin(s12s21_sr_ang))
-
-        par = np.genfromtxt(path_s11 + "par_s22_sr_mag.txt")
-        s22_sr_mag = mdl.model_evaluate("polynomial", par, ffn)
-        par = np.genfromtxt(path_s11 + "par_s22_sr_ang.txt")
-        s22_sr_ang = mdl.model_evaluate("polynomial", par, ffn)
-        s22_sr = s22_sr_mag * (np.cos(s22_sr_ang) + 1j * np.sin(s22_sr_ang))
-
-        par = np.genfromtxt(path_s11 + "par_s11_simu_mag.txt")
-        rsimu_mag = mdl.model_evaluate("fourier", par, ffn)
-        par = np.genfromtxt(path_s11 + "par_s11_simu_ang.txt")
-        rsimu_ang = mdl.model_evaluate("fourier", par, ffn)
-        rrsimu = rsimu_mag * (np.cos(rsimu_ang) + 1j * np.sin(rsimu_ang))
-
+        sim_name = "simu"
+        sim_basis = "fourier"
     else:
         ffn = (ff - 120) / 60
-
-        par = np.genfromtxt(path_s11 + "par_s11_LNA_mag.txt")
-        rl_mag = mdl.model_evaluate("polynomial", par, ffn)
-        par = np.genfromtxt(path_s11 + "par_s11_LNA_ang.txt")
-        rl_ang = mdl.model_evaluate("polynomial", par, ffn)
-        rrl = rl_mag * (np.cos(rl_ang) + 1j * np.sin(rl_ang))
-
-        par = np.genfromtxt(path_s11 + "par_s11_amb_mag.txt")
-        ra_mag = mdl.model_evaluate("fourier", par, ffn)
-        par = np.genfromtxt(path_s11 + "par_s11_amb_ang.txt")
-        ra_ang = mdl.model_evaluate("fourier", par, ffn)
-        rra = ra_mag * (np.cos(ra_ang) + 1j * np.sin(ra_ang))
-
-        par = np.genfromtxt(path_s11 + "par_s11_hot_mag.txt")
-        rh_mag = mdl.model_evaluate("fourier", par, ffn)
-        par = np.genfromtxt(path_s11 + "par_s11_hot_ang.txt")
-        rh_ang = mdl.model_evaluate("fourier", par, ffn)
-        rrh = rh_mag * (np.cos(rh_ang) + 1j * np.sin(rh_ang))
-
-        par = np.genfromtxt(path_s11 + "par_s11_open_mag.txt")
-        ro_mag = mdl.model_evaluate("fourier", par, ffn)
-        par = np.genfromtxt(path_s11 + "par_s11_open_ang.txt")
-        ro_ang = mdl.model_evaluate("fourier", par, ffn)
-        rro = ro_mag * (np.cos(ro_ang) + 1j * np.sin(ro_ang))
-
-        par = np.genfromtxt(path_s11 + "par_s11_shorted_mag.txt")
-        rs_mag = mdl.model_evaluate("fourier", par, ffn)
-        par = np.genfromtxt(path_s11 + "par_s11_shorted_ang.txt")
-        rs_ang = mdl.model_evaluate("fourier", par, ffn)
-        rrs = rs_mag * (np.cos(rs_ang) + 1j * np.sin(rs_ang))
-
-        par = np.genfromtxt(path_s11 + "par_s11_sr_mag.txt")
-        s11_sr_mag = mdl.model_evaluate("polynomial", par, ffn)
-        par = np.genfromtxt(path_s11 + "par_s11_sr_ang.txt")
-        s11_sr_ang = mdl.model_evaluate("polynomial", par, ffn)
-        s11_sr = s11_sr_mag * (np.cos(s11_sr_ang) + 1j * np.sin(s11_sr_ang))
-
-        par = np.genfromtxt(path_s11 + "par_s12s21_sr_mag.txt")
-        s12s21_sr_mag = mdl.model_evaluate("polynomial", par, ffn)
-        par = np.genfromtxt(path_s11 + "par_s12s21_sr_ang.txt")
-        s12s21_sr_ang = mdl.model_evaluate("polynomial", par, ffn)
-        s12s21_sr = s12s21_sr_mag * (np.cos(s12s21_sr_ang) + 1j * np.sin(s12s21_sr_ang))
-
-        par = np.genfromtxt(path_s11 + "par_s22_sr_mag.txt")
-        s22_sr_mag = mdl.model_evaluate("polynomial", par, ffn)
-        par = np.genfromtxt(path_s11 + "par_s22_sr_ang.txt")
-        s22_sr_ang = mdl.model_evaluate("polynomial", par, ffn)
-        s22_sr = s22_sr_mag * (np.cos(s22_sr_ang) + 1j * np.sin(s22_sr_ang))
-
-        par = np.genfromtxt(path_s11 + "par_s11_simu_mag.txt")
-        rsimu_mag = mdl.model_evaluate("polynomial", par, ffn)
-        par = np.genfromtxt(path_s11 + "par_s11_simu_ang.txt")
-        rsimu_ang = mdl.model_evaluate("polynomial", par, ffn)
-        rrsimu = rsimu_mag * (np.cos(rsimu_ang) + 1j * np.sin(rsimu_ang))
-
-    # Temperature of hot device
-
-    # reflection coefficient of termination
-    rht = rc.gamma_de_embed(s11_sr, s12s21_sr, s22_sr, rrh)
-
-    # inverting the direction of the s-parameters,
-    # since the port labels have to be inverted to match those of Pozar eqn 10.25
-    s11_sr_rev = s22_sr
-
-    # absolute value of S_21
-    abs_s21 = np.sqrt(np.abs(s12s21_sr))
-
-    # available power gain
-    GG = (
-        (abs_s21 ** 2)
-        * (1 - np.abs(rht) ** 2)
-        / ((np.abs(1 - s11_sr_rev * rht)) ** 2 * (1 - (np.abs(rrh)) ** 2))
-    )
-
-    # S11 at cleaned frequency array
-    if calibration_date == "2019_10_25C":
-
-        fn = (f / 200) - 0.5
-
-        par = np.genfromtxt(path_s11 + "par_s11_LNA_mag.txt")
-        rl_mag = mdl.model_evaluate("fourier", par, fn)
-        par = np.genfromtxt(path_s11 + "par_s11_LNA_ang.txt")
-        rl_ang = mdl.model_evaluate("fourier", par, fn)
-        rl = rl_mag * (np.cos(rl_ang) + 1j * np.sin(rl_ang))
-
-        par = np.genfromtxt(path_s11 + "par_s11_amb_mag.txt")
-        ra_mag = mdl.model_evaluate("fourier", par, fn)
-        par = np.genfromtxt(path_s11 + "par_s11_amb_ang.txt")
-        ra_ang = mdl.model_evaluate("fourier", par, fn)
-        ra = ra_mag * (np.cos(ra_ang) + 1j * np.sin(ra_ang))
-
-        par = np.genfromtxt(path_s11 + "par_s11_hot_mag.txt")
-        rh_mag = mdl.model_evaluate("fourier", par, fn)
-        par = np.genfromtxt(path_s11 + "par_s11_hot_ang.txt")
-        rh_ang = mdl.model_evaluate("fourier", par, fn)
-        rh = rh_mag * (np.cos(rh_ang) + 1j * np.sin(rh_ang))
-
-        par = np.genfromtxt(path_s11 + "par_s11_open_mag.txt")
-        ro_mag = mdl.model_evaluate("fourier", par, fn)
-        par = np.genfromtxt(path_s11 + "par_s11_open_ang.txt")
-        ro_ang = mdl.model_evaluate("fourier", par, fn)
-        ro = ro_mag * (np.cos(ro_ang) + 1j * np.sin(ro_ang))
-
-        par = np.genfromtxt(path_s11 + "par_s11_shorted_mag.txt")
-        rs_mag = mdl.model_evaluate("fourier", par, fn)
-        par = np.genfromtxt(path_s11 + "par_s11_shorted_ang.txt")
-        rs_ang = mdl.model_evaluate("fourier", par, fn)
-        rs = rs_mag * (np.cos(rs_ang) + 1j * np.sin(rs_ang))
-
-        par = np.genfromtxt(path_s11 + "par_s11_sr_mag.txt")
-        s11_sr_mag = mdl.model_evaluate("polynomial", par, fn)
-        par = np.genfromtxt(path_s11 + "par_s11_sr_ang.txt")
-        s11_sr_ang = mdl.model_evaluate("polynomial", par, fn)
-        s11_sr = s11_sr_mag * (np.cos(s11_sr_ang) + 1j * np.sin(s11_sr_ang))
-
-        par = np.genfromtxt(path_s11 + "par_s12s21_sr_mag.txt")
-        s12s21_sr_mag = mdl.model_evaluate("polynomial", par, fn)
-        par = np.genfromtxt(path_s11 + "par_s12s21_sr_ang.txt")
-        s12s21_sr_ang = mdl.model_evaluate("polynomial", par, fn)
-        s12s21_sr = s12s21_sr_mag * (np.cos(s12s21_sr_ang) + 1j * np.sin(s12s21_sr_ang))
-
-        par = np.genfromtxt(path_s11 + "par_s22_sr_mag.txt")
-        s22_sr_mag = mdl.model_evaluate("polynomial", par, fn)
-        par = np.genfromtxt(path_s11 + "par_s22_sr_ang.txt")
-        s22_sr_ang = mdl.model_evaluate("polynomial", par, fn)
-        s22_sr = s22_sr_mag * (np.cos(s22_sr_ang) + 1j * np.sin(s22_sr_ang))
-
-        par = np.genfromtxt(path_s11 + "par_s11_simu3_mag.txt")
-        rsimu_mag = mdl.model_evaluate("fourier", par, fn)
-        par = np.genfromtxt(path_s11 + "par_s11_simu3_ang.txt")
-        rsimu_ang = mdl.model_evaluate("fourier", par, fn)
-
-    elif (calibration_date == "2018_01_25C") and (
-        (folder == "nominal_2019_12_50-150MHz_try1")
-        or (folder == "nominal_2019_12_50-150MHz_try1_LNA_rep1")
-        or (folder == "nominal_2019_12_50-150MHz_try1_LNA_rep2")
-        or (folder == "nominal_2019_12_50-150MHz_try1_LNA_rep12")
-        or (folder == "nominal_2019_12_50-150MHz_LNA1_a1_h1_o1_s1_sim2")
-        or (folder == "nominal_2019_12_50-150MHz_LNA1_a1_h2_o1_s1_sim2")
-        or (folder == "nominal_2019_12_50-150MHz_LNA1_a2_h1_o1_s1_sim2")
-        or (folder == "nominal_2019_12_50-150MHz_LNA1_a2_h2_o1_s1_sim2")
-        or (folder == "nominal_2019_12_50-150MHz_LNA1_a2_h2_o1_s2_sim2")
-        or (folder == "nominal_2019_12_50-150MHz_LNA1_a2_h2_o2_s1_sim2")
-        or (folder == "nominal_2019_12_50-150MHz_LNA1_a2_h2_o2_s2_sim2")
-    ):
-
-        fn = (f / 200) - 0.5
-
-        par = np.genfromtxt(path_s11 + "par_s11_LNA_mag.txt")
-        rl_mag = mdl.model_evaluate("fourier", par, fn)
-        par = np.genfromtxt(path_s11 + "par_s11_LNA_ang.txt")
-        rl_ang = mdl.model_evaluate("fourier", par, fn)
-        rl = rl_mag * (np.cos(rl_ang) + 1j * np.sin(rl_ang))
-
-        par = np.genfromtxt(path_s11 + "par_s11_amb_mag.txt")
-        ra_mag = mdl.model_evaluate("fourier", par, fn)
-        par = np.genfromtxt(path_s11 + "par_s11_amb_ang.txt")
-        ra_ang = mdl.model_evaluate("fourier", par, fn)
-        ra = ra_mag * (np.cos(ra_ang) + 1j * np.sin(ra_ang))
-
-        par = np.genfromtxt(path_s11 + "par_s11_hot_mag.txt")
-        rh_mag = mdl.model_evaluate("fourier", par, fn)
-        par = np.genfromtxt(path_s11 + "par_s11_hot_ang.txt")
-        rh_ang = mdl.model_evaluate("fourier", par, fn)
-        rh = rh_mag * (np.cos(rh_ang) + 1j * np.sin(rh_ang))
-
-        par = np.genfromtxt(path_s11 + "par_s11_open_mag.txt")
-        ro_mag = mdl.model_evaluate("fourier", par, fn)
-        par = np.genfromtxt(path_s11 + "par_s11_open_ang.txt")
-        ro_ang = mdl.model_evaluate("fourier", par, fn)
-        ro = ro_mag * (np.cos(ro_ang) + 1j * np.sin(ro_ang))
-
-        par = np.genfromtxt(path_s11 + "par_s11_shorted_mag.txt")
-        rs_mag = mdl.model_evaluate("fourier", par, fn)
-        par = np.genfromtxt(path_s11 + "par_s11_shorted_ang.txt")
-        rs_ang = mdl.model_evaluate("fourier", par, fn)
-        rs = rs_mag * (np.cos(rs_ang) + 1j * np.sin(rs_ang))
-
-        par = np.genfromtxt(path_s11 + "par_s11_sr_mag.txt")
-        s11_sr_mag = mdl.model_evaluate("polynomial", par, fn)
-        par = np.genfromtxt(path_s11 + "par_s11_sr_ang.txt")
-        s11_sr_ang = mdl.model_evaluate("polynomial", par, fn)
-        s11_sr = s11_sr_mag * (np.cos(s11_sr_ang) + 1j * np.sin(s11_sr_ang))
-
-        par = np.genfromtxt(path_s11 + "par_s12s21_sr_mag.txt")
-        s12s21_sr_mag = mdl.model_evaluate("polynomial", par, fn)
-        par = np.genfromtxt(path_s11 + "par_s12s21_sr_ang.txt")
-        s12s21_sr_ang = mdl.model_evaluate("polynomial", par, fn)
-        s12s21_sr = s12s21_sr_mag * (np.cos(s12s21_sr_ang) + 1j * np.sin(s12s21_sr_ang))
-
-        par = np.genfromtxt(path_s11 + "par_s22_sr_mag.txt")
-        s22_sr_mag = mdl.model_evaluate("polynomial", par, fn)
-        par = np.genfromtxt(path_s11 + "par_s22_sr_ang.txt")
-        s22_sr_ang = mdl.model_evaluate("polynomial", par, fn)
-        s22_sr = s22_sr_mag * (np.cos(s22_sr_ang) + 1j * np.sin(s22_sr_ang))
-
-        par = np.genfromtxt(path_s11 + "par_s11_simu_mag.txt")
-        rsimu_mag = mdl.model_evaluate("fourier", par, fn)
-        par = np.genfromtxt(path_s11 + "par_s11_simu_ang.txt")
-        rsimu_ang = mdl.model_evaluate("fourier", par, fn)
-    else:
         fn = (f - 120) / 60
+        sim_name = "simu"
+        sim_basis = "polynomial"
 
-        par = np.genfromtxt(path_s11 + "par_s11_LNA_mag.txt")
-        rl_mag = mdl.model_evaluate("polynomial", par, fn)
-        par = np.genfromtxt(path_s11 + "par_s11_LNA_ang.txt")
-        rl_ang = mdl.model_evaluate("polynomial", par, fn)
-        rl = rl_mag * (np.cos(rl_ang) + 1j * np.sin(rl_ang))
+    loads_full = {
+        name: s11m.get_s11_model_from_file(path_s11, name, ffn)
+        for name in ["LNA", "amb", "hot", "open", "shorted"]
+    }
+    sr_full = {
+        kind: s11m.get_s11_model_from_file(
+            path_s11, "sr", ffn, coeff=kind, basis="polynomial"
+        )
+        for kind in ["s11", "s12s21", "s22"]
+    }
+    rrsimu = s11m.get_s11_model_from_file(path_s11, sim_name, ffn, basis=sim_basis)
+    GG = HotLoadCorrection.get_power_gain(sr_full, loads_full["hot"])
 
-        par = np.genfromtxt(path_s11 + "par_s11_amb_mag.txt")
-        ra_mag = mdl.model_evaluate("fourier", par, fn)
-        par = np.genfromtxt(path_s11 + "par_s11_amb_ang.txt")
-        ra_ang = mdl.model_evaluate("fourier", par, fn)
-        ra = ra_mag * (np.cos(ra_ang) + 1j * np.sin(ra_ang))
-
-        par = np.genfromtxt(path_s11 + "par_s11_hot_mag.txt")
-        rh_mag = mdl.model_evaluate("fourier", par, fn)
-        par = np.genfromtxt(path_s11 + "par_s11_hot_ang.txt")
-        rh_ang = mdl.model_evaluate("fourier", par, fn)
-        rh = rh_mag * (np.cos(rh_ang) + 1j * np.sin(rh_ang))
-
-        par = np.genfromtxt(path_s11 + "par_s11_open_mag.txt")
-        ro_mag = mdl.model_evaluate("fourier", par, fn)
-        par = np.genfromtxt(path_s11 + "par_s11_open_ang.txt")
-        ro_ang = mdl.model_evaluate("fourier", par, fn)
-        ro = ro_mag * (np.cos(ro_ang) + 1j * np.sin(ro_ang))
-
-        par = np.genfromtxt(path_s11 + "par_s11_shorted_mag.txt")
-        rs_mag = mdl.model_evaluate("fourier", par, fn)
-        par = np.genfromtxt(path_s11 + "par_s11_shorted_ang.txt")
-        rs_ang = mdl.model_evaluate("fourier", par, fn)
-        rs = rs_mag * (np.cos(rs_ang) + 1j * np.sin(rs_ang))
-
-        par = np.genfromtxt(path_s11 + "par_s11_sr_mag.txt")
-        s11_sr_mag = mdl.model_evaluate("polynomial", par, fn)
-        par = np.genfromtxt(path_s11 + "par_s11_sr_ang.txt")
-        s11_sr_ang = mdl.model_evaluate("polynomial", par, fn)
-        s11_sr = s11_sr_mag * (np.cos(s11_sr_ang) + 1j * np.sin(s11_sr_ang))
-
-        par = np.genfromtxt(path_s11 + "par_s12s21_sr_mag.txt")
-        s12s21_sr_mag = mdl.model_evaluate("polynomial", par, fn)
-        par = np.genfromtxt(path_s11 + "par_s12s21_sr_ang.txt")
-        s12s21_sr_ang = mdl.model_evaluate("polynomial", par, fn)
-        s12s21_sr = s12s21_sr_mag * (np.cos(s12s21_sr_ang) + 1j * np.sin(s12s21_sr_ang))
-
-        par = np.genfromtxt(path_s11 + "par_s22_sr_mag.txt")
-        s22_sr_mag = mdl.model_evaluate("polynomial", par, fn)
-        par = np.genfromtxt(path_s11 + "par_s22_sr_ang.txt")
-        s22_sr_ang = mdl.model_evaluate("polynomial", par, fn)
-        s22_sr = s22_sr_mag * (np.cos(s22_sr_ang) + 1j * np.sin(s22_sr_ang))
-
-        par = np.genfromtxt(path_s11 + "par_s11_simu_mag.txt")
-        rsimu_mag = mdl.model_evaluate("polynomial", par, fn)
-        par = np.genfromtxt(path_s11 + "par_s11_simu_ang.txt")
-        rsimu_ang = mdl.model_evaluate("polynomial", par, fn)
-
-    # Temperature of hot device
-
-    # reflection coefficient of termination
-    rht = rc.gamma_de_embed(s11_sr, s12s21_sr, s22_sr, rh)
-
-    # inverting the direction of the s-parameters,
-    # since the port labels have to be inverted to match those of Pozar eqn 10.25
-    s11_sr_rev = s22_sr
-
-    # absolute value of S_21
-    abs_s21 = np.sqrt(np.abs(s12s21_sr))
-
-    # available power gain
-    G = (
-        (abs_s21 ** 2)
-        * (1 - np.abs(rht) ** 2)
-        / ((np.abs(1 - s11_sr_rev * rht)) ** 2 * (1 - (np.abs(rh)) ** 2))
-    )
+    loads = {
+        name: s11m.get_s11_model_from_file(path_s11, name, fn)
+        for name in ["LNA", "amb", "hot", "open", "shorted"]
+    }
+    sr = {
+        kind: s11m.get_s11_model_from_file(
+            path_s11, "sr", fn, coeff=kind, basis="polynomial"
+        )
+        for kind in ["s11", "s12s21", "s22"]
+    }
+    # rsimu = s11m.get_s11_model_from_file(path_s11, sim_name, fn, basis=sim_basis)
+    G = HotLoadCorrection.get_power_gain(sr, loads["hot"])
 
     # temperature
-    Thd = G * Th + (1 - G) * Ta
+    phys_temp["hot_corrected"] = G * phys_temp["hot"] + (1 - G) * phys_temp["amb"]
 
     # Sweeping parameters and computing RMS
     Tamb_internal = 300
-    index_cterms = np.arange(1, 15, 1)
-    index_wterms = np.arange(1, 15, 1)
+    cterms = range(1, 15)
+    wterms = range(1, 15)
 
     if term_sweep:
-        RMS = np.zeros((4, len(index_wterms), len(index_cterms)))
-        for j in range(len(index_cterms)):
-            for i in range(len(index_wterms)):
+        RMS = np.zeros((4, len(wterms), len(cterms)))
+        for j in cterms:
+            for i in wterms:
+                fig, ax = plt.subplots(
+                    panels, 1, figsize=(6, panels * 3 - 6), sharex=True
+                )
+                fig_raw, ax_raw = plt.subplots(
+                    panels, 1, figsize=(6, panels * 3 - 6), sharex=True
+                )
+
                 C1, C2, TU, TC, TS = rcf.get_calibration_quantities_iterative(
                     fn,
-                    T_raw={"ambient": Tae, "hot_load": The, "short": Tse, "open": Toe},
-                    gamma_rec=rl,
-                    gamma_ant={"ambient": ra, "hot_load": rh, "short": rs, "open": ro},
-                    T_ant={"ambient": Ta, "hot_load": Thd, "short": Ts, "open": To},
-                    cterms=j + 1,
-                    wterms=i + 1,
+                    T_raw={
+                        "ambient": good_data["amb"],
+                        "hot_load": good_data["hot"],
+                        "short": good_data["shorted"],
+                        "open": good_data["open"],
+                    },
+                    gamma_rec=loads["LNA"],
+                    gamma_ant={
+                        "ambient": loads["amb"],
+                        "hot_load": loads["hot"],
+                        "short": loads["shorted"],
+                        "open": loads["open"],
+                    },
+                    T_ant={
+                        "ambient": phys_temp["amb"],
+                        "hot_load": phys_temp["hot_corrected"],
+                        "short": phys_temp["shorted"],
+                        "open": phys_temp["open"],
+                    },
+                    cterms=j,
+                    wterms=i,
                     Tamb_internal=Tamb_internal,
                 )
 
                 # Only open cable
                 print("---------------------------------------------------")
-                print(j + 1)
-                print(i + 1)
+                print(j + 1, i + 1)
 
                 # Cross-check
-                TTac = rcf.calibrated_antenna_temperature(
-                    TTae, rra, rrl, C1, C2, TU, TC, TS, T_load=Tamb_internal
-                )
-                fb, tab, wb, stdb = tools.spectral_binning_number_of_samples(
-                    ff, TTac, WW_all, nsamples=64
-                )
+                tcal = {}
+                for k, (load, s11) in enumerate(
+                    {**loads_full, **{"simu": rrsimu}}.items()
+                ):
+                    if load == "LNA":
+                        continue
 
-                TThc = rcf.calibrated_antenna_temperature(
-                    TThe, rrh, rrl, C1, C2, TU, TC, TS, T_load=Tamb_internal
-                )
-                TThhc = (TThc - (1 - GG) * Ta) / GG
-                fb, thb, wb, stdb = tools.spectral_binning_number_of_samples(
-                    ff, TThhc, WW_all, nsamples=64
-                )
-
-                TToc = rcf.calibrated_antenna_temperature(
-                    TToe, rro, rrl, C1, C2, TU, TC, TS, T_load=Tamb_internal
-                )
-                fb, tob, wb, stdb = tools.spectral_binning_number_of_samples(
-                    ff, TToc, WW_all, nsamples=64
-                )
-
-                TTsc = rcf.calibrated_antenna_temperature(
-                    TTse, rrs, rrl, C1, C2, TU, TC, TS, T_load=Tamb_internal
-                )
-                fb, tsb, wb, stdb = tools.spectral_binning_number_of_samples(
-                    ff, TTsc, WW_all, nsamples=64
-                )
-
-                TTqc = rcf.calibrated_antenna_temperature(
-                    TTqe, rrsimu, rrl, C1, C2, TU, TC, TS, T_load=Tamb_internal
-                )
-                fb, tqb, wb, stdb = tools.spectral_binning_number_of_samples(
-                    ff, TTqc, WW_all, nsamples=64
-                )
-
-                RMS[0, i, j] = np.std(tab - Ta)
-                RMS[1, i, j] = np.std(thb - Th)
-                RMS[2, i, j] = np.std(tob - To)
-                RMS[3, i, j] = np.std(tsb - Ts)
-
-                # Save figure 1 (BINNED)
-                # ----------------------
-                if panels == 4:
-                    plt.figure(1, figsize=[6, 6])
-                    plt.subplot(4, 1, 1)
-                    plt.plot(fb, tab)
-                    plt.plot(fb, Ta * np.ones(len(fb)))
-                    plt.xticks(np.arange(FMIN, FMAX + 1, 10), labels=[])
-                    plt.ylabel("Tamb\nRMS=" + str(round(np.std(tab - Ta), 3)) + "K")
-                    plt.title(
-                        "CTerms="
-                        + str(index_cterms[j])
-                        + ", WTerms="
-                        + str(index_wterms[i])
+                    TT = rcf.calibrated_antenna_temperature(
+                        raw_data[load],
+                        s11,
+                        loads_full["LNA"],
+                        C1,
+                        C2,
+                        TU,
+                        TC,
+                        TS,
+                        T_load=Tamb_internal,
                     )
-                    plt.subplot(4, 1, 2)
-                    plt.plot(fb, thb)
-                    plt.plot(fb, Th * np.ones(len(fb)))
-                    plt.xticks(np.arange(FMIN, FMAX + 1, 10), labels=[])
-                    plt.ylabel("Thot\nRMS=" + str(round(np.std(thb - Th), 3)) + "K")
-                    plt.subplot(4, 1, 3)
-                    plt.plot(fb, tob)
-                    plt.plot(fb, To * np.ones(len(fb)))
-                    plt.xticks(np.arange(FMIN, FMAX + 1, 10), labels=[])
-                    plt.ylabel("Topen\nRMS=" + str(round(np.std(tob - To), 2)) + "K")
-                    plt.subplot(4, 1, 4)
-                    plt.plot(fb, tsb)
-                    plt.plot(fb, Ts * np.ones(len(fb)))
-                    plt.xticks(np.arange(FMIN, FMAX + 1, 10))
-                    plt.ylabel("Tshorted\nRMS=" + str(round(np.std(tsb - Ts), 2)) + "K")
-                    plt.xlabel("frequency [MHz]")
 
-                elif panels == 5:
-                    plt.figure(1, figsize=[6, 9])
-                    plt.subplot(5, 1, 1)
-                    plt.plot(fb, tab)
-                    plt.plot(fb, Ta * np.ones(len(fb)))
-                    plt.xticks(np.arange(FMIN, FMAX + 1, 10), labels=[])
-                    plt.ylabel("Tamb\nRMS=" + str(round(np.std(tab - Ta), 3)) + "K")
-                    plt.title(
-                        "CTerms="
-                        + str(index_cterms[j])
-                        + ", WTerms="
-                        + str(index_wterms[i])
+                    if load == "hot":
+                        TT = (TT - (1 - GG) * phys_temp["amb"]) / GG
+
+                    fb, tb, wb, stdb = tools.spectral_binning_number_of_samples(
+                        ff, TT, WW_all, nsamples=64
                     )
-                    plt.subplot(5, 1, 2)
-                    plt.plot(fb, thb)
-                    plt.plot(fb, Th * np.ones(len(fb)))
-                    plt.xticks(np.arange(FMIN, FMAX + 1, 10), labels=[])
-                    plt.ylabel("Thot\nRMS=" + str(round(np.std(thb - Th), 3)) + "K")
-                    plt.subplot(5, 1, 3)
-                    plt.plot(fb, tob)
-                    plt.plot(fb, To * np.ones(len(fb)))
-                    plt.xticks(np.arange(FMIN, FMAX + 1, 10), labels=[])
-                    plt.ylabel("Topen\nRMS=" + str(round(np.std(tob - To), 2)) + "K")
-                    plt.subplot(5, 1, 4)
-                    plt.plot(fb, tsb)
-                    plt.plot(fb, Ts * np.ones(len(fb)))
-                    plt.xticks(np.arange(FMIN, FMAX + 1, 10), labels=[])
-                    plt.ylabel("Tshorted\nRMS=" + str(round(np.std(tsb - Ts), 2)) + "K")
-                    plt.subplot(5, 1, 5)
-                    plt.plot(fb, tqb)
-                    plt.plot(fb, Tsim * np.ones(len(fb)))
-                    plt.xticks(np.arange(FMIN, FMAX + 1, 10))
-                    plt.ylabel("Tsimu\nRMS=" + str(round(np.std(tqb - Tsim), 2)) + "K")
-                    plt.xlabel("frequency [MHz]")
+                    tcal[load] = {
+                        "temp_cal": TT,
+                        "f_binned": fb,
+                        "t_binned": tb,
+                        "w_binned": wb,
+                        "std_binned": stdb,
+                    }
 
+                    RMS[k, i - min(wterms), j - min(cterms)] = np.std(
+                        tb - phys_temp[load]
+                    )
+
+                    if panels < 5 and load == "simu":
+                        # Don't plot the simulation if panels < 5
+                        continue
+
+                    # Save figure 1 (BINNED)
+                    # ----------------------
+                    ax[k].plot(fb, tb)
+                    ax[k].plot(fb, phys_temp[load] * np.ones(len(fb)))
+                    ax[k].set_ylabel(
+                        r"T_{\rm %s}\nRMS=%s K"
+                        % (load, round(np.std(tb - phys_temp[load]), 3))
+                    )
+                    ax[k].set_title(f"CTerms={j}, Wterms={i}")
+
+                    ax_raw[k].plot(ff[WW_all > 0], TT[WW_all > 0])
+                    ax_raw[k].plot(fb, phys_temp[load] * np.ones(len(fb)))
+                    ax_raw[k].set_ylabel(
+                        r"T_{\rm %s}\nRMS=%s K"
+                        % (load, round(np.std(TT[WW_all > 0] - phys_temp[load]), 3))
+                    )
+                    ax_raw[k].set_title(f"CTerms={j}, Wterms={i}")
+
+                if j == cterms_nominal and i == wterms_nominal:
+                    # Save some nominal stuff.
+                    # Saving results
+                    if save_nominal:
+                        # Array
+                        save_array = np.array(
+                            [
+                                ff,
+                                np.real(loads_full["LNA"]),
+                                np.imag(loads_full["LNA"]),
+                                C1,
+                                C2,
+                                TU,
+                                TC,
+                                TS,
+                            ]
+                        )
+
+                        # Save
+                        np.savetxt(
+                            path_save
+                            + "calibration_file_receiver1"
+                            + save_nominal_flag
+                            + ".txt",
+                            save_array,
+                            fmt="%1.8f",
+                        )
+
+                    if plot_nominal:
+                        fig_nom, ax_nom = plt.subplots(
+                            5, 1, sharex=True, figsize=(10, 10)
+                        )
+                        for k, (load, caltemp) in tcal.items():
+                            rms = np.std(
+                                caltemp["temp_cal"][WW_all > 0] - phys_temp[load]
+                            )
+                            ax_nom[k].plot(
+                                ff[WW_all > 0],
+                                caltemp["temp_cal"][WW_all > 0],
+                                "g",
+                                lw=1,
+                            )
+                            ax_nom[k].plot(fb, phys_temp[load] * np.ones(len(fb)), "k")
+                            plt.ylabel(
+                                rf"T$_{load[0].upper()}$ [K]\nRMS={rms:.3f} K",
+                                fontsize=13,
+                            )
+
+                        # Creating folder if necessary
+                        plt.savefig(
+                            path_save
+                            + f"calibration_crosscheck_{f_low}_{f_high}MHz_cterms{j}_wterms{i}.pdf",
+                            bbox_inches="tight",
+                        )
                 # Creating folder if necessary
                 path_save_term_sweep = (
-                    path_save
-                    + "/binned_calibration_term_sweep_"
-                    + str(FMIN)
-                    + "_"
-                    + str(FMAX)
-                    + "MHz/"
+                    f"{path_save}/binned_calibration_term_sweep_{f_low}_{f_high}MHz/"
                 )
                 if not exists(path_save_term_sweep):
                     makedirs(path_save_term_sweep)
-                plt.savefig(
+
+                fig.savefig(
                     path_save_term_sweep
-                    + "calibration_term_sweep_"
-                    + str(FMIN)
-                    + "_"
-                    + str(FMAX)
-                    + "MHz_cterms"
-                    + str(index_cterms[j])
-                    + "_wterms"
-                    + str(index_wterms[i])
-                    + ".png",
+                    + f"calibration_term_sweep_{f_low}_{f_high}MHz_cterms{j}_wterms{i}.png",
                     bbox_inches="tight",
                 )
 
-                # Save figure 2 (RAW)
-                # -------------------
-                if panels == 4:
-                    plt.figure(1, figsize=[6, 6])
-                    plt.subplot(4, 1, 1)
-                    plt.plot(ff[WW_all > 0], TTac[WW_all > 0])
-                    plt.plot(fb, Ta * np.ones(len(fb)))
-                    plt.xticks(np.arange(FMIN, FMAX + 1, 10), labels=[])
-                    plt.ylabel(
-                        "Tamb\nRMS="
-                        + str(round(np.std(TTac[WW_all > 0] - Ta), 3))
-                        + "K"
-                    )
-                    plt.title(
-                        "CTerms="
-                        + str(index_cterms[j])
-                        + ", WTerms="
-                        + str(index_wterms[i])
-                    )
-
-                    plt.subplot(4, 1, 2)
-                    plt.plot(ff[WW_all > 0], TThhc[WW_all > 0])
-                    plt.plot(fb, Th * np.ones(len(fb)))
-                    plt.xticks(np.arange(FMIN, FMAX + 1, 10), labels=[])
-                    plt.ylabel(
-                        "Thot\nRMS="
-                        + str(round(np.std(TThhc[WW_all > 0] - Th), 3))
-                        + "K"
-                    )
-
-                    plt.subplot(4, 1, 3)
-                    plt.plot(ff[WW_all > 0], TToc[WW_all > 0])
-                    plt.plot(fb, To * np.ones(len(fb)))
-                    plt.xticks(np.arange(FMIN, FMAX + 1, 10), labels=[])
-                    plt.ylabel(
-                        "Topen\nRMS="
-                        + str(round(np.std(TToc[WW_all > 0] - To), 2))
-                        + "K"
-                    )
-
-                    plt.subplot(4, 1, 4)
-                    plt.plot(ff[WW_all > 0], TTsc[WW_all > 0])
-                    plt.plot(fb, Ts * np.ones(len(fb)))
-                    plt.xticks(np.arange(FMIN, FMAX + 1, 10))
-                    plt.ylabel(
-                        "Tshorted\nRMS="
-                        + str(round(np.std(TTsc[WW_all > 0] - Ts), 2))
-                        + "K"
-                    )
-                    plt.xlabel("frequency [MHz]")
-
-                elif panels == 5:
-                    plt.figure(1, figsize=[6, 9])
-                    plt.subplot(5, 1, 1)
-                    plt.plot(ff[WW_all > 0], TTac[WW_all > 0])
-                    plt.plot(fb, Ta * np.ones(len(fb)))
-                    plt.xticks(np.arange(FMIN, FMAX + 1, 10), labels=[])
-                    plt.ylabel(
-                        "Tamb\nRMS="
-                        + str(round(np.std(TTac[WW_all > 0] - Ta), 3))
-                        + "K"
-                    )
-                    plt.title(
-                        "CTerms="
-                        + str(index_cterms[j])
-                        + ", WTerms="
-                        + str(index_wterms[i])
-                    )
-                    plt.subplot(5, 1, 2)
-                    plt.plot(ff[WW_all > 0], TThhc[WW_all > 0])
-                    plt.plot(fb, Th * np.ones(len(fb)))
-                    plt.xticks(np.arange(FMIN, FMAX + 1, 10), labels=[])
-                    plt.ylabel(
-                        "Thot\nRMS="
-                        + str(round(np.std(TThhc[WW_all > 0] - Th), 3))
-                        + "K"
-                    )
-                    plt.subplot(5, 1, 3)
-                    plt.plot(ff[WW_all > 0], TToc[WW_all > 0])
-                    plt.plot(fb, To * np.ones(len(fb)))
-                    plt.xticks(np.arange(FMIN, FMAX + 1, 10), labels=[])
-                    plt.ylabel(
-                        "Topen\nRMS="
-                        + str(round(np.std(TToc[WW_all > 0] - To), 2))
-                        + "K"
-                    )
-                    plt.subplot(5, 1, 4)
-                    plt.plot(ff[WW_all > 0], TTsc[WW_all > 0])
-                    plt.plot(fb, Ts * np.ones(len(fb)))
-                    plt.xticks(np.arange(FMIN, FMAX + 1, 10), labels=[])
-                    plt.ylabel(
-                        "Tshorted\nRMS="
-                        + str(round(np.std(TTsc[WW_all > 0] - Ts), 2))
-                        + "K"
-                    )
-                    plt.subplot(5, 1, 5)
-                    plt.plot(ff[WW_all > 0], TTqc[WW_all > 0])
-                    plt.plot(fb, Tsim * np.ones(len(fb)))
-                    plt.xticks(np.arange(FMIN, FMAX + 1, 10))
-                    plt.ylabel(
-                        "Tsimu\nRMS="
-                        + str(round(np.std(TTqc[WW_all > 0] - Tsim), 2))
-                        + "K"
-                    )
-                    plt.xlabel("frequency [MHz]")
-
-                # Creating folder if necessary
-                path_save_term_sweep = (
-                    path_save
-                    + "/raw_calibration_term_sweep_"
-                    + str(FMIN)
-                    + "_"
-                    + str(FMAX)
-                    + "MHz/"
+                raw_path_save_term_sweep = (
+                    f"{path_save}/raw_binned_calibration_term_sweep_{f_low}_"
+                    f"{f_high}MHz/"
                 )
                 if not exists(path_save_term_sweep):
                     makedirs(path_save_term_sweep)
-                plt.savefig(
-                    path_save_term_sweep
-                    + "calibration_term_sweep_"
-                    + str(FMIN)
-                    + "_"
-                    + str(FMAX)
-                    + "MHz_cterms"
-                    + str(index_cterms[j])
-                    + "_wterms"
-                    + str(index_wterms[i])
-                    + ".png",
+
+                fig_raw.savefig(
+                    raw_path_save_term_sweep
+                    + f"calibration_term_sweep_{f_low}_{f_high}MHz_cterms{j}_wterms{i}.png",
                     bbox_inches="tight",
                 )
-                plt.close()
 
         # Save
         with h5py.File(
-            path_save_term_sweep
-            + "calibration_term_sweep_"
-            + str(FMIN)
-            + "_"
-            + str(FMAX)
-            + "MHz.hdf5",
+            path_save_term_sweep + f"calibration_term_sweep_{f_low}_{f_high}MHz.hdf5"
             "w",
         ) as hf:
             hf.create_dataset("RMS", data=RMS)
-            hf.create_dataset("index_cterms", data=index_cterms)
-            hf.create_dataset("index_wterms", data=index_wterms)
+            hf.create_dataset("index_cterms", data=cterms)
+            hf.create_dataset("index_wterms", data=wterms)
 
-    # Saving nominal case
-    C1, C2, TU, TC, TS = rcf.get_calibration_quantities_iterative(
-        fn,
-        T_raw={"ambient": Tae, "hot_load": The, "short": Tse, "open": Toe},
-        gamma_rec=rl,
-        gamma_ant={"ambient": ra, "hot_load": rh, "short": rs, "open": ro},
-        T_ant={"ambient": Ta, "hot_load": Thd, "short": Ts, "open": To},
-        cterms=cterms_nominal,
-        wterms=wterms_nominal,
-        Tamb_internal=Tamb_internal,
-    )
-
-    print("LENGTH of fn: " + str(len(fn)))
-    print("LENGTH of ffn: " + str(len(ffn)))
-    print(np.sum(ffn))
-    print("LENGTH of Tae: " + str(len(Tae)))
-    print("LENGTH of rl: " + str(len(rl)))
-    print("LENGTH of ra: " + str(len(ra)))
-    print("LENGTH of C1: " + str(len(C1)))
-
-    # Saving results
-    if save_nominal:
-        # Array
-        save_array = np.zeros((len(ff), 8))
-        save_array[:, 0] = ff
-        save_array[:, 1] = np.real(rrl)
-        save_array[:, 2] = np.imag(rrl)
-        save_array[:, 3] = C1
-        save_array[:, 4] = C2
-        save_array[:, 5] = TU
-        save_array[:, 6] = TC
-        save_array[:, 7] = TS
-
-        # Save
-        np.savetxt(
-            path_save + "calibration_file_receiver1" + save_nominal_flag + ".txt",
-            save_array,
-            fmt="%1.8f",
-        )
-
-    if plot_nominal:
-        # Plotting cross-check
-        TTac = rcf.calibrated_antenna_temperature(
-            TTae, rra, rrl, C1, C2, TU, TC, TS, T_load=Tamb_internal
-        )
-        fb, tab, wb, sb = tools.spectral_binning_number_of_samples(
-            ff, TTac, WW_all, nsamples=64
-        )
-
-        TThc = rcf.calibrated_antenna_temperature(
-            TThe, rrh, rrl, C1, C2, TU, TC, TS, T_load=Tamb_internal
-        )
-        TThhc = (TThc - (1 - GG) * Ta) / GG
-        fb, thb, wb, sb = tools.spectral_binning_number_of_samples(
-            ff, TThhc, WW_all, nsamples=64
-        )
-
-        TToc = rcf.calibrated_antenna_temperature(
-            TToe, rro, rrl, C1, C2, TU, TC, TS, T_load=Tamb_internal
-        )
-        fb, tob, wb, sb = tools.spectral_binning_number_of_samples(
-            ff, TToc, WW_all, nsamples=64
-        )
-
-        TTsc = rcf.calibrated_antenna_temperature(
-            TTse, rrs, rrl, C1, C2, TU, TC, TS, T_load=Tamb_internal
-        )
-        fb, tsb, wb, sb = tools.spectral_binning_number_of_samples(
-            ff, TTsc, WW_all, nsamples=64
-        )
-
-        TTqc = rcf.calibrated_antenna_temperature(
-            TTqe, rrsimu, rrl, C1, C2, TU, TC, TS, T_load=Tamb_internal
-        )
-        fb, tqb, wb, sb = tools.spectral_binning_number_of_samples(
-            ff, TTqc, WW_all, nsamples=64
-        )
-
-        fmin_new = np.copy(FMIN)
-        fmax_new = np.copy(FMAX)
-        lw = 1
-
-        plt.figure(1, figsize=[10, 10])
-        plt.subplot(5, 1, 1)
-        plt.plot(ff[WW_all > 0], TTac[WW_all > 0], "g", linewidth=lw)
-        plt.plot(fb, Ta * np.ones(len(fb)), "k")
-        plt.xticks(np.arange(FMIN, FMAX + 1, 10), labels=[])
-        plt.ylabel(
-            r"T$_A$ [K]"
-            + "\n"
-            + "RMS="
-            + str(round(np.std(TTac[WW_all > 0] - Ta), 3))
-            + " K",
-            fontsize=13,
-        )
-        plt.xlim([fmin_new, fmax_new])
-
-        plt.subplot(5, 1, 2)
-        plt.plot(ff[WW_all > 0], TThhc[WW_all > 0], "g", linewidth=lw)
-        plt.plot(fb, Th * np.ones(len(fb)), "k")
-        plt.xticks(np.arange(FMIN, FMAX + 1, 10), labels=[])
-        plt.ylabel(
-            r"T$_H$ [K]"
-            + "\n"
-            + "RMS="
-            + str(round(np.std(TThhc[WW_all > 0] - Th), 3))
-            + " K",
-            fontsize=13,
-        )
-        plt.xlim([fmin_new, fmax_new])
-
-        plt.subplot(5, 1, 3)
-        plt.plot(ff[WW_all > 0], TToc[WW_all > 0], "g", linewidth=lw)
-        plt.plot(fb, To * np.ones(len(fb)), "k")
-        plt.xticks(np.arange(FMIN, FMAX + 1, 10), labels=[])
-        plt.ylabel(
-            r"T$_O$ [K]"
-            + "\n"
-            + "RMS="
-            + str(round(np.std(TToc[WW_all > 0] - To), 2))
-            + " K",
-            fontsize=13,
-        )
-        plt.xlim([fmin_new, fmax_new])
-
-        plt.subplot(5, 1, 4)
-        plt.plot(ff[WW_all > 0], TTsc[WW_all > 0], "g", linewidth=lw)
-        plt.plot(fb, Ts * np.ones(len(fb)), "k")
-        plt.xticks(np.arange(FMIN, FMAX + 1, 10))
-        plt.ylabel(
-            r"T$_S$ [K]"
-            + "\n"
-            + "RMS="
-            + str(round(np.std(TTsc[WW_all > 0] - Ts), 2))
-            + " K",
-            fontsize=13,
-        )
-        plt.xlim([fmin_new, fmax_new])
-        plt.xlabel(r"$\nu$ [MHz]", fontsize=13)
-
-        plt.subplot(5, 1, 5)
-        plt.plot(ff[WW_all > 0], TTqc[WW_all > 0], "g", linewidth=lw)
-        plt.xticks(np.arange(FMIN, FMAX + 1, 10))
-        plt.ylabel(
-            r"T$_{\mathrm{sim}}$ [K]"
-            + "\n"
-            + "RMS="
-            + str(round(np.std(TTqc[WW_all > 0]), 2))
-            + " K",
-            fontsize=13,
-        )
-        plt.xlim([fmin_new, fmax_new])
-        plt.xlabel(r"$\nu$ [MHz]", fontsize=13)
-
-        # Creating folder if necessary
-        plt.savefig(
-            (
-                path_save
-                + "calibration_crosscheck_"
-                + str(fmin_new)
-                + "_"
-                + str(fmax_new)
-                + "MHz_cterms"
-                + str(cterms_nominal)
-                + "_wterms"
-                + str(wterms_nominal)
-                + ".pdf"
-            ),
-            bbox_inches="tight",
-        )
-
-    return f, Tae, The, Toe, Tse, Tqe, WW_all  # ff, C1, C2, TU, TC, TS
-
-
-def level1_to_level2(band, year, day_hour, low2_flag="_low2"):
-    # Paths and files
-    path_level1 = home_folder + "/EDGES/spectra/level1/" + band + "/300_350/"
-    path_logs = MRO_folder
-    save_file = (
-        home_folder
-        + "/EDGES/spectra/level2/"
-        + band
-        + "/"
-        + year
-        + "_"
-        + day_hour
-        + ".hdf5"
-    )
-
-    if band == "low_band2":
-        level1_file = (
-            path_level1 + "level1_" + year + "_" + day_hour + low2_flag + "_300_350.mat"
-        )
-
-    elif band == "low_band3":
-        level1_file = (
-            path_level1 + "level1_" + year + "_" + day_hour + "_low3_300_350.mat"
-        )
-
-    elif band == "mid_band":
-        level1_file = (
-            path_level1 + "level1_" + year + "_" + day_hour + "_mid_300_350.mat"
-        )
-
-    else:
-        level1_file = path_level1 + "level1_" + year + "_" + day_hour + "_300_350.mat"
-
-    if (int(year) < 2017) or ((int(year) == 2017) and (int(day_hour[0:3]) < 330)):
-        weather_file = path_logs + "/weather_upto_20171125.txt"
-
-    if (int(year) == 2018) or ((int(year) == 2017) and (int(day_hour[0:3]) > 331)):
-        weather_file = path_logs + "/weather2.txt"
-
-    if band == "high_band":
-        thermlog_file = path_logs + "/thermlog.txt"
-
-    if band == "low_band":
-        thermlog_file = path_logs + "/thermlog_low.txt"
-
-    if band == "low_band2":
-        thermlog_file = path_logs + "/thermlog_low2.txt"
-
-    if band == "mid_band":
-        thermlog_file = path_logs + "/thermlog_mid.txt"
-
-    if band == "low_band3":
-        thermlog_file = path_logs + "/thermlog_low3.txt"
-
-    # Loading data
-
-    # Frequency and indices
-    if band == "low_band":
-        f_low = 50
-        f_high = 199
-
-    elif band == "low_band2":
-        f_low = 50
-        f_high = 199
-
-    elif band == "low_band3":
-        f_low = 50
-        f_high = 199
-
-    elif band == "mid_band":
-        f_low = 50
-        f_high = 199
-
-    elif band == "high_band":
-        f_low = 65
-        f_high = 195
-
-    freq = EdgesFrequencyRange(f_low=f_low, f_high=f_high)
-    fe = freq.freq
-
-    ds, dd = Spectrum._read_mat(level1_file)
-    tt = ds[:, freq.mask]
-    ww = np.ones((len(tt[:, 0]), len(tt[0, :])))
-
-    # ------------ Meta -------------#
-    # Seconds into measurement
-    seconds_data = (
-        3600 * dd[:, 3].astype(float)
-        + 60 * dd[:, 4].astype(float)
-        + dd[:, 5].astype(float)
-    )
-
-    # EDGES coordinates
-    EDGES_LAT = -26.7
-    EDGES_LON = 116.6
-
-    # LST
-    LST = src.edges_analysis.analysis.coordinates.utc2lst(dd, EDGES_LON)
-    LST_column = LST.reshape(-1, 1)
-
-    # Year and day
-    year_int = int(year)
-    day_int = int(day_hour[0:3])
-
-    year_column = year_int * np.ones((len(LST), 1))
-    day_column = day_int * np.ones((len(LST), 1))
-
-    if len(day_hour) > 3:
-        fraction_int = int(day_hour[4::])
-    elif len(day_hour) == 3:
-        fraction_int = 0
-
-    fraction_column = fraction_int * np.ones((len(LST), 1))
-
-    # Galactic Hour Angle
-    LST_gc = 17 + (45 / 60) + (40.04 / (60 * 60))  # LST of Galactic Center
-    GHA = LST - LST_gc
-    for i in range(len(GHA)):
-        if GHA[i] < -12.0:
-            GHA[i] = GHA[i] + 24
-    GHA_column = GHA.reshape(-1, 1)
-
-    sun_moon_azel = src.edges_analysis.analysis.coordinates.sun_moon_azel(
-        EDGES_LAT, EDGES_LON, dd
-    )
-    # Sun/Moon coordinates
-    aux1, aux2 = io.auxiliary_data(weather_file, thermlog_file, band, year_int, day_int)
-
-    amb_temp_interp = np.interp(seconds_data, aux1[:, 0], aux1[:, 1]) - 273.15
-    amb_hum_interp = np.interp(seconds_data, aux1[:, 0], aux1[:, 2])
-    rec1_temp_interp = np.interp(seconds_data, aux1[:, 0], aux1[:, 3]) - 273.15
-
-    if len(aux2) == 1:
-        rec2_temp_interp = 25 * np.ones(len(seconds_data))
-    else:
-        rec2_temp_interp = np.interp(seconds_data, aux2[:, 0], aux2[:, 1])
-
-    amb_rec = np.array(
-        [amb_temp_interp, amb_hum_interp, rec1_temp_interp, rec2_temp_interp]
-    )
-    amb_rec = amb_rec.T
-
-    # Meta
-    meta = np.concatenate(
-        (
-            year_column,
-            day_column,
-            fraction_column,
-            LST_column,
-            GHA_column,
-            sun_moon_azel,
-            amb_rec,
-        ),
-        axis=1,
-    )
-
-    # Save
-    with h5py.File(save_file, "w") as hf:
-        hf.create_dataset("frequency", data=fe)
-        hf.create_dataset("antenna_temperature", data=tt)
-        hf.create_dataset("weights", data=ww)
-        hf.create_dataset("metadata", data=meta)
-
-    return fe, tt, ww, meta
-
-
-def level2_to_level3(
-    band,
-    year_day_hdf5,
-    flag_folder="test",
-    receiver_cal_file=1,
-    s11_path="antenna_s11_2018_147_17_04_33.txt",
-    # antenna_s11_year=2018,
-    # antenna_s11_day=147,
-    # antenna_s11_case=5,
-    antenna_s11_Nfit=15,
-    antenna_correction=1,
-    balun_correction=1,
-    ground_correction=1,
-    beam_correction=1,
-    beam_correction_case=0,
-    f_low=50,
-    f_high=150,
-    n_fg=7,
-):
-    fin = 0
-
-    # Load daily data
-    # ---------------
-    path_data = edges_folder + band + "/spectra/level2/"
-    filename = path_data + year_day_hdf5
-    fin_X, t_2D_X, m_2D, w_2D_X = io.level2read(filename)
-
-    # Continue if there are data available
-    # ------------------------------------
-    if np.sum(t_2D_X) > 0:
-
-        # Cut the frequency range
-        # -----------------------
-        fin = fin_X[(fin_X >= f_low) & (fin_X <= f_high)]
-        t_2D = t_2D_X[:, (fin_X >= f_low) & (fin_X <= f_high)]
-        w_2D = w_2D_X[:, (fin_X >= f_low) & (fin_X <= f_high)]
-
-        # Receiver calibration quantities
-        # -------------------------------
-        if (band == "mid_band") or (band == "low_band3"):
-
-            if receiver_cal_file == 1:
-                print("Receiver calibration FILE 1")
-                rcv_file = (
-                    edges_folder
-                    + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal"
-                    "/calibration_files/original/calibration_file_receiver1_cterms7_wterms7.txt"
-                )
-
-            if receiver_cal_file == 2:
-                print("Receiver calibration FILE 2")
-                rcv_file = (
-                    edges_folder
-                    + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal"
-                    "/calibration_files/original/calibration_file_receiver1_cterms7_wterms8.txt"
-                )
-
-            if receiver_cal_file == 3:
-                print("Receiver calibration FILE 3")
-                rcv_file = (
-                    edges_folder
-                    + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal"
-                    "/calibration_files/original/calibration_file_receiver1_cterms7_wterms15.txt"
-                )
-
-            if receiver_cal_file == 4:
-                print("Receiver calibration FILE 4")
-                rcv_file = (
-                    edges_folder
-                    + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal"
-                    "/calibration_files/original/calibration_file_receiver1_cterms8_wterms8.txt"
-                )
-
-            if receiver_cal_file == 5:
-                print("Receiver calibration FILE 5")
-                rcv_file = (
-                    edges_folder
-                    + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal"
-                    "/calibration_files/original/calibration_file_receiver1_cterms9_wterms9.txt"
-                )
-
-            if receiver_cal_file == 6:
-                print("Receiver calibration FILE 6")
-                rcv_file = (
-                    edges_folder
-                    + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal"
-                    "/calibration_files/original/calibration_file_receiver1_cterms10_wterms10.txt"
-                )
-
-            if receiver_cal_file == 7:
-                print("Receiver calibration FILE 7")
-                rcv_file = (
-                    edges_folder
-                    + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results"
-                    "/nominal_50-150MHz_no_rfi/calibration_files"
-                    "/calibration_file_receiver1_cterms9_wterms9_50-150MHz_no_rfi.txt"
-                )
-
-            if receiver_cal_file == 8:
-                print("Receiver calibration FILE 8")
-                rcv_file = (
-                    edges_folder
-                    + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results"
-                    "/nominal_50-150MHz_no_rfi/calibration_files"
-                    "/calibration_file_receiver1_cterms8_wterms8_50-150MHz_no_rfi.txt"
-                )
-
-            # Calibration results from May 24th, on
-
-            if receiver_cal_file == 30:
-                print("Receiver calibration FILE 30")
-                rcv_file = (
-                    edges_folder
-                    + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results"
-                    "/nominal_cleaned_60_120MHz/calibration_files"
-                    "/calibration_file_receiver1_cterms7_wterms6.txt"
-                )
-
-            if receiver_cal_file == 31:
-                print("Receiver calibration FILE 31")
-                rcv_file = (
-                    edges_folder
-                    + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results"
-                    "/nominal_cleaned_60_120MHz/calibration_files"
-                    "/calibration_file_receiver1_cterms7_wterms8.txt"
-                )
-
-            if receiver_cal_file == 32:
-                print("Receiver calibration FILE 32")
-                rcv_file = (
-                    edges_folder
-                    + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results"
-                    "/nominal_cleaned_60_120MHz/calibration_files"
-                    "/calibration_file_receiver1_cterms7_wterms9.txt"
-                )
-
-            if receiver_cal_file == 33:
-                print("Receiver calibration FILE 33")
-                rcv_file = (
-                    edges_folder
-                    + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results"
-                    "/nominal_cleaned_60_120MHz/calibration_files"
-                    "/calibration_file_receiver1_cterms6_wterms4.txt"
-                )
-
-            if receiver_cal_file == 34:
-                print("Receiver calibration FILE 34")
-                rcv_file = (
-                    edges_folder
-                    + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results"
-                    "/nominal_cleaned_60_120MHz/calibration_files"
-                    "/calibration_file_receiver1_cterms6_wterms8.txt"
-                )
-
-            if receiver_cal_file == 35:
-                print("Receiver calibration FILE 35")
-                rcv_file = (
-                    edges_folder
-                    + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results"
-                    "/nominal_cleaned_60_120MHz/calibration_files"
-                    "/calibration_file_receiver1_cterms6_wterms9.txt"
-                )
-
-            if receiver_cal_file == 39:
-                print("Receiver calibration FILE 39")
-                rcv_file = (
-                    edges_folder
-                    + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results"
-                    "/nominal_cleaned_60_120MHz/calibration_files"
-                    "/calibration_file_receiver1_cterms5_wterms9.txt"
-                )
-
-            # Calibration results from June 3rd, on
-            if receiver_cal_file == 21:
-                print("Receiver calibration FILE 21")
-                rcv_file = (
-                    edges_folder
-                    + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal"
-                    "/calibration_files/calibration_file_receiver1_cterms7_wterms7.txt"
-                )
-
-            if receiver_cal_file == 22:
-                print("Receiver calibration FILE 22")
-                rcv_file = (
-                    edges_folder
-                    + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal"
-                    "/calibration_files/calibration_file_receiver1_cterms7_wterms8.txt"
-                )
-
-            if receiver_cal_file == 23:
-                print("Receiver calibration FILE 23")
-                rcv_file = (
-                    edges_folder
-                    + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal"
-                    "/calibration_files/calibration_file_receiver1_cterms7_wterms9.txt"
-                )
-
-            if receiver_cal_file == 24:
-                print("Receiver calibration FILE 24")
-                rcv_file = (
-                    edges_folder
-                    + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal"
-                    "/calibration_files/calibration_file_receiver1_cterms7_wterms10.txt"
-                )
-
-            if receiver_cal_file == 25:
-                print("Receiver calibration FILE 25")
-                rcv_file = (
-                    edges_folder
-                    + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal"
-                    "/calibration_files/calibration_file_receiver1_cterms8_wterms8.txt"
-                )
-
-            if receiver_cal_file == 26:
-                print("Receiver calibration FILE 26")
-                rcv_file = (
-                    edges_folder
-                    + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal"
-                    "/calibration_files/calibration_file_receiver1_cterms8_wterms11.txt"
-                )
-
-            if receiver_cal_file == 40:
-                print("Receiver calibration FILE 40")
-                rcv_file = (
-                    edges_folder
-                    + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal"
-                    "/calibration_files/60_85MHz/calibration_file_receiver1_60_85MHz_cterms4_wterms6"
-                    ".txt"
-                )
-            if receiver_cal_file == 88:
-                print("Receiver calibration FILE 88")
-                rcv_file = (
-                    edges_folder
-                    + "mid_band/calibration/receiver_calibration/receiver1/2019_04_25C/results/nominal"
-                    "/calibration_files/calibration_file_receiver1_50_150MHz_cterms8_wterms8.txt"
-                )
-            if receiver_cal_file == 810:
-                print("Receiver calibration FILE 810")
-                rcv_file = (
-                    edges_folder
-                    + "mid_band/calibration/receiver_calibration/receiver1/2019_04_25C/results/nominal"
-                    "/calibration_files/calibration_file_receiver1_50_150MHz_cterms8_wterms10.txt"
-                )
-            if receiver_cal_file == 811:
-                print("Receiver calibration FILE 811")
-                rcv_file = (
-                    edges_folder
-                    + "mid_band/calibration/receiver_calibration/receiver1/2019_04_25C/results/nominal"
-                    "/calibration_files/calibration_file_receiver1_50_150MHz_cterms8_wterms11.txt"
-                )
-
-            if receiver_cal_file == 100:
-                print("Receiver calibration FILE 100")
-                rcv_file = (
-                    edges_folder
-                    + "mid_band/calibration/receiver_calibration/receiver1/2019_10_25C/results/nominal"
-                    "/calibration_files/calibration_file_receiver1_50_190MHz_cterms10_wterms13.txt"
-                )
-
-            if receiver_cal_file == 200:
-                print("Receiver calibration FILE 200")
-                rcv_file = (
-                    edges_folder
-                    + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results"
-                    "/nominal_2019_12_50-150MHz_try1/calibration_files"
-                    "/calibration_file_receiver1_55_150MHz_cterms14_wterms14.txt"
-                )
-
-            if receiver_cal_file == 201:
-                print("Receiver calibration FILE 201")
-                rcv_file = (
-                    edges_folder
-                    + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results"
-                    "/nominal_2019_12_50-150MHz_try1/calibration_files"
-                    "/calibration_file_receiver1_50_150MHz_cterms7_wterms8.txt"
-                )
-
-            if receiver_cal_file == 202:
-                print("Receiver calibration FILE 202")
-                rcv_file = (
-                    edges_folder
-                    + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results"
-                    "/nominal_2019_12_50-150MHz_try1/calibration_files"
-                    "/calibration_file_receiver1_50_150MHz_cterms7_wterms11.txt"
-                )
-
-            if receiver_cal_file == 203:
-                print("Receiver calibration FILE 203")
-                rcv_file = (
-                    edges_folder
-                    + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results"
-                    "/nominal_2019_12_50-150MHz_try1_LNA_rep1/calibration_files"
-                    "/calibration_file_receiver1_50_150MHz_cterms7_wterms8.txt"
-                )
-
-            if receiver_cal_file == 204:
-                print("Receiver calibration FILE 204")
-                rcv_file = (
-                    edges_folder
-                    + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results"
-                    "/nominal_2019_12_50-150MHz_try1_LNA_rep2/calibration_files"
-                    "/calibration_file_receiver1_50_150MHz_cterms7_wterms8.txt"
-                )
-
-            if receiver_cal_file == 205:
-                print("Receiver calibration FILE 205")
-                rcv_file = (
-                    edges_folder
-                    + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results"
-                    "/nominal_2019_12_50-150MHz_try1_LNA_rep12/calibration_files"
-                    "/calibration_file_receiver1_50_150MHz_cterms7_wterms8.txt"
-                )
-
-            if receiver_cal_file == 301:
-                print("Receiver calibration FILE 301")
-                rcv_file = (
-                    edges_folder
-                    + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results"
-                    "/nominal_2019_12_50-150MHz_try1/calibration_files"
-                    "/calibration_file_receiver1_60_120MHz_cterms7_wterms4.txt"
-                )
-
-            if receiver_cal_file == 302:
-                print("Receiver calibration FILE 302")
-                rcv_file = (
-                    edges_folder
-                    + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results"
-                    "/nominal_2019_12_50-150MHz_try1/calibration_files"
-                    "/calibration_file_receiver1_60_120MHz_cterms7_wterms5.txt"
-                )
-
-            if receiver_cal_file == 303:
-                print("Receiver calibration FILE 303")
-                rcv_file = (
-                    edges_folder
-                    + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results"
-                    "/nominal_2019_12_50-150MHz_try1/calibration_files"
-                    "/calibration_file_receiver1_60_120MHz_cterms7_wterms9.txt"
-                )
-
-            if receiver_cal_file == 304:
-                print("Receiver calibration FILE 304")
-                rcv_file = (
-                    edges_folder
-                    + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results"
-                    "/nominal_2019_12_50-150MHz_try1/calibration_files"
-                    "/calibration_file_receiver1_60_120MHz_cterms8_wterms4.txt"
-                )
-
-            if receiver_cal_file == 305:
-                print("Receiver calibration FILE 305")
-                rcv_file = (
-                    edges_folder
-                    + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results"
-                    "/nominal_2019_12_50-150MHz_try1/calibration_files"
-                    "/calibration_file_receiver1_60_120MHz_cterms8_wterms5.txt"
-                )
-
-            if receiver_cal_file == 306:
-                print("Receiver calibration FILE 306")
-                rcv_file = (
-                    edges_folder
-                    + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results"
-                    "/nominal_2019_12_50-150MHz_try1/calibration_files"
-                    "/calibration_file_receiver1_60_120MHz_cterms8_wterms9.txt"
-                )
-
-            if receiver_cal_file == 307:
-                print("Receiver calibration FILE 307")
-                rcv_file = (
-                    edges_folder
-                    + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results"
-                    "/nominal_2019_12_50-150MHz_try1/calibration_files"
-                    "/calibration_file_receiver1_60_120MHz_cterms5_wterms4.txt"
-                )
-
-            if receiver_cal_file == 308:
-                print("Receiver calibration FILE 308")
-                rcv_file = (
-                    edges_folder
-                    + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results"
-                    "/nominal_2019_12_50-150MHz_try1/calibration_files"
-                    "/calibration_file_receiver1_60_120MHz_cterms6_wterms4.txt"
-                )
-
-            if receiver_cal_file == 401:
-                print("Receiver calibration FILE 401")
-                rcv_file = (
-                    edges_folder
-                    + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results"
-                    "/nominal_2019_12_50-150MHz_LNA1_a1_h1_o1_s1_sim2/calibration_files"
-                    "/calibration_file_receiver1_50_150MHz_cterms7_wterms8.txt"
-                )
-
-            if receiver_cal_file == 402:
-                print("Receiver calibration FILE 402")
-                rcv_file = (
-                    edges_folder
-                    + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results"
-                    "/nominal_2019_12_50-150MHz_LNA1_a1_h2_o1_s1_sim2/calibration_files"
-                    "/calibration_file_receiver1_50_150MHz_cterms7_wterms8.txt"
-                )
-            if receiver_cal_file == 403:
-                print("Receiver calibration FILE 403")
-                rcv_file = (
-                    edges_folder
-                    + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results"
-                    "/nominal_2019_12_50-150MHz_LNA1_a2_h1_o1_s1_sim2/calibration_files"
-                    "/calibration_file_receiver1_50_150MHz_cterms7_wterms8.txt"
-                )
-
-            if receiver_cal_file == 404:
-                print("Receiver calibration FILE 404")
-                rcv_file = (
-                    edges_folder
-                    + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results"
-                    "/nominal_2019_12_50-150MHz_LNA1_a2_h2_o1_s1_sim2/calibration_files"
-                    "/calibration_file_receiver1_50_150MHz_cterms7_wterms8.txt"
-                )
-            if receiver_cal_file == 405:
-                print("Receiver calibration FILE 404")
-                rcv_file = (
-                    edges_folder
-                    + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results"
-                    "/nominal_2019_12_50-150MHz_LNA1_a2_h2_o1_s2_sim2/calibration_files"
-                    "/calibration_file_receiver1_50_150MHz_cterms7_wterms8.txt"
-                )
-            if receiver_cal_file == 406:
-                print("Receiver calibration FILE 406")
-                rcv_file = (
-                    edges_folder
-                    + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results"
-                    "/nominal_2019_12_50-150MHz_LNA1_a2_h2_o2_s1_sim2/calibration_files"
-                    "/calibration_file_receiver1_50_150MHz_cterms7_wterms8.txt"
-                )
-            if receiver_cal_file == 407:
-                print("Receiver calibration FILE 407")
-                rcv_file = (
-                    edges_folder
-                    + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results"
-                    "/nominal_2019_12_50-150MHz_LNA1_a2_h2_o2_s2_sim2/calibration_files"
-                    "/calibration_file_receiver1_50_150MHz_cterms7_wterms8.txt"
-                )
-
-        rcv = np.genfromtxt(rcv_file)
-
-        fX = rcv[:, 0]
-        rcv2 = rcv[(fX >= f_low) & (fX <= f_high), :]
-        s11_LNA = rcv2[:, 1] + 1j * rcv2[:, 2]
-        C1 = rcv2[:, 3]
-
-        C2 = rcv2[:, 4]
-        TU = rcv2[:, 5]
-        TC = rcv2[:, 6]
-        TS = rcv2[:, 7]
-
-        # Antenna S11
-        # -----------
-        s11_ant = s11m.antenna_s11_remove_delay(
-            s11_path, fin, delay_0=0.17, n_fit=antenna_s11_Nfit
-        )
-
-        # Calibrated antenna temperature with losses and beam chromaticity
-        # ----------------------------------------------------------------
-        tc_with_loss_and_beam = rcf.calibrated_antenna_temperature(
-            t_2D, s11_ant, s11_LNA, C1, C2, TU, TC, TS
-        )
-
-        # Antenna Loss (interface between panels and balun)
-        # -------------------------------------------------
-        if antenna_correction == 0:
-            Ga = 1
-            print("NO ANTENNA LOSS CORRECTION")
-
-        if antenna_correction == 1:
-            Ga = loss.antenna_loss(band, fin)
-
-        # Balun+Connector Loss
-        # --------------------
-        if balun_correction == 0:
-            Gbc = 1
-            print("NO BALUN CORRECTION")
-
-        if balun_correction == 1:
-            Gb, Gc = loss.balun_and_connector_loss(band, fin, s11_ant)
-            Gbc = Gb * Gc
-
-        # Ground Loss
-        # -----------
-        if ground_correction == 0:
-            Gg = 1
-            print("NO GROUND CORRECTION")
-
-        if ground_correction == 1:
-            Gg = loss.ground_loss(band, fin)
-
-        # Total loss
-        # ----------
-        G = Ga * Gbc * Gg
-
-        # Removing loss
-        # -------------
-        Tamb_2D = np.reshape(273.15 + m_2D[:, 9], (-1, 1))
-        G_2D = np.repeat(np.reshape(G, (1, -1)), len(m_2D[:, 9]), axis=0)
-        tc_with_beam = (tc_with_loss_and_beam - Tamb_2D * (1 - G_2D)) / G_2D
-
-        # Beam factor
-        # -----------
-        # No beam correction
-        if beam_correction == 0:
-            bf = 1
-            print("NO BEAM CORRECTION")
-
-        if beam_correction == 1:
-            if band == "mid_band":
-                if beam_correction_case == 0:
-                    # beam_factor_filename =
-                    # 'table_hires_NORMALIZED_mid_band_50
-                    # -150MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8
-                    # .5_reffreq_90MHz.hdf5'
-                    beam_factor_filename = "old_case.hdf5"
-                    print("OLD BEAM FACTOR !!!")
-
-                if beam_correction_case == 1:
-                    beam_factor_filename = "new_case.hdf5"
-                    print("NEW BEAM FACTOR !!!")
-
-            elif band == "low_band3":
-                beam_factor_filename = "table_hires_low_band3_50-120MHz_85deg_alan_haslam_2.5_2.62_reffreq_76MHz.hdf5"
-
-            f_table, lst_table, bf_table = beams.beam_factor_table_read(
-                edges_folder
-                + band
-                + "/calibration/beam_factors/table/"
-                + beam_factor_filename
-            )
-            bfX = beams.beam_factor_table_evaluate(
-                f_table, lst_table, bf_table, m_2D[:, 3]
-            )
-
-            bf = bfX[:, ((f_table >= f_low) & (f_table <= f_high))]
-
-        # Removing beam chromaticity
-        # --------------------------
-        tc = tc_with_beam / bf
-
-        # RFI cleaning
-        # ------------
-        tt, ww = rfi.excision_raw_frequency(fin, tc, w_2D)
-
-        # Number of spectra
-        # -----------------
-        lt = len(tt[:, 0])
-
-        # Initializing output arrays
-        # --------------------------
-        t_all = np.random.rand(lt, len(fin))
-        p_all = np.random.rand(lt, n_fg)
-        r_all = np.random.rand(lt, len(fin))
-        w_all = np.random.rand(lt, len(fin))
-        rms_all = np.random.rand(lt, 3)
-
-        # Foreground models and residuals
-        # -------------------------------
-        for i in range(lt):
-            ti = tt[i, :]
-            wi = ww[i, :]
-
-            # RFI cleaning
-            # ------------
-            tti, wwi = rfi.cleaning_polynomial(
-                fin, ti, wi, Nterms_fg=n_fg, Nterms_std=5, Nstd=3.5
-            )
-
-            # Fitting foreground model to binned version of spectra
-            # -----------------------------------------------------
-            Nsamples = 16  # 48.8 kHz
-            fbi, tbi, wbi, sbi = tools.spectral_binning_number_of_samples(
-                fin, tti, wwi, nsamples=Nsamples
-            )
-            par_fg = mdl.fit_polynomial_fourier(
-                "LINLOG", fbi / 200, tbi, n_fg, Weights=wbi
-            )
-
-            # Evaluating foreground model at raw resolution
-            # ---------------------------------------------
-            model_i = mdl.model_evaluate(
-                "LINLOG", par_fg[0], fin / 200
-            )  # model_bi = par_fg[1]
-
-            # Residuals
-            # ---------
-            rri = tti - model_i
-
-            # RMS for two halfs of the spectrum
-            # ---------------------------------
-            IX = int(np.floor(len(fin) / 2))
-
-            F1 = fin[0:IX]
-            R1 = rri[0:IX]
-            W1 = wwi[0:IX]
-
-            F2 = fin[IX::]
-            R2 = rri[IX::]
-            W2 = wwi[IX::]
-
-            RMS1 = np.sqrt(np.sum((R1[W1 > 0]) ** 2) / len(F1[W1 > 0]))
-            RMS2 = np.sqrt(np.sum((R2[W2 > 0]) ** 2) / len(F2[W2 > 0]))
-
-            # We also compute residuals for 3 terms as an additional filter
-            # Fitting foreground model to binned version of spectra
-            # -----------------------------------------------------
-            par_fg_Xt = mdl.fit_polynomial_fourier(
-                "LINLOG", fbi / 200, tbi, 3, Weights=wbi
-            )
-
-            # Evaluating foreground model at raw resolution
-            # ---------------------------------------------
-            model_i_Xt = mdl.model_evaluate("LINLOG", par_fg_Xt[0], fin / 200)
-
-            # Residuals
-            # ---------
-            rri_Xt = tti - model_i_Xt
-
-            # RMS
-            # ---
-            RMS3 = np.sqrt(np.sum((rri_Xt[wwi > 0]) ** 2) / len(fin[wwi > 0]))
-
-            # Store
-            # -----
-            t_all[i, :] = tti
-            p_all[i, :] = par_fg[0]
-            r_all[i, :] = rri
-            w_all[i, :] = wwi
-            rms_all[i, 0] = RMS1
-            rms_all[i, 1] = RMS2
-            rms_all[i, 2] = RMS3
-
-            print(
-                year_day_hdf5
-                + ": Spectrum number: "
-                + str(i + 1)
-                + ": RMS: "
-                + str(RMS1)
-                + ", "
-                + str(RMS2)
-                + ", "
-                + str(RMS3)
-            )
-
-    # Total power computation
-    # -----------------------
-    t1 = t_all[:, (fin >= 60) & (fin <= 90)]
-    t2 = t_all[:, (fin >= 90) & (fin <= 120)]
-    t3 = t_all[:, (fin >= 60) & (fin <= 120)]
-
-    tp1 = np.sum(t1, axis=1)
-    tp2 = np.sum(t2, axis=1)
-    tp3 = np.sum(t3, axis=1)
-
-    tp_all = np.zeros((lt, 3))
-    tp_all[:, 0] = tp1
-    tp_all[:, 1] = tp2
-    tp_all[:, 2] = tp3
-
-    # Save
-    # ----
-
-    if band == "mid_band":
-        save_folder = edges_folder + band + "/spectra/level3/" + flag_folder + "/"
-        if not exists(save_folder):
-            makedirs(save_folder)
-
-    elif band == "low_band3":
-        save_folder = (
-            "/media/raul/EXTERNAL_2TB/low_band3/spectra/level3/" + flag_folder + "/"
-        )
-        if not exists(save_folder):
-            makedirs(save_folder)
-
-    with h5py.File(save_folder + year_day_hdf5, "w") as hf:
-        hf.create_dataset("frequency", data=fin)
-        hf.create_dataset("antenna_temperature", data=t_all)
-        hf.create_dataset("parameters", data=p_all)
-        hf.create_dataset("residuals", data=r_all)
-        hf.create_dataset("weights", data=w_all)
-        hf.create_dataset("rms", data=rms_all)
-        hf.create_dataset("total_power", data=tp_all)
-        hf.create_dataset("metadata", data=m_2D)
-
-    return fin, t_all, p_all, r_all, w_all, rms_all, m_2D
-
-
-def level3_to_level4(
-    band, case, GHA_edges, sun_el_max, moon_el_max, save_folder_file_name
-):
-    """
-    For instance: One-hour bins -> GHA_edges = np.arange(0, 25, 1)
-
-    or
-
-    GHA_edges = np.arange(0.5, 24, 1)
-    GHA_edges = np.insert(GHA_edges,0,23.5)
-    """
-
-    # Listing files available
-    # ------------------------
-    if band == "mid_band":
-
-        # Case 1 calibration: Receiver 2018, Switch 2018
-        if (case >= 10) and (case <= 19):
-            if case == 10:
-                path_files = (
-                    edges_folder + "mid_band/spectra/level3/rcv18_sw18_nominal/"
-                )
-
-        # Case 2 calibration: Receiver 2018, Switch 2019
-        if (case >= 20) and (case <= 29):
-            if case == 20:
-                path_files = (
-                    edges_folder + "mid_band/spectra/level3/rcv18_sw19_nominal/"
-                )
-
-        # Receiver and switch calibration 2019-10
-        if case == 2:
-            path_files = (
-                edges_folder
-                + "mid_band/spectra/level3/calibration_2019_10_no_ground_loss_no_beam_corrections/"
-            )
-
-        # Case 1 calibration: Receiver 2018, Switch 2018, AGAIN
-        if case == 3:
-            path_files = (
-                edges_folder
-                + "mid_band/spectra/level3/case_nominal_50-150MHz_no_ground_loss_no_beam_corrections/"
-            )
-
-        # Case 1 calibration: Receiver 2018, Switch 2018, AGAIN
-        if case == 5:
-            path_files = (
-                edges_folder + "mid_band/spectra/level3/case_nominal_14_14_terms_55"
-                "-150MHz_no_ground_loss_no_beam_corrections/"
-            )
-
-        # Calibration: Receiver 2018, Switch 2018, AGAIN, LNA1
-        if case == 406:
-            path_files = (
-                edges_folder
-                + "mid_band/spectra/level3/case_nominal_50-150MHz_LNA1_a2_h2_o2_s1_sim2/"
-            )
-
-        # Calibration: Receiver 2018, Switch 2018, all corrections
-        if case == 501:
-            path_files = (
-                edges_folder
-                + "mid_band/spectra/level3/case_nominal_50-150MHz_LNA2_a2_h2_o2_s1_sim2_all_lc_yes_bc/"
-            )
-
-        save_folder = (
-            edges_folder + "mid_band/spectra/level4/" + save_folder_file_name + "/"
-        )
-        output_file_name_hdf5 = save_folder_file_name + ".hdf5"
-
-    if band == "low_band3":
-
-        if case == 2:
-            path_files = "/media/raul/EXTERNAL_2TB/low_band3/spectra/level3/case2/"
-            save_folder = edges_folder + "low_band3/spectra/level4/case2/"
-            output_file_name_hdf5 = "case2.hdf5"
-
-    new_list = listdir(path_files)
-    new_list.sort()
-
-    index_new_list = range(len(new_list))
-
-    # Loading and cleaning data
-    # -------------------------
-    flag = -1
-
-    year_day_all = np.zeros((len(index_new_list), 2))
-
-    for i in index_new_list:  # range(4):  #
-
-        # Storing year and day of each file
-        year_day_all[i, 0] = float(new_list[i][0:4])
-
-        if len(new_list[i]) == 8:
-            year_day_all[i, 1] = float(new_list[i][5::])
-        elif len(new_list[i]) > 8:
-            year_day_all[i, 1] = float(new_list[i][5:8])
-
-        flag = flag + 1
-
-        # Loading data
-        f, ty, py, ry, wy, rmsy, tpy, my = io.level3read(path_files + new_list[i])
-        print("----------------------------------------------")
-
-        # Daily index
-        daily_index1 = np.arange(len(f))
-
-        # Filtering out high humidity
-        amb_hum_max = 40
-        IX = io.data_selection(
-            my,
-            use_gha="GHA",
-            time_1=0,
-            time_2=24,
-            sun_el_max=sun_el_max,
-            moon_el_max=moon_el_max,
-            amb_hum_max=amb_hum_max,
-            min_receiver_temp=0,
-            max_receiver_temp=100,
-        )
-
-        px = py[IX, :]
-        rx = ry[IX, :]
-        wx = wy[IX, :]
-        rmsx = rmsy[IX, :]
-        tpx = tpy[IX, :]
-        mx = my[IX, :]
-        daily_index2 = daily_index1[IX]
-        # master_index[i, IX] = 1
-
-        # Finding index of clean data
-        gx = np.copy(mx[:, 4])
-        gx[gx < 0] = gx[gx < 0] + 24
-
-        Nsigma = 3
-        index_good_rms, i1, i2, i3 = filters.rms_filter(band, case, gx, rmsx, Nsigma)
-
-        # Applying total-power filter
-        index_good_total_power, i1, i2, i3 = filters.tp_filter(gx, tpx)
-
-        # Combined filters
-        index_good = np.intersect1d(index_good_rms, index_good_total_power)
-
-        # Selecting good data
-        p = px[index_good, :]
-        r = rx[index_good, :]
-        w = wx[index_good, :]
-        rms = rmsx[index_good, :]
-        m = mx[index_good, :]
-        daily_index3 = daily_index2[index_good]
-
-        # Storing GHA and rms of good data
-        GHA = m[:, 4]
-        GHA[GHA < 0] = GHA[GHA < 0] + 24
-
-        AT = np.vstack((gx, rmsx.T))
-        BT = np.vstack((GHA, rms.T))
-
-        A = AT.T
-        B = BT.T
-
-        if flag == 0:
-            avp_all = np.zeros((len(new_list), len(GHA_edges) - 1, len(p[0, :])))
-            avr_all = np.zeros((len(new_list), len(GHA_edges) - 1, len(r[0, :])))
-            avw_all = np.zeros((len(new_list), len(GHA_edges) - 1, len(w[0, :])))
-
-            # Creating master array of indices of good-quality spectra used in the final averages
-            master_index = np.zeros((len(new_list), len(GHA_edges) - 1, 4000))
-
-            grx_all = np.copy(A)
-            gr_all = np.copy(B)
-
-        if flag > 0:
-            grx_all = np.vstack((grx_all, A))
-            gr_all = np.vstack((gr_all, B))
-
-        # Averaging data within each GHA bin
-        for j in range(len(GHA_edges) - 1):
-
-            GHA_LOW = GHA_edges[j]
-            GHA_HIGH = GHA_edges[j + 1]
-
-            if GHA_LOW < GHA_HIGH:
-                p1 = p[(GHA >= GHA_LOW) & (GHA < GHA_HIGH), :]
-                r1 = r[(GHA >= GHA_LOW) & (GHA < GHA_HIGH), :]
-                w1 = w[(GHA >= GHA_LOW) & (GHA < GHA_HIGH), :]
-                # m1 = m[(GHA >= GHA_LOW) & (GHA < GHA_HIGH), :]
-                daily_index4 = daily_index3[(GHA >= GHA_LOW) & (GHA < GHA_HIGH)]
-
-            elif GHA_LOW > GHA_HIGH:
-                p1 = p[(GHA >= GHA_LOW) | (GHA < GHA_HIGH), :]
-                r1 = r[(GHA >= GHA_LOW) | (GHA < GHA_HIGH), :]
-                w1 = w[(GHA >= GHA_LOW) | (GHA < GHA_HIGH), :]
-                # m1 = m[(GHA >= GHA_LOW) | (GHA < GHA_HIGH), :]
-                daily_index4 = daily_index3[(GHA >= GHA_LOW) | (GHA < GHA_HIGH)]
-
-            print(
-                str(new_list[i])
-                + ". GHA: "
-                + str(GHA_LOW)
-                + "-"
-                + str(GHA_HIGH)
-                + " hr. Number of spectra: "
-                + str(len(r1))
-            )
-
-            if len(r1) > 0:
-                avp = np.mean(p1, axis=0)
-                avr, avw = tools.weighted_mean(r1, w1)
-
-                # RFI cleaning of average spectra
-                avr_no_rfi, avw_no_rfi = rfi.cleaning_sweep(
-                    f, avr, avw, window_width=3, n_poly=2, n_bootstrap=20, n_sigma=2.5,
-                )
-
-                # Storing averages
-                avp_all[i, j, :] = avp
-                avr_all[i, j, :] = avr_no_rfi
-                avw_all[i, j, :] = avw_no_rfi
-                master_index[i, j, daily_index4] = 1
-
-    print()
-    print()
-
-    # Save
-    # ----
-    if not exists(save_folder):
-        makedirs(save_folder)
-    with h5py.File(save_folder + output_file_name_hdf5, "w") as hf:
-        hf.create_dataset("frequency", data=f)
-        hf.create_dataset("parameters", data=avp_all)
-        hf.create_dataset("residuals", data=avr_all)
-        hf.create_dataset("weights", data=avw_all)
-        hf.create_dataset("index", data=master_index)
-        hf.create_dataset("gha_edges", data=GHA_edges)
-        hf.create_dataset("year_day", data=year_day_all)
-
-    return f, avp_all, avr_all, avw_all, master_index, GHA_edges, year_day_all
+    return f, good_data, WW_all
 
 
 def daily_integrations_and_residuals():
@@ -3997,9 +2168,7 @@ def batch_mid_band_level1_to_level2():
         if (int(day[0:3]) <= 170) or (
             int(day[0:3]) >= 174
         ):  # files in this range have problems
-            src.edges_analysis.analysis.scripts.level1_to_level2(
-                "mid_band", "2018", day
-            )
+            src.edges_analysis.analysis.levels.level1_to_level2("mid_band", "2018", day)
 
 
 def batch_low_band3_level1_to_level2():
@@ -4020,7 +2189,7 @@ def batch_low_band3_level1_to_level2():
 
         else:
             print(year + " " + day)
-            src.edges_analysis.analysis.scripts.level1_to_level2("low_band3", year, day)
+            src.edges_analysis.analysis.levels.level1_to_level2("low_band3", year, day)
 
 
 def batch_mid_band_level2_to_level3(case, first_day, last_day):
@@ -4684,7 +2853,9 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
                 "mid_band",
                 new_list[i],
                 flag_folder=flag_folder,
-                receiver_cal_file=receiver_cal_file,
+                receiver_cal_file=edges_folder
+                + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/"
+                + CALFILES[receiver_cal_file],
                 antenna_s11_year=2018,
                 antenna_s11_day=antenna_s11_day,
                 antenna_s11_case=antenna_s11_case,
@@ -4705,7 +2876,11 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
 def batch_low_band3_level2_to_level3(case):
     if case == 2:
         flag_folder = "case2"
-        receiver_cal_file = 1
+        receiver_cal_file = (
+            edges_folder
+            + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal"
+            "/calibration_files/original/calibration_file_receiver1_cterms7_wterms8.txt"
+        )
         antenna_s11_day = 227
         antenna_s11_Nfit = 14
         beam_correction = 1

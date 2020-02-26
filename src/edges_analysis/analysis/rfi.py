@@ -65,7 +65,9 @@ def excision_raw_frequency(f, d, w, rfi_file=None, extra_rfi=None, in_place=Fals
     return d, w
 
 
-def cleaning_sweep(f, d, w, window_width=4, n_poly=4, n_bootstrap=20, n_sigma=2.5):
+def cleaning_sweep(
+    f, d, w, window_width=4, n_poly=4, n_bootstrap=20, n_sigma=2.5, flip=False
+):
     """
     Clean sweep of RFI ???
 
@@ -150,6 +152,22 @@ def cleaning_sweep(f, d, w, window_width=4, n_poly=4, n_bootstrap=20, n_sigma=2.
 
             # Compute STD for the current window using only good data
             r_std = np.std(r_block[w_block > 0])
+
+    if flip:
+        d_flip, w_flip = cleaning_sweep(
+            f,
+            np.flip(d),
+            np.flip(w),
+            window_width=window_width,
+            n_poly=n_poly,
+            n_bootstrap=n_bootstrap,
+            n_sigma=n_sigma,
+            flip=False,
+        )
+        w_flip = np.flip(w_flip)
+        flags = w_out == 0 & w_flip == 0
+        d_out[flags] = 0
+        w_out[flags] = 0
 
     return d_out, w_out
 

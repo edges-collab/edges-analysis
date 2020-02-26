@@ -56,3 +56,11 @@ def antenna_s11_remove_delay(s11_path, f, delay_0=0.17, n_fit=10):
 
     model_s11_wd = model_re_wd + 1j * model_im_wd
     return model_s11_wd * np.exp(-1j * delay_0 * f)
+
+
+def get_s11_model_from_file(path_s11, name, ffn, coeff="s11", basis="fourier"):
+    par = np.genfromtxt(path_s11 + f"par_{coeff}_{name}_mag.txt")
+    mag = mdl.model_evaluate(basis, par, ffn)
+    par = np.genfromtxt(path_s11 + f"par_{coeff}_{name}_ang.txt")
+    ang = mdl.model_evaluate(basis, par, ffn)
+    return mag * (np.cos(ang) + 1j * np.sin(ang))
