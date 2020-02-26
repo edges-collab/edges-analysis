@@ -36,8 +36,8 @@ def plots_midband_polychord(fig):
             100,
             model_type_signal="exp",
             model_type_foreground="exp",
-            N21par=0,
-            NFGpar=5,
+            n_21=0,
+            n_fgpar=5,
         )
     elif fig == 1:
         folder = (
@@ -61,8 +61,8 @@ def plots_midband_polychord(fig):
             100,
             model_type_signal="exp",
             model_type_foreground="linlog",
-            N21par=0,
-            NFGpar=5,
+            n_21=0,
+            n_fgpar=5,
         )
     elif fig == 10:
         # Data used:  60-120
@@ -98,8 +98,8 @@ def plots_midband_polychord(fig):
             100,
             model_type_signal="tanh",
             model_type_foreground="exp",
-            N21par=5,
-            NFGpar=5,
+            n_21=5,
+            n_fgpar=5,
         )
     elif fig == 11:
         # Data used:  60-120, CASE 2, cterms7, wterms8
@@ -135,8 +135,8 @@ def plots_midband_polychord(fig):
             100,
             model_type_signal="tanh",
             model_type_foreground="exp",
-            N21par=5,
-            NFGpar=5,
+            n_21=5,
+            n_fgpar=5,
         )
     elif fig == 12:
         # Data used:  60-120
@@ -172,8 +172,8 @@ def plots_midband_polychord(fig):
             100,
             model_type_signal="exp",
             model_type_foreground="exp",
-            N21par=5,
-            NFGpar=5,
+            n_21=5,
+            n_fgpar=5,
         )
     elif fig == 2:
         # Data used:  60-67, 103-119.5
@@ -204,8 +204,8 @@ def plots_midband_polychord(fig):
             100,
             model_type_signal="exp",
             model_type_foreground="exp",
-            N21par=0,
-            NFGpar=5,
+            n_21=0,
+            n_fgpar=5,
         )
     elif fig == 3:
         # Data used:  60-65, 103-119.5
@@ -236,8 +236,8 @@ def plots_midband_polychord(fig):
             100,
             model_type_signal="exp",
             model_type_foreground="exp",
-            N21par=0,
-            NFGpar=5,
+            n_21=0,
+            n_fgpar=5,
         )
     elif fig == 4:
         # Data used:  60-65, 95-119.5
@@ -268,8 +268,8 @@ def plots_midband_polychord(fig):
             100,
             model_type_signal="exp",
             model_type_foreground="exp",
-            N21par=0,
-            NFGpar=5,
+            n_21=0,
+            n_fgpar=5,
         )
     elif fig == 5:
         # Data used:  60-65, 95-115
@@ -300,8 +300,8 @@ def plots_midband_polychord(fig):
             100,
             model_type_signal="exp",
             model_type_foreground="exp",
-            N21par=0,
-            NFGpar=5,
+            n_21=0,
+            n_fgpar=5,
         )
     elif fig == 6:
         # Data used:  60-65, 100-115
@@ -332,8 +332,8 @@ def plots_midband_polychord(fig):
             100,
             model_type_signal="exp",
             model_type_foreground="exp",
-            N21par=0,
-            NFGpar=5,
+            n_21=0,
+            n_fgpar=5,
         )
     elif fig == 7:
         # Data used:  60-65, 97-115
@@ -364,8 +364,8 @@ def plots_midband_polychord(fig):
             100,
             model_type_signal="exp",
             model_type_foreground="exp",
-            N21par=0,
-            NFGpar=5,
+            n_21=0,
+            n_fgpar=5,
         )
     elif fig == 8:
         # Data used:  60-65, 100-115, CASE 2, cterms7, wterms8
@@ -396,8 +396,8 @@ def plots_midband_polychord(fig):
             100,
             model_type_signal="exp",
             model_type_foreground="exp",
-            N21par=0,
-            NFGpar=5,
+            n_21=0,
+            n_fgpar=5,
         )
     elif fig == 9:
         # Data used:  60-115
@@ -433,7 +433,7 @@ def plots_midband_polychord(fig):
             100,
             model_type_signal="tanh",
             model_type_foreground="exp",
-            N21par=5,
-            NFGpar=5,
+            n_21=5,
+            n_fgpar=5,
         )
     return v, t, w, model

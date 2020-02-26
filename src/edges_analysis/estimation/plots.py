@@ -202,8 +202,8 @@ def plot_foreground_polychord_fit(
         vr,
         model_type_signal=signal,
         model_type_foreground=fg,
-        N21par=n_21,
-        NFGpar=n_fg,
+        n_21=n_21,
+        n_fgpar=n_fg,
     )
 
     model_signal = dm.signal_model("exp", best_fit_full[:n_21], v)

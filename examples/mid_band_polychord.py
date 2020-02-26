@@ -20,7 +20,7 @@ from edges_analysis.simulation import data_models as dm
 edges_folder = ""  # TODO: remove
 
 
-def prior_list(N21, Nfg, model_type_signal, model_type_foreground):
+def prior_list(N21, n_fg, model_type_signal, model_type_foreground):
     pl = np.zeros((Nparameters, 2))
     pl[:, 0] = -1e4
     pl[:, 1] = +1e4
@@ -78,8 +78,8 @@ def loglikelihood(theta):
         v0,
         model_type_signal=model_type_signal,
         model_type_foreground=model_type_foreground,
-        N21par=N21,
-        NFGpar=Nfg,
+        n_21=N21,
+        n_fgpar=n_fg,
     )
 
     # Log-likelihood
@@ -112,7 +112,7 @@ def prior(cube):
 
     theta = np.zeros(len(cube))
 
-    pl = prior_list(N21, Nfg, model_type_signal, model_type_foreground)
+    pl = prior_list(N21, n_fg, model_type_signal, model_type_foreground)
 
     for i in range(len(cube)):
         theta[i] = cube[i] * (pl[i, 1] - pl[i, 0]) + pl[i, 0]
@@ -141,15 +141,15 @@ if __name__ == "__main__":
 
     data = "real"  # it could be 'real' or 'simulated'
     case = 101  # 0=nominal
-    FLOW = 58  # 58
-    FHIGH = 118  # 128
+    f_low = 58  # 58
+    f_high = 118  # 128
     v0 = 90
 
-    Nfg = int(sys.argv[1])
+    n_fg = int(sys.argv[1])
     N21 = int(sys.argv[2])
 
-    gap_FLOW = 0  # nominal value: 0
-    gap_FHIGH = 0  # nominal_value: 0
+    gap_f_low = 0  # nominal value: 0
+    gap_f_high = 0  # nominal_value: 0
 
     model_type_foreground = "linlog"  # , 'linlog', 'powerlog'
     model_type_signal = "exp"  # 'exp'  #, 'tanh'
@@ -160,7 +160,7 @@ if __name__ == "__main__":
 
     # Constants
     # -----------------------
-    Nparameters = N21 + Nfg
+    Nparameters = N21 + n_fg
     Nderived = 0
 
     # Data
@@ -170,8 +170,8 @@ if __name__ == "__main__":
         v = np.arange(61, 159, 0.39)
 
         # t, sigma, inv_sigma, det_sigma = dm.simulated_data([-0.5, 78, 19, 7, 1000, -2.5, -0.1, 1,
-        # 1], v, v0, 0.02, model_type_signal='exp', model_type_foreground='exp', N21par=4,
-        # NFGpar=5)
+        # 1], v, v0, 0.02, model_type_signal='exp', model_type_foreground='exp', n_21=4,
+        # n_fgpar=5)
         t, sigma, inv_sigma, det_sigma = dm.simulated_data(
             [1000, -2.5, -0.1, 1, 1],
             v,
@@ -180,12 +180,12 @@ if __name__ == "__main__":
             model_type_signal="exp",
             model_type_foreground="exp",
             N21par=0,
-            NFGpar=5,
+            n_fgpar=5,
         )
 
     elif data == "real":
         v, t, w, sigma, inv_sigma, det_sigma = dm.real_data(
-            case, FLOW, FHIGH, gap_FLOW=gap_FLOW, gap_FHIGH=gap_FHIGH
+            case, f_low, f_high, gap_f_low=gap_f_low, gap_f_high=gap_f_high
         )
 
     run()

@@ -93,9 +93,9 @@ if __name__ == "__main__":
     v0 = 100
 
     N21 = 4
-    Nfg = 5
+    n_fg = 5
 
-    Nparameters = N21 + Nfg
+    Nparameters = N21 + n_fg
     Nderived = 0
 
     # flattened gaussian

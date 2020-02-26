@@ -21,7 +21,7 @@ def simulated_data(
     model_type_signal="exp",
     model_type_foreground="exp",
     N21par=4,
-    NFGpar=5,
+    n_fgpar=5,
 ):
     std_dev_vec = noise_std_at_vr * (v / vr) ** (-2.5)
 
@@ -37,50 +37,30 @@ def simulated_data(
         vr,
         model_type_signal=model_type_signal,
         model_type_foreground=model_type_foreground,
-        N21par=N21par,
-        NFGpar=NFGpar,
+        n_21=N21par,
+        n_fgpar=n_fgpar,
     )
     d = d_no_noise + noise
 
     return d, sigma, inv_sigma, det_sigma
 
 
-def real_data(case, FLOW, FHIGH, gap_FLOW=0, gap_FHIGH=0):
-    if case == 1:
-        dd = np.genfromtxt(
-            edges_folder + "mid_band/spectra/level5/one_day_tests/another_one.txt"
-        )
-    elif case == 101:
-        dd = np.genfromtxt(
-            edges_folder + "mid_band/spectra/level5/rcv18_sw18_nominal_GHA_every_1hr"
-            "/integrated_spectrum_rcv18_sw18_every_1hr_GHA_6-18hr.txt"
-        )
-    vv = dd[:, 0]
-    tt = dd[:, 1]
-    ww = dd[:, 2]
-    ss = dd[:, 3]
+def real_data(case, f_low, f_high, gap_f_low=0, gap_f_high=0):
+    cases = {
+        1: "one_day_tests/another_one.txt",
+        2: "rcv18_sw18_nominal_GHA_every_1hr/integrated_spectrum_rcv18_sw18_every_1hr_GHA_6-18hr.txt",
+    }
+    data = np.genfromtxt(edges_folder + "mid_band/spectra/level5/" + cases[case])
+    mask = (data[:, 0] >= f_low) & (data[:, 0] <= f_high)
+    data = data[mask]
 
-    vp = vv[(vv >= FLOW) & (vv <= FHIGH)]
-    tp = tt[(vv >= FLOW) & (vv <= FHIGH)]
-    wp = ww[(vv >= FLOW) & (vv <= FHIGH)]
-    sp = ss[(vv >= FLOW) & (vv <= FHIGH)]
+    # Possibility of removing from analysis the data range between f_low_gap and f_high_gap
+    if gap_f_low > 0 and gap_f_high > 0:
+        mask = (data[:, 0] <= gap_f_low) | (data[:, 0] >= gap_f_high)
+        data = data[mask]
 
-    # Possibility of removing from analysis the data range between FLOW_gap and FHIGH_gap
-    if (gap_FLOW > 0) and (gap_FHIGH > 0):
-        vx = np.copy(vp)
-        tx = np.copy(tp)
-        wx = np.copy(wp)
-        sx = np.copy(sp)
-
-        vp = vx[(vx <= gap_FLOW) | (vx >= gap_FHIGH)]
-        tp = tx[(vx <= gap_FLOW) | (vx >= gap_FHIGH)]
-        wp = wx[(vx <= gap_FLOW) | (vx >= gap_FHIGH)]
-        sp = sx[(vx <= gap_FLOW) | (vx >= gap_FHIGH)]
-
-    v = vp[wp > 0]
-    t = tp[wp > 0]
-    w = wp[wp > 0]
-    std_dev_vec = sp[wp > 0]
+    data = data[data[:, 2] > 0]
+    v, t, w, std_dev_vec = data.T
 
     sigma = np.diag(std_dev_vec ** 2)  # uncertainty covariance matrix
     inv_sigma = np.linalg.inv(sigma)
@@ -92,27 +72,22 @@ def real_data(case, FLOW, FHIGH, gap_FLOW=0, gap_FHIGH=0):
 def foreground_model(
     model_type, theta_fg, v, vr, ion_abs_coeff="free", ion_emi_coeff="free"
 ):
-    number_of_parameters = len(theta_fg)
+    n_params = len(theta_fg)
 
     model_fg = 0
 
     if model_type == "linlog":
-        for i in range(number_of_parameters):
+        for i in range(n_params):
             model_fg += theta_fg[i] * ((v / vr) ** (-2.5)) * ((np.log(v / vr)) ** i)
 
     elif model_type == "powerlog":
-        if (ion_abs_coeff == "free") and (ion_emi_coeff == "free"):
-            number_astro_parameters = number_of_parameters - 2
-
-        elif (ion_abs_coeff == "free") or (ion_emi_coeff == "free"):
-            number_astro_parameters = number_of_parameters - 1
-
-        else:
-            number_astro_parameters = number_of_parameters
+        if ion_abs_coeff == "free":
+            n_params -= 1
+        if ion_emi_coeff == "free":
+            n_params -= 1
 
         astro_exponent = sum(
-            theta_fg[i + 1] * ((np.log(v / vr)) ** i)
-            for i in range(number_astro_parameters - 1)
+            theta_fg[i + 1] * ((np.log(v / vr)) ** i) for i in range(n_params - 1)
         )
         astro_fg = theta_fg[0] * ((v / vr) ** astro_exponent)
 
@@ -133,71 +108,59 @@ def signal_model(model_type, theta, v):
 
 
 def full_model(
-    theta, v, vr, model_type_signal="exp", model_type_foreground="exp", N21par=4
+    theta, v, vr, model_type_signal="exp", model_type_foreground="exp", n_21=4
 ):
-    # Signal model
-    if N21par == 0:
-        model_21 = 0
-    else:
-        model_21 = signal_model(model_type_signal, theta[0:N21par], v)
+    model_21 = 0
+    if n_21:
+        model_21 = signal_model(model_type_signal, theta[:n_21], v)
 
     # Foreground model
     model_fg = foreground_model(
-        model_type_foreground, theta[N21par::], v, vr, ion_abs_coeff=0, ion_emi_coeff=0
+        model_type_foreground, theta[n_21:], v, vr, ion_abs_coeff=0, ion_emi_coeff=0
     )
 
     return model_21 + model_fg
 
 
-def spectrum_channel_to_channel_difference(f, t, w, FLOW, FHIGH, Nfg=5):
-    fc = f[(f >= FLOW) & (f <= FHIGH)]
-    tc = t[(f >= FLOW) & (f <= FHIGH)]
-    wc = w[(f >= FLOW) & (f <= FHIGH)]
-
-    par = mdl.fit_polynomial_fourier("LINLOG", fc, tc, Nfg, Weights=wc)
-
-    rc = tc - par[1]
-
-    x1 = np.arange(0, len(rc), 2)
-    x2 = np.arange(1, len(rc), 2)
-
-    return rc[x2] - rc[x1]
+def spectrum_channel_to_channel_difference(f, t, w, f_low, f_high, n_fg=5):
+    mask = (f >= f_low) & (f <= f_high)
+    par = mdl.fit_polynomial_fourier("LINLOG", f[mask], t[mask], n_fg, Weights=w[mask])
+    r = t[mask] - par[1]
+    return np.diff(r)
 
 
-def svd_functions(folder_with_spectra, FLOW, FHIGH, method="average_removed"):
-    """Computing SVD functions"""
+def svd_functions(folder_with_spectra, f_low, f_high, remove_avg=True):
+    """Compute SVD functions"""
 
     # Listing files to be processed
-    # -----------------------------
     folder = edges_folder + "mid_band/spectra/level5/" + folder_with_spectra + "/"
-    list_of_spectra = listdir(folder)
-    list_of_spectra.sort()
+    list_of_spectra = sorted(listdir(folder))
 
     # Generate the original matrix of spectra
-    # ---------------------------------------
     for i in range(len(list_of_spectra)):
         filename = list_of_spectra[i]
         d = np.genfromtxt(folder + filename)
 
         if i == 0:
             A = d[:, 1]
-            fx = d[:, 0]
+            f = d[:, 0]
         else:
             A = np.vstack((A, d[:, 1]))
 
     # Cut to desired frequency range
-    f = fx[(fx >= FLOW) & (fx <= FHIGH)]
-    A = A[:, (fx >= FLOW) & (fx <= FHIGH)]
+    mask = (f >= f_low) & (f <= f_high)
+    f = f[mask]
+    A = A[:, mask]
 
     # Remove channels with no data
     P = np.prod(A, axis=0)
     f = f[P > 0]
     A = A[:, P > 0]
 
-    if method == "average_removed":
+    if remove_avg:
         avA = np.mean(A, axis=0)
         C = A - avA
-    elif method == "delta_all":
+    else:
         flag = 0
         for j in range(len(list_of_spectra) - 1):
             for i in range(len(list_of_spectra) - 1 - j):
@@ -205,30 +168,23 @@ def svd_functions(folder_with_spectra, FLOW, FHIGH, method="average_removed"):
                 k = i + (j + 1)
                 B = A[k] - A[j]
 
-                if flag == 0:
-                    C = np.copy(B)
-
-                elif flag > 0:
+                if not flag:
+                    C = B
+                    flag = True
+                else:
                     C = np.vstack((C, B))
 
-                print(str(flag) + ": " + str(k) + "-" + str(j))
-
-                flag += 1
-
     # SVD
-    # ---------------------------------------
-    u, EValues, EFunctions = np.linalg.svd(C)
+    u, eig_values, eig_functions = np.linalg.svd(C)
 
-    return f, EValues, EFunctions
+    return f, eig_values, eig_functions
 
 
 def signal_edges2018_uncertainties(v):
     # Nominal model reported in Bowman et al. (2018)
-    # ----------------------------------------------
     model_nominal = signal_model("exp", [-0.5, 78, 19, 7], v)
 
-    # Computing distribution of models and limits
-    # -------------------------------------------
+    # Compute distribution of models and limits
     N_MC = 10000
     dx = 0.003 / 2  # probability tails for 99.7% (3 sigma) probabilities
 
@@ -287,80 +243,50 @@ def signal_edges2018_uncertainties(v):
     return model_nominal, model_perturbed, limits
 
 
-def models_calibration_spectra(case, f, MC_spectra_noise=np.zeros(4)):
-    if case == 1:
-        path_par_spec = (
-            edges_folder
-            + "/mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results"
-            "/nominal/spectra/"
-        )
+def models_calibration_spectra(path_par_spec, f, MC_spectra_noise=(0, 0, 0, 0)):
+    # Loading parameters
+    par_spec = {
+        kind: np.genfromtxt(path_par_spec + f"par_spec_{kind}.txt")
+        for kind in ["amb", "hot", "open", "shorted"]
+    }
+    RMS_spec = np.genfromtxt(path_par_spec + "RMS_spec.txt")
 
-        # Loading parameters
-        par_spec_amb = np.genfromtxt(path_par_spec + "par_spec_amb.txt")
-        par_spec_hot = np.genfromtxt(path_par_spec + "par_spec_hot.txt")
-        par_spec_open = np.genfromtxt(path_par_spec + "par_spec_open.txt")
-        par_spec_shorted = np.genfromtxt(path_par_spec + "par_spec_shorted.txt")
-        RMS_spec = np.genfromtxt(path_par_spec + "RMS_spec.txt")
+    # Normalized frequency
+    fn = (f - 120) / 60
 
-        # Normalized frequency
-        fn = (f - 120) / 60
-
-        # Evaluating models
-        Tae = mdl.model_evaluate("fourier", par_spec_amb, fn)
-        The = mdl.model_evaluate("fourier", par_spec_hot, fn)
-        Toe = mdl.model_evaluate("fourier", par_spec_open, fn)
-        Tse = mdl.model_evaluate("fourier", par_spec_shorted, fn)
-
-    # RMS noise
-    RMS_Tae = RMS_spec[0]
-    RMS_The = RMS_spec[1]
-    RMS_Toe = RMS_spec[2]
-    RMS_Tse = RMS_spec[3]
+    # Evaluating models
+    models = {
+        kind: mdl.model_evaluate("fourier", p, fn) for kind, p in par_spec.items()
+    }
 
     # Adding noise to models
-    if MC_spectra_noise[0] > 0:
-        Tae = Tae + MC_spectra_noise[0] * RMS_Tae * np.random.normal(
-            0, np.ones(len(fn))
-        )
+    for i, (kind, model) in models.items():
+        if MC_spectra_noise[i] > 0:
+            model += MC_spectra_noise[i] * RMS_spec[i] * np.random.normal(size=len(fn))
 
-    if MC_spectra_noise[1] > 0:
-        The = The + MC_spectra_noise[1] * RMS_The * np.random.normal(
-            0, np.ones(len(fn))
-        )
-
-    if MC_spectra_noise[2] > 0:
-        Toe = Toe + MC_spectra_noise[2] * RMS_Toe * np.random.normal(
-            0, np.ones(len(fn))
-        )
-
-    if MC_spectra_noise[3] > 0:
-        Tse = Tse + MC_spectra_noise[3] * RMS_Tse * np.random.normal(
-            0, np.ones(len(fn))
-        )
-
-    return np.array([Tae, The, Toe, Tse])
+    return np.array(list(models.values()))
 
 
-def random_signal_perturbation(f, RMS_expectation, Npar_max):
+def random_signal_perturbation(f, rms_expectation, n_par_max):
     # Choose randomly, from a Uniform distribution, an integer corresponding to the number of
     # polynomial terms
-    Npar = np.random.choice(Npar_max + 1)
+    n_par = np.random.choice(n_par_max + 1)
 
-    # Choose randomly, from a Gaussian distribution, a number corresponding to the RMS of the
+    # Choose randomly, from a Gaussian distribution, a number corresponding to the rms of the
     # perturbation across frequency
-    RMS = RMS_expectation * np.random.normal(0, 1)
+    rms = rms_expectation * np.random.normal()
 
     # Generate random noise across frequency, with MEAN=0 and STD=1
-    noise = np.random.normal(0, 1, size=len(f))
+    noise = np.random.normal(size=len(f))
 
-    # Fit a generic polynomial to the noise, using a polynomial with Npar terms
-    par = np.polyfit(f, noise, Npar + 1)
+    # Fit a generic polynomial to the noise, using a polynomial with n_par terms
+    par = np.polyfit(f, noise, n_par + 1)
     model = np.polyval(par, f)
 
-    # Compute the current RMS of the polynomial
-    RMS_model = np.std(model)
+    # Compute the current rms of the polynomial
+    rms_model = np.std(model)
 
-    return (RMS / RMS_model) * model
+    return (rms / rms_model) * model
 
 
 def two_port_network_uncertainties():
@@ -369,70 +295,36 @@ def two_port_network_uncertainties():
     to uncertainties in the 2-port S-parameters of the short cable between the hot load and the
     receiver
     """
-
-    # Simulated measurements at the VNA input
-    # ---------------------------------------
-
     # Reflection standard models
     f = np.arange(50, 181)  # In MHz
     resistance_of_match = 50.1
 
-    Y = rc.agilent_85033E((10 ** 6) * f, resistance_of_match, m=1, md_value_ps=38)
-    oa = Y[0]
-    sa = Y[1]
-    la = Y[2]
+    oa, sa, la = rc.agilent_85033E(
+        (10 ** 6) * f, resistance_of_match, m=1, md_value_ps=38
+    )
 
     # Simulated measurements at the VNA input
-    o1m = 1 * np.ones(len(f))
-    s1m = -1 * np.ones(len(f))
-    l1m = 0.001 * np.ones(len(f))
+    one_port = [np.ones(len(f)), -np.ones(len(f)), 0.001 * np.ones(len(f))]
 
     # S-parameters of VNA calibration network
-    X, s11V, s12s21V, s22V = rc.de_embed(oa, sa, la, o1m, s1m, l1m, o1m)
+    X, s11V, s12s21V, s22V = rc.de_embed(oa, sa, la, *one_port, one_port[0])
 
     # Simulated measurements at the end of the 2-port network
-    # -------------------------------------------------------
-
     # Load 2-port parameters and models
-
     path_par_s11 = (
         edges_folder + "/mid_band/calibration/receiver_calibration/receiver1"
         "/2018_01_25C/results/nominal/s11/"
     )
 
-    par_s11_sr_mag = np.genfromtxt(path_par_s11 + "par_s11_sr_mag.txt")
-    par_s11_sr_ang = np.genfromtxt(path_par_s11 + "par_s11_sr_ang.txt")
+    sxx = get_reflections(f, path_par_s11)
 
-    par_s12s21_sr_mag = np.genfromtxt(path_par_s11 + "par_s12s21_sr_mag.txt")
-    par_s12s21_sr_ang = np.genfromtxt(path_par_s11 + "par_s12s21_sr_ang.txt")
+    vna = {}
+    for thing, a in zip(["open", "short", "load"], [oa, sa, la]):
+        # Measurements as seen at the input of 2-port network
+        meas_2port = rc.gamma_shifted(sxx["s11"], sxx["s12s21"], sxx["s22"], a)
 
-    par_s22_sr_mag = np.genfromtxt(path_par_s11 + "par_s22_sr_mag.txt")
-    par_s22_sr_ang = np.genfromtxt(path_par_s11 + "par_s22_sr_ang.txt")
-
-    fen = (f - 120) / 60
-
-    s11_mag = mdl.model_evaluate("polynomial", par_s11_sr_mag, fen)
-    s11_ang = mdl.model_evaluate("polynomial", par_s11_sr_ang, fen)
-
-    s12s21_mag = mdl.model_evaluate("polynomial", par_s12s21_sr_mag, fen)
-    s12s21_ang = mdl.model_evaluate("polynomial", par_s12s21_sr_ang, fen)
-
-    s22_mag = mdl.model_evaluate("polynomial", par_s22_sr_mag, fen)
-    s22_ang = mdl.model_evaluate("polynomial", par_s22_sr_ang, fen)
-
-    s11 = s11_mag * (np.cos(s11_ang) + 1j * np.sin(s11_ang))
-    s12s21 = s12s21_mag * (np.cos(s12s21_ang) + 1j * np.sin(s12s21_ang))
-    s22 = s22_mag * (np.cos(s22_ang) + 1j * np.sin(s22_ang))
-
-    # Measurements as seen at the input of 2-port network
-    oX = rc.gamma_shifted(s11, s12s21, s22, oa)
-    sX = rc.gamma_shifted(s11, s12s21, s22, sa)
-    lX = rc.gamma_shifted(s11, s12s21, s22, la)
-
-    # Measurements at the uncalibrated VNA port
-    o2m = rc.gamma_shifted(s11V, s12s21V, s22V, oX)
-    s2m = rc.gamma_shifted(s11V, s12s21V, s22V, sX)
-    l2m = rc.gamma_shifted(s11V, s12s21V, s22V, lX)
+        # Measurements at the uncalibrated VNA port
+        vna[thing] = rc.gamma_shifted(s11V, s12s21V, s22V, meas_2port)
 
     # Simulating and propagating uncertainties
     # ----------------------------------------
@@ -446,105 +338,74 @@ def two_port_network_uncertainties():
     s12s21_N = np.zeros((N, len(f))) + 1j * 0
     s22_N = np.zeros((N, len(f))) + 1j * 0
 
+    # Add perturbations to measurements
     for i in range(N):
-        print(i)
+        perturbed = {}
+        for key in vna.keys():
+            perturbed[key] = {}
+            for thing in zip(["one", "two"], [one_port, vna.values()]):
+                for meas in thing:
+                    # Open at VNA port
+                    pert_mag = random_signal_perturbation(f, RMS_mag, Npar_max)
+                    pert_ang = random_signal_perturbation(f, RMS_ang, Npar_max)
 
-        # Add perturbations to measurements
+                    mag = np.abs(meas) + pert_mag
+                    ang = np.unwrap(np.angle(meas)) + (np.pi / 180) * pert_ang
 
-        # Open at VNA port
-        pert_mag = random_signal_perturbation(f, RMS_mag, Npar_max)
-        pert_ang = random_signal_perturbation(f, RMS_ang, Npar_max)
+                    perturbed[key][thing] = mag * (np.cos(ang) + 1j * np.sin(ang))
 
-        o1mp_mag = np.abs(o1m) + pert_mag
-        o1mp_ang = np.unwrap(np.angle(o1m)) + (np.pi / 180) * pert_ang
-
-        o1mp = o1mp_mag * (np.cos(o1mp_ang) + 1j * np.sin(o1mp_ang))
-
-        # Short at VNA port
-        pert_mag = random_signal_perturbation(f, RMS_mag, Npar_max)
-        pert_ang = random_signal_perturbation(f, RMS_ang, Npar_max)
-
-        s1mp_mag = np.abs(s1m) + pert_mag
-        s1mp_ang = np.unwrap(np.angle(s1m)) + (np.pi / 180) * pert_ang
-
-        s1mp = s1mp_mag * (np.cos(s1mp_ang) + 1j * np.sin(s1mp_ang))
-
-        # Load at VNA port
-        pert_mag = random_signal_perturbation(f, RMS_mag, Npar_max)
-        pert_ang = random_signal_perturbation(f, RMS_ang, Npar_max)
-
-        l1mp_mag = np.abs(l1m) + pert_mag
-        l1mp_ang = np.unwrap(np.angle(l1m)) + (np.pi / 180) * pert_ang
-
-        l1mp = l1mp_mag * (np.cos(l1mp_ang) + 1j * np.sin(l1mp_ang))
-
-        # Open at the end of network
-        pert_mag = random_signal_perturbation(f, RMS_mag, Npar_max)
-        pert_ang = random_signal_perturbation(f, RMS_ang, Npar_max)
-
-        o2mp_mag = np.abs(o2m) + pert_mag
-        o2mp_ang = np.unwrap(np.angle(o2m)) + (np.pi / 180) * pert_ang
-
-        o2mp = o2mp_mag * (np.cos(o2mp_ang) + 1j * np.sin(o2mp_ang))
-
-        # Short at the end of network
-        pert_mag = random_signal_perturbation(f, RMS_mag, Npar_max)
-        pert_ang = random_signal_perturbation(f, RMS_ang, Npar_max)
-
-        s2mp_mag = np.abs(s2m) + pert_mag
-        s2mp_ang = np.unwrap(np.angle(s2m)) + (np.pi / 180) * pert_ang
-
-        s2mp = s2mp_mag * (np.cos(s2mp_ang) + 1j * np.sin(s2mp_ang))
-
-        # Load at the end of network
-        pert_mag = random_signal_perturbation(f, RMS_mag, Npar_max)
-        pert_ang = random_signal_perturbation(f, RMS_ang, Npar_max)
-
-        l2mp_mag = np.abs(l2m) + pert_mag
-        l2mp_ang = np.unwrap(np.angle(l2m)) + (np.pi / 180) * pert_ang
-
-        l2mp = l2mp_mag * (np.cos(l2mp_ang) + 1j * np.sin(l2mp_ang))
-
-        # Calibrate measurements at the end of 2-port network, to VNA port
-        o2mx, xa, xb, xc = rc.de_embed(oa, sa, la, o1mp, s1mp, l1mp, o2mp)
-        s2mx, xa, xb, xc = rc.de_embed(oa, sa, la, o1mp, s1mp, l1mp, s2mp)
-        l2mx, xa, xb, xc = rc.de_embed(oa, sa, la, o1mp, s1mp, l1mp, l2mp)
+        out = {}
+        for key in vna.keys():
+            out[key] = rc.de_embed(
+                oa,
+                sa,
+                la,
+                perturbed[key]["one"],
+                perturbed[key]["one"],
+                perturbed[key]["one"],
+                perturbed[key]["two"],
+            )[0]
 
         # Compute S-parameters of DUT
-        l, s11new, s12s21new, s22new = rc.de_embed(oa, sa, la, o2mx, s2mx, l2mx, l2mx)
+        l, s11new, s12s21new, s22new = rc.de_embed(
+            oa, sa, la, out["open"], out["short"], out["load"], out["load"]
+        )
 
         # Store S-parameters of DUT
         s11_N[i, :] = s11new
         s12s21_N[i, :] = s12s21new
         s22_N[i, :] = s22new
 
-    # The first three S-parameters are the input, nominal values. The last three are the MC
-    # arrays from which the uncertainty STD could be estimated
-    return f, s11, s12s21, s22, s11_N, s12s21_N, s22_N
+    return f, sxx, s11_N, s12s21_N, s22_N
+
+
+def get_reflections(f, path_par_s11, kinds=("s11", "s12s21", "s22"), loadname="sr"):
+    sxx = {}
+    fen = (f - 120) / 60
+    for kind in kinds:
+        for part in ["mag", "ang"]:
+            pars = np.genfromtxt(path_par_s11 + f"par_{kind}_{loadname}_{part}.txt")
+            model = mdl.model_evaluate("polynomial", pars, fen)
+
+            if part == "mag":
+                sxx[kind] = model
+            else:
+                sxx[kind] *= np.cos(model) + 1j * np.sin(model)
+    return sxx
 
 
 def MC_receiver(
     band, MC_spectra_noise=np.ones(4), MC_s11_syst=np.ones(16), MC_temp=np.ones(4)
 ):
-    # Settings
-    case_models = 1  # mid band 2018
     s11_Npar_max = 14
 
-    # band          = 'mid_band'
-
     f = EdgesFrequencyRange(f_low=50, f_high=150).freq
-    # fx, il, ih = ba.frequency_edges(50, 150)
-    # f = fx[il : (ih + 1)]
     fn = (f - 120) / 60
 
     Tamb_internal = 300
 
     cterms = 7
     wterms = 8
-
-    # MC flags
-
-    # Computing "Perturbed" receiver spectra, reflection coefficients, and physical temperatures
 
     # Spectra
     if np.sum(MC_spectra_noise) == 0:
@@ -553,47 +414,51 @@ def MC_receiver(
             + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C"
             "/results/nominal/data/average_spectra_300_350.txt"
         )
-        print(Tunc[:, 0])
         ms = Tunc[:, 1:5].T
-        print(ms.shape)
     else:
         ms = models_calibration_spectra(
-            case_models, f, MC_spectra_noise=MC_spectra_noise
+            (
+                edges_folder
+                + "/mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results"
+                "/nominal/spectra/"
+            ),
+            f,
+            MC_spectra_noise=MC_spectra_noise,
         )
 
     # S11
     mr = models_calibration_s11(
-        case_models, f, MC_s11_syst=MC_s11_syst, Npar_max=s11_Npar_max
+        (
+            edges_folder
+            + "/mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results"
+            "/nominal/s11/"
+        ),
+        f,
+        MC_s11_syst=MC_s11_syst,
+        Npar_max=s11_Npar_max,
     )
 
     # Physical temperature
     mt = models_calibration_physical_temperature(
-        case_models, f, s_parameters=[mr[2], mr[5], mr[6], mr[7]], MC_temp=MC_temp
+        (
+            edges_folder
+            + "/mid_band/calibration/receiver_calibration/receiver1/2018_01_25C"
+            "/results/nominal/temp/"
+        ),
+        f,
+        s_parameters=[mr[2], mr[5], mr[6], mr[7]],
+        MC_temp=MC_temp,
     )
 
-    Tae = ms[0]
-    The = ms[1]
-    Toe = ms[2]
-    Tse = ms[3]
-
     rl = mr[0]
-    ra = mr[1]
-    rh = mr[2]
-    ro = mr[3]
-    rs = mr[4]
-
-    Ta = mt[0]
-    Thd = mt[1]
-    To = mt[2]
-    Ts = mt[3]
 
     # Computing receiver calibration quantities
     C1, C2, TU, TC, TS = rcf.get_calibration_quantities_iterative(
         fn,
-        T_raw={"ambient": Tae, "hot_load": The, "short": Tse, "open": Toe},
-        gamma_rec=rl,
-        gamma_ant={"ambient": ra, "hot_load": rh, "short": rs, "open": ro},
-        T_ant={"ambient": Ta, "hot_load": Thd, "short": Ts, "open": To},
+        T_raw={"ambient": ms[0], "hot_load": ms[1], "short": ms[2], "open": ms[3]},
+        gamma_rec=mr[0],
+        gamma_ant={"ambient": mr[1], "hot_load": mr[2], "short": mr[4], "open": mr[3]},
+        T_ant={"ambient": mt[0], "hot_load": mt[1], "short": mt[3], "open": mt[2]},
         cterms=cterms,
         wterms=wterms,
         Tamb_internal=Tamb_internal,
@@ -603,11 +468,7 @@ def MC_receiver(
 
 
 def MC_antenna_s11(f, rant, s11_Npar_max=14):
-    # rant = models_antenna_s11_remove_delay(band, f, year=2018, day=147, delay_0=0.17,
-    # model_type='polynomial', n_fit=14, plot_fit_residuals='no')
-
     # Producing perturbed antenna reflection coefficient
-
     RMS_mag = 0.0001  # original value = 0.0001
     RMS_ang = 0.1 * (np.pi / 180)
 
@@ -630,368 +491,185 @@ def MC_antenna_loss(f, G_Npar_max=10):
     G_nominal = Gb*Gc  # balun loss x connector loss
 
     """
-
     RMS_G = 0.00025  # 5% of typical (i.e., of 0.5%)
-
-    flag = 1
-    while flag == 1:
+    dG = RMS_G * 10
+    while np.max(np.abs(dG)) > 6 * RMS_G:
         dG = random_signal_perturbation(f, RMS_G, G_Npar_max)
-        if (
-            np.max(np.abs(dG)) <= 6 * RMS_G
-        ):  # 6 sigma = 0.0015, forcing the loss to stay within reason
-            flag = 0
 
     return dG
 
 
-def MC_error_propagation():
-    band = "mid_band"
-    FLOW = 61
-    FHIGH = 121
+def MC_error_propagation(f_low=61, f_high=121, band="mid_band"):
 
-    ff, rl_X, C1_X, C2_X, TU_X, TC_X, TS_X = MC_receiver(
+    f, rl, C1, C2, TU, TC, TS = MC_receiver(
         band,
         MC_spectra_noise=np.zeros(4),
         MC_s11_syst=np.zeros(16),
         MC_temp=np.zeros(4),
     )
 
-    rant1_X = models_antenna_s11_remove_delay(
-        "mid_band",
-        ff,
-        year=2018,
-        day=147,
-        delay_0=0.17,
-        model_type="polynomial",
-        Nfit=14,
-        plot_fit_residuals=False,
-    )
-    rant2_X = models_antenna_s11_remove_delay(
-        "low_band3",
-        ff,
-        year=2018,
-        day=227,
-        delay_0=0.17,
-        model_type="polynomial",
-        Nfit=14,
-        plot_fit_residuals=False,
-    )
-
-    Gb, Gc = balun_and_connector_loss("mid_band", ff, rant1_X)
-    G1_X = Gb * Gc
-
-    Gb, Gc = balun_and_connector_loss("low_band3", ff, rant1_X)
-    G2_X = Gb * Gc
-
-    f = ff[(ff >= FLOW) & (ff <= FHIGH)]
-    rl = rl_X[(ff >= FLOW) & (ff <= FHIGH)]
-    C1 = C1_X[(ff >= FLOW) & (ff <= FHIGH)]
-    C2 = C2_X[(ff >= FLOW) & (ff <= FHIGH)]
-    TU = TU_X[(ff >= FLOW) & (ff <= FHIGH)]
-    TC = TC_X[(ff >= FLOW) & (ff <= FHIGH)]
-    TS = TS_X[(ff >= FLOW) & (ff <= FHIGH)]
-
-    rant1 = rant1_X[(ff >= FLOW) & (ff <= FHIGH)]
-    rant2 = rant2_X[(ff >= FLOW) & (ff <= FHIGH)]
-
-    G1 = G1_X[(ff >= FLOW) & (ff <= FHIGH)]
-    G2 = G2_X[(ff >= FLOW) & (ff <= FHIGH)]
-
-    tsky1 = 1000 * (f / 100) ** (-2.5)
-    tsky2 = 3000 * (f / 100) ** (-2.5)
+    mask = (f >= f_low) & (f <= f_high)
+    f = f[mask]
+    rl = rl[mask]
+    C1 = C1[mask]
+    C2 = C2[mask]
+    TU = TU[mask]
+    TC = TC[mask]
+    TS = TS[mask]
 
     Tamb = 273 + 25
 
-    tsky1L1 = tsky1 * G1 + Tamb * (1 - G1)
-    tsky2L1 = tsky2 * G1 + Tamb * (1 - G1)
+    gamma_ant, G, tsky = [], [], []
+    for i, (day, temp) in enumerate([147, 227], [1000, 3000]):
+        gamma_ant.append(
+            models_antenna_s11_remove_delay(
+                "mid_band",
+                f,
+                year=2018,
+                day=day,
+                delay_0=0.17,
+                model_type="polynomial",
+                Nfit=14,
+                plot_fit_residuals=False,
+            )[mask]
+        )
 
-    tsky1L2 = tsky1 * G2 + Tamb * (1 - G2)
-    tsky2L2 = tsky2 * G2 + Tamb * (1 - G2)
+        Gb, Gc = balun_and_connector_loss("mid_band", f, gamma_ant[i])
+        G.append((Gb * Gc)[mask])
+        tsky.append(temp * (f / 100) ** -2.5)
 
-    tunc1 = rcf.uncalibrated_antenna_temperature(
-        tsky1L1, rant1, rl, C1, C2, TU, TC, TS, T_load=300
-    )
-    tunc2 = rcf.uncalibrated_antenna_temperature(
-        tsky1L2, rant2, rl, C1, C2, TU, TC, TS, T_load=300
-    )
+    tunc = []
+    for i in range(2):
+        for j in range(2):
+            tskyl1 = tsky[j] * G[i] + Tamb * (1 - G[i])
+            tunc.append(
+                rcf.uncalibrated_antenna_temperature(
+                    tskyl1, gamma_ant[j], rl, C1, C2, TU, TC, TS, T_load=300
+                )
+            )
 
-    tunc3 = rcf.uncalibrated_antenna_temperature(
-        tsky2L1, rant1, rl, C1, C2, TU, TC, TS, T_load=300
-    )
-    tunc4 = rcf.uncalibrated_antenna_temperature(
-        tsky2L2, rant2, rl, C1, C2, TU, TC, TS, T_load=300
-    )
-
-    ff, rl_Y, C1_Y, C2_Y, TU_Y, TC_Y, TS_Y = MC_receiver(
+    ff, rl, C1, C2, TU, TC, TS = MC_receiver(
         band,
         MC_spectra_noise=np.zeros(4),
         MC_s11_syst=np.zeros(16),
         MC_temp=np.zeros(4),
     )
 
-    rant1_Y = MC_antenna_s11(ff, rant1_X, s11_Npar_max=14)
-    rant2_Y = MC_antenna_s11(ff, rant2_X, s11_Npar_max=14)
+    rl_MC = rl[mask]
+    C1_MC = C1[mask]
+    C2_MC = C2[mask]
+    TU_MC = TU[mask]
+    TC_MC = TC[mask]
+    TS_MC = TS[mask]
 
-    dG1_Y = MC_antenna_loss(ff, G_Npar_max=10)
-    dG2_Y = MC_antenna_loss(ff, G_Npar_max=10)
+    gamma_ant_mc, G_mc = [], []
+    for i in range(2):
+        gamma_ant_y = MC_antenna_s11(ff, gamma_ant[i], s11_Npar_max=14)
+        dG_y = MC_antenna_loss(ff, G_Npar_max=10)
+        G_y = G[i] + dG_y
+        gamma_ant_mc.append(gamma_ant_y[mask])
+        G_mc.append(G_y[mask])
 
-    G1_Y = G1_X + dG1_Y
-    G2_Y = G2_X + dG2_Y
-
-    rl_MC = rl_Y[(ff >= FLOW) & (ff <= FHIGH)]
-    C1_MC = C1_Y[(ff >= FLOW) & (ff <= FHIGH)]
-    C2_MC = C2_Y[(ff >= FLOW) & (ff <= FHIGH)]
-    TU_MC = TU_Y[(ff >= FLOW) & (ff <= FHIGH)]
-    TC_MC = TC_Y[(ff >= FLOW) & (ff <= FHIGH)]
-    TS_MC = TS_Y[(ff >= FLOW) & (ff <= FHIGH)]
-
-    rant1_MC = rant1_Y[(ff >= FLOW) & (ff <= FHIGH)]
-    rant2_MC = rant2_Y[(ff >= FLOW) & (ff <= FHIGH)]
-
-    G1_MC = G1_Y[(ff >= FLOW) & (ff <= FHIGH)]
-    G2_MC = G2_Y[(ff >= FLOW) & (ff <= FHIGH)]
-
-    # rant_MC = MC_antenna_s11(f, band)
-
-    tcal1L1 = rcf.calibrated_antenna_temperature(
-        tunc1, rant1_MC, rl_MC, C1_MC, C2_MC, TU_MC, TC_MC, TS_MC, T_load=300
-    )
-    tcal1L2 = rcf.calibrated_antenna_temperature(
-        tunc2, rant2_MC, rl_MC, C1_MC, C2_MC, TU_MC, TC_MC, TS_MC, T_load=300
-    )
-
-    tcal2L1 = rcf.calibrated_antenna_temperature(
-        tunc3, rant1_MC, rl_MC, C1_MC, C2_MC, TU_MC, TC_MC, TS_MC, T_load=300
-    )
-    tcal2L2 = rcf.calibrated_antenna_temperature(
-        tunc4, rant2_MC, rl_MC, C1_MC, C2_MC, TU_MC, TC_MC, TS_MC, T_load=300
-    )
-
-    tcal1 = (tcal1L1 - Tamb * (1 - G1_MC)) / G1_MC
-    tcal2 = (tcal1L2 - Tamb * (1 - G2_MC)) / G2_MC
-
-    tcal3 = (tcal2L1 - Tamb * (1 - G1_MC)) / G1_MC
-    tcal4 = (tcal2L2 - Tamb * (1 - G2_MC)) / G2_MC
-
-    Nfg = 1
-    par1 = mdl.fit_polynomial_fourier("LINLOG", f, tcal1, Nfg)
-    par2 = mdl.fit_polynomial_fourier("LINLOG", f, tcal2, Nfg)
-
-    par3 = mdl.fit_polynomial_fourier("LINLOG", f, tcal3, Nfg)
-    par4 = mdl.fit_polynomial_fourier("LINLOG", f, tcal4, Nfg)
-
-    return (
-        f,
-        rant1,
-        rant2,
-        tcal1,
-        tcal2,
-        tcal3,
-        tcal4,
-        par1[1],
-        par2[1],
-        par3[1],
-        par4[1],
-    )
-
-
-def models_calibration_s11(case, f, MC_s11_syst=np.zeros(16), Npar_max=15):
-    if case == 1:
-        path_par_s11 = (
-            edges_folder
-            + "/mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results"
-            "/nominal/s11/"
+    tcal = []
+    for i in range(4):
+        tc = rcf.calibrated_antenna_temperature(
+            tunc[i],
+            gamma_ant_mc[i % 2],
+            rl_MC,
+            C1_MC,
+            C2_MC,
+            TU_MC,
+            TC_MC,
+            TS_MC,
+            T_load=300,
         )
+        tcal.append((tc - Tamb * (1 - G_mc[i % 2])) / G_mc[i % 2])
 
+    n_fg = 1
+    par = [mdl.fit_polynomial_fourier("LINLOG", f, tc, n_fg)[1] for tc in tcal]
+    return (f, *gamma_ant, *tcal, *par)
+
+
+def models_calibration_s11(
+    path_par_s11,
+    f,
+    MC_s11_syst=np.zeros(16),
+    Npar_max=15,
+    rms_expected=(0.0001, np.pi / 180),
+):
     # Loading S11 parameters
-    par_s11_LNA_mag = np.genfromtxt(path_par_s11 + "par_s11_LNA_mag.txt")
-    par_s11_LNA_ang = np.genfromtxt(path_par_s11 + "par_s11_LNA_ang.txt")
-
-    par_s11_amb_mag = np.genfromtxt(path_par_s11 + "par_s11_amb_mag.txt")
-    par_s11_amb_ang = np.genfromtxt(path_par_s11 + "par_s11_amb_ang.txt")
-
-    par_s11_hot_mag = np.genfromtxt(path_par_s11 + "par_s11_hot_mag.txt")
-    par_s11_hot_ang = np.genfromtxt(path_par_s11 + "par_s11_hot_ang.txt")
-
-    par_s11_open_mag = np.genfromtxt(path_par_s11 + "par_s11_open_mag.txt")
-    par_s11_open_ang = np.genfromtxt(path_par_s11 + "par_s11_open_ang.txt")
-
-    par_s11_shorted_mag = np.genfromtxt(path_par_s11 + "par_s11_shorted_mag.txt")
-    par_s11_shorted_ang = np.genfromtxt(path_par_s11 + "par_s11_shorted_ang.txt")
-
-    par_s11_sr_mag = np.genfromtxt(path_par_s11 + "par_s11_sr_mag.txt")
-    par_s11_sr_ang = np.genfromtxt(path_par_s11 + "par_s11_sr_ang.txt")
-
-    par_s12s21_sr_mag = np.genfromtxt(path_par_s11 + "par_s12s21_sr_mag.txt")
-    par_s12s21_sr_ang = np.genfromtxt(path_par_s11 + "par_s12s21_sr_ang.txt")
-
-    par_s22_sr_mag = np.genfromtxt(path_par_s11 + "par_s22_sr_mag.txt")
-    par_s22_sr_ang = np.genfromtxt(path_par_s11 + "par_s22_sr_ang.txt")
-
-    fen = (f - 120) / 60
-
-    # Evaluating S11 models at EDGES frequency
-    s11_LNA_mag = mdl.model_evaluate("polynomial", par_s11_LNA_mag, fen)
-    s11_LNA_ang = mdl.model_evaluate("polynomial", par_s11_LNA_ang, fen)
-
-    s11_amb_mag = mdl.model_evaluate("fourier", par_s11_amb_mag, fen)
-    s11_amb_ang = mdl.model_evaluate("fourier", par_s11_amb_ang, fen)
-
-    s11_hot_mag = mdl.model_evaluate("fourier", par_s11_hot_mag, fen)
-    s11_hot_ang = mdl.model_evaluate("fourier", par_s11_hot_ang, fen)
-
-    s11_open_mag = mdl.model_evaluate("fourier", par_s11_open_mag, fen)
-    s11_open_ang = mdl.model_evaluate("fourier", par_s11_open_ang, fen)
-
-    s11_shorted_mag = mdl.model_evaluate("fourier", par_s11_shorted_mag, fen)
-    s11_shorted_ang = mdl.model_evaluate("fourier", par_s11_shorted_ang, fen)
-
-    s11_sr_mag = mdl.model_evaluate("polynomial", par_s11_sr_mag, fen)
-    s11_sr_ang = mdl.model_evaluate("polynomial", par_s11_sr_ang, fen)
-
-    s12s21_sr_mag = mdl.model_evaluate("polynomial", par_s12s21_sr_mag, fen)
-    s12s21_sr_ang = mdl.model_evaluate("polynomial", par_s12s21_sr_ang, fen)
-
-    s22_sr_mag = mdl.model_evaluate("polynomial", par_s22_sr_mag, fen)
-    s22_sr_ang = mdl.model_evaluate("polynomial", par_s22_sr_ang, fen)
-
-    # ----- Make these input parameters ??
-    RMS_expec_mag = 0.0001  # 0.0001
-    RMS_expec_ang = 1 * (np.pi / 180)  # 0.1
+    sr = get_reflections(f, path_par_s11)
+    loads = {
+        name: get_reflections(f, path_par_s11, kinds=("s11",), loadname="amb")
+        for name in ["LNA", "amb", "hot", "open", "shorted"]
+    }
 
     # The following were obtained using the function "two_port_network_uncertainties()" also
     # contained in this file
-    RMS_expec_mag_2port = 0.0002
-    RMS_expec_ang_2port = 2 * (np.pi / 180)
+    rms_expec_2port = (0.0002, 2 * (np.pi / 180))
+    rms_expec_s12s21 = (0.0002, 0.1 * (np.pi / 180))
 
-    RMS_expec_mag_s12s21 = 0.0002
-    RMS_expec_ang_s12s21 = 0.1 * (np.pi / 180)
-    # ---------------------- LNA --------------------------------
-    if MC_s11_syst[0] > 0:
-        pert_mag = random_signal_perturbation(f, RMS_expec_mag, Npar_max)
-        s11_LNA_mag = s11_LNA_mag + MC_s11_syst[0] * pert_mag
+    j = 0
+    for name in loads:
+        this = []
+        for i, fnc in enumerate(lambda x: np.abs(x), lambda x: np.angle(x)):  # ang/mag
+            if MC_s11_syst[j] > 0:
+                pert = random_signal_perturbation(f, rms_expected[i], Npar_max)
+                this.append(fnc(loads[name]["s11"]) + MC_s11_syst[j] * pert)
+            j += 1
+        loads[name] = this[0] * (np.cos(this[1]) + 1j * np.sin(this[1]))
 
-    if MC_s11_syst[1] > 0:
-        pert_ang = random_signal_perturbation(f, RMS_expec_ang, Npar_max)
-        s11_LNA_ang = s11_LNA_ang + MC_s11_syst[1] * pert_ang
-    # ---------------------- Amb ---------------------------------
-    if MC_s11_syst[2] > 0:
-        pert_mag = random_signal_perturbation(f, RMS_expec_mag, Npar_max)
-        s11_amb_mag = s11_amb_mag + MC_s11_syst[2] * pert_mag
+    for name, expec in zip(sr, [rms_expec_2port, rms_expec_s12s21, rms_expec_2port]):
+        this = []
+        for i, fnc in enumerate(lambda x: np.abs(x), lambda x: np.angle(x)):  # ang/mag
+            if MC_s11_syst[j] > 0:
+                pert = random_signal_perturbation(f, expec[i], Npar_max)
+                this.append(fnc(sr[name]) + MC_s11_syst[j] * pert)
+            j += 1
+        sr[name] = this[0] * (np.cos(this[1]) + 1j * np.sin(this[1]))
 
-    if MC_s11_syst[3] > 0:
-        pert_ang = random_signal_perturbation(f, RMS_expec_ang, Npar_max)
-        s11_amb_ang = s11_amb_ang + MC_s11_syst[3] * pert_ang
-    # ---------------------- Hot ---------------------------------
-    if MC_s11_syst[4] > 0:
-        pert_mag = random_signal_perturbation(f, RMS_expec_mag, Npar_max)
-        s11_hot_mag = s11_hot_mag + MC_s11_syst[4] * pert_mag
-
-    if MC_s11_syst[5] > 0:
-        pert_ang = random_signal_perturbation(f, RMS_expec_ang, Npar_max)
-        s11_hot_ang = s11_hot_ang + MC_s11_syst[5] * pert_ang
-    # ---------------------- Open --------------------------------
-    if MC_s11_syst[6] > 0:
-        pert_mag = random_signal_perturbation(f, RMS_expec_mag, Npar_max)
-        s11_open_mag = s11_open_mag + MC_s11_syst[6] * pert_mag
-
-    if MC_s11_syst[7] > 0:
-        pert_ang = random_signal_perturbation(f, RMS_expec_ang, Npar_max)
-        s11_open_ang = s11_open_ang + MC_s11_syst[7] * pert_ang
-    # ---------------------- Shorted -----------------------------
-    if MC_s11_syst[8] > 0:
-        pert_mag = random_signal_perturbation(f, RMS_expec_mag, Npar_max)
-        s11_shorted_mag = s11_shorted_mag + MC_s11_syst[8] * pert_mag
-
-    if MC_s11_syst[9] > 0:
-        pert_ang = random_signal_perturbation(f, RMS_expec_ang, Npar_max)
-        s11_shorted_ang = s11_shorted_ang + MC_s11_syst[9] * pert_ang
-    # ---------------------- S11 short cable -----------------------------------
-    if MC_s11_syst[10] > 0:
-        pert_mag = random_signal_perturbation(f, RMS_expec_mag_2port, Npar_max)
-        s11_sr_mag = s11_sr_mag + MC_s11_syst[10] * pert_mag
-
-    if MC_s11_syst[11] > 0:
-        pert_ang = random_signal_perturbation(f, RMS_expec_ang_2port, Npar_max)
-        s11_sr_ang = s11_sr_ang + MC_s11_syst[11] * pert_ang
-    # ---------------------- S12S21 short cable -----------------------------------
-    if MC_s11_syst[12] > 0:
-        pert_mag = random_signal_perturbation(f, RMS_expec_mag_s12s21, Npar_max)
-        s12s21_sr_mag = s12s21_sr_mag + MC_s11_syst[12] * pert_mag
-
-    if MC_s11_syst[13] > 0:
-        pert_ang = random_signal_perturbation(f, RMS_expec_ang_s12s21, Npar_max)
-        s12s21_sr_ang = s12s21_sr_ang + MC_s11_syst[13] * pert_ang
-    # ---------------------- S22 short cable -----------------------------------
-    if MC_s11_syst[14] > 0:
-        pert_mag = random_signal_perturbation(f, RMS_expec_mag_2port, Npar_max)
-        s22_sr_mag = s22_sr_mag + MC_s11_syst[14] * pert_mag
-
-    if MC_s11_syst[15] > 0:
-        pert_ang = random_signal_perturbation(f, RMS_expec_ang_2port, Npar_max)
-        s22_sr_ang = s22_sr_ang + MC_s11_syst[15] * pert_ang
-
-    # Output
-    # ------
-    s11_LNA = s11_LNA_mag * (np.cos(s11_LNA_ang) + 1j * np.sin(s11_LNA_ang))
-    s11_amb = s11_amb_mag * (np.cos(s11_amb_ang) + 1j * np.sin(s11_amb_ang))
-    s11_hot = s11_hot_mag * (np.cos(s11_hot_ang) + 1j * np.sin(s11_hot_ang))
-    s11_open = s11_open_mag * (np.cos(s11_open_ang) + 1j * np.sin(s11_open_ang))
-    s11_shorted = s11_shorted_mag * (
-        np.cos(s11_shorted_ang) + 1j * np.sin(s11_shorted_ang)
+    return (
+        loads["LNA"],
+        loads["amb"],
+        loads["hot"],
+        loads["open"],
+        loads["shorted"],
+        sr["s11"],
+        sr["s12s21"],
+        sr["s22"],
     )
-    s11_sr = s11_sr_mag * (np.cos(s11_sr_ang) + 1j * np.sin(s11_sr_ang))
-    s12s21_sr = s12s21_sr_mag * (np.cos(s12s21_sr_ang) + 1j * np.sin(s12s21_sr_ang))
-    s22_sr = s22_sr_mag * (np.cos(s22_sr_ang) + 1j * np.sin(s22_sr_ang))
-
-    return s11_LNA, s11_amb, s11_hot, s11_open, s11_shorted, s11_sr, s12s21_sr, s22_sr
 
 
 def models_calibration_physical_temperature(
-    case, f, s_parameters=np.zeros(1), MC_temp=np.zeros(4)
+    path, f, s_parameters=np.zeros(1), MC_temp=np.zeros(4)
 ):
-    if case == 1:
-        # Paths
-        path = (
-            edges_folder
-            + "/mid_band/calibration/receiver_calibration/receiver1/2018_01_25C"
-            "/results/nominal/temp/"
-        )
 
     # Physical temperatures
     phys_temp = np.genfromtxt(path + "physical_temperatures.txt")
-    Ta = phys_temp[0] * np.ones(len(f))
-    Th = phys_temp[1] * np.ones(len(f))
-    To = phys_temp[2] * np.ones(len(f))
-    Ts = phys_temp[3] * np.ones(len(f))
+    T = [temp * np.ones(len(f)) for temp in phys_temp]
+    # Ta = phys_temp[0] * np.ones(len(f))
+    # Th = phys_temp[1] * np.ones(len(f))
+    # To = phys_temp[2] * np.ones(len(f))
+    # Ts = phys_temp[3] * np.ones(len(f))
 
     # MC realizations of physical temperatures
-    STD_temp = 0.1
-    if MC_temp[0] > 0:
-        Ta = Ta + MC_temp[0] * STD_temp * np.random.normal(0, 1)
-
-    if MC_temp[1] > 0:
-        Th = Th + MC_temp[1] * STD_temp * np.random.normal(0, 1)
-
-    if MC_temp[2] > 0:
-        To = To + MC_temp[2] * STD_temp * np.random.normal(0, 1)
-
-    if MC_temp[3] > 0:
-        Ts = Ts + MC_temp[3] * STD_temp * np.random.normal(0, 1)
+    std_temp = 0.1
+    for i, t in enumerate(T):
+        if MC_temp[i] > 0:
+            # TODO: should the random here be of size len(f)?
+            t += MC_temp[i] * std_temp * np.random.normal()
 
     # S-parameters of hot load device
     if len(s_parameters) == 1:
-        out = models_calibration_s11(case, f)
+        out = models_calibration_s11(1, f)
         rh = out[2]
         s11_sr = out[5]
         s12s21_sr = out[6]
         s22_sr = out[7]
-
-    if len(s_parameters) == 4:
-        rh = s_parameters[0]
-        s11_sr = s_parameters[1]
-        s12s21_sr = s_parameters[2]
-        s22_sr = s_parameters[3]
+    elif len(s_parameters) == 4:
+        rh, s11_sr, s12s21_sr, s22_sr = s_parameters
+    else:
+        raise ValueError("s_parameters has wrong size!")
 
     # reflection coefficient of termination
     rht = rc.gamma_de_embed(s11_sr, s12s21_sr, s22_sr, rh)
@@ -1011,6 +689,6 @@ def models_calibration_physical_temperature(
     )
 
     # temperature
-    Thd = G * Th + (1 - G) * Ta
+    T[1] = G * T[1] + (1 - G) * T[0]
 
-    return np.array([Ta, Thd, To, Ts])
+    return np.array(T)

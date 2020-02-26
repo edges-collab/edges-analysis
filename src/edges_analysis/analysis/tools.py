@@ -52,9 +52,9 @@ def level4_binned_residuals(case, f_low, f_high, output_file_name_hdf5):
                 tc_k = t_k[(f > f_low) & (f < f_high)]
                 wc_k = w_k[(f > f_low) & (f < f_high)]
 
-                Nfg = 5 if 6 <= gha[k] <= 17 else 6
+                n_fg = 5 if 6 <= gha[k] <= 17 else 6
                 pc_k = mdl.fit_polynomial_fourier(
-                    "LINLOG", fc / 200, tc_k, Nfg, Weights=wc_k
+                    "LINLOG", fc / 200, tc_k, n_fg, Weights=wc_k
                 )
                 mc_k = mdl.model_evaluate("LINLOG", pc_k[0], fc / 200)
 
@@ -134,7 +134,7 @@ def level4_good_days_GHA(GHA, first_day, last_day):
     return good_days[(good_days >= first_day) & (good_days <= last_day)]
 
 
-def level4_integration(case, GHA_list, first_day, last_day, f_low, f_high, Nfg):
+def level4_integration(case, GHA_list, first_day, last_day, f_low, f_high, n_fg):
     case, folder = _get_level4_case(case)
 
     f, p, r, w, index, gha, yy = level4read(folder + case + ".hdf5")
@@ -162,7 +162,7 @@ def level4_integration(case, GHA_list, first_day, last_day, f_low, f_high, Nfg):
     wc = avw[mask]
 
     model_type = "LINLOG"
-    pc = mdl.fit_polynomial_fourier(model_type, fc / 200, tc, Nfg, Weights=wc)
+    pc = mdl.fit_polynomial_fourier(model_type, fc / 200, tc, n_fg, Weights=wc)
     mc = mdl.model_evaluate(model_type, pc[0], fc / 200)
     rc = tc - mc
     fb, rb, wb, sb = spectral_binning_number_of_samples(fc, rc, wc)
@@ -231,12 +231,12 @@ def level4_foreground_fits(
                 wc = wb[mask]
                 sc = sb[mask]
 
-                for i_fg, Nfg in enumerate([2, 3, 4, 5]):
+                for i_fg, n_fg in enumerate([2, 3, 4, 5]):
 
                     logf = np.log(fc / f_norm)
                     logt = np.log(tc)
 
-                    par = np.polyfit(logf[wc > 0], logt[wc > 0], Nfg - 1)
+                    par = np.polyfit(logf[wc > 0], logt[wc > 0], n_fg - 1)
                     logm = np.polyval(par, logf)
                     m = np.exp(logm)
 
@@ -244,7 +244,7 @@ def level4_foreground_fits(
 
                     chi2 = np.sum(((tc - m)[wc > 0] / sc[wc > 0]) ** 2)
                     LEN = len(fc[wc > 0])
-                    BIC = chi2 + Nfg * np.log(LEN)
+                    BIC = chi2 + n_fg * np.log(LEN)
 
                     fits[i_fg][i, k, 0] = yyi[0]
                     fits[i_fg][i, k, 1] = yyi[1]
@@ -253,7 +253,7 @@ def level4_foreground_fits(
                     fits[i_fg][i, k, 4] = av_moonel
 
                     fits[i_fg][i, k, 5] = np.exp(par[-1])
-                    fits[i_fg][i, k, 6 : 6 + Nfg - 1] = par[:-1][::-1]
+                    fits[i_fg][i, k, 6 : 6 + n_fg - 1] = par[:-1][::-1]
 
                     fits[i_fg][i, k, -4] = rms
                     fits[i_fg][i, k, -3] = chi2
@@ -319,9 +319,9 @@ def spectra_to_residuals(fx, tx_2D, wx_2D, f_low, f_high, n_fg, model_type="LINL
 def daily_residuals_LST(
     file_name,
     LST_boundaries=np.arange(0, 25, 2),
-    FLOW=60,
-    FHIGH=150,
-    Nfg=5,
+    f_low=60,
+    f_high=150,
+    n_fg=5,
     SUN_EL_max=90,
     MOON_EL_max=90,
 ):
@@ -354,7 +354,7 @@ def daily_residuals_LST(
             tb = mb + rb
 
             rb_x, wb_x, fb_x = _get_model_resid(
-                fb, tb, wb, Nfg, f_low=FLOW, f_high=FHIGH
+                fb, tb, wb, n_fg, f_low=f_low, f_high=f_high
             )
 
             if flag == 0:
@@ -368,14 +368,14 @@ def daily_residuals_LST(
 
     if flag == 0:
         fb, rb, wb = spectral_binning_number_of_samples(f, r[0], w[0], nsamples=64)
-        fb_x = fb[(fb >= FLOW) & (fb <= FHIGH)]
+        fb_x = fb[(fb >= f_low) & (fb <= f_high)]
         rb_x_all = np.zeros((len(LST_boundaries) - 1, len(fb_x)))
         wb_x_all = np.zeros((len(LST_boundaries) - 1, len(fb_x)))
 
     return fb_x, rb_x_all, wb_x_all
 
 
-def spectral_fit_two_ranges(model_type, fx, tx, wx, sx, F1L, F1H, F2L, F2H, Nfg):
+def spectral_fit_two_ranges(model_type, fx, tx, wx, sx, F1L, F1H, F2L, F2H, n_fg):
     f = fx[wx > 0]
     t = tx[wx > 0]
     s = sx[wx > 0]
@@ -388,11 +388,11 @@ def spectral_fit_two_ranges(model_type, fx, tx, wx, sx, F1L, F1H, F2L, F2H, Nfg)
     ss = s[index_sel]
 
     if model_type == "LINLOG":
-        pp = mdl.fit_polynomial_fourier("LINLOG", ff, tt, Nfg, Weights=1 / (ss ** 2))
+        pp = mdl.fit_polynomial_fourier("LINLOG", ff, tt, n_fg, Weights=1 / (ss ** 2))
         model = mdl.model_evaluate("LINLOG", pp[0], fx)
 
     elif model_type == "LOGLOG":
-        pp = np.polyfit(np.log(ff), np.log(tt), Nfg - 1)
+        pp = np.polyfit(np.log(ff), np.log(tt), n_fg - 1)
         log_model = np.polyval(pp, np.log(fx))
         model = np.exp(log_model)
     else:

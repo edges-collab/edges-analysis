@@ -1244,26 +1244,26 @@ def level1_to_level2(band, year, day_hour, low2_flag="_low2"):
 
     # Frequency and indices
     if band == "low_band":
-        flow = 50
-        fhigh = 199
+        f_low = 50
+        f_high = 199
 
     elif band == "low_band2":
-        flow = 50
-        fhigh = 199
+        f_low = 50
+        f_high = 199
 
     elif band == "low_band3":
-        flow = 50
-        fhigh = 199
+        f_low = 50
+        f_high = 199
 
     elif band == "mid_band":
-        flow = 50
-        fhigh = 199
+        f_low = 50
+        f_high = 199
 
     elif band == "high_band":
-        flow = 65
-        fhigh = 195
+        f_low = 65
+        f_high = 195
 
-    freq = EdgesFrequencyRange(f_low=flow, f_high=fhigh)
+    freq = EdgesFrequencyRange(f_low=f_low, f_high=f_high)
     fe = freq.freq
 
     ds, dd = Spectrum._read_mat(level1_file)
@@ -1367,9 +1367,9 @@ def level2_to_level3(
     ground_correction=1,
     beam_correction=1,
     beam_correction_case=0,
-    FLOW=50,
-    FHIGH=150,
-    Nfg=7,
+    f_low=50,
+    f_high=150,
+    n_fg=7,
 ):
     fin = 0
 
@@ -1385,9 +1385,9 @@ def level2_to_level3(
 
         # Cut the frequency range
         # -----------------------
-        fin = fin_X[(fin_X >= FLOW) & (fin_X <= FHIGH)]
-        t_2D = t_2D_X[:, (fin_X >= FLOW) & (fin_X <= FHIGH)]
-        w_2D = w_2D_X[:, (fin_X >= FLOW) & (fin_X <= FHIGH)]
+        fin = fin_X[(fin_X >= f_low) & (fin_X <= f_high)]
+        t_2D = t_2D_X[:, (fin_X >= f_low) & (fin_X <= f_high)]
+        w_2D = w_2D_X[:, (fin_X >= f_low) & (fin_X <= f_high)]
 
         # Receiver calibration quantities
         # -------------------------------
@@ -1799,7 +1799,7 @@ def level2_to_level3(
         rcv = np.genfromtxt(rcv_file)
 
         fX = rcv[:, 0]
-        rcv2 = rcv[(fX >= FLOW) & (fX <= FHIGH), :]
+        rcv2 = rcv[(fX >= f_low) & (fX <= f_high), :]
         s11_LNA = rcv2[:, 1] + 1j * rcv2[:, 2]
         C1 = rcv2[:, 3]
 
@@ -1892,7 +1892,7 @@ def level2_to_level3(
                 f_table, lst_table, bf_table, m_2D[:, 3]
             )
 
-            bf = bfX[:, ((f_table >= FLOW) & (f_table <= FHIGH))]
+            bf = bfX[:, ((f_table >= f_low) & (f_table <= f_high))]
 
         # Removing beam chromaticity
         # --------------------------
@@ -1909,7 +1909,7 @@ def level2_to_level3(
         # Initializing output arrays
         # --------------------------
         t_all = np.random.rand(lt, len(fin))
-        p_all = np.random.rand(lt, Nfg)
+        p_all = np.random.rand(lt, n_fg)
         r_all = np.random.rand(lt, len(fin))
         w_all = np.random.rand(lt, len(fin))
         rms_all = np.random.rand(lt, 3)
@@ -1923,7 +1923,7 @@ def level2_to_level3(
             # RFI cleaning
             # ------------
             tti, wwi = rfi.cleaning_polynomial(
-                fin, ti, wi, Nterms_fg=Nfg, Nterms_std=5, Nstd=3.5
+                fin, ti, wi, Nterms_fg=n_fg, Nterms_std=5, Nstd=3.5
             )
 
             # Fitting foreground model to binned version of spectra
@@ -1933,7 +1933,7 @@ def level2_to_level3(
                 fin, tti, wwi, nsamples=Nsamples
             )
             par_fg = mdl.fit_polynomial_fourier(
-                "LINLOG", fbi / 200, tbi, Nfg, Weights=wbi
+                "LINLOG", fbi / 200, tbi, n_fg, Weights=wbi
             )
 
             # Evaluating foreground model at raw resolution
@@ -2322,9 +2322,9 @@ def daily_integrations_and_residuals():
     )  #
 
     #
-    FLOW = 57  # 60
-    FHIGH = 120
-    Nfg = 5
+    f_low = 57  # 60
+    f_high = 120
+    n_fg = 5
     Nsp = 1
 
     ll = len(px[:, 0, 0])
@@ -2342,11 +2342,11 @@ def daily_integrations_and_residuals():
             mx = mdl.model_evaluate("LINLOG", px[i, 0, :], f / 200)
             tx = mx + rx[i, 0, :]
 
-            fy = f[(f >= FLOW) & (f <= FHIGH)]
-            ty = tx[(f >= FLOW) & (f <= FHIGH)]
-            wy = wx[i, 0, (f >= FLOW) & (f <= FHIGH)]
+            fy = f[(f >= f_low) & (f <= f_high)]
+            ty = tx[(f >= f_low) & (f <= f_high)]
+            wy = wx[i, 0, (f >= f_low) & (f <= f_high)]
 
-            p = mdl.fit_polynomial_fourier("LINLOG", fy / 200, ty, Nfg, Weights=wy)
+            p = mdl.fit_polynomial_fourier("LINLOG", fy / 200, ty, n_fg, Weights=wy)
             my = mdl.model_evaluate("LINLOG", p[0], fy / 200)
             ry = ty - my
 
@@ -2415,14 +2415,14 @@ def daily_integrations_and_residuals():
 def integrated_spectrum_level4(
     case,
     index_GHA,
-    FLOW,
-    FHIGH,
+    f_low,
+    f_high,
     day_range,
     day_min1,
     day_max1,
     day_min2,
     day_max2,
-    Nfg,
+    n_fg,
     rms_threshold,
     save,
     filename_flag,
@@ -2582,10 +2582,10 @@ def integrated_spectrum_level4(
 
     # Computing residuals for plot
     # ----------------------------------------
-    fx = fb[(fb >= FLOW) & (fb <= FHIGH)]
-    tx = tb[(fb >= FLOW) & (fb <= FHIGH)]
-    wx = wb[(fb >= FLOW) & (fb <= FHIGH)]
-    sx = sb[(fb >= FLOW) & (fb <= FHIGH)]
+    fx = fb[(fb >= f_low) & (fb <= f_high)]
+    tx = tb[(fb >= f_low) & (fb <= f_high)]
+    wx = wb[(fb >= f_low) & (fb <= f_high)]
+    sx = sb[(fb >= f_low) & (fb <= f_high)]
 
     ft = fx[wx > 0]
     tt = tx[wx > 0]
@@ -2593,12 +2593,12 @@ def integrated_spectrum_level4(
     st = sx[wx > 0]
 
     pt = mdl.fit_polynomial_fourier(
-        "LINLOG", ft / 200, tt, Nfg, Weights=(1 / (st ** 2))
+        "LINLOG", ft / 200, tt, n_fg, Weights=(1 / (st ** 2))
     )
     mt = mdl.model_evaluate("LINLOG", pt[0], ft / 200)
     rt = tt - mt
 
-    pl = np.polyfit(np.log(ft / 200), np.log(tt), Nfg - 1)
+    pl = np.polyfit(np.log(ft / 200), np.log(tt), n_fg - 1)
     log_ml = np.polyval(pl, np.log(ft / 200))
     ml = np.exp(log_ml)
     rl = tt - ml
@@ -4040,9 +4040,9 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
         ground_correction = 1
         beam_correction = 1
 
-        FLOW = 55
-        FHIGH = 120
-        Nfg = 5
+        f_low = 55
+        f_high = 120
+        n_fg = 5
 
     if case == 1:
         flag_folder = "test_rcv18_sw18_no_beam_correction"  # 'case_nominal_55_150MHz'
@@ -4057,9 +4057,9 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
         ground_correction = 1
         beam_correction = 0  # 1
 
-        FLOW = 55
-        FHIGH = 150
-        Nfg = 5
+        f_low = 55
+        f_high = 150
+        n_fg = 5
 
     if case == 2:
         flag_folder = "calibration_2019_10_no_ground_loss_no_beam_corrections"
@@ -4074,9 +4074,9 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
         ground_correction = 0
         beam_correction = 0
 
-        FLOW = 55
-        FHIGH = 150
-        Nfg = 5
+        f_low = 55
+        f_high = 150
+        n_fg = 5
 
     if case == 3:
         flag_folder = "case_nominal_50-150MHz_no_ground_loss_no_beam_corrections"
@@ -4091,9 +4091,9 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
         ground_correction = 0
         beam_correction = 0
 
-        FLOW = 50
-        FHIGH = 150
-        Nfg = 5
+        f_low = 50
+        f_high = 150
+        n_fg = 5
 
     if case == 4:
         flag_folder = (
@@ -4110,9 +4110,9 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
         ground_correction = 0
         beam_correction = 0
 
-        FLOW = 50
-        FHIGH = 150
-        Nfg = 5
+        f_low = 50
+        f_high = 150
+        n_fg = 5
 
     if case == 5:
         flag_folder = (
@@ -4129,9 +4129,9 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
         ground_correction = 0
         beam_correction = 0
 
-        FLOW = 55
-        FHIGH = 150
-        Nfg = 5
+        f_low = 55
+        f_high = 150
+        n_fg = 5
 
     if case == 61:
         flag_folder = "case_nominal_60-120MHz_7_4"
@@ -4146,9 +4146,9 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
         ground_correction = 0
         beam_correction = 0
 
-        FLOW = 60
-        FHIGH = 120
-        Nfg = 5
+        f_low = 60
+        f_high = 120
+        n_fg = 5
 
     if case == 62:
         flag_folder = "case_nominal_60-120MHz_7_5"
@@ -4163,9 +4163,9 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
         ground_correction = 0
         beam_correction = 0
 
-        FLOW = 60
-        FHIGH = 120
-        Nfg = 5
+        f_low = 60
+        f_high = 120
+        n_fg = 5
 
     if case == 63:
         flag_folder = "case_nominal_60-120MHz_7_9"
@@ -4180,9 +4180,9 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
         ground_correction = 0
         beam_correction = 0
 
-        FLOW = 60
-        FHIGH = 120
-        Nfg = 5
+        f_low = 60
+        f_high = 120
+        n_fg = 5
 
     if case == 64:
         flag_folder = "case_nominal_60-120MHz_8_4"
@@ -4197,9 +4197,9 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
         ground_correction = 0
         beam_correction = 0
 
-        FLOW = 60
-        FHIGH = 120
-        Nfg = 5
+        f_low = 60
+        f_high = 120
+        n_fg = 5
 
     if case == 65:
         flag_folder = "case_nominal_60-120MHz_8_5"
@@ -4214,9 +4214,9 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
         ground_correction = 0
         beam_correction = 0
 
-        FLOW = 60
-        FHIGH = 120
-        Nfg = 5
+        f_low = 60
+        f_high = 120
+        n_fg = 5
 
     if case == 66:
         flag_folder = "case_nominal_60-120MHz_8_9"
@@ -4231,9 +4231,9 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
         ground_correction = 0
         beam_correction = 0
 
-        FLOW = 60
-        FHIGH = 120
-        Nfg = 5
+        f_low = 60
+        f_high = 120
+        n_fg = 5
 
     if case == 67:
         flag_folder = "case_nominal_60-120MHz_5_4"
@@ -4248,9 +4248,9 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
         ground_correction = 0
         beam_correction = 0
 
-        FLOW = 60
-        FHIGH = 120
-        Nfg = 5
+        f_low = 60
+        f_high = 120
+        n_fg = 5
 
     if case == 68:
         flag_folder = "case_nominal_60-120MHz_6_4"
@@ -4265,9 +4265,9 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
         ground_correction = 0
         beam_correction = 0
 
-        FLOW = 60
-        FHIGH = 120
-        Nfg = 5
+        f_low = 60
+        f_high = 120
+        n_fg = 5
 
     if case == 69:
         flag_folder = "case_nominal_55-150MHz_7_7"
@@ -4282,9 +4282,9 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
         ground_correction = 0
         beam_correction = 0
 
-        FLOW = 55
-        FHIGH = 150
-        Nfg = 5
+        f_low = 55
+        f_high = 150
+        n_fg = 5
 
     if case == 70:
         flag_folder = "case_nominal_55-150MHz_7_10"
@@ -4299,9 +4299,9 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
         ground_correction = 0
         beam_correction = 0
 
-        FLOW = 55
-        FHIGH = 150
-        Nfg = 5
+        f_low = 55
+        f_high = 150
+        n_fg = 5
 
     if case == 71:
         flag_folder = "case_nominal_50-150MHz_7_8"
@@ -4316,9 +4316,9 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
         ground_correction = 0
         beam_correction = 0
 
-        FLOW = 50
-        FHIGH = 150
-        Nfg = 5
+        f_low = 50
+        f_high = 150
+        n_fg = 5
 
     if case == 72:
         flag_folder = "case_nominal_50-150MHz_7_11"
@@ -4333,9 +4333,9 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
         ground_correction = 0
         beam_correction = 0
 
-        FLOW = 50
-        FHIGH = 150
-        Nfg = 5
+        f_low = 50
+        f_high = 150
+        n_fg = 5
 
     if case == 73:
         flag_folder = "case_nominal_50-150MHz_7_8_LNA_rep1"
@@ -4350,9 +4350,9 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
         ground_correction = 0
         beam_correction = 0
 
-        FLOW = 50
-        FHIGH = 150
-        Nfg = 5
+        f_low = 50
+        f_high = 150
+        n_fg = 5
 
     if case == 74:
         flag_folder = "case_nominal_50-150MHz_7_8_LNA_rep2"
@@ -4367,9 +4367,9 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
         ground_correction = 0
         beam_correction = 0
 
-        FLOW = 50
-        FHIGH = 150
-        Nfg = 5
+        f_low = 50
+        f_high = 150
+        n_fg = 5
 
     if case == 75:
         flag_folder = "case_nominal_50-150MHz_7_8_LNA_rep12"
@@ -4384,9 +4384,9 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
         ground_correction = 0
         beam_correction = 0
 
-        FLOW = 50
-        FHIGH = 150
-        Nfg = 5
+        f_low = 50
+        f_high = 150
+        n_fg = 5
 
     if case == 731:
         flag_folder = "case_nominal_50-150MHz_7_8_LNA_rep1_ant1"
@@ -4401,9 +4401,9 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
         ground_correction = 0
         beam_correction = 0
 
-        FLOW = 50
-        FHIGH = 150
-        Nfg = 5
+        f_low = 50
+        f_high = 150
+        n_fg = 5
 
     if case == 735:
         flag_folder = "case_nominal_50-150MHz_7_8_LNA_rep1_ant5"
@@ -4418,9 +4418,9 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
         ground_correction = 0
         beam_correction = 0
 
-        FLOW = 50
-        FHIGH = 150
-        Nfg = 5
+        f_low = 50
+        f_high = 150
+        n_fg = 5
 
     if case == 736:
         flag_folder = "case_nominal_50-150MHz_7_8_LNA_rep1_ant6"
@@ -4435,9 +4435,9 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
         ground_correction = 0
         beam_correction = 0
 
-        FLOW = 50
-        FHIGH = 150
-        Nfg = 5
+        f_low = 50
+        f_high = 150
+        n_fg = 5
 
     if case == 401:
         flag_folder = "case_nominal_50-150MHz_LNA1_a1_h1_o1_s1_sim2"
@@ -4452,9 +4452,9 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
         ground_correction = 0
         beam_correction = 0
 
-        FLOW = 50
-        FHIGH = 150
-        Nfg = 5
+        f_low = 50
+        f_high = 150
+        n_fg = 5
 
     if case == 402:
         flag_folder = "case_nominal_50-150MHz_LNA1_a1_h2_o1_s1_sim2"
@@ -4469,9 +4469,9 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
         ground_correction = 0
         beam_correction = 0
 
-        FLOW = 50
-        FHIGH = 150
-        Nfg = 5
+        f_low = 50
+        f_high = 150
+        n_fg = 5
 
     if case == 403:
         flag_folder = "case_nominal_50-150MHz_LNA1_a2_h1_o1_s1_sim2"
@@ -4486,9 +4486,9 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
         ground_correction = 0
         beam_correction = 0
 
-        FLOW = 50
-        FHIGH = 150
-        Nfg = 5
+        f_low = 50
+        f_high = 150
+        n_fg = 5
 
     if case == 404:
         flag_folder = "case_nominal_50-150MHz_LNA1_a2_h2_o1_s1_sim2"
@@ -4503,9 +4503,9 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
         ground_correction = 0
         beam_correction = 0
 
-        FLOW = 50
-        FHIGH = 150
-        Nfg = 5
+        f_low = 50
+        f_high = 150
+        n_fg = 5
 
     if case == 405:
         flag_folder = "case_nominal_50-150MHz_LNA1_a2_h2_o1_s2_sim2"
@@ -4520,9 +4520,9 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
         ground_correction = 0
         beam_correction = 0
 
-        FLOW = 50
-        FHIGH = 150
-        Nfg = 5
+        f_low = 50
+        f_high = 150
+        n_fg = 5
 
     if case == 406:
         flag_folder = "case_nominal_50-150MHz_LNA1_a2_h2_o2_s1_sim2"
@@ -4537,9 +4537,9 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
         ground_correction = 0
         beam_correction = 0
 
-        FLOW = 50
-        FHIGH = 150
-        Nfg = 5
+        f_low = 50
+        f_high = 150
+        n_fg = 5
 
     if case == 407:
         flag_folder = "case_nominal_50-150MHz_LNA1_a2_h2_o2_s2_sim2"
@@ -4554,9 +4554,9 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
         ground_correction = 0
         beam_correction = 0
 
-        FLOW = 50
-        FHIGH = 150
-        Nfg = 5
+        f_low = 50
+        f_high = 150
+        n_fg = 5
 
     if case == 500:
         flag_folder = "case_nominal_50-150MHz_LNA2_a2_h2_o2_s1_sim2_all_lc_no_bc"  #
@@ -4572,9 +4572,9 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
         ground_correction = 1
         beam_correction = 0
 
-        FLOW = 50
-        FHIGH = 150
-        Nfg = 5
+        f_low = 50
+        f_high = 150
+        n_fg = 5
 
     if case == 501:
         flag_folder = "case_nominal_50-150MHz_LNA2_a2_h2_o2_s1_sim2_all_lc_yes_bc"  #
@@ -4591,9 +4591,9 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
         ground_correction = 1
         beam_correction = 1
 
-        FLOW = 50
-        FHIGH = 150
-        Nfg = 5
+        f_low = 50
+        f_high = 150
+        n_fg = 5
 
     if case == 510:
         flag_folder = (
@@ -4615,9 +4615,9 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
         )
         # lat-function for spectral index
 
-        FLOW = 50
-        FHIGH = 150
-        Nfg = 5
+        f_low = 50
+        f_high = 150
+        n_fg = 5
 
     if case == 511:
         flag_folder = (
@@ -4639,9 +4639,9 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
         )
         # lat-function for spectral index
 
-        FLOW = 50
-        FHIGH = 150
-        Nfg = 5
+        f_low = 50
+        f_high = 150
+        n_fg = 5
 
     # Listing files to be processed
     path_files = edges_folder + "mid_band/spectra/level2/"
@@ -4694,9 +4694,9 @@ def batch_mid_band_level2_to_level3(case, first_day, last_day):
                 ground_correction=ground_correction,
                 beam_correction=beam_correction,
                 beam_correction_case=beam_correction_case,
-                FLOW=FLOW,
-                FHIGH=FHIGH,
-                Nfg=Nfg,
+                f_low=f_low,
+                f_high=f_high,
+                n_fg=n_fg,
             )
 
     return 0
@@ -4710,9 +4710,9 @@ def batch_low_band3_level2_to_level3(case):
         antenna_s11_Nfit = 14
         beam_correction = 1
         balun_correction = 1
-        FLOW = 50
-        FHIGH = 120
-        Nfg = 7
+        f_low = 50
+        f_high = 120
+        n_fg = 7
 
     # Listing files to be processed
     path_files = edges_folder + "low_band3/spectra/level2/"
@@ -4731,9 +4731,9 @@ def batch_low_band3_level2_to_level3(case):
             antenna_s11_Nfit=antenna_s11_Nfit,
             beam_correction=beam_correction,
             balun_correction=balun_correction,
-            FLOW=FLOW,
-            FHIGH=FHIGH,
-            Nfg=Nfg,
+            f_low=f_low,
+            f_high=f_high,
+            n_fg=n_fg,
         )
 
     return new_list
@@ -4752,8 +4752,8 @@ def batch_plot_daily_residuals_LST():
 
     # Computation of residuals
     LST_boundaries = np.arange(0, 25, 1)
-    FLOW = 60
-    FHIGH = 150
+    f_low = 60
+    f_high = 150
     SUN_EL_max = -20
     MOON_EL_max = 90
 
@@ -4761,14 +4761,14 @@ def batch_plot_daily_residuals_LST():
     LST_centers = list(np.arange(0.5, 24))
     LST_text = ["LST=" + str(LST_centers[i]) + " hr" for i in range(len(LST_centers))]
     DY = 4
-    FLOW_plot = 35
-    FHIGH_plot = 155
+    f_low_plot = 35
+    f_high_plot = 155
     XTICKS = np.arange(60, 156, 20)
     XTEXT = 38
     YLABEL = "4 K per division"
 
     # 3 foreground terms
-    Nfg = 5
+    n_fg = 5
     figure_path = (
         "/data5/raul/EDGES/results/plots/20181031/midband_residuals_nighttime_5terms/"
     )
@@ -4780,9 +4780,9 @@ def batch_plot_daily_residuals_LST():
         fb, rb, wb = tools.daily_residuals_LST(
             new_list[i],
             LST_boundaries=LST_boundaries,
-            FLOW=FLOW,
-            FHIGH=FHIGH,
-            Nfg=Nfg,
+            f_low=f_low,
+            f_high=f_high,
+            n_fg=n_fg,
             SUN_EL_max=SUN_EL_max,
             MOON_EL_max=MOON_EL_max,
         )
@@ -4793,12 +4793,12 @@ def batch_plot_daily_residuals_LST():
             rb,
             LST_text,
             DY=DY,
-            FLOW=FLOW_plot,
-            FHIGH=FHIGH_plot,
+            f_low=f_low_plot,
+            f_high=f_high_plot,
             XTICKS=XTICKS,
             XTEXT=XTEXT,
             YLABEL=YLABEL,
-            TITLE=str(Nfg) + " TERMS:  " + new_list[i][0:-5],
+            TITLE=str(n_fg) + " TERMS:  " + new_list[i][0:-5],
             save=True,
             figure_path=figure_path,
             figure_name=new_list[i][0:-5],
@@ -4815,8 +4815,8 @@ def plot_residuals_GHA_1hr_bin(f, r, w):
         for i in range(len(GHA_edges) - 1)
     ]
     DY = 0.4
-    FLOW_plot = 40
-    FHIGH_plot = 125
+    f_low_plot = 40
+    f_high_plot = 125
     XTICKS = np.arange(60, 121, 20)
     XTEXT = 42
     YLABEL = str(DY) + " K per division"
@@ -4831,8 +4831,8 @@ def plot_residuals_GHA_1hr_bin(f, r, w):
         w,
         GHA_text,
         DY=DY,
-        FLOW=FLOW_plot,
-        FHIGH=FHIGH_plot,
+        f_low=f_low_plot,
+        f_high=f_high_plot,
         XTICKS=XTICKS,
         XTEXT=XTEXT,
         YLABEL=YLABEL,
@@ -4848,8 +4848,8 @@ def plot_residuals_GHA_Xhr_bin(f, r, w):
     # ----------------------------------
     LST_text = ["GHA=0-5 hr", "GHA=5-11 hr", "GHA=11-18 hr", "GHA=18-24 hr"]
     DY = 0.5
-    FLOW_plot = 35
-    FHIGH_plot = 165
+    f_low_plot = 35
+    f_high_plot = 165
     XTICKS = np.arange(60, 161, 20)
     XTEXT = 38
     YLABEL = str(DY) + " K per division"
@@ -4868,8 +4868,8 @@ def plot_residuals_GHA_Xhr_bin(f, r, w):
         FIG_SX=FIG_SX,
         FIG_SY=FIG_SY,
         DY=DY,
-        FLOW=FLOW_plot,
-        FHIGH=FHIGH_plot,
+        f_low=f_low_plot,
+        f_high=f_high_plot,
         XTICKS=XTICKS,
         XTEXT=XTEXT,
         YLABEL=YLABEL,
@@ -5406,22 +5406,22 @@ def VNA_comparison4():
     at6_p2, fx = rc.s1p_read(path_folder + "port2_attn6db.s1p")
     at10_p2, fx = rc.s1p_read(path_folder + "port2_attn10db.s1p")
 
-    FLOW = 15e6
-    f = fx[(fx >= FLOW)]
+    f_low = 15e6
+    f = fx[(fx >= f_low)]
 
-    o_p1 = o_p1[(fx >= FLOW)]
-    s_p1 = s_p1[(fx >= FLOW)]
-    m_p1 = m_p1[(fx >= FLOW)]
-    at3_p1 = at3_p1[(fx >= FLOW)]
-    at6_p1 = at6_p1[(fx >= FLOW)]
-    at10_p1 = at10_p1[(fx >= FLOW)]
+    o_p1 = o_p1[(fx >= f_low)]
+    s_p1 = s_p1[(fx >= f_low)]
+    m_p1 = m_p1[(fx >= f_low)]
+    at3_p1 = at3_p1[(fx >= f_low)]
+    at6_p1 = at6_p1[(fx >= f_low)]
+    at10_p1 = at10_p1[(fx >= f_low)]
 
-    o_p2 = o_p2[(fx >= FLOW)]
-    s_p2 = s_p2[(fx >= FLOW)]
-    m_p2 = m_p2[(fx >= FLOW)]
-    at3_p2 = at3_p2[(fx >= FLOW)]
-    at6_p2 = at6_p2[(fx >= FLOW)]
-    at10_p2 = at10_p2[(fx >= FLOW)]
+    o_p2 = o_p2[(fx >= f_low)]
+    s_p2 = s_p2[(fx >= f_low)]
+    m_p2 = m_p2[(fx >= f_low)]
+    at3_p2 = at3_p2[(fx >= f_low)]
+    at6_p2 = at6_p2[(fx >= f_low)]
+    at10_p2 = at10_p2[(fx >= f_low)]
 
     Leads = 0.004
     R50 = 48.785 - Leads
@@ -5553,8 +5553,8 @@ def plot_number_of_cterms_wterms():
 
 
 def antsim3_calibration():
-    FLOW = 50
-    FHIGH = 150
+    f_low = 50
+    f_high = 150
 
     # Spectra
     d = np.genfromtxt(
@@ -5565,7 +5565,7 @@ def antsim3_calibration():
     ff = d[:, 0]
     tx = d[:, 5]
 
-    tunc = tx[(ff >= FLOW) & (ff <= FHIGH)]
+    tunc = tx[(ff >= f_low) & (ff <= f_high)]
 
     (
         f,
@@ -5626,11 +5626,11 @@ def plots_for_memo148(plot_number):
 
         rcv = np.genfromtxt(rcv_file)
 
-        FLOW = 50
-        FHIGH = 150
+        f_low = 50
+        f_high = 150
 
         fX = rcv[:, 0]
-        rcv2 = rcv[(fX >= FLOW) & (fX <= FHIGH), :]
+        rcv2 = rcv[(fX >= f_low) & (fX <= f_high), :]
 
         fe = rcv2[:, 0]
         rl = rcv2[:, 1] + 1j * rcv2[:, 2]
@@ -6161,19 +6161,19 @@ def plots_for_memo148(plot_number):
             "name",
         )
 
-    FLOW = 60
-    FHIGH = 150
+    f_low = 60
+    f_high = 150
 
-    f = fx[(fx >= FLOW) & (fx <= FHIGH)]
-    t150_low_case1 = t150_low_case1[(fx >= FLOW) & (fx <= FHIGH)]
-    t150_low_case2 = t150_low_case2[(fx >= FLOW) & (fx <= FHIGH)]
-    t150_low_case3 = t150_low_case3[(fx >= FLOW) & (fx <= FHIGH)]
-    t150_low_case4 = t150_low_case4[(fx >= FLOW) & (fx <= FHIGH)]
+    f = fx[(fx >= f_low) & (fx <= f_high)]
+    t150_low_case1 = t150_low_case1[(fx >= f_low) & (fx <= f_high)]
+    t150_low_case2 = t150_low_case2[(fx >= f_low) & (fx <= f_high)]
+    t150_low_case3 = t150_low_case3[(fx >= f_low) & (fx <= f_high)]
+    t150_low_case4 = t150_low_case4[(fx >= f_low) & (fx <= f_high)]
 
-    s150_low_case1 = s150_low_case1[(fx >= FLOW) & (fx <= FHIGH)]
-    s150_low_case2 = s150_low_case2[(fx >= FLOW) & (fx <= FHIGH)]
-    s150_low_case3 = s150_low_case3[(fx >= FLOW) & (fx <= FHIGH)]
-    s150_low_case4 = s150_low_case4[(fx >= FLOW) & (fx <= FHIGH)]
+    s150_low_case1 = s150_low_case1[(fx >= f_low) & (fx <= f_high)]
+    s150_low_case2 = s150_low_case2[(fx >= f_low) & (fx <= f_high)]
+    s150_low_case3 = s150_low_case3[(fx >= f_low) & (fx <= f_high)]
+    s150_low_case4 = s150_low_case4[(fx >= f_low) & (fx <= f_high)]
 
     p = mdl.fit_polynomial_fourier(
         "LINLOG", f, t150_low_case1, 5, Weights=1 / (s150_low_case1 ** 2)
@@ -6293,20 +6293,20 @@ def plots_for_memo148(plot_number):
         "name",
     )
 
-    FLOW = 60
-    FHIGH = 150
+    f_low = 60
+    f_high = 150
 
-    f = fx[(fx >= FLOW) & (fx <= FHIGH)]
+    f = fx[(fx >= f_low) & (fx <= f_high)]
 
-    t188_low_case1 = t188_low_case1[(fx >= FLOW) & (fx <= FHIGH)]
-    t188_low_case2 = t188_low_case2[(fx >= FLOW) & (fx <= FHIGH)]
-    t188_low_case3 = t188_low_case3[(fx >= FLOW) & (fx <= FHIGH)]
-    t188_low_case4 = t188_low_case4[(fx >= FLOW) & (fx <= FHIGH)]
+    t188_low_case1 = t188_low_case1[(fx >= f_low) & (fx <= f_high)]
+    t188_low_case2 = t188_low_case2[(fx >= f_low) & (fx <= f_high)]
+    t188_low_case3 = t188_low_case3[(fx >= f_low) & (fx <= f_high)]
+    t188_low_case4 = t188_low_case4[(fx >= f_low) & (fx <= f_high)]
 
-    s188_low_case1 = s188_low_case1[(fx >= FLOW) & (fx <= FHIGH)]
-    s188_low_case2 = s188_low_case2[(fx >= FLOW) & (fx <= FHIGH)]
-    s188_low_case3 = s188_low_case3[(fx >= FLOW) & (fx <= FHIGH)]
-    s188_low_case4 = s188_low_case4[(fx >= FLOW) & (fx <= FHIGH)]
+    s188_low_case1 = s188_low_case1[(fx >= f_low) & (fx <= f_high)]
+    s188_low_case2 = s188_low_case2[(fx >= f_low) & (fx <= f_high)]
+    s188_low_case3 = s188_low_case3[(fx >= f_low) & (fx <= f_high)]
+    s188_low_case4 = s188_low_case4[(fx >= f_low) & (fx <= f_high)]
 
     p = mdl.fit_polynomial_fourier(
         "LINLOG", f, t188_low_case1, 5, Weights=1 / (s188_low_case1 ** 2)
@@ -6413,18 +6413,18 @@ def plots_for_memo148(plot_number):
         "name",
     )
 
-    FLOW = 60
-    FHIGH = 150
+    f_low = 60
+    f_high = 150
 
-    f = fx[(fx >= FLOW) & (fx <= FHIGH)]
+    f = fx[(fx >= f_low) & (fx <= f_high)]
 
-    t150_low_case1 = t150_low_case1[(fx >= FLOW) & (fx <= FHIGH)]
-    t150_low_case2 = t150_low_case2[(fx >= FLOW) & (fx <= FHIGH)]
-    t150_low_case3 = t150_low_case3[(fx >= FLOW) & (fx <= FHIGH)]
+    t150_low_case1 = t150_low_case1[(fx >= f_low) & (fx <= f_high)]
+    t150_low_case2 = t150_low_case2[(fx >= f_low) & (fx <= f_high)]
+    t150_low_case3 = t150_low_case3[(fx >= f_low) & (fx <= f_high)]
 
-    s150_low_case1 = s150_low_case1[(fx >= FLOW) & (fx <= FHIGH)]
-    s150_low_case2 = s150_low_case2[(fx >= FLOW) & (fx <= FHIGH)]
-    s150_low_case3 = s150_low_case3[(fx >= FLOW) & (fx <= FHIGH)]
+    s150_low_case1 = s150_low_case1[(fx >= f_low) & (fx <= f_high)]
+    s150_low_case2 = s150_low_case2[(fx >= f_low) & (fx <= f_high)]
+    s150_low_case3 = s150_low_case3[(fx >= f_low) & (fx <= f_high)]
 
     p = mdl.fit_polynomial_fourier(
         "LINLOG", f, t150_low_case1, 5, Weights=1 / (s150_low_case1 ** 2)
@@ -6522,18 +6522,18 @@ def plots_for_memo148(plot_number):
         "name",
     )
 
-    FLOW = 60
-    FHIGH = 150
+    f_low = 60
+    f_high = 150
 
-    f = fx[(fx >= FLOW) & (fx <= FHIGH)]
+    f = fx[(fx >= f_low) & (fx <= f_high)]
 
-    t188_low_case1 = t188_low_case1[(fx >= FLOW) & (fx <= FHIGH)]
-    t188_low_case2 = t188_low_case2[(fx >= FLOW) & (fx <= FHIGH)]
-    t188_low_case3 = t188_low_case3[(fx >= FLOW) & (fx <= FHIGH)]
+    t188_low_case1 = t188_low_case1[(fx >= f_low) & (fx <= f_high)]
+    t188_low_case2 = t188_low_case2[(fx >= f_low) & (fx <= f_high)]
+    t188_low_case3 = t188_low_case3[(fx >= f_low) & (fx <= f_high)]
 
-    s188_low_case1 = s188_low_case1[(fx >= FLOW) & (fx <= FHIGH)]
-    s188_low_case2 = s188_low_case2[(fx >= FLOW) & (fx <= FHIGH)]
-    s188_low_case3 = s188_low_case3[(fx >= FLOW) & (fx <= FHIGH)]
+    s188_low_case1 = s188_low_case1[(fx >= f_low) & (fx <= f_high)]
+    s188_low_case2 = s188_low_case2[(fx >= f_low) & (fx <= f_high)]
+    s188_low_case3 = s188_low_case3[(fx >= f_low) & (fx <= f_high)]
 
     p = mdl.fit_polynomial_fourier(
         "LINLOG", f, t188_low_case1, 5, Weights=1 / (s188_low_case1 ** 2)
@@ -6591,7 +6591,7 @@ def plots_of_absorption_glitch(part_number):
         fmin_res = 50
         fmax_res = 120
 
-        Nfg = 5
+        n_fg = 5
 
         el = np.arange(0, 91)
         sin_theta = np.sin((90 - el) * (np.pi / 180))
@@ -6619,7 +6619,7 @@ def plots_of_absorption_glitch(part_number):
         fr = ft[(ft >= fmin_res) & (ft <= fmax_res)]
         br = bt[(ft >= fmin_res) & (ft <= fmax_res)]
 
-        x = np.polyfit(fr, br, Nfg - 1)
+        x = np.polyfit(fr, br, n_fg - 1)
         m = np.polyval(x, fr)
         rr = br - m
 
@@ -6647,7 +6647,7 @@ def plots_of_absorption_glitch(part_number):
         fr = ft[(ft >= fmin_res) & (ft <= fmax_res)]
         br = bt[(ft >= fmin_res) & (ft <= fmax_res)]
 
-        x = np.polyfit(fr, br, Nfg - 1)
+        x = np.polyfit(fr, br, n_fg - 1)
         m = np.polyval(x, fr)
         rr = br - m
 
@@ -6678,7 +6678,7 @@ def plots_of_absorption_glitch(part_number):
         fr = ft[(ft >= fmin_res) & (ft <= fmax_res)]
         br = bt[(ft >= fmin_res) & (ft <= fmax_res)]
 
-        x = np.polyfit(fr, br, Nfg - 1)
+        x = np.polyfit(fr, br, n_fg - 1)
         m = np.polyval(x, fr)
         rr = br - m
 
@@ -6705,7 +6705,7 @@ def plots_of_absorption_glitch(part_number):
         fr = ft[(ft >= fmin_res) & (ft <= fmax_res)]
         br = bt[(ft >= fmin_res) & (ft <= fmax_res)]
 
-        x = np.polyfit(fr, br, Nfg - 1)
+        x = np.polyfit(fr, br, n_fg - 1)
         m = np.polyval(x, fr)
         rr = br - m
 
@@ -6736,7 +6736,7 @@ def plots_of_absorption_glitch(part_number):
         fr = ft[(ft >= fmin_res) & (ft <= fmax_res)]
         br = bt[(ft >= fmin_res) & (ft <= fmax_res)]
 
-        x = np.polyfit(fr, br, Nfg - 1)
+        x = np.polyfit(fr, br, n_fg - 1)
         m = np.polyval(x, fr)
         rr = br - m
 
@@ -6767,7 +6767,7 @@ def plots_of_absorption_glitch(part_number):
         fr = ft[(ft >= fmin_res) & (ft <= fmax_res)]
         br = bt[(ft >= fmin_res) & (ft <= fmax_res)]
 
-        x = np.polyfit(fr, br, Nfg - 1)
+        x = np.polyfit(fr, br, n_fg - 1)
         m = np.polyval(x, fr)
         rr = br - m
 
@@ -6795,7 +6795,7 @@ def plots_of_absorption_glitch(part_number):
         fr = ft[(ft >= fmin_res) & (ft <= fmax_res)]
         br = bt[(ft >= fmin_res) & (ft <= fmax_res)]
 
-        x = np.polyfit(fr, br, Nfg - 1)
+        x = np.polyfit(fr, br, n_fg - 1)
         m = np.polyval(x, fr)
         rr = br - m
 
@@ -6823,7 +6823,7 @@ def plots_of_absorption_glitch(part_number):
         fr = ft[(ft >= fmin_res) & (ft <= fmax_res)]
         br = bt[(ft >= fmin_res) & (ft <= fmax_res)]
 
-        x = np.polyfit(fr, br, Nfg - 1)
+        x = np.polyfit(fr, br, n_fg - 1)
         m = np.polyval(x, fr)
         rr = br - m
 
@@ -6851,7 +6851,7 @@ def plots_of_absorption_glitch(part_number):
         fr = ft[(ft >= fmin_res) & (ft <= fmax_res)]
         br = bt[(ft >= fmin_res) & (ft <= fmax_res)]
 
-        x = np.polyfit(fr, br, Nfg - 1)
+        x = np.polyfit(fr, br, n_fg - 1)
         m = np.polyval(x, fr)
         rr = br - m
 
@@ -6879,7 +6879,7 @@ def plots_of_absorption_glitch(part_number):
         fr = ft[(ft >= fmin_res) & (ft <= fmax_res)]
         br = bt[(ft >= fmin_res) & (ft <= fmax_res)]
 
-        x = np.polyfit(fr, br, Nfg - 1)
+        x = np.polyfit(fr, br, n_fg - 1)
         m = np.polyval(x, fr)
         rr = br - m
 
@@ -7150,10 +7150,10 @@ def high_band_2015_reanalysis():
     LST1 = 1
     LST2 = 11
 
-    FLOW = 80
-    FHIGH = 140
+    f_low = 80
+    f_high = 140
 
-    Nfg = 5
+    n_fg = 5
 
     filename_list = [
         "2015_251_00.hdf5",
@@ -7199,15 +7199,15 @@ def high_band_2015_reanalysis():
 
     tb = rb + avmb
 
-    fk = fb[(fb >= FLOW) & (fb <= FHIGH)]
-    tk = tb[(fb >= FLOW) & (fb <= FHIGH)]
-    sk = sb[(fb >= FLOW) & (fb <= FHIGH)]
+    fk = fb[(fb >= f_low) & (fb <= f_high)]
+    tk = tb[(fb >= f_low) & (fb <= f_high)]
+    sk = sb[(fb >= f_low) & (fb <= f_high)]
 
-    p1 = mdl.fit_polynomial_fourier("LINLOG", fk, tk, Nfg, Weights=(1 / sk) ** 2)
+    p1 = mdl.fit_polynomial_fourier("LINLOG", fk, tk, n_fg, Weights=(1 / sk) ** 2)
 
     signal = dm.signal_model("tanh", [-0.7, 79, 22, 7, 8], fk)
     p2 = mdl.fit_polynomial_fourier(
-        "LINLOG", fk, tk - signal, Nfg, Weights=(1 / sk) ** 2
+        "LINLOG", fk, tk - signal, n_fg, Weights=(1 / sk) ** 2
     )
 
     plt.close()
@@ -7353,12 +7353,12 @@ def comparison_FEKO_WIPLD():
 
     btW = (1 / (4 * np.pi)) * ((np.pi / 180) ** 2) * bint  # /np.mean(bx)
 
-    Nfg = 7
-    fHIGH = 150
-    fX = f[f <= fHIGH]
-    btWX = btW[f <= fHIGH]
+    n_fg = 7
+    f_high = 150
+    fX = f[f <= f_high]
+    btWX = btW[f <= f_high]
 
-    x = np.polyfit(fX, btWX, Nfg - 1)
+    x = np.polyfit(fX, btWX, n_fg - 1)
     model = np.polyval(x, fX)
     rtWX = btWX - model
 
@@ -7615,8 +7615,8 @@ def comparison_FEKO_WIPLD():
         ]
     )
 
-    Nfg = 4
-    x = np.polyfit(fHX, btHX, Nfg - 1)
+    n_fg = 4
+    x = np.polyfit(fHX, btHX, n_fg - 1)
     model = np.polyval(x, fHX)
     rtHX = btHX - model
 
@@ -7645,11 +7645,11 @@ def comparison_FEKO_WIPLD():
 
     btF = (1 / (4 * np.pi)) * ((np.pi / 180) ** 2) * bint  # /np.mean(bx)
 
-    Nfg = 7
-    fX = f[f <= fHIGH]
-    btFX = btF[f <= fHIGH]
+    n_fg = 7
+    fX = f[f <= f_high]
+    btFX = btF[f <= f_high]
 
-    x = np.polyfit(fX, btFX, Nfg - 1)
+    x = np.polyfit(fX, btFX, n_fg - 1)
     model = np.polyval(x, fX)
     rtFX = btFX - model
 
@@ -7769,13 +7769,13 @@ def integrated_antenna_gain_WIPLD_try1():
 
     btW = (1 / (4 * np.pi)) * ((np.pi / 180) ** 2) * bint  # /np.mean(bx)
 
-    Nfg = 5
-    fLOW = 50
-    fHIGH = 120
-    fX = f[(f >= fLOW) & (f <= fHIGH)]
-    btWX = btW[(f >= fLOW) & (f <= fHIGH)]
+    n_fg = 5
+    f_low = 50
+    f_high = 120
+    fX = f[(f >= f_low) & (f <= f_high)]
+    btWX = btW[(f >= f_low) & (f <= f_high)]
 
-    x = np.polyfit(fX, btWX, Nfg - 1)
+    x = np.polyfit(fX, btWX, n_fg - 1)
     model = np.polyval(x, fX)
     rtWX = btWX - model
 
@@ -7786,7 +7786,7 @@ def integrated_antenna_gain_WIPLD_try1():
     return f, btW, fX, rtWX
 
 
-def integrated_antenna_gain_WIPLD(case, Nfg):
+def integrated_antenna_gain_WIPLD(case, n_fg):
     # WIPL-D
     filename0 = (
         "/run/media/raul/WD_RED_6TB/EDGES_vol2/others/beam_simulations/wipl-d/20191023"
@@ -8193,12 +8193,12 @@ def integrated_antenna_gain_WIPLD(case, Nfg):
         b = (1 / (4 * np.pi)) * ((np.pi / 180) ** 2) * bint  # /np.mean(bx)
 
     # n_fg   = 5
-    fLOW = 50
-    fHIGH = 200
-    fX = f[(f >= fLOW) & (f <= fHIGH)]
-    bX = b[(f >= fLOW) & (f <= fHIGH)]
+    f_low = 50
+    f_high = 200
+    fX = f[(f >= f_low) & (f <= f_high)]
+    bX = b[(f >= f_low) & (f <= f_high)]
 
-    x = np.polyfit(fX, bX, Nfg - 1)
+    x = np.polyfit(fX, bX, n_fg - 1)
     model = np.polyval(x, fX)
     rX = bX - model
 
@@ -8211,8 +8211,8 @@ def plots_for_memo_153(figname):
     sy = 10
 
     if figname == 1:
-        Nfg = 5
-        f, b0, f0, r0 = integrated_antenna_gain_WIPLD(0, Nfg)
+        n_fg = 5
+        f, b0, f0, r0 = integrated_antenna_gain_WIPLD(0, n_fg)
 
         plt.close()
         plt.close()
@@ -8235,12 +8235,12 @@ def plots_for_memo_153(figname):
         plt.close()
 
     if figname == 2:
-        Nfg = 5
-        f, b1, f1, r1 = integrated_antenna_gain_WIPLD(1, Nfg)
-        f, b2, f2, r2 = integrated_antenna_gain_WIPLD(2, Nfg)
-        f, b3, f3, r3 = integrated_antenna_gain_WIPLD(3, Nfg)
-        f, b4, f4, r4 = integrated_antenna_gain_WIPLD(4, Nfg)
-        f, b5, f5, r5 = integrated_antenna_gain_WIPLD(5, Nfg)
+        n_fg = 5
+        f, b1, f1, r1 = integrated_antenna_gain_WIPLD(1, n_fg)
+        f, b2, f2, r2 = integrated_antenna_gain_WIPLD(2, n_fg)
+        f, b3, f3, r3 = integrated_antenna_gain_WIPLD(3, n_fg)
+        f, b4, f4, r4 = integrated_antenna_gain_WIPLD(4, n_fg)
+        f, b5, f5, r5 = integrated_antenna_gain_WIPLD(5, n_fg)
 
         plt.close()
         plt.close()
@@ -8281,13 +8281,13 @@ def plots_for_memo_153(figname):
         plt.close()
 
     if figname == 3:
-        Nfg = 7
-        f, b1, f1, r1 = integrated_antenna_gain_WIPLD(11, Nfg)
-        f, b2, f2, r2 = integrated_antenna_gain_WIPLD(12, Nfg)
-        f, b3, f3, r3 = integrated_antenna_gain_WIPLD(13, Nfg)
-        f, b4, f4, r4 = integrated_antenna_gain_WIPLD(14, Nfg)
-        f, b5, f5, r5 = integrated_antenna_gain_WIPLD(15, Nfg)
-        f, b6, f6, r6 = integrated_antenna_gain_WIPLD(16, Nfg)
+        n_fg = 7
+        f, b1, f1, r1 = integrated_antenna_gain_WIPLD(11, n_fg)
+        f, b2, f2, r2 = integrated_antenna_gain_WIPLD(12, n_fg)
+        f, b3, f3, r3 = integrated_antenna_gain_WIPLD(13, n_fg)
+        f, b4, f4, r4 = integrated_antenna_gain_WIPLD(14, n_fg)
+        f, b5, f5, r5 = integrated_antenna_gain_WIPLD(15, n_fg)
+        f, b6, f6, r6 = integrated_antenna_gain_WIPLD(16, n_fg)
 
         plt.figure(figsize=[sx, sy])
 
@@ -8324,13 +8324,13 @@ def plots_for_memo_153(figname):
 
         plt.savefig(path_plot_save + "fig3.pdf", bbox_inches="tight")
     if figname == 4:
-        Nfg = 7
-        f, b1, f1, r1 = integrated_antenna_gain_WIPLD(51, Nfg)
-        f, b2, f2, r2 = integrated_antenna_gain_WIPLD(52, Nfg)
-        f, b3, f3, r3 = integrated_antenna_gain_WIPLD(53, Nfg)
-        f, b4, f4, r4 = integrated_antenna_gain_WIPLD(54, Nfg)
-        f, b5, f5, r5 = integrated_antenna_gain_WIPLD(55, Nfg)
-        f, b6, f6, r6 = integrated_antenna_gain_WIPLD(56, Nfg)
+        n_fg = 7
+        f, b1, f1, r1 = integrated_antenna_gain_WIPLD(51, n_fg)
+        f, b2, f2, r2 = integrated_antenna_gain_WIPLD(52, n_fg)
+        f, b3, f3, r3 = integrated_antenna_gain_WIPLD(53, n_fg)
+        f, b4, f4, r4 = integrated_antenna_gain_WIPLD(54, n_fg)
+        f, b5, f5, r5 = integrated_antenna_gain_WIPLD(55, n_fg)
+        f, b6, f6, r6 = integrated_antenna_gain_WIPLD(56, n_fg)
 
         plt.figure(figsize=[sx, sy])
 
@@ -8368,13 +8368,13 @@ def plots_for_memo_153(figname):
         plt.savefig(path_plot_save + "fig4.pdf", bbox_inches="tight")
 
     if figname == 5:
-        Nfg = 7
-        f, b1, f1, r1 = integrated_antenna_gain_WIPLD(101, Nfg)
-        f, b2, f2, r2 = integrated_antenna_gain_WIPLD(102, Nfg)
-        f, b3, f3, r3 = integrated_antenna_gain_WIPLD(103, Nfg)
-        f, b4, f4, r4 = integrated_antenna_gain_WIPLD(104, Nfg)
-        f, b5, f5, r5 = integrated_antenna_gain_WIPLD(105, Nfg)
-        f, b6, f6, r6 = integrated_antenna_gain_WIPLD(106, Nfg)
+        n_fg = 7
+        f, b1, f1, r1 = integrated_antenna_gain_WIPLD(101, n_fg)
+        f, b2, f2, r2 = integrated_antenna_gain_WIPLD(102, n_fg)
+        f, b3, f3, r3 = integrated_antenna_gain_WIPLD(103, n_fg)
+        f, b4, f4, r4 = integrated_antenna_gain_WIPLD(104, n_fg)
+        f, b5, f5, r5 = integrated_antenna_gain_WIPLD(105, n_fg)
+        f, b6, f6, r6 = integrated_antenna_gain_WIPLD(106, n_fg)
 
         plt.figure(figsize=[sx, sy])
 
@@ -8465,7 +8465,7 @@ def plots_for_memo_155():
     bx = bint[(f >= fmin) & (f <= fmax)]
     bt = (1 / (4 * np.pi)) * ((np.pi / 180) ** 2) * bx  # /np.mean(bx)
 
-    flow10 = np.copy(ft)
+    f_low10 = np.copy(ft)
     blow10 = np.copy(bt)
     beam_low10 = np.copy(b_all)
 
@@ -8484,7 +8484,7 @@ def plots_for_memo_155():
     bx = bint[(f >= fmin) & (f <= fmax)]
     bt = (1 / (4 * np.pi)) * ((np.pi / 180) ** 2) * bx  # /np.mean(bx)
 
-    flow30 = np.copy(ft)
+    f_low30 = np.copy(ft)
     blow30 = np.copy(bt)
     beam_low30 = np.copy(b_all)
 
@@ -8609,12 +8609,12 @@ def plots_for_memo_155():
     plt.figure(4, figsize=[10, 13])
     plt.plot(fA, b301, "r")
     plt.plot(fC, b501, "r--")
-    plt.plot(flow10, blow10, "m--")
+    plt.plot(f_low10, blow10, "m--")
 
     plt.plot(fA, b306, "b")
     plt.plot(fmid30, bmid30, "c")
     plt.plot(fC, b500, "b--")
-    plt.plot(flow30, blow30, "c--")
+    plt.plot(f_low30, blow30, "c--")
 
     plt.xlabel("frequency [MHz]")
     plt.ylabel("integrated gain above horizon\n [fraction of 4pi]")
@@ -8683,17 +8683,17 @@ def plots_for_memo_155():
     # --------------------------------------------
 
     plt.figure(6, figsize=[10, 8])
-    plt.plot(flow10, beam_low10[:, -1, 0], "r--")
+    plt.plot(f_low10, beam_low10[:, -1, 0], "r--")
     plt.plot(fmid30, beam_mid30[:, -1, 0], "b")
-    plt.plot(flow30, beam_low30[:, -1, 0], "b--")
+    plt.plot(f_low30, beam_low30[:, -1, 0], "b--")
 
-    plt.plot(flow10, beam_low10[:, 45, 0], "r--")
+    plt.plot(f_low10, beam_low10[:, 45, 0], "r--")
     plt.plot(fmid30, beam_mid30[:, 45, 0], "b")
-    plt.plot(flow30, beam_low30[:, 45, 0], "b--")
+    plt.plot(f_low30, beam_low30[:, 45, 0], "b--")
 
-    plt.plot(flow10, beam_low10[:, 45, 90], "r--")
+    plt.plot(f_low10, beam_low10[:, 45, 90], "r--")
     plt.plot(fmid30, beam_mid30[:, 45, 90], "b")
-    plt.plot(flow30, beam_low30[:, 45, 90], "b--")
+    plt.plot(f_low30, beam_low30[:, 45, 90], "b--")
 
     plt.xlim([50, 140])
     plt.ylim([0, 8])
@@ -8983,7 +8983,7 @@ def plots_for_memo_155():
             len(beam_low30[0, 0, :]),
         )
     )
-    for i in range(len(flow30) - 1):
+    for i in range(len(f_low30) - 1):
         XX = beam_low30[i + 1, :, :] - beam_low30[i, :, :]
         XXX = np.flipud(XX)
         delta[i, :, :] = XXX
@@ -9038,7 +9038,7 @@ def plots_for_memo_155():
             len(beam_low10[0, 0, :]),
         )
     )
-    for i in range(len(flow10) - 1):
+    for i in range(len(f_low10) - 1):
         XX = beam_low10[i + 1, :, :] - beam_low10[i, :, :]
         XXX = np.flipud(XX)
         delta[i, :, :] = XXX
@@ -9094,7 +9094,7 @@ def plots_for_memo_155():
         XXX = np.flipud(XX)
         delta[i, :, :] = XXX
 
-    return fA, beam301, delta, flow10, beam_low10
+    return fA, beam301, delta, f_low10, beam_low10
 
 
 def plot_calibration_s11():
@@ -9325,8 +9325,8 @@ def plot_mid_band_GHA_14_16():
     plt.savefig("/home/raul/Desktop/GHA_14-16hr.pdf", bbox_inches="tight")
 
 
-def plot_signal_residuals(FLOW, FHIGH, A21, model_type, Ntotal):
-    f = np.arange(FLOW, FHIGH + 1, 1)
+def plot_signal_residuals(f_low, f_high, A21, model_type, Ntotal):
+    f = np.arange(f_low, f_high + 1, 1)
     A = 1500
     f0 = 75
     model_fg = A * (f / f0) ** ((-2.5) + 0.1 * np.log(f / f0))
@@ -9405,7 +9405,7 @@ def plot_foreground_analysis():
     plt.xlim([0, 24])
 
 
-def beam_correction_check(FLOW, FHIGH):
+def beam_correction_check(f_low, f_high):
     bb = np.genfromtxt(
         edges_folder + "mid_band/calibration/beam_factors/raw/mid_band_50"
         "-200MHz_90deg_alan1_haslam_2.5_2.62_reffreq_100MHz_data.txt"
@@ -9415,8 +9415,8 @@ def beam_correction_check(FLOW, FHIGH):
         "-200MHz_90deg_alan1_haslam_2.5_2.62_reffreq_100MHz_freq.txt"
     )
 
-    b = bb[:, (ff >= FLOW) & (ff <= FHIGH)]
-    f = ff[(ff >= FLOW) & (ff <= FHIGH)]
+    b = bb[:, (ff >= f_low) & (ff <= f_high)]
+    f = ff[(ff >= f_low) & (ff <= f_high)]
 
     plt.figure(1)
     plt.imshow(b, interpolation="none", aspect="auto", vmin=0.99, vmax=1.01)

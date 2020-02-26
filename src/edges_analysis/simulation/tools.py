@@ -6,7 +6,7 @@ from src.edges_analysis import basic as ba
 edges_folder = ""  # TODO: remove
 
 
-def residuals_of_simulations(case, name_flag, Nfg=5, FLOW=60, FHIGH=150):
+def residuals_of_simulations(case, name_flag, n_fg=5, f_low=60, f_high=150):
     folder_plot = edges_folder + "plots/20191227/"
 
     cases = {
@@ -266,9 +266,9 @@ def residuals_of_simulations(case, name_flag, Nfg=5, FLOW=60, FHIGH=150):
             ".65_sigma_deg_8.5_reffreq_90MHz_beam_factor.txt"
         )
 
-    fc = f[(f >= FLOW) & (f <= FHIGH)]
-    tc = t_all[:, (f >= FLOW) & (f <= FHIGH)]
-    bc = bf_all[:, (f >= FLOW) & (f <= FHIGH)]
+    fc = f[(f >= f_low) & (f <= f_high)]
+    tc = t_all[:, (f >= f_low) & (f <= f_high)]
+    bc = bf_all[:, (f >= f_low) & (f <= f_high)]
 
     GHA = LST - 17.76
     GHA[GHA < 0] += 24
@@ -294,12 +294,12 @@ def residuals_of_simulations(case, name_flag, Nfg=5, FLOW=60, FHIGH=150):
         avt = np.mean(tx, axis=0)
         avb = np.mean(bx, axis=0)
 
-        pc = mdl.fit_polynomial_fourier("LINLOG", fc / 200, avt, Nfg)
+        pc = mdl.fit_polynomial_fourier("LINLOG", fc / 200, avt, n_fg)
         mc = mdl.model_evaluate("LINLOG", pc[0], fc / 200)
         rc = avt - mc
         res[i, :] = rc
 
-        pc = mdl.fit_polynomial_fourier("LINLOG", fc / 200, avb, Nfg)
+        pc = mdl.fit_polynomial_fourier("LINLOG", fc / 200, avb, n_fg)
         mbc = mdl.model_evaluate("LINLOG", pc[0], fc / 200)
         rbc = avb - mbc
         resb[i, :] = rbc

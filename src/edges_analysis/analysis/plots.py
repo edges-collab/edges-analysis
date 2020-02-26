@@ -62,8 +62,8 @@ def plot_daily_residuals_nominal(f, r, w, yd, path="/home/raul/Desktop/"):
         FIG_SX=fig_sx,
         FIG_SY=fig_sy,
         DY=dy,
-        FLOW=f_low_plot,
-        FHIGH=f_high_plot,
+        f_low=f_low_plot,
+        f_high=f_high_plot,
         XTICKS=xticks,
         XTEXT=xtext,
         YLABEL=ylabel,
@@ -333,8 +333,8 @@ def plot_season_average_residuals(
         FIG_SX=7,
         FIG_SY=12,
         DY=ddy,
-        FLOW=parameters["plot_f_low"],
-        FHIGH=parameters["plot_f_high"],
+        f_low=parameters["plot_f_low"],
+        f_high=parameters["plot_f_high"],
         XTICKS=parameters["xticks"],
         XTEXT=32,
         YLABEL=str(ddy) + " K per division",
@@ -395,8 +395,8 @@ def plot_residuals_simulated_antenna_temperature(model, title):
         FIG_SX=7,
         FIG_SY=12,
         DY=1.5,
-        FLOW=30,
-        FHIGH=165,
+        f_low=30,
+        f_high=165,
         XTICKS=np.arange(60, 160 + 1, 20),
         XTEXT=32,
         YLABEL="1.5 K per division",
@@ -407,7 +407,7 @@ def plot_residuals_simulated_antenna_temperature(model, title):
     )
 
 
-def level4_plot_integrated_residuals(case, FLOW=60, FHIGH=150):
+def level4_plot_integrated_residuals(case, f_low=60, f_high=150):
     direc = (
         edges_folder + "mid_band/spectra/level4/{}/binned_averages/GHA_every_1hr.txt"
     )
@@ -433,10 +433,10 @@ def level4_plot_integrated_residuals(case, FLOW=60, FHIGH=150):
             d[:, i + 1],
             d[:, i + 1 + 48],
             n_poly=5,
-            f1_low=FLOW,
-            f1_high=FHIGH,
-            f2_low=FLOW,
-            f2_high=FHIGH,
+            f1_low=f_low,
+            f1_high=f_high,
+            f2_low=f_low,
+            f2_high=f_high,
         )
         if r_full is None:
             r_full = r
@@ -499,10 +499,10 @@ def plot_level4(
     index_GHA,
     averaged_146,
     good,
-    FLOW,
-    FHIGH,
+    f_low,
+    f_high,
     model,
-    Nfg,
+    n_fg,
     K_per_division,
     file_name,
     fit_range=None,
@@ -552,11 +552,11 @@ def plot_level4(
 
     rms_all, fb, ii, rb, wb = _scroll_through_i(
         ax,
-        FHIGH,
-        FLOW,
+        f_high,
+        f_low,
         K_per_division,
         NS,
-        Nfg,
+        n_fg,
         f,
         index_GHA,
         model,
@@ -593,7 +593,7 @@ def plot_level4(
             + " hr, "
             + model
             + ", "
-            + str(int(Nfg))
+            + str(int(n_fg))
             + " terms",
             fontsize=16,
         )
@@ -661,8 +661,8 @@ def plot_residuals(
     FIG_SX=7,
     FIG_SY=12,
     DY=2,
-    FLOW=50,
-    FHIGH=180,
+    f_low=50,
+    f_high=180,
     XTICKS=np.arange(60, 180 + 1, 20),
     XTEXT=160,
     YLABEL="ylabel",
@@ -680,7 +680,7 @@ def plot_residuals(
         plt.plot(f[w[i] > 0], (r[i] - i * DY)[w[i] > 0], color="rb"[i % 2])
         plt.text(XTEXT, -i * DY, list_names[i])
 
-    plt.xlim([FLOW, FHIGH])
+    plt.xlim([f_low, f_high])
     plt.ylim([-DY * n_spec, DY])
     plt.grid()
     plt.xticks(XTICKS)
@@ -697,11 +697,11 @@ def plot_residuals(
 
 def _scroll_through_i(
     ax,
-    FHIGH,
-    FLOW,
+    f_high,
+    f_low,
     K_per_division,
     NS,
-    Nfg,
+    n_fg,
     f,
     index_GHA,
     model,
@@ -731,7 +731,7 @@ def _scroll_through_i(
             m = mdl.model_evaluate("LINLOG", avp, f / 200)
             tr = m + rr
 
-            mask = (f >= FLOW) & (f <= FHIGH)
+            mask = (f >= f_low) & (f <= f_high)
             ft = f[mask]
             tt = tr[mask]
             wt = wr[mask]
@@ -751,7 +751,7 @@ def _scroll_through_i(
                 wx = wt
 
             if model == "LINLOG":
-                p = mdl.fit_polynomial_fourier("LINLOG", fx / 200, tx, Nfg, Weights=wx)
+                p = mdl.fit_polynomial_fourier("LINLOG", fx / 200, tx, n_fg, Weights=wx)
                 mt = mdl.model_evaluate("LINLOG", p[0], ft / 200)
                 rt = tt - mt
 
@@ -759,7 +759,7 @@ def _scroll_through_i(
                     ft, rt, wt, nsamples=NS
                 )
             elif model == "LOGLOG":
-                p = np.polyfit(np.log(fx[wx > 0] / 200), np.log(tx[wx > 0]), Nfg - 1)
+                p = np.polyfit(np.log(fx[wx > 0] / 200), np.log(tx[wx > 0]), n_fg - 1)
                 log_ml = np.polyval(p, np.log(ft / 200))
                 ml = np.exp(log_ml)
                 rl = tt - ml
@@ -786,9 +786,9 @@ def _scroll_through_i(
             rms_all[i, 0] = yd[i, 0]
             rms_all[i, 1] = yd[i, 1]
             rms_all[i, 2] = index_GHA
-            rms_all[i, 3] = FLOW
-            rms_all[i, 4] = FHIGH
-            rms_all[i, 5] = Nfg
+            rms_all[i, 3] = f_low
+            rms_all[i, 4] = f_high
+            rms_all[i, 5] = n_fg
             rms_all[i, 6] = RMS
     return rms_all, fb, ii, rb, wb
 
@@ -929,14 +929,14 @@ def level4_plot_residuals(case, gha_index, title, subfolder, figure_save_name, d
     FIGURE_FORMAT = "pdf"
 
     if case == 5011:
-        FLOW_plot = 40
-        FHIGH_plot = 122
+        f_low_plot = 40
+        f_high_plot = 122
         XTICKS = np.arange(60, 121, 10)
         XTEXT = 40.5
 
     else:
-        FLOW_plot = 35
-        FHIGH_plot = 152
+        f_low_plot = 35
+        f_high_plot = 152
         XTICKS = np.arange(60, 151, 10)
         XTEXT = 35.5
 
@@ -949,8 +949,8 @@ def level4_plot_residuals(case, gha_index, title, subfolder, figure_save_name, d
         FIG_SX=FIG_SX,
         FIG_SY=FIG_SY,
         DY=dy,
-        FLOW=FLOW_plot,
-        FHIGH=FHIGH_plot,
+        f_low=f_low_plot,
+        f_high=f_high_plot,
         XTICKS=XTICKS,
         XTEXT=XTEXT,
         YLABEL=YLABEL,
@@ -1166,12 +1166,12 @@ def plot_low_mid_comparison():
         ".hdf5"
     )
     fmx, tmx, pm, rmx, wmx, rmsm, tpm, mm = io.level3read(filename)
-    FLOW = 60
-    FHIGH = 100
-    fl = flx[(flx >= FLOW) & (flx <= FHIGH)]
-    tl = tlx[:, (flx >= FLOW) & (flx <= FHIGH)]
-    tm = tmx[:, (fmx >= FLOW) & (fmx <= FHIGH)]
-    wm = wmx[:, (fmx >= FLOW) & (fmx <= FHIGH)]
+    f_low = 60
+    f_high = 100
+    fl = flx[(flx >= f_low) & (flx <= f_high)]
+    tl = tlx[:, (flx >= f_low) & (flx <= f_high)]
+    tm = tmx[:, (fmx >= f_low) & (fmx <= f_high)]
+    wm = wmx[:, (fmx >= f_low) & (fmx <= f_high)]
 
     il = [1597, 1787, 1976, 2166, 77, 267, 547, 647, 837, 1027, 1217, 1407]
     im = [1610, 1793, 1977, 2161, 138, 322, 505, 689, 873, 1057, 1241, 1425]
@@ -1438,7 +1438,7 @@ def plot_beam_gain(path_plot_save):
     fmax = 120
     fmin_res = 50
     fmax_res = 120
-    Nfg = 5
+    n_fg = 5
     el = np.arange(0, 91)
     sin_theta = np.sin((90 - el) * (np.pi / 180))
     sin_theta_2D_T = np.tile(sin_theta, (360, 1))
@@ -1468,7 +1468,7 @@ def plot_beam_gain(path_plot_save):
         b = bx / np.mean(bx)
         ff = fr[(fr >= fmin_res) & (fr <= fmax_res)]
         bb = b[(fr >= fmin_res) & (fr <= fmax_res)]
-        x = np.polyfit(ff, bb, Nfg - 1)
+        x = np.polyfit(ff, bb, n_fg - 1)
         m = np.polyval(x, ff)
         r = bb - m
         return b, r, fr, ff
@@ -1513,8 +1513,8 @@ def plot_antenna_beam():
 
     size_x = 8.2
     size_y = 6
-    flow = 50
-    fhigh = 120
+    f_low = 50
+    f_high = 120
 
     def get_beam(beam_file, low_band=False):
         if not low_band:
@@ -1535,7 +1535,7 @@ def plot_antenna_beam():
             )
             ff = np.arange(40, 121, 2)
 
-        mask = (ff >= flow) & (ff <= fhigh)
+        mask = (ff >= f_low) & (ff <= f_high)
         fe = ff[mask]
         g_zenith = bm[mask, 90, 0]
         g_45_E = bm[mask, 45, 0]
@@ -1551,7 +1551,7 @@ def plot_antenna_beam():
         r"Low-Band 10m x 10m GP",
     ]
 
-    Nfg = 4
+    n_fg = 4
     DY = 0.08
 
     for j, ((beam_file, low_band), label) in enumerate(
@@ -1564,7 +1564,7 @@ def plot_antenna_beam():
             fe = f
 
         for i, gg in enumerate(g):
-            p = np.polyfit(f, gg, Nfg)
+            p = np.polyfit(f, gg, n_fg)
             m = np.polyval(p, f)
 
             ax[0].plot(f, gg, color=f"C{j}", label=label if not i else None)
@@ -1603,8 +1603,8 @@ def plot_antenna_beam():
 
     x1 = (1 - Gg) * 100
     x2 = (1 - Gglb) * 100
-    p1 = np.polyfit(fe, x1, Nfg)
-    p2flb = np.polyfit(flb, x2, Nfg)
+    p1 = np.polyfit(fe, x1, n_fg)
+    p2flb = np.polyfit(flb, x2, n_fg)
     m1 = np.polyval(p1, fe)
     m2 = np.polyval(p2flb)
     ax[3].plot(fe, x1 - m1, "b", linewidth=1)
