@@ -1840,3 +1840,83 @@ def plot_calibration_term_sweep(fname):
         plt.colorbar()
 
     return figs
+
+
+def plot_beam_factor(
+    az_above_horizon,
+    edges_lat_deg,
+    el_above_horizon,
+    irf,
+    lst,
+    path_plots,
+    plot_format,
+    sky_map,
+    sky_ref_above_horizon,
+):
+    LAT_DEG = np.copy(edges_lat_deg)
+    AZ_plot = np.copy(az_above_horizon)
+    AZ_plot[AZ_plot > 180] -= 360
+    EL_plot = np.copy(el_above_horizon)
+    SKY_plot = np.copy(sky_ref_above_horizon)
+    max_log10sky = np.max(np.log10(sky_map[:, irf]))
+    min_log10sky = np.min(np.log10(sky_map[:, irf]))
+    marker_size = 10
+    LST_gc = 17 + (45 / 60) + (40.04 / (60 * 60))  # LST of Galactic Center
+    GHA = lst - LST_gc
+    if GHA < 0:
+        GHA += 24
+
+    if plot_format == "rect":
+        plt.figure(figsize=[19, 6])
+        plt.scatter(
+            AZ_plot,
+            EL_plot,
+            edgecolors="none",
+            s=marker_size,
+            c=np.log10(SKY_plot),
+            vmin=min_log10sky,
+            vmax=max_log10sky,
+        )
+        plt.xticks(np.arange(-180, 181, 30))
+        plt.yticks([0, 15, 30, 45, 60, 75, 90])
+        cbar = plt.colorbar()
+        cbar.set_label("log10( Tsky @ 50MHz [K] )", rotation=90)
+        plt.xlabel("AZ [deg]")
+        plt.ylabel("EL [deg]")
+        plt.title(
+            f"LAT={LAT_DEG:.3f} [deg] \n\n LST={lst:.3f} hr        GHA={GHA:.3f} hr"
+        )
+    elif plot_format == "polar":
+        fig = plt.figure(figsize=[11.5, 10])
+        ax = fig.add_subplot(111, projection="polar")
+        c = ax.scatter(
+            (np.pi / 180) * AZ_plot,
+            90 - EL_plot,
+            edgecolors="none",
+            s=marker_size,
+            c=np.log10(SKY_plot),
+            vmin=min_log10sky,
+            vmax=5,
+        )
+        ax.set_theta_offset(-np.pi / 2)
+        ax.set_ylim([0, 90])
+        ax.set_yticks([0, 30, 60, 90])
+        ax.set_yticklabels(["90", "60", "30", "0"])
+        plt.text(-2 * (np.pi / 180), 101, "AZ", fontsize=14, fontweight="bold")
+        plt.text(22 * (np.pi / 180), 95, "EL", fontsize=14, fontweight="bold")
+        plt.text(
+            45 * (np.pi / 180), 143, "Raul Monsalve", fontsize=8, color=[0.5, 0.5, 0.5],
+        )
+        plt.title(
+            f"LAT={LAT_DEG:.3f} [deg] \n\n LST={lst:.3f} hr        GHA={GHA:.3f} hr",
+            fontsize=14,
+            fontweight="bold",
+        )
+        cbar_ax = fig.add_axes([0.9, 0.3, 0.02, 0.4])
+        hcbar = fig.colorbar(c, cax=cbar_ax)
+        hcbar.set_label("log10( Tsky @ 50MHz [K] )", rotation=90)
+    else:
+        raise ValueError("plot_format must be either 'polar' or 'rect'.")
+    plt.savefig(
+        path_plots + f"LST_{lst:.3f} hr.png", bbox_inches="tight",
+    )

@@ -1,6 +1,5 @@
 import numpy as np
 import h5py
-import matplotlib.pyplot as plt
 
 from edges_cal import modelling as mdl
 from . import tools
@@ -165,16 +164,7 @@ def level3read(path_file, print_key=False):
 
 
 def level3_single_file_test(
-    path_file,
-    gha_1,
-    gha_2,
-    f_low,
-    f_high,
-    plot_residuals,
-    model_type,
-    n_fg,
-    save,
-    save_spectrum_name,
+    path_file, gha_1, gha_2, f_low, f_high, save, save_spectrum_name
 ):
     f, t, p, r, w, rms, tp, m = level3read(path_file)
 
@@ -199,24 +189,6 @@ def level3_single_file_test(
     tt = tb[freq_mask]
     ww = wb[freq_mask]
     ss = sb[freq_mask]
-
-    if plot_residuals:
-        if model_type == "LINLOG":
-            pp = mdl.fit_polynomial_fourier(
-                "LINLOG", ff, tt, n_fg, Weights=1 / (ss ** 2)
-            )
-            model = pp[1]
-        elif model_type == "LOGLOG":
-            pp = np.polyfit(np.log(ff), np.log(tt), n_fg - 1)
-            log_model = np.polyval(pp, np.log(ff))
-            model = np.exp(log_model)
-        else:
-            raise ValueError("model_type must be LINLOG or LOGLOG")
-
-        plt.figure()
-        plt.plot(ff[ww > 0], (tt - model)[ww > 0])
-        plt.ylim([-1, 1])
-        plt.xlim([60, 120])
 
     if save:
         outT = np.array([ff, tt, ww, ss])

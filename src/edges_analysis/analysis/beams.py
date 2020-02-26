@@ -5,18 +5,17 @@ import astropy.coordinates as apc
 import astropy.time as apt
 import astropy.units as apu
 import h5py
-import matplotlib.pyplot as plt
 import numpy as np
 import scipy.interpolate as spi
 
 from . import coordinates as coords
 from .loss import ground_loss
+from .plots import plot_beam_factor
 from .sky_models import (
     LW_150MHz_map,
     guzman_45MHz_map,
     haslam_408MHz_map,
     remazeilles_408MHz_map,
-    get_map_coords,
 )
 
 edges_folder = ""  # TODO: get rid of this
@@ -359,96 +358,16 @@ def antenna_beam_factor(
 
         # Plotting sky in local coordinates
         if sky_plots:
-            LAT_DEG = np.copy(edges_lat_deg)
-
-            AZ_plot = np.copy(az_above_horizon)
-            AZ_plot[AZ_plot > 180] = AZ_plot[AZ_plot > 180] - 360
-
-            EL_plot = np.copy(el_above_horizon)
-            SKY_plot = np.copy(sky_ref_above_horizon)
-
-            max_log10sky = np.max(np.log10(sky_map[:, irf]))
-            min_log10sky = np.min(np.log10(sky_map[:, irf]))
-
-            marker_size = 10
-
-            LST_gc = 17 + (45 / 60) + (40.04 / (60 * 60))  # LST of Galactic Center
-            GHA = lst[i] - LST_gc
-            if GHA < 0:
-                GHA = GHA + 24
-
-            if plot_format == "rect":
-                plt.figure(figsize=[19, 6])
-                plt.scatter(
-                    AZ_plot,
-                    EL_plot,
-                    edgecolors="none",
-                    s=marker_size,
-                    c=np.log10(SKY_plot),
-                    vmin=min_log10sky,
-                    vmax=max_log10sky,
-                )
-                plt.xticks(np.arange(-180, 181, 30))
-                plt.yticks([0, 15, 30, 45, 60, 75, 90])
-                cbar = plt.colorbar()
-                cbar.set_label("log10( Tsky @ 50MHz [K] )", rotation=90)
-                plt.xlabel("AZ [deg]")
-                plt.ylabel("EL [deg]")
-                plt.title(
-                    "LAT="
-                    + str(np.round(LAT_DEG, 3))
-                    + " [deg] \n\n LST="
-                    + str(np.round(lst[i], 3)).ljust(5, "0")
-                    + " hr        GHA="
-                    + str(np.round(GHA, 3)).ljust(5, "0")
-                    + " hr"
-                )
-            elif plot_format == "polar":
-                plt.close()
-                fig = plt.figure(figsize=[11.5, 10])
-                ax = fig.add_subplot(111, projection="polar")
-                c = ax.scatter(
-                    (np.pi / 180) * AZ_plot,
-                    90 - EL_plot,
-                    edgecolors="none",
-                    s=marker_size,
-                    c=np.log10(SKY_plot),
-                    vmin=min_log10sky,
-                    vmax=5,
-                )
-                ax.set_theta_offset(-np.pi / 2)
-                ax.set_ylim([0, 90])
-                ax.set_yticks([0, 30, 60, 90])
-                ax.set_yticklabels(["90", "60", "30", "0"])
-                plt.text(-2 * (np.pi / 180), 101, "AZ", fontsize=14, fontweight="bold")
-                plt.text(22 * (np.pi / 180), 95, "EL", fontsize=14, fontweight="bold")
-                plt.text(
-                    45 * (np.pi / 180),
-                    143,
-                    "Raul Monsalve",
-                    fontsize=8,
-                    color=[0.5, 0.5, 0.5],
-                )
-                plt.title(
-                    "LAT="
-                    + str(np.round(LAT_DEG, 3))
-                    + " [deg] \n\n LST="
-                    + str(np.round(lst[i], 3)).ljust(5, "0")
-                    + " [hr]        GHA="
-                    + str(np.round(GHA, 3)).ljust(5, "0")
-                    + " [hr]",
-                    fontsize=14,
-                    fontweight="bold",
-                )
-                cbar_ax = fig.add_axes([0.9, 0.3, 0.02, 0.4])
-                hcbar = fig.colorbar(c, cax=cbar_ax)
-                hcbar.set_label("log10( Tsky @ 50MHz [K] )", rotation=90)
-            else:
-                raise ValueError("plot_format must be either 'polar' or 'rect'.")
-
-            plt.savefig(
-                path_plots + "LST_" + str(np.round(lst[i], 3)).ljust(5, "0") + "hr.png",
-                bbox_inches="tight",
+            plot_beam_factor(
+                az_above_horizon,
+                edges_lat_deg,
+                el_above_horizon,
+                irf,
+                lst[i],
+                path_plots,
+                plot_format,
+                sky_map,
+                sky_ref_above_horizon,
             )
 
         # Arranging AZ and EL arrays corresponding to beam model

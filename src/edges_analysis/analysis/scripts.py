@@ -1524,15 +1524,12 @@ def plots_for_memo148(plot_number):
         GHA2 = 18
 
         f, t150_low_case1, w, s150_low_case1 = io.level3_single_file_test(
-            edges_folder
-            + "mid_band/spectra/level3/tests_55_150MHz/rcv18_sw18/2018_150_00.hdf5",
+            edges_folder + "mid_band/spectra"
+            "/level3/tests_55_150MHz/rcv18_sw18/2018_150_00.hdf5",
             GHA1,
             GHA2,
             60,
             150,
-            False,
-            "LINLOG",
-            5,
             False,
             "name",
         )
@@ -1545,9 +1542,6 @@ def plots_for_memo148(plot_number):
             60,
             150,
             False,
-            "LINLOG",
-            5,
-            False,
             "name",
         )
         f, t150_low_case3, w, s150_low_case3 = io.level3_single_file_test(
@@ -1559,9 +1553,6 @@ def plots_for_memo148(plot_number):
             60,
             150,
             False,
-            "LINLOG",
-            5,
-            False,
             "name",
         )
         f, t150_low_case4, w, s150_low_case4 = io.level3_single_file_test(
@@ -1572,9 +1563,6 @@ def plots_for_memo148(plot_number):
             GHA2,
             60,
             150,
-            False,
-            "LINLOG",
-            5,
             False,
             "name",
         )
@@ -1622,9 +1610,6 @@ def plots_for_memo148(plot_number):
             55,
             150,
             False,
-            "LINLOG",
-            5,
-            False,
             "name",
         )
         fx, t150_low_case2, w, s150_low_case2 = io.level3_single_file_test(
@@ -1634,9 +1619,6 @@ def plots_for_memo148(plot_number):
             GHA2,
             55,
             150,
-            False,
-            "LINLOG",
-            5,
             False,
             "name",
         )
@@ -1648,9 +1630,6 @@ def plots_for_memo148(plot_number):
             55,
             150,
             False,
-            "LINLOG",
-            5,
-            False,
             "name",
         )
         fx, t150_low_case4, w, s150_low_case4 = io.level3_single_file_test(
@@ -1660,9 +1639,6 @@ def plots_for_memo148(plot_number):
             GHA2,
             55,
             150,
-            False,
-            "LINLOG",
-            5,
             False,
             "name",
         )
@@ -1754,9 +1730,6 @@ def plots_for_memo148(plot_number):
         55,
         150,
         False,
-        "LINLOG",
-        5,
-        False,
         "name",
     )
     fx, t188_low_case2, w, s188_low_case2 = io.level3_single_file_test(
@@ -1766,9 +1739,6 @@ def plots_for_memo148(plot_number):
         GHA2,
         55,
         150,
-        False,
-        "LINLOG",
-        5,
         False,
         "name",
     )
@@ -1780,9 +1750,6 @@ def plots_for_memo148(plot_number):
         55,
         150,
         False,
-        "LINLOG",
-        5,
-        False,
         "name",
     )
     fx, t188_low_case4, w, s188_low_case4 = io.level3_single_file_test(
@@ -1792,9 +1759,6 @@ def plots_for_memo148(plot_number):
         GHA2,
         55,
         150,
-        False,
-        "LINLOG",
-        5,
         False,
         "name",
     )
@@ -1887,9 +1851,6 @@ def plots_for_memo148(plot_number):
         55,
         150,
         False,
-        "LINLOG",
-        5,
-        False,
         "name",
     )
     fx, t150_low_case2, w, s150_low_case2 = io.level3_single_file_test(
@@ -1900,9 +1861,6 @@ def plots_for_memo148(plot_number):
         55,
         150,
         False,
-        "LINLOG",
-        5,
-        False,
         "name",
     )
     fx, t150_low_case3, w, s150_low_case3 = io.level3_single_file_test(
@@ -1912,9 +1870,6 @@ def plots_for_memo148(plot_number):
         GHA2,
         55,
         150,
-        False,
-        "LINLOG",
-        5,
         False,
         "name",
     )
@@ -1996,9 +1951,6 @@ def plots_for_memo148(plot_number):
         55,
         150,
         False,
-        "LINLOG",
-        5,
-        False,
         "name",
     )
     fx, t188_low_case2, w, s188_low_case2 = io.level3_single_file_test(
@@ -2009,9 +1961,6 @@ def plots_for_memo148(plot_number):
         55,
         150,
         False,
-        "LINLOG",
-        5,
-        False,
         "name",
     )
     fx, t188_low_case3, w, s188_low_case3 = io.level3_single_file_test(
@@ -2021,9 +1970,6 @@ def plots_for_memo148(plot_number):
         GHA2,
         55,
         150,
-        False,
-        "LINLOG",
-        5,
         False,
         "name",
     )
