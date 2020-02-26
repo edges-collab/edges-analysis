@@ -489,7 +489,7 @@ def spectral_binning_number_of_samples(freq_in, spectrum_in, weights_in, nsample
 
             i = 0
 
-    return np.array(av_fr), np.array(av_sp), np.array(av_we), np.array(av_std)
+    return np.array(av_fr), np.array(av_sp), np.array(av_we)
 
 
 def weighted_mean(data, weights, axis=0):
