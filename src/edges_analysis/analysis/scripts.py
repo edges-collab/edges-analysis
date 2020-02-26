@@ -19,11 +19,8 @@ from . import s11 as s11m
 from . import tools
 from .levels import level1_to_level2, level2_to_level3
 from ..simulation import data_models as dm
+from ..config import config
 
-edges_folder = ""  # TODO: remove
-home_folder = ""  # TODO: remove
-MRO_folder = ""  # TODO: remove
-edges_folder_v1 = ""  # TODO: remove
 
 CALFILES = {
     1: "nominal/calibration_files/original/calibration_file_receiver1_cterms7_wterms7.txt",
@@ -99,7 +96,7 @@ def calibration_file_computation(
     plot_nominal=False,
 ):
     prefix = (
-        edges_folder
+        config["edges_folder"]
         + "mid_band/calibration/receiver_calibration/receiver1/"
         + calibration_date
         + "/results/"
@@ -458,7 +455,8 @@ def calibration_file_computation(
 
 def daily_integrations_and_residuals():
     f, pz, rz, wz, index, gha, ydz = io.level4read(
-        edges_folder + "mid_band/spectra/level4/case_nominal/case_nominal.hdf5"
+        config["edges_folder"]
+        + "mid_band/spectra/level4/case_nominal/case_nominal.hdf5"
     )
 
     px = np.delete(pz, 1, axis=0)
@@ -592,7 +590,7 @@ def integrated_spectrum_level4(
         22: "rcv18_ant19_every_1hr_GHA",
     }
 
-    in_file = f"{edges_folder}mid_band/spectra/level4/{cases[case]}/{cases[case]}.hdf5"
+    in_file = f"{config['edges_folder']}mid_band/spectra/level4/{cases[case]}/{cases[case]}.hdf5"
     save_path = dirname(in_file).replace("level4", "level5")
     f, px, rx, wx, index, gha, ydx = io.level4read(in_file)
 
@@ -794,11 +792,11 @@ def integrated_half_hour_level4_many(band, case, GHA_starts=[(13, 1), (14, 0)]):
 def season_integrated_spectra_GHA(
     band, case, new_gha_edges=np.arange(0, 25, 2), data_save_name_flag="2hr"
 ):
-    data_save_path = edges_folder + f"{band}/spectra/level5/case{case}/"
+    data_save_path = config["edges_folder"] + f"{band}/spectra/level5/case{case}/"
 
     # Loading level4 data
     f, p_all, r_all, w_all, gha_edges, yd = io.level4read(
-        edges_folder + f"band/spectra/level4/case{case}/case{case}.hdf5"
+        config["edges_folder"] + f"band/spectra/level4/case{case}/case{case}.hdf5"
     )
 
     # Creating intermediate 1hr-average arrays
@@ -960,7 +958,7 @@ def batch_level1_to_level2(
 def batch_mid_band_level1_to_level2():
     batch_level1_to_level2(
         "mid_band",
-        path=home_folder + "/EDGES/spectra/level1/mid_band/300_350/",
+        path=config["home_folder"] + "/EDGES/spectra/level1/mid_band/300_350/",
         omit_days=range(170, 175),
     )
 
@@ -968,7 +966,7 @@ def batch_mid_band_level1_to_level2():
 def batch_low_band3_level1_to_level2():
     batch_level1_to_level2(
         "low_band3",
-        path=home_folder + "/EDGES/spectra/level1/low_band3/300_350/",
+        path=config["home_folder"] + "/EDGES/spectra/level1/low_band3/300_350/",
         omit_days=[225],
         day_indx=12,
     )
@@ -993,7 +991,7 @@ def batch_level2_to_level3(
 ):
 
     # Listing files to be processed
-    path_files = edges_folder + f"{band}/spectra/level2/"
+    path_files = config["edges_folder"] + f"{band}/spectra/level2/"
     files = sorted(listdir(path_files))
 
     if bad_files is None and band == "mid_band":
@@ -1019,7 +1017,7 @@ def batch_level2_to_level3(
                 fl,
                 flag_folder=flag_folder,
                 rcv_file=(
-                    edges_folder
+                    config["edges_folder"]
                     + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results/"
                     + CALFILES[receiver_cal_file]
                 ),
@@ -1084,10 +1082,10 @@ def plot_residuals_GHA_Xhr_bin(direc, fname, f, r, w):
 
 def vna_comparison():
     paths = [
-        edges_folder + "others/vna_comparison/keysight_e5061a/",
-        edges_folder + "others/vna_comparison/copper_mountain_r60/",
-        edges_folder + "others/vna_comparison/tektronix_ttr506a/",
-        edges_folder + "others/vna_comparison/copper_mountain_tr1300/",
+        config["edges_folder"] + "others/vna_comparison/keysight_e5061a/",
+        config["edges_folder"] + "others/vna_comparison/copper_mountain_r60/",
+        config["edges_folder"] + "others/vna_comparison/tektronix_ttr506a/",
+        config["edges_folder"] + "others/vna_comparison/copper_mountain_tr1300/",
     ]
 
     labels = ["Keysight E5061A", "CM R60", "Tektronix", "CM TR1300"]
@@ -1097,8 +1095,8 @@ def vna_comparison():
 
 def VNA_comparison2():
     paths = [
-        edges_folder + "others/vna_comparison/again/ks_e5061a/",
-        edges_folder + "others/vna_comparison/again/cm_tr1300/",
+        config["edges_folder"] + "others/vna_comparison/again/ks_e5061a/",
+        config["edges_folder"] + "others/vna_comparison/again/cm_tr1300/",
     ]
 
     labels = ["Keysight E5061A", "CM TR1300"]
@@ -1108,10 +1106,14 @@ def VNA_comparison2():
 def VNA_comparison3():
 
     paths = (
-        edges_folder + "others/vna_comparison/fieldfox_N9923A/agilent_E5061A_male/",
-        edges_folder + "others/vna_comparison/fieldfox_N9923A/agilent_E5061A_female/",
-        edges_folder + "others/vna_comparison/fieldfox_N9923A/fieldfox_N9923A_male/",
-        edges_folder + "others/vna_comparison/fieldfox_N9923A/fieldfox_N9923A_female/",
+        config["edges_folder"]
+        + "others/vna_comparison/fieldfox_N9923A/agilent_E5061A_male/",
+        config["edges_folder"]
+        + "others/vna_comparison/fieldfox_N9923A/agilent_E5061A_female/",
+        config["edges_folder"]
+        + "others/vna_comparison/fieldfox_N9923A/fieldfox_N9923A_male/",
+        config["edges_folder"]
+        + "others/vna_comparison/fieldfox_N9923A/fieldfox_N9923A_female/",
     )
     labels = ["Male E5061A", "Male N9923A", "Female E5061A", "Female N9923A"]
     plots.plot_vna_comparison(paths, labels, repeat_num=2)
@@ -1121,11 +1123,12 @@ def plots_for_memo148(plot_number):
     # Receiver calibration parameters
     if plot_number == 1:
         # Paths
-        path_plot_save = edges_folder + "plots/20190828/"
+        path_plot_save = config["edges_folder"] + "plots/20190828/"
 
         # Calibration parameters
         rcv_file = (
-            edges_folder + "mid_band/calibration/receiver_calibration/receiver1"
+            config["edges_folder"]
+            + "mid_band/calibration/receiver_calibration/receiver1"
             "/2018_01_25C/results/nominal/calibration_files"
             "/calibration_file_receiver1_cterms7_wterms8.txt"
         )
@@ -1298,7 +1301,7 @@ def plots_for_memo148(plot_number):
         plt.savefig(path_plot_save + "receiver_calibration.pdf", bbox_inches="tight")
     if plot_number == 2:
         # Paths
-        path_plot_save = edges_folder + "plots/20190828/"
+        path_plot_save = config["edges_folder"] + "plots/20190828/"
 
         flb = np.arange(50, 100, 1)
         alb = np.ones(len(flb))
@@ -1310,17 +1313,17 @@ def plots_for_memo148(plot_number):
 
         paths = [
             (
-                edges_folder_v1
+                config["edges_folder"]
                 + "calibration/receiver_calibration/mid_band/2017_11_15C_25C_35C/data/s11/raw/25C"
                 "/receiver_MRO_fieldfox_40-200MHz/"
             ),
             (
-                edges_folder
+                config["edges_folder"]
                 + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/data/s11/raw"
                 "/InternalSwitch/"
             ),
             (
-                edges_folder
+                config["edges_folder"]
                 + "mid_band/calibration/receiver_calibration/receiver1/2019_03_25C/data/s11/raw"
                 "/SwitchingState01/"
             ),
@@ -1374,7 +1377,7 @@ def plots_for_memo148(plot_number):
 
     if plot_number == 3:
         # Paths
-        path_plot_save = edges_folder + "plots/20190828/"
+        path_plot_save = config["edges_folder"] + "plots/20190828/"
 
         size_x = 11
         size_y = 13.0
@@ -1518,13 +1521,13 @@ def plots_for_memo148(plot_number):
 
     if plot_number == 4:
         # Paths
-        path_plot_save = edges_folder + "plots/20190828/"
+        path_plot_save = config["edges_folder"] + "plots/20190828/"
 
         GHA1 = 6
         GHA2 = 18
 
         f, t150_low_case1, w, s150_low_case1 = io.level3_single_file_test(
-            edges_folder + "mid_band/spectra"
+            config["edges_folder"] + "mid_band/spectra"
             "/level3/tests_55_150MHz/rcv18_sw18/2018_150_00.hdf5",
             GHA1,
             GHA2,
@@ -1534,7 +1537,7 @@ def plots_for_memo148(plot_number):
             "name",
         )
         f, t150_low_case2, w, s150_low_case2 = io.level3_single_file_test(
-            edges_folder
+            config["edges_folder"]
             + "mid_band/spectra/level3/tests_55_150MHz/rcv18_sw19/2018_150_00"
             ".hdf5",
             GHA1,
@@ -1545,7 +1548,7 @@ def plots_for_memo148(plot_number):
             "name",
         )
         f, t150_low_case3, w, s150_low_case3 = io.level3_single_file_test(
-            edges_folder
+            config["edges_folder"]
             + "mid_band/spectra/level3/tests_55_150MHz/rcv19_sw18/2018_150_00"
             ".hdf5",
             GHA1,
@@ -1556,7 +1559,7 @@ def plots_for_memo148(plot_number):
             "name",
         )
         f, t150_low_case4, w, s150_low_case4 = io.level3_single_file_test(
-            edges_folder
+            config["edges_folder"]
             + "mid_band/spectra/level3/tests_55_150MHz/rcv19_sw19/2018_150_00"
             ".hdf5",
             GHA1,
@@ -1598,12 +1601,12 @@ def plots_for_memo148(plot_number):
 
     if plot_number == 5:
         # Paths
-        path_plot_save = edges_folder + "plots/20190828/"
+        path_plot_save = config["edges_folder"] + "plots/20190828/"
 
         GHA1 = GHA2 = 18
 
         fx, t150_low_case1, w, s150_low_case1 = io.level3_single_file_test(
-            edges_folder
+            config["edges_folder"]
             + "mid_band/spectra/level3/tests_55_150MHz/rcv18_sw18/2018_150_00.hdf5",
             GHA1,
             GHA2,
@@ -1613,7 +1616,7 @@ def plots_for_memo148(plot_number):
             "name",
         )
         fx, t150_low_case2, w, s150_low_case2 = io.level3_single_file_test(
-            edges_folder
+            config["edges_folder"]
             + "mid_band/spectra/level3/tests_55_150MHz/rcv18_sw19/2018_150_00.hdf5",
             GHA1,
             GHA2,
@@ -1623,7 +1626,7 @@ def plots_for_memo148(plot_number):
             "name",
         )
         fx, t150_low_case3, w, s150_low_case3 = io.level3_single_file_test(
-            edges_folder
+            config["edges_folder"]
             + "mid_band/spectra/level3/tests_55_150MHz/rcv19_sw18/2018_150_00.hdf5",
             GHA1,
             GHA2,
@@ -1633,7 +1636,7 @@ def plots_for_memo148(plot_number):
             "name",
         )
         fx, t150_low_case4, w, s150_low_case4 = io.level3_single_file_test(
-            edges_folder
+            config["edges_folder"]
             + "mid_band/spectra/level3/tests_55_150MHz/rcv19_sw19/2018_150_00.hdf5",
             GHA1,
             GHA2,
@@ -1717,13 +1720,13 @@ def plots_for_memo148(plot_number):
     plt.savefig(path_plot_save + "residuals1.pdf", bbox_inches="tight")
     if plot_number == 6:
         # Paths
-        path_plot_save = edges_folder + "plots/20190828/"
+        path_plot_save = config["edges_folder"] + "plots/20190828/"
 
     GHA1 = 6
     GHA2 = 18
 
     fx, t188_low_case1, w, s188_low_case1 = io.level3_single_file_test(
-        edges_folder
+        config["edges_folder"]
         + "mid_band/spectra/level3/tests_55_150MHz/rcv18_sw18/2018_188_00.hdf5",
         GHA1,
         GHA2,
@@ -1733,7 +1736,7 @@ def plots_for_memo148(plot_number):
         "name",
     )
     fx, t188_low_case2, w, s188_low_case2 = io.level3_single_file_test(
-        edges_folder
+        config["edges_folder"]
         + "mid_band/spectra/level3/tests_55_150MHz/rcv18_sw19/2018_188_00.hdf5",
         GHA1,
         GHA2,
@@ -1743,7 +1746,7 @@ def plots_for_memo148(plot_number):
         "name",
     )
     fx, t188_low_case3, w, s188_low_case3 = io.level3_single_file_test(
-        edges_folder + "mid_band/spectra/level3"
+        config["edges_folder"] + "mid_band/spectra/level3"
         "/tests_55_150MHz/rcv19_sw18/2018_188_00.hdf5",
         GHA1,
         GHA2,
@@ -1753,7 +1756,7 @@ def plots_for_memo148(plot_number):
         "name",
     )
     fx, t188_low_case4, w, s188_low_case4 = io.level3_single_file_test(
-        edges_folder
+        config["edges_folder"]
         + "mid_band/spectra/level3/tests_55_150MHz/rcv19_sw19/2018_188_00.hdf5",
         GHA1,
         GHA2,
@@ -1838,13 +1841,13 @@ def plots_for_memo148(plot_number):
 
     if plot_number == 7:
         # Paths
-        path_plot_save = edges_folder + "plots/20190828/"
+        path_plot_save = config["edges_folder"] + "plots/20190828/"
 
     GHA1 = 6
     GHA2 = 18
 
     fx, t150_low_case1, w, s150_low_case1 = io.level3_single_file_test(
-        edges_folder
+        config["edges_folder"]
         + "mid_band/spectra/level3/tests_55_150MHz/rcv18_sw18/2018_150_00.hdf5",
         GHA1,
         GHA2,
@@ -1854,7 +1857,7 @@ def plots_for_memo148(plot_number):
         "name",
     )
     fx, t150_low_case2, w, s150_low_case2 = io.level3_single_file_test(
-        edges_folder
+        config["edges_folder"]
         + "mid_band/spectra/level3/tests_55_150MHz/rcv18_sw19/2018_150_00.hdf5",
         GHA1,
         GHA2,
@@ -1864,7 +1867,7 @@ def plots_for_memo148(plot_number):
         "name",
     )
     fx, t150_low_case3, w, s150_low_case3 = io.level3_single_file_test(
-        edges_folder
+        config["edges_folder"]
         + "mid_band/spectra/level3/tests_55_150MHz/rcv18_sw18and19_ant147/2018_150_00.hdf5",
         GHA1,
         GHA2,
@@ -1938,13 +1941,13 @@ def plots_for_memo148(plot_number):
 
     if plot_number == 8:
         # Paths
-        path_plot_save = edges_folder + "plots/20190828/"
+        path_plot_save = config["edges_folder"] + "plots/20190828/"
 
     GHA1 = 6
     GHA2 = 18
 
     fx, t188_low_case1, w, s188_low_case1 = io.level3_single_file_test(
-        edges_folder
+        config["edges_folder"]
         + "mid_band/spectra/level3/tests_55_150MHz/rcv18_sw18/2018_188_00.hdf5",
         GHA1,
         GHA2,
@@ -1954,7 +1957,7 @@ def plots_for_memo148(plot_number):
         "name",
     )
     fx, t188_low_case2, w, s188_low_case2 = io.level3_single_file_test(
-        edges_folder
+        config["edges_folder"]
         + "mid_band/spectra/level3/tests_55_150MHz/rcv18_sw19/2018_188_00.hdf5",
         GHA1,
         GHA2,
@@ -1964,7 +1967,8 @@ def plots_for_memo148(plot_number):
         "name",
     )
     fx, t188_low_case3, w, s188_low_case3 = io.level3_single_file_test(
-        edges_folder + "mid_band/spectra/level3/tests_55_150MHz/rcv18_sw18and19_ant147"
+        config["edges_folder"]
+        + "mid_band/spectra/level3/tests_55_150MHz/rcv18_sw18and19_ant147"
         "/2018_188_00.hdf5",
         GHA1,
         GHA2,
@@ -2777,7 +2781,7 @@ def comparison_FEKO_HFSS():
 
 
 def comparison_FEKO_WIPLD():
-    path_plot_save = edges_folder + "plots/20191015/"
+    path_plot_save = config["edges_folder"] + "plots/20191015/"
 
     # WIPL-D
     filename = (
@@ -2818,7 +2822,7 @@ def comparison_FEKO_WIPLD():
 
     # HFSS
     thetaX, phi, b60 = beams.hfss_read(
-        edges_folder
+        config["edges_folder"]
         + "others/beam_simulations/hfss/20191002/mid_band_infinite_pec/60MHz.csv",
         "linear",
         theta_min=0,
@@ -2832,7 +2836,7 @@ def comparison_FEKO_WIPLD():
     H60 = b60[thetaX <= 90, :]
 
     thetaX, phi, b90 = beams.hfss_read(
-        edges_folder
+        config["edges_folder"]
         + "others/beam_simulations/hfss/20191002/mid_band_infinite_pec/90MHz.csv",
         "linear",
         theta_min=0,
@@ -2845,7 +2849,7 @@ def comparison_FEKO_WIPLD():
     H90 = b90[thetaX <= 90, :]
 
     thetaX, phi, b120 = beams.hfss_read(
-        edges_folder
+        config["edges_folder"]
         + "others/beam_simulations/hfss/20191002/mid_band_infinite_pec/120MHz.csv",
         "linear",
         theta_min=0,
@@ -2858,7 +2862,7 @@ def comparison_FEKO_WIPLD():
     H120 = b120[thetaX <= 90, :]
 
     thetaX, phi, b65 = beams.hfss_read(
-        edges_folder
+        config["edges_folder"]
         + "others/beam_simulations/hfss/20191002/mid_band_infinite_pec/65MHz.csv",
         "linear",
         theta_min=0,
@@ -2871,7 +2875,7 @@ def comparison_FEKO_WIPLD():
     H65 = b65[thetaX <= 90, :]
 
     thetaX, phi, b66 = beams.hfss_read(
-        edges_folder
+        config["edges_folder"]
         + "others/beam_simulations/hfss/20191002/mid_band_infinite_pec/66MHz.csv",
         "linear",
         theta_min=0,
@@ -2884,7 +2888,7 @@ def comparison_FEKO_WIPLD():
     H66 = b66[thetaX <= 90, :]
 
     thetaX, phi, b67 = beams.hfss_read(
-        edges_folder
+        config["edges_folder"]
         + "others/beam_simulations/hfss/20191002/mid_band_infinite_pec/67MHz.csv",
         "linear",
         theta_min=0,
@@ -2897,7 +2901,7 @@ def comparison_FEKO_WIPLD():
     H67 = b67[thetaX <= 90, :]
 
     thetaX, phi, b68 = beams.hfss_read(
-        edges_folder
+        config["edges_folder"]
         + "others/beam_simulations/hfss/20191002/mid_band_infinite_pec/68MHz.csv",
         "linear",
         theta_min=0,
@@ -2910,7 +2914,7 @@ def comparison_FEKO_WIPLD():
     H68 = b68[thetaX <= 90, :]
 
     thetaX, phi, b69 = beams.hfss_read(
-        edges_folder
+        config["edges_folder"]
         + "others/beam_simulations/hfss/20191002/mid_band_infinite_pec/69MHz.csv",
         "linear",
         theta_min=0,
@@ -2923,7 +2927,7 @@ def comparison_FEKO_WIPLD():
     H69 = b69[thetaX <= 90, :]
 
     thetaX, phi, b70 = beams.hfss_read(
-        edges_folder
+        config["edges_folder"]
         + "others/beam_simulations/hfss/20191002/mid_band_infinite_pec/70MHz.csv",
         "linear",
         theta_min=0,
@@ -2936,7 +2940,7 @@ def comparison_FEKO_WIPLD():
     H70 = b70[thetaX <= 90, :]
 
     thetaX, phi, b71 = beams.hfss_read(
-        edges_folder
+        config["edges_folder"]
         + "others/beam_simulations/hfss/20191002/mid_band_infinite_pec/71MHz.csv",
         "linear",
         theta_min=0,
@@ -2949,7 +2953,7 @@ def comparison_FEKO_WIPLD():
     H71 = b71[thetaX <= 90, :]
 
     thetaX, phi, b72 = beams.hfss_read(
-        edges_folder
+        config["edges_folder"]
         + "others/beam_simulations/hfss/20191002/mid_band_infinite_pec/72MHz.csv",
         "linear",
         theta_min=0,
@@ -2962,7 +2966,7 @@ def comparison_FEKO_WIPLD():
     H72 = b72[thetaX <= 90, :]
 
     thetaX, phi, b73 = beams.hfss_read(
-        edges_folder
+        config["edges_folder"]
         + "others/beam_simulations/hfss/20191002/mid_band_infinite_pec/73MHz.csv",
         "linear",
         theta_min=0,
@@ -2975,7 +2979,7 @@ def comparison_FEKO_WIPLD():
     H73 = b73[thetaX <= 90, :]
 
     thetaX, phi, b74 = beams.hfss_read(
-        edges_folder
+        config["edges_folder"]
         + "others/beam_simulations/hfss/20191002/mid_band_infinite_pec/74MHz.csv",
         "linear",
         theta_min=0,
@@ -2988,7 +2992,7 @@ def comparison_FEKO_WIPLD():
     H74 = b74[thetaX <= 90, :]
 
     thetaX, phi, b75 = beams.hfss_read(
-        edges_folder
+        config["edges_folder"]
         + "others/beam_simulations/hfss/20191002/mid_band_infinite_pec/75MHz.csv",
         "linear",
         theta_min=0,
@@ -3600,7 +3604,7 @@ def integrated_antenna_gain_WIPLD(case, n_fg):
 
 
 def plots_for_memo_153(figname):
-    path_plot_save = edges_folder + "plots/20191025/"
+    path_plot_save = config["edges_folder"] + "plots/20191025/"
     sx = 8
     sy = 10
 
@@ -3807,7 +3811,7 @@ def plots_for_memo_153(figname):
 
 
 def plots_for_memo_155():
-    path_plot_save = edges_folder + "plots/20191105/"
+    path_plot_save = config["edges_folder"] + "plots/20191105/"
 
     fA, b300, fx, rx, theta, phi, beam300 = integrated_antenna_gain_WIPLD(300, 2)
     fA, b301, fx, rx, theta, phi, beam301 = integrated_antenna_gain_WIPLD(301, 2)
@@ -4556,11 +4560,11 @@ def plot_foreground_analysis():
 
 def beam_correction_check(f_low, f_high):
     bb = np.genfromtxt(
-        edges_folder + "mid_band/calibration/beam_factors/raw/mid_band_50"
+        config["edges_folder"] + "mid_band/calibration/beam_factors/raw/mid_band_50"
         "-200MHz_90deg_alan1_haslam_2.5_2.62_reffreq_100MHz_data.txt"
     )
     ff = np.genfromtxt(
-        edges_folder + "mid_band/calibration/beam_factors/raw/mid_band_50"
+        config["edges_folder"] + "mid_band/calibration/beam_factors/raw/mid_band_50"
         "-200MHz_90deg_alan1_haslam_2.5_2.62_reffreq_100MHz_freq.txt"
     )
 
@@ -4572,7 +4576,8 @@ def beam_correction_check(f_low, f_high):
     plt.colorbar()
 
     f_t, lst_t, bf_t = beams.beam_factor_table_read(
-        edges_folder + "mid_band/calibration/beam_factors/table/table_hires_mid_band_50"
+        config["edges_folder"]
+        + "mid_band/calibration/beam_factors/table/table_hires_mid_band_50"
         "-200MHz_90deg_alan1_haslam_2.5_2.62_reffreq_100MHz.hdf5"
     )
 

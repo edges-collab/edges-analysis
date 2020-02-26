@@ -3,8 +3,7 @@ from edges_cal import receiver_calibration_func as rcf
 
 from ..analysis import loss
 from ..analysis.scripts import models_antenna_s11_remove_delay
-
-edges_folder = ""  # TODO: remove
+from ..config import config
 
 
 def test(
@@ -20,7 +19,7 @@ def test(
     # Receiver calibration quantities
     # -------------------------------
     rcv_file = (
-        edges_folder
+        config["edges_folder"]
         + band
         + "/calibration/receiver_calibration/receiver1/2018_01_25C/results/nominal/calibration_files/"
     )

@@ -17,8 +17,7 @@ from scipy import interpolate as interp
 from . import beams, filters, io, loss, rfi
 from . import s11 as s11m
 from . import sky_models, tools
-
-edges_folder = ""  # TODO: rmeove
+from ..config import config
 
 
 def plot_daily_residuals_nominal(f, r, w, yd, path="/home/raul/Desktop/"):
@@ -74,7 +73,7 @@ def plot_daily_residuals_nominal(f, r, w, yd, path="/home/raul/Desktop/"):
 
 
 def plots_midband_metadata():
-    direc = edges_folder + "/mid_band/spectra/level3/case_nominal/"
+    direc = config["edges_folder"] + "/mid_band/spectra/level3/case_nominal/"
     list_files = os.listdir(direc)
     list_files.sort()
 
@@ -148,7 +147,10 @@ def plots_midband_metadata():
     ax[-1].xlabel("time [number of raw spectra since start of file]")
 
     plt.savefig(
-        edges_folder + "/mid_band/spectra/level3/case_nominal/metadata/" + day + ".png",
+        config["edges_folder"]
+        + "/mid_band/spectra/level3/case_nominal/metadata/"
+        + day
+        + ".png",
         bbox_inches="tight",
     )
 
@@ -279,7 +281,7 @@ def plot_season_average_residuals(
 ):
     def path(kind):
         return (
-            edges_folder
+            config["edges_folder"]
             + f"mid_band/spectra/level5/case2/case2_{case.split('_')+'_' if kind != 'frequency' else ''}{kind}.txt"
         )
 
@@ -348,12 +350,12 @@ def plot_residuals_simulated_antenna_temperature(model, title):
 
     if model == 1:
         path = (
-            edges_folder + "mid_band/calibration/beam_factors/raw/mid_band_50"
+            config["edges_folder"] + "mid_band/calibration/beam_factors/raw/mid_band_50"
             "-200MHz_90deg_alan1_haslam_2.5_2.62_reffreq_100MHz_{}.txt"
         )
     elif model == 2:
         path = (
-            edges_folder + "mid_band/calibration/beam_factors/raw/mid_band_50"
+            config["edges_folder"] + "mid_band/calibration/beam_factors/raw/mid_band_50"
             "-200MHz_90deg_alan1_haslam_2.5_2.5_reffreq_80MHz_{}.txt"
         )
     else:
@@ -408,7 +410,8 @@ def plot_residuals_simulated_antenna_temperature(model, title):
 
 def level4_plot_integrated_residuals(case, f_low=60, f_high=150):
     direc = (
-        edges_folder + "mid_band/spectra/level4/{}/binned_averages/GHA_every_1hr.txt"
+        config["edges_folder"]
+        + "mid_band/spectra/level4/{}/binned_averages/GHA_every_1hr.txt"
     )
 
     folders = {
@@ -487,7 +490,7 @@ def level4_plot_integrated_residuals(case, f_low=60, f_high=150):
     plt.yticks(np.arange(-22, 0.1, 2), np.arange(5, -7, -1))
 
     plt.savefig(
-        edges_folder
+        config["edges_folder"]
         + "plots/20191218/data_residuals_no_ground_loss_no_beam_correction.pdf",
         bbox_inches="tight",
     )
@@ -525,9 +528,9 @@ def plot_level4(
     folder = folders[case]
     f, py, ry, wy, index, gha, yy = io.level4read(path.format(folder=folder))
 
-    save_rms_folder = edges_folder + "mid_band/spectra/level4/{}/rms_filters/".format(
-        folder
-    )
+    save_rms_folder = config[
+        "edges_folder"
+    ] + "mid_band/spectra/level4/{}/rms_filters/".format(folder)
 
     if not exists(save_rms_folder):
         makedirs(save_rms_folder)
@@ -858,7 +861,7 @@ def plots_level3_rms_folder(
 
 def level4_plot_residuals(case, gha_index, title, subfolder, figure_save_name, dy):
     filename = (
-        edges_folder
+        config["edges_folder"]
         + "mid_band/spectra/level4/{}/binned_residuals/binned_residuals_one_hour_GHA.hdf5"
     )
     save_direc = os.path.join(os.path.dirname(filename), "binned_plots", subfolder)
@@ -1102,7 +1105,7 @@ def plot_data_stats():
     keep = filters.daily_nominal_filter("mid_band", 26, ydx)
     ydy = ydx[keep > 0]
     ix = np.arange(len(ydy))
-    path_files = edges_folder + "mid_band/spectra/level3/case26/"
+    path_files = config["edges_folder"] + "mid_band/spectra/level3/case26/"
     new_list = listdir(path_files)
     new_list.sort()
     index_new_list = range(len(new_list))
@@ -1123,7 +1126,8 @@ def plot_data_stats():
             gha_i[gha_i < 0] = gha_i[gha_i < 0] + 24
             gha_all = np.append(gha_all, gha_i)
     sp = np.genfromtxt(
-        edges_folder + "mid_band/spectra/level5/case2/integrated_spectrum_case2.txt"
+        config["edges_folder"]
+        + "mid_band/spectra/level5/case2/integrated_spectrum_case2.txt"
     )
     fb = sp[:, 0]
     wb = sp[:, 2]
@@ -1150,7 +1154,8 @@ def plot_data_stats():
     plt.ylabel("normalized weights")
     plt.text(59, 1.09, "(b)", fontsize=14)
     plt.savefig(
-        edges_folder + "plots/20190730/data_statistics.pdf", bbox_inches="tight"
+        config["edges_folder"] + "plots/20190730/data_statistics.pdf",
+        bbox_inches="tight",
     )
 
 
@@ -1196,7 +1201,8 @@ def plot_low_mid_comparison():
     plt.ylim([-12 * dy, dy])
     # Saving
     plt.savefig(
-        edges_folder + "/plots/20190612/comparison_mid_low2.pdf", bbox_inches="tight"
+        config["edges_folder"] + "/plots/20190612/comparison_mid_low2.pdf",
+        bbox_inches="tight",
     )
 
 
@@ -1341,7 +1347,7 @@ def beam_chromaticity_differences():
     fig.colorbar(im, cax=cax, orientation="vertical")
     cax.set_title(r"$\Delta C$", fontsize=14)
 
-    path_plot_save = edges_folder + "/plots/20190729/"
+    path_plot_save = config["edges_folder"] + "/plots/20190729/"
     plt.savefig(
         path_plot_save + "beam_chromaticity_differences.pdf", bbox_inches="tight"
     )
@@ -1403,7 +1409,7 @@ def plot_beam_chromaticity_correction():
     ax.set_yticks([0.98, 1, 1.02])
     ax.set_ylabel("$C$")
     # Saving plot
-    path_plot_save = edges_folder + "plots/20190729/"
+    path_plot_save = config["edges_folder"] + "plots/20190729/"
     plt.savefig(
         path_plot_save + "beam_chromaticity_correction.pdf", bbox_inches="tight"
     )
@@ -1508,7 +1514,7 @@ def plot_beam_gain(path_plot_save):
 
 
 def plot_antenna_beam():
-    path_plot_save = edges_folder + "plots/20200108/"
+    path_plot_save = config["edges_folder"] + "plots/20200108/"
 
     size_x = 8.2
     size_y = 6
@@ -1629,7 +1635,7 @@ def _get_xf(fe, path, f_high=np.inf):
 
 def plot_balun_loss2(s11_path):
     # Paths
-    path_plot_save = edges_folder + "plots/20190917/"
+    path_plot_save = config["edges_folder"] + "plots/20190917/"
     # Plot
     size_x = 4.5
     size_y = 2.7
@@ -1661,7 +1667,7 @@ def plot_balun_loss2(s11_path):
 
 def plot_antenna_calibration_params(s11_path):
     # Paths
-    path_plot_save = edges_folder + "plots/20190917/"
+    path_plot_save = config["edges_folder"] + "plots/20190917/"
     # Plot
     fs_labels = 12
     size_x = 4.5
@@ -1722,7 +1728,7 @@ def _get_ra(s11_path):
 def plot_balun_loss(s11_path):
 
     # Paths
-    path_plot_save = edges_folder + "plots/20200108/"
+    path_plot_save = config["edges_folder"] + "plots/20200108/"
 
     # Plot
     size_x = 4.5

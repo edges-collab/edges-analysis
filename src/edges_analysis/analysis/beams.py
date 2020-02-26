@@ -17,8 +17,7 @@ from .sky_models import (
     haslam_408MHz_map,
     remazeilles_408MHz_map,
 )
-
-edges_folder = ""  # TODO: get rid of this
+from ..config import config
 
 
 def hfss_read(
@@ -198,7 +197,7 @@ def antenna_beam_factor(
     """
 
     # Data paths
-    path_save = edges_folder + band + "/calibration/beam_factors/raw/"
+    path_save = config["edges_folder"] + f"{band}/calibration/beam_factors/raw/"
     path_plots = path_save + "plots/"
 
     # Antenna beam
@@ -214,7 +213,7 @@ def antenna_beam_factor(
 
         beam_all = feko_blade_beam(band, beam_file, az_antenna_axis=rotation_from_north)
     elif band == "mid_band":  # Beams from WIPL-D
-        prefix = edges_folder + "/others/beam_simulations/wipl-d/"
+        prefix = config["edges_folder"] + "/others/beam_simulations/wipl-d/"
         filenames = {
             101: "20191030/blade_dipole_infinite_soil_real_metal_GP_30mx30m.ra1",
             102: "20191124/mid_band_perf_30x30_5mm_wire_.ra1",
@@ -478,7 +477,7 @@ def antenna_beam_factor_interpolation(band, case, lst_hires, fnew, Npar_freq=15)
     if band not in ("low_band3", "mid_band"):
         raise ValueError("band must be 'low_band3' or 'mid_band'")
 
-    direc = edges_folder + "{}/calibration/beam_factors/raw/".format(band)
+    direc = config["edges_folder"] + f"{band}/calibration/beam_factors/raw/"
 
     if band == "low_band3":
         pth = "low_band3_50-120MHz_85deg_alan_haslam_2.5_2.62_reffreq_76MHz_{}.txt"
@@ -562,7 +561,7 @@ def antenna_beam_factor_interpolation_v2(band, case, lst_hires, fnew):
     if band not in ("mid_band",):
         raise NotImplementedError("only 'mid_band' implemented for this function.")
 
-    direc = edges_folder + "{}/calibration/beam_factors/raw/".format(band)
+    direc = config["edges_folder"] + f"{band}/calibration/beam_factors/raw/"
 
     if band == "mid_band":
         paths = {
@@ -621,7 +620,7 @@ def beam_factor_table_computation(band, case, f, N_lst, file_name_hdf5):
         band, case, lst_hires, f
     )
 
-    file_path = edges_folder + band + "/calibration/beam_factors/table/"
+    file_path = config["edges_folder"] + f"{band}/calibration/beam_factors/table/"
     with h5py.File(file_path + file_name_hdf5, "w") as hf:
         hf.create_dataset("frequency", data=f)
         hf.create_dataset("lst", data=lst_hires)
@@ -735,7 +734,7 @@ def feko_blade_beam(
     az_antenna_axis = 0    #  Angle of orientation (in integer degrees) of excited antenna panels
     relative to due North. Best value is around X ???
     """
-    data_folder = edges_folder + "/{}/calibration/beam/alan/".format(band)
+    data_folder = config["edges_folder"] + f"/{band}/calibration/beam/alan/"
 
     if band == "low_band3":
         if beam_file == 1:

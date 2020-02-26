@@ -1,5 +1,4 @@
 import os
-from os.path import exists
 
 import h5py
 import numpy as np
@@ -7,8 +6,7 @@ from edges_cal import modelling as mdl
 
 from . import tools, io, rfi
 from .io import data_selection, level3read, level4read
-
-edges_folder = ""  # TODO: remove
+from ..config import config
 
 
 def _get_level4_case(case):
@@ -20,7 +18,7 @@ def _get_level4_case(case):
         501: "case_nominal_50-150MHz_LNA2_a2_h2_o2_s1_sim2_all_lc_yes_bc",
         502: "case_nominal_50-150MHz_LNA2_a2_h2_o2_s1_sim2_all_lc_yes_bc_20min",
     }
-    folder = edges_folder + "mid_band/spectra/level4/{}/"
+    folder = config["edges_folder"] + "mid_band/spectra/level4/{}/"
 
     if case not in _level4_cases:
         raise ValueError("case must be one of {}".format(_level4_cases.keys()))
@@ -199,10 +197,10 @@ def level4_foreground_fits(
 
     for i, yyi in enumerate(yy):
         # Loading data
-        path_level3_file = (
-            edges_folder
-            + "mid_band/spectra/level3/case_nominal_50-150MHz_LNA2_a2_h2_o2_s1_sim2_all_lc_yes_bc"
-            "/2018_{}_00.hdf5".format(yyi)
+        path_level3_file = config[
+            "edges_folder"
+        ] + "mid_band/spectra/level3/case_nominal_50-150MHz_LNA2_a2_h2_o2_s1_sim2_all_lc_yes_bc" "/2018_{}_00.hdf5".format(
+            yyi
         )
 
         xf, xt, xp, xr, xw, xrms, xtp, xm = level3read(path_level3_file)

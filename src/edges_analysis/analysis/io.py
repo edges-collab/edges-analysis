@@ -3,8 +3,7 @@ import h5py
 
 from edges_cal import modelling as mdl
 from . import tools
-
-edges_folder = ""  # TODO: remove this
+from ..config import config
 
 
 def auxiliary_data(weather_file, thermlog_file, band, year, day):
@@ -194,7 +193,7 @@ def level3_single_file_test(
         outT = np.array([ff, tt, ww, ss])
         out = outT.T
 
-        save_path = edges_folder + "mid_band/spectra/level5/one_day_tests/"
+        save_path = config["edges_folder"] + "mid_band/spectra/level5/one_day_tests/"
         np.savetxt(save_path + save_spectrum_name, out)
 
     return ff, tt, ww, ss
@@ -267,7 +266,7 @@ def level4_save_averaged_spectra(case, gha_case, first_day, last_day):
         "f [MHz], t_ant (GHA=0-23) [K], std (GHA=0-23) [K], Nsamples (GHA=0-23)"
     )
     file_name = "GHA_every_1hr.txt"
-    file_path = edges_folder + "mid_band/spectra/level4/{}/binned_averages/"
+    file_path = config["edges_folder"] + "mid_band/spectra/level4/{}/binned_averages/"
 
     paths = {
         2: "calibration_2019_10_no_ground_loss_no_beam_corrections",

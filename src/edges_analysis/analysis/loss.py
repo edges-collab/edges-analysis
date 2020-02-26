@@ -1,8 +1,6 @@
 import numpy as np
 from edges_cal import reflection_coefficient as rc
-
-edges_folder = ""  # TODO: remove
-edges_folder_v1 = ""  # TODO: remove
+from ..config import config
 
 
 def balun_and_connector_loss(
@@ -212,11 +210,13 @@ def ground_loss(band, f_MHz):
     """
     if band == "low_band":
         fname = (
-            edges_folder_v1
+            config["edges_folder"]
             + "calibration/loss/low_band/ground_loss/lowband_loss_on_30x30m_two_columns.txt"
         )
     elif band == "mid_band":
-        fname = edges_folder + "mid_band/calibration/ground_loss/loss_column.txt"
+        fname = (
+            config["edges_folder"] + "mid_band/calibration/ground_loss/loss_column.txt"
+        )
     else:
         raise ValueError("band must be low_band or mid_band")
 
@@ -229,7 +229,8 @@ def antenna_loss(band, f_MHz):
     """
     if band == "mid_band":
         fname = (
-            edges_folder + "mid_band/calibration/antenna_loss/loss_mid_ant_column.txt"
+            config["edges_folder"]
+            + "mid_band/calibration/antenna_loss/loss_mid_ant_column.txt"
         )
     else:
         raise ValueError("only mid_band allowed for band")

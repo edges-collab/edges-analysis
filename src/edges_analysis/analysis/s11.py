@@ -1,9 +1,5 @@
-from os.path import join
-
 import numpy as np
 from edges_cal import modelling as mdl
-from edges_cal import reflection_coefficient as rc
-from edges_io.io import S1P
 
 
 def antenna_s11_remove_delay(s11_path, f, delay_0=0.17, n_fit=10):

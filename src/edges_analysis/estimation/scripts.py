@@ -1,8 +1,7 @@
 import src.edges_analysis.estimation.plots
 
 from ..simulation import data_models as dm
-
-edges_folder = ""  # TODO: remove
+from ..config import config
 
 
 def plots_midband_polychord(fig):
@@ -10,7 +9,7 @@ def plots_midband_polychord(fig):
 
     if fig == 0:
         folder = (
-            edges_folder
+            config["edges_folder"]
             + "mid_band/polychord/20190508/case1_nominal/foreground_model_exp/"
         )
         getdist_samples, ww, ll, best_fit, covariance_matrix = gp.load_samples(
@@ -41,7 +40,7 @@ def plots_midband_polychord(fig):
         )
     elif fig == 1:
         folder = (
-            edges_folder
+            config["edges_folder"]
             + "mid_band/polychord/20190508/case1_nominal/foreground_model_linlog/"
         )
         getdist_samples, ww, ll, best_fit, covariance_matrix = gp.load_samples(
@@ -67,7 +66,7 @@ def plots_midband_polychord(fig):
     elif fig == 10:
         # Data used:  60-120
         folder = (
-            edges_folder + "mid_band/polychord/20190508/case1_nominal"
+            config["edges_folder"] + "mid_band/polychord/20190508/case1_nominal"
             "/foreground_model_exp_signal_model_tanh_60_120MHz/"
         )
         getdist_samples, ww, ll, best_fit, covariance_matrix = gp.load_samples(
@@ -104,7 +103,7 @@ def plots_midband_polychord(fig):
     elif fig == 11:
         # Data used:  60-120, CASE 2, cterms7, wterms8
         folder = (
-            edges_folder + "mid_band/polychord/20190508/case1_nominal"
+            config["edges_folder"] + "mid_band/polychord/20190508/case1_nominal"
             "/foreground_model_exp_signal_model_tanh_60_120MHz_case2/"
         )
         getdist_samples, ww, ll, best_fit, covariance_matrix = gp.load_samples(
@@ -141,7 +140,7 @@ def plots_midband_polychord(fig):
     elif fig == 12:
         # Data used:  60-120
         folder = (
-            edges_folder + "mid_band/polychord/20190508/case1_nominal"
+            config["edges_folder"] + "mid_band/polychord/20190508/case1_nominal"
             "/foreground_model_exp_signal_model_exp_60_120MHz/"
         )
         getdist_samples, ww, ll, best_fit, covariance_matrix = gp.load_samples(
@@ -178,7 +177,7 @@ def plots_midband_polychord(fig):
     elif fig == 2:
         # Data used:  60-67, 103-119.5
         folder = (
-            edges_folder
+            config["edges_folder"]
             + "mid_band/polychord/20190508/case1_nominal/foreground_model_exp_gap/"
         )
         getdist_samples, ww, ll, best_fit, covariance_matrix = gp.load_samples(
@@ -210,7 +209,7 @@ def plots_midband_polychord(fig):
     elif fig == 3:
         # Data used:  60-65, 103-119.5
         folder = (
-            edges_folder
+            config["edges_folder"]
             + "mid_band/polychord/20190508/case1_nominal/foreground_model_exp_gap2/"
         )
         getdist_samples, ww, ll, best_fit, covariance_matrix = gp.load_samples(
@@ -242,7 +241,7 @@ def plots_midband_polychord(fig):
     elif fig == 4:
         # Data used:  60-65, 95-119.5
         folder = (
-            edges_folder
+            config["edges_folder"]
             + "mid_band/polychord/20190508/case1_nominal/foreground_model_exp_gap3/"
         )
         getdist_samples, ww, ll, best_fit, covariance_matrix = gp.load_samples(
@@ -274,7 +273,7 @@ def plots_midband_polychord(fig):
     elif fig == 5:
         # Data used:  60-65, 95-115
         folder = (
-            edges_folder
+            config["edges_folder"]
             + "mid_band/polychord/20190508/case1_nominal/foreground_model_exp_gap4/"
         )
         getdist_samples, ww, ll, best_fit, covariance_matrix = gp.load_samples(
@@ -306,7 +305,7 @@ def plots_midband_polychord(fig):
     elif fig == 6:
         # Data used:  60-65, 100-115
         folder = (
-            edges_folder
+            config["edges_folder"]
             + "mid_band/polychord/20190508/case1_nominal/foreground_model_exp_gap5/"
         )
         getdist_samples, ww, ll, best_fit, covariance_matrix = gp.load_samples(
@@ -338,7 +337,7 @@ def plots_midband_polychord(fig):
     elif fig == 7:
         # Data used:  60-65, 97-115
         folder = (
-            edges_folder
+            config["edges_folder"]
             + "mid_band/polychord/20190508/case1_nominal/foreground_model_exp_gap6/"
         )
         getdist_samples, ww, ll, best_fit, covariance_matrix = gp.load_samples(
@@ -370,7 +369,7 @@ def plots_midband_polychord(fig):
     elif fig == 8:
         # Data used:  60-65, 100-115, CASE 2, cterms7, wterms8
         folder = (
-            edges_folder
+            config["edges_folder"]
             + "mid_band/polychord/20190508/case1_nominal/foreground_model_exp_gap7/"
         )
         getdist_samples, ww, ll, best_fit, covariance_matrix = gp.load_samples(
@@ -402,7 +401,7 @@ def plots_midband_polychord(fig):
     elif fig == 9:
         # Data used:  60-115
         folder = (
-            edges_folder
+            config["edges_folder"]
             + "mid_band/polychord/20190508/case1_nominal/foreground_model_exp_signal_model_tanh/"
         )
         getdist_samples, ww, ll, best_fit, covariance_matrix = gp.load_samples(

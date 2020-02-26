@@ -1,13 +1,12 @@
 import numpy as np
 from edges_cal import modelling as mdl
 
-from src.edges_analysis.simulation.plots import plot_simulation_residuals
-
-edges_folder = ""  # TODO: remove
+from .plots import plot_simulation_residuals
+from ..config import config
 
 
 def residuals_of_simulations(case, name_flag, n_fg=5, f_low=60, f_high=150, plot=False):
-    folder_plot = edges_folder + "plots/20191227/"
+    folder_plot = config["edges_folder"] + "plots/20191227/"
 
     cases = {
         "inf ground plane": 11,

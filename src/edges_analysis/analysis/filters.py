@@ -3,8 +3,7 @@ import os
 import numpy as np
 
 from .io import data_selection, level3read
-
-edges_folder = ""  # TODO: remove this
+from ..config import config
 
 
 def rms_filter_computation(band, case, save_parameters=False):
@@ -12,8 +11,8 @@ def rms_filter_computation(band, case, save_parameters=False):
     Computation of the RMS filter
     """
     # Listing files available
-    path_files_direc = edges_folder + "/{}/spectra/level3/".format(band)
-    save_direc = edges_folder + "/{}/rms_filters/".format(band)
+    path_files_direc = config["edges_folder"] + f"/{band}/spectra/level3/"
+    save_direc = config["edges_folder"] + f"/{band}/rms_filters/"
 
     if band == "mid_band":
         paths = {
@@ -148,7 +147,7 @@ def perform_rms_filter(rms, indices, gha, n_poly, n_sigma, n_terms, n_std):
 
 
 def rms_filter(band, case, gx, rms, n_sigma):
-    prefix = edges_folder + band + "/rms_filters/"
+    prefix = config["edges_folder"] + band + "/rms_filters/"
 
     if band == "mid_band":
         if 10 <= case <= 19:
@@ -458,7 +457,7 @@ def daily_strict_filter(band, year_day_list):
 def daily_rms_filter(band, case, index_GHA, year_day_list, rms_threshold):
     if band == "mid_band" and case == 1:
         d = np.genfromtxt(
-            edges_folder
+            config["edges_folder"]
             + "mid_band/spectra/level4/case1/rms_filters/rms_index"
             + str(index_GHA)
             + ".txt"

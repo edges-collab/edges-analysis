@@ -1,10 +1,8 @@
 import numpy as np
-from examples.edges_polychord import v
 from getdist import loadMCSamples, plots
 from matplotlib import pyplot as plt
-from src.edges_analysis.analysis.scripts import edges_folder
-from src.edges_analysis.estimation.models import model
-from src.edges_analysis.simulation import data_models as dm
+from ..simulation import data_models as dm
+from ..config import config
 
 
 def load_samples(file_root, index_good=0):
@@ -14,84 +12,6 @@ def load_samples(file_root, index_good=0):
     covariance_matrix = samples.cov()
 
     return samples, samples.weights, samples.loglikes, best_fit, covariance_matrix
-
-
-#
-# def triangle_plot():
-#     d = np.genfromtxt("/home/raul/Desktop/hu.txt")
-#
-#     ss = d[:, 2::]
-#     ww = d[:, 0]
-#     ll = d[:, 1] / 2
-#
-#     # names  = ['x1', 'x2', 'x3', 'x4', 'x5']
-#     # labels = [r'a_0', r'a_1', r'a_2', r'a_3', r'a_4']
-#
-#     names = ["x1", "x2", "x3", "x4", "x5", "x6", "x7", "x8", "x9"]
-#     labels = [
-#         r"T_{21}",
-#         r"\nu_r",
-#         r"\Delta\nu",
-#         r"\tau",
-#         r"a_0",
-#         r"a_1",
-#         r"a_2",
-#         r"a_3",
-#         r"a_4",
-#     ]
-#
-#     samples = MCSamples(
-#         samples=ss, weights=ww, loglikes=ll, names=names, labels=labels, label=r"only"
-#     )
-#
-#     g = plots.getSubplotPlotter(subplot_size=3.3)
-#     g.settings.legend_fontsize = 15
-#     g.settings.lab_fontsize = 15
-#     g.settings.axes_fontsize = 15
-#     # g.settings.tight_layout=False
-#     g.triangle_plot(
-#         [samples], filled=True
-#     )  # , param_limits={'x1':[1498, 1502], 'x2':[-2.504,
-#     # -2.496]}, filled=True, legend_loc='upper right')
-#     g.export("/home/raul/Desktop/output_file_X.pdf")
-#     plt.close()
-#     plt.close()
-#
-#     return samples
-
-
-def model_plot():
-    t = model([1500, -2.5])
-    s3 = model([1, -2.5])
-
-    s1 = 2 * np.ones(len(v))
-    s2 = 1 * np.ones(len(v))
-
-    plt.figure(figsize=[6, 8])
-    plt.subplot(2, 1, 1)
-    plt.plot(v, t, "k")
-
-    plt.ylabel("temperature [K]")
-    plt.ylim([0, 5000])
-
-    plt.subplot(2, 1, 2)
-    plt.plot(v, s1, color=[0.7, 0.7, 0.7])
-    plt.plot(v, s2, "r")
-    plt.plot(v, s3, "b")
-
-    plt.xlabel("frequency [MHz]")
-    plt.ylabel("temperature [K]")
-    plt.legend(
-        [
-            r"$\sigma=2\;\;\rm{[K]}$",
-            r"$\sigma=1\;\;\rm{[K]}$",
-            r"$\sigma = \left(\frac{\nu}{75\;\;\rm{MHz}}\right)^{-2.5}\;\;\rm{[K]}$",
-        ]
-    )
-
-    plt.ylim([0, 3])
-
-    plt.savefig("models.pdf", bbox_inches="tight")
 
 
 def plot_absorption_model_comparison(models, labels, styles=None):
@@ -151,7 +71,8 @@ def plot_absorption_model_comparison(models, labels, styles=None):
     ax[-1].set_xlabel(r"$\nu$ [MHz]", fontsize=13)
 
     plt.savefig(
-        edges_folder + "/plots/20190730/absorption_models.pdf", bbox_inches="tight"
+        config["edges_folder"] + "/plots/20190730/absorption_models.pdf",
+        bbox_inches="tight",
     )
 
 

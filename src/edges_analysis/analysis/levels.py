@@ -12,17 +12,16 @@ from edges_io.io import Spectrum
 
 # import src.edges_analysis
 from . import io, s11 as s11m, loss, beams, rfi, tools, filters, coordinates
-
-edges_folder = ""
-MRO_folder = ""
-home_folder = ""
+from ..config import config
 
 
 def level1_to_level2(band, year, day_hour, band_flag=None):
     # Paths and files
-    path_level1 = home_folder + f"/EDGES/spectra/level1/{band}/300_350/"
-    path_logs = MRO_folder
-    save_file = home_folder + f"/EDGES/spectra/level2/{band}/{year}_{day_hour}.hdf5"
+    path_level1 = config["home_folder"] + f"/EDGES/spectra/level1/{band}/300_350/"
+    path_logs = config["MRO_folder"]
+    save_file = (
+        config["home_folder"] + f"/EDGES/spectra/level2/{band}/{year}_{day_hour}.hdf5"
+    )
 
     band_flag = band_flag or band.replace("_band", "")
     level1_file = path_level1 + f"level1_{year}_{day_hour}_{band_flag}_300_350.mat"
@@ -153,7 +152,7 @@ def level2_to_level3(
 
     # Load daily data
     # ---------------
-    path_data = edges_folder + band + "/spectra/level2/"
+    path_data = config["edges_folder"] + band + "/spectra/level2/"
     filename = path_data + year_day_hdf5
     fin_X, t_2D_X, m_2D, w_2D_X = io.level2read(filename)
 
@@ -227,7 +226,7 @@ def level2_to_level3(
                 raise ValueError("band must be mid_band or low_band3")
 
             f_table, lst_table, bf_table = beams.beam_factor_table_read(
-                f"{edges_folder}{band}/calibration/beam_factors/table/{beam_factor_filename}"
+                f"{config['edges_folder']}{band}/calibration/beam_factors/table/{beam_factor_filename}"
             )
             bfX = beams.beam_factor_table_evaluate(
                 f_table, lst_table, bf_table, m_2D[:, 3]
@@ -333,7 +332,9 @@ def level2_to_level3(
 
     # Save
     if band == "mid_band":
-        save_folder = edges_folder + band + "/spectra/level3/" + flag_folder + "/"
+        save_folder = (
+            config["edges_folder"] + band + "/spectra/level3/" + flag_folder + "/"
+        )
     elif band == "low_band3":
         save_folder = (
             f"/media/raul/EXTERNAL_2TB/low_band3/spectra/level3/{flag_folder}/"
@@ -374,53 +375,59 @@ def level3_to_level4(
         if (case >= 10) and (case <= 19):
             if case == 10:
                 path_files = (
-                    edges_folder + "mid_band/spectra/level3/rcv18_sw18_nominal/"
+                    config["edges_folder"]
+                    + "mid_band/spectra/level3/rcv18_sw18_nominal/"
                 )
 
         # Case 2 calibration: Receiver 2018, Switch 2019
         if (case >= 20) and (case <= 29):
             if case == 20:
                 path_files = (
-                    edges_folder + "mid_band/spectra/level3/rcv18_sw19_nominal/"
+                    config["edges_folder"]
+                    + "mid_band/spectra/level3/rcv18_sw19_nominal/"
                 )
 
         # Receiver and switch calibration 2019-10
         if case == 2:
             path_files = (
-                edges_folder
+                config["edges_folder"]
                 + "mid_band/spectra/level3/calibration_2019_10_no_ground_loss_no_beam_corrections/"
             )
 
         # Case 1 calibration: Receiver 2018, Switch 2018, AGAIN
         if case == 3:
             path_files = (
-                edges_folder
+                config["edges_folder"]
                 + "mid_band/spectra/level3/case_nominal_50-150MHz_no_ground_loss_no_beam_corrections/"
             )
 
         # Case 1 calibration: Receiver 2018, Switch 2018, AGAIN
         if case == 5:
             path_files = (
-                edges_folder + "mid_band/spectra/level3/case_nominal_14_14_terms_55"
+                config["edges_folder"]
+                + "mid_band/spectra/level3/case_nominal_14_14_terms_55"
                 "-150MHz_no_ground_loss_no_beam_corrections/"
             )
 
         # Calibration: Receiver 2018, Switch 2018, AGAIN, LNA1
         if case == 406:
             path_files = (
-                edges_folder
+                config["edges_folder"]
                 + "mid_band/spectra/level3/case_nominal_50-150MHz_LNA1_a2_h2_o2_s1_sim2/"
             )
 
         # Calibration: Receiver 2018, Switch 2018, all corrections
         if case == 501:
             path_files = (
-                edges_folder
+                config["edges_folder"]
                 + "mid_band/spectra/level3/case_nominal_50-150MHz_LNA2_a2_h2_o2_s1_sim2_all_lc_yes_bc/"
             )
 
         save_folder = (
-            edges_folder + "mid_band/spectra/level4/" + save_folder_file_name + "/"
+            config["edges_folder"]
+            + "mid_band/spectra/level4/"
+            + save_folder_file_name
+            + "/"
         )
         output_file_name_hdf5 = save_folder_file_name + ".hdf5"
 
@@ -428,7 +435,7 @@ def level3_to_level4(
 
         if case == 2:
             path_files = "/media/raul/EXTERNAL_2TB/low_band3/spectra/level3/case2/"
-            save_folder = edges_folder + "low_band3/spectra/level4/case2/"
+            save_folder = config["edges_folder"] + "low_band3/spectra/level4/case2/"
             output_file_name_hdf5 = "case2.hdf5"
 
     new_list = listdir(path_files)

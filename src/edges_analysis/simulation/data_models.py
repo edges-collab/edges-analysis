@@ -9,8 +9,7 @@ from edges_cal.cal_coefficients import EdgesFrequencyRange
 from ..analysis.loss import balun_and_connector_loss
 from ..analysis.scripts import models_antenna_s11_remove_delay
 from ..estimation import models
-
-edges_folder = ""  # TODO: remove
+from ..config import config
 
 
 def simulated_data(
@@ -50,7 +49,9 @@ def real_data(case, f_low, f_high, gap_f_low=0, gap_f_high=0):
         1: "one_day_tests/another_one.txt",
         2: "rcv18_sw18_nominal_GHA_every_1hr/integrated_spectrum_rcv18_sw18_every_1hr_GHA_6-18hr.txt",
     }
-    data = np.genfromtxt(edges_folder + "mid_band/spectra/level5/" + cases[case])
+    data = np.genfromtxt(
+        config["edges_folder"] + "mid_band/spectra/level5/" + cases[case]
+    )
     mask = (data[:, 0] >= f_low) & (data[:, 0] <= f_high)
     data = data[mask]
 
@@ -133,7 +134,9 @@ def svd_functions(folder_with_spectra, f_low, f_high, remove_avg=True):
     """Compute SVD functions"""
 
     # Listing files to be processed
-    folder = edges_folder + "mid_band/spectra/level5/" + folder_with_spectra + "/"
+    folder = (
+        config["edges_folder"] + "mid_band/spectra/level5/" + folder_with_spectra + "/"
+    )
     list_of_spectra = sorted(listdir(folder))
 
     # Generate the original matrix of spectra
@@ -312,7 +315,7 @@ def two_port_network_uncertainties():
     # Simulated measurements at the end of the 2-port network
     # Load 2-port parameters and models
     path_par_s11 = (
-        edges_folder + "/mid_band/calibration/receiver_calibration/receiver1"
+        config["edges_folder"] + "/mid_band/calibration/receiver_calibration/receiver1"
         "/2018_01_25C/results/nominal/s11/"
     )
 
@@ -410,7 +413,7 @@ def MC_receiver(
     # Spectra
     if np.sum(MC_spectra_noise) == 0:
         Tunc = np.genfromtxt(
-            edges_folder
+            config["edges_folder"]
             + "mid_band/calibration/receiver_calibration/receiver1/2018_01_25C"
             "/results/nominal/data/average_spectra_300_350.txt"
         )
@@ -418,7 +421,7 @@ def MC_receiver(
     else:
         ms = models_calibration_spectra(
             (
-                edges_folder
+                config["edges_folder"]
                 + "/mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results"
                 "/nominal/spectra/"
             ),
@@ -429,7 +432,7 @@ def MC_receiver(
     # S11
     mr = models_calibration_s11(
         (
-            edges_folder
+            config["edges_folder"]
             + "/mid_band/calibration/receiver_calibration/receiver1/2018_01_25C/results"
             "/nominal/s11/"
         ),
@@ -441,7 +444,7 @@ def MC_receiver(
     # Physical temperature
     mt = models_calibration_physical_temperature(
         (
-            edges_folder
+            config["edges_folder"]
             + "/mid_band/calibration/receiver_calibration/receiver1/2018_01_25C"
             "/results/nominal/temp/"
         ),
