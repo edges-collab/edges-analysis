@@ -554,7 +554,7 @@ def antenna_beam_factor_interpolation(band, case, lst_hires, fnew, Npar_freq=15)
 
     Here, "case" is not the same as in the FEKO... function
     """
-    # TODO: is this functio deprecated/unused since there's a v2 below?
+    # TODO: is this function deprecated/unused since there's a v2 below?
 
     if band not in ("low_band3", "mid_band"):
         raise ValueError("band must be 'low_band3' or 'mid_band'")

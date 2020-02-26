@@ -39,11 +39,7 @@ def test(
 
     f = rcv2[:, 0]
     rl = rcv2[:, 1] + 1j * rcv2[:, 2]
-    C1 = rcv2[:, 3]
-    C2 = rcv2[:, 4]
-    TU = rcv2[:, 5]
-    TC = rcv2[:, 6]
-    TS = rcv2[:, 7]
+    C1, C2, TU, TC, TS = rcv2[:, 3:]
 
     # Antenna S11
     # -----------
@@ -76,21 +72,8 @@ def test(
     t_3p = rcf.uncalibrated_antenna_temperature(t_lb, ra, rl, C1, C2, TU, TC, TS)
 
     # Perturbed calibration quantities
-    X_ra = ra + 0
-
-    X_rl = rl + 0
-    X_C1 = C1 * (1 + 0.1)
-    X_C2 = C2 + 0
-    X_TU = TU + 0
-    X_TC = TC + 0
-    X_TS = TS + 0
-    X_G = G + 0
-    X_t_amb = t_amb + 0
+    C1 *= 1 + 0.1
 
     # Calibrated uncalibrated data
-    X_t_lb = rcf.calibrated_antenna_temperature(
-        t_3p, X_ra, X_rl, X_C1, X_C2, X_TU, X_TC, X_TS
-    )
-    X_t_b = (X_t_lb - X_t_amb * (1 - X_G)) / X_G
-
-    return f, t_b, X_t_b
+    t_lb = rcf.calibrated_antenna_temperature(t_3p, ra, rl, C1, C2, TU, TC, TS)
+    return f, t_b, (t_lb - t_amb * (1 - G)) / G

@@ -1,7 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from edges_cal import modelling as mdl
-from src.edges_analysis import basic as ba
 
 edges_folder = ""  # TODO: remove
 
@@ -28,247 +27,46 @@ def residuals_of_simulations(case, name_flag, n_fg=5, f_low=60, f_high=150):
     if case not in cases.values():
         raise ValueError("case must be one of {}".format(cases.values()))
 
-    if case == 11:
-        t_all = np.genfromtxt(
-            "/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw"
-            "/mid_band_50-200MHz_90deg_alan1_haslam_gaussian_index_2.4_2.65_sigma_deg_8"
-            ".5_reffreq_90MHz_tant.txt"
-        )
-        f = np.genfromtxt(
-            "/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw"
-            "/mid_band_50-200MHz_90deg_alan1_haslam_gaussian_index_2.4_2.65_sigma_deg_8"
-            ".5_reffreq_90MHz_freq.txt"
-        )
-        LST = np.genfromtxt(
-            "/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw"
-            "/mid_band_50-200MHz_90deg_alan1_haslam_gaussian_index_2.4_2.65_sigma_deg_8"
-            ".5_reffreq_90MHz_LST.txt"
-        )
-        bf_all = np.genfromtxt(
-            "/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw"
-            "/mid_band_50-200MHz_90deg_alan1_haslam_gaussian_index_2.4_2.65_sigma_deg_8"
-            ".5_reffreq_90MHz_data.txt"
-        )
-    elif case == 12:
-        t_all = np.genfromtxt(
-            "/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw"
-            "/mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8"
-            ".5_reffreq_90MHz_tant.txt"
-        )
-        f = np.genfromtxt(
-            "/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw"
-            "/mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8"
-            ".5_reffreq_90MHz_freq.txt"
-        )
-        LST = np.genfromtxt(
-            "/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw"
-            "/mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8"
-            ".5_reffreq_90MHz_LST.txt"
-        )
-        bf_all = np.genfromtxt(
-            "/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw"
-            "/mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8"
-            ".5_reffreq_90MHz_data.txt"
-        )
-    elif case == 12:
-        t_all = np.genfromtxt(
-            "/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw"
-            "/mid_band_50-200MHz_90deg_alan0_haslam_flat_index_2.56_reffreq_90MHz_tant.txt"
-        )
-        f = np.genfromtxt(
-            "/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw"
-            "/mid_band_50-200MHz_90deg_alan0_haslam_flat_index_2.56_reffreq_90MHz_freq.txt"
-        )
-        LST = np.genfromtxt(
-            "/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw"
-            "/mid_band_50-200MHz_90deg_alan0_haslam_flat_index_2.56_reffreq_90MHz_LST.txt"
-        )
-        bf_all = np.genfromtxt(
-            "/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw"
-            "/mid_band_50-200MHz_90deg_alan0_haslam_flat_index_2.56_reffreq_90MHz_data.txt"
-        )
-    elif case == 14:
-        t_all = np.genfromtxt(
-            "/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw"
-            "/mid_band_50-200MHz_90deg_alan0_guzman_gaussian_index_2.4_2.65_sigma_deg_8"
-            ".5_reffreq_90MHz_tant.txt"
-        )
-        f = np.genfromtxt(
-            "/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw"
-            "/mid_band_50-200MHz_90deg_alan0_guzman_gaussian_index_2.4_2.65_sigma_deg_8"
-            ".5_reffreq_90MHz_freq.txt"
-        )
-        LST = np.genfromtxt(
-            "/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw"
-            "/mid_band_50-200MHz_90deg_alan0_guzman_gaussian_index_2.4_2.65_sigma_deg_8"
-            ".5_reffreq_90MHz_LST.txt"
-        )
-        bf_all = np.genfromtxt(
-            "/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw"
-            "/mid_band_50-200MHz_90deg_alan0_guzman_gaussian_index_2.4_2.65_sigma_deg_8"
-            ".5_reffreq_90MHz_data.txt"
-        )
-    elif case == 15:
-        t_all = np.genfromtxt(
-            "/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw"
-            "/mid_band_50-200MHz_90deg_alan0_LW_gaussian_index_2.4_2.65_sigma_deg_8"
-            ".5_reffreq_90MHz_tant.txt"
-        )
-        f = np.genfromtxt(
-            "/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw"
-            "/mid_band_50-200MHz_90deg_alan0_LW_gaussian_index_2.4_2.65_sigma_deg_8"
-            ".5_reffreq_90MHz_freq.txt"
-        )
-        LST = np.genfromtxt(
-            "/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw"
-            "/mid_band_50-200MHz_90deg_alan0_LW_gaussian_index_2.4_2.65_sigma_deg_8"
-            ".5_reffreq_90MHz_LST.txt"
-        )
-        bf_all = np.genfromtxt(
-            "/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw"
-            "/mid_band_50-200MHz_90deg_alan0_LW_gaussian_index_2.4_2.65_sigma_deg_8"
-            ".5_reffreq_90MHz_data.txt"
-        )
-    elif case == 21:
-        t_all = np.genfromtxt(
-            "/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw"
-            "/mid_band_50-200MHz_WIPL-D_101_90deg_haslam_gaussian_index_2.4_2.65_sigma_deg_8"
-            ".5_reffreq_90MHz_tant.txt"
-        )
-        f = np.genfromtxt(
-            "/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw"
-            "/mid_band_50-200MHz_WIPL-D_101_90deg_haslam_gaussian_index_2.4_2.65_sigma_deg_8"
-            ".5_reffreq_90MHz_freq.txt"
-        )
-        LST = np.genfromtxt(
-            "/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw"
-            "/mid_band_50-200MHz_WIPL-D_101_90deg_haslam_gaussian_index_2.4_2.65_sigma_deg_8"
-            ".5_reffreq_90MHz_LST.txt"
-        )
-        l_all = np.genfromtxt(
-            "/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw"
-            "/mid_band_50-200MHz_WIPL-D_101_90deg_haslam_gaussian_index_2.4_2.65_sigma_deg_8"
-            ".5_reffreq_90MHz_loss.txt"
-        )
-        bf_all = np.genfromtxt(
-            "/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw"
-            "/mid_band_50-200MHz_WIPL-D_101_90deg_haslam_gaussian_index_2.4_2.65_sigma_deg_8"
-            ".5_reffreq_90MHz_beam_factor.txt"
-        )
+    prefix = (
+        "/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/"
+    )
 
-        # Adding the ground loss
-        t_all = t_all + 300 * l_all
+    files = {
+        11: "mid_band_50-200MHz_90deg_alan1_haslam_gaussian_index_2.4_2.65_sigma_deg_8"
+        ".5_reffreq_90MHz_{}.txt",
+        12: "mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8"
+        ".5_reffreq_90MHz_{}.txt",
+        13: "mid_band_50-200MHz_90deg_alan0_haslam_flat_index_2.56_reffreq_90MHz_{}.txt",
+        14: "mid_band_50-200MHz_90deg_alan0_guzman_gaussian_index_2.4_2.65_sigma_deg_8"
+        ".5_reffreq_90MHz_{}.txt",
+        15: "mid_band_50-200MHz_90deg_alan0_LW_gaussian_index_2.4_2.65_sigma_deg_8"
+        ".5_reffreq_90MHz_{}.txt",
+        21: "mid_band_50-200MHz_WIPL-D_101_90deg_haslam_gaussian_index_2.4_2.65_sigma_deg_8"
+        ".5_reffreq_90MHz_{}.txt",
+        22: "mid_band_50-200MHz_WIPL-D_102_90deg_haslam_gaussian_index_2.4_2.65_sigma_deg_8"
+        ".5_reffreq_90MHz_{}.txt",
+        23: "mid_band_50-200MHz_WIPL-D_103_90deg_haslam_gaussian_index_2.4_2.65_sigma_deg_8"
+        ".5_reffreq_90MHz_{}.txt",
+        31: "CORRECT_mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8"
+        ".5_reffreq_90MHz_{}.txt",
+        51: "NORMALIZED_mid_band_50-150MHz_90deg_alan0_haslam_gaussian_index_2.4_2"
+        ".65_sigma_deg_8.5_reffreq_90MHz_{}.txt",
+    }
 
-    elif case == 22:
-        t_all = np.genfromtxt(
-            "/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw"
-            "/mid_band_50-200MHz_WIPL-D_102_90deg_haslam_gaussian_index_2.4_2.65_sigma_deg_8"
-            ".5_reffreq_90MHz_tant.txt"
-        )
-        f = np.genfromtxt(
-            "/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw"
-            "/mid_band_50-200MHz_WIPL-D_102_90deg_haslam_gaussian_index_2.4_2.65_sigma_deg_8"
-            ".5_reffreq_90MHz_freq.txt"
-        )
-        LST = np.genfromtxt(
-            "/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw"
-            "/mid_band_50-200MHz_WIPL-D_102_90deg_haslam_gaussian_index_2.4_2.65_sigma_deg_8"
-            ".5_reffreq_90MHz_LST.txt"
-        )
-        l_all = np.genfromtxt(
-            "/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw"
-            "/mid_band_50-200MHz_WIPL-D_102_90deg_haslam_gaussian_index_2.4_2.65_sigma_deg_8"
-            ".5_reffreq_90MHz_loss.txt"
-        )
-        bf_all = np.genfromtxt(
-            "/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw"
-            "/mid_band_50-200MHz_WIPL-D_102_90deg_haslam_gaussian_index_2.4_2.65_sigma_deg_8"
-            ".5_reffreq_90MHz_beam_factor.txt"
-        )
+    fl = prefix + files[case]
+    t_all = np.genfromtxt(fl.format("tant"))
+    f = np.genfromtxt(fl.format("freq"))
+    LST = np.genfromtxt(fl.format("LST"))
+    bf_all = np.genfromtxt(fl.format("data"))
 
-        # Adding the ground loss
-        t_all = t_all + 300 * l_all
-    elif case == 23:
-        t_all = np.genfromtxt(
-            "/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw"
-            "/mid_band_50-200MHz_WIPL-D_103_90deg_haslam_gaussian_index_2.4_2.65_sigma_deg_8"
-            ".5_reffreq_90MHz_tant.txt"
-        )
-        f = np.genfromtxt(
-            "/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw"
-            "/mid_band_50-200MHz_WIPL-D_103_90deg_haslam_gaussian_index_2.4_2.65_sigma_deg_8"
-            ".5_reffreq_90MHz_freq.txt"
-        )
-        LST = np.genfromtxt(
-            "/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw"
-            "/mid_band_50-200MHz_WIPL-D_103_90deg_haslam_gaussian_index_2.4_2.65_sigma_deg_8"
-            ".5_reffreq_90MHz_LST.txt"
-        )
-        l_all = np.genfromtxt(
-            "/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw"
-            "/mid_band_50-200MHz_WIPL-D_103_90deg_haslam_gaussian_index_2.4_2.65_sigma_deg_8"
-            ".5_reffreq_90MHz_loss.txt"
-        )
-        bf_all = np.genfromtxt(
-            "/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw"
-            "/mid_band_50-200MHz_WIPL-D_103_90deg_haslam_gaussian_index_2.4_2.65_sigma_deg_8"
-            ".5_reffreq_90MHz_beam_factor.txt"
-        )
+    if case in [21, 22, 23]:
+        loss = np.genfromtxt(fl.format("loss"))
+        t_all += 300 * loss
 
-        # Adding the ground loss
-        t_all = t_all + 300 * l_all
-
-    # 30x30 m,   SAME AS CASE 12 BUT WITH CORRECT COMPUTATION OF ANTENNA
-    # TEMPERATURE AND BEAM FACTOR
-    elif case == 31:
-        t_all = np.genfromtxt(
-            "/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw"
-            "/CORRECT_mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8"
-            ".5_reffreq_90MHz_tant.txt"
-        )
-        f = np.genfromtxt(
-            "/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw"
-            "/CORRECT_mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8"
-            ".5_reffreq_90MHz_freq.txt"
-        )
-        LST = np.genfromtxt(
-            "/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw"
-            "/CORRECT_mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8"
-            ".5_reffreq_90MHz_LST.txt"
-        )
-        bf_all = np.genfromtxt(
-            "/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw"
-            "/CORRECT_mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8"
-            ".5_reffreq_90MHz_beam_factor.txt"
-        )
-
-    # 30x30 m,   SAME AS CASE 12 BUT WITH CORRECT AND "LOSS-NORMALIZED"
-    # COMPUTATION OF ANTENNA TEMPERATURE AND BEAM FACTOR
-    elif case == 51:
-        t_all = np.genfromtxt(
-            "/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw"
-            "/NORMALIZED_mid_band_50-150MHz_90deg_alan0_haslam_gaussian_index_2.4_2"
-            ".65_sigma_deg_8.5_reffreq_90MHz_tant.txt"
-        )
-        f = np.genfromtxt(
-            "/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw"
-            "/NORMALIZED_mid_band_50-150MHz_90deg_alan0_haslam_gaussian_index_2.4_2"
-            ".65_sigma_deg_8.5_reffreq_90MHz_freq.txt"
-        )
-        LST = np.genfromtxt(
-            "/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw"
-            "/NORMALIZED_mid_band_50-150MHz_90deg_alan0_haslam_gaussian_index_2.4_2"
-            ".65_sigma_deg_8.5_reffreq_90MHz_LST.txt"
-        )
-        bf_all = np.genfromtxt(
-            "/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw"
-            "/NORMALIZED_mid_band_50-150MHz_90deg_alan0_haslam_gaussian_index_2.4_2"
-            ".65_sigma_deg_8.5_reffreq_90MHz_beam_factor.txt"
-        )
-
-    fc = f[(f >= f_low) & (f <= f_high)]
-    tc = t_all[:, (f >= f_low) & (f <= f_high)]
-    bc = bf_all[:, (f >= f_low) & (f <= f_high)]
+    mask = (f >= f_low) & (f <= f_high)
+    fc = f[mask]
+    tc = t_all[:, mask]
+    bc = bf_all[:, mask]
 
     GHA = LST - 17.76
     GHA[GHA < 0] += 24
@@ -276,8 +74,8 @@ def residuals_of_simulations(case, name_flag, n_fg=5, f_low=60, f_high=150):
     index_sort = np.argsort(GHA)
 
     GHA_inc = GHA[index_sort]
-    tc_inc = tc[index_sort, :]
-    bc_inc = bc[index_sort, :]
+    tc_inc = tc[index_sort]
+    bc_inc = bc[index_sort]
 
     res = np.zeros((24, len(fc)))
     resb = np.zeros((24, len(fc)))
@@ -308,133 +106,61 @@ def residuals_of_simulations(case, name_flag, n_fg=5, f_low=60, f_high=150):
 
     gg = np.arange(24)
 
-    r_low = res[(gg >= 6) & (gg <= 17), :]
-
-    r_high = res[(gg < 6) | (gg > 17), :]
-    r_high1 = r_high[0:6, :]
-    r_high2 = r_high[6::, :]
-    r_high = np.vstack((r_high2, r_high1))
-
-    rb_low = resb[(gg >= 6) & (gg <= 17), :]
-
-    rb_high = resb[(gg < 6) | (gg > 17), :]
-    rb_high1 = rb_high[0:6, :]
-    rb_high2 = rb_high[6::, :]
-    rb_high = np.vstack((rb_high2, rb_high1))
-
-    b_low = bf_all[(gg >= 6) & (gg <= 17), :]
-
-    b_high = bf_all[(gg < 6) | (gg > 17), :]
-    b_high1 = b_high[0:6, :]
-    b_high2 = b_high[6::, :]
-    b_high = np.vstack((b_high2, b_high1))
+    out = {}
+    for name, x in zip(
+        ["residuals", "correction", "correction_residuals"], [res, resb, bf_all]
+    ):
+        out[name]["low"] = x[(gg >= 6) & (gg <= 17), :]
+        high = x[(gg < 6) | (gg > 17), :]
+        high1 = high[:6]
+        high2 = high[6:]
+        out[name]["high"] = np.vstack((high2, high1))
 
     f = np.copy(fc)
 
-    plt.figure(figsize=[13, 11])
-    plt.subplot(1, 2, 1)
-    c = "b"
-    for i in range(len(r_low[:, 0])):
-        plt.plot(f, r_low[i, :] - 0.5 * i, c)
-        if c == "b":
-            c = "r"
-        elif c == "r":
-            c = "b"
-    plt.xlim([60, 150])
-    plt.grid()
-    plt.ylim([-6, 0.5])
-    plt.xlabel("frequency [MHz]")
-    plt.ylabel("GHA\n [0.5 K per division]")
-    plt.yticks(np.arange(-5.5, 0.1, 0.5), np.arange(17, 5, -1))
+    def plot_it(key, ylim_1, yticks_1, div_1, ylim_2=None, yticks_2=None, div_2=None):
+        fig, ax = plt.subplots(1, 2, figsize=[13, 11], sharex=True)
 
-    plt.subplot(1, 2, 2)
-    c = "b"
-    for i in range(len(r_high[:, 0])):
-        plt.plot(f, r_high[i, :] - 2 * i, c)
-        if c == "b":
-            c = "r"
-        elif c == "r":
-            c = "b"
-    plt.xlim([60, 150])
-    plt.grid()
-    plt.ylim([-24, 2])
-    plt.xlabel("frequency [MHz]")
-    plt.ylabel("GHA\n [2 K per division]")
-    plt.yticks(np.arange(-22, 0.1, 2), np.arange(5, -7, -1))
+        for i, val in enumerate(out[key]["low"]):
+            ax[0].plot(f, val - div_1 * i, "br"[i % 2])
 
-    plt.savefig(
-        folder_plot + name_flag + "_simulated_residuals.pdf", bbox_inches="tight"
+        for i, val in enumerate(out[key]["high"]):
+            ax[1].plot(f, val - (div_2 or div_1) * i, "br"[i % 2])
+
+        for axx in ax:
+            axx.set_xlim([60, 150])
+            axx.grid()
+            axx.set_xlabel("frequency [MHz]")
+
+        ax[0].set_ylim(ylim_1)
+        ax[0].set_ylabel(f"GHA\n [{div_1} K per division]")
+        ax[0].yaxis.yticks(yticks_1, np.arange(17, 5, -1))
+
+        ax[1].set_ylim(ylim_2 or ylim_1)
+        ax[1].set_ylabel(f"GHA\n [{div_2 or div_1} K per division]")
+        ax[1].yaxis.yticks(yticks_2 or yticks_1, np.arange(5, -7, -1))
+
+        plt.savefig(
+            folder_plot + name_flag + f"_simulated_{key}.pdf", bbox_inches="tight"
+        )
+
+    plot_it(
+        "residuals",
+        ylim_1=(-6, 0.5),
+        yticks_1=np.arange(-5.5, 0.1, 0.5),
+        div_1=0.5,
+        ylim_2=(-24, 2),
+        yticks_2=np.arange(-22, 0.1, 2),
+        div_2=2,
     )
-
-    plt.figure(figsize=[13, 11])
-    plt.subplot(1, 2, 1)
-    c = "b"
-    for i in range(len(b_low[:, 0])):
-        plt.plot(f, b_low[i, :] - 0.1 * i, c)
-        if c == "b":
-            c = "r"
-        elif c == "r":
-            c = "b"
-    plt.xlim([60, 150])
-    plt.grid()
-    plt.ylim([-0.2, 1.1])
-    plt.xlabel("frequency [MHz]")
-    plt.ylabel("GHA\n [0.1 per division]")
-    plt.yticks(np.arange(-0.1, 1.01, 0.1), np.arange(17, 5, -1))
-
-    plt.subplot(1, 2, 2)
-    c = "b"
-    for i in range(len(b_high[:, 0])):
-        plt.plot(f, b_high[i, :] - 0.1 * i, c)
-        if c == "b":
-            c = "r"
-        elif c == "r":
-            c = "b"
-    plt.xlim([60, 150])
-    plt.grid()
-    plt.ylim([-0.2, 1.1])
-    plt.xlabel("frequency [MHz]")
-    plt.ylabel("GHA\n [0.1 per division]")
-    plt.yticks(np.arange(-0.1, 1.01, 0.1), np.arange(5, -7, -1))
-
-    plt.savefig(
-        folder_plot + name_flag + "_simulated_correction.pdf", bbox_inches="tight"
+    plot_it(
+        "correction", ylim_1=(-0.2, 1.1), yticks_1=np.arange(-0.1, 1.01, 0.1), div_1=0.1
     )
-
-    plt.figure(figsize=[13, 11])
-    plt.subplot(1, 2, 1)
-    c = "b"
-    for i in range(len(rb_low[:, 0])):
-        plt.plot(f, rb_low[i, :] - 0.005 * i, c)
-        if c == "b":
-            c = "r"
-        elif c == "r":
-            c = "b"
-    plt.xlim([60, 150])
-    plt.grid()
-    plt.ylim([-0.06, 0.005])
-    plt.xlabel("frequency [MHz]")
-    plt.ylabel("GHA\n [0.05 per division]")
-    plt.yticks(np.arange(-0.055, 0.0025, 0.005), np.arange(17, 5, -1))
-
-    plt.subplot(1, 2, 2)
-    c = "b"
-    for i in range(len(rb_high[:, 0])):
-        plt.plot(f, rb_high[i, :] - 0.005 * i, c)
-        if c == "b":
-            c = "r"
-        elif c == "r":
-            c = "b"
-    plt.xlim([60, 150])
-    plt.grid()
-    plt.ylim([-0.06, 0.005])
-    plt.xlabel("frequency [MHz]")
-    plt.ylabel("GHA\n [0.05 per division]")
-    plt.yticks(np.arange(-0.055, 0.0025, 0.005), np.arange(5, -7, -1))
-
-    plt.savefig(
-        folder_plot + name_flag + "_simulated_correction_residuals.pdf",
-        bbox_inches="tight",
+    plot_it(
+        "correction_residuals",
+        ylim_1=(-0.06, 0.005),
+        yticks_1=np.arange(-0.055, 0.0025, 0.005),
+        div_1=0.005,
     )
 
     return fc, GHA_inc, res
