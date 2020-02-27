@@ -14,7 +14,10 @@ def rms_filter_computation(band, case, save_parameters=False):
     path_files_direc = config["edges_folder"] + f"/{band}/spectra/level3/"
     save_direc = config["edges_folder"] + f"/{band}/rms_filters/"
 
-    if band == "mid_band":
+    if band == "low_band3":
+        if case == 2:
+            pth = "case2/"
+    elif band == "mid_band":
         paths = {
             10: "rcv18_sw18_nominal/",
             20: "rcv18_sw19_nominal/",
@@ -29,13 +32,8 @@ def rms_filter_computation(band, case, save_parameters=False):
             )
 
         pth = paths[case]
-
-    elif band == "low_band3":
-        if case == 2:
-            pth = "case2/"
     else:
         raise ValueError("band must be 'mid_band' or 'low_band3'.")
-
     path_files = path_files_direc + pth
     save_folder = save_direc + pth
 
@@ -66,7 +64,7 @@ def rms_filter_computation(band, case, save_parameters=False):
             max_receiver_temp=100,
         )
 
-        # Accumulatee data
+        # Accumulate data
         rms_all.append(rms[indices])
         m_all.append(m[indices])
 
@@ -129,12 +127,7 @@ def perform_rms_filter(rms, indices, gha, n_poly, n_sigma, n_terms, n_std):
             print("STD: " + str(np.round(std, 3)) + " K")
             print("Number of bad points excised: " + str(bad))
 
-        # Indices of bad data points
-        if i == 0:
-            bad = np.copy(IN_x_bad)
-        else:
-            bad = np.append(bad, IN_x_bad)
-
+        bad = np.copy(IN_x_bad) if i == 0 else np.append(bad, IN_x_bad)
     good = np.setdiff1d(indices, bad)
 
     par = np.polyfit(gha[good], rms[good], n_terms - 1)
@@ -186,7 +179,7 @@ def rms_filter(band, case, gx, rms, n_sigma):
     return (index_good, *good_indices)
 
 
-def tp_filter(gha, tp):
+def total_power_filter(gha, tp):
     """
     Filter on total power.
 

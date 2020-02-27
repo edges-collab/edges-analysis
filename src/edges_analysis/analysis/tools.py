@@ -2,9 +2,9 @@ import os
 
 import h5py
 import numpy as np
-from edges_cal import modelling as mdl
+from edges_cal import modelling as mdl, xrfi as rfi
 
-from . import tools, io, rfi
+from . import tools, io
 from .io import data_selection, level3read, level4read
 from ..config import config
 
@@ -589,9 +589,16 @@ def integrate_level4_half_hour(
 
     # For the 10.5 and 11 averages, DO NOT USE THIS CLEANING. ONLY use the 2.5sigma filter in the
     # INTEGRATED 10.5-11.5 spectrum, AFTER integration
-    avrn, avwn = rfi.cleaning_sweep(
-        f, avrn, avwn, window_width=3, n_poly=2, n_bootstrap=20, n_sigma=3.0
+    flags = rfi.cleaning_sweep(
+        avrn,
+        avwn,
+        window_width=int(3 / (f[1] - f[0])),
+        n_poly=2,
+        n_bootstrap=20,
+        n_sigma=3.0,
     )
+    avrn[flags] = 0
+    avwn[flags] = 0
 
     avtn = mdl.model_evaluate("LINLOG", avp, f / 200) + avrn
     fb, rbn, wbn = spectral_binning_number_of_samples(f, avrn, avwn)

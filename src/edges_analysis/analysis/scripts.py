@@ -4,17 +4,15 @@ from os.path import exists, dirname
 import h5py
 import numpy as np
 import yaml
-import src.edges_analysis
-import src.edges_analysis.analysis.levels
-import src.edges_analysis.analysis.tools
 from edges_cal import modelling as mdl
 from edges_cal import receiver_calibration_func as rcf
 from edges_cal import s11_correction as s11c
+from edges_cal import xrfi as rfi
 from edges_cal.cal_coefficients import EdgesFrequencyRange, HotLoadCorrection
 from edges_io.io import SwitchingState
 from matplotlib import pyplot as plt
 
-from . import beams, filters, io, loss, plots, rfi
+from . import beams, filters, io, loss, plots
 from . import s11 as s11m
 from . import tools
 from .levels import level1_to_level2, level2_to_level3
@@ -150,17 +148,15 @@ def calibration_file_computation(
     n_sigma = 4
     index_good = np.zeros(len(ff), dtype=bool)
     for d in raw_data.values():
-        wghts = rfi.cleaning_sweep(
-            ff,
+        index_good &= ~rfi.cleaning_sweep(
             d["temp"],
             d["weights"],
-            window_width=4,
+            window_width=int(4 / (ff[1] - ff[0])),
             n_poly=4,
             n_bootstrap=20,
             n_sigma=n_sigma,
             flip=True,
-        )[1]
-        index_good &= wghts != 0
+        )
 
     # Removing data points with zero weight. But for the rest, not using the weights
     # because they are pretty even across frequency
@@ -625,9 +621,16 @@ def integrated_spectrum_level4(
     m = mdl.model_evaluate("LINLOG", avp, f / 200)
 
     avr, avw = tools.spectral_averaging(r, w)
-    rr, wr = rfi.cleaning_sweep(
-        f, avr, avw, window_width=3, n_poly=2, n_bootstrap=20, n_sigma=3
+    flags = rfi.cleaning_sweep(
+        avr,
+        avw,
+        window_width=int(3 / (f[1] - f[0])),
+        n_poly=2,
+        n_bootstrap=20,
+        n_sigma=3,
     )
+    rr = np.where(flags, 0, avr)
+    wr = np.where(flags, 0, avw)
 
     tr = m + rr
 
@@ -775,9 +778,17 @@ def integrated_half_hour_level4_many(band, case, GHA_starts=[(13, 1), (14, 0)]):
     avp = np.mean(avp_all, axis=0)
     avt = mdl.model_evaluate("LINLOG", avp, f / 200) + avr
 
-    avrn, avwn = rfi.cleaning_sweep(
-        f, avr, avw, window_width=3, n_poly=2, n_bootstrap=20, n_sigma=2.5
+    flags = rfi.cleaning_sweep(
+        avr,
+        avw,
+        window_width=int(3 / (f[1] - f[0])),
+        n_poly=2,
+        n_bootstrap=20,
+        n_sigma=2.5,
     )
+    avrn = np.where(flags, 0, avr)
+    avwn = np.where(flags, 0, avw)
+
     fb, rb, wbn = tools.spectral_binning_number_of_samples(f, avrn, avwn)
     tbn = mdl.model_evaluate("LINLOG", avp, fb / 200) + rb
 
@@ -818,9 +829,16 @@ def season_integrated_spectra_GHA(
         avr, avw = tools.weighted_mean(rr, ww)
 
         # RFI cleaning of 1-hr season average spectra
-        avr_no_rfi, avw_no_rfi = rfi.cleaning_sweep(
-            f, avr, avw, window_width=3, n_poly=2, n_bootstrap=20, n_sigma=2.5,
+        flags = rfi.cleaning_sweep(
+            avr,
+            avw,
+            window_width=int(3 / (f[1] - f[0])),
+            n_poly=2,
+            n_bootstrap=20,
+            n_sigma=2.5,
         )
+        avr_no_rfi = np.where(flags, 0, avr)
+        avw_no_rfi = np.where(flags, 0, avw)
 
         # Storing season 1hr-average spectra
         pr_all[j] = avp
@@ -870,9 +888,16 @@ def season_integrated_spectra_GHA(
             avpx = np.mean(px_all, axis=0)
             avrx, avwx = tools.weighted_mean(rx_all, wx_all)
 
-        avrx_no_rfi, avwx_no_rfi = rfi.cleaning_sweep(
-            f, avrx, avwx, window_width=3, n_poly=2, n_bootstrap=20, n_sigma=2.5,
+        flags = rfi.cleaning_sweep(
+            avrx,
+            avwx,
+            window_width=int(3 / (f[1] - f[0])),
+            n_poly=2,
+            n_bootstrap=20,
+            n_sigma=2.5,
         )
+        avrx_no_rfi = np.where(flags, 0, avrx)
+        avwx_no_rfi = np.where(flags, 0, avwx)
 
         # Frequency binning
         fb, rbx, wbx = tools.spectral_binning_number_of_samples(

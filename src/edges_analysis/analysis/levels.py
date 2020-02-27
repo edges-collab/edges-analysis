@@ -1,5 +1,5 @@
 from os import makedirs, listdir
-from os.path import exists
+from os.path import exists, dirname
 
 import h5py
 import numpy as np
@@ -7,11 +7,12 @@ from edges_cal import (
     EdgesFrequencyRange,
     receiver_calibration_func as rcf,
     modelling as mdl,
+    xrfi as rfi,
 )
 from edges_io.io import Spectrum
 
 # import src.edges_analysis
-from . import io, s11 as s11m, loss, beams, rfi, tools, filters, coordinates
+from . import io, s11 as s11m, loss, beams, tools, filters, coordinates
 from ..config import config
 
 
@@ -237,7 +238,13 @@ def level2_to_level3(
         tc = tc_with_beam / bf
 
         # RFI cleaning
-        tt, ww = rfi.excision_raw_frequency(fin, tc, w_2D)
+        flags = rfi.excision_raw_frequency(
+            fin, rfi_file=dirname(__file__) + "data/known_rfi_channels.yaml"
+        )
+        tt = tc
+        tt[flags] = 0
+        ww = w_2D
+        ww[:flags] = 0
 
         # Number of spectra
         lt = len(tt)
@@ -253,9 +260,16 @@ def level2_to_level3(
         for i, (ti, wi) in enumerate(tt, ww):
 
             # RFI cleaning
-            tti, wwi = rfi.cleaning_polynomial(
-                fin, ti, wi, Nterms_fg=n_fg, Nterms_std=5, Nstd=3.5
+            flags = rfi.xrfi_poly(
+                ti,
+                wi,
+                f_ratio=fin.max() / fin.min(),
+                n_signal=n_fg,
+                n_resid=5,
+                n_abs_resid_threshold=3.5,
             )
+            tti = np.where(flags, 0, ti)
+            wwi = np.where(flags, 0, wi)
 
             # Fitting foreground model to binned version of spectra
             Nsamples = 16  # 48.8 kHz
@@ -497,7 +511,7 @@ def level3_to_level4(
         index_good_rms, i1, i2, i3 = filters.rms_filter(band, case, gx, rmsx, Nsigma)
 
         # Applying total-power filter
-        index_good_total_power, i1, i2, i3 = filters.tp_filter(gx, tpx)
+        index_good_total_power, i1, i2, i3 = filters.total_power_filter(gx, tpx)
 
         # Combined filters
         index_good = np.intersect1d(index_good_rms, index_good_total_power)
@@ -560,14 +574,18 @@ def level3_to_level4(
                 avr, avw = tools.weighted_mean(r1, w1)
 
                 # RFI cleaning of average spectra
-                avr_no_rfi, avw_no_rfi = rfi.cleaning_sweep(
-                    f, avr, avw, window_width=3, n_poly=2, n_bootstrap=20, n_sigma=2.5,
+                flags = rfi.xrfi_poly_filter(
+                    avr,
+                    avw,
+                    window_width=int(3 / (f[1] - f[0])),
+                    n_poly=2,
+                    n_bootstrap=20,
+                    n_sigma=2.5,
                 )
-
                 # Storing averages
                 avp_all[i, j, :] = avp
-                avr_all[i, j, :] = avr_no_rfi
-                avw_all[i, j, :] = avw_no_rfi
+                avr_all[i, j, flags] = 0
+                avw_all[i, j, flags] = 0
                 master_index[i, j, daily_index4] = 1
 
     # Save

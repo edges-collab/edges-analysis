@@ -9,12 +9,12 @@ import numpy as np
 from astropy import coordinates as apc
 from astropy import time as apt
 from astropy import units as apu
-from edges_cal import EdgesFrequencyRange, reflection_coefficient as rc
+from edges_cal import EdgesFrequencyRange, reflection_coefficient as rc, xrfi as rfi
 from edges_cal import modelling as mdl
 from edges_io.io import S1P
 from scipy import interpolate as interp
 
-from . import beams, filters, io, loss, rfi
+from . import beams, filters, io, loss
 from . import s11 as s11m
 from . import sky_models, tools
 from ..config import config
@@ -719,10 +719,19 @@ def _scroll_through_i(
         lw = len(avw[avw > 0])
 
         if lw > 0:
-            ii = ii + 1
-            rr, wr = rfi.cleaning_sweep(
-                f, avr, avw, window_width=3, n_poly=2, n_bootstrap=20, n_sigma=3.5,
+            ii += 1
+            flags = rfi.cleaning_sweep(
+                avr,
+                avw,
+                window_width=int(3 / (f[1] - f[0])),
+                n_poly=2,
+                n_bootstrap=20,
+                n_sigma=3.5,
             )
+            avr[flags] = 0
+            avw[flags] = 0
+            rr = avr
+            wr = avw
 
             m = mdl.model_evaluate("LINLOG", avp, f / 200)
             tr = m + rr
