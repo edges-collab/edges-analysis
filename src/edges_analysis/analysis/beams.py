@@ -3,7 +3,6 @@ import warnings
 
 import astropy.coordinates as apc
 import astropy.time as apt
-import astropy.units as apu
 import h5py
 import numpy as np
 import scipy.interpolate as spi
@@ -18,6 +17,7 @@ from .sky_models import (
     remazeilles_408MHz_map,
 )
 from ..config import config
+from .. import const
 
 
 def hfss_read(
@@ -298,13 +298,6 @@ def antenna_beam_factor(
     for i in range(len(freq_array)):
         sky_map[:, i] = (map_orig - Tcmb) * (freq_array[i] / v0) ** (-index) + Tcmb
 
-    # EDGES location
-    edges_lat_deg = -26.714778
-    edges_lon_deg = 116.605528
-    edges_location = apc.EarthLocation(
-        lat=edges_lat_deg * apu.deg, lon=edges_lon_deg * apu.deg
-    )
-
     # Reference UTC observation time. At this time, the LST is 0.1666 (00:10 Hrs LST) at the
     # EDGES location.
     ref_time = [2014, 1, 1, 9, 39, 42]
@@ -334,12 +327,12 @@ def antenna_beam_factor(
                 ref_time_dt.second,
             ]
 
-        lst[i] = coords.utc2lst(np.array(ref_time), edges_lon_deg)
+        lst[i] = coords.utc2lst(np.array(ref_time), const.edges_lon_deg)
 
         # Transforming Galactic coordinates of Sky to Local coordinates
         altaz = galac_coord_object.transform_to(
             apc.AltAz(
-                location=edges_location,
+                location=const.edges_location,
                 obstime=apt.Time(ref_time_dt, format="datetime"),
             )
         )
@@ -359,7 +352,7 @@ def antenna_beam_factor(
         if sky_plots:
             plot_beam_factor(
                 az_above_horizon,
-                edges_lat_deg,
+                const.edges_lat_deg,
                 el_above_horizon,
                 irf,
                 lst[i],
@@ -779,3 +772,21 @@ def feko_blade_beam(
     # Shifting beam relative to true AZ (referenced at due North)
     # Due to angle of orientation of excited antenna panels relative to due North
     return shift_beam_maps(az_antenna_axis, beam_maps)
+
+
+def FEKO_low_band_blade_beam(**kwargs):
+    # TODO: find this function.
+    try:
+        return feko_blade_beam(**kwargs)
+    except Exception:
+        raise NotImplementedError("yeah this function actually doesn't work.")
+
+
+def gain_derivative(beam_file):
+    b_all = FEKO_low_band_blade_beam(
+        beam_file=beam_file,
+        frequency_interpolation=False,
+        frequency=np.array([0]),
+        AZ_antenna_axis=0,
+    )
+    return np.diff(b_all, axis=0)

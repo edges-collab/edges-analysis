@@ -14,6 +14,7 @@ from edges_io.io import Spectrum
 # import src.edges_analysis
 from . import io, s11 as s11m, loss, beams, tools, filters, coordinates
 from ..config import config
+from .. import const
 
 
 def level1_to_level2(band, year, day_hour, band_flag=None):
@@ -62,12 +63,8 @@ def level1_to_level2(band, year, day_hour, band_flag=None):
         + dd[:, 5].astype(float)
     )
 
-    # EDGES coordinates
-    EDGES_LAT = -26.7
-    EDGES_LON = 116.6
-
     # LST
-    LST = coordinates.utc2lst(dd, EDGES_LON)
+    LST = coordinates.utc2lst(dd, const.edges_lon_deg)
     LST_column = LST.reshape(-1, 1)
 
     # Year and day
@@ -92,7 +89,9 @@ def level1_to_level2(band, year, day_hour, band_flag=None):
             GHA[i] = GHA[i] + 24
     GHA_column = GHA.reshape(-1, 1)
 
-    sun_moon_azel = coordinates.sun_moon_azel(EDGES_LAT, EDGES_LON, dd)
+    sun_moon_azel = coordinates.sun_moon_azel(
+        const.edges_lat_deg, const.edges_lon_deg, dd
+    )
 
     # Sun/Moon coordinates
     aux1, aux2 = io.auxiliary_data(weather_file, thermlog_file, band, year, day)

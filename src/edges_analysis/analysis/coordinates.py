@@ -54,9 +54,6 @@ def utc2lst(utc_time_array, LONG_float):
 def sun_moon_azel(lat, lon, utc_array):
     """
     Local coordinates of the Sun using Astropy
-
-    EDGES_lat_deg = -26.7
-    EDGES_lon_deg = 116.6
     """
 
     obs_location = eph.Observer()

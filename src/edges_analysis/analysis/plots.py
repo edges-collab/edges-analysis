@@ -18,11 +18,17 @@ from . import beams, filters, io, loss
 from . import s11 as s11m
 from . import sky_models, tools
 from ..config import config
+from .. import const
 
 
 def plot_daily_residuals_nominal(f, r, w, yd, path="/home/raul/Desktop/"):
     # Filter the data.
-    keep = filters.daily_nominal_filter("mid_band", 1, yd)
+    keep = filters.explicit_filter(
+        yd,
+        os.path.join(
+            os.path.dirname(__file__), "data/bad_days_nominal_mid_band101.yaml"
+        ),
+    )
     r, w, yd = r[keep], w[keep], yd[keep]
 
     for i, (rr, ww) in enumerate(zip(r, w)):
@@ -1010,14 +1016,6 @@ def plot_sky_model():
                 FWHM[j, 0] = j
                 FWHM[j, 1] = 90 - el
 
-    # Reference location
-    # TODO: extract into data
-    edges_lat_deg = -26.714778
-    edges_lon_deg = 116.605528
-    edges_location = apc.EarthLocation(
-        lat=edges_lat_deg * apu.deg, lon=edges_lon_deg * apu.deg
-    )
-
     def get_ra_dec(time_iter_utc):
         time_iter_utc_dt = dt.datetime(*time_iter_utc)
         alt_az = apc.SkyCoord(
@@ -1025,7 +1023,7 @@ def plot_sky_model():
             az=FWHM[:, 0] * apu.deg,
             frame="altaz",
             obstime=apt.Time(time_iter_utc_dt, format="datetime"),
-            location=edges_location,
+            location=const.edges_location,
         )
         ra_dec = alt_az.icrs
         ra = np.asarray(ra_dec.ra)
@@ -1778,63 +1776,6 @@ def plot_balun_loss(s11_path):
     plt.savefig(path_plot_save + "loss.pdf", bbox_inches="tight")
 
 
-def plot_vna_comparison(folders, labels, repeat_num=None):
-    # TODO: moved to edges-cal
-    assert len(folders) == len(labels)
-
-    vna = {}
-    for label, folder in zip(folders, labels):
-        fls = listdir(folder)
-        vna[label] = {}
-
-        for standard in ["open", "short", "match", "3db", "6db", "10db", "15db"]:
-            find_standard = standard
-            if repeat_num is not None:
-                find_standard += f"0{repeat_num}"
-
-            fl = [fl for fl in fls if find_standard in fl.lower()][0]
-
-            vna[label][standard], f = S1P.read(fl)
-
-    o_a, s_a, m_a = rc.agilent_85033E(f, 50, m=1, md_value_ps=38)
-
-    for label, standards in vna.items():
-        for standard, s11 in standards.items():
-            if standard.endswith("db"):
-                vna[label][standard + "_corrected"] = rc.de_embed(
-                    o_a,
-                    s_a,
-                    m_a,
-                    standards["open"],
-                    standards["short"],
-                    standards["match"],
-                    standards[standard],
-                )
-
-    fig, ax = plt.subplots(len(folders), 2, sharex=True)
-
-    def angle(x):
-        return (180 / np.pi) * np.unwrap(np.angle(x))
-
-    for i, (label, standards) in enumerate(vna.items()):
-        for standard, s11 in standards.items():
-            if not standard.endswith("corrected"):
-                continue
-
-            for j, fnc in enumerate(
-                (
-                    lambda x: 20 * np.log10(np.abs(x)),
-                    lambda x: angle(x) - angle(vna[labels[0]][standard]),
-                )
-            ):
-                ax[i, j].plot(f, fnc(s11), label=label)
-                ax[i, j].set_ylabel(f"{standard} Attn [{'degrees' if j else 'dB'}]")
-                ax[i, j].set_title(r"$\Delta$ PHASE" if j else "MAGNITUDE")
-
-        ax[i, -1].set_xlabel("frequency [MHz]")
-    ax[0, 0].legend()
-
-
 def plot_calibration_term_sweep(fname):
     rms, cterms, wterms = io.calibration_rms_read(fname)
 
@@ -1849,7 +1790,6 @@ def plot_calibration_term_sweep(fname):
 
 def plot_beam_factor(
     az_above_horizon,
-    edges_lat_deg,
     el_above_horizon,
     irf,
     lst,
@@ -1858,7 +1798,7 @@ def plot_beam_factor(
     sky_map,
     sky_ref_above_horizon,
 ):
-    LAT_DEG = np.copy(edges_lat_deg)
+    LAT_DEG = np.copy(const.edges_lat_deg)
     AZ_plot = np.copy(az_above_horizon)
     AZ_plot[AZ_plot > 180] -= 360
     EL_plot = np.copy(el_above_horizon)
