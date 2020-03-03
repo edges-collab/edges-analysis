@@ -7,7 +7,7 @@ from edges_cal import reflection_coefficient as rc
 from edges_cal.cal_coefficients import EdgesFrequencyRange
 
 from ..analysis.loss import balun_and_connector_loss
-from ..analysis.scripts import models_antenna_s11_remove_delay
+from ..analysis.s11 import antenna_s11_remove_delay
 from ..estimation import models
 from ..config import config
 
@@ -501,7 +501,7 @@ def MC_antenna_loss(f, G_Npar_max=10):
     return dG
 
 
-def MC_error_propagation(f_low=61, f_high=121, band="mid_band"):
+def MC_error_propagation(s11_path, f_low=61, f_high=121, band="mid_band"):
 
     f, rl, C1, C2, TU, TC, TS = MC_receiver(
         band,
@@ -524,16 +524,7 @@ def MC_error_propagation(f_low=61, f_high=121, band="mid_band"):
     gamma_ant, G, tsky = [], [], []
     for i, (day, temp) in enumerate([147, 227], [1000, 3000]):
         gamma_ant.append(
-            models_antenna_s11_remove_delay(
-                "mid_band",
-                f,
-                year=2018,
-                day=day,
-                delay_0=0.17,
-                model_type="polynomial",
-                Nfit=14,
-                plot_fit_residuals=False,
-            )[mask]
+            antenna_s11_remove_delay(s11_path, f, delay_0=0.17, Nfit=14,)[mask]
         )
 
         Gb, Gc = balun_and_connector_loss("mid_band", f, gamma_ant[i])

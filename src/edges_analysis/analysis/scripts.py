@@ -63,15 +63,6 @@ CALFILES = {
 }
 
 
-def models_antenna_s11_remove_delay(**kwargs):
-    # TODO: figure out where this came from.
-    raise NotImplementedError(
-        "this is not the same as the remove_delay function from s11 "
-        "(which was from original calibrate.py). This was supposed to"
-        " be from edges.py but doesn't exist"
-    )
-
-
 def daily_integrations_and_residuals():
     # TODO: might be old? not very general.
 

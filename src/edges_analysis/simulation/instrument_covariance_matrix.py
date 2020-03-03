@@ -2,19 +2,11 @@ import numpy as np
 from edges_cal import receiver_calibration_func as rcf
 
 from ..analysis import loss
-from ..analysis.scripts import models_antenna_s11_remove_delay
+from ..analysis.s11 import antenna_s11_remove_delay
 from ..config import config
 
 
-def test(
-    band,
-    receiver_cal_file=1,
-    antenna_s11_year=2018,
-    antenna_s11_day=147,
-    antenna_s11_nfit=14,
-    f_low=60,
-    f_high=160,
-):
+def test(band, s11_path, receiver_cal_file=1, f_low=60, f_high=160, antenna_s11_nfit=5):
 
     # Receiver calibration quantities
     # -------------------------------
@@ -42,16 +34,7 @@ def test(
 
     # Antenna S11
     # -----------
-    ra = models_antenna_s11_remove_delay(
-        band,
-        f,
-        year=antenna_s11_year,
-        day=antenna_s11_day,
-        delay_0=0.17,
-        model_type="polynomial",
-        Nfit=antenna_s11_nfit,
-        plot_fit_residuals=False,
-    )
+    ra = antenna_s11_remove_delay(s11_path, f, delay_0=0.17, n_fit=antenna_s11_nfit,)
 
     # Balun+Connector Loss
     # --------------------
