@@ -93,6 +93,8 @@ def calibration_file_computation(
     panels=4,
     plot_nominal=False,
 ):
+    # TODO: this function is only for lab data
+
     prefix = (
         config["edges_folder"]
         + "mid_band/calibration/receiver_calibration/receiver1/"
@@ -446,6 +448,8 @@ def calibration_file_computation(
 
 
 def daily_integrations_and_residuals():
+    # TODO: might be old? not very general.
+
     f, pz, rz, wz, index, gha, ydz = io.level4read(
         config["edges_folder"]
         + "mid_band/spectra/level4/case_nominal/case_nominal.hdf5"
@@ -575,6 +579,12 @@ def integrated_spectrum_level4(
     save,
     filename_flag,
 ):
+    """
+    Important high level function that averages level4 field data. Used consistently.
+    TODO: make this into an actual script. Make it a little bit more general.
+    The idea here is just to average together a bunch of level data over many days
+    and GHA. Can choose the days.
+    """
     cases = {
         100: "rcv18_sw18_nominal_GHA_6_18hr",
         101: "rcv18_sw18_nominal_GHA_every_1hr",
@@ -679,6 +689,7 @@ def integrated_spectrum_level4(
 
 
 def integrated_half_hour_level4_many(band, case, GHA_starts=[(13, 1), (14, 0)]):
+    # TODO: this should be a script.
     discard = {
         (6, 0): [146, 164, 167, 169],
         (6, 1): [146, 147, 174, 179, 181, 198, 211, 215],
@@ -798,11 +809,17 @@ def integrated_half_hour_level4_many(band, case, GHA_starts=[(13, 1), (14, 0)]):
 def season_integrated_spectra_GHA(
     band, case, new_gha_edges=np.arange(0, 25, 2), data_save_name_flag="2hr"
 ):
+    """
+    Take a whole season of spectra and produce season averages in GHA, with
+    changeable range. Not being as strict for cleaning.
+
+    # TODO: move to scripts.
+    """
     data_save_path = config["edges_folder"] + f"{band}/spectra/level5/case{case}/"
 
     # Loading level4 data
     f, p_all, r_all, w_all, gha_edges, yd = io.level4read(
-        config["edges_folder"] + f"band/spectra/level4/case{case}/case{case}.hdf5"
+        config["edges_folder"] + f"{band}/spectra/level4/case{case}/case{case}.hdf5"
     )
 
     # Creating intermediate 1hr-average arrays
@@ -1046,6 +1063,7 @@ def batch_level2_to_level3(
 
 
 def plot_residuals_GHA_1hr_bin(direc, f, r, w, fname="linlog_5terms_60-120MHz"):
+    # TODO: move to old
     GHA_edges = list(np.arange(0, 25))
     DY = 0.4
 
@@ -1069,6 +1087,7 @@ def plot_residuals_GHA_1hr_bin(direc, f, r, w, fname="linlog_5terms_60-120MHz"):
 
 
 def plot_residuals_GHA_Xhr_bin(direc, fname, f, r, w):
+    # TODO: move to old
     DY = 0.5
 
     # Plotting
@@ -1093,6 +1112,7 @@ def plot_residuals_GHA_Xhr_bin(direc, fname, f, r, w):
 
 
 def vna_comparison():
+    # TODO: move to old
     paths = [
         config["edges_folder"] + "others/vna_comparison/keysight_e5061a/",
         config["edges_folder"] + "others/vna_comparison/copper_mountain_r60/",
@@ -1106,6 +1126,7 @@ def vna_comparison():
 
 
 def VNA_comparison2():
+    # TODO: move to old
     paths = [
         config["edges_folder"] + "others/vna_comparison/again/ks_e5061a/",
         config["edges_folder"] + "others/vna_comparison/again/cm_tr1300/",
@@ -1116,7 +1137,7 @@ def VNA_comparison2():
 
 
 def VNA_comparison3():
-
+    # TODO: move to old
     paths = (
         config["edges_folder"]
         + "others/vna_comparison/fieldfox_N9923A/agilent_E5061A_male/",
@@ -1132,6 +1153,8 @@ def VNA_comparison3():
 
 
 def plots_for_memo148(plot_number):
+    # TODO: move to old
+
     # Receiver calibration parameters
     if plot_number == 1:
         # Paths
@@ -2052,6 +2075,8 @@ def plots_for_memo148(plot_number):
 
 
 def plots_of_absorption_glitch(part_number):
+    # TODO: move to old.
+
     if part_number == 1:
         fmin = 50
         fmax = 200
@@ -2613,6 +2638,7 @@ def plots_of_absorption_glitch(part_number):
 
 
 def high_band_2015_reanalysis():
+    # TODO: move to old
     LST1 = 1
     LST2 = 11
 
@@ -2689,6 +2715,7 @@ def high_band_2015_reanalysis():
 
 
 def comparison_FEKO_HFSS():
+    # TODO: this went into a memo. Move to old.
     theta, phi, b60 = beams.hfss_read(
         "/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam/raul/hfss/20191002"
         "/pec_60MHz.csv",
@@ -2791,6 +2818,7 @@ def comparison_FEKO_HFSS():
 
 
 def comparison_FEKO_WIPLD():
+    # TODO: move to old.
     path_plot_save = config["edges_folder"] + "plots/20191015/"
 
     # WIPL-D
@@ -3173,7 +3201,7 @@ def comparison_FEKO_WIPLD():
 
 def plots_beam_gain_derivative():
     # Low-Band, Blade on 10m x 10m GP
-
+    # TODO: this is fairly general and could be moved to beams.py
     b_all = beams.FEKO_low_band_blade_beam(
         beam_file=5,
         frequency_interpolation=False,
@@ -3195,6 +3223,8 @@ def plots_beam_gain_derivative():
 
 
 def integrated_antenna_gain_WIPLD(case, n_fg):
+    # TODO: mark as old
+
     # WIPL-D
     filename0 = (
         "/run/media/raul/WD_RED_6TB/EDGES_vol2/others/beam_simulations/wipl-d/20191023"
@@ -3614,6 +3644,7 @@ def integrated_antenna_gain_WIPLD(case, n_fg):
 
 
 def plots_for_memo_153(figname):
+    # TODO: move to old
     path_plot_save = config["edges_folder"] + "plots/20191025/"
     sx = 8
     sy = 10
@@ -3821,6 +3852,7 @@ def plots_for_memo_153(figname):
 
 
 def plots_for_memo_155():
+    # TODO: move to old
     path_plot_save = config["edges_folder"] + "plots/20191105/"
 
     fA, b300, fx, rx, theta, phi, beam300 = integrated_antenna_gain_WIPLD(300, 2)
@@ -4506,6 +4538,8 @@ def plots_for_memo_155():
 
 
 def plot_foreground_analysis():
+    # TODO: potentially general plotting functionality, but otherwise old.
+
     path_file = (
         "/media/raul/DATA/EDGES_vol2/mid_band/spectra/level4/case_nominal_50"
         "-150MHz_LNA2_a2_h2_o2_s1_sim2_all_lc_yes_bc_20min/foreground_fits.hdf5"
@@ -4569,6 +4603,8 @@ def plot_foreground_analysis():
 
 
 def beam_correction_check(f_low, f_high):
+    # TODO: move to old.
+
     bb = np.genfromtxt(
         config["edges_folder"] + "mid_band/calibration/beam_factors/raw/mid_band_50"
         "-200MHz_90deg_alan1_haslam_2.5_2.62_reffreq_100MHz_data.txt"
@@ -4608,6 +4644,8 @@ def beam_correction_check(f_low, f_high):
 def plots_for_midband_verification_paper(
     antenna_reflection_loss=False, beam_factor=False
 ):
+    # TODO: move to old.
+
     if antenna_reflection_loss:
         # Plot
         # ---------------------------------------

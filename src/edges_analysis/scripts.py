@@ -25,6 +25,7 @@ edges_folder = ""  # TODO: remove.
 
 
 def plots_midband_paper(plot_number, s11_path="antenna_s11_2018_147_17_04_33.txt"):
+    # TODO: move to old
     if plot_number == 1:
         plot_receiver_calibration_params()
     elif plot_number == 10:

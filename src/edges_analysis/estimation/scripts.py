@@ -5,7 +5,7 @@ from ..config import config
 
 
 def plots_midband_polychord(fig):
-    # TODO: replace this entire function with a simple script function.
+    # TODO: move to old
 
     if fig == 0:
         folder = (

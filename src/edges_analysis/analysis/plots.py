@@ -1779,6 +1779,7 @@ def plot_balun_loss(s11_path):
 
 
 def plot_vna_comparison(folders, labels, repeat_num=None):
+    # TODO: moved to edges-cal
     assert len(folders) == len(labels)
 
     vna = {}

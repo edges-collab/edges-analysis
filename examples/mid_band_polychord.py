@@ -16,8 +16,7 @@ from PyPolyChord.settings import PolyChordSettings
 
 from edges_analysis.estimate.tools import dumper
 from edges_analysis.simulation import data_models as dm
-
-edges_folder = ""  # TODO: remove
+from edges_analysis.config import config
 
 
 def prior_list(N21, n_fg, model_type_signal, model_type_foreground):
@@ -135,7 +134,7 @@ if __name__ == "__main__":
     # Input parameters
     # -----------------------
     save_folder = (
-        edges_folder + "mid_band/polychord/20190910/case101_GHA_6-18hr"
+        config["edges_folder"] + "mid_band/polychord/20190910/case101_GHA_6-18hr"
         "/foreground_linlog_5par_signal_exp_4par/"
     )
 

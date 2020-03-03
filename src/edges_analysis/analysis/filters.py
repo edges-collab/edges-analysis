@@ -467,6 +467,7 @@ def daily_rms_filter(band, case, index_GHA, year_day_list, rms_threshold):
 
 
 def one_hour_filter(band, case, year, day, gha):
+    # TODO: refactor data out of package.
     if band == "low_band3":
         bad = np.array(
             [
