@@ -32,7 +32,7 @@ def plot_daily_residuals_nominal(f, r, w, yd, path="/home/raul/Desktop/"):
     r, w, yd = r[keep], w[keep], yd[keep]
 
     for i, (rr, ww) in enumerate(zip(r, w)):
-        fb, rb, wb = tools.spectral_binning_number_of_samples(f, rr, ww)
+        fb, rb, wb = tools.average_in_frequency(rr, f, ww, n_samples=16)
 
         if i == 0:
             rb_all = np.zeros((len(r), len(fb)))
@@ -766,18 +766,14 @@ def _scroll_through_i(
                 mt = mdl.model_evaluate("LINLOG", p[0], ft / 200)
                 rt = tt - mt
 
-                fb, rb, wb, sb = tools.spectral_binning_number_of_samples(
-                    ft, rt, wt, nsamples=NS
-                )
+                fb, rb, wb, sb = tools.average_in_frequency(rt, ft, wt, n_samples=NS)
             elif model == "LOGLOG":
                 p = np.polyfit(np.log(fx[wx > 0] / 200), np.log(tx[wx > 0]), n_fg - 1)
                 log_ml = np.polyval(p, np.log(ft / 200))
                 ml = np.exp(log_ml)
                 rl = tt - ml
 
-                fb, rb, wb, sb = tools.spectral_binning_number_of_samples(
-                    ft, rl, wt, nsamples=NS
-                )
+                fb, rb, wb, sb = tools.average_in_frequency(rl, ft, wt, n_samples=NS)
             else:
                 raise ValueError("model must be LINLOG or LOGLOG")
             if i % 2 == 0:

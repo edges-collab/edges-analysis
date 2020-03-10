@@ -1,4 +1,6 @@
 import os
+from typing import Tuple
+from os.path import join, dirname
 
 import h5py
 import numpy as np
@@ -7,6 +9,7 @@ from edges_cal import modelling as mdl, xrfi as rfi
 from . import tools, io
 from .io import data_selection, level3read, level4read
 from ..config import config
+from . import filters
 
 
 def _get_level4_case(case):
@@ -58,7 +61,7 @@ def level4_binned_residuals(case, f_low, f_high, output_file_name_hdf5):
 
                 rc_k = tc_k - mc_k
 
-                fb, rb, wb, sb = spectral_binning_number_of_samples(fc, rc_k, wc_k)
+                fb, rb, wb, sb = average_in_frequency(rc_k, fc, wc_k, n_samples=16)
 
                 if start:
                     binned_residuals = np.zeros((len(r), len(r[0]), len(fb)))
@@ -163,7 +166,7 @@ def level4_integration(case, GHA_list, first_day, last_day, f_low, f_high, n_fg)
     pc = mdl.fit_polynomial_fourier(model_type, fc / 200, tc, n_fg, Weights=wc)
     mc = mdl.model_evaluate(model_type, pc[0], fc / 200)
     rc = tc - mc
-    fb, rb, wb, sb = spectral_binning_number_of_samples(fc, rc, wc)
+    fb, rb, wb, sb = average_in_frequency(rc, fc, wc, n_samples=16)
     mb = mdl.model_evaluate(model_type, pc[0], fb / 200)
     tb = rb + mb
     tb[wb == 0] = 0
@@ -215,8 +218,8 @@ def level4_foreground_fits(
                 av_sunel = np.mean(new_meta[:, 6])
                 av_moonel = np.mean(new_meta[:, 8])
 
-                fb, rb, wb, sb = spectral_binning_number_of_samples(
-                    f, r[i, k, :], w[i, k, :]
+                fb, rb, wb, sb = average_in_frequency(
+                    r[i, k, :], f, w[i, k, :], n_samples=16
                 )
 
                 mb = mdl.model_evaluate("LINLOG", p[i, k, :], fb / 200)
@@ -341,7 +344,7 @@ def daily_residuals_LST(
 
         if len(indx):
             avr, avw = spectral_averaging(r[indx], w[indx])
-            fb, rb, wb = spectral_binning_number_of_samples(f, avr, avw, nsamples=64)
+            fb, rb, wb, _ = average_in_frequency(avr, f, avw, n_samples=64)
 
             avp = np.mean(p[indx], axis=0)
 
@@ -362,7 +365,7 @@ def daily_residuals_LST(
             flag += 1
 
     if flag == 0:
-        fb, rb, wb = spectral_binning_number_of_samples(f, r[0], w[0], nsamples=64)
+        fb, rb, wb, _ = average_in_frequency(r[0], f, w[0], n_samples=64)
         fb_x = fb[(fb >= f_low) & (fb <= f_high)]
         rb_x_all = np.zeros((len(LST_boundaries) - 1, len(fb_x)))
         wb_x_all = np.zeros((len(LST_boundaries) - 1, len(fb_x)))
@@ -425,7 +428,7 @@ def average_level3_mid_band(case, sun_el_max=90, moon_el_max=90):
 
         if len(indx):
             avr, avw = spectral_averaging(r[indx], w[indx])
-            fb, rb, wb = spectral_binning_number_of_samples(f, avr, avw, nsamples=64)
+            fb, rb, wb = average_in_frequency(avr, f, avw, n_samples=64)
 
             rx_all.append(r[indx])
             wx_all.append(w[indx])
@@ -446,50 +449,113 @@ def average_level3_mid_band(case, sun_el_max=90, moon_el_max=90):
     )
 
 
-def spectral_binning_number_of_samples(freq_in, spectrum_in, weights_in, nsamples=64):
-    # TODO: perhaps replace with simple convolution
-    i = 0
-    av_fr, av_sp, av_we, av_std = [], [], [], []
+def average_in_frequency(
+    spectrum: [list, np.ndarray],
+    freq: [list, np.ndarray, None] = None,
+    weights: [list, np.ndarray, None] = None,
+    resolution: [float, None] = None,
+    n_samples: [int, None] = None,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Average a spectrum, with weights, in frequency.
 
-    for j in range(len(freq_in)):
-        if i == 0:
-            sum_fre, sum_num, sum_den = 0, 0, 0
-            samples_spectrum_in = []
-            samples_weights_in = []
+    The average is optionally taken within bins along the frequency axis.
 
-        elif i < nsamples:
-            sum_fre = sum_fre + freq_in[j]
-            sum_num = sum_num + spectrum_in[j] * weights_in[j]
-            sum_den = sum_den + weights_in[j]
+    Parameters
+    ----------
+    spectrum : array-like
+        The spectrum to average. Must be 1D.
+    freq : array-like, optional
+        The frequencies along which to average. If provided, must be the same shape
+        as ``spectrum``. Must be provided if either ``resolution`` or ``n_samples``
+        is provided.
+    weights : array-like, optional
+        The weights of the weighted averaged. If provided, same shape as ``spectrum``.
+        If not provided, all weights are considered to be one.
+    resolution : float, optional
+        The (frequency) resolution with which to perform the average, in same units
+        as ``freq``. For example, if an array of frequencies with resolution 0.1 MHz is
+        passed in, and ``resolution`` is 0.2, the output array will contain half the
+        number of bins. Default is to average the whole array.
+    n_samples : int, optional
+        The number of samples to average into each frequency bin. Used only if
+        ``resolution`` is not provided. By default, averages all frequencies.
 
-            av_fr_temp = sum_fre / nsamples
-            av_sp_temp = sum_num / sum_den if sum_den > 0 else 0
-            if weights_in[j] > 0:
-                samples_spectrum_in = np.append(samples_spectrum_in, spectrum_in[j])
-                samples_weights_in = np.append(samples_weights_in, weights_in[j])
+    Returns
+    -------
+    f : array
+        An array with length determined automatically by the routine, giving the
+        mean frequency in each output bin.
+    s : array
+        Array of same length as ``f`` containing the weighted-average spectrum
+    w : array
+        Array of same length as ``f`` containing the total weight in each bin.
+    std : array
+        Array of same length as ``f`` contianing the standard deviation about the mean
+        for each bin.
+    Examples
+    --------
+    >>> freq = np.linspace(0.1, 1, 10)
+    >>> spectrum = [0, 2] * 5
+    >>> f, s, w = average_in_frequency(spectrum, freq=freq, resolution=0.2)
+    >>> f
+    [0.15, 0.35, 0.55, 0.75, 0.95]
+    >>> s
+    [1, 1, 1, 1, 1]
+    >>> w
+    [1, 1, 1, 1, 1]
 
-        if i < (nsamples - 1):
-            i += 1
-        else:
-            if len(samples_spectrum_in) <= 1:
-                std_of_the_mean = 1e6
+    """
+    if resolution is not None:
+        n_samples = int((freq[1] - freq[0]) / resolution)
 
-            if len(samples_spectrum_in) > 1:
-                sample_variance = np.sum(
-                    ((samples_spectrum_in - av_sp_temp) ** 2) * samples_weights_in
-                ) / np.sum(samples_weights_in)
+    if resolution or n_samples and freq is None:
+        raise ValueError(
+            "You must provide freq if resolution or n_samples is provided!"
+        )
 
-                # sample_variance = (np.std(samples_spectrum_in))**2
-                std_of_the_mean = np.sqrt(sample_variance / len(samples_spectrum_in))
+    nf = len(spectrum)
 
-            av_fr.append(av_fr_temp)
-            av_sp.append(av_sp_temp)
-            av_we.append(sum_den)
-            av_std.append(std_of_the_mean)
+    if resolution is None and n_samples is None:
+        n_samples = nf
 
-            i = 0
+    if freq is None:
+        freq = np.ones(nf)
 
-    return np.array(av_fr), np.array(av_sp), np.array(av_we)
+    if weights is None:
+        weights = np.ones(weights)
+
+    mod = nf % n_samples
+    if mod:
+        last_f = freq[-mod:]
+        last_s = spectrum[-mod:]
+        last_w = weights[-mod:]
+
+    f = freq[: nf // n_samples]
+    s = spectrum[: nf // n_samples]
+    w = weights[: nf // n_samples]
+
+    f = np.reshape(f, (-1, n_samples))
+    s = np.reshape(s, (-1, n_samples))
+    w = np.reshape(w, (-1, n_samples))
+
+    f = np.mean(f, axis=1)
+    s_tmp, w_tmp = weighted_mean(s, weights=w, axis=1)
+    std = weighted_standard_deviation(
+        np.atleast_2d(s_tmp), s, std=np.sqrt(1 / w), axis=-1
+    )
+    s = s_tmp
+    w = w_tmp
+
+    if mod:
+        f = np.concatenate((f, np.mean(last_f)))
+        ss, ww = weighted_mean(last_s, last_w)
+        s = np.concatenate((s, ss))
+        w = np.concatenate((w, ww))
+        std = np.concatenate(
+            (std, weighted_standard_deviation(ss, last_s, std=np.sqrt(1 / ww)))
+        )
+
+    return f, s, w, std
 
 
 def weighted_mean(data, weights, axis=0):
@@ -564,7 +630,7 @@ def integrate_level4_half_hour(
         r_raw = t - par[1]
         w_raw = ww
 
-        fb, rb, wb = spectral_binning_number_of_samples(f, r_raw, w_raw)
+        fb, rb, wb, _ = average_in_frequency(r_raw, f, w_raw, n_samples=16)
 
         if not flag:
             rr_all = np.copy(r_raw)
@@ -601,7 +667,257 @@ def integrate_level4_half_hour(
     avwn[flags] = 0
 
     avtn = mdl.model_evaluate("LINLOG", avp, f / 200) + avrn
-    fb, rbn, wbn = spectral_binning_number_of_samples(f, avrn, avwn)
+    fb, rbn, wbn, _ = average_in_frequency(avrn, f, avwn)
     tbn = mdl.model_evaluate("LINLOG", avp, fb / 200) + rbn
 
     return fb, rb_all, wb_all, d_all, tbn, wbn, f, rr_all, wr_all, avrn, avwn, avp, avtn
+
+
+def integrate_spectrum(
+    fname, p, r, w, index_GHA, f_low, f_high, bad_days, n_fg,
+):
+    """
+    Important high level function that averages level4 field data. Used consistently.
+    TODO: make this into an actual script. Make it a little bit more general.
+    The idea here is just to average together a bunch of level data over many days
+    and GHA. Can choose the days.
+    """
+    in_file = f"{config['edges_folder']}/mid_band/spectra/level4/{fname}/{fname}.hdf5"
+    f, px, rx, wx, index, gha, ydx = io.level4read(in_file)
+
+    # Produce integrated spectrum
+    for i in range(len(index_GHA)):
+        keep = filters.explicit_filter(ydx, bad=bad_days)
+
+        p_i = px[keep, index_GHA[i]]
+        r_i = rx[keep, index_GHA[i]]
+        w_i = wx[keep, index_GHA[i]]
+
+        if i == 0:
+            p = np.copy(p_i)
+            r = np.copy(r_i)
+            w = np.copy(w_i)
+        else:
+            p = np.vstack((p, p_i))
+            r = np.vstack((r, r_i))
+            w = np.vstack((w, w_i))
+
+    avp = np.mean(p, axis=0)
+    m = mdl.model_evaluate("LINLOG", avp, f / 200)
+
+    avr, avw = tools.spectral_averaging(r, w)
+    flags = rfi.xrfi_poly_filter(
+        avr,
+        avw,
+        window_width=int(3 / (f[1] - f[0])),
+        n_poly=2,
+        n_bootstrap=20,
+        n_sigma=3,
+    )
+    rr = np.where(flags, 0, avr)
+    wr = np.where(flags, 0, avw)
+
+    tr = m + rr
+
+    fr1 = 136
+    fr2 = 139
+    tr[(f >= fr1) & (f <= fr2)] = 0
+    wr[(f >= fr1) & (f <= fr2)] = 0
+
+    p = mdl.fit_polynomial_fourier("LINLOG", f / 200, tr, 7, Weights=wr)
+    m = mdl.model_evaluate("LINLOG", p[0], f / 200)
+    r = tr - m
+
+    NS = 64
+    fb, rb, wb, sb = tools.average_in_frequency(r, f, wr, n_samples=NS)
+
+    mb = mdl.model_evaluate("LINLOG", p[0], fb / 200)
+    tb = mb + rb
+    tb[wb == 0] = 0
+    sb[wb == 0] = 0
+
+    # Computing residuals for plot
+    mask = (fb >= f_low) & (fb <= f_high)
+    fx, tx, wx, sx = fb[mask], tb[mask], wb[mask], sb[mask]
+    ft, tt, st = fx[wx > 0], tx[wx > 0], sx[wx > 0]
+
+    pt = mdl.fit_polynomial_fourier(
+        "LINLOG", ft / 200, tt, n_fg, Weights=(1 / (st ** 2))
+    )
+    mt = mdl.model_evaluate("LINLOG", pt[0], ft / 200)
+    rt = tt - mt
+
+    pl = np.polyfit(np.log(ft / 200), np.log(tt), n_fg - 1)
+    log_ml = np.polyval(pl, np.log(ft / 200))
+    ml = np.exp(log_ml)
+    rl = tt - ml
+
+    return ft, tt, st, rt, rl
+
+
+def season_integrated_spectra_GHA(
+    band, case, new_gha_edges=np.arange(0, 25, 2), data_save_name_flag="2hr"
+):
+    """
+    Take a whole season of spectra and produce season averages in GHA, with
+    changeable range. Not being as strict for cleaning.
+
+    # TODO: move to scripts.
+    """
+    data_save_path = config["edges_folder"] + f"{band}/spectra/level5/case{case}/"
+
+    # Loading level4 data
+    f, p_all, r_all, w_all, gha_edges, yd = io.level4read(
+        config["edges_folder"] + f"{band}/spectra/level4/case{case}/case{case}.hdf5"
+    )
+
+    # Creating intermediate 1hr-average arrays
+    pr_all = np.zeros((len(gha_edges) - 1, len(p_all[0, 0, :])))
+    rr_all = np.zeros((len(gha_edges) - 1, len(f)))
+    wr_all = np.zeros((len(gha_edges) - 1, len(f)))
+
+    # Looping over every original GHA edges
+    for j in range(len(gha_edges) - 1):
+        # Looping over day
+        index_good = filters.explicit_filter(
+            yd,
+            bad=join(
+                dirname(__file__),
+                f"data/bad_hours_{band}{case if case is not None else ''}.yaml",
+            ),
+        )
+
+        # Selecting good parameters and spectra
+        pp = p_all[index_good, j]
+        rr = r_all[index_good, j]
+        ww = w_all[index_good, j]
+
+        # Average parameters and spectra
+        avp = np.mean(pp, axis=0)
+        avr, avw = tools.weighted_mean(rr, ww)
+
+        # RFI cleaning of 1-hr season average spectra
+        flags = rfi.cleaning_sweep(
+            avr,
+            avw,
+            window_width=int(3 / (f[1] - f[0])),
+            n_poly=2,
+            n_bootstrap=20,
+            n_sigma=2.5,
+        )
+        avr_no_rfi = np.where(flags, 0, avr)
+        avw_no_rfi = np.where(flags, 0, avw)
+
+        # Storing season 1hr-average spectra
+        pr_all[j] = avp
+        rr_all[j] = avr_no_rfi
+        wr_all[j] = avw_no_rfi
+
+        # Frequency binning
+        fb, rb, wb, _ = tools.average_in_frequency(
+            avr_no_rfi, f, avw_no_rfi, n_samples=16
+        )
+        mb = mdl.model_evaluate("LINLOG", avp, fb / 200)
+        tb = mb + rb
+        tb[wb == 0] = 0
+
+        # Storing binned average spectra
+        if j == 0:
+            tb_all = np.zeros((len(gha_edges) - 1, len(fb)))
+            wb_all = np.zeros((len(gha_edges) - 1, len(fb)))
+        else:
+            tb_all[j] = tb
+            wb_all[j] = wb
+
+    # Averaging data within new GHA edges
+    for j in range(len(new_gha_edges) - 1):
+        new_gha_start = new_gha_edges[j]
+        new_gha_end = new_gha_edges[j + 1]
+
+        flag = True
+        for i in range(len(gha_edges) - 1):
+            if (
+                new_gha_start < new_gha_end
+                and ((gha_edges[i] >= new_gha_start) and (gha_edges[i] < new_gha_end))
+            ) or ((gha_edges[i] >= new_gha_start) or (gha_edges[i] < new_gha_end)):
+                if flag:
+                    px_all = pr_all[i]
+                    rx_all = rr_all[i]
+                    wx_all = wr_all[i]
+                    flag = False
+                else:
+                    px_all = np.vstack((px_all, pr_all[i, :]))
+                    rx_all = np.vstack((rx_all, rr_all[i, :]))
+                    wx_all = np.vstack((wx_all, wr_all[i, :]))
+
+        if len(px_all.shape) == 1:
+            avpx = np.copy(px_all)
+            avrx = np.copy(rx_all)
+            avwx = np.copy(wx_all)
+        elif len(px_all.shape) == 2:
+            avpx = np.mean(px_all, axis=0)
+            avrx, avwx = tools.weighted_mean(rx_all, wx_all)
+
+        flags = rfi.cleaning_sweep(
+            avrx,
+            avwx,
+            window_width=int(3 / (f[1] - f[0])),
+            n_poly=2,
+            n_bootstrap=20,
+            n_sigma=2.5,
+        )
+        avrx_no_rfi = np.where(flags, 0, avrx)
+        avwx_no_rfi = np.where(flags, 0, avwx)
+
+        # Frequency binning
+        fb, rbx, wbx, _ = tools.average_in_frequency(
+            avrx_no_rfi, f, avwx_no_rfi, n_samples=16
+        )
+        modelx = mdl.model_evaluate("LINLOG", avpx, fb / 200)
+        tbx = modelx + rbx
+        tbx[wbx == 0] = 0
+
+        # Storing binned average spectra
+        if j == 0:
+            tbx_all = np.zeros((len(new_gha_edges) - 1, len(fb)))
+            wbx_all = np.zeros((len(new_gha_edges) - 1, len(fb)))
+
+        tbx_all[j, :] = tbx
+        wbx_all[j, :] = wbx
+
+        # Saving data
+        np.savetxt(
+            data_save_path + f"case{case}_frequency.txt", fb, header="Frequency [MHz]."
+        )
+        np.savetxt(
+            data_save_path + f"case{case}_1hr_gha_edges.txt",
+            gha_edges,
+            header="GHA edges of integrated spectra from 0hr to 23hr in steps of 1hr [hr].",
+        )
+        np.savetxt(
+            data_save_path + f"case{case}_1hr_temperature.txt",
+            tb_all,
+            header="Rows correspond to different GHAs from 0hr to 23hr in steps of 1hr. Columns correspond to frequency.",
+        )
+        np.savetxt(
+            data_save_path + f"case{case}_1hr_weights.txt",
+            wb_all,
+            header="Rows correspond to different GHAs from 0hr to 23hr in steps of 1hr. Columns correspond to frequency.",
+        )
+        np.savetxt(
+            data_save_path + f"case{case}_{data_save_name_flag}_gha_edges.txt",
+            new_gha_edges,
+            header="GHA edges of integrated spectra [hr].",
+        )
+        np.savetxt(
+            data_save_path + f"case{case}_{data_save_name_flag}_temperature.txt",
+            tbx_all,
+            header="Rows correspond to different GHAs. Columns correspond to frequency.",
+        )
+        np.savetxt(
+            data_save_path + f"case{case}_{data_save_name_flag}_weights.txt",
+            wbx_all,
+            header="Rows correspond to different GHAs. Columns correspond to frequency.",
+        )
+
+    return fb, tb_all, wb_all, tbx_all, wbx_all

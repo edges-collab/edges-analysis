@@ -1,9 +1,177 @@
 import numpy as np
 import h5py
-
+import attr
+from attr import validators
+from pathlib import Path
+import contextlib
 from edges_cal import modelling as mdl
 from . import tools
 from ..config import config
+
+
+@attr.s
+class _HDF5Group:
+    filename = attr.ib(converter=Path, validator=lambda x: x.exists())
+    group_path = attr.ib(converter=str)
+    always_lazy = attr.ib(default=False, converter=bool)
+    lazy = attr.ib(default=True, converter=bool)
+    open = False
+
+    def __attrs_post_init__(self):
+        self.__memcache__ = {}
+
+        if not self.lazy:
+            self.load_all(self.filename)
+
+    def get_group(self):
+        fl = h5py.File(self.filename, "r")
+        grp = fl
+        for path in self.group_path.split("."):
+            grp = grp[path]
+
+        self.open = True
+        return grp
+
+    @contextlib.contextmanager
+    def _open(self):
+        """Context manager for using certain configuration options for a set time."""
+        fl = h5py.File(self.filename, "r")
+        grp = fl
+
+        for bit in self.group_path.split("."):
+            grp = grp[bit]
+
+        yield grp
+
+        fl.close()
+
+    def __getitem__(self, item):
+        if item in self.__memcache__:
+            return self.__memcache__[item]
+
+        with self._open() as fl:
+            if item in ("attrs", "meta"):
+                out = dict(fl.attrs)
+            if isinstance(fl[item], h5py.Group):
+                out = _HDF5Group(self.filename, item)
+            elif isinstance(fl[item], h5py.Dataset):
+                out = fl[item][...]
+            else:
+                raise NotImplementedError("that item is not supported yet.")
+
+        if not self.always_lazy:
+            self.__memcache__[item] = out
+
+
+@attr.s
+class HDF5Object:
+    _structure = None
+    _require_all = True
+    _require_no_extra = True
+
+    filename = attr.ib(default=None, converter=lambda x: x if x is None else Path(x))
+    require_all = attr.ib(default=_require_all, converter=bool)
+    require_no_extra = attr.ib(default=_require_no_extra, converter=bool)
+    always_lazy = attr.ib(default=False, converter=bool)
+    lazy = attr.ib(default=True, converter=bool)
+
+    @filename.validator
+    def _fn_validator(self, att, val):
+        if val is not None:
+            assert val.exists()
+
+    def __attrs_post_init__(self):
+        self.check(self.filename, self.require_no_extra, self.require_all)
+
+        self.__memcache__ = {}
+
+        if not self.lazy:
+            self.load_all(self.filename)
+
+    @classmethod
+    def from_data(cls, data, **kwargs):
+        inst = cls(**kwargs)
+
+        false_if_extra = kwargs.get("require_no_extra", cls._require_no_extra)
+        false_if_absent = kwargs.get("require_all", cls._require_all)
+
+        def _check(grp, strc):
+            for k, v in strc:
+                if k not in grp and false_if_absent:
+                    raise TypeError()
+                elif isinstance(v, dict):
+                    _check(grp[k], v)
+                elif v:
+                    assert v(grp[k])
+
+            # Ensure there's no extra keys in the group
+            if false_if_extra and len(strc) < len(grp.keys()):
+                raise ValueError()
+
+        _check(data, cls._structure)
+
+        inst.__memcache__ = data
+
+    def write(self, filename=None, clobber=False):
+        filename = filename or self.filename
+
+        if Path(filename).exists() and not clobber:
+            raise FileExistsError(f"file {filename} already exists!")
+
+        def _write(grp, struct, cache):
+            for k, v in struct.items():
+                if isinstance(v, dict):
+                    _write(grp[k], struct[k], cache[k])
+                elif np.isscalar(cache[k]):
+                    grp.attrs[k] = cache[k]
+                else:
+                    grp[k] = cache[k]
+
+        with h5py.File(filename, "w") as fl:
+            _write(fl, self._structure, self.__memcache__)
+
+    @classmethod
+    def check(cls, filename, false_if_extra=None, false_if_absent=None):
+        false_if_extra = false_if_extra or cls._require_no_extra
+        false_if_absent = false_if_absent or cls._require_all
+
+        if not cls._structure:
+            return True
+
+        def _check(grp, strc):
+            for k, v in strc.items():
+                if k not in grp and false_if_absent:
+                    raise TypeError()
+                elif isinstance(v, dict):
+                    _check(grp[k], v)
+                elif v:
+                    assert v(grp[k])
+
+            # Ensure there's no extra keys in the group
+            if false_if_extra and len(strc) < len(grp.keys()):
+                raise ValueError()
+
+        with h5py.File(filename, "r") as fl:
+            _check(fl, cls._structure)
+
+    def __getitem__(self, item):
+        if item in self.__memcache__:
+            return self.__memcache__[item]
+
+        with open(self.filename, "r") as fl:
+            if item in ("attrs", "meta"):
+                out = dict(fl.attrs)
+            if isinstance(fl[item], h5py.Group):
+                out = _HDF5Group(self.filename, item)
+            elif isinstance(fl[item], h5py.Dataset):
+                out = fl[item][...]
+            else:
+                raise NotImplementedError("that item is not supported yet.")
+
+        if not self.always_lazy:
+            self.__memcache__[item] = out
+
+        return out
 
 
 def auxiliary_data(weather_file, thermlog_file, band, year, day):
@@ -174,7 +342,7 @@ def level3_single_file_test(
 
     avr, avw = tools.spectral_averaging(r[mask, :], w[mask, :])
     avp = np.mean(p[mask, :], axis=0)
-    fb, rb, wb, sb = tools.spectral_binning_number_of_samples(f, avr, avw, nsamples=128)
+    fb, rb, wb, sb = tools.average_in_frequency(avr, freq=f, weights=avw, n_samples=128)
 
     mb = mdl.model_evaluate("LINLOG", avp, fb / 200)
 

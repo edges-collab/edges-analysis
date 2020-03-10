@@ -5,7 +5,7 @@ import numpy as np
 from astropy import time as apt
 
 
-def utc2lst(utc_time_array, LONG_float):
+def utc2lst(utc_time_array, longitude):
     """
     Last modification: May 29, 2015.
 
@@ -35,17 +35,18 @@ def utc2lst(utc_time_array, LONG_float):
 
     for i, ut in enumerate(uta):
         # time stamp in python "datetime" format
-        udt = dt.datetime(*ut)
+        if not isinstance(ut, dt.datetime):
+            ut = dt.datetime(*ut)
 
         # python "datetime" to astropy "Time" format
-        t = apt.Time(udt, format="datetime", scale="utc")
+        t = apt.Time(ut, format="datetime", scale="utc")
 
         # necessary approximation to compute sidereal time
         t.delta_ut1_utc = 0
 
         # LST at longitude LONG_float, in degrees
         lst[i] = t.sidereal_time(
-            "apparent", str(LONG_float) + "d", model="IAU2006A"
+            "apparent", str(longitude) + "d", model="IAU2006A"
         ).value
 
     return lst
@@ -65,7 +66,10 @@ def sun_moon_azel(lat, lon, utc_array):
     coord = np.zeros((len(utc_array), 4))
 
     for i, utc in enumerate(utc_array):
-        obs_location.date = dt.datetime(*utc)
+        if not isinstance(utc, dt.datetime):
+            obs_location.date = dt.datetime(*utc)
+        else:
+            obs_location.date = utc
 
         sun = eph.Sun(obs_location)
         moon = eph.Moon(obs_location)
