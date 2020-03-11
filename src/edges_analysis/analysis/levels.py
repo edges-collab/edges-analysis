@@ -1,5 +1,7 @@
 from os import makedirs, listdir
 from os.path import exists, dirname
+from typing import Tuple, Optional, Sequence, List
+from functools import lru_cache
 
 import h5py
 import numpy as np
@@ -16,6 +18,7 @@ from pathlib import Path
 from cached_property import cached_property
 
 # import src.edges_analysis
+import src.edges_analysis.analysis.filters
 from . import io, s11 as s11m, loss, beams, tools, filters, coordinates
 from ..config import config
 from .. import const
@@ -35,7 +38,13 @@ class _Level(io.HDF5Object):
             )
 
         if not isinstance(prev_level, cls._prev_level):
-            prev_level = cls._prev_level(prev_level)
+            if hasattr(prev_level, "__len__"):
+                prev_level = [
+                    p if isinstance(p, cls._prev_level) else cls._prev_level(p)
+                    for p in prev_level
+                ]
+            else:
+                prev_level = cls._prev_level(prev_level)
 
         data = cls._from_prev_level(prev_level, **kwargs)
         out = cls.from_data(data, filename=filename)
@@ -45,8 +54,41 @@ class _Level(io.HDF5Object):
         return out
 
     @classmethod
-    def _from_prev_level(cls, prev_level: [_prev_level], **kwargs):
+    def _from_prev_level(
+        cls, prev_level: [_prev_level, Sequence[_prev_level]], **kwargs
+    ):
         pass
+
+    @property
+    def meta(self):
+        return self["meta"]
+
+    @property
+    def spectrum(self):
+        return self["spectra"]["antenna_temp"]
+
+    @property
+    def raw_frequencies(self):
+        return self["spectra"]["frequencies"]
+
+    @property
+    def freq(self):
+        return FrequencyRange(self.raw_frequencies)
+
+    @property
+    def ancillary(self):
+        return self["ancillary"]
+
+    @property
+    def spectra(self):
+        return self["spectra"]
+
+    @property
+    def weights(self):
+        try:
+            return self.spectra["weights"]
+        except KeyError:
+            return np.ones_like(self.raw_frequencies)
 
 
 @attr.s
@@ -73,36 +115,81 @@ class Level1(_Level):
 @attr.s
 class Level2(_Level):
     @classmethod
-    def _from_prev_level(
-        cls, level1, weather_file, thermlog_file, band, year, day, hour=0
-    ):
-        data, ancillary, meta = level1_to_level2(
-            level1, weather_file, thermlog_file, band, year, day, hour
-        )
+    def _from_prev_level(cls, level1, **kwargs):
+        data, ancillary, meta = level1_to_level2(level1, **kwargs)
         return {"spectra": data, "ancillary": ancillary, "meta": meta}
 
 
-def level1_to_level2(level1, weather_file, thermlog_file, band, year, day, hour=0):
+def level1_to_level2(
+    level1: [Level1, Path, str],
+    weather_file: [Path, str],
+    thermlog_file: [Path, str],
+    band: str,
+    year: int,
+    day: int,
+    hour: int = 0,
+):
     """
-    Convert a Level 1 file to a Level 2 file.
+    Convert a Level1 file or object to Level2.
+
+    The process of converting one to the other does not modify the spectrum in any
+    way -- there is no averaging/integration done in this step. Rather, auxiliary
+    information is *added* to the object, containing weather and thermal characteristics
+    at the site during observation, interpolated to the observing times.
+
+    Parameters
+    ----------
+    level1 : :class:`Level1` instance, Path or str
+        The level1 object to update to level2.
+    weather_file : Path or str
+        The file containing weather information relevant to the dates contained in the
+        level1 object.
+    thermlog_file : Path or str
+        The file containing thermistor log information relevant to the dates
+        contained in the level1 object.
+    band : str
+        A string specifying which band this observation is for (either `low2, `low3`,
+        `mid`, or `high`).
+    year : int
+        The year of observation.
+    day : int
+        The day (of the year) of observation.
+    hour : int
+        The hour of the day at which observations began.
+
+    Returns
+    -------
+    data : dict
+        Dict containing "frequencies" and "antenna_temp", which are just the same
+        as level1.
+    auxiliary : dict
+        Containing
+        * "ambient_temp": Ambient temperature as a function of time
+        * "ambient_humidity": Ambient humidity as a function of time
+        * "receiver1_temp": Receiver1 temperature as a function of time
+        * "recevier2_temp": Receiver2 temperature as a function of time
+        * "lst": LST for each observation in the spectrum.
+        * "gha": GHA for each observation in the spectrum.
+        * "sun_moon_azel": Coordinates of the sun and moon as function of time.
+    meta : dict
+        Containing
+        * "year": year of observation
+        * "day": day of observation (within year)
+        * "hour": hour of observation (within day)
+        * "band": the band of observation (a string)
+        * "thermlog_file": path to the thermlog information used
+        * "weather_file": path to the weather information used
     """
-    # Paths and files
-    # save_file = (
-    #     config["home_folder"] + f"/EDGES/spectra/level2/{band}/{year}_{day_hour}.hdf5"
-    # )
+    weather_file = Path(weather_file)
+    if not weather_file.is_absolute():
+        weather_file = (Path(config["MRO_folder"]) / weather_file).absolute()
 
-    if not Path(weather_file).is_absolute():
-        weather_file = (Path(config["MRO_folder"]) / Path(weather_file)).absolute()
-
-    if not Path(thermlog_file).is_absolute():
-        thermlog_file = (Path(config["MRO_folder"]) / Path(thermlog_file)).absolute()
+    thermlog_file = Path(thermlog_file)
+    if not thermlog_file.is_absolute():
+        thermlog_file = (Path(config["MRO_folder"]) / thermlog_file).absolute()
 
     if not isinstance(level1, Level1):
         level1 = Level1(level1)
-    fe = level1.freq.freq
-
-    tt = level1.spectrum[:, level1.freq.mask]
-    ww = np.ones_like(tt)
 
     # LST
     lst = coordinates.utc2lst(level1.datetimes, const.edges_lon_deg)
@@ -110,10 +197,11 @@ def level1_to_level2(level1, weather_file, thermlog_file, band, year, day, hour=
     gha[gha < -12.0] += 24
 
     # Sun/Moon coordinates
-    sun_moon_azel = coordinates.sun_moon_azel(
+    sun, moon = coordinates.sun_moon_azel(
         const.edges_lat_deg, const.edges_lon_deg, level1.datetimes
     )
 
+    # TODO: Check if band/year/day can be gotten directly from level1
     aux1, aux2 = io.auxiliary_data(weather_file, thermlog_file, band, year, day)
     seconds = (level1.datetimes_np - level1.datetimes_np[0]).astype(float)
     amb_temp_interp = np.interp(seconds, aux1[:, 0], aux1[:, 1]) - 273.15
@@ -126,33 +214,142 @@ def level1_to_level2(level1, weather_file, thermlog_file, band, year, day, hour=
         rec2_temp_interp = np.interp(seconds, aux2[:, 0], aux2[:, 1])
 
     # Meta
-    meta = {"year": year, "day": day, "hour": hour}
+    meta = {
+        "band": band,
+        "year": year,
+        "day": day,
+        "hour": hour,
+        "thermlog_file": str(thermlog_file),
+        "weather_file": str(weather_file),
+    }
 
-    ancilliary = {
+    ancillary = {
         "ambient_temp": amb_temp_interp,
         "ambient_humidity": amb_hum_interp,
         "receiver1_temp": rec1_temp_interp,
-        "recevier2_temp": rec2_temp_interp,
+        "receiver2_temp": rec2_temp_interp,
         "lst": lst,
         "gha": gha,
-        "sun_moon_azel": sun_moon_azel,
+        "sun_azel": sun,
+        "moon_azel": moon,
     }
 
-    data = {"frequency": fe, "antenna_temp": tt, "weights": ww}
+    # TODO: consider filtering on auxilary HERE rather than in Level4.
 
-    return data, ancilliary, meta
+    data = {"frequency": level1.freq.freq, "antenna_temp": level1.spectrum}
+
+    return data, ancillary, meta
 
 
-class Leve3(_Level):
+class Level3(_Level):
     def _from_prev_level(cls, level2: [Level2], **kwargs):
         data, ancillary, meta = level2_to_level3(level2, **kwargs)
         return {"spectra": data, "ancillary": ancillary, "meta": meta}
+
+    @lru_cache()
+    def frequency_average_spectrum(self, indx=None, resolution=0.0488):
+        """
+        Perform a frequency-average over the spectrum.
+
+        Parameters
+        ----------
+        indx : int, optional
+            The (time) index at which to compute the frequency-averaged spectrum.
+            If not given, returns a 2D array, with time on the first axis.
+        resolution : float, optional
+            The frequency resolution of the output.
+
+        Returns
+        -------
+        f : array-like
+            The mean frequency in each output bin
+        t : array-like
+            The weighted-average of the spectrum in each bin
+        w : array-like
+            The total weight in each bin
+        std : array-like
+            The standard deviation about the mean in each bin.
+        """
+        if indx is None:
+            out = [
+                self.frequency_average_spectrum(i, resolution)
+                for i in range(len(self.spectrum))
+            ]
+            return tuple(np.array(x) for x in out)
+        else:
+            # Fitting foreground model to binned version of spectra
+            return tools.average_in_frequency(
+                self.spectrum[indx],
+                freq=self.raw_frequencies,
+                weights=self.weights[indx],
+                resolution=resolution,
+            )
+
+    @lru_cache()
+    def model(self, indx, model="LINLOG", n_terms=5, resolution=0.0488):
+        """
+        Determine a callable model of the spectrum at a given time, optionally
+        computed over averaged original data.
+
+        Parameters
+        ----------
+        indx : int
+            The (time) index to compute the model for.
+        model : str, optional
+            The kind of model to fit.
+        n_terms : int, optional
+            The number of terms to use in the fit.
+
+        Returns
+        -------
+        callable :
+            Function of frequency (in units of self.raw_frequency) that will return
+            the model.
+        """
+        f, s, w = self.frequency_average_spectrum(indx, resolution)[:3]
+
+        freq = FrequencyRange(f)
+        params = mdl.fit_polynomial_fourier(
+            model, freq.freq_recentred, s, n_terms, Weights=w
+        )[0]
+
+        return lambda nu: mdl.model_evaluate(model, params, freq.normalize(nu))
+
+    @lru_cache()
+    def get_model_rms(
+        self,
+        indx=None,
+        model="LINLOG",
+        n_terms=5,
+        resolution=0.0488,
+        freq_range=(-np.inf, np.inf),
+    ):
+        if indx is None:
+            return np.array(
+                [
+                    self.get_model_rms(i, model, n_terms, resolution, freq_range)
+                    for i in range(len(self.spectrum))
+                ]
+            )
+        else:
+            mask = (
+                self.raw_frequencies
+                >= freq_range[0] & self.raw_frequencies
+                <= freq_range[1]
+            )
+
+            model = self.model(indx, model, n_terms, resolution)(
+                self.raw_frequencies[mask]
+            )
+            resid = self.spectrum[indx, mask] - model
+            return np.sqrt(
+                np.sum((resid[self.weights > 0]) ** 2) / np.sum(self.weights > 0)
+            )
 
 
 def level2_to_level3(
     level2: [str, Path, Level2],
     calobs: [str, CalibrationObservation],
-    band: str,
     s11_path="antenna_s11_2018_147_17_04_33.txt",
     antenna_s11_n_terms=15,
     antenna_correction=True,
@@ -162,12 +359,58 @@ def level2_to_level3(
     f_low: float = 50,
     f_high: float = 150,
     n_fg=7,
-) -> dict:
+) -> Tuple[dict, dict, dict]:
+    """
+    Convert a Level2 file or object to Level3.
+
+    This algorithm performs the following operations on the data:
+
+    * Restricts frequency range
+    * Applies a lab-based calibration solution
+    * Corrects for ground/balun/antenna losses
+    * Corrects for beam factor
+    * Flags RFI using an explicit list of channels
+    * Flags RFI using a moving window polynomial filter
+
+    Parameters
+    ----------
+    level2 : :class:`Level2` instance or path
+        The level2 instance to process.
+    calobs : :class:`CalibrationObservation` instance or path
+        The lab-based calibration observation to use to calibrate the data.
+    s11_path : path, optional
+        Path to the S11 measurement of the antenna.
+    antenna_s11_n_terms : int, optional
+        Number of terms used in fitting the S11 model.
+    antenna_correction : bool, optional
+        Whether to perform the antenna correction
+    balun_correction : bool, optional
+        Whether to perform the balun correction
+    ground_correction : bool, optional
+        Whether to perform the ground correction
+    beam_file : path, optional
+        Filename (not absolute) of a beam model to use for correcting for the beam
+        factor. Not used if not provided.
+    f_low : float
+        Minimum frequency to use.
+    f_high : float
+        Maximum frequency to use.
+    n_fg : int, optional
+        Number of foreground terms to use in obtaining the model and residual.
+
+    Returns
+    -------
+    data : dict
+        Same keys as for :func:`level1_to_level2` but adding `weights`.
+    ancillary : dict
+        The same ancillary data as contained in `level2`.
+    meta : dict
+        Contains all input parameters, as well as level2 meta.
+    """
     if not isinstance(level2, Level2):
         level2 = Level2(level2)
 
     meta = {
-        "band": band,
         "s11_path": Path(s11_path).absolute(),
         "antenna_s11_n_terms": antenna_s11_n_terms,
         "antenna_correction": antenna_correction,
@@ -176,32 +419,22 @@ def level2_to_level3(
         "beam_file": beam_file,
         "f_low": f_low,
         "f_high": f_high,
-        "n_fg": n_fg,
+        "n_poly_xrfi": n_fg,
     }
 
     meta = {**meta, **level2["meta"]}
-
-    # Load daily data
-    #    fin_X, t_2D_X, m_2D, w_2D_X = io.level2read(filename)
 
     if np.all(level2["spectra"] == 0):
         raise Exception("The level2 file given has no non-zero spectra!")
 
     # Cut the frequency range
-    freq = FrequencyRange(level2["spectra"]["frequency"], f_low=f_low, f_high=f_high)
+    freq = FrequencyRange(level2.raw_frequencies, f_low=f_low, f_high=f_high)
     # fin = fin_X[(fin_X >= f_low) & (fin_X <= f_high)]
-    spectra = level2["spectra"]["temperature"][:, freq.mask]
-    weights = level2["spectra"]["weights"][:, freq.mask]
+    spectra = level2.spectrum[:, freq.mask]
+    weights = level2.weights[:, freq.mask]
 
     if not isinstance(calobs, CalibrationObservation):
         calobs = CalibrationObservation.from_file(calobs)
-
-    #    rcv = np.genfromtxt(rcv_file)
-
-    # fX = rcv[:, 0]
-    # rcv = rcv[(fX >= f_low) & (fX <= f_high)]
-    # s11_LNA = rcv[:, 1] + 1j * rcv[:, 2]
-    # C1, C2, TU, TC, TS = rcv.T[3:]
 
     # Antenna S11
     s11_ant = s11m.antenna_s11_remove_delay(
@@ -223,29 +456,26 @@ def level2_to_level3(
     # Antenna Loss (interface between panels and balun)
     G = np.ones_like(freq.freq)
     if antenna_correction:
-        G *= loss.antenna_loss(band, freq.freq)
+        G *= loss.antenna_loss(level2.meta["band"], freq.freq)
 
     # Balun+Connector Loss
     if balun_correction:
-        Gb, Gc = loss.balun_and_connector_loss(band, freq.freq, s11_ant)
+        Gb, Gc = loss.balun_and_connector_loss(level2.meta["band"], freq.freq, s11_ant)
         G *= Gb * Gc
 
     # Ground Loss
     if ground_correction:
-        G *= loss.ground_loss(band, freq.freq)
+        G *= loss.ground_loss(level2.meta["band"], freq.freq)
 
-    # # Total loss
-    # G = Ga * Gbc * Gg
-    #
     # Remove loss
     # TODO: it is *not* clear which temperature to use here...
-    ambient_temp = 273.15 + level2["ancillary"]["ambient_temp"]
+    ambient_temp = 273.15 + level2.ancillary["ambient_temp"]
     calibrated_temp = (calibrated_temp - ambient_temp * (1 - G)) / G
 
     # Beam factor
     if beam_file:
         if not Path(beam_file).exists():
-            beam_file = f"{config['edges_folder']}{band}/calibration/beam_factors/table/{beam_file}"
+            beam_file = f"{config['edges_folder']}{level2.meta['band']}/calibration/beam_factors/table/{beam_file}"
 
         f_table, lst_table, bf_table = beams.beam_factor_table_read(beam_file)
         bf = beams.beam_factor_table_evaluate(
@@ -263,19 +493,8 @@ def level2_to_level3(
     calibrated_temp[flags] = 0
     weights[flags] = 0
 
-    # Number of spectra
-    #    lt = len(tt)
-
-    # Initializing output arrays
-    t_all = np.zeros((len(weights), freq.n))
-    p_all = np.zeros((len(weights), n_fg))
-    r_all = np.zeros((len(weights), freq.n))
-    w_all = np.zeros((len(weights), freq.n))
-
-    # Foreground models and residuals
+    # RFI cleaning
     for i, (temp_cal, wi) in enumerate(calibrated_temp, weights):
-
-        # RFI cleaning
         flags = rfi.xrfi_poly(
             temp_cal,
             wi,
@@ -288,341 +507,254 @@ def level2_to_level3(
         temp_cal[flags] = 0
         wi[flags] = 0
 
-        # Fitting foreground model to binned version of spectra
-        fbi, tbi, wbi, _ = tools.average_in_frequency(
-            temp_cal, freq=freq.freq, weights=wi, resolution=0.0488  # in MHz
-        )
-        par_fg = mdl.fit_polynomial_fourier(
-            "LINLOG", FrequencyRange(fbi).freq_recentred, tbi, n_fg, Weights=wbi
-        )[0]
-
-        # Evaluating foreground model at raw resolution
-        model = mdl.model_evaluate("LINLOG", par_fg, freq.freq_recentred)
-
-        # Residuals
-        rri = temp_cal - model
-
-        # # RMS for two halfs of the spectrum
-        # IX = int(np.floor(len(fin) / 2))
-        #
-        # F1 = fin[:IX]
-        # R1 = rri[:IX]
-        # W1 = wi[:IX]
-        #
-        # F2 = fin[IX:]
-        # R2 = rri[IX:]
-        # W2 = wi[IX:]
-
-        # RMS1 = np.sqrt(np.sum((R1[W1 > 0]) ** 2) / len(F1[W1 > 0]))
-        # RMS2 = np.sqrt(np.sum((R2[W2 > 0]) ** 2) / len(F2[W2 > 0]))
-
-        # We also compute residuals for 3 terms as an additional filter
-        # Fitting foreground model to binned version of spectra
-        #        par_fg_Xt = mdl.fit_polynomial_fourier(
-        #            "LINLOG", freq.freq_recentred, tbi, 3, Weights=wbi
-        #        )
-
-        # Evaluating foreground model at raw resolution
-        #       model_i_Xt = mdl.model_evaluate("LINLOG", par_fg_Xt[0], freq.freq_recentred)
-
-        # Residuals
-        #        rri_Xt = temp_cal - model_i_Xt
-
-        # RMS
-        # RMS3 = np.sqrt(np.sum((rri_Xt[wi > 0]) ** 2) / np.sum(wi > 0))
-
-        # Store
-        # -----
-        t_all[i] = temp_cal
-        p_all[i] = par_fg
-        r_all[i] = rri
-        w_all[i] = wi
-        # rms_all[i, 0] = RMS1
-        # rms_all[i, 1] = RMS2
-        # rms_all[i, 2] = RMS3
-        #
-        # print(
-        #     f"{year_day_hdf5}: Spectrum number: {i+1}: RMS: {RMS1}, {RMS2}, {RMS3}"
-        # )
-    #
-    # # Total power computation
-    # t1 = t_all[:, (fin >= 60) & (fin <= 90)]
-    # t2 = t_all[:, (fin >= 90) & (fin <= 120)]
-    # t3 = t_all[:, (fin >= 60) & (fin <= 120)]
-    #
-    # tp1 = np.sum(t1, axis=1)
-    # tp2 = np.sum(t2, axis=1)
-    # tp3 = np.sum(t3, axis=1)
-    #
-    # tp_all = np.zeros((lt, 3))
-    # tp_all[:, 0] = tp1
-    # tp_all[:, 1] = tp2
-    # tp_all[:, 2] = tp3
-
-    # Save
-    # if band == "mid_band":
-    #     save_folder = (
-    #         config["edges_folder"] + band + "/spectra/level3/" + flag_folder + "/"
-    #     )
-    # elif band == "low_band3":
-    #     save_folder = (
-    #         f"/media/raul/EXTERNAL_2TB/low_band3/spectra/level3/{flag_folder}/"
-    #     )
-    # if not exists(save_folder):
-    #     makedirs(save_folder)
-
-    ancillary = {"parameters": p_all, "residuals": r_all}
+    ancillary = level2.ancillary
 
     data = {
-        "antenna_temp": t_all,
+        "antenna_temp": calibrated_temp,
         "frequency": freq.freq,
-        "weights": w_all,
+        "weights": weights,
     }
-    #
-    # with h5py.File(save_folder + year_day_hdf5, "w") as hf:
-    #     hf.create_dataset("frequency", data=freq.freq)
-    #     hf.create_dataset("antenna_temperature", data=t_all)
-    #     hf.create_dataset("parameters", data=p_all)
-    #     hf.create_dataset("residuals", data=r_all)
-    #     hf.create_dataset("weights", data=w_all)
-    #     # hf.create_dataset("rms", data=rms_all)
-    #     # hf.create_dataset("total_power", data=tp_all)
-    #     hf.create_dataset("metadata", data=m_2D)
 
     return data, ancillary, meta
 
 
 def level3_to_level4(
-    band, case, GHA_edges, sun_el_max, moon_el_max, save_folder_file_name
+    level3: Sequence[Level3, Path, str],
+    gha_edges: Sequence[Tuple[float, float]],
+    sun_el_max,
+    moon_el_max,
+    ambient_humidity_max=40,
+    min_receiver_temp=0,
+    max_receiver_temp=100,
+    n_sigma_rms=3,
+    rfi_window_size=3,  # MHz
+    n_poly_rfi=2,
+    n_bootstrap_rfi=20,
+    n_sigma_rfi=3.5,
 ):
     """
-    For instance: One-hour bins -> GHA_edges = np.arange(0, 25, 1)
+    Combine and Convert level3 objects to a single level4 object.
 
-    or
+    Given a sequence of :class:`Level3` objects, this function combines them together,
+    filters out some times (see below), and integrates over time into given bins in
+    LST/GHA.
 
-    GHA_edges = np.arange(0.5, 24, 1)
-    GHA_edges = np.insert(GHA_edges,0,23.5)
+    Times are filtered based on sun/moon position, humidity, receiver temperature,
+    the total RMS of two halves of the spectrum after subtraction of a 5-term polynomial
+    (fitted to frequency-binned data), the total RMS of the full spectrum after
+    subtractino of a 3-term polynomial (fitted to frequency-binned data), and the total
+    summed temperature over the spectrum (for each half, and the whole).
+
+    Times are then averaged within provided bins of GHA.
+
+    Further frequency filtering is performed based on a moving window polynomial filter
+    of the mean data within each GHA bin.
+
+    Parameters
+    ----------
+    level3 : list of :class:`Level3` instances or paths
+        A bunch of level3 objects to combine and integrate into the level4 data.
+    gha_edges : list of tuple
+        A list of 2-tuples, each containing a min and max GHA.
+    sun_el_max : float
+        The maximum elevation of the sun before the time is filtered.
+    moon_el_max : float
+        The maximum elevation of the moon before the time is filtered.
+    ambient_humidity_max : float, optional
+        The maximum humidity allowed before the time is filtered.
+    min_receiver_temp : float, optional
+        The minimum temperature of the receiver before the observation is filtered.
+    max_receiver_temp : float, optional
+        The maximum temperature of the receiver before the observation is filtered.
+    n_sigma_rms : int, optional
+        The number of sigma at which to filter a time due to its RMS after subtracting
+        a smooth model.
+    rfi_window_size : float, optional
+        The size of the moving polynomial window used to locate frequency-based RFI.
+        In MHz.
+    n_poly_rfi : int, optional
+        The order of the polynomial used to fit the sliding window for RFI.
+    n_bootstrap_rfi : int, optional
+        The number of bootstrap samples to take to initialize the RMS for the first
+        sliding window.
+    n_sigma_rfi : float, optional
+        Number of sigma to use for clipping RFI.
+
+    Returns
+    -------
+    data : dict
+        The same keys as in :func:`level2_to_level3`. However, the axes for the weights
+        and spectra in this case are ``(N_FILES, N_GHA, N_FREQ)``, where ``N_FILES``
+        is the original number of Level3 objects input.
+    ancillary : dict
+        Containing:
+        * "n_total_times_per_file": The number of observations per input file.
+        * "used_times": A 2D boolean array specifying which times (second axis)
+          are used for which files (first axis). The array is padded out to the maximum
+          number of times in any of the files, and the `n_total_times_per_file` should
+          be used to index the relevant arrays.
+        * 'years': The year for each file.
+        * 'days': The day for each file
+        * 'hours': The starting hour for each file.
+    meta : dict
+        Containing all input parameters, and the number of files used.
     """
+    meta = {
+        "n_files": len(level3),
+        "gha_edges": gha_edges,
+        "sun_el_max": sun_el_max,
+        "moon_el_max": moon_el_max,
+        "ambient_humidity_max": ambient_humidity_max,
+        "min_receiver_temp": min_receiver_temp,
+        "max_receiver_temp": max_receiver_temp,
+        "n_sigma_rms": n_sigma_rms,
+        "rfi_window_size": rfi_window_size,
+        "n_poly_rfi": n_poly_rfi,
+        "n_bootstrap_rfi": n_bootstrap_rfi,
+        "n_sigma_rfi": n_sigma_rfi,
+    }
 
-    # Listing files available
-    # ------------------------
-    if band == "mid_band":
+    # Sort the inputs in ascending date.
+    level3 = sorted(
+        level3, key=lambda x: f"{x.meta['year']-x.meta['day']-x.meta['hour']}"
+    )
 
-        # Case 1 calibration: Receiver 2018, Switch 2018
-        if (case >= 10) and (case <= 19):
-            if case == 10:
-                path_files = (
-                    config["edges_folder"]
-                    + "mid_band/spectra/level3/rcv18_sw18_nominal/"
-                )
+    years = [x.meta["year"] for x in level3]
+    days = [x.meta["day"] for x in level3]
+    hours = [x.meta["hour"] for x in level3]
 
-        # Case 2 calibration: Receiver 2018, Switch 2019
-        if (case >= 20) and (case <= 29):
-            if case == 20:
-                path_files = (
-                    config["edges_folder"]
-                    + "mid_band/spectra/level3/rcv18_sw19_nominal/"
-                )
+    weights = np.zeros((len(level3), len(gha_edges), level3[0].freq.n))
+    spectra = np.zeros((len(level3), len(gha_edges), level3[0].freq.n))
 
-        # Receiver and switch calibration 2019-10
-        if case == 2:
-            path_files = (
-                config["edges_folder"]
-                + "mid_band/spectra/level3/calibration_2019_10_no_ground_loss_no_beam_corrections/"
-            )
+    # Create a master array of indices of good-quality spectra (over the time axis)
+    # used in the final averages
+    ntimes = np.array([len(l3.spectrum) for l3 in level3])
+    master_index = np.zeros((len(level3), len(gha_edges), ntimes.max()), dtype=bool)
 
-        # Case 1 calibration: Receiver 2018, Switch 2018, AGAIN
-        if case == 3:
-            path_files = (
-                config["edges_folder"]
-                + "mid_band/spectra/level3/case_nominal_50-150MHz_no_ground_loss_no_beam_corrections/"
-            )
-
-        # Case 1 calibration: Receiver 2018, Switch 2018, AGAIN
-        if case == 5:
-            path_files = (
-                config["edges_folder"]
-                + "mid_band/spectra/level3/case_nominal_14_14_terms_55"
-                "-150MHz_no_ground_loss_no_beam_corrections/"
-            )
-
-        # Calibration: Receiver 2018, Switch 2018, AGAIN, LNA1
-        if case == 406:
-            path_files = (
-                config["edges_folder"]
-                + "mid_band/spectra/level3/case_nominal_50-150MHz_LNA1_a2_h2_o2_s1_sim2/"
-            )
-
-        # Calibration: Receiver 2018, Switch 2018, all corrections
-        if case == 501:
-            path_files = (
-                config["edges_folder"]
-                + "mid_band/spectra/level3/case_nominal_50-150MHz_LNA2_a2_h2_o2_s1_sim2_all_lc_yes_bc/"
-            )
-
-        save_folder = (
-            config["edges_folder"]
-            + "mid_band/spectra/level4/"
-            + save_folder_file_name
-            + "/"
-        )
-        output_file_name_hdf5 = save_folder_file_name + ".hdf5"
-
-    if band == "low_band3":
-
-        if case == 2:
-            path_files = "/media/raul/EXTERNAL_2TB/low_band3/spectra/level3/case2/"
-            save_folder = config["edges_folder"] + "low_band3/spectra/level4/case2/"
-            output_file_name_hdf5 = "case2.hdf5"
-
-    new_list = listdir(path_files)
-    new_list.sort()
-
-    index_new_list = range(len(new_list))
-
-    # Loading and cleaning data
-    # -------------------------
-    flag = -1
-
-    year_day_all = np.zeros((len(index_new_list), 2))
-
-    for i in index_new_list:  # range(4):  #
-
-        # Storing year and day of each file
-        year_day_all[i, 0] = float(new_list[i][0:4])
-
-        if len(new_list[i]) == 8:
-            year_day_all[i, 1] = float(new_list[i][5::])
-        elif len(new_list[i]) > 8:
-            year_day_all[i, 1] = float(new_list[i][5:8])
-
-        flag = flag + 1
-
-        # Loading data
-        f, ty, py, ry, wy, rmsy, tpy, my = io.level3read(path_files + new_list[i])
-
-        # Daily index
-        daily_index1 = np.arange(len(f))
-
-        # Filtering out high humidity
-        amb_hum_max = 40
-        IX = io.data_selection(
-            my,
-            use_gha="GHA",
-            time_1=0,
-            time_2=24,
+    for i, l3 in enumerate(level3):
+        # Filter based on aux data.
+        good = filters.time_filter_auxiliary(
+            gha=l3.ancillary["gha"],
+            sun_el=l3.ancillary["sun_azel"][1],
+            moon_el=l3.ancillary["sun_azel"][1],
+            humidity=l3.ancillary["ambient_humidity"],
+            receiver_temp=l3.ancillary["receiver1_temp"],
             sun_el_max=sun_el_max,
             moon_el_max=moon_el_max,
-            amb_hum_max=amb_hum_max,
-            min_receiver_temp=0,
-            max_receiver_temp=100,
+            amb_hum_max=ambient_humidity_max,
+            min_receiver_temp=min_receiver_temp,
+            max_receiver_temp=max_receiver_temp,
         )
 
-        px = py[IX, :]
-        rx = ry[IX, :]
-        wx = wy[IX, :]
-        rmsx = rmsy[IX, :]
-        tpx = tpy[IX, :]
-        mx = my[IX, :]
-        daily_index2 = daily_index1[IX]
+        # Get RMS
+        rms_lower = l3.get_model_rms(freq_range=(-np.inf, l3.freq.center))
+        rms_upper = l3.get_model_rms(freq_range=(l3.freq.center, np.inf))
+        rms_3term = l3.get_model_rms(n_terms=3)
+
+        # px = py[IX, :]
+        # rx = ry[IX, :]
+        # wx = wy[IX, :]
+
+        #        rmsx = rmsy[IX, :]
+        #         tpx = tpy[IX, :]
+        #         mx = my[IX, :]
+        #         daily_index2 = daily_index1[IX]
         # master_index[i, IX] = 1
 
         # Finding index of clean data
-        gx = np.copy(mx[:, 4])
-        gx[gx < 0] = gx[gx < 0] + 24
+        gha = l3.ancillary["gha"]
 
-        Nsigma = 3
-        index_good_rms, i1, i2, i3 = filters.rms_filter(band, case, gx, rmsx, Nsigma)
+        good &= filters.rms_filter(
+            l3.meta["band"],
+            gha,
+            np.array([rms_lower, rms_upper, rms_3term]).T,
+            n_sigma_rms,
+        )
 
         # Applying total-power filter
-        index_good_total_power, i1, i2, i3 = filters.total_power_filter(gx, tpx)
-
-        # Combined filters
-        index_good = np.intersect1d(index_good_rms, index_good_total_power)
+        good &= filters.total_power_filter(
+            gha,
+            np.array(
+                [
+                    np.sum(
+                        l3.spectrum[:, l3.raw_frequencies <= l3.freq.center], axis=1
+                    ),
+                    np.sum(
+                        l3.spectrum[:, l3.raw_frequencies >= l3.freq.center], axis=1
+                    ),
+                    np.sum(l3.spectrum, axis=1),
+                ]
+            ),
+        )
 
         # Selecting good data
-        p = px[index_good, :]
-        r = rx[index_good, :]
-        w = wx[index_good, :]
-        rms = rmsx[index_good, :]
-        m = mx[index_good, :]
-        daily_index3 = daily_index2[index_good]
-
-        # Storing GHA and rms of good data
-        GHA = m[:, 4]
-        GHA[GHA < 0] = GHA[GHA < 0] + 24
-
-        AT = np.vstack((gx, rmsx.T))
-        BT = np.vstack((GHA, rms.T))
-
-        A = AT.T
-        B = BT.T
-
-        if flag == 0:
-            avp_all = np.zeros((len(new_list), len(GHA_edges) - 1, len(p[0, :])))
-            avr_all = np.zeros((len(new_list), len(GHA_edges) - 1, len(r[0, :])))
-            avw_all = np.zeros((len(new_list), len(GHA_edges) - 1, len(w[0, :])))
-
-            # Creating master array of indices of good-quality spectra used in the final averages
-            master_index = np.zeros((len(new_list), len(GHA_edges) - 1, 4000))
-
-            grx_all = np.copy(A)
-            gr_all = np.copy(B)
-
-        if flag > 0:
-            grx_all = np.vstack((grx_all, A))
-            gr_all = np.vstack((gr_all, B))
+        # p = px[index_good, :]
+        # r = rx[index_good, :]
+        # w = wx[index_good, :]
+        # rms = rmsx[index_good, :]
+        # m = mx[index_good, :]
+        # daily_index3 = daily_index2[index_good]
+        #
+        # AT = np.vstack((gx, rmsx.T))
+        # BT = np.vstack((GHA, rms.T))
+        #
+        # A = AT.T
+        # B = BT.T
+        #
+        # if flag == 0:
+        #
+        #     grx_all = np.copy(A)
+        #     gr_all = np.copy(B)
+        #
+        # if flag > 0:
+        #     grx_all = np.vstack((grx_all, A))
+        #     gr_all = np.vstack((gr_all, B))
 
         # Averaging data within each GHA bin
-        for j in range(len(GHA_edges) - 1):
+        for j, (gha_low, gha_high) in enumerate(gha_edges):
 
-            GHA_LOW = GHA_edges[j]
-            GHA_HIGH = GHA_edges[j + 1]
+            mask = (gha >= gha_low) & (gha < gha_high)
+            spec = l3.spectrum[mask]
+            wght = l3.weights[mask]
+            # r1 = r[(GHA >= GHA_LOW) & (GHA < GHA_HIGH), :]
+            # w1 = w[(GHA >= GHA_LOW) & (GHA < GHA_HIGH), :]
+            # m1 = m[(GHA >= GHA_LOW) & (GHA < GHA_HIGH), :]
+            # daily_index4 = daily_index3[(GHA >= GHA_LOW) & (GHA < GHA_HIGH)]
 
-            if GHA_LOW < GHA_HIGH:
-                p1 = p[(GHA >= GHA_LOW) & (GHA < GHA_HIGH), :]
-                r1 = r[(GHA >= GHA_LOW) & (GHA < GHA_HIGH), :]
-                w1 = w[(GHA >= GHA_LOW) & (GHA < GHA_HIGH), :]
-                # m1 = m[(GHA >= GHA_LOW) & (GHA < GHA_HIGH), :]
-                daily_index4 = daily_index3[(GHA >= GHA_LOW) & (GHA < GHA_HIGH)]
+            these_indx = good & mask
 
-            elif GHA_LOW > GHA_HIGH:
-                p1 = p[(GHA >= GHA_LOW) | (GHA < GHA_HIGH), :]
-                r1 = r[(GHA >= GHA_LOW) | (GHA < GHA_HIGH), :]
-                w1 = w[(GHA >= GHA_LOW) | (GHA < GHA_HIGH), :]
-                # m1 = m[(GHA >= GHA_LOW) | (GHA < GHA_HIGH), :]
-                daily_index4 = daily_index3[(GHA >= GHA_LOW) | (GHA < GHA_HIGH)]
-
-            if len(r1) > 0:
-                avp = np.mean(p1, axis=0)
-                avr, avw = tools.weighted_mean(r1, w1)
+            if np.any(these_indx):
+                spec_mean, wght_mean = tools.weighted_mean(spec, weights=wght, axis=0)
 
                 # RFI cleaning of average spectra
                 flags = rfi.xrfi_poly_filter(
-                    avr,
-                    avw,
-                    window_width=int(3 / (f[1] - f[0])),
-                    n_poly=2,
-                    n_bootstrap=20,
-                    n_sigma=2.5,
+                    spec_mean,
+                    wght_mean,
+                    window_width=int(rfi_window_size / l3.freq.df),
+                    n_poly=n_poly_rfi,
+                    n_bootstrap=n_bootstrap_rfi,
+                    n_sigma=n_sigma_rfi,
                 )
-                # Storing averages
-                avp_all[i, j, :] = avp
-                avr_all[i, j, flags] = 0
-                avw_all[i, j, flags] = 0
-                master_index[i, j, daily_index4] = 1
+                spec_mean[flags] = 0
+                wght_mean[flags] = 0
 
-    # Save
-    # ----
-    if not exists(save_folder):
-        makedirs(save_folder)
-    with h5py.File(save_folder + output_file_name_hdf5, "w") as hf:
-        hf.create_dataset("frequency", data=f)
-        hf.create_dataset("parameters", data=avp_all)
-        hf.create_dataset("residuals", data=avr_all)
-        hf.create_dataset("weights", data=avw_all)
-        hf.create_dataset("index", data=master_index)
-        hf.create_dataset("gha_edges", data=GHA_edges)
-        hf.create_dataset("year_day", data=year_day_all)
+                # Store this iteration
+                spectra[i, j] = spec_mean
+                weights[i, j] = wght_mean
+                master_index[i, j, these_indx] = True
 
-    return f, avp_all, avr_all, avw_all, master_index, GHA_edges, year_day_all
+    data = {
+        "antenna_temp": spectra,
+        "weights": weights,
+        "frequency": level3[0].raw_frequencies,
+    }
+
+    ancillary = {
+        "n_total_times_per_file": ntimes,
+        "used_times": master_index,
+        "years": years,
+        "days": days,
+        "hours": hours,
+    }
+
+    return data, ancillary, meta

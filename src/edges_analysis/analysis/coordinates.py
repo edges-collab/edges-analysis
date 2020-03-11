@@ -63,7 +63,8 @@ def sun_moon_azel(lat, lon, utc_array):
 
     # Compute local coordinates of Sun and Moon
     utc_array = np.atleast_2d(utc_array)
-    coord = np.zeros((len(utc_array), 4))
+    sun = np.zeros((len(utc_array), 2))
+    moon = np.zeros((len(utc_array), 2))
 
     for i, utc in enumerate(utc_array):
         if not isinstance(utc, dt.datetime):
@@ -74,12 +75,12 @@ def sun_moon_azel(lat, lon, utc_array):
         sun = eph.Sun(obs_location)
         moon = eph.Moon(obs_location)
 
-        coord[i, 0] = (180 / np.pi) * eph.degrees(sun.az)
-        coord[i, 1] = (180 / np.pi) * eph.degrees(sun.alt)
-        coord[i, 2] = (180 / np.pi) * eph.degrees(moon.az)
-        coord[i, 3] = (180 / np.pi) * eph.degrees(moon.alt)
+        sun[i, 0] = (180 / np.pi) * eph.degrees(sun.az)
+        sun[i, 1] = (180 / np.pi) * eph.degrees(sun.alt)
+        moon[i, 0] = (180 / np.pi) * eph.degrees(moon.az)
+        moon[i, 1] = (180 / np.pi) * eph.degrees(moon.alt)
 
-    return coord
+    return sun, moon
 
 
 def f2z(fe):

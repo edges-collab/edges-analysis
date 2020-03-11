@@ -7,7 +7,8 @@ import numpy as np
 from edges_cal import modelling as mdl, xrfi as rfi
 
 from . import tools, io
-from .io import data_selection, level3read, level4read
+from .io import level3read, level4read
+from .filters import time_filter_auxiliary
 from ..config import config
 from . import filters
 
@@ -333,7 +334,7 @@ def daily_residuals_LST(
     flag = 0
     for i in range(len(LST_boundaries) - 1):
 
-        indx = data_selection(
+        indx = time_filter_auxiliary(
             m,
             sun_el_max=SUN_EL_max,
             moon_el_max=MOON_EL_max,
@@ -417,7 +418,7 @@ def average_level3_mid_band(case, sun_el_max=90, moon_el_max=90):
     for i in range(10):
         f, t, p, r, w, rms, m = level3read(path_files + list_files[i])
 
-        indx = data_selection(
+        indx = time_filter_auxiliary(
             m,
             sun_el_max=sun_el_max,
             moon_el_max=moon_el_max,

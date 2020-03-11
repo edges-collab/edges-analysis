@@ -1,7 +1,6 @@
 import numpy as np
 import h5py
 import attr
-from attr import validators
 from pathlib import Path
 import contextlib
 from edges_cal import modelling as mdl
@@ -52,7 +51,7 @@ class _HDF5Group:
         with self._open() as fl:
             if item in ("attrs", "meta"):
                 out = dict(fl.attrs)
-            if isinstance(fl[item], h5py.Group):
+            elif isinstance(fl[item], h5py.Group):
                 out = _HDF5Group(self.filename, item)
             elif isinstance(fl[item], h5py.Dataset):
                 out = fl[item][...]
@@ -175,17 +174,6 @@ class HDF5Object:
 
 
 def auxiliary_data(weather_file, thermlog_file, band, year, day):
-    # scp -P 64122 loco@150.101.175.77:/media/DATA/EDGES_data/weather.txt /home/raul/Desktop/
-    # scp -P 64122 loco@150.101.175.77:/media/DATA/EDGES_data/thermlog.txt /home/raul/Desktop/
-
-    # OR
-
-    # scp raul@enterprise.sese.asu.edu:/data1/edges/data/2014_February_Boolardy/weather.txt Desktop/
-    # scp raul@enterprise.sese.asu.edu:/data1/edges/data/2014_February_Boolardy/thermlog_low.txt
-    # Desktop/
-    # scp raul@enterprise.sese.asu.edu:/data1/edges/data/2014_February_Boolardy/thermlog.txt
-    # Desktop/
-
     array1 = read_weather_file(day, weather_file, year)
     array2 = read_thermlog_file(band, day, thermlog_file, year)
 
@@ -362,50 +350,6 @@ def level3_single_file_test(
         np.savetxt(save_path + save_spectrum_name, out)
 
     return ff, tt, ww, ss
-
-
-def data_selection(
-    m,
-    use_gha=True,
-    time_1=0,
-    time_2=24,
-    sun_el_max=90,
-    moon_el_max=90,
-    amb_hum_max=200,
-    min_receiver_temp=0,
-    max_receiver_temp=100,
-):
-    # Master index
-    index = np.arange(len(m[:, 0]))
-
-    if use_gha:
-        gha = m[:, 4]
-        gha[gha < 0] += 24
-
-        index_time_1 = index[gha >= time_1]
-        index_time_2 = index[gha < time_2]
-    else:
-        index_time_1 = index[m[:, 3] >= time_1]
-        index_time_2 = index[m[:, 3] < time_2]
-
-    # Sun elevation, Moon elevation, ambient humidity, and receiver temperature
-    index_sun = index[m[:, 6] <= sun_el_max]
-    index_moon = index[m[:, 8] <= moon_el_max]
-    index_hum = index[m[:, 10] <= amb_hum_max]
-    index_Trec = index[
-        (m[:, 11] >= min_receiver_temp) & (m[:, 11] <= max_receiver_temp)
-    ]
-    # Combined index
-    if time_1 < time_2:
-        index1 = np.intersect1d(index_time_1, index_time_2)
-    else:
-        index1 = np.union1d(index_time_1, index_time_2)
-
-    return index1 & index_sun & index_moon & index_hum & index_Trec
-    # index2 = np.intersect1d(index_sun, index_moon)
-    # index3 = np.intersect1d(index2, index_hum)
-    # index4 = np.intersect1d(index3, index_Trec)
-    # return np.intersect1d(index1, index4)
 
 
 def level4read(path_file):

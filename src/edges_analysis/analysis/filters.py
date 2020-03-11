@@ -2,7 +2,7 @@ import os
 
 import numpy as np
 
-from .io import data_selection, level3read
+from .io import level3read
 from ..config import config
 import yaml
 
@@ -54,7 +54,7 @@ def rms_filter_computation(band, case, save_parameters=False):
 
         # Filter out high humidity
         amb_hum_max = 40
-        indices = data_selection(
+        indices = time_filter_auxiliary(
             m,
             use_gha="GHA",
             time_1=0,
@@ -353,3 +353,29 @@ def daily_rms_filter(band, case, index_GHA, year_day_list, rms_threshold):
             for year_day in year_day_list
         ]
     )
+
+
+def time_filter_auxiliary(
+    gha,
+    sun_el,
+    moon_el,
+    humidity,
+    receiver_temp,
+    gha_range=(0, 24),
+    sun_el_max=90,
+    moon_el_max=90,
+    amb_hum_max=200,
+    min_receiver_temp=0,
+    max_receiver_temp=100,
+):
+    good = np.ones(len(gha), dtype=bool)
+
+    good &= gha >= gha_range[0] & gha < gha_range[1]
+
+    # Sun elevation, Moon elevation, ambient humidity, and receiver temperature
+    good &= sun_el <= sun_el_max
+    good &= moon_el <= moon_el_max
+    good &= humidity <= amb_hum_max
+    good &= receiver_temp >= min_receiver_temp & receiver_temp <= max_receiver_temp
+
+    return good
