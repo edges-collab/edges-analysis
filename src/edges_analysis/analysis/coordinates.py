@@ -1,33 +1,29 @@
 import datetime as dt
-
-import ephem as eph
 import numpy as np
-from astropy import time as apt
+from astropy import time as apt, coordinates as apc
 
 
 def utc2lst(utc_time_array, longitude):
     """
-    Last modification: May 29, 2015.
+    Convert an array representing UTC date/time to a 1D array of LST date/time.
 
-    This function converts an Nx6 array of floats or integers representing UTC date/time,
-    to a 1D array of LST date/time.
+    Parameters
+    ----------
+    utc_time_array : array-like
+        Nx6 array of floats or integers, where each row is of the form
+        [yyyy, mm, dd,HH, MM, SS]. It can also be a 6-element 1D array.
+    longitude : float
+        Terrestrial longitude of observatory (float) in degrees.
 
-    Definition:
-    LST = utc2lst(utc_time_array, LONG_float)
+    Returns
+    -------
+    LST : 1D array of LST dates/times
 
-    Input parameters:
-    utc_time_array: Nx6 array of floats or integers, where each row is of the form [yyyy, mm, dd,
-    HH, MM, SS]. It can also be a 6-element 1D array.
-    LONG_float: terrestrial longitude of observatory (float) in degrees.
-
-    Output parameters:
-    LST: 1D array of LST dates/times
-
-    Usage:
-    LST = utc2lst(utc_time_array, -27.5)
+    Examples
+    --------
+    >>> LST = utc2lst(utc_time_array, -27.5)
     """
-
-    # converting input array to "int"
+    # convert input array to "int"
     uta = np.atleast_2d(utc_time_array.astype(int))
 
     # converting UTC to LST
@@ -53,13 +49,9 @@ def utc2lst(utc_time_array, longitude):
 
 
 def sun_moon_azel(lat, lon, utc_array):
-    """
-    Local coordinates of the Sun using Astropy
-    """
+    """Get local coordinates of the Sun using Astropy."""
 
-    obs_location = eph.Observer()
-    obs_location.lat = str(lat)
-    obs_location.lon = str(lon)
+    obs_location = apc.EarthLocation(lat=lat, lon=lon)
 
     # Compute local coordinates of Sun and Moon
     utc_array = np.atleast_2d(utc_array)
@@ -67,18 +59,18 @@ def sun_moon_azel(lat, lon, utc_array):
     moon = np.zeros((len(utc_array), 2))
 
     for i, utc in enumerate(utc_array):
-        if not isinstance(utc, dt.datetime):
-            obs_location.date = dt.datetime(*utc)
-        else:
-            obs_location.date = utc
+        time = apt.Time(dt.datetime(*utc))
 
-        sun = eph.Sun(obs_location)
-        moon = eph.Moon(obs_location)
+        Sun = apc.get_sun(time)
+        Moon = apc.get_moon(time)
 
-        sun[i, 0] = (180 / np.pi) * eph.degrees(sun.az)
-        sun[i, 1] = (180 / np.pi) * eph.degrees(sun.alt)
-        moon[i, 0] = (180 / np.pi) * eph.degrees(moon.az)
-        moon[i, 1] = (180 / np.pi) * eph.degrees(moon.alt)
+        Sun = sun.transform_to(apc.AltAz(location=obs_location))
+        Moon = moon.transform_to(apc.AltAz(location=obs_location))
+
+        sun[i, 0] = Sun.alt.deg
+        sun[i, 1] = Sun.az.deg
+        moon[i, 0] = Moon.alt.deg
+        moon[i, 1] = Moon.az.deg
 
     return sun, moon
 
