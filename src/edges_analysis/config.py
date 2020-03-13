@@ -14,10 +14,13 @@ class Config(dict):
     """Simple over-ride of dict that adds a context manager."""
 
     _defaults = {
-        "raw_antenna_data_dir": "",
-        "raw_lab_data_dir": "",
-        "lab_products_dir": cal_config["cache_dir"],
-        "field_products_dir": os.path.expanduser("~/edges-cal-field-data"),
+        "paths": {
+            "raw_field_data": "",
+            "raw_lab_data": "",
+            "lab_products": cal_config["cache_dir"],
+            "field_products": os.path.expanduser("~/edges-cal-field-products"),
+            "beams": "",
+        }
     }
 
     # The following gives a way to change the keys of defaults over time,
@@ -32,30 +35,43 @@ class Config(dict):
 
     def _migrate(self):
         # Ensure the keys that got read in are the right keys for the current version
-        do_write = False
-        for k, v in self._defaults.items():
-            if k in self:
-                continue
 
-            if k not in self._aliases:
+        def check(k, v, selfdict):
+            do_write = False
+
+            if k in selfdict:
+                if isinstance(v, dict):
+                    for kk, vv in v.items():
+                        do_write |= check(kk, vv, selfdict[k])
+            elif k not in self._aliases:
                 warnings.warn("Your configuration file is out of date. Updating...")
                 do_write = True
-                self[k] = v
+                selfdict[k] = v
 
             else:
                 for alias in self._aliases[k]:
-                    if alias in self:
+                    if alias in selfdict:
                         do_write = True
                         warnings.warn(
                             f"Your configuration file has old key '{alias}' which has been re-named "
                             f"'{k}'. Updating..."
                         )
-                        self[k] = self[alias]
-                        del self[alias]
+                        selfdict[k] = selfdict[alias]
+                        del selfdict[alias]
+
+                        if isinstance(v, dict):
+                            for kk, vv in v.items():
+                                do_write |= check(kk, vv, selfdict[kk])
+
                 if not do_write:
                     raise ConfigurationError(
                         f"The configuration file has key '{alias}' which is not known."
                     )
+            return do_write
+
+        do_write = False
+        for k, v in self._defaults.items():
+            do_write |= check(k, v, self)
 
         if do_write:
             self.write()

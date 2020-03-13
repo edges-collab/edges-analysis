@@ -1,15 +1,19 @@
 import datetime as dt
 import warnings
+from pathlib import Path
+from typing import Optional
 
 import astropy.coordinates as apc
 import astropy.time as apt
 import h5py
 import numpy as np
 import scipy.interpolate as spi
+from attr.validators import instance_of
 
 from . import coordinates as coords
 from .loss import ground_loss
 from .plots import plot_beam_factor
+from . import io
 from .sky_models import (
     LW_150MHz_map,
     guzman_45MHz_map,
@@ -18,6 +22,7 @@ from .sky_models import (
 )
 from ..config import config
 from .. import const
+from edges_cal import FrequencyRange
 
 
 def hfss_read(
@@ -141,6 +146,65 @@ def wipld_read(filename, az_antenna_axis=0):
     return frequencies, az, el, beam_maps_shifted
 
 
+def feko_read(
+    filename, frequency=None, band=None, frequency_out=None, az_antenna_axis=0,
+):
+    """
+    Read a FEKO beam file.
+
+    Parameters
+    ----------
+    filename : path
+        The path to the file. Will look in the configured `beams` folder if not
+        an absolute path.
+    frequency : array-like, optional
+        The frequencies of the data. This usually must be given, as they are not
+        included in the data file itself. By default, uses range(50, 121, 2).
+    band : str, optional
+        If the filename is not absolute, the band must be provided to search for
+        the input file.
+    frequency_out : array-like, optional
+        If given, input frequencies will be interpolated to these frequencies.
+    az_antenna_axis : int, optional
+
+    Returns
+    -------
+    beam_maps : ndarray
+        An ndarray with first axis being frequency, second axis elevation, and third
+        axis azimuth.
+    """
+    filename = Path(filename)
+    if not filename.is_absolute():
+        filename = Path(config["paths"]["beams"]) / band / "feko" / filename
+
+    data = np.genfromtxt(str(filename))
+    if frequency is None:
+        frequency = np.arange(50, 121, 2)
+
+    freq = FrequencyRange(frequency)
+
+    # Loading data and convert to linear representation
+    beam_maps = np.zeros((len(frequency), 91, 360))
+    for i in range(len(frequency)):
+        beam_maps[i] = (10 ** (data[(i * 360) : ((i + 1) * 360), 2::] / 10)).T
+
+    # Frequency interpolation
+    if frequency_out is not None:
+        interp_beam = np.zeros(
+            (len(frequency_out), beam_maps.shape[1], beam_maps.shape[2])
+        )
+        for i, bm in enumerate(beam_maps.T):
+            for j, b in enumerate(bm):
+                par = np.polyfit(freq.freq_recentred, b, 13)
+                model = np.polyval(par, freq.normalize(frequency_out))
+                interp_beam[:, j, i] = model
+        beam_maps = interp_beam
+
+    # Shifting beam relative to true AZ (referenced at due North)
+    # Due to angle of orientation of excited antenna panels relative to due North
+    return shift_beam_maps(az_antenna_axis, beam_maps)
+
+
 def shift_beam_maps(az_antenna_axis, beam_maps):
     if az_antenna_axis < 0:
         index = -az_antenna_axis
@@ -158,12 +222,26 @@ def shift_beam_maps(az_antenna_axis, beam_maps):
     return beam_maps_shifted
 
 
+class BeamFactor(io.HDF5Object):
+    """A non-interpolated beam factor."""
+
+    _structure = {
+        "frequency": instance_of(np.ndarray),
+        "lst": instance_of(np.ndarray),
+        "antenna_temp_above_horizon": instance_of(np.ndarray),
+        "loss_fraction": instance_of(np.ndarray),
+        "beam_factor": instance_of(np.ndarray),
+    }
+
+
 def antenna_beam_factor(
     band,
-    name_save,
+    beam_file,
+    simulator,
+    save_dir=None,
+    save_fname=None,
     f_low=None,
     f_high=None,
-    beam_file=0,
     normalize_mid_band_beam=True,
     sky_model="haslam",
     rotation_from_north=90,
@@ -176,75 +254,80 @@ def antenna_beam_factor(
     index_outband=2.6,
     reference_frequency=100,
     convolution_computation="old",
-    sky_plots=False,
     plot_format="polar",
+    sky_plot_path=None,
 ):
     """
-    2019-04-16
+    Calculate the antenna beam factor.
 
-    band                      : 'mid_band'
-    sky_model                 : 'haslam', 'LW', 'guzman'
+    Parameters
+    ----------
+    band
+    simulator
+    name_save
+    f_low
+    f_high
+    beam_file
+    normalize_mid_band_beam
+    sky_model
+    rotation_from_north
+    index_model
+    sigma_deg
+    index_center
+    index_pole
+    band_deg
+    index_inband
+    index_outband
+    reference_frequency
+    convolution_computation
+    sky_plots
+    plot_format
 
-    index_model               : 'gaussian' (default), or 'step'
-    parameters for 'gaussian' :  sigma_deg=8.5, index_center=2.4, index_pole=2.65
-    parameters for 'step'     :  band_deg=10, index_inband=2.5, index_outband=2.6
-
-    Example:
-    [101] :   o = cal.antenna_beam_factor('mid_band',
-    'mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2.65_sigma_deg_8.5_reffreq_90MHz',
-    beam_file=0, sky_model='haslam', rotation_from_north=90, index_model='gaussian',
-    sigma_deg=8.5, index_center=2.4, index_pole=2.65, reference_frequency=90)
+    Returns
+    -------
+    beam_factor : :class`BeamFactor` instance
     """
+    if not save_fname:
+        raise NotImplementedError(
+            "You have to pass 'save_fname' until we figure out an automatic scheme."
+        )
 
-    # Data paths
-    path_save = config["edges_folder"] + f"{band}/calibration/beam_factors/raw/"
-    path_plots = path_save + "plots/"
+    if not save_dir:
+        save_dir = Path(config["paths"]["beams"]) / f"{band}/beam_factors/"
+
+    if not Path(save_fname).is_absolute():
+        save_fname = Path(save_dir).absolute() / save_fname
+
+    if not Path(beam_file).is_absolute():
+        beam_file = (
+            Path(config["paths"]["beams"])
+            / f"{band}/simulations/{simulator}/{beam_file}"
+        )
 
     # Antenna beam
     az_beam = np.arange(0, 360)
     el_beam = np.arange(0, 91)
     freq_array = None
-    if (
-        band == "mid_band" and beam_file <= 100
-    ) or band == "low_band3":  # FEKO blade beam
-        # Fixing rotation angle due to different rotation (by 90deg) in Nivedita's map
-        if band == "mid_band" and beam_file == 100:
-            rotation_from_north -= 90
+    if simulator == "feko":
+        rotation_from_north -= 90
+        beam_all = feko_read(band, beam_file, az_antenna_axis=rotation_from_north)
 
-        beam_all = feko_blade_beam(band, beam_file, az_antenna_axis=rotation_from_north)
-    elif band == "mid_band":  # Beams from WIPL-D
-        prefix = config["edges_folder"] + "/others/beam_simulations/wipl-d/"
-        filenames = {
-            101: "20191030/blade_dipole_infinite_soil_real_metal_GP_30mx30m.ra1",
-            102: "20191124/mid_band_perf_30x30_5mm_wire_.ra1",
-            103: "20191124/mid_band_perf_30x30_5mm_wire_no_soil_conductivity.ra1",
-        }
+        # TODO: move this to actual beam reading/storing.
+        if len(beam_all) == 76:
+            freq_array = np.arange(50, 201, 2, dtype="uint32")
+        elif len(beam_all) == 71:
+            freq_array = np.arange(60, 201, 2, dtype="uint32")
+        elif len(beam_all) == 36:
+            freq_array = np.arange(50, 121, 2, dtype="uint32")
+        elif len(beam_all) == 41:
+            freq_array = np.arange(40, 201, 2, dtype="uint32")
 
-        if beam_file not in filenames:
-            raise ValueError(
-                "If band=='mid_band' and beam_file>100, "
-                "beam_file must be in {}".format(filenames.keys())
-            )
-
+    elif simulator == "wipl-d":  # Beams from WIPL-D
         freq_array, az_beam, el_beam, beam_all = wipld_read(
-            prefix + filenames[beam_file], az_antenna_axis=rotation_from_north
+            beam_file, az_antenna_axis=rotation_from_north
         )
     else:
-        raise ValueError("Incompatible combination of band and beam_file")
-
-    # Frequency array
-    if band == "mid_band":
-        if beam_file in (0, 1, 2):  # Best case, Feb 20, 2019
-            freq_array = np.arange(50, 201, 2, dtype="uint32")
-        elif beam_file == 100:
-            freq_array = np.arange(60, 201, 2, dtype="uint32")
-    elif band == "low_band3" and beam_file == 1:
-        freq_array = np.arange(50, 121, 2, dtype="uint32")
-    elif band == "low_band" and beam_file == 2:
-        freq_array = np.arange(40, 121, 2, dtype="uint32")
-
-    if freq_array is None:
-        raise ValueError("Incompatible combination of band and beam_file")
+        raise ValueError(f"Unknown value for simulator: '{simulator}'")
 
     # Selecting frequency range
     if band == "mid_band" and normalize_mid_band_beam:  # Beam normalization
@@ -349,14 +432,14 @@ def antenna_beam_factor(
         sky_ref_above_horizon = sky_above_horizon[:, irf].flatten()
 
         # Plotting sky in local coordinates
-        if sky_plots:
+        if sky_plot_path:
             plot_beam_factor(
                 az_above_horizon,
                 const.edges_lat_deg,
                 el_above_horizon,
                 irf,
                 lst[i],
-                path_plots,
+                sky_plot_path,
                 plot_format,
                 sky_map,
                 sky_ref_above_horizon,
@@ -385,8 +468,6 @@ def antenna_beam_factor(
             if convolution_computation == "old":
 
                 # Convolution and Antenna temperature OLD 'incorrect' WAY
-                # -------------------------------------------------------
-
                 # Convolution between (beam at all frequencies) and (sky at reference frequency)
                 convolution_ref[i, j] = np.sum(
                     beam_above_horizon[index_no_nan]
@@ -406,7 +487,6 @@ def antenna_beam_factor(
             elif convolution_computation == "new":
 
                 # Convolution and Antenna temperature NEW 'correct' WAY
-                # -----------------------------------------------------
                 # Number of pixels over 4pi that are not 'nan'
                 Npixels_total = len(el)
                 Npixels_above_horizon_nan = len(el_above_horizon) - len(
@@ -451,197 +531,130 @@ def antenna_beam_factor(
     # Beam factor
     beam_factor = convolution_ref.T / convolution_ref[:, irf].T
 
-    # Saving
-    np.savetxt(path_save + name_save + "_freq.txt", freq_array)
-    np.savetxt(path_save + name_save + "_LST.txt", lst)
-    np.savetxt(path_save + name_save + "_tant.txt", antenna_temperature_above_horizon)
-    np.savetxt(path_save + name_save + "_loss.txt", loss_fraction)
-    np.savetxt(path_save + name_save + "_beam_factor.txt", beam_factor.T)
+    out = {
+        "frequency": freq_array,
+        "lst": lst,
+        "antenna_temp_above_horizon": antenna_temperature_above_horizon,
+        "loss_fraction": loss_fraction,
+        "beam_factor": beam_factor,
+        "meta": {
+            "beam_file": beam_file,
+            "simulator": simulator,
+            "f_low": f_low,
+            "f_high": f_high,
+            "normalize_mid_band_beam": normalize_mid_band_beam,
+            "sky_model": sky_model,
+            "rotation_from_north": rotation_from_north,
+            "index_model": index_model,
+            "sigma_deg": sigma_deg,
+            "index_center": index_center,
+            "index_pole": index_pole,
+            "band_deg": band_deg,
+            "index_inband": index_inband,
+            "index_outband": index_outband,
+            "reference_frequency": reference_frequency,
+            "convolution_computation": convolution_computation,
+        },
+    }
+
+    bf = BeamFactor.from_data(out, filename=save_fname)
+    bf.write()
+
+    return bf
 
 
-def antenna_beam_factor_interpolation(band, case, lst_hires, fnew, Npar_freq=15):
-    """
-    For Mid-Band, over 50-200MHz, we have to use Npar_freq=15
+class InterpolatedBeamFactor(io.HDF5Object):
+    _structure = {
+        "beam_factor": instance_of(np.ndarray),
+        "frequency": instance_of(np.ndarray),
+        "lst": instance_of(np.ndarray),
+    }
 
-    Here, "case" is not the same as in the FEKO... function
-    """
-    # TODO: is this function deprecated/unused since there's a v2 below?
+    @classmethod
+    def from_beam_factor(
+        cls,
+        beam_factor_file,
+        band: Optional[str] = None,
+        lst_new: Optional[np.ndarray] = None,
+        f_new: Optional[np.ndarray] = None,
+    ):
+        """
+        Interpolate beam factor to a new set of LSTs and frequencies.
 
-    if band not in ("low_band3", "mid_band"):
-        raise ValueError("band must be 'low_band3' or 'mid_band'")
+        The LST interpolation is done using `griddata`, whilst the frequency interpolation
+        is done using a polynomial fit.
 
-    direc = config["edges_folder"] + f"{band}/calibration/beam_factors/raw/"
-
-    if band == "low_band3":
-        pth = "low_band3_50-120MHz_85deg_alan_haslam_2.5_2.62_reffreq_76MHz_{}.txt"
-
-    elif band == "mid_band":
-        paths = {
-            0: (
-                "mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2"
-                ".65_sigma_deg_8.5_reffreq_90MHz_{}.txt"
-            ),
-            1: (
-                "mid_band_50-200MHz_90deg_alan0_haslam_flat_index_2"
-                ".56_reffreq_90MHz_{}.txt"
-            ),
-            10: (
-                "NORMALIZED_mid_band_50-150MHz_90deg_alan0_haslam_gaussian_index_2"
-                ".4_2.65_sigma_deg_8.5_reffreq_90MHz_{}.txt"
-            ),
-            2: (
-                "mid_band_50-200MHz_90deg_alan0_LW_gaussian_index_2.4_2"
-                ".65_sigma_deg_8.5_reffreq_90MHz_{}.txt"
-            ),
-            3: (
-                "mid_band_50-200MHz_90deg_alan0_guzman_gaussian_index_2.4_2"
-                ".65_sigma_deg_8.5_reffreq_90MHz_{}.txt"
-            ),
-            4: (
-                "mid_band_50-200MHz_90deg_alan1_haslam_gaussian_index_2.4_2"
-                ".65_sigma_deg_8.5_reffreq_90MHz_{}.txt"
-            ),
-            5: (
-                "mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2"
-                ".65_sigma_deg_8.5_reffreq_120MHz_{}.txt"
-            ),
-        }
-
-        if case not in paths:
-            raise ValueError(
-                "For mid_band, the case must be one of {}".format(paths.keys())
+        Parameters
+        ----------
+        beam_factor_file : path
+            Path to a file containing beam factors produced by :func:`antenna_beam_factor`.
+            If just a filename (no path), the `beams/band/beam_factors/` directory will
+            be searched (dependent on the configured "beams" directory).
+        band : str, optional
+            If `beam_factor_file` is relative, the band is required to find the file.
+        lst_new : array-like, optional
+            The LSTs to interpolate to. By default, keep same LSTs as input.
+        f_new : array-like, optional
+            The frequencies to interpolate to. By default, keep same frequencies as input.
+        """
+        beam_factor_file = Path(beam_factor_file)
+        if not beam_factor_file.is_absolute():
+            beam_factor_file = (
+                Path(config["paths"]["beams"])
+                / band
+                / "beam_factors"
+                / beam_factor_file
             )
 
-        pth = paths[case]
+        if not beam_factor_file.exists():
+            raise ValueError(
+                "The beam factor file {} does not exist!".format(beam_factor_file)
+            )
 
-    bf_old = np.genfromtxt(direc + pth.format("data"))
-    freq = np.genfromtxt(direc + pth.format("freq"))
-    lst_old = np.genfromtxt(direc + pth.format("LST"))
+        with h5py.File(beam_factor_file, "r") as fl:
+            beam_factor = fl["beam_factor"][...]
+            freq = fl["frequency"][...]
+            lst = fl["lst"][...]
 
-    # Wrap beam factor and LST for 24-hr interpolation
-    bf = np.vstack((bf_old[-1, :], bf_old, bf_old[0, :]))
-    lst0 = np.append(lst_old[-1] - 24, lst_old)
-    lst = np.append(lst0, lst_old[0] + 24)
+        # Wrap beam factor and LST for 24-hr interpolation
+        beam_factor = np.vstack((beam_factor[-1], beam_factor, beam_factor[0]))
+        lst0 = np.append(lst[-1] - 24, lst)
+        lst = np.append(lst0, lst[0] + 24)
 
-    # Arranging original arrays in preparation for interpolation
-    freq_array = np.tile(freq, len(lst))
-    lst_array = np.repeat(lst, len(freq))
-    bf_array = bf.reshape(1, -1)[0]
-    freq_lst_original = np.array([freq_array, lst_array]).T
+        if lst_new:
+            beam_factor_lst = np.zeros((len(lst_new), len(freq)))
+            for i, bf in enumerate(beam_factor.T):
+                beam_factor_lst[:, i] = spi.interp1d(lst, bf, kind="cubic")(lst_new)
+            lst = lst_new
+        else:
+            beam_factor_lst = beam_factor
 
-    # Producing high-resolution array of LSTs (frequencies are the same as the original)
-    freq_hires = np.copy(freq)
-    freq_hires_array = np.tile(freq_hires, len(lst_hires))
-    lst_hires_array = np.repeat(lst_hires, len(freq_hires))
-    freq_lst_hires = np.array([freq_hires_array, lst_hires_array]).T
+        if f_new:
+            # Interpolating beam factor to high frequency resolution
+            beam_factor_freq = np.zeros((len(beam_factor_lst), len(f_new)))
+            for i, bf in enumerate(beam_factor_lst):
+                beam_factor_freq[i] = spi.interp1d(freq, bf, kind="cubic")(f_new)
 
-    # Interpolating beam factor to high LST resolution
-    bf_hires_array = spi.griddata(
-        freq_lst_original, bf_array, freq_lst_hires, method="cubic"
-    )
-    bf_2D = bf_hires_array.reshape(len(lst_hires), len(freq_hires))
+            freq = f_new
+        else:
+            beam_factor_freq = beam_factor_lst
 
-    # Interpolating beam factor to high frequency resolution
-    bf_2D_hires = np.zeros((len(bf_2D), len(fnew)))
-    for i, bf in enumerate(bf_2D):
-        par = np.polyfit(freq_hires, bf, Npar_freq - 1)
-        bf_2D_hires[i] = np.polyval(par, fnew)
+        return cls.from_data(
+            {"beam_factor": beam_factor_freq, "frequency": freq, "lst": lst}
+        )
 
-    return bf_2D_hires, bf_2D
+    def evaluate(self, lst):
+        """Fast nearest-neighbour evaluation of the beam factor for a given LST."""
+        beam_factor = np.zeros((len(lst), len(self["frequency"])))
 
+        for i, lst in enumerate(lst):
+            index = np.argmin(np.abs(self["lst"] - lst))
+            beam_factor[i] = self["beam_factor"][index]
 
-def antenna_beam_factor_interpolation_v2(band, case, lst_hires, fnew):
-    if band not in ("mid_band",):
-        raise NotImplementedError("only 'mid_band' implemented for this function.")
-
-    direc = config["edges_folder"] + f"{band}/calibration/beam_factors/raw/"
-
-    if band == "mid_band":
-        paths = {
-            0: (
-                "mid_band_50-200MHz_90deg_alan0_haslam_gaussian_index_2.4_2"
-                ".65_sigma_deg_8.5_reffreq_120MHz_{}.txt"
-            ),
-            1: (
-                "NORMALIZED_mid_band_50-150MHz_90deg_alan0_haslam_gaussian_index_2"
-                ".4_2.65_sigma_deg_8.5_reffreq_90MHz_{}.txt"
-            ),
-        }
-
-        if case not in paths:
-            raise ValueError("case must be in {}".format(paths.keys()))
-
-        pth = paths[case]
-
-    bf_old = np.genfromtxt(direc + pth.format("data"))
-    freq = np.genfromtxt(direc + pth.format("freq"))
-    lst_old = np.genfromtxt(direc + pth.format("LST"))
-
-    # Wrap beam factor and LST for 24-hr interpolation
-    bf = np.vstack((bf_old[-1, :], bf_old, bf_old[0, :]))
-    lst0 = np.append(lst_old[-1] - 24, lst_old)
-    lst = np.append(lst0, lst_old[0] + 24)
-
-    new_bf = np.zeros((len(lst_hires), len(freq)))
-    for i in range(len(freq)):
-        fun = spi.interp1d(lst, bf[:, i], kind="cubic")
-        new_bf[:, i] = fun(lst_hires)
-
-    new_bf2 = np.zeros((len(lst_hires), len(fnew)))
-    for i in range(len(lst_hires)):
-        fun = spi.interp1d(freq, new_bf[i, :], kind="cubic", fill_value="extrapolate")
-        new_bf2[i, :] = fun(fnew)
-
-    return new_bf2, bf_old, freq, lst_old
+        return beam_factor
 
 
-def beam_factor_table_computation(band, case, f, N_lst, file_name_hdf5):
-    """
-    Frequency vector
-    ------------------
-    ff, i1, i2 = ba.frequency_edges(50, 150)
-    f = ff[i1:i2+1]
-
-    High and Low LST resolution
-    ------------------------------------------
-    high:   N_lst = 6000   # number of LST points within 24 hours
-    low:    N_lst = 300    # number of LST points within 24 hours
-    """
-
-    lst_hires = np.arange(0, 24, 24 / N_lst)
-    bf, bf_orig, f_orig, lst_orig = antenna_beam_factor_interpolation_v2(
-        band, case, lst_hires, f
-    )
-
-    file_path = config["edges_folder"] + f"{band}/calibration/beam_factors/table/"
-    with h5py.File(file_path + file_name_hdf5, "w") as hf:
-        hf.create_dataset("frequency", data=f)
-        hf.create_dataset("lst", data=lst_hires)
-        hf.create_dataset("beam_factor", data=bf)
-
-
-def beam_factor_table_read(path_file):
-    # Show keys (array names inside HDF5 file)
-    with h5py.File(path_file, "r") as hf:
-        f = np.array(hf.get("frequency"))
-        lst = np.array(hf.get("lst"))
-        bf = np.array(hf.get("beam_factor"))
-
-    return f, lst, bf
-
-
-def beam_factor_table_evaluate(f_table, lst_table, bf_table, lst_in):
-    beam_factor = np.zeros((len(lst_in), len(f_table)))
-
-    for i, lst in enumerate(lst_in):
-        d = np.abs(lst_table - lst)
-        index = np.argsort(d)[0]
-        beam_factor[i, :] = bf_table[index, :]
-
-    return beam_factor
-
-
-def hfss_integrated_beam_directivity():
+def hfss_integrated_beam_directivity(soil_fname, vacuum_fname):
     kwargs = dict(
         linear=True,
         theta_min=0,
@@ -652,13 +665,8 @@ def hfss_integrated_beam_directivity():
         phi_resolution=1,
     )
 
-    pth = (
-        "/run/media/raul/WD_RED_6TB/EDGES_vol2/others/beam_simulations/20190911"
-        "/test4_0.04Sm/MROsoil_{}_120MHz.csv"
-    )
-
-    theta, phi, beam1 = hfss_read(pth.format("vacuum"), **kwargs)
-    beam2 = hfss_read(pth.format("MROsoil"), **kwargs)[-1]
+    theta, phi, beam1 = hfss_read(vacuum_fname, **kwargs)
+    beam2 = hfss_read(soil_fname, **kwargs)[-1]
 
     sin_theta = np.array([np.sin((np.pi / 180) * theta)]).T
     sin_theta_2D = np.tile(sin_theta, len(phi))
@@ -690,8 +698,6 @@ def beam_solid_angle(gain_map):
 
 def beam_normalization(freqs, input_beam, f_low=50, f_high=150):
     """
-    2019-Nov-29
-
     input_beam_X = cal.FEKO_blade_beam('mid_band', 0, az_antenna_axis=90)
     f_X          = np.arange(50,201,2)
     f, original_solid_angle, normalized_beam = cal.beam_normalization(f_X, input_beam_X)
@@ -700,7 +706,7 @@ def beam_normalization(freqs, input_beam, f_low=50, f_high=150):
     # Select data in the range 50-150 MHz, where we have ground loss data available.
     mask = (freqs >= f_low) & (freqs <= f_high)
     f = freqs[mask]
-    input_beam = input_beam[mask, :, :]
+    input_beam = input_beam[mask]
 
     # Definitions
     g = ground_loss("mid_band", f)
@@ -711,73 +717,15 @@ def beam_normalization(freqs, input_beam, f_low=50, f_high=150):
     for i, m in enumerate(input_beam):
         osa = beam_solid_angle(m)
         original_solid_angle[i] = osa
-        output_beam[i, :, :] = (g[i] / osa) * m
+        output_beam[i] = (g[i] / osa) * m
 
     return f, original_solid_angle, output_beam
-
-
-def feko_blade_beam(
-    band,
-    beam_file,
-    frequency_interpolation=False,
-    frequency=np.array([0]),
-    az_antenna_axis=0,
-):
-    data_folder = config["edges_folder"] + f"/{band}/calibration/beam/alan/"
-
-    if band == "low_band3":
-        if beam_file == 1:
-            ff = data_folder + "azelq_low3.txt"
-            f_original = np.arange(50, 121, 2)
-        else:
-            raise ValueError("for low_band3 beam_file must be 1.")
-    elif band == "mid_band":
-        if beam_file == 0:
-            ff = data_folder + "azelq_blade9perf7mid_1.9in.txt"
-            f_original = np.arange(50, 201, 2)
-        elif beam_file == 1:
-            ff = data_folder + "azelq_blade9mid0.78.txt"
-            f_original = np.arange(50, 201, 2)
-        elif beam_file == 100:
-            ff = data_folder + "FEKO_midband_realgnd_Simple-blade_niv.txt"
-            f_original = np.arange(60, 201, 2)
-        elif beam_file == 2:
-            ff = data_folder + "azelq_blade9perf7mid.txt"
-            f_original = np.arange(50, 201, 2)
-        else:
-            raise ValueError("for low_band3 beam_file must be 0,1,100 or 2.")
-    else:
-        raise ValueError("band must be either 'low_band3' or 'mid_band'.")
-
-    data = np.genfromtxt(ff)
-
-    # Loading data and convert to linear representation
-    beam_maps = np.zeros((len(f_original), 91, 360))
-    for i in range(len(f_original)):
-        beam_maps[i, :, :] = (10 ** (data[(i * 360) : ((i + 1) * 360), 2::] / 10)).T
-
-    # Frequency interpolation
-    if frequency_interpolation:
-
-        interp_beam = np.zeros(
-            (len(frequency), len(beam_maps[0, :, 0]), len(beam_maps[0, 0, :]))
-        )
-        for j in range(len(beam_maps[0, :, 0])):
-            for i in range(len(beam_maps[0, 0, :])):
-                par = np.polyfit(f_original / 200, beam_maps[:, j, i], 13)
-                model = np.polyval(par, frequency / 200)
-                interp_beam[:, j, i] = model
-        beam_maps = interp_beam
-
-    # Shifting beam relative to true AZ (referenced at due North)
-    # Due to angle of orientation of excited antenna panels relative to due North
-    return shift_beam_maps(az_antenna_axis, beam_maps)
 
 
 def FEKO_low_band_blade_beam(**kwargs):
     # TODO: find this function.
     try:
-        return feko_blade_beam(**kwargs)
+        return feko_read(**kwargs)
     except Exception:
         raise NotImplementedError("yeah this function actually doesn't work.")
 

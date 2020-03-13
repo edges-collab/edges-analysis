@@ -992,7 +992,7 @@ def plot_sky_model():
     )
 
     hp.graticule(local=True)
-    beam = beams.feko_blade_beam(
+    beam = beams.feko_read(
         "mid_band", 0, frequency_interpolation=False, az_antenna_axis=90
     )
     beam90 = beam[20, :, :]
@@ -1202,7 +1202,7 @@ def plot_low_mid_comparison():
 def plot_beam_power(max_norm=True):
     def get_sm(beam_file, low_band=False):
         if not low_band:
-            bm_all = beams.feko_blade_beam(
+            bm_all = beams.feko_read(
                 "mid_band", beam_file, frequency_interpolation=False, az_antenna_axis=90
             )
             f = np.arange(50, 201, 2)
@@ -1443,7 +1443,7 @@ def plot_beam_gain(path_plot_save):
 
     def get_beam(beam_file, low_band=False):
         if not low_band:
-            b_all = beams.feko_blade_beam(
+            b_all = beams.feko_read(
                 "mid_band", beam_file, frequency_interpolation=False, az_antenna_axis=90
             )
             f = np.arange(50, 201, 2)
@@ -1515,7 +1515,7 @@ def plot_antenna_beam():
 
     def get_beam(beam_file, low_band=False):
         if not low_band:
-            bm = beams.feko_blade_beam(
+            bm = beams.feko_read(
                 "mid_band",
                 beam_file,
                 frequency_interpolation=False,

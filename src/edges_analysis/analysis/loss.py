@@ -198,7 +198,7 @@ def _get_loss(fname, f_MHz, n_terms):
     fr = gr[:, 0]
     dr = gr[:, 1]
 
-    par = np.polyfit(fr, dr, 8)  # 7 terms are sufficient
+    par = np.polyfit(fr, dr, n_terms)
     model = np.polyval(par, f_MHz)
 
     return 1 - model

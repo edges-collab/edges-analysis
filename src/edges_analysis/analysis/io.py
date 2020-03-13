@@ -3,24 +3,27 @@ import h5py
 import attr
 from pathlib import Path
 import contextlib
-from edges_cal import modelling as mdl
-from . import tools
-from ..config import config
 
 
 @attr.s
 class _HDF5Group:
     filename = attr.ib(converter=Path, validator=lambda x: x.exists())
+    structure = attr.ib(converter=dict)
     group_path = attr.ib(converter=str)
     always_lazy = attr.ib(default=False, converter=bool)
     lazy = attr.ib(default=True, converter=bool)
     open = False
 
+    @lazy.validator
+    def _lazy_vld(self, att, val):
+        if self.always_lazy and not val:
+            raise ValueError("Can't be always lazy but not lazy.")
+
     def __attrs_post_init__(self):
         self.__memcache__ = {}
 
         if not self.lazy:
-            self.load_all(self.filename)
+            self.load_all()
 
     def get_group(self):
         fl = h5py.File(self.filename, "r")
@@ -30,6 +33,10 @@ class _HDF5Group:
 
         self.open = True
         return grp
+
+    def load_all(self):
+        for k in self.structure:
+            self[k]
 
     @contextlib.contextmanager
     def _open(self):
@@ -88,28 +95,44 @@ class HDF5Object:
             self.load_all(self.filename)
 
     @classmethod
+    def _checkgrp(cls, grp, strc, false_if_extra=False, false_if_absent=True):
+        for k, v in strc:
+            if k == "meta":
+                k = "attrs"
+
+            if k not in grp and false_if_absent:
+                raise TypeError()
+            elif isinstance(v, dict):
+                cls._checkgrp(grp[k], v)
+            elif v:
+                assert v(grp[k])
+
+        # Ensure there's no extra keys in the group
+        if false_if_extra and len(strc) < len(grp.keys()):
+            raise ValueError()
+
+    @classmethod
     def from_data(cls, data, **kwargs):
         inst = cls(**kwargs)
 
         false_if_extra = kwargs.get("require_no_extra", cls._require_no_extra)
         false_if_absent = kwargs.get("require_all", cls._require_all)
 
-        def _check(grp, strc):
-            for k, v in strc:
-                if k not in grp and false_if_absent:
-                    raise TypeError()
-                elif isinstance(v, dict):
-                    _check(grp[k], v)
-                elif v:
-                    assert v(grp[k])
-
-            # Ensure there's no extra keys in the group
-            if false_if_extra and len(strc) < len(grp.keys()):
-                raise ValueError()
-
-        _check(data, cls._structure)
+        cls._checkgrp(data, cls._structure, false_if_extra, false_if_absent)
 
         inst.__memcache__ = data
+
+    def load_all(self, filename=None):
+        if filename and not self.filename:
+            self.filename = filename
+
+        filename = filename or self.filename
+
+        if not filename:
+            raise ValueError("You need to provide a filename to load")
+
+        for k, v in self._structure.items():
+            self[k]
 
     def write(self, filename=None, clobber=False):
         filename = filename or self.filename
@@ -137,31 +160,23 @@ class HDF5Object:
         if not cls._structure:
             return True
 
-        def _check(grp, strc):
-            for k, v in strc.items():
-                if k not in grp and false_if_absent:
-                    raise TypeError()
-                elif isinstance(v, dict):
-                    _check(grp[k], v)
-                elif v:
-                    assert v(grp[k])
-
-            # Ensure there's no extra keys in the group
-            if false_if_extra and len(strc) < len(grp.keys()):
-                raise ValueError()
-
         with h5py.File(filename, "r") as fl:
-            _check(fl, cls._structure)
+            cls._checkgrp(fl, cls._structure, false_if_extra, false_if_absent)
 
     def __getitem__(self, item):
         if item in self.__memcache__:
             return self.__memcache__[item]
 
+        if item not in self._structure:
+            raise KeyError(
+                f"'{item}' is not a valid part of {self.__class__.__name__}. Valid keys: {self._structure.keys()}"
+            )
+
         with open(self.filename, "r") as fl:
             if item in ("attrs", "meta"):
                 out = dict(fl.attrs)
             if isinstance(fl[item], h5py.Group):
-                out = _HDF5Group(self.filename, item)
+                out = _HDF5Group(self.filename, self._structure[item], item)
             elif isinstance(fl[item], h5py.Dataset):
                 out = fl[item][...]
             else:
@@ -174,6 +189,7 @@ class HDF5Object:
 
 
 def auxiliary_data(weather_file, thermlog_file, band, year, day):
+    # TODO: move to edges-io
     array1 = read_weather_file(day, weather_file, year)
     array2 = read_thermlog_file(band, day, thermlog_file, year)
 
@@ -181,6 +197,7 @@ def auxiliary_data(weather_file, thermlog_file, band, year, day):
 
 
 def read_thermlog_file(band, day, filename, year):
+    # TODO: move to edges-io
     # gather data from 'thermlog.txt' file
     with open(filename, "r") as fl:
         lines_all = fl.readlines()
@@ -234,8 +251,11 @@ def read_thermlog_file(band, day, filename, year):
             year_iter = int(line[0:4])
             day_of_year = int(line[5:8])
 
+    return out
+
 
 def read_weather_file(day, weather_file, year):
+    # TODO: move to edges-io
     # Gather data from 'weather.txt' file
     with open(weather_file, "r") as f1:
         lines_all_1 = f1.readlines()
@@ -287,135 +307,3 @@ def read_weather_file(day, weather_file, year):
             year_iter_1 = int(line1[0:4])
             day_of_year_1 = int(line1[5:8])
     return array1
-
-
-def _levelxread(path_file, out_keys):
-    with h5py.File(path_file, "r") as hf:
-        out = tuple(np.array(hf.get(k)) for k in out_keys)
-
-    return out
-
-
-def level2read(path_file):
-    out_keys = ["frequency", "antenna_temperature", "metadata", "weights"]
-    return _levelxread(path_file, out_keys)
-
-
-def level3read(path_file):
-    out_keys = [
-        "frequency",
-        "antenna_temperature",
-        "parameters",
-        "residuals",
-        "weights",
-        "rms",
-        "total_power",
-        "metadata",
-    ]
-    return _levelxread(path_file, out_keys)
-
-
-def level3_single_file_test(
-    path_file, gha_1, gha_2, f_low, f_high, save, save_spectrum_name
-):
-    f, t, p, r, w, rms, tp, m = level3read(path_file)
-
-    gha = m[:, 4]
-    gha[gha < 0] += 24
-
-    if gha_2 > gha_1:
-        mask = (gha >= gha_1) & (gha <= gha_2)
-    else:
-        mask = (gha >= gha_1) | (gha <= gha_2)
-
-    avr, avw = tools.spectral_averaging(r[mask, :], w[mask, :])
-    avp = np.mean(p[mask, :], axis=0)
-    fb, rb, wb, sb = tools.average_in_frequency(avr, freq=f, weights=avw, n_samples=128)
-
-    mb = mdl.model_evaluate("LINLOG", avp, fb / 200)
-
-    tb = mb + rb
-
-    freq_mask = (fb >= f_low) & (fb <= f_high)
-    ff = fb[freq_mask]
-    tt = tb[freq_mask]
-    ww = wb[freq_mask]
-    ss = sb[freq_mask]
-
-    if save:
-        outT = np.array([ff, tt, ww, ss])
-        out = outT.T
-
-        save_path = config["edges_folder"] + "mid_band/spectra/level5/one_day_tests/"
-        np.savetxt(save_path + save_spectrum_name, out)
-
-    return ff, tt, ww, ss
-
-
-def level4read(path_file):
-    out_keys = [
-        "frequency",
-        "parameters",
-        "residuals",
-        "weights",
-        "index",
-        "gha_edges",
-        "year_day",
-    ]
-    return _levelxread(path_file, out_keys)
-
-
-def level4_binned_read(path_file):
-    out_keys = ["frequency", "residuals", "weights", "stddev", "gha_edges", "year_day"]
-    return _levelxread(path_file, out_keys)
-
-
-def level4_save_averaged_spectra(case, gha_case, first_day, last_day):
-    header_text = (
-        "f [MHz], t_ant (GHA=0-23) [K], std (GHA=0-23) [K], Nsamples (GHA=0-23)"
-    )
-    file_name = "GHA_every_1hr.txt"
-    file_path = config["edges_folder"] + "mid_band/spectra/level4/{}/binned_averages/"
-
-    paths = {
-        2: "calibration_2019_10_no_ground_loss_no_beam_corrections",
-        3: "case_nominal_50-150MHz_no_ground_loss_no_beam_corrections",
-        406: "case_nominal_50-150MHz_LNA1_a2_h2_o2_s1_sim2",
-        5: "case_nominal_14_14_terms_55-150MHz_no_ground_loss_no_beam_corrections",
-        501: "case_nominal_50-150MHz_LNA2_a2_h2_o2_s1_sim2_all_lc_yes_bc",
-    }
-
-    if case not in paths:
-        raise ValueError("case must be one of {}".format(paths.keys()))
-
-    pth = paths[case]
-    file_path = file_path.format(pth)
-
-    if gha_case != 24:
-        raise ValueError("gha_case must be 24")
-
-    for i in range(24):
-        fb, tb, rb, wb, sb = tools.level4_integration(
-            case, [i], first_day, last_day, 55, 150, 5
-        )
-        if not i:
-            out = np.zeros((1 + 3 * 24, len(fb)))
-            out[0, :] = fb
-
-        out[i + 1, :] = tb
-        out[i + 1 + 24, :] = sb
-        out[i + 1 + 48, :] = wb
-
-    np.savetxt(file_path + file_name, out.T, header=header_text)
-
-    return out
-
-
-def level4_foreground_fits_read(path_file):
-    out_keys = ["fref", "fit2", "fit3", "fit4", "fit5"]
-    return _levelxread(path_file, out_keys)
-
-
-def calibration_rms_read(path_file):
-    out_keys = ["RMS", "index_cterms", "index_wterms"]
-    return _levelxread(path_file, out_keys)
