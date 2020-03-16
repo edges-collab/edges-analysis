@@ -70,10 +70,7 @@ def plot_absorption_model_comparison(models, labels, styles=None):
 
     ax[-1].set_xlabel(r"$\nu$ [MHz]", fontsize=13)
 
-    plt.savefig(
-        config["edges_folder"] + "/plots/20190730/absorption_models.pdf",
-        bbox_inches="tight",
-    )
+    return fig, ax
 
 
 def triangle_plot(file_root, output_file):
