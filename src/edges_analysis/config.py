@@ -16,11 +16,11 @@ class Config(dict):
         "paths": {
             "raw_field_data": "",
             "raw_lab_data": "",
-            "lab_products": "~/edges-calibrations",
+            "lab_products": os.path.expanduser("~/edges-calibrations"),
             "field_products": os.path.expanduser("~/edges-field-levels"),
-            "beams": "~/edges-beams",
-            "antenna": "~/edges-antenna-meta",
-            "sky_models": "~/edges-sky-models",
+            "beams": os.path.expanduser("~/edges-beams"),
+            "antenna": os.path.expanduser("~/edges-antenna-meta"),
+            "sky_models": os.path.expanduser("~/edges-sky-models"),
         }
     }
 
