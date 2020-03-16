@@ -456,7 +456,9 @@ def level2_to_level3(
     # Antenna Loss (interface between panels and balun)
     G = np.ones_like(freq.freq)
     if antenna_correction:
-        G *= loss.antenna_loss(level2.meta["band"], freq.freq)
+        G *= loss.antenna_loss(
+            "default_antenna_loss.txt", freq.freq, band=level2.meta["band"]
+        )
 
     # Balun+Connector Loss
     if balun_correction:
@@ -465,7 +467,9 @@ def level2_to_level3(
 
     # Ground Loss
     if ground_correction:
-        G *= loss.ground_loss(level2.meta["band"], freq.freq)
+        G *= loss.ground_loss(
+            "default_ground_loss.txt", freq.freq, band=level2.meta["band"]
+        )
 
     # Remove loss
     # TODO: it is *not* clear which temperature to use here...
@@ -475,12 +479,16 @@ def level2_to_level3(
     # Beam factor
     if beam_file:
         if not Path(beam_file).exists():
-            beam_file = f"{config['edges_folder']}{level2.meta['band']}/calibration/beam_factors/table/{beam_file}"
+            beam_file = (
+                Path(config["paths"]["beams"])
+                / level2.meta["band"]
+                / "beam_factors"
+                / beam_file
+            )
 
-        f_table, lst_table, bf_table = beams.beam_factor_table_read(beam_file)
-        bf = beams.beam_factor_table_evaluate(
-            f_table, lst_table, bf_table, level2["ancillary"]["lst"]
-        )[:, ((f_table >= f_low) & (f_table <= f_high))]
+        beam_fac = beams.InterpolatedBeamFactor(beam_file)
+        bf = beam_fac.evaluate(level2.ancillary["lst"])
+        bf = bf[:, (beam_fac["frequency"] >= f_low) & (beam_fac["frequency"] <= f_high)]
 
         # Remove beam chromaticity
         calibrated_temp /= bf
@@ -518,6 +526,12 @@ def level2_to_level3(
     return data, ancillary, meta
 
 
+class Level4(_Level):
+    def _from_prev_level(cls, level3: [Level3], **kwargs):
+        data, ancillary, meta = level3_to_level4(level3, **kwargs)
+        return {"spectra": data, "ancillary": ancillary, "meta": meta}
+
+
 def level3_to_level4(
     level3: Sequence[Level3, Path, str],
     gha_edges: Sequence[Tuple[float, float]],
@@ -531,6 +545,7 @@ def level3_to_level4(
     n_poly_rfi=2,
     n_bootstrap_rfi=20,
     n_sigma_rfi=3.5,
+    rms_filter_file=None,
 ):
     """
     Combine and Convert level3 objects to a single level4 object.
@@ -636,7 +651,7 @@ def level3_to_level4(
         good = filters.time_filter_auxiliary(
             gha=l3.ancillary["gha"],
             sun_el=l3.ancillary["sun_azel"][1],
-            moon_el=l3.ancillary["sun_azel"][1],
+            moon_el=l3.ancillary["moon_azel"][1],
             humidity=l3.ancillary["ambient_humidity"],
             receiver_temp=l3.ancillary["receiver1_temp"],
             sun_el_max=sun_el_max,
@@ -664,14 +679,17 @@ def level3_to_level4(
         # Finding index of clean data
         gha = l3.ancillary["gha"]
 
-        good &= filters.rms_filter(
-            l3.meta["band"],
-            gha,
-            np.array([rms_lower, rms_upper, rms_3term]).T,
-            n_sigma_rms,
-        )
+        if rms_filter_file:
+            good &= filters.rms_filter(
+                rms_filter_file,
+                gha,
+                np.array([rms_lower, rms_upper, rms_3term]).T,
+                n_sigma_rms,
+            )
 
         # Applying total-power filter
+        # TODO: this filter should be removed/reworked -- it uses arbitrary numbers.
+        # TODO: it at *least* should be done on the mean, not the sum.
         good &= filters.total_power_filter(
             gha,
             np.array(
@@ -756,5 +774,114 @@ def level3_to_level4(
         "days": days,
         "hours": hours,
     }
+
+    return data, ancillary, meta
+
+
+class Level5(_Level):
+    def _from_prev_level(cls, level4: [Level4], **kwargs):
+        data, ancillary, meta = level4_to_level5(level4, **kwargs)
+        return {"spectra": data, "ancillary": ancillary, "meta": meta}
+
+
+def level4_to_level5(
+    level4,
+    day_range=None,
+    ignore_days=None,
+    gha_list=range(24),
+    f_low=None,
+    f_high=None,
+    freq_resolution=None,
+):
+    meta = {
+        "day_range": day_range,
+        "ignore_days": ignore_days,
+        "gha_list": gha_list,
+    }
+    # Compute the residuals
+    spec, wght = [], []
+    days = level4.ancillary["days"]
+    freq = FrequencyRange(level4.raw_frequencies, f_low=f_low, f_high=f_high)
+
+    if day_range is None:
+        day_range = (days.min(), days.max())
+
+    for i, (low, high) in enumerate(level4.meta["gha_edges"]):
+        gha_range = range(int(np.floor(low)), int(np.floor(high)))
+
+        good_days = [filters.filter_explicit_gha(gha, *day_range) for gha in gha_range]
+        for j, day in enumerate(days):
+            if all(day in g for g in good_days) and day not in ignore_days:
+                spec.append(level4.spectrum[j, i, freq.mask])
+                wght.append(level4.weights[j, i, freq.mask])
+
+    spec, wght = tools.weighted_mean(spec, wght, axis=0)
+
+    out_spec, out_wght, out_std = [], [], []
+    if freq_resolution:
+        f, p, w, s = tools.average_in_frequency(
+            spec, freq.freq, weights=wght, resolution=freq_resolution
+        )
+        out_spec.append(p)
+        out_wght.append(w)
+        out_std.append(s)
+
+    data = {
+        "spectrum": out_spec,
+        "weights": out_wght,
+        "frequency": f,
+    }
+
+    ancillary = {"std_dev": out_std}
+
+    return data, ancillary, meta
+
+
+class Level6(_Level):
+    def _from_prev_level(cls, level5: [Level5], **kwargs):
+        data, ancillary, meta = level5_to_level6(level5, **kwargs)
+        return {"spectra": data, "ancillary": ancillary, "meta": meta}
+
+
+def level5_to_level6(
+    level5, f_low=None, f_high=None, ignore_freq_ranges=None, freq_resolution=None
+):
+    meta = {
+        "ignore_freq_ranges": ignore_freq_ranges,
+    }
+
+    freq = FrequencyRange(level5.raw_frequencies, f_low=f_low, f_high=f_high)
+
+    spec = level5.spectrum[freq.mask]
+    wght = level5.weights[freq.mask]
+
+    # Another round of XRFI
+    flags = rfi.xrfi_poly_filter(
+        spec,
+        wght,
+        window_width=int(3 / level5.freq.df),
+        n_poly=2,
+        n_bootstrap=20,
+        n_sigma=3,
+    )
+    wght = np.where(flags, 0, level5.weights)
+
+    if ignore_freq_ranges:
+        for (low, high) in ignore_freq_ranges:
+            wght[(freq.freq >= low) & (freq.freq <= high)] = 0
+
+    if freq_resolution:
+        f, spec, wght, s = tools.average_in_frequency(
+            spec, freq.freq, wght, resolution=freq_resolution
+        )
+    else:
+        f = freq.freq
+        s = level5.ancillary["std_dev"]
+
+    spec, wght = tools.weighted_mean(spec, weights=wght, axis=0)
+
+    data = {"frequency": f, "spectrum": spec, "weights": wght}
+
+    ancillary = {"std_dev": s}
 
     return data, ancillary, meta

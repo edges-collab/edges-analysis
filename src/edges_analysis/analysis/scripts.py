@@ -5,9 +5,8 @@ import numpy as np
 import yaml
 from edges_cal import modelling as mdl
 from edges_cal import xrfi as rfi
-from matplotlib import pyplot as plt
 
-from . import tools, io, filters
+from . import tools
 from .levels import level1_to_level2, level2_to_level3
 from ..config import config
 
@@ -170,7 +169,7 @@ def integrated_half_hour_level4_many(band, case, GHA_starts=[(13, 1), (14, 0)]):
     avrn = np.where(flags, 0, avr)
     avwn = np.where(flags, 0, avw)
 
-    fb, rb, wbn = tools.average_in_frequency(avrn, f, avwn, n_samples=16)
+    fb, rb, wbn, _ = tools.average_in_frequency(avrn, f, avwn, n_samples=16)
     tbn = mdl.model_evaluate("LINLOG", avp, fb / 200) + rb
 
     return f, avr, avw, avt, avp, fb, tbn, wbn

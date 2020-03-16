@@ -392,11 +392,12 @@ def antenna_beam_factor(
     antenna_temperature_above_horizon = np.zeros((len(lst), len(beam_all[:, 0, 0])))
     loss_fraction = np.zeros((len(lst), len(beam_all[:, 0, 0])))
 
+    # Advancing time ( 19:57 minutes UTC correspond to 20 minutes LST )
+    minutes_offset = 19
+    seconds_offset = 57
+
     # TODO: consider adding progress bar.
     for i in range(len(lst)):
-        # Advancing time ( 19:57 minutes UTC correspond to 20 minutes LST )
-        minutes_offset = 19
-        seconds_offset = 57
         if i > 0:
             ref_time_dt = ref_time_dt + dt.timedelta(
                 minutes=minutes_offset, seconds=seconds_offset
@@ -464,28 +465,7 @@ def antenna_beam_factor(
 
             sky_above_horizon_ff = sky_above_horizon[:, j].flatten()
 
-            # Normalization only above the horizon, frequency-by-frequency
-            if convolution_computation == "old":
-
-                # Convolution and Antenna temperature OLD 'incorrect' WAY
-                # Convolution between (beam at all frequencies) and (sky at reference frequency)
-                convolution_ref[i, j] = np.sum(
-                    beam_above_horizon[index_no_nan]
-                    * sky_ref_above_horizon[index_no_nan]
-                ) / np.sum(beam_above_horizon[index_no_nan])
-
-                # Antenna temperature, i.e., Convolution between (beam at all frequencies) and (
-                # sky at all frequencies)
-                antenna_temperature_above_horizon[i, j] = np.sum(
-                    beam_above_horizon[index_no_nan]
-                    * sky_above_horizon_ff[index_no_nan]
-                ) / np.sum(beam_above_horizon[index_no_nan])
-
-                loss_fraction[i, j] = 0
-
-            # Normalization to 4pi, constant in frequency
-            elif convolution_computation == "new":
-
+            if convolution_computation == "new":
                 # Convolution and Antenna temperature NEW 'correct' WAY
                 # Number of pixels over 4pi that are not 'nan'
                 Npixels_total = len(el)
@@ -525,6 +505,23 @@ def antenna_beam_factor(
                     np.sum(NORMALIZED_BEAM_ABOVE_HORIZON[index_no_nan])
                     / Npixels_total_no_nan
                 )
+            elif convolution_computation == "old":
+                # Convolution and Antenna temperature OLD 'incorrect' WAY
+                # Convolution between (beam at all frequencies) and (sky at reference frequency)
+                convolution_ref[i, j] = np.sum(
+                    beam_above_horizon[index_no_nan]
+                    * sky_ref_above_horizon[index_no_nan]
+                ) / np.sum(beam_above_horizon[index_no_nan])
+
+                # Antenna temperature, i.e., Convolution between (beam at all frequencies) and (
+                # sky at all frequencies)
+                antenna_temperature_above_horizon[i, j] = np.sum(
+                    beam_above_horizon[index_no_nan]
+                    * sky_above_horizon_ff[index_no_nan]
+                ) / np.sum(beam_above_horizon[index_no_nan])
+
+                loss_fraction[i, j] = 0
+
             else:
                 raise ValueError("convolution_computation must be 'old' or 'new'")
 

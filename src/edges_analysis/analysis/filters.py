@@ -1,64 +1,49 @@
 import os
-
+from pathlib import Path
 import numpy as np
 
-from .io import level3read
+import h5py
+from .levels import Level3
 from ..config import config
 import yaml
 
 
 # TODO: clean up all the rms filtering functions in this module.
-def rms_filter_computation(band, case, save_parameters=False):
+def rms_filter_computation(
+    paths_in, path_out, band, save_parameters=False, n_files=None
+):
     """
     Computation of the RMS filter
     """
     # Listing files available
-    path_files_direc = config["edges_folder"] + f"/{band}/spectra/level3/"
-    save_direc = config["edges_folder"] + f"/{band}/rms_filters/"
+    level3 = [Level3(x) for x in paths_in]
 
-    if band == "low_band3":
-        if case == 2:
-            pth = "case2/"
-    elif band == "mid_band":
-        paths = {
-            10: "rcv18_sw18_nominal/",
-            20: "rcv18_sw19_nominal/",
-            2: "calibration_2019_10_no_ground_loss_no_beam_corrections/",
-            3: "case_nominal_50-150MHz_no_ground_loss_no_beam_corrections/",
-            5: "case_nominal_14_14_terms_55-150MHz_no_ground_loss_no_beam_corrections/",
-            501: "case_nominal_50-150MHz_LNA2_a2_h2_o2_s1_sim2_all_lc_yes_bc/",
-        }
-        if case not in paths:
-            raise ValueError(
-                "for mid_band, case must be one of {}".format(paths.keys())
-            )
+    path_out = Path(path_out)
+    if not path_out.is_absolute():
+        path_out = (
+            Path(config["paths"]["field_products"]) / band / "rms_filters" / path_out
+        )
 
-        pth = paths[case]
-    else:
-        raise ValueError("band must be 'mid_band' or 'low_band3'.")
-    path_files = path_files_direc + pth
-    save_folder = save_direc + pth
+    # Sort the inputs in ascending date.
+    level3 = sorted(
+        level3, key=lambda x: f"{x.meta['year'] - x.meta['day'] - x.meta['hour']}"
+    )
 
-    new_list = os.listdir(path_files)
-    new_list.sort()
+    # Load data used to compute filter
+    n_files = n_files or len(
+        level3
+    )  # Only using the first "N_files" to compute the filter
 
-    # Loading data used to compute filter
-    # -----------------------------------
-    n_files = 8  # Only using the first "N_files" to compute the filter
-    rms_all, m_all = [], []
-    for i in range(n_files):  #
-        print(new_list[i])
-
-        # Loading data
-        f, t, p, r, w, rms, tp, m = level3read(path_files + new_list[i])
-
-        # Filter out high humidity
-        amb_hum_max = 40
-        indices = time_filter_auxiliary(
-            m,
-            use_gha="GHA",
-            time_1=0,
-            time_2=24,
+    rms_lower, rms_upper, rms_full, gha = [], [], [], []
+    # Filter out high humidity
+    amb_hum_max = 40
+    for i, l3 in enumerate(level3[:n_files]):
+        good = time_filter_auxiliary(
+            gha=l3.ancillary["gha"],
+            sun_el=l3.ancillary["sun_azel"][1],
+            moon_el=l3.ancillary["moon_azel"][1],
+            humidity=l3.ancillary["ambient_humidity"],
+            receiver_temp=l3.ancillary["receiver1_temp"],
             sun_el_max=90,
             moon_el_max=90,
             amb_hum_max=amb_hum_max,
@@ -66,71 +51,59 @@ def rms_filter_computation(band, case, save_parameters=False):
             max_receiver_temp=100,
         )
 
+        # Get RMS
+        rms_lower.append(l3.get_model_rms(freq_range=(-np.inf, l3.freq.center)))
+        rms_upper.append(l3.get_model_rms(freq_range=(l3.freq.center, np.inf)))
+        rms_full.append(l3.get_model_rms(n_terms=3))
+
         # Accumulate data
-        rms_all.append(rms[indices])
-        m_all.append(m[indices])
+        gha.append(l3.ancillary["gha"][good])
 
-    rms_all = np.vstack(rms_all)
-    m_all = np.vstack(m_all)
+    rms_lower = np.vstack(rms_lower)
+    rms_upper = np.vstack(rms_upper)
+    rms_full = np.vstack(rms_full)
+    gha = np.vstack(gha)
 
-    # Columns necessary for analysis
-    # ------------------------------
-    gha = m_all[:, 4]
-    gha[gha < 0] += 24
+    with h5py.File(str(path_out), "w") as fl:
+        # Number of polynomial terms used to fit each 1-hour bin
+        # and number of sigma threshold
+        n_poly = 3
+        n_sigma = 3
+        n_terms = 16
+        n_std = 6
 
-    indices = np.arange(0, len(gha))
+        for rms, label in zip(
+            [(rms_lower, rms_upper, rms_full), ("lower", "upper", "full")]
+        ):
 
-    # Number of polynomial terms used to fit each 1-hour bin
-    # and number of sigma threshold
-    n_poly = 3
-    n_sigma = 3
-    n_terms = 16
-    n_std = 6
-
-    # Identification of bad data, within 1-hour "bins", across 24 hours
-    out = [
-        perform_rms_filter(rms_all[:, i], indices, gha, n_poly, n_sigma, n_terms, n_std)
-        for i in range(3)
-    ]
-
-    if save_parameters:
-        par = np.array([o[-2] for o in out])
-        par_std = np.array([o[-1] for o in out])
-
-        np.savetxt(save_folder + "rms_polynomial_parameters.txt", par)
-        np.savetxt(save_folder + "rms_std_polynomial_parameters.txt", par_std)
-
-    out = [gha] + [out[i][j] for i in range(3) for j in range(5)]
-    return tuple(out)
-
-
-def perform_rms_filter(rms, indices, gha, n_poly, n_sigma, n_terms, n_std):
-    for i in range(24):
-        GHA_x = gha[(gha >= i) & (gha < (i + 1))]
-        RMS_x = rms[(gha >= i) & (gha < (i + 1))]
-        IN_x = indices[(gha >= i) & (gha < (i + 1))]
-
-        W = np.ones(len(GHA_x))
-        bad_old = -1
-        bad = 0
-        iteration = 0
-
-        while bad > bad_old:
-            res, std, iteration = get_model_residual_iter(
-                W, i, iteration, n_poly, GHA_x, RMS_x
+            # Identification of bad data, within 1-hour "bins", across 24 hours
+            rms, good, model, abs_res, model_std, par, par_std = perform_rms_filter(
+                rms, gha, n_poly, n_sigma, n_terms, n_std
             )
 
-            IN_x_bad = IN_x[np.abs(res) > n_sigma * std]
-            W[np.abs(res) > n_sigma * std] = 0
+            grp = fl.create_group(label)
+            grp["rms"] = rms
+            grp["good_indices"] = good
+            grp["model"] = model
+            grp["abs_resid"] = abs_res
+            grp["model_std"] = model_std
+            grp["polynomial_params"] = par
+            grp["polynomial_params_std"] = par_std
 
-            bad_old = np.copy(bad)
-            bad = len(IN_x_bad)
 
-            print("STD: " + str(np.round(std, 3)) + " K")
-            print("Number of bad points excised: " + str(bad))
+def perform_rms_filter(rms, gha, n_poly, n_sigma, n_terms, n_std):
+    good = np.ones(len(rms), dtype=bool)
 
-        bad = np.copy(IN_x_bad) if i == 0 else np.append(bad, IN_x_bad)
-    good = np.setdiff1d(indices, bad)
+    for i in range(24):  # Go through each hour
+        mask = (gha >= i) & (gha < (i + 1))
+        n_orig = np.sum(mask)
+
+        while np.sum(good[mask]) < n_orig:
+            n_orig = np.sum(good[mask])
+            res, std = _get_model_residual_iter(
+                n_poly, gha[mask], rms[mask], weights=good[mask]
+            )
+            good[mask] &= np.abs(res) <= n_sigma * std
 
     par = np.polyfit(gha[good], rms[good], n_terms - 1)
     model = np.polyval(par, gha)
@@ -141,31 +114,11 @@ def perform_rms_filter(rms, indices, gha, n_poly, n_sigma, n_terms, n_std):
     return rms, good, model, abs_res, model_std, par, par_std
 
 
-def rms_filter(band, case, gx, rms, n_sigma):
-    prefix = config["edges_folder"] + band + "/rms_filters/"
-
-    if band == "mid_band":
-        if 10 <= case <= 19:
-            file_path = "rcv18_sw18_nominal/"
-        elif 20 <= case <= 29:
-            file_path = "rcv18_sw19_nominal/"
-        elif case == 2:
-            file_path = "calibration_2019_10_no_ground_loss_no_beam_corrections/"
-        elif case in [3, 406]:
-            file_path = "case_nominal_50-150MHz_no_ground_loss_no_beam_corrections/"
-        elif case == 5:
-            file_path = (
-                "case_nominal_14_14_terms_55-150MHz_no_ground_loss_no_beam_corrections/"
-            )
-        elif case == 501:
-            file_path = "case_nominal_50-150MHz_LNA2_a2_h2_o2_s1_sim2_all_lc_yes_bc/"
-        else:
-            raise ValueError("case {} does not exist".format(case))
-    else:
-        raise ValueError("band must be mid_band")
-
-    p = np.genfromtxt(prefix + file_path + "rms_polynomial_parameters.txt")
-    ps = np.genfromtxt(prefix + file_path + "rms_std_polynomial_parameters.txt")
+def rms_filter(filter_file, gx, rms, n_sigma):
+    p, ps = [], []
+    with h5py.File(filter_file) as fl:
+        p.append(fl["lower"]["polynomial_params"][...])
+        ps.append(fl["lower"]["polynomial_params_std"][...])
 
     m = [np.polyval(pp, gx) for pp in p]
     ms = [np.polyval(pp, gx) for pp in ps]
@@ -220,11 +173,10 @@ def total_power_filter(gha, tp):
             W = np.ones(len(this_gha))
             bad_old = -1
             bad = 0
-            iteration = 0
 
             while bad_old < bad < int(lx / 2):
-                res, std, iteration = get_model_residual_iter(
-                    W, i, iteration, n_poly, this_gha, this_tp
+                res, std = _get_model_residual_iter(
+                    n_poly, this_gha, this_tp, weights=W
                 )
 
                 if std <= std_threshold:
@@ -240,9 +192,6 @@ def total_power_filter(gha, tp):
 
                 if bad >= int(lx / 2):
                     bad_indx = np.copy(this_indx)
-
-                print("STD: " + str(np.round(std, 3)) + " K")
-                print("Number of bad points excised: " + str(bad))
 
             # Indices of bad data points
             if not flag:
@@ -261,21 +210,19 @@ def total_power_filter(gha, tp):
     return (good, *good_indx)
 
 
-def get_model_residual_iter(W, i, iteration, n_poly, this_gha, this_tp, verbose=False):
-    iteration += 1
+def _get_model_residual_iter(n_poly, this_gha, this_tp, weights=None):
 
-    if verbose:
-        print(" ")
-        print("------------")
-        print("GHA: " + str(i) + "-" + str(i + 1) + "hr")
-        print("Iteration: " + str(iteration))
+    if weights:
+        mask = weights > 0
+        this_gha = this_gha[mask]
+        this_tp = this_tp[mask]
 
-    par = np.polyfit(this_gha[W > 0], this_tp[W > 0], n_poly - 1)
+    par = np.polyfit(this_gha, this_tp, n_poly - 1)
     model = np.polyval(par, this_gha)
     res = this_tp - model
-    std = np.std(res[W > 0])
+    std = np.std(res)
 
-    return res, std, iteration
+    return res, std
 
 
 def explicit_filter(times, bad, ret_times=False):
@@ -336,25 +283,6 @@ def explicit_filter(times, bad, ret_times=False):
         return keep
 
 
-def daily_rms_filter(band, case, index_GHA, year_day_list, rms_threshold):
-    if band == "mid_band" and case == 1:
-        d = np.genfromtxt(
-            config["edges_folder"]
-            + "mid_band/spectra/level4/case1/rms_filters/rms_index"
-            + str(index_GHA)
-            + ".txt"
-        )
-        rms_original = d[:, -1]
-        good = d[rms_original <= rms_threshold, :]
-
-    return np.array(
-        [
-            any(year_day[0] == b[0] and year_day[1] == b[1] for b in good)
-            for year_day in year_day_list
-        ]
-    )
-
-
 def time_filter_auxiliary(
     gha,
     sun_el,
@@ -379,3 +307,53 @@ def time_filter_auxiliary(
     good &= receiver_temp >= min_receiver_temp & receiver_temp <= max_receiver_temp
 
     return good
+
+
+def filter_explicit_gha(gha, first_day, last_day):
+    # TODO: this should not be used -- it's arbitrary!
+    if gha in [0, 2, 3, 4, 5, 16, 17, 18, 19, 20, 21, 22]:
+        good_days = np.arange(140, 300, 1)
+    else:
+        good_day_dct = {
+            1: np.concatenate((np.arange(148, 160), np.arange(161, 220))),
+            10: np.concatenate(
+                (
+                    np.arange(148, 168),
+                    np.arange(177, 194),
+                    np.arange(197, 202),
+                    np.arange(205, 216),
+                )
+            ),
+            11: np.arange(187, 202),
+            12: np.arange(147, 150),
+            13: np.array([147, 149, 157, 159]),
+            14: np.arange(148, 183),
+            15: np.concatenate(
+                (np.arange(140, 183), np.arange(187, 206), np.arange(210, 300))
+            ),
+            23: np.arange(148, 300),
+            6: np.arange(147, 300),
+            7: np.concatenate(
+                (
+                    np.arange(147, 153),
+                    np.arange(160, 168),
+                    np.arange(174, 202),
+                    np.arange(210, 300),
+                )
+            ),
+            8: np.concatenate(
+                (np.arange(147, 151), np.arange(160, 168), np.arange(174, 300))
+            ),
+            9: np.concatenate(
+                (
+                    np.arange(147, 153),
+                    np.arange(160, 168),
+                    np.arange(174, 194),
+                    np.arange(197, 202),
+                    np.arange(210, 300),
+                )
+            ),
+        }
+        good_days = good_day_dct[gha]
+
+    return good_days[(good_days >= first_day) & (good_days <= last_day)]

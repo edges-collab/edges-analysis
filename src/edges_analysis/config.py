@@ -20,6 +20,8 @@ class Config(dict):
             "lab_products": cal_config["cache_dir"],
             "field_products": os.path.expanduser("~/edges-cal-field-products"),
             "beams": "",
+            "antenna": "",
+            "sky_models": "",
         }
     }
 

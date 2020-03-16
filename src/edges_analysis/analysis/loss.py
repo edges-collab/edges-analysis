@@ -1,25 +1,43 @@
+from pathlib import Path
 import numpy as np
 from edges_cal import reflection_coefficient as rc
 from ..config import config
 
 
 def balun_and_connector_loss(
-    band, f, ra, MC=(False, False, False, False, False, False, False, False)
+    band,
+    f,
+    gamma_ant,
+    monte_carlo_flags=(False, False, False, False, False, False, False, False),
 ):
     """
-    f:    frequency in MHz
-    ra: reflection coefficient of antenna at the reference plane, the LNA input
+    Compute balun and connector losses.
 
-    MC Switches:
-    -------------------------
-    MC[0] = tube_inner_radius
-    MC[1] = tube_outer_radius
-    MC[2] = tube_length
-    MC[3] = connector_inner_radius
-    MC[4] = connector_outer_radius
-    MC[5] = connector_length
-    MC[6] = metal_conductivity
-    MC[7] = teflon_permittivity
+    Parameters
+    ----------
+    band : str {'low_band3', 'mid_band'}
+        Parameters of the loss are different for each antenna.
+    f : array-like
+        Frequency in MHz
+    gamma_ant: float
+        Reflection coefficient of antenna at the reference plane, the LNA input.
+    monte_carlo_flags : tuple of bool
+        Which parameters to add a random offset to, in order:
+        * tube_inner_radius
+        * tube_outer_radius
+        * tube_length
+        * connector_inner_radius
+        * connector_outer_radius
+        * connector_length
+        * metal_conductivity
+        * teflon_permittivity
+
+    Returns
+    -------
+    Gb : float or array-like
+        The balun loss
+    Gc : float or array-like
+        The connector loss
     """
     # Angular frequency
     w = 2 * np.pi * f * 1e6
@@ -82,41 +100,41 @@ def balun_and_connector_loss(
     u_teflon = u0 * ur_teflon
 
     ric_b = parameters[band]["ric_b"]
-    if MC[0]:
+    if monte_carlo_flags[0]:
         # 1-sigma of 3%
         ric_b *= 1 + 0.03 * np.random.normal()
 
     roc_b = parameters[band]["roc_b"]
-    if MC[1]:
+    if monte_carlo_flags[1]:
         # 1-sigma of 3%
         roc_b *= 1 + 0.03 * np.random.normal()
 
     l_b = parameters[band]["balun_length"] * inch2m  # length in meters
-    if MC[2]:
+    if monte_carlo_flags[2]:
         l_b += 0.001 * np.random.normal()  # 1-sigma of 1 mm
 
     # Connector dimensions
     ric_c = (0.05 * inch2m) / 2  # radius of outer wall of inner conductor
-    if MC[3]:
+    if monte_carlo_flags[3]:
         # 1-sigma of 3%, about < 0.04 mm
         ric_c += 0.03 * ric_c * np.random.normal()
 
     roc_c = parameters[band]["roc_c"]
-    if MC[4]:
+    if monte_carlo_flags[4]:
         # 1-sigma of 3%
         roc_c *= 1 + 0.03 * np.random.normal()
 
     l_c = parameters[band]["connector_length"] * inch2m  # length
-    if MC[5]:
+    if monte_carlo_flags[5]:
         l_c += 0.0001 * np.random.normal()
 
-    if MC[6]:
+    if monte_carlo_flags[6]:
         sigma_copper *= 1 + 0.01 * np.random.normal()
         sigma_brass *= 1 + 0.01 * np.random.normal()
         sigma_xx_inner *= 1 + 0.01 * np.random.normal()
         sigma_xx_outer *= 1 + 0.01 * np.random.normal()
 
-    if MC[7] == 1:
+    if monte_carlo_flags[7] == 1:
         # 1-sigma of 1%
         epp_teflon *= 1 + 0.01 * np.random.normal()
 
@@ -172,7 +190,7 @@ def balun_and_connector_loss(
 
     # S-parameters (it has to be done in this order, first the Connector+Bend, then the Balun)
     ra_c, S11c, S12S21c, S22c = rc.de_embed(
-        Ropen, Rshort, Rmatch, Rin_c_open, Rin_c_short, Rin_c_match, ra
+        Ropen, Rshort, Rmatch, Rin_c_open, Rin_c_short, Rin_c_match, gamma_ant
     )
 
     # Reflection of antenna only, at the input of bend+connector
@@ -188,7 +206,7 @@ def balun_and_connector_loss(
         )
 
     Gb = get_G(S22b, S12S21b, ra_b, ra_c)
-    Gc = get_G(S22c, S12S21c, ra_c, ra)
+    Gc = get_G(S22c, S12S21c, ra_c, gamma_ant)
 
     return Gb, Gc
 
@@ -204,35 +222,45 @@ def _get_loss(fname, f_MHz, n_terms):
     return 1 - model
 
 
-def ground_loss(band, f_MHz):
+def ground_loss(filename, freq, band=None):
     """
-    f: frequency in MHz. For mid-band (low-band), between 50 and 150 (120) MHz.
+    Calculate ground loss of a particular antenna at given frequencies.
+
+    Parameters
+    ----------
+    filename : path
+        File in which value of the ground loss for this instrument are tabulated.
+    freq : array-like
+        Frequency in MHz. For mid-band (low-band), between 50 and 150 (120) MHz.
+    band : str, optional
+        The instrument to find the ground loss for. Only required if `filename`
+        doesn't exist and isn't an absolute path (in which case the standard directory
+        structure will be searched using ``band``).
     """
-    if band == "low_band":
-        fname = (
-            config["edges_folder"]
-            + "calibration/loss/low_band/ground_loss/lowband_loss_on_30x30m_two_columns.txt"
-        )
-    elif band == "mid_band":
-        fname = (
-            config["edges_folder"] + "mid_band/calibration/ground_loss/loss_column.txt"
-        )
-    else:
-        raise ValueError("band must be low_band or mid_band")
+    filename = Path(filename)
+    if not (filename.exists() or filename.is_absolute()):
+        filename = Path(config["paths"]["beams"]) / band / "loss" / filename
 
-    return _get_loss(fname, f_MHz, 8)
+    return _get_loss(str(filename), freq, 8)
 
 
-def antenna_loss(band, f_MHz):
+def antenna_loss(filename, freq, band=None):
     """
-    f: frequency in MHz. For mid-band (low-band), between 50 and 150 (120) MHz.
-    """
-    if band == "mid_band":
-        fname = (
-            config["edges_folder"]
-            + "mid_band/calibration/antenna_loss/loss_mid_ant_column.txt"
-        )
-    else:
-        raise ValueError("only mid_band allowed for band")
+    Calculate antenna loss of a particular antenna at given frequencies.
 
-    return _get_loss(fname, f_MHz, 11)
+    Parameters
+    ----------
+    filename : path
+        File in which value of the antenna loss for this instrument are tabulated.
+    freq : array-like
+        Frequency in MHz. For mid-band (low-band), between 50 and 150 (120) MHz.
+    band : str, optional
+        The instrument to find the antenna loss for. Only required if `filename`
+        doesn't exist and isn't an absolute path (in which case the standard directory
+        structure will be searched using ``band``).
+    """
+    filename = Path(filename)
+    if not (filename.exists() or filename.is_absolute()):
+        filename = Path(config["paths"]["antenna"]) / band / "loss" / filename
+
+    return _get_loss(str(filename), freq, 11)

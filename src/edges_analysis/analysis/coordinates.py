@@ -1,6 +1,7 @@
 import datetime as dt
 import numpy as np
 from astropy import time as apt, coordinates as apc
+from .. import const
 
 
 def utc2lst(utc_time_array, longitude):
@@ -93,3 +94,9 @@ def z2f(z):
     l21 = c / f21  # frequency to wavelength, as emitted
     lmbda = l21 * (1 + z)
     return c / (lmbda * 1e6)
+
+
+def lst2gha(lst):
+    gha = lst - const.galactic_centre_lst
+    gha[gha < 0] += 24
+    return gha

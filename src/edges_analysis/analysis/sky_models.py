@@ -1,5 +1,6 @@
 import healpy as hp
 import numpy as np
+from pathlib import Path
 from astropy import coordinates as apc
 from astropy import io as fits
 from ..config import config
@@ -7,10 +8,9 @@ from ..config import config
 
 def get_map_coords(reorder=False, res=9):
     coord = fits.open(
-        config["edges_folder"]
-        + "/sky_models/coordinate_maps/pixel_coords_map_nested_galactic_res{}.fits".format(
-            res
-        )
+        Path(config["paths"]["sky_models"])
+        / "coordinate_maps"
+        / "pixel_coords_map_nested_galactic_res{}.fits".format(res)
     )
     coord_array = coord[1].data
     lon = coord_array["LONGITUDE"]
@@ -31,7 +31,7 @@ def haslam_408MHz_map():
     # Loading Haslam map
     # ------------------
     haslam_map = fits.open(
-        config["edges_folder"] + "/sky_models/haslam_map/lambda_haslam408_dsds.fits"
+        Path(config["paths"]["sky_model"]) / "haslam_map" / "lambda_haslam408_dsds.fits"
     )
     return (haslam_map[1].data)["temperature"], get_map_coords()
 
@@ -46,8 +46,9 @@ def remazeilles_408MHz_map():
     # Loading Haslam map
     # ------------------
     haslam_map = fits.open(
-        config["edges_folder"]
-        + "/sky_models/haslam_map/haslam408_ds_Remazeilles2014.fits"
+        Path(config["paths"]["sky_models"])
+        / "haslam_map"
+        / "haslam408_ds_Remazeilles2014.fits"
     )
     x = (haslam_map[1].data)["temperature"]
     haslam408_ring = x.flatten()
@@ -62,8 +63,9 @@ def LW_150MHz_map():
     # Here we use the raw map, without destriping
     return (
         np.genfromtxt(
-            config["edges_folder"]
-            + "/sky_models/LW_150MHz_map/150_healpix_gal_nested_R8.txt"
+            Path(config["paths"]["sky_models"])
+            / "LW_150MHz_map"
+            / "150_healpix_gal_nested_R8.txt"
         ),
         get_map_coords(res=8),
     )
@@ -75,7 +77,7 @@ def guzman_45MHz_map():
     """
     # 45-MHz map. The map is in Plate Caree projection (unprojected,
     # see https://en.wikipedia.org/wiki/Equirectangular_projection)
-    map45_fit = fits.open(config["edges_folder"] + "/sky_models/map_45MHz/wlb45.fits")
+    map45_fit = fits.open(Path(config["paths"]["sky_models"]) / "map_45MHz/wlb45.fits")
     map45 = map45_fit[0].data
     map45_1D = map45.flatten()
 
@@ -106,14 +108,9 @@ def guzman_45MHz_map():
     m = hp.reorder(map45_512, r2n=True)
 
     # Loading celestial coordinates to fill in the temperature hole around the north pole
-    coord = fits.open(
-        config["edges_folder"]
-        + "/sky_models/coordinate_maps/pixel_coords_map_nested_celestial_res9.fits"
-    )
-    coord_array = coord[1].data
-    DEC = coord_array["LATITUDE"]
+    LON, DEC, apc_coord = get_map_coords()
 
     # Filling the hole
     m[DEC > 68] = np.mean(m[(DEC > 60) & (DEC < 68)])
 
-    return m, get_map_coords()
+    return m, (LON, DEC, apc_coord)
