@@ -3,7 +3,6 @@ import os
 import yaml
 import contextlib
 import warnings
-from edges_cal.config import config as cal_config
 
 
 class ConfigurationError(Exception):
@@ -17,11 +16,11 @@ class Config(dict):
         "paths": {
             "raw_field_data": "",
             "raw_lab_data": "",
-            "lab_products": cal_config["cache_dir"],
-            "field_products": os.path.expanduser("~/edges-cal-field-products"),
-            "beams": "",
-            "antenna": "",
-            "sky_models": "",
+            "lab_products": "~/edges-calibrations",
+            "field_products": os.path.expanduser("~/edges-field-levels"),
+            "beams": "~/edges-beams",
+            "antenna": "~/edges-antenna-meta",
+            "sky_models": "~/edges-sky-models",
         }
     }
 
@@ -107,7 +106,7 @@ class Config(dict):
         return cls(config)
 
 
-config_filename = os.path.expanduser(os.path.join("~", ".edges-analysis", "config.yml"))
+config_filename = os.path.expanduser(os.path.join("~", ".edges.yml"))
 
 try:
     config = Config.load(config_filename)
