@@ -81,23 +81,19 @@ class HDF5Object:
     always_lazy = attr.ib(default=False, converter=bool)
     lazy = attr.ib(default=True, converter=bool)
 
-    @filename.validator
-    def _fn_validator(self, att, val):
-        if val is not None:
-            assert val.exists()
-
     def __attrs_post_init__(self):
-        self.check(self.filename, self.require_no_extra, self.require_all)
-
         self.__memcache__ = {}
+
+        if self.filename and self.filename.exists():
+            self.check(self.filename, self.require_no_extra, self.require_all)
 
         if not self.lazy:
             self.load_all(self.filename)
 
     @classmethod
     def _checkgrp(cls, grp, strc, false_if_extra=False, false_if_absent=True):
-        for k, v in strc:
-            if k == "meta":
+        for k, v in strc.items():
+            if k == "meta" and k not in grp:
                 k = "attrs"
 
             if k not in grp and false_if_absent:
@@ -121,6 +117,8 @@ class HDF5Object:
         cls._checkgrp(data, cls._structure, false_if_extra, false_if_absent)
 
         inst.__memcache__ = data
+
+        return inst
 
     def load_all(self, filename=None):
         if filename and not self.filename:
@@ -186,124 +184,3 @@ class HDF5Object:
             self.__memcache__[item] = out
 
         return out
-
-
-def auxiliary_data(weather_file, thermlog_file, band, year, day):
-    # TODO: move to edges-io
-    array1 = read_weather_file(day, weather_file, year)
-    array2 = read_thermlog_file(band, day, thermlog_file, year)
-
-    return array1, array2
-
-
-def read_thermlog_file(band, day, filename, year):
-    # TODO: move to edges-io
-    # gather data from 'thermlog.txt' file
-    with open(filename, "r") as fl:
-        lines_all = fl.readlines()
-
-    if (band == "high_band") and (year == 2015):
-        i2 = 24000  # ~ day 108
-    elif (band == "high_band") and (year == 2016):
-        i2 = 58702  # beginning of year 2016
-    elif (band == "low_band") and (year == 2015):
-        i2 = 0
-    elif (band == "low_band") and (year == 2016):
-        i2 = 14920  # beginning of year 2016
-    elif (band == "low_band") and (year == 2017):
-        i2 = 59352  # beginning of year 2017
-    elif (band == "low_band2") and (year == 2017) and (day < 332):
-        return np.array([0])
-    elif band == "low_band2" and year == 2017:
-        i2 = 0
-    elif (band == "low_band2") and (year == 2018):
-        i2 = 4768
-    elif (band == "low_band3") and (year == 2018):
-        i2 = 0
-    elif (band == "mid_band") and (year == 2018) and (day <= 171):
-        i2 = 5624  # beginning of year 2018, file "thermlog_mid.txt"
-    elif (band == "mid_band") and (year == 2018) and (day >= 172):
-        i2 = 16154
-
-    line = lines_all[i2]
-    year_iter = int(line[0:4])
-    day_of_year = int(line[5:8])
-
-    out = np.zeros((0, 2))
-    while day_of_year <= day and year_iter <= year:
-        if day_of_year == day:
-
-            date_time = line[0:17]
-            ttt = date_time.split(":")
-            seconds = 3600 * int(ttt[2]) + 60 * int(ttt[3]) + int(ttt[4])
-
-            try:
-                rec_temp = float(line[48:53])
-            except ValueError:
-                rec_temp = 0
-
-            tmp = np.array([seconds, rec_temp]).reshape((1, -1))
-            out = np.append(out, tmp, axis=0)
-
-        i2 += 1
-        if i2 != 26348:
-            line = lines_all[i2]
-            year_iter = int(line[0:4])
-            day_of_year = int(line[5:8])
-
-    return out
-
-
-def read_weather_file(day, weather_file, year):
-    # TODO: move to edges-io
-    # Gather data from 'weather.txt' file
-    with open(weather_file, "r") as f1:
-        lines_all_1 = f1.readlines()
-    array1 = np.zeros((0, 4))
-    # TODO: this is really arbitrary and hard to understand
-    if year == 2015:
-        i1 = 92000  # ~ day 100
-    elif year == 2016:
-        i1 = 165097  # start of year 2016
-    elif (year == 2017) and (day < 330):
-        i1 = 261356  # start of year 2017
-    elif (year == 2017) and (day > 331):
-        i1 = 0  # start of year 2017 in file weather2.txt
-    elif year == 2018:
-        i1 = 9806  # start of year in file weather2.txt
-    else:
-        raise ValueError("year must be between 2015-2018 inclusive")
-    line1 = lines_all_1[i1]
-    year_iter_1 = int(line1[0:4])
-    day_of_year_1 = int(line1[5:8])
-    while day_of_year_1 <= day and year_iter_1 <= year:
-        if day_of_year_1 == day:
-            date_time = line1[0:17]
-            ttt = date_time.split(":")
-            seconds = 3600 * int(ttt[2]) + 60 * int(ttt[3]) + int(ttt[4])
-
-            try:
-                amb_temp = float(line1[59:65])
-            except ValueError:
-                amb_temp = 0
-
-            try:
-                amb_hum = float(line1[87:93])
-            except ValueError:
-                amb_hum = 0
-
-            try:
-                rec_temp = float(line1[113:119])
-            except ValueError:
-                rec_temp = 0
-
-            array1_temp1 = np.array([seconds, amb_temp, amb_hum, rec_temp])
-            array1_temp2 = array1_temp1.reshape((1, -1))
-            array1 = np.append(array1, array1_temp2, axis=0)
-
-        i1 += 1
-        if i1 not in [28394, 1768]:
-            line1 = lines_all_1[i1]
-            year_iter_1 = int(line1[0:4])
-            day_of_year_1 = int(line1[5:8])
-    return array1

@@ -25,12 +25,13 @@ def utc2lst(utc_time_array, longitude):
     >>> LST = utc2lst(utc_time_array, -27.5)
     """
     # convert input array to "int"
-    uta = np.atleast_2d(utc_time_array.astype(int))
+    if not isinstance(utc_time_array[0], dt.datetime):
+        utc_time_array = np.atleast_2d(utc_time_array).astype(int)
 
     # converting UTC to LST
-    lst = np.zeros(len(uta))
+    lst = np.zeros(len(utc_time_array))
 
-    for i, ut in enumerate(uta):
+    for i, ut in enumerate(utc_time_array):
         # time stamp in python "datetime" format
         if not isinstance(ut, dt.datetime):
             ut = dt.datetime(*ut)
@@ -55,18 +56,20 @@ def sun_moon_azel(lat, lon, utc_array):
     obs_location = apc.EarthLocation(lat=lat, lon=lon)
 
     # Compute local coordinates of Sun and Moon
-    utc_array = np.atleast_2d(utc_array)
+    utc_array = utc_array
     sun = np.zeros((len(utc_array), 2))
     moon = np.zeros((len(utc_array), 2))
 
     for i, utc in enumerate(utc_array):
-        time = apt.Time(dt.datetime(*utc))
+        if not isinstance(utc, dt.datetime):
+            utc = dt.datetime(*utc)
+        time = apt.Time(utc)
 
         Sun = apc.get_sun(time)
         Moon = apc.get_moon(time)
 
-        Sun = sun.transform_to(apc.AltAz(location=obs_location))
-        Moon = moon.transform_to(apc.AltAz(location=obs_location))
+        Sun = Sun.transform_to(apc.AltAz(location=obs_location))
+        Moon = Moon.transform_to(apc.AltAz(location=obs_location))
 
         sun[i, 0] = Sun.alt.deg
         sun[i, 1] = Sun.az.deg

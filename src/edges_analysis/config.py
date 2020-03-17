@@ -102,7 +102,7 @@ class Config(dict):
         """Create a Config object from a config file."""
         cls.file_name = file_name
         with open(file_name, "r") as fl:
-            config = yaml.load(fl)
+            config = yaml.load(fl, Loader=yaml.FullLoader)
         return cls(config)
 
 

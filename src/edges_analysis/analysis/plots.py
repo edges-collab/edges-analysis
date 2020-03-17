@@ -1,7 +1,5 @@
 import datetime as dt
 import os
-from os import listdir, makedirs
-from os.path import exists
 from typing import Optional, Sequence
 from pathlib import Path
 
@@ -11,13 +9,12 @@ import numpy as np
 from astropy import coordinates as apc
 from astropy import time as apt
 from astropy import units as apu
-from edges_cal import EdgesFrequencyRange, reflection_coefficient as rc, xrfi as rfi
+from edges_cal import xrfi as rfi
 from edges_cal import modelling as mdl
 from scipy import interpolate as interp
 import h5py
 
-from . import beams, filters, io, loss, levels, coordinates as cd
-from . import s11 as s11m
+from . import beams, filters, loss, levels, coordinates as cd
 from . import sky_models, tools
 from ..config import config
 from .. import const
@@ -80,7 +77,7 @@ def plot_daily_residuals_nominal(f, r, w, yd, path="/home/raul/Desktop/"):
     )
 
 
-def plot_level3_ancillary(level3: levels.Level3, plot_file: Optional[str, Path] = None):
+def plot_level3_ancillary(level3, plot_file: [None, str, Path] = None):
     fig, ax = plt.subplots(5, 1, figsize=[4.5, 9], sharex=True)
 
     day = level3.meta["day"]
@@ -658,7 +655,7 @@ def _scroll_through_i(
     return rms_all, fb, ii, rb, wb
 
 
-def plot_level3_rms(level3: levels.Level3, ylim_lower=None, ylim_upper=None):
+def plot_level3_rms(level3, ylim_lower=None, ylim_upper=None):
     """
     This function plots the RMS of residuals of Level3 data
     """

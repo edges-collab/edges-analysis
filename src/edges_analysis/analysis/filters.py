@@ -1,23 +1,16 @@
-import os
 from pathlib import Path
 import numpy as np
 
 import h5py
-from .levels import Level3
 from ..config import config
 import yaml
 
 
 # TODO: clean up all the rms filtering functions in this module.
-def rms_filter_computation(
-    paths_in, path_out, band, save_parameters=False, n_files=None
-):
+def rms_filter_computation(level3, path_out, band, n_files=None):
     """
     Computation of the RMS filter
     """
-    # Listing files available
-    level3 = [Level3(x) for x in paths_in]
-
     path_out = Path(path_out)
     if not path_out.is_absolute():
         path_out = (
@@ -30,9 +23,8 @@ def rms_filter_computation(
     )
 
     # Load data used to compute filter
-    n_files = n_files or len(
-        level3
-    )  # Only using the first "N_files" to compute the filter
+    # Only using the first "N_files" to compute the filter
+    n_files = n_files or len(level3)
 
     rms_lower, rms_upper, rms_full, gha = [], [], [], []
     # Filter out high humidity

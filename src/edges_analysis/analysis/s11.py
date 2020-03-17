@@ -1,5 +1,6 @@
 import numpy as np
 from edges_cal import modelling as mdl
+from edges_io import io
 
 
 def antenna_s11_remove_delay(s11_path, f, delay_0=0.17, n_fit=10):
@@ -23,27 +24,26 @@ def antenna_s11_remove_delay(s11_path, f, delay_0=0.17, n_fit=10):
     array-like :
         An array of the same shape as `f`, containing the S11 with delay removed.
     """
-    d = np.genfromtxt(s11_path)
+    gamma, f_orig = io.S1P.read(s11_path)
 
     f_low = np.min(f)
     f_high = np.max(f)
-    f_orig = d[:, 0]
 
     if f_orig.min() > f_low:
         raise ValueError("Would be extrapolating beyond low end of frequency.")
     if f_orig.max() < f_high:
         raise ValueError("Would be extrapolating beyond high end of frequency.")
 
-    d_cut = d[(f_orig >= f_low) & (f_orig <= f_high), :]
-
-    f_orig = d_cut[:, 0]
-    s11 = d_cut[:, 1] + 1j * d_cut[:, 2]
+    print(f_low, f_high, f_orig.min(), f_orig.max())
+    mask = (f_orig >= f_low) & (f_orig <= f_high)
+    gamma = gamma[mask]
+    f_orig = f_orig[mask]
 
     # Removing delay from S11
     delay = delay_0 * f_orig
 
     def get_model(fnc):
-        re_wd = np.abs(s11) * fnc(delay + np.unwrap(np.angle(s11)))
+        re_wd = np.abs(gamma) * fnc(delay + np.unwrap(np.angle(gamma)))
         par_re_wd = np.polyfit(f_orig, re_wd, n_fit - 1)
         return np.polyval(par_re_wd, f)
 
@@ -52,11 +52,3 @@ def antenna_s11_remove_delay(s11_path, f, delay_0=0.17, n_fit=10):
 
     model_s11_wd = model_re_wd + 1j * model_im_wd
     return model_s11_wd * np.exp(-1j * delay_0 * f)
-
-
-def get_s11_model_from_file(path_s11, name, ffn, coeff="s11", basis="fourier"):
-    par = np.genfromtxt(path_s11 + f"par_{coeff}_{name}_mag.txt")
-    mag = mdl.model_evaluate(basis, par, ffn)
-    par = np.genfromtxt(path_s11 + f"par_{coeff}_{name}_ang.txt")
-    ang = mdl.model_evaluate(basis, par, ffn)
-    return mag * (np.cos(ang) + 1j * np.sin(ang))
