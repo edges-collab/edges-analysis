@@ -38,9 +38,11 @@ class _Level(io.HDF5Object):
       that describe the data.
     """
 
+    default_root = config["paths"]["field_products"]
+
     _structure = {
         "spectra": {"frequency": None, "spectrum": None},
-        "ancillary": None,
+        "ancillary": {},
         "meta": None,
     }
 
@@ -634,7 +636,7 @@ def level3_to_level4(
     min_receiver_temp=0,
     max_receiver_temp=100,
     n_sigma_rms=3,
-    rfi_window_size=3,  # MHz
+    rfi_window_size=3,
     n_poly_rfi=2,
     n_bootstrap_rfi=20,
     n_sigma_rfi=3.5,

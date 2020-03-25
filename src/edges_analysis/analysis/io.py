@@ -7,7 +7,7 @@ import contextlib
 
 @attr.s
 class _HDF5Group:
-    filename = attr.ib(converter=Path, validator=lambda x: x.exists())
+    filename = attr.ib(converter=Path, validator=lambda x, att, val: val.exists())
     structure = attr.ib(converter=dict)
     group_path = attr.ib(converter=str)
     always_lazy = attr.ib(default=False, converter=bool)
@@ -68,12 +68,15 @@ class _HDF5Group:
         if not self.always_lazy:
             self.__memcache__[item] = out
 
+        return out
+
 
 @attr.s
 class HDF5Object:
     _structure = None
     _require_all = True
     _require_no_extra = True
+    default_root = Path(".")
 
     filename = attr.ib(default=None, converter=lambda x: x if x is None else Path(x))
     require_all = attr.ib(default=_require_all, converter=bool)
@@ -133,19 +136,42 @@ class HDF5Object:
             self[k]
 
     def write(self, filename=None, clobber=False):
-        filename = filename or self.filename
+        if filename is None and self.filename is None:
+            raise ValueError(
+                "You need to pass a filename since there is no instance filename."
+            )
 
-        if Path(filename).exists() and not clobber:
+        filename = Path(filename or self.filename)
+
+        if not filename.is_absolute():
+            filename = self.default_root / filename
+
+        if self.filename is None:
+            self.filename = filename
+
+        if filename.exists() and not clobber:
             raise FileExistsError(f"file {filename} already exists!")
 
         def _write(grp, struct, cache):
-            for k, v in struct.items():
+            for k, v in cache.items():
                 if isinstance(v, dict):
-                    _write(grp[k], struct[k], cache[k])
+                    g = grp.create_group(k)
+                    _write(g, struct[k], v)
                 elif np.isscalar(cache[k]):
-                    grp.attrs[k] = cache[k]
+                    try:
+                        grp.attrs[k] = v
+                    except TypeError:
+                        raise TypeError(
+                            f"For key '{k}' in class '{self.__class__.__name__}', type '{type(cache[k])}' is not allowed in HDF5."
+                        )
                 else:
-                    grp[k] = cache[k]
+                    try:
+                        grp[k] = v
+                    except TypeError:
+                        raise TypeError(
+                            f"For key '{k}' in class '{self.__class__.__name__}', type '{type(cache[k])}' is not "
+                            f"allowed in HDF5."
+                        )
 
         with h5py.File(filename, "w") as fl:
             _write(fl, self._structure, self.__memcache__)
@@ -170,10 +196,10 @@ class HDF5Object:
                 f"'{item}' is not a valid part of {self.__class__.__name__}. Valid keys: {self._structure.keys()}"
             )
 
-        with open(self.filename, "r") as fl:
+        with h5py.File(self.filename, "r") as fl:
             if item in ("attrs", "meta"):
                 out = dict(fl.attrs)
-            if isinstance(fl[item], h5py.Group):
+            elif isinstance(fl[item], h5py.Group):
                 out = _HDF5Group(self.filename, self._structure[item], item)
             elif isinstance(fl[item], h5py.Dataset):
                 out = fl[item][...]

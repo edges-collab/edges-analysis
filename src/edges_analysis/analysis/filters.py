@@ -144,9 +144,11 @@ def total_power_filter(gha, tp):
 
     assert tp.shape == (len(gha), 3)
 
+    # This only applies to mid-band, and they are gotten empirically from some set
+    # of data.
     std_thresholds = [5e4, 2e4, 1e5]
     good_indx = []
-    for j, (tpi, std_threshold) in enumerate(zip(tp, std_thresholds)):
+    for j, (tpi, std_threshold) in enumerate(zip(tp.T, std_thresholds)):
 
         flag = False
 
