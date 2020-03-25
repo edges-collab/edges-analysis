@@ -1,5 +1,6 @@
 from pathlib import Path
 import numpy as np
+import warnings
 
 import h5py
 from ..config import config
@@ -109,24 +110,21 @@ def perform_rms_filter(rms, gha, n_poly, n_sigma, n_terms, n_std):
 def rms_filter(filter_file, gx, rms, n_sigma):
     p, ps = [], []
     with h5py.File(filter_file) as fl:
-        p.append(fl["lower"]["polynomial_params"][...])
-        ps.append(fl["lower"]["polynomial_params_std"][...])
+        for key in ["lower", "upper", "full"]:
+            p.append(fl[key]["polynomial_params"][...])
+            ps.append(fl[key]["polynomial_params_std"][...])
 
-    m = [np.polyval(pp, gx) for pp in p]
-    ms = [np.polyval(pp, gx) for pp in ps]
+    flags = np.zeros(rms.shape[-1], dtype=bool)
 
-    index = np.arange(0, len(rms))
+    for pp, pstd, rr in zip(p, ps, rms):
+        m = np.polyval(pp, gx)
+        ms = np.polyval(pstd, gx)
+        flags |= np.abs(rr - m) > n_sigma * ms
 
-    diff = [np.abs(rr - mm) for rr, mm in zip(rms, m)]
-    good_indices = [index[d <= n_sigma * mm] for d, mm in zip(diff, ms)]
-
-    index_good = np.intersect1d(good_indices[0], good_indices[1])
-    index_good = np.intersect1d(index_good, good_indices[2])
-
-    return (index_good, *good_indices)
+    return flags
 
 
-def total_power_filter(gha, tp):
+def total_power_filter(gha, total_power, flags=None):
     """
     Filter on total power.
 
@@ -134,74 +132,55 @@ def total_power_filter(gha, tp):
     ----------
     gha : array_like
         1D array of galactic hour angles
-    tp : array_like
-        2D array where first dimension corresponds to gha, and second dimension is
-        length 3 and corresponds to different frequency ranges (60-90, 90-120, 60-120).
+    total_power : array_like
+        2D array where first dimension is length 3 and corresponds to different
+        frequency ranges (60-90, 90-120, 60-120), and second dimension corresponds to gha.
     """
-    indices = np.arange(0, len(gha))
+    # indices = np.arange(0, len(gha))
     n_poly = 3
     n_sigma = 3
 
-    assert tp.shape == (len(gha), 3)
+    assert total_power.shape == (3, len(gha))
+    if flags is None:
+        flags = np.zeros(len(gha), dtype=bool)
 
     # This only applies to mid-band, and they are gotten empirically from some set
     # of data.
     std_thresholds = [5e4, 2e4, 1e5]
-    good_indx = []
-    for j, (tpi, std_threshold) in enumerate(zip(tp.T, std_thresholds)):
 
-        flag = False
-
+    for j, (tpi, std_threshold) in enumerate(zip(total_power, std_thresholds)):
         for i in range(24):
             mask = (gha >= i) & (gha < (i + 1))
             this_gha = gha[mask]
+            this_flags = flags[mask]
 
             this_tp = tpi[mask]
-            this_indx = indices[mask]
+            # this_indx = indices[mask]
 
             # If enough data points available per hour
-            lx = len(this_tp)
+            lx = len(this_flags) - np.sum(this_flags)
+
             if lx <= 10:
+                warnings.warn(
+                    f"GHA {i} didn't have enough unflagged data to do a total-power filter."
+                )
                 continue
 
-            W = np.ones(len(this_gha))
-            bad_old = -1
-            bad = 0
+            nflags = -1
 
-            while bad_old < bad < int(lx / 2):
+            while nflags < np.sum(this_flags):
+                nflags = np.sum(this_flags)
+
                 res, std = _get_model_residual_iter(
-                    n_poly, this_gha, this_tp, weights=W
+                    n_poly, this_gha, this_tp, weights=(~this_flags).astype("float")
                 )
 
                 if std <= std_threshold:
-                    mask = np.abs(res) > n_sigma * std
+                    flags |= np.abs(res) > n_sigma * std
                 else:
-                    mask = np.abs(res) > std
+                    flags |= np.abs(res) > std
 
-                bad_indx = this_indx[mask]
-                W[mask] = 0
-
-                bad_old = np.copy(bad)
-                bad = len(bad_indx)
-
-                if bad >= int(lx / 2):
-                    bad_indx = np.copy(this_indx)
-
-            # Indices of bad data points
-            if not flag:
-                IN_bad = np.copy(bad_indx)
-                flag = True
-            else:
-                IN_bad = np.append(IN_bad, bad_indx)
-
-        bad = np.copy(IN_bad)
-        good_indx.append(np.setdiff1d(indices, bad))
-
-    # Combined index of good data points
-    good = np.intersect1d(good_indx[0], good_indx[1])
-    good = np.intersect1d(good, good_indx[2])
-
-    return (good, *good_indx)
+    return flags
 
 
 def _get_model_residual_iter(n_poly, this_gha, this_tp, weights=None):
@@ -290,17 +269,17 @@ def time_filter_auxiliary(
     min_receiver_temp=0,
     max_receiver_temp=100,
 ):
-    good = np.ones(len(gha), dtype=bool)
+    flags = np.zeros(len(gha), dtype=bool)
 
-    good &= gha >= gha_range[0] & gha < gha_range[1]
+    flags |= gha < gha_range[0] | gha >= gha_range[1]
 
     # Sun elevation, Moon elevation, ambient humidity, and receiver temperature
-    good &= sun_el <= sun_el_max
-    good &= moon_el <= moon_el_max
-    good &= humidity <= amb_hum_max
-    good &= receiver_temp >= min_receiver_temp & receiver_temp <= max_receiver_temp
+    flags |= sun_el > sun_el_max
+    flags |= moon_el > moon_el_max
+    flags |= humidity > amb_hum_max
+    flags |= receiver_temp >= min_receiver_temp & receiver_temp <= max_receiver_temp
 
-    return good
+    return flags
 
 
 def filter_explicit_gha(gha, first_day, last_day):
