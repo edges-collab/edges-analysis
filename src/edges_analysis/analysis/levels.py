@@ -2,11 +2,11 @@ from os.path import dirname, basename
 from typing import Tuple, Optional, Sequence, List, Union
 from functools import lru_cache
 import sys
+import glob
 
 import numpy as np
 from edges_cal import (
     FrequencyRange,
-    receiver_calibration_func as rcf,
     modelling as mdl,
     xrfi as rfi,
     Calibration,
@@ -160,6 +160,7 @@ class Level1(_Level):
         filename,
         band,
         calfile,
+        s11_path,
         weather_file=None,
         thermlog_file=None,
         out_file=None,
@@ -173,7 +174,7 @@ class Level1(_Level):
 
         meta = {
             "year": times[0].year,
-            "day": times[0].day,
+            "day": (times[0] - datetime(times[0].year, 1, 1)).days + 1,
             "hour": times[0].hour,
             **ancillary.meta,
         }
@@ -185,7 +186,23 @@ class Level1(_Level):
         )
         meta = {**meta, **new_meta}
 
-        time_based_anc = tools.join_struct_arrays(time_based_anc, new_anc)
+        time_based_anc = tools.join_struct_arrays((time_based_anc, new_anc))
+
+        s11_path = Path(s11_path)
+        if not s11_path.is_absolute():
+            s11_path = Path(config["paths"]["raw_field_data"]) / s11_path
+
+        if s11_path.is_dir():
+            # Get closest measurement
+            fls = glob.glob(str(s11_path) + "/*_input1.s1p")
+            s11_times = [
+                tools.dt_from_year_day(*[int(x) for x in Path(fl).name.split("_")[:5]])
+                for fl in fls
+            ]
+            closest = fls[
+                np.argmin([abs((times[0] - t).total_seconds()) for t in s11_times])
+            ]
+            s11_path = closest.replace("_input1.s1p", "")
 
         calspec, freq, weights, new_meta = cls._calibrate(
             spectrum=Q,
@@ -194,6 +211,7 @@ class Level1(_Level):
             calfile=calfile,
             ambient_temp=time_based_anc["ambient_temp"],
             lst=time_based_anc["lst"],
+            s11_path=s11_path,
             **cal_kwargs,
         )
 
@@ -215,7 +233,13 @@ class Level1(_Level):
             )
 
         return cls.from_data(
-            freq.freq, data, time_based_anc, meta, filename=str(out_file),
+            {
+                "frequency": freq.freq,
+                "spectra": data,
+                "ancillary": time_based_anc,
+                "meta": meta,
+            },
+            filename=str(out_file),
         )
 
     @property
@@ -305,7 +329,6 @@ class Level1(_Level):
         else:
             thermlog_file = pth / f"thermlog_{band}.txt"
 
-        # TODO: Check if band can be gotten directly from level1
         weather, thermlog = auxiliary_data(weather_file, thermlog_file, year, day)
         seconds = np.array([(t - times[0]).total_seconds() for t in times])
 
@@ -372,8 +395,9 @@ class Level1(_Level):
         calfile: [str, Calibration],
         ambient_temp,
         lst,
+        s11_path,
+        switch_state_dir,
         weights=None,
-        s11_path="antenna_s11_2018_147_17_04_33.txt",
         antenna_s11_n_terms=15,
         antenna_correction=True,
         balun_correction=True,
@@ -382,7 +406,8 @@ class Level1(_Level):
         f_low: float = 50,
         f_high: float = 150,
         n_fg=7,
-    ) -> Tuple[dict, dict, dict]:
+        switch_state_run_num=None,
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, dict]:
         """
         Calibrate data.
 
@@ -400,7 +425,9 @@ class Level1(_Level):
         calobs : :class:`CalibrationObservation` instance or path
             The lab-based calibration observation to use to calibrate the data.
         s11_path : path, optional
-            Path to the S11 measurement of the antenna.
+            Path to the S11 measurements of the antenna. It should be an absolute
+            path, to which will be appended "_inputX.s1p" to obtain the four
+            necessary inputs.
         antenna_s11_n_terms : int, optional
             Number of terms used in fitting the S11 model.
         antenna_correction : bool, optional
@@ -444,6 +471,8 @@ class Level1(_Level):
             "wterms": calfile.wterms,
             "cterms": calfile.cterms,
             "calfile": calfile.path,
+            "switch_state_dir": switch_state_dir,
+            "switch_state_run_num": switch_state_run_num,
         }
 
         if np.all(spectrum == 0):
@@ -458,8 +487,15 @@ class Level1(_Level):
         weights = weights[:, freq.mask]
 
         # Antenna S11
+        # Get files
+        s11_files = sorted(glob.glob(s11_path + "_input*.s1p"))
         s11_ant = s11m.antenna_s11_remove_delay(
-            s11_path, freq.freq, delay_0=0.17, n_fit=antenna_s11_n_terms
+            s11_files,
+            freq.freq,
+            switch_state_dir=switch_state_dir,
+            delay_0=0.17,
+            n_fit=antenna_s11_n_terms,
+            switch_state_run_num=switch_state_run_num,
         )
 
         # Calibrated antenna temperature with losses and beam chromaticity

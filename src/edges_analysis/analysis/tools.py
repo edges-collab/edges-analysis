@@ -1,4 +1,5 @@
 from typing import Tuple
+from datetime import datetime, timedelta
 
 import numpy as np
 from edges_cal import modelling as mdl
@@ -12,6 +13,10 @@ def join_struct_arrays(arrays):
         for name in a.dtype.names:
             out[name] = a[name]
     return out
+
+
+def dt_from_year_day(year, day, *args):
+    return datetime(year, 1, 1, *args) + timedelta(days=day - 1)
 
 
 #
