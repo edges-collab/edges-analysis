@@ -1,112 +1,117 @@
-import logging
-from os.path import join
-
+from os.path import join, isdir
+from os import mkdir
+import glob
 import click
-from edges_cal import cal_coefficients as cc
+from pathlib import Path
+import yaml
+import h5py
+import tqdm
 
-from . import io
-from .logging import logger
+from .analysis.levels import Level1
+from .config import config
 
 main = click.Group()
 
 
 @main.command()
-@click.argument("path", type=click.Path(dir_okay=True, file_okay=False, exists=True))
+@click.argument("path", type=click.Path(dir_okay=True))
 @click.option(
-    "-f", "--f-low", type=float, default=None, help="minimum frequency to calibrate"
+    "-b",
+    "--band",
+    default=None,
+    type=click.Choice(["mid", "low1", "low2", "low3", "high"]),
 )
 @click.option(
-    "-F", "--f-high", type=float, default=None, help="maximum frequency to calibrate"
+    "-c", "--calfile", default=None, type=click.Path(exists=True, dir_okay=False)
 )
-@click.option("-n", "--run-num", type=int, default=None, help="run number to read")
+@click.option("-S", "--s11-path", default=None, type=click.Path(dir_okay=True))
+@click.option("-l", "--label", default="")
+@click.option("-p", "--prefix", default="")
+@click.option("-m", "--message", default="")
 @click.option(
-    "-p",
-    "--ignore_times_percent",
-    type=float,
-    default=5,
-    help="percentage of data at start of files to ignore",
-)
-@click.option(
-    "-r",
-    "--resistance-f",
-    type=float,
-    default=50.0002,
-    help="female resistance standard",
+    "--weather-file", default=None, type=click.Path(exists=True, dir_okay=False)
 )
 @click.option(
-    "-R", "--resistance-m", type=float, default=50.166, help="male resistance standard"
+    "--thermlog-file", default=None, type=click.Path(exists=True, dir_okay=False)
 )
 @click.option(
-    "-C", "--c-terms", type=int, default=11, help="number of terms to fit for C1 and C2"
+    "-s", "--settings", default=None, type=click.Path(exists=True, dir_okay=False)
 )
-@click.option(
-    "-W",
-    "--w-terms",
-    type=int,
-    default=12,
-    help="number of terms to fit for TC, TS and TU",
-)
-@click.option(
-    "-o",
-    "--out",
-    type=click.Path(dir_okay=True, file_okay=False, exists=True),
-    default=".",
-    help="output directory",
-)
-@click.option(
-    "-c",
-    "--cache-dir",
-    type=click.Path(dir_okay=True, file_okay=False),
-    default=".",
-    help="directory in which to keep/search for the cache",
-)
-def run(
+def calibrate(
     path,
-    f_low,
-    f_high,
-    run_num,
-    ignore_times_percent,
-    resistance_f,
-    resistance_m,
-    c_terms,
-    w_terms,
-    out,
-    cache_dir,
+    band,
+    calfile,
+    s11_path,
+    label,
+    prefix,
+    message,
+    weather_file,
+    thermlog_file,
+    settings,
 ):
     """
-    Calibrate using lab measurements in PATH, and make all relevant plots.
+    Calibrate field data to produce Level1 files.
     """
-    obs = cc.CalibrationObservation(
-        path=path,
-        f_low=f_low,
-        f_high=f_high,
-        run_num=run_num,
-        ignore_times_percent=ignore_times_percent,
-        resistance_f=resistance_f,
-        resistance_m=resistance_m,
-        cterms=c_terms,
-        wterms=w_terms,
-        cache_dir=cache_dir,
-    )
+    if settings:
+        with open(settings, "r") as fl:
+            settings = yaml.load(fl, Loader=yaml.FullLoader)
+    else:
+        settings = {}
 
-    # Plot Calibrator properties
-    fig = obs.plot_raw_spectra()
-    fig.savefig(join(out, "raw_spectra.png"))
+    settings = {
+        **settings,
+        **{
+            "band": band,
+            "calfile": calfile,
+            "s11_path": s11_path,
+            "label": label,
+            "message": message,
+            "weather_file": weather_file,
+            "thermlog_file": thermlog_file,
+        },
+    }
 
-    figs = obs.plot_s11_models()
-    for kind, fig in figs.items():
-        fig.savefig(join(out, f"{kind}_s11_model.png"))
+    print("Settings: ", settings)
 
-    fig = obs.plot_calibrated_temps(bins=256)
-    fig.savefig(join(out, "calibrated_temps.png"))
+    if isdir(path):
+        print(f"Attempting to calibrate all files in {path}")
+        path = join(path, "*")
 
-    fig = obs.plot_coefficients()
-    fig.savefig(join(out, "calibration_coefficients.png"))
+    files = glob.glob(path)
 
-    # Calibrate and plot antsim
-    antsim = obs.new_load(load_name="AntSim3")
-    fig = obs.plot_calibrated_temp(antsim, bins=256)
-    fig.savefig(join(out, "antsim_calibrated_temp.png"))
+    # Get the output structure ready
+    hsh = hash(repr(settings))
 
-    # Write out data
-    obs.write_coefficients()
+    if not label:
+        label = band + "_" + hsh
+
+    if prefix:
+        output_dir = Path(prefix) / label
+    else:
+        output_dir = Path(config["paths"]["field_products"]) / "level1" / label
+
+    if not output_dir.exists():
+        mkdir(str(output_dir))
+    else:
+        # If the directory is not empty, we need to check whether the files that are
+        # already there are consistent with these files.
+        for fl in glob.glob(str(output_dir / "*.h5")):
+            with h5py.File(fl, "r") as ff:
+                for k, v in settings.items():
+                    if ff.attrs[k] != v:
+                        raise ValueError(
+                            f"The directory you want to write to has "
+                            f"non-consistent files for key: {k} [{v} vs. {ff.attrs[k]}]."
+                        )
+
+    print(f"Output Directory: {output_dir}")
+
+    pbar = tqdm.tqdm(files, unit="file")
+    for fl in pbar:
+        pbar.set_description(f"{fl}")
+        l1 = Level1(filename=fl, **settings)
+
+        fname = f"level1_{l1.meta['year']}_{l1.meta['day']}_{l1.meta['hour']}_{hsh}.h5"
+        fname = output_dir / fname
+
+        l1.write(fname)
