@@ -6,7 +6,6 @@ from . import levels
 from . import loss
 from . import plots
 from . import s11
-from . import scripts
 from . import sky_models
 from . import tools
 

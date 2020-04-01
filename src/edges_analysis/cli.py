@@ -68,11 +68,17 @@ def calibrate(
     for k, v in settings.items():
         print(f"    {k}:", stylize(v, attr("dim")))
 
-    if isdir(path):
-        print(f"Attempting to calibrate all files in {path}")
-        path = join(path, "*")
+    path = Path(path)
 
-    files = [Path(fl) for fl in glob.glob(path)]
+    if not path.is_absolute():
+        if (Path(config["paths"]["raw_field_data"]) / path).exists():
+            path = Path(config["paths"]["raw_field_data"]) / path
+
+    if path.is_dir():
+        print(f"Attempting to calibrate all files in {path}")
+        path = path / "*"
+
+    files = [Path(fl) for fl in glob.glob(str(path))]
 
     # Get the output structure ready
     hsh = hashlib.md5(repr(settings).encode()).hexdigest()
