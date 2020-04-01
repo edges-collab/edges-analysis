@@ -99,8 +99,10 @@ class HDF5Object:
             if k == "meta" and k not in grp:
                 k = "attrs"
 
-            if k not in grp and false_if_absent:
-                raise TypeError()
+            if k not in grp and k != "attrs" and false_if_absent:
+                raise TypeError(f"{k} not in {grp} and false_if_absent=True")
+            elif k == "attrs":
+                pass
             elif isinstance(v, dict):
                 cls._checkgrp(grp[k], v)
             elif v:
@@ -120,7 +122,6 @@ class HDF5Object:
         cls._checkgrp(data, cls._structure, false_if_extra, false_if_absent)
 
         inst.__memcache__ = data
-
         return inst
 
     def load_all(self, filename=None):
@@ -154,24 +155,24 @@ class HDF5Object:
 
         def _write(grp, struct, cache):
             for k, v in cache.items():
-                if isinstance(v, dict):
-                    g = grp.create_group(k)
-                    _write(g, struct[k], v)
-                elif np.isscalar(cache[k]):
-                    try:
-                        grp.attrs[k] = v
-                    except TypeError:
-                        raise TypeError(
-                            f"For key '{k}' in class '{self.__class__.__name__}', type '{type(cache[k])}' is not allowed in HDF5."
-                        )
-                else:
-                    try:
+                try:
+                    if isinstance(v, dict):
+                        if k in ["meta", "attrs"]:
+                            g = grp.attrs
+                        else:
+                            g = grp.create_group(k)
+                        _write(g, struct[k], v)
+                    else:
+                        if v is None:
+                            v = "none"
                         grp[k] = v
-                    except TypeError:
-                        raise TypeError(
-                            f"For key '{k}' in class '{self.__class__.__name__}', type '{type(cache[k])}' is not "
-                            f"allowed in HDF5."
-                        )
+
+                except TypeError:
+                    raise TypeError(
+                        f"For key '{k}' in class '{self.__class__.__name__}', type '"
+                        f"{type(cache[k])}' is not "
+                        f"allowed in HDF5."
+                    )
 
         with h5py.File(filename, "w") as fl:
             _write(fl, self._structure, self.__memcache__)
@@ -199,6 +200,9 @@ class HDF5Object:
         with h5py.File(self.filename, "r") as fl:
             if item in ("attrs", "meta"):
                 out = dict(fl.attrs)
+                for k in out:
+                    if out[k] == "none":
+                        out[k] = None
             elif isinstance(fl[item], h5py.Group):
                 out = _HDF5Group(self.filename, self._structure[item], item)
             elif isinstance(fl[item], h5py.Dataset):

@@ -1,0 +1,7 @@
+band: mid
+calfile: ~/data4/temporary_calibration_2019_11.h5
+s11_path: mro/mid/s11/mid-band-2018-02-15
+switch_state_dir: /data5/edges/data/CalibrationObservations/Receiver01_2019_11_26_040_to_200MHz/25C/S11/SwitchingState01
+balun_correction: false
+antenna_correction: false
+ground_correction: false

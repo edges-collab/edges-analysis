@@ -19,81 +19,6 @@ def dt_from_year_day(year, day, *args):
     return datetime(year, 1, 1, *args) + timedelta(days=day - 1)
 
 
-#
-# def _get_level4_case(case):
-#     _level4_cases = {
-#         2: "calibration_2019_10_no_ground_loss_no_beam_corrections",
-#         3: "case_nominal_50-150MHz_no_ground_loss_no_beam_corrections",
-#         406: "case_nominal_50-150MHz_LNA1_a2_h2_o2_s1_sim2",
-#         5: "case_nominal_14_14_terms_55-150MHz_no_ground_loss_no_beam_corrections",
-#         501: "case_nominal_50-150MHz_LNA2_a2_h2_o2_s1_sim2_all_lc_yes_bc",
-#         502: "case_nominal_50-150MHz_LNA2_a2_h2_o2_s1_sim2_all_lc_yes_bc_20min",
-#     }
-#     folder = config["edges_folder"] + "mid_band/spectra/level4/{}/"
-#
-#     if case not in _level4_cases:
-#         raise ValueError("case must be one of {}".format(_level4_cases.keys()))
-#
-#     case = _level4_cases[case]
-#     folder = folder.format(case)
-#
-#     return case, folder
-
-
-# def level4_binned_residuals(case, f_low, f_high, output_file_name_hdf5):
-#     case, folder = _get_level4_case(case)
-#
-#     f, p, r, w, index, gha, yy = level4read(folder + case + ".hdf5")
-#     save_folder = folder + "binned_residuals/"
-#
-#     # Compute the residuals
-#     start = True
-#     for i in range(len(r[:, 0, 0])):
-#         for k in range(len(r[0, :, 0])):
-#
-#             if np.sum(w[i, k, :]) > 100:
-#
-#                 model_k = mdl.model_evaluate("LINLOG", p[i, k, :], f / 200)
-#                 t_k = r[i, k, :] + model_k
-#                 w_k = w[i, k, :]
-#
-#                 fc = f[(f > f_low) & (f < f_high)]
-#                 tc_k = t_k[(f > f_low) & (f < f_high)]
-#                 wc_k = w_k[(f > f_low) & (f < f_high)]
-#
-#                 n_fg = 5 if 6 <= gha[k] <= 17 else 6
-#                 pc_k = mdl.fit_polynomial_fourier(
-#                     "LINLOG", fc / 200, tc_k, n_fg, Weights=wc_k
-#                 )
-#                 mc_k = mdl.model_evaluate("LINLOG", pc_k[0], fc / 200)
-#
-#                 rc_k = tc_k - mc_k
-#
-#                 fb, rb, wb, sb = average_in_frequency(rc_k, fc, wc_k, n_samples=16)
-#
-#                 if start:
-#                     binned_residuals = np.zeros((len(r), len(r[0]), len(fb)))
-#                     binned_weights = np.zeros_like(binned_residuals)
-#                     binned_stddev = np.zeros_like(binned_residuals)
-#                     start = False
-#
-#                 binned_residuals[i, k, :] = rb
-#                 binned_weights[i, k, :] = wb
-#                 binned_stddev[i, k, :] = sb
-#
-#     # Save
-#     # ----
-#     with h5py.File(save_folder + output_file_name_hdf5, "w") as hf:
-#         hf.create_dataset("frequency", data=fb)
-#         hf.create_dataset("residuals", data=binned_residuals)
-#         hf.create_dataset("weights", data=binned_weights)
-#         hf.create_dataset("stddev", data=binned_stddev)
-#         hf.create_dataset("gha_edges", data=gha)
-#         hf.create_dataset("year_day", data=yy)
-#
-#     return fb, binned_residuals
-
-
 def spectrum_fit(f, t, w, n_poly=5, f1_low=60, f1_high=65, f2_low=95, f2_high=140):
     fc = f[((f >= f1_low) & (f <= f1_high)) | ((f >= f2_low) & (f <= f2_high))]
     tc = t[((f >= f1_low) & (f <= f1_high)) | ((f >= f2_low) & (f <= f2_high))]
@@ -106,97 +31,13 @@ def spectrum_fit(f, t, w, n_poly=5, f1_low=60, f1_high=65, f2_low=95, f2_high=14
     return f, r
 
 
-# def level4_foreground_fits(
-#     case, f_low, f_high, f_norm, output_file_name_hdf5="foreground_fits.hdf5"
-# ):
-#     folder, case = _get_level4_case(case)
-#     save_folder = folder + "binned_residuals/"
-#
-#     f, p, r, w, index, gha, yy = level4read(folder + case + ".hdf5")
-#
-#     # Computing the foreground parameters
-#     # -----------------------------------
-#     fits = [np.zeros((len(r), len(r[0]), n)) for n in range(11, 15)]
-#
-#     for i, yyi in enumerate(yy):
-#         # Loading data
-#         path_level3_file = config[
-#             "edges_folder"
-#         ] + "mid_band/spectra/level3/case_nominal_50-150MHz_LNA2_a2_h2_o2_s1_sim2_all_lc_yes_bc" "/2018_{}_00.hdf5".format(
-#             yyi
-#         )
-#
-#         xf, xt, xp, xr, xw, xrms, xtp, xm = level3read(path_level3_file)
-#
-#         for k in range(len(r[0, :, 0])):
-#             IX = np.arange(0, len(index[0, 0, :]))
-#             new_meta = xm[IX[index[i, k, :] == 1], :]
-#
-#             # If there are enough data points
-#             if (np.sum(w[i, k, :]) > 100) and (len(new_meta) > 0):
-#
-#                 av_sunel = np.mean(new_meta[:, 6])
-#                 av_moonel = np.mean(new_meta[:, 8])
-#
-#                 fb, rb, wb, sb = average_in_frequency(
-#                     r[i, k, :], f, w[i, k, :], n_samples=16
-#                 )
-#
-#                 mb = mdl.model_evaluate("LINLOG", p[i, k, :], fb / 200)
-#                 tb = rb + mb
-#
-#                 mask = (fb > f_low) & (fb < f_high)
-#                 fc = fb[mask]
-#                 tc = tb[mask]
-#                 wc = wb[mask]
-#                 sc = sb[mask]
-#
-#                 for i_fg, n_fg in enumerate([2, 3, 4, 5]):
-#
-#                     logf = np.log(fc / f_norm)
-#                     logt = np.log(tc)
-#
-#                     par = np.polyfit(logf[wc > 0], logt[wc > 0], n_fg - 1)
-#                     logm = np.polyval(par, logf)
-#                     m = np.exp(logm)
-#
-#                     rms = np.std((tc - m)[wc > 0])
-#
-#                     chi2 = np.sum(((tc - m)[wc > 0] / sc[wc > 0]) ** 2)
-#                     LEN = len(fc[wc > 0])
-#                     BIC = chi2 + n_fg * np.log(LEN)
-#
-#                     fits[i_fg][i, k, 0] = yyi[0]
-#                     fits[i_fg][i, k, 1] = yyi[1]
-#                     fits[i_fg][i, k, 2] = gha[k]
-#                     fits[i_fg][i, k, 3] = av_sunel
-#                     fits[i_fg][i, k, 4] = av_moonel
-#
-#                     fits[i_fg][i, k, 5] = np.exp(par[-1])
-#                     fits[i_fg][i, k, 6 : 6 + n_fg - 1] = par[:-1][::-1]
-#
-#                     fits[i_fg][i, k, -4] = rms
-#                     fits[i_fg][i, k, -3] = chi2
-#                     fits[i_fg][i, k, -2] = LEN
-#                     fits[i_fg][i, k, -1] = BIC
-#
-#     # Save to file.
-#     with h5py.File(save_folder + output_file_name_hdf5, "w") as hf:
-#         hf.create_dataset("fref", data=np.array([f_norm]))
-#         hf.create_dataset("fit2", data=fits[0])
-#         hf.create_dataset("fit3", data=fits[1])
-#         hf.create_dataset("fit4", data=fits[2])
-#         hf.create_dataset("fit5", data=fits[3])
-#
-#     return fits
-
-
 def average_in_frequency(
     spectrum: [list, np.ndarray],
     freq: [list, np.ndarray, None] = None,
     weights: [list, np.ndarray, None] = None,
     resolution: [float, None] = None,
     n_samples: [int, None] = None,
+    axis: int = -1,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Average a spectrum, with weights, in frequency.
 
@@ -221,6 +62,8 @@ def average_in_frequency(
     n_samples : int, optional
         The number of samples to average into each frequency bin. Used only if
         ``resolution`` is not provided. By default, averages all frequencies.
+    axis : int, optional
+        The axis along which to do the binning.
 
     Returns
     -------
@@ -247,15 +90,18 @@ def average_in_frequency(
     [1, 1, 1, 1, 1]
 
     """
-    if resolution is not None:
-        n_samples = int((freq[1] - freq[0]) / resolution)
+    if axis < 0:
+        axis += spectrum.ndim
 
-    if resolution or n_samples and freq is None:
+    if resolution is not None:
+        n_samples = max(int(resolution / (freq[1] - freq[0])), 1)
+        print(freq[1] - freq[0], resolution, n_samples)
+    if (resolution or n_samples) and freq is None:
         raise ValueError(
             "You must provide freq if resolution or n_samples is provided!"
         )
 
-    nf = len(spectrum)
+    nf = spectrum.shape[axis]
 
     if resolution is None and n_samples is None:
         n_samples = nf
@@ -264,38 +110,48 @@ def average_in_frequency(
         freq = np.ones(nf)
 
     if weights is None:
-        weights = np.ones(weights)
+        weights = np.ones_like(spectrum)
 
     mod = nf % n_samples
     if mod:
-        last_f = freq[-mod:]
-        last_s = spectrum[-mod:]
-        last_w = weights[-mod:]
+        rng = range(-mod, -1)
+        last_f = freq[rng]
+        last_s = spectrum.take(rng, axis=axis)
+        last_w = weights.take(rng, axis=axis)
 
-    f = freq[: nf // n_samples]
-    s = spectrum[: nf // n_samples]
-    w = weights[: nf // n_samples]
+        ss, ww = weighted_mean(last_s, last_w, axis=axis)
+        last_std = weighted_standard_deviation(
+            np.expand_dims(ss, axis), last_s, std=np.sqrt(1 / last_w), axis=axis
+        )
+        last_s = ss
+        last_w = ww
 
+    print("mod: ", mod)
+
+    rng = range(nf - mod)
+    # Get the main part of the array (without trailing bin)
+    f = freq[rng]
+    s = spectrum.take(rng, axis=axis)
+    w = weights.take(rng, axis=axis)
+
+    # Reshape the array so that the binning axis is split.
     f = np.reshape(f, (-1, n_samples))
-    s = np.reshape(s, (-1, n_samples))
-    w = np.reshape(w, (-1, n_samples))
+    s = np.reshape(s, s.shape[:axis] + (-1, n_samples) + s.shape[(axis + 1) :])
+    w = np.reshape(w, w.shape[:axis] + (-1, n_samples) + w.shape[(axis + 1) :])
 
     f = np.mean(f, axis=1)
-    s_tmp, w_tmp = weighted_mean(s, weights=w, axis=1)
+    s_tmp, w_tmp = weighted_mean(s, w, axis=axis + 1)
     std = weighted_standard_deviation(
-        np.atleast_2d(s_tmp), s, std=np.sqrt(1 / w), axis=-1
+        np.expand_dims(s_tmp, axis + 1), s, std=np.sqrt(1 / w), axis=axis + 1
     )
     s = s_tmp
     w = w_tmp
 
     if mod:
-        f = np.concatenate((f, np.mean(last_f)))
-        ss, ww = weighted_mean(last_s, last_w)
-        s = np.concatenate((s, ss))
-        w = np.concatenate((w, ww))
-        std = np.concatenate(
-            (std, weighted_standard_deviation(ss, last_s, std=np.sqrt(1 / ww)))
-        )
+        f = np.concatenate((f, [np.mean(last_f)]))
+        s = np.concatenate((s, np.expand_dims(last_s, axis)), axis=axis)
+        w = np.concatenate((w, np.expand_dims(last_w, axis)), axis=axis)
+        std = np.concatenate((std, np.expand_dims(last_std, axis)), axis=axis)
 
     return f, s, w, std
 
@@ -323,7 +179,9 @@ def weighted_mean(data, weights, axis=0):
     sum = np.sum(data * weights, axis=axis)
     weights = np.sum(weights, axis=axis)
 
-    av = np.where(weights > 0, sum / weights, 0)
+    av = np.zeros_like(sum)
+    mask = weights > 0
+    av[mask] = sum[mask] / weights[mask]
     return av, weights
 
 

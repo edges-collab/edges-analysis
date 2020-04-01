@@ -1,0 +1,12 @@
+gha_edges: [[0,1], [1,2], [2,3], [3,4], [4,5], [5,6], [6,7], [7,8], [8,9], [9, 10], [10, 11]]
+sun_el_max: 0
+moon_el_max: 0
+ambient_humidity_max: 40
+min_receiver_temp: 0
+max_receiver_temp: 100
+n_sigma_rms: 3
+rfi_window_size: 3
+n_poly_rfi: 2
+n_bootstrap_rfi: 20
+n_sigma_rfi: 3.5
+rms_filter_file: null

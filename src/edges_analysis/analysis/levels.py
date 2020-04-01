@@ -1,8 +1,10 @@
 from os.path import dirname, basename
+import os
 from typing import Tuple, Optional, Sequence, List, Union
 from functools import lru_cache
 import sys
 import glob
+import yaml
 
 import numpy as np
 from edges_cal import (
@@ -51,7 +53,7 @@ class _Level(io.HDF5Object):
     }
 
     @classmethod
-    def from_previous_level(cls, prev_level, filename=None, **kwargs):
+    def from_previous_level(cls, prev_level, filename=None, clobber=False, **kwargs):
         _prev_level = int(cls.__name__[-1]) - 1
         if _prev_level:
             _prev_level = getattr(sys.modules[__name__], f"Level{_prev_level}")
@@ -69,12 +71,18 @@ class _Level(io.HDF5Object):
             else:
                 prev_level = _prev_level(prev_level)
 
+        freq, data, ancillary, meta = cls._from_prev_level(prev_level, **kwargs)
+
+        if clobber and Path(filename).exists():
+            os.remove(filename)
+
         out = cls.from_data(
-            cls._from_prev_level(prev_level, **kwargs), filename=filename
+            {"frequency": freq, "spectra": data, "ancillary": ancillary, "meta": meta},
         )
 
         if filename:
-            out.write()
+            out.write(filename)
+
         return out
 
     @classmethod
@@ -188,7 +196,7 @@ class Level1(_Level):
 
         time_based_anc = tools.join_struct_arrays((time_based_anc, new_anc))
 
-        s11_path = Path(s11_path)
+        s11_path = Path(s11_path).expanduser()
         if not s11_path.is_absolute():
             s11_path = Path(config["paths"]["raw_field_data"]) / s11_path
 
@@ -208,7 +216,7 @@ class Level1(_Level):
             spectrum=Q,
             frequencies=ancillary.frequencies,
             band=band,
-            calfile=calfile,
+            calfile=Path(calfile).expanduser(),
             ambient_temp=time_based_anc["ambient_temp"],
             lst=time_based_anc["lst"],
             s11_path=s11_path,
@@ -381,8 +389,8 @@ class Level1(_Level):
         time_based_anc["moon_el"] = moon[:, 1]
 
         meta = {
-            "thermlog_file": thermlog_file.absolute(),
-            "weather_file": weather_file.absolute(),
+            "thermlog_file": str(thermlog_file.absolute()),
+            "weather_file": str(weather_file.absolute()),
         }
         return time_based_anc, meta
 
@@ -459,19 +467,21 @@ class Level1(_Level):
             calfile = Calibration(calfile)
 
         meta = {
-            "s11_path": Path(s11_path).absolute(),
+            "s11_path": str(Path(s11_path).absolute()),
             "antenna_s11_n_terms": antenna_s11_n_terms,
             "antenna_correction": antenna_correction,
             "balun_correction": balun_correction,
             "ground_correction": ground_correction,
-            "beam_file": beam_file,
+            "beam_file": str(Path(beam_file).absolute())
+            if beam_file is not None
+            else "",
             "f_low": f_low,
             "f_high": f_high,
             "n_poly_xrfi": n_fg,
             "wterms": calfile.wterms,
             "cterms": calfile.cterms,
             "calfile": calfile.path,
-            "switch_state_dir": switch_state_dir,
+            "switch_state_dir": str(Path(switch_state_dir).absolute()),
             "switch_state_run_num": switch_state_run_num,
         }
 
@@ -727,6 +737,18 @@ class Level2(_Level):
         Containing all input parameters, and the number of files used.
     """
 
+    _structure = {
+        "frequency": None,
+        "spectra": {"weights": None, "spectrum": None,},
+        "ancillary": {
+            "n_total_times_per_file": None,
+            "years": None,
+            "days": None,
+            "hours": None,
+        },
+        "meta": None,
+    }
+
     @classmethod
     def _from_prev_level(
         cls,
@@ -779,8 +801,8 @@ class Level2(_Level):
                 gha=l1.ancillary["gha"],
                 sun_el=l1.ancillary["sun_el"],
                 moon_el=l1.ancillary["moon_el"],
-                humidity=l1.ancillary["ambient_humidity"],
-                receiver_temp=l1.ancillary["receiver1_temp"],
+                humidity=l1.ancillary["ambient_hum"],
+                receiver_temp=l1.ancillary["receiver_temp"],
                 sun_el_max=sun_el_max,
                 moon_el_max=moon_el_max,
                 amb_hum_max=ambient_humidity_max,
@@ -817,16 +839,16 @@ class Level2(_Level):
                             l1.spectrum[:, l1.raw_frequencies <= l1.freq.center],
                             l1.weights[:, l1.raw_frequencies <= l1.freq.center],
                             axis=1,
-                        ),
+                        )[0],
                         tools.weighted_mean(
                             l1.spectrum[:, l1.raw_frequencies >= l1.freq.center],
                             l1.weights[:, l1.raw_frequencies >= l1.freq.center],
                             axis=1,
-                        ),
-                        tools.weighted_mean(l1.spectrum, l1.weights, axis=1),
+                        )[0],
+                        tools.weighted_mean(l1.spectrum, l1.weights, axis=1)[0],
                     ]
                 ),
-                flags=l1.weights.astype("bool"),
+                flags=np.sum(l1.weights, axis=1).astype("bool"),
             )
             l1.weights[flags] = 0
 
@@ -879,6 +901,16 @@ class Level2(_Level):
 
 
 class Level3(_Level):
+    _structure = {
+        "frequency": None,
+        "spectra": {
+            "weights": None,
+            "spectrum": None,
+        },  # All spectra components assumed to be the same shape, with last axis being frequency.
+        "ancillary": {"std_dev": None, "years": None},
+        "meta": None,
+    }
+
     @classmethod
     def _from_prev_level(
         cls,
@@ -888,9 +920,10 @@ class Level3(_Level):
         f_low: Optional[float] = None,
         f_high: Optional[float] = None,
         freq_resolution: Optional[float] = None,
+        gha_filter_file: [None, str, Path] = None,
     ):
         """
-        Convert a level4 to a level5.
+        Convert a level3 to a level3.
 
         This step integrates over days to form a spectrum as a function of GHA and
         frequency. It also applies an optional further frequency averaging.
@@ -928,29 +961,47 @@ class Level3(_Level):
             * ``ignore_days``: The user-specified list of explicit days ignored in the
               integration.
         """
-        meta = {"day_range": day_range, "ignore_days": ignore_days, **level2.meta}
 
         # Compute the residuals
-        spec, wght = [], []
         days = level2.ancillary["days"]
         freq = FrequencyRange(level2.raw_frequencies, f_low=f_low, f_high=f_high)
 
         if day_range is None:
             day_range = (days.min(), days.max())
 
-        for i, (low, high) in enumerate(level2.meta["gha_edges"]):
-            gha_range = range(int(np.floor(low)), int(np.floor(high)))
+        if ignore_days is None:
+            ignore_days = []
 
-            good_days = [
-                filters.filter_explicit_gha(gha, *day_range) for gha in gha_range
-            ]
-            for j, day in enumerate(days):
-                if all(day in g for g in good_days) and day not in ignore_days:
-                    spec.append(level2.spectrum[j, i, freq.mask])
-                    wght.append(level2.weights[j, i, freq.mask])
+        if gha_filter_file:
+            with open(gha_filter_file, "r") as fl:
+                # gha filter is a dict of {gha: days} specifying a list of days to
+                # *keep* for each GHA.
+                gha_filter = yaml.load(fl, Loader=yaml.FullLoader)
 
-        spec, wght = tools.weighted_mean(spec, wght, axis=0)
+            spec, wght = [], []
+            for i, (low, high) in enumerate(level2.meta["gha_edges"]):
+                gha_range = range(int(np.floor(low)), int(np.floor(high)))
 
+                # a list of lists of good days for all integer GHA in this range.
+                good_days = [gha_filter[gha] for gha in gha_range]
+
+                for j, day in enumerate(days):
+                    if all(day in g for g in good_days) and day not in ignore_days:
+                        spec.append(level2.spectrum[j, i, freq.mask])
+                        wght.append(level2.weights[j, i, freq.mask])
+
+            spec = np.array(spec)
+            wght = np.array(wght)
+
+        else:
+            spec = level2.spectrum[:, :, freq.mask]
+            wght = level2.weights[:, :, freq.mask]
+
+        print("before weighted mean: ", spec, wght)
+
+        spec, wght = tools.weighted_mean(np.array(spec), np.array(wght), axis=0)
+
+        print("before freq res: ", spec, wght)
         if freq_resolution:
             f, p, w, s = tools.average_in_frequency(
                 spec, freq.freq, weights=wght, resolution=freq_resolution
@@ -967,6 +1018,12 @@ class Level3(_Level):
         }
 
         ancillary = {"std_dev": s, "years": np.unique(level2.ancillary["years"])}
+        meta = {
+            "day_range": day_range,
+            "ignore_days": ignore_days,
+            "gha_filter_file": gha_filter_file or "",
+            **level2.meta,
+        }
 
         return f, data, ancillary, meta
 
@@ -1005,6 +1062,16 @@ class Level4(_Level):
         * ``ignore_freq_ranges``: the list of ignored frequency ranges in the object.
     """
 
+    _structure = {
+        "frequency": None,
+        "spectra": {
+            "weights": None,
+            "spectrum": None,
+        },  # All spectra components assumed to be the same shape, with last axis being frequency.
+        "ancillary": {"std_dev": None,},
+        "meta": None,
+    }
+
     @classmethod
     def _from_prev_level(
         cls,
@@ -1019,23 +1086,25 @@ class Level4(_Level):
 
         freq = FrequencyRange(level3.raw_frequencies, f_low=f_low, f_high=f_high)
 
-        spec = level3.spectrum[freq.mask]
-        wght = level3.weights[freq.mask]
+        spec = level3.spectrum[:, freq.mask]
+        wght = level3.weights[:, freq.mask]
 
         # Another round of XRFI
-        flags = rfi.xrfi_poly_filter(
-            spec,
-            wght,
-            window_width=int(3 / level3.freq.df),
-            n_poly=2,
-            n_bootstrap=20,
-            n_sigma=3,
-        )
-        wght[flags] = 0
+        for s, w in zip(spec, wght):
+            if np.any(w > 0):
+                flags = rfi.xrfi_poly_filter(
+                    s,
+                    w,
+                    window_width=int(3 / level3.freq.df),
+                    n_poly=2,
+                    n_bootstrap=20,
+                    n_sigma=3,
+                )
+                w[flags] = 0
 
         if ignore_freq_ranges:
             for (low, high) in ignore_freq_ranges:
-                wght[(freq.freq >= low) & (freq.freq <= high)] = 0
+                wght[:, (freq.freq >= low) & (freq.freq <= high)] = 0
 
         if freq_resolution:
             f, spec, wght, s = tools.average_in_frequency(
@@ -1045,7 +1114,7 @@ class Level4(_Level):
             f = freq.freq
             s = level3.ancillary["std_dev"]
 
-        spec, wght = tools.weighted_mean(spec, weights=wght, axis=0)
+        spec, wght = tools.weighted_mean(spec, wght, axis=0)
 
         data = {"spectrum": spec, "weights": wght}
 

@@ -1,0 +1,4 @@
+f_low: 60.0
+f_high: 120.0
+ignore_freq_ranges: null
+freq_resolution: 0.5

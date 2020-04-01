@@ -140,7 +140,10 @@ def total_power_filter(gha, total_power, flags=None):
     n_poly = 3
     n_sigma = 3
 
-    assert total_power.shape == (3, len(gha))
+    assert total_power.shape == (
+        3,
+        len(gha),
+    ), f"total_power has shape {total_power.shape}"
     if flags is None:
         flags = np.zeros(len(gha), dtype=bool)
 
@@ -155,15 +158,11 @@ def total_power_filter(gha, total_power, flags=None):
             this_flags = flags[mask]
 
             this_tp = tpi[mask]
-            # this_indx = indices[mask]
 
             # If enough data points available per hour
             lx = len(this_flags) - np.sum(this_flags)
 
             if lx <= 10:
-                warnings.warn(
-                    f"GHA {i} didn't have enough unflagged data to do a total-power filter."
-                )
                 continue
 
             nflags = -1
@@ -172,28 +171,26 @@ def total_power_filter(gha, total_power, flags=None):
                 nflags = np.sum(this_flags)
 
                 res, std = _get_model_residual_iter(
-                    n_poly, this_gha, this_tp, weights=(~this_flags).astype("float")
+                    n_poly, this_gha, this_tp, this_flags
                 )
 
                 if std <= std_threshold:
-                    flags |= np.abs(res) > n_sigma * std
+                    this_flags |= np.abs(res) > n_sigma * std
                 else:
-                    flags |= np.abs(res) > std
+                    this_flags |= np.abs(res) > std
 
     return flags
 
 
-def _get_model_residual_iter(n_poly, this_gha, this_tp, weights=None):
-
-    if weights:
-        mask = weights > 0
-        this_gha = this_gha[mask]
-        this_tp = this_tp[mask]
+def _get_model_residual_iter(n_poly, gha, tp, flags=None):
+    if flags is not None:
+        this_gha = gha[~flags]
+        this_tp = tp[~flags]
 
     par = np.polyfit(this_gha, this_tp, n_poly - 1)
-    model = np.polyval(par, this_gha)
-    res = this_tp - model
-    std = np.std(res)
+    model = np.polyval(par, gha)
+    res = tp - model
+    std = np.std(res[~flags])
 
     return res, std
 
@@ -271,13 +268,13 @@ def time_filter_auxiliary(
 ):
     flags = np.zeros(len(gha), dtype=bool)
 
-    flags |= gha < gha_range[0] | gha >= gha_range[1]
+    flags |= (gha < gha_range[0]) | (gha >= gha_range[1])
 
     # Sun elevation, Moon elevation, ambient humidity, and receiver temperature
     flags |= sun_el > sun_el_max
     flags |= moon_el > moon_el_max
     flags |= humidity > amb_hum_max
-    flags |= receiver_temp >= min_receiver_temp & receiver_temp <= max_receiver_temp
+    flags |= (receiver_temp >= min_receiver_temp) & (receiver_temp <= max_receiver_temp)
 
     return flags
 
