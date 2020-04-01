@@ -95,7 +95,7 @@ def average_in_frequency(
 
     if resolution is not None:
         n_samples = max(int(resolution / (freq[1] - freq[0])), 1)
-        print(freq[1] - freq[0], resolution, n_samples)
+
     if (resolution or n_samples) and freq is None:
         raise ValueError(
             "You must provide freq if resolution or n_samples is provided!"
@@ -125,8 +125,6 @@ def average_in_frequency(
         )
         last_s = ss
         last_w = ww
-
-    print("mod: ", mod)
 
     rng = range(nf - mod)
     # Get the main part of the array (without trailing bin)
