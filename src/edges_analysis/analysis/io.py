@@ -1,8 +1,10 @@
-import numpy as np
 import h5py
 import attr
 from pathlib import Path
 import contextlib
+from datetime import datetime
+
+from .. import __version__
 
 
 @attr.s
@@ -136,6 +138,16 @@ class HDF5Object:
         for k, v in self._structure.items():
             self[k]
 
+    @classmethod
+    def _get_extra_meta(cls):
+        return {
+            "time_of_analysis": datetime.now().strftime(
+                datetime.now().strftime("%Y-%M-%D:%H:%M:%S")
+            ),
+            "edges_analysis_version": __version__,
+            "object_name": cls.__name__,
+        }
+
     def write(self, filename=None, clobber=False):
         if filename is None and self.filename is None:
             raise ValueError(
@@ -174,8 +186,11 @@ class HDF5Object:
                         f"allowed in HDF5."
                     )
 
+        to_write = self.__memcache__
+        to_write["meta"].update(self._get_extra_meta())
+
         with h5py.File(filename, "w") as fl:
-            _write(fl, self._structure, self.__memcache__)
+            _write(fl, self._structure, to_write)
 
     @classmethod
     def check(cls, filename, false_if_extra=None, false_if_absent=None):

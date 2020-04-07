@@ -5,6 +5,7 @@ from functools import lru_cache
 import sys
 import glob
 import yaml
+import matplotlib.pyplot as plt
 
 import numpy as np
 from edges_cal import (
@@ -172,9 +173,17 @@ class Level1(_Level):
         weather_file=None,
         thermlog_file=None,
         out_file=None,
+        progress=True,
+        leave_progress=True,
         **cal_kwargs,
     ):
-        Q, p, ancillary = decode_file(filename, write_formats=[], meta=True)
+        Q, p, ancillary = decode_file(
+            filename,
+            write_formats=[],
+            meta=True,
+            progress=progress,
+            leave_progress=leave_progress,
+        )
 
         # TODO: weights from data drops?
 
@@ -253,7 +262,7 @@ class Level1(_Level):
     @property
     def raw_time_data(self):
         """Raw string times at which the spectra were taken."""
-        return self.ancillary["times"]
+        return self.ancillary["time"]
 
     @cached_property
     def datetimes(self):
@@ -415,7 +424,7 @@ class Level1(_Level):
         f_high: float = 150,
         n_fg=7,
         switch_state_run_num=None,
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, dict]:
+    ) -> Tuple[np.ndarray, FrequencyRange, np.ndarray, dict]:
         """
         Calibrate data.
 
@@ -630,11 +639,9 @@ class Level1(_Level):
         f, s, w = self.frequency_average_spectrum(indx, resolution)[:3]
 
         freq = FrequencyRange(f)
-        params = mdl.fit_polynomial_fourier(
-            model, freq.freq_recentred, s, n_terms, Weights=w
-        )[0]
+        model = mdl.ModelFit(model, freq.freq_recentred, s, weights=w, n_terms=n_terms)
 
-        return lambda nu: mdl.model_evaluate(model, params, freq.normalize(nu))
+        return lambda nu: model.evaluate(freq.normalize(nu))
 
     @lru_cache()
     def get_model_rms(
@@ -666,6 +673,9 @@ class Level1(_Level):
             return np.sqrt(
                 np.sum((resid[self.weights > 0]) ** 2) / np.sum(self.weights > 0)
             )
+
+    def plot_waterfall(self, quantity="spectrum"):
+        pass
 
 
 class Level2(_Level):
@@ -753,7 +763,9 @@ class Level2(_Level):
     def _from_prev_level(
         cls,
         level1: List[Level1],
-        gha_edges: Sequence[Tuple[float, float]],
+        gha_min: float = 0.0,
+        gha_max: float = 24.0,
+        gha_bin_size: float = 0.1,
         sun_el_max: float = 0,
         moon_el_max: float = 0,
         ambient_humidity_max: float = 40,
@@ -767,9 +779,19 @@ class Level2(_Level):
         rms_filter_file: [None, Path, str] = None,
     ):
 
+        if gha_min < 0 or gha_min > 24 or gha_min >= gha_max:
+            raise ValueError("gha_min must be between 0 and 24")
+
+        if gha_max < 0 or gha_max > 24:
+            raise ValueError("gha_max must be between 0 and 24")
+
+        gha_edges = np.arange(gha_min, gha_max, gha_bin_size)
+
         meta = {
             "n_files": len(level1),
-            "gha_edges": gha_edges,
+            "gha_min": gha_min,
+            "gha_max": gha_max,
+            "gha_bin_size": gha_bin_size,
             "sun_el_max": sun_el_max,
             "moon_el_max": moon_el_max,
             "ambient_humidity_max": ambient_humidity_max,
@@ -853,15 +875,15 @@ class Level2(_Level):
             l1.weights[flags] = 0
 
         # Averaging data within GHA bins
-        weights = np.zeros((len(level1), len(gha_edges), level1[0].freq.n))
-        spectra = np.zeros((len(level1), len(gha_edges), level1[0].freq.n))
+        weights = np.zeros((len(level1), len(gha_edges) - 1, level1[0].freq.n))
+        spectra = np.zeros((len(level1), len(gha_edges) - 1, level1[0].freq.n))
 
         for i, l1 in enumerate(level1):
             gha = l1.ancillary["gha"]
 
-            for j, (gha_low, gha_high) in enumerate(gha_edges):
+            for j, gha_low in enumerate(gha_edges[:-1]):
 
-                mask = (gha >= gha_low) & (gha < gha_high)
+                mask = (gha >= gha_low) & (gha < gha_edges[j + 1])
                 spec = l1.spectrum[mask]
                 wght = l1.weights[mask]
 
@@ -895,6 +917,7 @@ class Level2(_Level):
             "years": years,
             "days": days,
             "hours": hours,
+            "gha_edges": gha_edges,
         }
 
         return level1[0].raw_frequencies, data, ancillary, meta
@@ -979,7 +1002,8 @@ class Level3(_Level):
                 gha_filter = yaml.load(fl, Loader=yaml.FullLoader)
 
             spec, wght = [], []
-            for i, (low, high) in enumerate(level2.meta["gha_edges"]):
+            gha_edges = level2.ancillary["gha_edges"]
+            for i, (low, high) in enumerate(zip(gha_edges[:-1], gha_edges[1:])):
                 gha_range = range(int(np.floor(low)), int(np.floor(high)))
 
                 # a list of lists of good days for all integer GHA in this range.
@@ -997,11 +1021,8 @@ class Level3(_Level):
             spec = level2.spectrum[:, :, freq.mask]
             wght = level2.weights[:, :, freq.mask]
 
-        print("before weighted mean: ", spec, wght)
-
         spec, wght = tools.weighted_mean(np.array(spec), np.array(wght), axis=0)
 
-        print("before freq res: ", spec, wght)
         if freq_resolution:
             f, p, w, s = tools.average_in_frequency(
                 spec, freq.freq, weights=wght, resolution=freq_resolution

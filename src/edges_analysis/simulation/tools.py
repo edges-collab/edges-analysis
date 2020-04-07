@@ -92,13 +92,11 @@ def residuals_of_simulations(case, name_flag, n_fg=5, f_low=60, f_high=150, plot
         avt = np.mean(tx, axis=0)
         avb = np.mean(bx, axis=0)
 
-        pc = mdl.fit_polynomial_fourier("LINLOG", fc / 200, avt, n_fg)
-        mc = mdl.model_evaluate("LINLOG", pc[0], fc / 200)
+        mc = mdl.ModelFit("linlog", fc / 200, avt, n_terms=n_fg).evaluate()
         rc = avt - mc
         res[i, :] = rc
 
-        pc = mdl.fit_polynomial_fourier("LINLOG", fc / 200, avb, n_fg)
-        mbc = mdl.model_evaluate("LINLOG", pc[0], fc / 200)
+        mbc = mdl.ModelFit("linlog", fc / 200, avb, n_terms=n_fg).evaluate()
         rbc = avb - mbc
         resb[i, :] = rbc
 

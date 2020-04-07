@@ -68,7 +68,7 @@ def balun_and_connector_loss(
     e0 = 1 / (u0 * c ** 2)  # permittivity of free space
 
     parameters = {
-        "low_band3": {
+        "low3": {
             "balun_length": 43.6,
             "connector_length": 0.8,
             "er_air": 1.07,
@@ -76,7 +76,7 @@ def balun_and_connector_loss(
             "roc_b": ((3 / 4) * inch2m) / 2,
             "roc_c": (0.16 * inch2m) / 2,
         },
-        "mid_band": {
+        "mid": {
             "balun_length": 35,  # inches
             "connector_length": 0.03 / inch2m,
             "er_air": 1.2,

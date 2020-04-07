@@ -24,8 +24,9 @@ def spectrum_fit(f, t, w, n_poly=5, f1_low=60, f1_high=65, f2_low=95, f2_high=14
     tc = t[((f >= f1_low) & (f <= f1_high)) | ((f >= f2_low) & (f <= f2_high))]
     wc = w[((f >= f1_low) & (f <= f1_high)) | ((f >= f2_low) & (f <= f2_high))]
 
-    pc = mdl.fit_polynomial_fourier("LINLOG", fc / 200, tc, n_poly, Weights=wc)
-    m = mdl.model_evaluate("LINLOG", pc[0], f / 200)
+    m = mdl.ModelFit("linlog", fc / 200, tc, weights=wc, n_terms=n_poly).evaluate(
+        f / 200
+    )
     r = t - m
 
     return f, r
