@@ -110,7 +110,7 @@ then if you pass a directory (either via the `-L` or `-i`) it must include only 
 You may specify a single file by combining `-L` and `-i`, eg.:
 
 ```bash
-edges-analysis level 3 example_level2_settings.yaml -i my_unique_filename.h5 -L example_level2_settings.yaml
+edges-analysis level 3 example_level3_settings.yaml -i my_unique_filename.h5 -L example_level2_settings.yaml
 ```
 
 This will automatically search the default cache location for Level2, and pick the file
