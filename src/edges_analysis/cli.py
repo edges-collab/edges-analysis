@@ -54,13 +54,13 @@ def _get_input_files(level, path, label, allow_many=False):
     return []
 
 
-def _get_all_files(pth: Path):
+def _get_all_files(pth: Path, filter=h5py.is_hdf5):
     if pth.is_file():
         return [pth]
     elif pth.is_dir():
-        return [fl for fl in pth.glob("*.h5") if h5py.is_hdf5(fl)]
+        return [fl for fl in pth.glob("*.h5") if filter(fl)]
     else:
-        return [Path(fl) for fl in glob.glob(str(pth)) if h5py.is_hdf5(fl)]
+        return [Path(fl) for fl in glob.glob(str(pth)) if filter(fl)]
 
 
 def _get_unique_file(pth):
@@ -70,9 +70,8 @@ def _get_unique_file(pth):
     return files[0]
 
 
-def _get_files(pth: Path):
-    files = _get_all_files(pth)
-    print(files)
+def _get_files(pth: Path, filter=h5py.is_hdf5):
+    files = _get_all_files(pth, filter)
     if not files:
         raise ValueError
 
@@ -122,7 +121,7 @@ def calibrate(settings, path, label, prefix, message, clobber):
     files = []
     for pth in [path, root / path, root_data / path]:
         try:
-            files = _get_files(pth)
+            files = _get_files(pth, filter=lambda x: True)
             break
         except ValueError:
             pass

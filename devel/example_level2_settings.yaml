@@ -1,7 +1,7 @@
 gha_bin_size: 0.5
 sun_el_max: 0
-moon_el_max: 0
-ambient_humidity_max: 40
+moon_el_max: 50
+ambient_humidity_max: 80
 min_receiver_temp: 0
 max_receiver_temp: 100
 n_sigma_rms: 3
@@ -10,3 +10,4 @@ n_poly_rfi: 2
 n_bootstrap_rfi: 20
 n_sigma_rfi: 3.5
 rms_filter_file: null
+do_total_power_filter: false

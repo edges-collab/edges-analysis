@@ -237,9 +237,9 @@ class Level1(_Level):
         data = {
             "frequency": freq.freq,
             "spectrum": calspec,
-            "switch_powers": p,
+            "switch_powers": [pp[:, freq.mask] for pp in p],
             "weights": weights,
-            "Q": Q,
+            "Q": Q[:, freq.mask],
         }
 
         if out_file is None:
@@ -674,8 +674,89 @@ class Level1(_Level):
                 np.sum((resid[self.weights > 0]) ** 2) / np.sum(self.weights > 0)
             )
 
-    def plot_waterfall(self, quantity="spectrum"):
-        pass
+    def plot_waterfall(
+        self, quantity: str = "spectrum", ax: [None, plt.Axes] = None, cbar=True
+    ):
+        if quantity in ["p0", "p1", "p2"]:
+            q = self.spectra["switch_powers"][int(quantity[-1])]
+        else:
+            q = self.spectra[quantity]
+
+        if ax is not None:
+            fig = ax.figure
+        else:
+            fig, ax = plt.subplots(1, 1)
+
+        img = ax.imshow(
+            q,
+            extent=(
+                self.raw_frequencies.min(),
+                self.raw_frequencies.max(),
+                self.ancillary["seconds"].min(),
+                self.ancillary["seconds"].max(),
+            ),
+            aspect="auto",
+        )
+        if cbar:
+            cb = plt.colorbar(img, ax=ax)
+            cb.set_label(quantity)
+
+        return ax
+
+    def plot_waterfalls(self, quanties="all"):
+        if quanties == "all":
+            quanties = ["spectrum", "Q", "weights", "p0", "p1", "p2"]
+
+        fig, ax = plt.subplots(
+            len(quanties),
+            1,
+            sharex=True,
+            sharey=True,
+            figsize=(10, 10),
+            gridspec_kw={"hspace": 0.05, "wspace": 0.05},
+        )
+
+        for i, (q, axx) in enumerate(zip(quanties, ax)):
+            self.plot_waterfall(q, ax=axx)
+
+        return fig, ax
+
+    def plot_time_averaged_spectrum(
+        self,
+        quantity="spectrum",
+        integrator="mean",
+        ax: [None, plt.Axes] = None,
+        logy=True,
+    ):
+        if quantity in ["p0", "p1", "p2"]:
+            q = self.spectra["switch_powers"][int(quantity[-1])]
+        else:
+            q = self.spectra[quantity]
+
+        if ax is not None:
+            fig = ax.figure
+        else:
+            fig, ax = plt.subplots(1, 1)
+
+        if integrator == "mean":
+            q, w = tools.weighted_mean(q, weights=self.weights, axis=0)
+            q[w == 0] = np.nan
+        elif integrator == "median":
+            q[self.weights == 0] = np.nan
+            q = np.nanmedian(q, axis=0)
+
+        unit = "[K]"
+        if quantity == "Q":
+            unit = ""
+
+        ax.plot(self.raw_frequencies, q)
+        ax.set_xlabel("Frequency [MHz]")
+        ax.set_ylabel(f"{quantity} {unit}")
+
+        if logy:
+            ax.set_yscale("log")
+
+        return ax
 
 
 class Level2(_Level):
@@ -777,6 +858,7 @@ class Level2(_Level):
         n_bootstrap_rfi: int = 20,
         n_sigma_rfi: float = 3.5,
         rms_filter_file: [None, Path, str] = None,
+        do_total_power_filter: bool = True,
     ):
 
         if gha_min < 0 or gha_min > 24 or gha_min >= gha_max:
@@ -786,6 +868,8 @@ class Level2(_Level):
             raise ValueError("gha_max must be between 0 and 24")
 
         gha_edges = np.arange(gha_min, gha_max, gha_bin_size)
+        if np.isclose(gha_max, gha_edges.max() + gha_bin_size):
+            gha_edges = np.concatenate((gha_edges, [gha_edges.max() + gha_bin_size]))
 
         meta = {
             "n_files": len(level1),
@@ -832,6 +916,10 @@ class Level2(_Level):
                 max_receiver_temp=max_receiver_temp,
             )
             l1.weights[flags] = 0
+            if np.sum(l1.weights) == 0:
+                print(
+                    f"File {l1.filename.name} has been completely filtered by its aux data."
+                )
 
         # Apply RMS filter.
         if rms_filter_file:
@@ -849,30 +937,31 @@ class Level2(_Level):
                 )
                 l1.weights[flags] = 0
 
-        for i, l1 in enumerate(level1):
-            # Applying total-power filter
-            # TODO: this filter should be removed/reworked -- it uses arbitrary numbers.
-            # TODO: it at *least* should be done on the mean, not the sum.
-            flags = filters.total_power_filter(
-                l1.ancillary["gha"],
-                np.array(
-                    [
-                        tools.weighted_mean(
-                            l1.spectrum[:, l1.raw_frequencies <= l1.freq.center],
-                            l1.weights[:, l1.raw_frequencies <= l1.freq.center],
-                            axis=1,
-                        )[0],
-                        tools.weighted_mean(
-                            l1.spectrum[:, l1.raw_frequencies >= l1.freq.center],
-                            l1.weights[:, l1.raw_frequencies >= l1.freq.center],
-                            axis=1,
-                        )[0],
-                        tools.weighted_mean(l1.spectrum, l1.weights, axis=1)[0],
-                    ]
-                ),
-                flags=np.sum(l1.weights, axis=1).astype("bool"),
-            )
-            l1.weights[flags] = 0
+        if do_total_power_filter:
+            for i, l1 in enumerate(level1):
+                # Applying total-power filter
+                # TODO: this filter should be removed/reworked -- it uses arbitrary numbers.
+                # TODO: it at *least* should be done on the mean, not the sum.
+                flags = filters.total_power_filter(
+                    l1.ancillary["gha"],
+                    np.array(
+                        [
+                            tools.weighted_mean(
+                                l1.spectrum[:, l1.raw_frequencies <= l1.freq.center],
+                                l1.weights[:, l1.raw_frequencies <= l1.freq.center],
+                                axis=1,
+                            )[0],
+                            tools.weighted_mean(
+                                l1.spectrum[:, l1.raw_frequencies >= l1.freq.center],
+                                l1.weights[:, l1.raw_frequencies >= l1.freq.center],
+                                axis=1,
+                            )[0],
+                            tools.weighted_mean(l1.spectrum, l1.weights, axis=1)[0],
+                        ]
+                    ),
+                    flags=np.sum(l1.weights, axis=1).astype("bool"),
+                )
+                l1.weights[flags] = 0
 
         # Averaging data within GHA bins
         weights = np.zeros((len(level1), len(gha_edges) - 1, level1[0].freq.n))

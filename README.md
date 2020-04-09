@@ -55,7 +55,7 @@ Here is a basic workflow:
 First get some raw data and calibrate it:
 
 ```bash
-edges-analysis calibrate [raw_acq_file.acq] -s devel/example_level1_settings.yaml -m "A simple calibration example"
+edges-analysis calibrate devel/example_level1_settings.yaml [raw_acq_file.acq] -m "A simple calibration example"
 ```
 
 The acq file we provide here can also be a glob pattern, in which case each file matching
@@ -70,31 +70,48 @@ particular calibration (or any other notes).
 The stdout from this function will give the unique label/directory into which the output
 is written.
 
-Onto Level2, in which we combine a set of consistently calibrated files:
-
+The rest of the levels share a unified interface:
 ```bash
-edges-analysis combine [level1_label] -s example_level2_settings.yaml -m "A simple calibration example"
+edges-analysis level LEVEL_NUMBER SETTINGS_FILE [OPTIONS]
 ```
 
-Here, we pass the directory in which the consistently-calibrated files lie. This was
-told us by the previous step. This can be an absolute directory, or if the previous files
-were saved in the default location, it just needs to be the final label.
-
-The message gets written into the HDF5 file itself in this case.
-
-Now Level3:
+A particular useful feature is that by setting the option `-L` (or `--prev-label`),
+we can automatically find the files from the previous step to input.
+For example, Level2, in which we combine a set of consistently calibrated files:
 
 ```bash
-edges-analysis level3 example_level2_settings.yaml -s example_level3_settings.yaml -m "A simple calibration example"
+edges-analysis level 2 example_level2_settings.yaml -L example_level1_settings.yaml
 ```
 
-Note that here instead of a label/directory pointing to the level2 file, we instead
-passed the Level2 settings file. From this file, a unique label is determined and it
-can find the Level2 data. You could instead pass the directory like in the previous
-step.
-
-Finally, Level4:
+Notice that we passed the settings file of Level1 to `-L`: the code knows how to create
+the "unique label" that those settings would generate, and automatically find the files
+in that directory. If you had explicitly set a label in level 1, you should pass that
+to `-L` instead. Alternatively, you can pass an explicit directory in which to search
+for the files to combine (or, for other levels, the one file to process):
 
 ```bash
-edges-analysis level4 example_level3_settings.yaml -s example_level4_settings.yaml -m "A simple calibration example"
+edges-analysis level 2 example_level2_settings.yaml -i /path/to/directory/of/level1
 ```
+
+This is fairly smart: if the path is an absolute directory, it will search there. If not,
+it will first search relative to the current working directory, and then relative to
+the default cache location for the level you're trying to read in, and then relative to
+the root directory of the level cache.
+
+Furthermore, the path can be a glob-style pattern if you wish to only read some certain files,
+eg:
+
+```bash
+edges-analysis level 2 example_level2_settings.yaml -i /path/to/directory/of/level1/2020_076*
+```
+
+If the level you're converting to only allows a single file at a time (eg. Level 3 and 4),
+then if you pass a directory (either via the `-L` or `-i`) it must include only one file.
+You may specify a single file by combining `-L` and `-i`, eg.:
+
+```bash
+edges-analysis level 3 example_level2_settings.yaml -i my_unique_filename.h5 -L example_level2_settings.yaml
+```
+
+This will automatically search the default cache location for Level2, and pick the file
+`my_unique_filename.h5` from that directory.

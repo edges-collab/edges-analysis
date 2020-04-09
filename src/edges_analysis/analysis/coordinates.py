@@ -63,18 +63,15 @@ def sun_moon_azel(lat, lon, utc_array):
     for i, utc in enumerate(utc_array):
         if not isinstance(utc, dt.datetime):
             utc = dt.datetime(*utc)
-        time = apt.Time(utc)
+        time = apt.Time(utc, format="datetime", scale="utc")
 
-        Sun = apc.get_sun(time)
-        Moon = apc.get_moon(time)
+        Sun = apc.get_sun(time).transform_to(apc.AltAz(location=obs_location))
+        Moon = apc.get_moon(time).transform_to(apc.AltAz(location=obs_location))
 
-        Sun = Sun.transform_to(apc.AltAz(location=obs_location))
-        Moon = Moon.transform_to(apc.AltAz(location=obs_location))
-
-        sun[i, 0] = Sun.alt.deg
-        sun[i, 1] = Sun.az.deg
-        moon[i, 0] = Moon.alt.deg
-        moon[i, 1] = Moon.az.deg
+        sun[i, 0] = Sun.az.deg
+        sun[i, 1] = Sun.alt.deg
+        moon[i, 0] = Moon.az.deg
+        moon[i, 1] = Moon.alt.deg
 
     return sun, moon
 

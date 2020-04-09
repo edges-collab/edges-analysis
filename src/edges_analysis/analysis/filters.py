@@ -269,13 +269,11 @@ def time_filter_auxiliary(
     flags = np.zeros(len(gha), dtype=bool)
 
     flags |= (gha < gha_range[0]) | (gha >= gha_range[1])
-
     # Sun elevation, Moon elevation, ambient humidity, and receiver temperature
     flags |= sun_el > sun_el_max
     flags |= moon_el > moon_el_max
     flags |= humidity > amb_hum_max
-    flags |= (receiver_temp >= min_receiver_temp) & (receiver_temp <= max_receiver_temp)
-
+    flags |= (receiver_temp >= max_receiver_temp) | (receiver_temp <= min_receiver_temp)
     return flags
 
 
