@@ -15,6 +15,8 @@ from edges_cal import (
     Calibration,
 )
 from edges_io.auxiliary import auxiliary_data
+from edges_io.logging import logger
+import time
 import attr
 from pathlib import Path
 from cached_property import cached_property
@@ -175,8 +177,10 @@ class Level1(_Level):
         out_file=None,
         progress=True,
         leave_progress=True,
+        xrfi_pipe: [None, dict] = None,
         **cal_kwargs,
     ):
+        t = time.time()
         Q, p, ancillary = decode_file(
             filename,
             write_formats=[],
@@ -184,26 +188,35 @@ class Level1(_Level):
             progress=progress,
             leave_progress=leave_progress,
         )
+        logger.info(f"Time for reading: {time.time() - t:.2f} sec.")
 
         # TODO: weights from data drops?
 
+        logger.info("Converting time strings to datetimes...")
+        t = time.time()
         times = cls.get_datetimes(ancillary.data["time"])
+        logger.info(f"...  finished in {time.time() - t:.2f} sec.")
 
         meta = {
             "year": times[0].year,
             "day": (times[0] - datetime(times[0].year, 1, 1)).days + 1,
             "hour": times[0].hour,
+            "band": band,
+            "xrfi_pipe": xrfi_pipe,
             **ancillary.meta,
         }
 
         time_based_anc = ancillary.data
 
+        logger.info("Getting ancillary weather data...")
+        t = time.time()
         new_anc, new_meta = cls._get_weather_thermlog(
             meta["year"], meta["day"], band, times, weather_file, thermlog_file
         )
         meta = {**meta, **new_meta}
 
         time_based_anc = tools.join_struct_arrays((time_based_anc, new_anc))
+        logger.info(f"... finished in {time.time() - t:.2f} sec.")
 
         s11_path = Path(s11_path).expanduser()
         if not s11_path.is_absolute():
@@ -211,7 +224,7 @@ class Level1(_Level):
 
         if s11_path.is_dir():
             # Get closest measurement
-            fls = glob.glob(str(s11_path) + "/*_input1.s1p")
+            fls = s11_path.glob("*_input1.s1p")
             s11_times = [
                 tools.dt_from_year_day(*[int(x) for x in Path(fl).name.split("_")[:5]])
                 for fl in fls
@@ -221,6 +234,8 @@ class Level1(_Level):
             ]
             s11_path = closest.replace("_input1.s1p", "")
 
+        logger.info("Calibrating data ...")
+        t = time.time()
         calspec, freq, weights, new_meta = cls._calibrate(
             spectrum=Q,
             frequencies=ancillary.frequencies,
@@ -231,6 +246,17 @@ class Level1(_Level):
             s11_path=s11_path,
             **cal_kwargs,
         )
+        logger.info(f"... finished in {time.time() - t:.2f} sec.")
+
+        # RFI cleaning.
+        # We need to do any rfi cleaning desired on the raw powers right here, as in
+        # future levels they are not stored.
+        if xrfi_pipe:
+            logger.info(f"Running xRFI...")
+            t = time.time()
+            for pspec in p:
+                tools.run_xrfi_pipe(pspec, weights, xrfi_pipe)
+            logger.info(f"... finished in {time.time() - t:.2f} sec.")
 
         meta = {**meta, **new_meta}
 
@@ -404,6 +430,33 @@ class Level1(_Level):
         return time_based_anc, meta
 
     @classmethod
+    def _get_antenna_s11(
+        cls, s11_path, freq, switch_state_dir, n_terms, switch_state_run_num
+    ):
+        # Get files
+        s11_files = sorted(glob.glob(str(s11_path) + "_input*.s1p"))
+        return s11m.antenna_s11_remove_delay(
+            s11_files,
+            freq,
+            switch_state_dir=switch_state_dir,
+            delay_0=0.17,
+            n_fit=n_terms,
+            switch_state_run_num=switch_state_run_num,
+        )
+
+    @property
+    def antenna_s11(self):
+        s11_path = self.meta["s11_path"]
+        freq = self.raw_frequencies
+        switch_state_dir = self.meta["switch_state_dir"]
+        switch_state_run_num = self.meta["switch_state_run_num"]
+        n_terms = self.meta["antenna_s11_n_terms"]
+
+        return self._get_antenna_s11(
+            s11_path, freq, switch_state_dir, n_terms, switch_state_run_num
+        )
+
+    @classmethod
     def _calibrate(
         cls,
         spectrum,
@@ -505,18 +558,13 @@ class Level1(_Level):
         Q = spectrum[:, freq.mask]
         weights = weights[:, freq.mask]
 
-        # Antenna S11
-        # Get files
-        s11_files = sorted(glob.glob(s11_path + "_input*.s1p"))
-        s11_ant = s11m.antenna_s11_remove_delay(
-            s11_files,
+        s11_ant = cls._get_antenna_s11(
+            s11_path,
             freq.freq,
-            switch_state_dir=switch_state_dir,
-            delay_0=0.17,
-            n_fit=antenna_s11_n_terms,
-            switch_state_run_num=switch_state_run_num,
+            switch_state_dir,
+            antenna_s11_n_terms,
+            switch_state_run_num,
         )
-
         # Calibrated antenna temperature with losses and beam chromaticity
         calibrated_temp = calfile.calibrate_Q(freq.freq, Q, s11_ant)
 
@@ -552,27 +600,6 @@ class Level1(_Level):
 
             # Remove beam chromaticity
             calibrated_temp /= bf
-
-        # RFI cleaning
-        flags = rfi.xrfi_explicit(
-            freq.freq,
-            rfi_file=Path(dirname(__file__)) / "data" / "known_rfi_channels.yaml",
-        )
-
-        weights[:, flags] = 0
-
-        # RFI cleaning
-        for i, (temp_cal, wi) in enumerate(zip(calibrated_temp, weights)):
-            flags = rfi.xrfi_poly(
-                temp_cal,
-                wi,
-                f_ratio=freq.max / freq.min,
-                n_signal=n_fg,
-                n_resid=5,
-                n_abs_resid_threshold=3.5,
-                max_iter=50,
-            )
-            wi[flags] = 0
 
         return calibrated_temp, freq, weights, meta
 
@@ -853,13 +880,15 @@ class Level2(_Level):
         min_receiver_temp: float = 0,
         max_receiver_temp: float = 100,
         n_sigma_rms: float = 3,
-        rfi_window_size: float = 3,
-        n_poly_rfi: int = 2,
-        n_bootstrap_rfi: int = 20,
-        n_sigma_rfi: float = 3.5,
+        # rfi_window_size: float = 3,
+        # n_poly_rfi: int = 2,
+        # n_bootstrap_rfi: int = 20,
+        # n_sigma_rfi: float = 3.5,
         rms_filter_file: [None, Path, str] = None,
         do_total_power_filter: bool = True,
+        xrfi_pipe: [None, dict] = None,
     ):
+        xrfi_pipe = xrfi_pipe or {}
 
         if gha_min < 0 or gha_min > 24 or gha_min >= gha_max:
             raise ValueError("gha_min must be between 0 and 24")
@@ -881,11 +910,12 @@ class Level2(_Level):
             "ambient_humidity_max": ambient_humidity_max,
             "min_receiver_temp": min_receiver_temp,
             "max_receiver_temp": max_receiver_temp,
-            "n_sigma_rms": n_sigma_rms,
-            "rfi_window_size": rfi_window_size,
-            "n_poly_rfi": n_poly_rfi,
-            "n_bootstrap_rfi": n_bootstrap_rfi,
-            "n_sigma_rfi": n_sigma_rfi,
+            "xrfi_pipe": xrfi_pipe,
+            # "n_sigma_rms": n_sigma_rms,
+            # "rfi_window_size": rfi_window_size,
+            # "n_poly_rfi": n_poly_rfi,
+            # "n_bootstrap_rfi": n_bootstrap_rfi,
+            # "n_sigma_rfi": n_sigma_rfi,
         }
 
         # Sort the inputs in ascending date.
@@ -920,6 +950,23 @@ class Level2(_Level):
                 print(
                     f"File {l1.filename.name} has been completely filtered by its aux data."
                 )
+
+            # For each level 1 file, do xrfi
+            if "explicit" in xrfi_pipe:
+                kwargs = xrfi_pipe.pop("explicit")
+
+                if kwargs["file"] is None:
+                    known_rfi_file = (
+                        Path(dirname(__file__)) / "data" / "known_rfi_channels.yaml"
+                    )
+                else:
+                    known_rfi_file = kwargs["file"]
+
+                flags = rfi.xrfi_explicit(l1.raw_frequencies, rfi_file=known_rfi_file,)
+
+                l1.weights[:, flags] = 0
+
+            tools.run_xrfi_pipe(l1.spectrum, l1.weights, xrfi_pipe)
 
         # Apply RMS filter.
         if rms_filter_file:
@@ -981,17 +1028,6 @@ class Level2(_Level):
                         spec, weights=wght, axis=0
                     )
 
-                    # RFI cleaning of average spectra
-                    flags = rfi.xrfi_poly_filter(
-                        spec_mean,
-                        wght_mean,
-                        window_width=int(rfi_window_size / l1.freq.df),
-                        n_poly=n_poly_rfi,
-                        n_bootstrap=n_bootstrap_rfi,
-                        n_sigma=n_sigma_rfi,
-                    )
-                    wght_mean[flags] = 0
-
                     # Store this iteration
                     spectra[i, j] = spec_mean
                     weights[i, j] = wght_mean
@@ -1033,6 +1069,7 @@ class Level3(_Level):
         f_high: Optional[float] = None,
         freq_resolution: Optional[float] = None,
         gha_filter_file: [None, str, Path] = None,
+        xrfi_pipe: [None, dict] = None,
     ):
         """
         Convert a level3 to a level3.
@@ -1073,6 +1110,7 @@ class Level3(_Level):
             * ``ignore_days``: The user-specified list of explicit days ignored in the
               integration.
         """
+        xrfi_pipe = xrfi_pipe or {}
 
         # Compute the residuals
         days = level2.ancillary["days"]
@@ -1110,6 +1148,12 @@ class Level3(_Level):
             spec = level2.spectrum[:, :, freq.mask]
             wght = level2.weights[:, :, freq.mask]
 
+        # Perform xRFI on GHA-averaged spectra.
+        if xrfi_pipe:
+            for s, w in zip(spec, wght):
+                tools.run_xrfi_pipe(s, w, xrfi_pipe)
+
+        # Take mean over nights.
         spec, wght = tools.weighted_mean(np.array(spec), np.array(wght), axis=0)
 
         if freq_resolution:
@@ -1120,7 +1164,7 @@ class Level3(_Level):
             f = freq.freq
             p = spec
             w = wght
-            s = 0
+            s = np.zeros_like(wght)
 
         data = {
             "spectrum": p,
@@ -1132,6 +1176,7 @@ class Level3(_Level):
             "day_range": day_range,
             "ignore_days": ignore_days,
             "gha_filter_file": gha_filter_file or "",
+            "xrfi_pipe": xrfi_pipe,
             **level2.meta,
         }
 
@@ -1190,9 +1235,14 @@ class Level4(_Level):
         f_high: Optional[float] = None,
         ignore_freq_ranges: Optional[Sequence[Tuple[float, float]]] = None,
         freq_resolution: Optional[float] = None,
+        xrfi_pipe: [None, dict] = None,
     ):
-
-        meta = {"ignore_freq_ranges": ignore_freq_ranges, **level3.meta}
+        xrfi_pipe = xrfi_pipe or {}
+        meta = {
+            "ignore_freq_ranges": ignore_freq_ranges,
+            "xrfi_pipe": xrfi_pipe,
+            **level3.meta,
+        }
 
         freq = FrequencyRange(level3.raw_frequencies, f_low=f_low, f_high=f_high)
 
@@ -1200,17 +1250,7 @@ class Level4(_Level):
         wght = level3.weights[:, freq.mask]
 
         # Another round of XRFI
-        for s, w in zip(spec, wght):
-            if np.any(w > 0):
-                flags = rfi.xrfi_poly_filter(
-                    s,
-                    w,
-                    window_width=int(3 / level3.freq.df),
-                    n_poly=2,
-                    n_bootstrap=20,
-                    n_sigma=3,
-                )
-                w[flags] = 0
+        tools.run_xrfi_pipe(spec, wght, xrfi_pipe)
 
         if ignore_freq_ranges:
             for (low, high) in ignore_freq_ranges:

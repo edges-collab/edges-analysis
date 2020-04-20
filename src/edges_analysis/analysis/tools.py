@@ -2,7 +2,7 @@ from typing import Tuple
 from datetime import datetime, timedelta
 
 import numpy as np
-from edges_cal import modelling as mdl
+from edges_cal import modelling as mdl, xrfi
 
 
 def join_struct_arrays(arrays):
@@ -238,3 +238,17 @@ def average_in_gha(
     out_weights = np.reshape(out_weights, (-1,) + orig_shape)
 
     return out_spectrum, out_weights
+
+
+def run_xrfi_pipe(spectrum, weights, xrfi_pipe):
+    """Run an xrfi pipeline on given spectrum and weights, updating weights in place."""
+    for method, kwargs in xrfi_pipe.items():
+        if (
+            method in ["xrfi_poly"] and spectrum.ndim == 2
+        ):  # methods that only allow 1D spectra.
+            for i, psp in enumerate(spectrum):
+                flags = getattr(xrfi, method)(psp, flags=weights[i] <= 0, **kwargs)
+                weights[i][flags] = 0
+        else:
+            flags = getattr(xrfi, method)(spectrum, flags=weights <= 0, **kwargs)
+            weights[flags] = 0

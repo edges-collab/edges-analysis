@@ -10,8 +10,12 @@ from colored import stylize, fg, bg, attr
 from .analysis.levels import Level1
 from .analysis import levels
 from .config import config
+from edges_io.logging import logger
+import logging
 
 main = click.Group()
+
+logger.setLevel(logging.INFO)
 
 
 def _get_settings(settings):
@@ -99,7 +103,7 @@ def get_output_path(level, settings, in_file, label, prefix):
 
 @main.command()
 @click.argument("settings", type=click.Path(dir_okay=False, exists=True))
-@click.argument("path", type=click.Path(dir_okay=True))
+@click.argument("path", type=click.Path(dir_okay=True), nargs=-1)
 @click.option("-l", "--label", default="")
 @click.option("-p", "--prefix", default="")
 @click.option("-m", "--message", default="")
@@ -113,21 +117,22 @@ def calibrate(settings, path, label, prefix, message, clobber):
     settings = _get_settings(settings)
     label = settings.pop("label", "") or label
 
-    path = Path(path)
+    path = [Path(p) for p in path]
 
     root = Path(config["paths"]["raw_field_data"])
     root_data = root / "mro" / settings["band"]
 
     files = []
-    for pth in [path, root / path, root_data / path]:
-        try:
-            files = _get_files(pth, filter=lambda x: True)
-            break
-        except ValueError:
-            pass
+    for p in path:
+        for pth in [p, root / p, root_data / p]:
+            try:
+                files += _get_files(pth, filter=lambda x: True)
+                break
+            except ValueError:
+                pass
 
     if not files:
-        print(stylize("No input files were found!", fg("red") + attr("bold")))
+        logger.warning("No input files were found!")
         return
 
     output_dir = get_output_dir(1, settings, label, prefix)
@@ -174,7 +179,7 @@ Metadata in file:
         l1 = Level1.from_acq(filename=fl, leave_progress=False, **settings)
 
         t = l1.datetimes[0]
-        fname = f"{t.year}_{l1.meta['day']}_{t.hour}_{t.minute}_{t.second}.h5"
+        fname = f"{t.year}_{l1.meta['day']:>03}_{t.hour:>02}_{t.minute:>02}_{t.second:>02}.h5"
         fname = output_dir / fname
 
         l1.write(fname)
