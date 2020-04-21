@@ -153,7 +153,18 @@ def calibrate(settings, path, label, prefix, message, clobber):
             for fl in [fl for fl in current_files if h5py.is_hdf5(fl)]:
                 with h5py.File(fl, "r") as ff:
                     for k, v in settings.items():
-                        if k not in ff.attrs or ff.attrs[k] != v:
+                        if k not in ["calfile", "s11_path"] and (
+                            k not in ff.attrs or ff.attrs[k] != v
+                        ):
+                            if k in ff.attrs:
+                                try:
+                                    v = Path(v).expanduser().absolute()
+                                except Exception:
+                                    pass
+
+                                if ff.attrs[k] == str(v):
+                                    continue
+
                             meta = "\n\t".join(
                                 f"{kk}: {vv}" for kk, vv in ff.attrs.items()
                             )

@@ -6,6 +6,7 @@ import sys
 import glob
 import yaml
 import matplotlib.pyplot as plt
+import warnings
 
 import numpy as np
 from edges_cal import (
@@ -24,6 +25,7 @@ from read_acq import decode_file
 
 # import src.edges_analysis
 from . import io, s11 as s11m, loss, beams, tools, filters, coordinates
+from .coordinates import get_jd, dt_from_jd
 from ..config import config
 from .. import const
 from datetime import datetime
@@ -199,7 +201,7 @@ class Level1(_Level):
 
         meta = {
             "year": times[0].year,
-            "day": (times[0] - datetime(times[0].year, 1, 1)).days + 1,
+            "day": get_jd(times[0]),
             "hour": times[0].hour,
             "band": band,
             "xrfi_pipe": xrfi_pipe,
@@ -211,7 +213,7 @@ class Level1(_Level):
         logger.info("Getting ancillary weather data...")
         t = time.time()
         new_anc, new_meta = cls._get_weather_thermlog(
-            meta["year"], meta["day"], band, times, weather_file, thermlog_file
+            band, times, weather_file, thermlog_file
         )
         meta = {**meta, **new_meta}
 
@@ -220,11 +222,17 @@ class Level1(_Level):
 
         s11_path = Path(s11_path).expanduser()
         if not s11_path.is_absolute():
-            s11_path = Path(config["paths"]["raw_field_data"]) / s11_path
+            s11_path = (
+                Path(config["paths"]["raw_field_data"])
+                / "mro"
+                / band
+                / "s11"
+                / s11_path
+            )
 
         if s11_path.is_dir():
             # Get closest measurement
-            fls = s11_path.glob("*_input1.s1p")
+            fls = list(s11_path.glob("*_input1.s1p"))
             s11_times = [
                 tools.dt_from_year_day(*[int(x) for x in Path(fl).name.split("_")[:5]])
                 for fl in fls
@@ -232,7 +240,7 @@ class Level1(_Level):
             closest = fls[
                 np.argmin([abs((times[0] - t).total_seconds()) for t in s11_times])
             ]
-            s11_path = closest.replace("_input1.s1p", "")
+            s11_path = str(closest).replace("_input1.s1p", "")
 
         logger.info("Calibrating data ...")
         t = time.time()
@@ -302,8 +310,6 @@ class Level1(_Level):
     @classmethod
     def _get_weather_thermlog(
         cls,
-        year: int,
-        day: int,
         band: str,
         times: List[datetime],
         weather_file: [None, Path, str] = None,
@@ -314,10 +320,6 @@ class Level1(_Level):
 
         Parameters
         ----------
-        year : int
-            The year of the beginning of the observation
-        day : int
-            The day (of the year) of the beginning of the observation
         band : str
             The band/telescope of the data (mid, low2, low3, high).
         times : list of datetimes
@@ -354,13 +356,16 @@ class Level1(_Level):
               the default if necessary).
         """
 
+        start = min(times)
+        end = max(times)
+
         pth = Path(config["paths"]["raw_field_data"])
         if weather_file is not None:
             weather_file = Path(weather_file)
             if not (weather_file.exists() or weather_file.is_absolute()):
                 weather_file = pth / weather_file
         else:
-            if (year, day) <= (2017, 329):
+            if (start.year, start.day) <= (2017, 329):
                 weather_file = pth / "weather_upto_20171125.txt"
             else:
                 weather_file = pth / "weather2.txt"
@@ -372,13 +377,35 @@ class Level1(_Level):
         else:
             thermlog_file = pth / f"thermlog_{band}.txt"
 
-        weather, thermlog = auxiliary_data(weather_file, thermlog_file, year, day)
+        # Get all aux data covering our times, up to the next minute (so we have some
+        # overlap).
+        weather, thermlog = auxiliary_data(
+            weather_file,
+            thermlog_file,
+            year=start.year,
+            day=get_jd(start),
+            hour=start.hour,
+            end_time=(end.year, get_jd(end), end.hour, end.minute + 1),
+        )
+        print("Setting up arrays...")
+
+        t = time.time()
+        # Get the seconds since obs start for the data (not the auxiliary).
         seconds = np.array([(t - times[0]).total_seconds() for t in times])
 
         time_based_anc = np.zeros(
             len(seconds),
-            dtype=[(name, float) for name in weather.dtype.names]
-            + [(name, float) for name in thermlog.dtype.names if name != "seconds"]
+            dtype=[("seconds", int)]
+            + [
+                (name, float)
+                for name, (kind, off) in weather.dtype.fields.items()
+                if kind.kind == "f"
+            ]
+            + [
+                (name, float)
+                for name, (kind, off) in thermlog.dtype.fields.items()
+                if kind.kind == "f"
+            ]
             + [
                 ("lst", float),
                 ("gha", float),
@@ -389,34 +416,58 @@ class Level1(_Level):
             ],
         )
         time_based_anc["seconds"] = seconds
+        print(f".... took {time.time() - t} sec.")
 
+        t = time.time()
         # Interpolate weather
-        for name in weather.dtype.names:
-            if name == "seconds":
+        for name, (kind, _) in weather.dtype.fields.items():
+            if kind.kind == "i":
                 continue
 
-            time_based_anc[name] = np.interp(seconds, weather["seconds"], weather[name])
+            wth_seconds = [
+                (
+                    dt_from_jd(
+                        x["year"], int(x["day"]), x["hour"], x["minute"], x["second"]
+                    )
+                    - times[0]
+                ).total_seconds()
+                for x in weather
+            ]
+            time_based_anc[name] = np.interp(seconds, wth_seconds, weather[name])
 
             # Convert to celsius
             if name.endswith("_temp"):
                 time_based_anc[name] -= 273.15
 
-        for name in thermlog.dtype.names:
-            if name == "seconds":
+        for name, (kind, _) in thermlog.dtype.fields.items():
+            if kind.kind == "i":
                 continue
 
-            time_based_anc[name] = np.interp(
-                seconds, thermlog["seconds"], thermlog[name]
-            )
+            wth_seconds = [
+                (
+                    dt_from_jd(
+                        x["year"], int(x["day"]), x["hour"], x["minute"], x["second"]
+                    )
+                    - times[0]
+                ).total_seconds()
+                for x in thermlog
+            ]
+
+            time_based_anc[name] = np.interp(seconds, wth_seconds, thermlog[name])
+        print(f"Took {time.time() - t} sec to interpolate auxiliary data.")
 
         # LST
+        t = time.time()
         time_based_anc["lst"] = coordinates.utc2lst(times, const.edges_lon_deg)
         time_based_anc["gha"] = coordinates.lst2gha(time_based_anc["lst"])
+        print(f"Took {time.time() - t} sec to get lst/gha")
 
         # Sun/Moon coordinates
+        t = time.time()
         sun, moon = coordinates.sun_moon_azel(
             const.edges_lat_deg, const.edges_lon_deg, times
         )
+        print(f"Took {time.time() - t} sec to get sun/moon coords.")
 
         time_based_anc["sun_az"] = sun[:, 0]
         time_based_anc["sun_el"] = sun[:, 1]
@@ -466,7 +517,7 @@ class Level1(_Level):
         ambient_temp,
         lst,
         s11_path,
-        switch_state_dir,
+        switch_state_dir=None,
         weights=None,
         antenna_s11_n_terms=15,
         antenna_correction=True,
@@ -528,6 +579,23 @@ class Level1(_Level):
         if not isinstance(calfile, Calibration):
             calfile = Calibration(calfile)
 
+        print("SWITCH_STATE_DIR: ", switch_state_dir)
+        if switch_state_dir is not None:
+            warnings.warn(
+                "You should use the switch state that is inherently in the calibration object."
+            )
+            switch_state_dir = str(Path(switch_state_dir).absolute())
+        else:
+            switch_state_dir = calfile.internal_switch.path
+
+        if switch_state_run_num is not None:
+            warnings.warn(
+                "You should use the switch state run_num that is inherently in the calibration object."
+            )
+            switch_state_run_num = switch_state_run_num
+        else:
+            switch_state_run_num = calfile.internal_switch.run_num
+
         meta = {
             "s11_path": str(Path(s11_path).absolute()),
             "antenna_s11_n_terms": antenna_s11_n_terms,
@@ -543,7 +611,7 @@ class Level1(_Level):
             "wterms": calfile.wterms,
             "cterms": calfile.cterms,
             "calfile": calfile.path,
-            "switch_state_dir": str(Path(switch_state_dir).absolute()),
+            "switch_state_dir": switch_state_dir,
             "switch_state_run_num": switch_state_run_num,
         }
 
@@ -558,6 +626,7 @@ class Level1(_Level):
         Q = spectrum[:, freq.mask]
         weights = weights[:, freq.mask]
 
+        print("s11_path: ", s11_path)
         s11_ant = cls._get_antenna_s11(
             s11_path,
             freq.freq,

@@ -26,28 +26,17 @@ def utc2lst(utc_time_array, longitude):
     """
     # convert input array to "int"
     if not isinstance(utc_time_array[0], dt.datetime):
-        utc_time_array = np.atleast_2d(utc_time_array).astype(int)
+        utc_time_array = [
+            dt.datetime(*utc) for utc in np.atleast_2d(utc_time_array).astype(int)
+        ]
 
-    # converting UTC to LST
-    lst = np.zeros(len(utc_time_array))
+    # python "datetime" to astropy "Time" format
+    t = apt.Time(utc_time_array, format="datetime", scale="utc")
 
-    for i, ut in enumerate(utc_time_array):
-        # time stamp in python "datetime" format
-        if not isinstance(ut, dt.datetime):
-            ut = dt.datetime(*ut)
+    # necessary approximation to compute sidereal time
+    t.delta_ut1_utc = 0
 
-        # python "datetime" to astropy "Time" format
-        t = apt.Time(ut, format="datetime", scale="utc")
-
-        # necessary approximation to compute sidereal time
-        t.delta_ut1_utc = 0
-
-        # LST at longitude LONG_float, in degrees
-        lst[i] = t.sidereal_time(
-            "apparent", str(longitude) + "d", model="IAU2006A"
-        ).value
-
-    return lst
+    return t.sidereal_time("apparent", str(longitude) + "d", model="IAU2006A").value
 
 
 def sun_moon_azel(lat, lon, utc_array):
@@ -60,18 +49,18 @@ def sun_moon_azel(lat, lon, utc_array):
     sun = np.zeros((len(utc_array), 2))
     moon = np.zeros((len(utc_array), 2))
 
-    for i, utc in enumerate(utc_array):
-        if not isinstance(utc, dt.datetime):
-            utc = dt.datetime(*utc)
-        time = apt.Time(utc, format="datetime", scale="utc")
+    utc_array = [
+        utc if isinstance(utc, dt.datetime) else dt.datetime(*utc) for utc in utc_array
+    ]
+    times = apt.Time(utc_array, format="datetime")
 
-        Sun = apc.get_sun(time).transform_to(apc.AltAz(location=obs_location))
-        Moon = apc.get_moon(time).transform_to(apc.AltAz(location=obs_location))
+    Sun = apc.get_sun(times).transform_to(apc.AltAz(location=obs_location))
+    Moon = apc.get_moon(times).transform_to(apc.AltAz(location=obs_location))
 
-        sun[i, 0] = Sun.az.deg
-        sun[i, 1] = Sun.alt.deg
-        moon[i, 0] = Moon.az.deg
-        moon[i, 1] = Moon.alt.deg
+    sun[:, 0] = Sun.az.deg
+    sun[:, 1] = Sun.alt.deg
+    moon[:, 0] = Moon.az.deg
+    moon[:, 1] = Moon.alt.deg
 
     return sun, moon
 
@@ -100,3 +89,14 @@ def lst2gha(lst):
     gha = lst - const.galactic_centre_lst
     gha[gha < 0] += 24
     return gha
+
+
+def get_jd(d):
+    """Get the day of the year from a datetime object"""
+    dt0 = dt.datetime(d.year, 1, 1)
+    return (d - dt0).days
+
+
+def dt_from_jd(y, d, *args):
+    begin = dt.datetime(y, 1, 1, *args)
+    return begin + dt.timedelta(days=d)
