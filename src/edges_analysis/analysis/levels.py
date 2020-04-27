@@ -877,10 +877,8 @@ class Level2(_Level):
 
     Parameters
     ----------
-    level3 : list of :class:`Level3` instances or paths
+    level1 : list of :class:`Level3` instances or paths
         A bunch of level3 objects to combine and integrate into the level4 data.
-    gha_edges : list of tuple
-        A list of 2-tuples, each containing a min and max GHA.
     sun_el_max : float
         The maximum elevation of the sun before the time is filtered.
     moon_el_max : float
@@ -950,10 +948,6 @@ class Level2(_Level):
         min_receiver_temp: float = 0,
         max_receiver_temp: float = 100,
         n_sigma_rms: float = 3,
-        # rfi_window_size: float = 3,
-        # n_poly_rfi: int = 2,
-        # n_bootstrap_rfi: int = 20,
-        # n_sigma_rfi: float = 3.5,
         rms_filter_file: [None, Path, str] = None,
         do_total_power_filter: bool = True,
         xrfi_pipe: [None, dict] = None,

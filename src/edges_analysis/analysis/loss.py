@@ -15,7 +15,7 @@ def balun_and_connector_loss(
 
     Parameters
     ----------
-    band : str {'low_band3', 'mid_band'}
+    band : str {'low3', 'mid'}
         Parameters of the loss are different for each antenna.
     f : array-like
         Frequency in MHz
@@ -69,7 +69,7 @@ def balun_and_connector_loss(
 
     parameters = {
         "low3": {
-            "balun_length": 43.6,
+            "balun_length": 43.6 * inch2m,
             "connector_length": 0.8,
             "er_air": 1.07,
             "ric_b": ((5 / 16) * inch2m) / 2,
@@ -77,8 +77,8 @@ def balun_and_connector_loss(
             "roc_c": (0.16 * inch2m) / 2,
         },
         "mid": {
-            "balun_length": 35,  # inches
-            "connector_length": 0.03 / inch2m,
+            "balun_length": 35 * inch2m,
+            "connector_length": 0.03,
             "er_air": 1.2,
             "ric_b": ((16 / 32) * inch2m) / 2,
             "roc_b": ((1.25) * inch2m) / 2,
@@ -109,7 +109,7 @@ def balun_and_connector_loss(
         # 1-sigma of 3%
         roc_b *= 1 + 0.03 * np.random.normal()
 
-    l_b = parameters[band]["balun_length"] * inch2m  # length in meters
+    l_b = parameters[band]["balun_length"]  # length in meters
     if monte_carlo_flags[2]:
         l_b += 0.001 * np.random.normal()  # 1-sigma of 1 mm
 
@@ -117,14 +117,14 @@ def balun_and_connector_loss(
     ric_c = (0.05 * inch2m) / 2  # radius of outer wall of inner conductor
     if monte_carlo_flags[3]:
         # 1-sigma of 3%, about < 0.04 mm
-        ric_c += 0.03 * ric_c * np.random.normal()
+        ric_c *= 1 + 0.03 * np.random.normal()
 
     roc_c = parameters[band]["roc_c"]
     if monte_carlo_flags[4]:
         # 1-sigma of 3%
         roc_c *= 1 + 0.03 * np.random.normal()
 
-    l_c = parameters[band]["connector_length"] * inch2m  # length
+    l_c = parameters[band]["connector_length"]
     if monte_carlo_flags[5]:
         l_c += 0.0001 * np.random.normal()
 
@@ -149,28 +149,49 @@ def balun_and_connector_loss(
     Rs_copper = 1 / (sigma_copper * skin_depth_copper)
     Rs_brass = 1 / (sigma_brass * skin_depth_brass)
 
-    def get_induc_cap_res_cond_prop(ric, roc, skin_depth_inner, skin_depth_outer, u):
+    Rs_xx_inner = 1 / (sigma_xx_inner * skin_depth_xx_inner)
+    Rs_xx_outer = 1 / (sigma_xx_outer * skin_depth_xx_outer)
+
+    def get_induc_cap_res_cond_prop(
+        ric, roc, skin_depth_inner, skin_depth_outer, rs_inner, rs_outer, u, ep, epp
+    ):
         L_inner = u0 * skin_depth_inner / (4 * np.pi * ric)
         L_dielec = (u / (2 * np.pi)) * np.log(roc / ric)
         L_outer = u0 * skin_depth_outer / (4 * np.pi * roc)
         L = L_inner + L_dielec + L_outer
-        C = 2 * np.pi * ep_air / np.log(roc / ric)
-        R = (Rs_copper / (2 * np.pi * ric)) + (Rs_brass / (2 * np.pi * roc))
-        G = 2 * np.pi * w * epp_air / np.log(roc / ric)
-        gamma = np.sqrt((R + 1j * w * L) * (G + 1j * w * C))
-        return L, C, R, G, gamma
+        C = 2 * np.pi * ep / np.log(roc / ric)
+        R = (rs_inner / (2 * np.pi * ric)) + (rs_outer / (2 * np.pi * roc))
+        G = 2 * np.pi * w * epp / np.log(roc / ric)
+
+        return (
+            np.sqrt((R + 1j * w * L) * (G + 1j * w * C)),
+            np.sqrt((R + 1j * w * L) / (G + 1j * w * C)),
+        )
 
     # Inductance per unit length
-    Lb, Cb, Rb, Gb, gamma_b = get_induc_cap_res_cond_prop(
-        ric_b, roc_b, skin_depth_copper, skin_depth_brass, u_air
-    )
-    Lc, Cc, Rc, Gc, gamma_c = get_induc_cap_res_cond_prop(
-        ric_c, roc_c, skin_depth_xx_inner, skin_depth_xx_outer, u_teflon
+    gamma_b, Zchar_b = get_induc_cap_res_cond_prop(
+        ric_b,
+        roc_b,
+        skin_depth_copper,
+        skin_depth_brass,
+        Rs_copper,
+        Rs_brass,
+        u_air,
+        ep_air,
+        epp_air,
     )
 
-    # Complex Cable Impedance
-    Zchar_b = gamma_b
-    Zchar_c = gamma_c
+    gamma_c, Zchar_c = get_induc_cap_res_cond_prop(
+        ric_c,
+        roc_c,
+        skin_depth_xx_inner,
+        skin_depth_xx_outer,
+        Rs_xx_inner,
+        Rs_xx_outer,
+        u_teflon,
+        ep_teflon,
+        epp_teflon,
+    )
 
     # Impedance of Agilent terminations
     Zref = 50
@@ -202,7 +223,7 @@ def balun_and_connector_loss(
         return (
             np.abs(S12S21)
             * (1 - np.abs(ra_x) ** 2)
-            / ((np.abs(1 - S11_rev * ra_b)) ** 2 * (1 - (np.abs(ra_y)) ** 2))
+            / ((np.abs(1 - S11_rev * ra_x)) ** 2 * (1 - (np.abs(ra_y)) ** 2))
         )
 
     Gb = get_G(S22b, S12S21b, ra_b, ra_c)
