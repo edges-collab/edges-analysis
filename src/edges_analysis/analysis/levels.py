@@ -7,6 +7,8 @@ import glob
 import yaml
 import matplotlib.pyplot as plt
 import warnings
+import tqdm
+import json
 
 import numpy as np
 from edges_cal import (
@@ -579,7 +581,6 @@ class Level1(_Level):
         if not isinstance(calfile, Calibration):
             calfile = Calibration(calfile)
 
-        print("SWITCH_STATE_DIR: ", switch_state_dir)
         if switch_state_dir is not None:
             warnings.warn(
                 "You should use the switch state that is inherently in the calibration object."
@@ -943,8 +944,8 @@ class Level2(_Level):
         gha_min: float = 0.0,
         gha_max: float = 24.0,
         gha_bin_size: float = 0.1,
-        sun_el_max: float = 0,
-        moon_el_max: float = 0,
+        sun_el_max: float = 90,
+        moon_el_max: float = 90,
         ambient_humidity_max: float = 40,
         min_receiver_temp: float = 0,
         max_receiver_temp: float = 100,
@@ -979,12 +980,7 @@ class Level2(_Level):
             "ambient_humidity_max": ambient_humidity_max,
             "min_receiver_temp": min_receiver_temp,
             "max_receiver_temp": max_receiver_temp,
-            "xrfi_pipe": xrfi_pipe,
-            # "n_sigma_rms": n_sigma_rms,
-            # "rfi_window_size": rfi_window_size,
-            # "n_poly_rfi": n_poly_rfi,
-            # "n_bootstrap_rfi": n_bootstrap_rfi,
-            # "n_sigma_rfi": n_sigma_rfi,
+            "xrfi_pipe": json.dumps(xrfi_pipe),  # TODO: this is not wonderful
         }
 
         # Sort the inputs in ascending date.
@@ -1001,7 +997,10 @@ class Level2(_Level):
         n_times = np.array([len(l1.spectrum) for l1 in level1])
 
         # For each level1 file, flag times based on ancillary data.
-        for i, l1 in enumerate(level1):
+        pbar = tqdm.tqdm(enumerate(level1), unit="files", total=len(level1))
+        for i, l1 in pbar:
+            pbar.set_description(f"Filtering RFI/aux for {l1.filename.name}")
+
             flags = filters.time_filter_auxiliary(
                 gha=l1.ancillary["gha"],
                 sun_el=l1.ancillary["sun_el"],
@@ -1014,6 +1013,7 @@ class Level2(_Level):
                 min_receiver_temp=min_receiver_temp,
                 max_receiver_temp=max_receiver_temp,
             )
+
             l1.weights[flags] = 0
             if np.sum(l1.weights) == 0:
                 print(
@@ -1039,7 +1039,9 @@ class Level2(_Level):
 
         # Apply RMS filter.
         if rms_filter_file:
-            for i, l1 in enumerate(level1):
+            pbar = tqdm.tqdm(enumerate(level1), unit="files", total=len(level1))
+            for i, l1 in pbar:
+                pbar.set_description(f"RMS Filter for {l1.filename.name}")
                 # Get RMS
                 rms_lower = l1.get_model_rms(freq_range=(-np.inf, l1.freq.center))
                 rms_upper = l1.get_model_rms(freq_range=(l1.freq.center, np.inf))
@@ -1054,7 +1056,9 @@ class Level2(_Level):
                 l1.weights[flags] = 0
 
         if do_total_power_filter:
-            for i, l1 in enumerate(level1):
+            pbar = tqdm.tqdm(enumerate(level1), unit="files", total=len(level1))
+            for i, l1 in pbar:
+                pbar.set_description(f"Total Power Filter for {l1.filename.name}")
                 # Applying total-power filter
                 # TODO: this filter should be removed/reworked -- it uses arbitrary numbers.
                 # TODO: it at *least* should be done on the mean, not the sum.
@@ -1083,7 +1087,10 @@ class Level2(_Level):
         weights = np.zeros((len(level1), len(gha_edges) - 1, level1[0].freq.n))
         spectra = np.zeros((len(level1), len(gha_edges) - 1, level1[0].freq.n))
 
-        for i, l1 in enumerate(level1):
+        pbar = tqdm.tqdm(enumerate(level1), unit="files", total=len(level1))
+        for i, l1 in pbar:
+            pbar.set_description(f"GHA Binning for {l1.filename.name}")
+
             gha = l1.ancillary["gha"]
 
             for j, gha_low in enumerate(gha_edges[:-1]):

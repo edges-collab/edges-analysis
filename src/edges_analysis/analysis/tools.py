@@ -181,6 +181,7 @@ def weighted_mean(data, weights, axis=0):
     av = np.zeros_like(sum)
     mask = weights > 0
     av[mask] = sum[mask] / weights[mask]
+    av[~mask] = np.nan
     return av, weights
 
 
@@ -247,8 +248,10 @@ def run_xrfi_pipe(spectrum, weights, xrfi_pipe):
             method in ["xrfi_poly"] and spectrum.ndim == 2
         ):  # methods that only allow 1D spectra.
             for i, psp in enumerate(spectrum):
-                flags = getattr(xrfi, method)(psp, flags=weights[i] <= 0, **kwargs)
+                flags, info = getattr(xrfi, method)(
+                    psp, flags=weights[i] <= 0, **kwargs
+                )
                 weights[i][flags] = 0
         else:
-            flags = getattr(xrfi, method)(spectrum, flags=weights <= 0, **kwargs)
+            flags, info = getattr(xrfi, method)(spectrum, flags=weights <= 0, **kwargs)
             weights[flags] = 0

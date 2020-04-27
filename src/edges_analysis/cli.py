@@ -250,6 +250,10 @@ def level(level, settings, path, label, prev_label, prefix, message, clobber):
 
     print(stylize("Output File:", attr("bold")), stylize(str(output_file), attr("dim")))
 
+    if output_file.exists() and not clobber:
+        logger.error("The output file already exists -- use clobber!")
+        return
+
     getattr(levels, f"Level{level}").from_previous_level(
         in_files, output_file, clobber, **settings
     )
