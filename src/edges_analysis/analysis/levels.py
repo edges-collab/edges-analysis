@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import warnings
 import tqdm
 import json
+import re
 
 import numpy as np
 from edges_cal import (
@@ -182,6 +183,7 @@ class Level1(_Level):
         progress=True,
         leave_progress=True,
         xrfi_pipe: [None, dict] = None,
+        s11_file_pattern: str = r"{y}_{jd}_{h}_*_input{input}.s1p",
         **cal_kwargs,
     ):
         t = time.time()
@@ -222,27 +224,7 @@ class Level1(_Level):
         time_based_anc = tools.join_struct_arrays((time_based_anc, new_anc))
         logger.info(f"... finished in {time.time() - t:.2f} sec.")
 
-        s11_path = Path(s11_path).expanduser()
-        if not s11_path.is_absolute():
-            s11_path = (
-                Path(config["paths"]["raw_field_data"])
-                / "mro"
-                / band
-                / "s11"
-                / s11_path
-            )
-
-        if s11_path.is_dir():
-            # Get closest measurement
-            fls = list(s11_path.glob("*_input1.s1p"))
-            s11_times = [
-                tools.dt_from_year_day(*[int(x) for x in Path(fl).name.split("_")[:5]])
-                for fl in fls
-            ]
-            closest = fls[
-                np.argmin([abs((times[0] - t).total_seconds()) for t in s11_times])
-            ]
-            s11_path = str(closest).replace("_input1.s1p", "")
+        s11_files = cls.get_s11_paths(s11_path, band, times[0], s11_file_pattern)
 
         logger.info("Calibrating data ...")
         t = time.time()
@@ -253,7 +235,7 @@ class Level1(_Level):
             calfile=Path(calfile).expanduser(),
             ambient_temp=time_based_anc["ambient_temp"],
             lst=time_based_anc["lst"],
-            s11_path=s11_path,
+            s11_files=s11_files,
             **cal_kwargs,
         )
         logger.info(f"... finished in {time.time() - t:.2f} sec.")
@@ -294,6 +276,148 @@ class Level1(_Level):
             },
             filename=str(out_file),
         )
+
+    @classmethod
+    def default_s11_directory(cls, band):
+        return Path(config["paths"]["raw_field_data"]) / "mro" / band / "s11"
+
+    @classmethod
+    def _get_closest_s11_time(
+        cls,
+        s11_dir: Path,
+        time: datetime,
+        s11_file_pattern: str = "{y}_{jd}_{h}_*_input{input}.s1p",
+    ):
+        """From a given filename pattern, within a directory, find file closest to time.
+
+        Parameters
+        ----------
+        s11_dir : Path
+            The directory in which to search for S11 files.
+        time : datetime
+            The time to find the closest match to.
+        s11_file_pattern : str
+            A pattern that matches files in the directory. A few tags are available:
+            {input}: tags the input number (should be 1-4)
+            {y}: year (four digit number)
+            {m}: month (two-digit number)
+            {d}: day of month (two-digit number)
+            {jd}: day of year (three-digit number)
+            {h}: hour of day (observation start) (two digit number)
+        """
+        # Replace the suffix dot with a literal dot for regex
+        s11_file_pattern = s11_file_pattern.replace(".", r"\.")
+
+        # Replace any glob-style asterisks with non-greedy regex version
+        s11_file_pattern = s11_file_pattern.replace("*", r".*?")
+
+        # First, we need to build a regex pattern out of the s11_file_pattern
+        dct = {
+            "input": r"(?P<input>\d)",
+            "y": r"(?P<year>\d\d\d\d)",
+            "m": r"(?P<month>\d\d)",
+            "d": r"(?P<day>\d\d)",
+            "jd": r"(?P<jd>\d\d\d)",
+            "h": r"(?P<hour>\d\d)",
+        }
+        dct = {d: v for d, v in dct.items() if "{%s}" % d in s11_file_pattern}
+
+        if not ("d" in dct or "jd" in dct):
+            raise ValueError("s11_file_pattern must contain a tag {d} or {jd}.")
+        if "d" in dct and "jd" in dct:
+            raise ValueError("s11_file_pattern must not contain both {d} and {jd}.")
+
+        p = re.compile(s11_file_pattern.format(**dct))
+
+        files = list(s11_dir.glob("*"))
+
+        s11_times = []
+        indx = []
+        for i, fl in enumerate(files):
+            match = p.match(str(fl.name))
+
+            # Ignore files that don't match the pattern
+            if not match:
+                continue
+            else:
+
+                d = match.groupdict()
+            indx.append(i)
+
+            # Different time constructor for Day of year vs Day of month
+            if "jd" in d:
+                dt = tools.dt_from_year_day(
+                    int(d.get("year", time.year)),
+                    int(d.get("jd")),
+                    int(d.get("hour", 0)),
+                )
+            else:
+                dt = datetime(
+                    int(d.get("year", time.year)),
+                    int(d.get("month", time.month)),
+                    int(d.get("day")),
+                    int(d.get("hour", 0)),
+                )
+            s11_times.append(dt)
+
+        if not len(s11_times):
+            raise FileNotFoundError(
+                f"No files found matching the input pattern. Available files: {[fl.name for fl in files]}. Regex pattern: {p.pattern}. "
+            )
+
+        files = [fl for i, fl in enumerate(files) if i in indx]
+        time_diffs = np.array([abs((time - t).total_seconds()) for t in s11_times])
+        indx = np.where(time_diffs == time_diffs.min())[0]
+
+        # Gets a representative closest time file
+        closest = [fl for i, fl in enumerate(files) if i in indx]
+
+        assert (
+            len(closest) == 4
+        ), f"There need to be four input S1P files of the same time, got {closest}."
+        return sorted(closest)
+
+    @classmethod
+    def get_s11_paths(
+        cls,
+        s11_path: [str, Path, Tuple, List],
+        band: str,
+        begin_time: datetime,
+        s11_file_pattern: str,
+    ):
+        """Given an s11_path, return list of paths for each of the inputs"""
+
+        # If we get four files, make sure they exist and pass them back
+        if isinstance(s11_path, (tuple, list)):
+            if len(s11_path) != 4:
+                raise ValueError(
+                    "If passing explicit paths to S11 inputs, length must be 4."
+                )
+
+            fls = []
+            for pth in s11_path:
+                p = Path(pth).expanduser().absolute()
+                assert p.exists()
+                fls.append(p)
+
+            return fls
+
+        # Otherwise it must be a path.
+        s11_path = Path(s11_path).expanduser()
+
+        if str(s11_path).startswith(":"):
+            s11_path = cls.default_s11_directory(band) / str(s11_path)[1:]
+
+        if s11_path.is_dir():
+            # Get closest measurement
+            return cls._get_closest_s11_time(s11_path, begin_time, s11_file_pattern)
+        else:
+            # The path *must* have an {input} tag in it which we can search on
+            fls = glob.glob(str(s11_path).format(input="?"))
+            assert (
+                len(fls) == 4
+            ), f"There are not exactly four files matching {s11_path}. Found: {fls}."
+            return sorted([Path(fl) for fl in fls])
 
     @property
     def raw_time_data(self):
@@ -484,10 +608,9 @@ class Level1(_Level):
 
     @classmethod
     def _get_antenna_s11(
-        cls, s11_path, freq, switch_state_dir, n_terms, switch_state_run_num
+        cls, s11_files, freq, switch_state_dir, n_terms, switch_state_run_num
     ):
         # Get files
-        s11_files = sorted(glob.glob(str(s11_path) + "_input*.s1p"))
         return s11m.antenna_s11_remove_delay(
             s11_files,
             freq,
@@ -499,14 +622,14 @@ class Level1(_Level):
 
     @property
     def antenna_s11(self):
-        s11_path = self.meta["s11_path"]
+        s11_files = self.meta["s11_files"]
         freq = self.raw_frequencies
         switch_state_dir = self.meta["switch_state_dir"]
         switch_state_run_num = self.meta["switch_state_run_num"]
         n_terms = self.meta["antenna_s11_n_terms"]
 
         return self._get_antenna_s11(
-            s11_path, freq, switch_state_dir, n_terms, switch_state_run_num
+            s11_files, freq, switch_state_dir, n_terms, switch_state_run_num
         )
 
     @classmethod
@@ -518,7 +641,7 @@ class Level1(_Level):
         calfile: [str, Calibration],
         ambient_temp,
         lst,
-        s11_path,
+        s11_files,
         switch_state_dir=None,
         weights=None,
         antenna_s11_n_terms=15,
@@ -598,7 +721,7 @@ class Level1(_Level):
             switch_state_run_num = calfile.internal_switch.run_num
 
         meta = {
-            "s11_path": str(Path(s11_path).absolute()),
+            "s11_files": [str(f) for f in s11_files],
             "antenna_s11_n_terms": antenna_s11_n_terms,
             "antenna_correction": antenna_correction,
             "balun_correction": balun_correction,
@@ -627,9 +750,8 @@ class Level1(_Level):
         Q = spectrum[:, freq.mask]
         weights = weights[:, freq.mask]
 
-        print("s11_path: ", s11_path)
         s11_ant = cls._get_antenna_s11(
-            s11_path,
+            s11_files,
             freq.freq,
             switch_state_dir,
             antenna_s11_n_terms,

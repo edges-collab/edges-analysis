@@ -69,8 +69,11 @@ def _get_all_files(pth: Path, filter=h5py.is_hdf5):
 
 def _get_unique_file(pth):
     files = _get_all_files(pth)
-    if len(files) != 1:
+    if not files:
         raise ValueError
+    elif len(files) > 1:
+        raise IOError(f"More than one file found in {pth}")
+
     return files[0]
 
 
