@@ -155,16 +155,49 @@ def average_in_frequency(
     return f, s, w, std
 
 
-def weighted_mean(data, weights, axis=0):
-    """A careful weighted mean where zero-weights don't error.
-
-    In this function, if the total weight is zero, zero is returned.
+def weighted_sum(data, weights=None, normalize=False, axis=0):
+    """A careful weighted sum.
 
     Parameters
     ----------
     data : array-like
         The data over which the weighted mean is to be taken.
-    weights : array-like
+    weights : array-like, optional
+        Same shape as data, giving the weights of each datum.
+    normalize : bool, optional
+        If True, normalize weights so that the maximum weight is unity.
+    axis : int, optional
+        The axis over which to take the mean.
+
+    Returns
+    -------
+    array-like :
+        The weighted sum over `axis`, where elements with zero total weight are
+        set to nan.
+    """
+    if weights is None:
+        weights = np.ones_like(data)
+
+    if normalize:
+        weights = weights.copy() / weights.max()
+
+    sum = np.sum(data * weights, axis=axis)
+    weights = np.sum(weights, axis=axis)
+
+    sum[weights == 0] = np.nan
+    return sum, weights
+
+
+def weighted_mean(data, weights=None, axis=0):
+    """A careful weighted mean where zero-weights don't error.
+
+    In this function, if the total weight is zero, np.nan is returned.
+
+    Parameters
+    ----------
+    data : array-like
+        The data over which the weighted mean is to be taken.
+    weights : array-like, optional
         Same shape as data, giving the weights of each datum.
     axis : int, optional
         The axis over which to take the mean.
@@ -173,16 +206,54 @@ def weighted_mean(data, weights, axis=0):
     -------
     array-like :
         The weighted mean over `axis`, where elements with zero total weight are
-        set to zero.
+        set to nan.
     """
-    sum = np.sum(data * weights, axis=axis)
-    weights = np.sum(weights, axis=axis)
+    sum, weights = weighted_sum(data, weights, axis=axis)
 
     av = np.zeros_like(sum)
     mask = weights > 0
     av[mask] = sum[mask] / weights[mask]
     av[~mask] = np.nan
     return av, weights
+
+
+def weighted_sorted_metric(data, weights=None, metric="median", **kwargs):
+    """Semi-weighted integrator of data.
+
+    This function will perform integrations of data that rely on sorting the data (eg.
+    median or percentile). These are ony able to partial weighting -- i.e. weights of
+    zero ensure that datum is ignored, while other weights all count the same.
+
+    Parameters
+    ----------
+    data : array-like
+        The data over which the weighted mean is to be taken.
+    weights : array-like, optional
+        Same shape as data, giving the weights of each datum.
+    metric : str, optional
+        One of ('median', 'argmax', 'argmin','max', 'min', 'percentile', 'quantile'),
+        specifying which metric to take.
+    kwargs :
+        Extra arguments to the function np.nan<metric>.
+
+    Returns
+    -------
+    array-like :
+        The weighted mean over `axis`, where elements with zero total weight are
+        set to nan.
+    """
+    assert metric in (
+        "median",
+        "argmax",
+        "argmin",
+        "max",
+        "min",
+        "percentile",
+        "quantile",
+    )
+    d = data.copy()
+    d[weights == 0] = np.nan
+    return getattr(np, "nan" + metric)(d, **kwargs)
 
 
 def weighted_standard_deviation(av, data, std, axis=0):

@@ -94,7 +94,7 @@ def lst2gha(lst):
 def get_jd(d):
     """Get the day of the year from a datetime object"""
     dt0 = dt.datetime(d.year, 1, 1)
-    return (d - dt0).days
+    return (d - dt0).days + 1
 
 
 def dt_from_jd(y, d, *args):

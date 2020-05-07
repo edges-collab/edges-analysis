@@ -169,10 +169,7 @@ class HDF5Object:
             for k, v in cache.items():
                 try:
                     if isinstance(v, dict):
-                        if k in ["meta", "attrs"]:
-                            g = grp.attrs
-                        else:
-                            g = grp.create_group(k)
+                        g = grp.attrs if k in ["meta", "attrs"] else grp.create_group(k)
                         _write(g, struct[k], v)
                     else:
                         if v is None:
@@ -215,8 +212,8 @@ class HDF5Object:
         with h5py.File(self.filename, "r") as fl:
             if item in ("attrs", "meta"):
                 out = dict(fl.attrs)
-                for k in out:
-                    if out[k] == "none":
+                for k, v in out.items():
+                    if isinstance(v, str) and v == "none":
                         out[k] = None
             elif isinstance(fl[item], h5py.Group):
                 out = _HDF5Group(self.filename, self._structure[item], item)

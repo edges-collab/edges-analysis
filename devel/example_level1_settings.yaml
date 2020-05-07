@@ -4,3 +4,5 @@ s11_path: ':daily'
 balun_correction: false
 antenna_correction: false
 ground_correction: false
+ignore_s11_files:
+  - 2020_065

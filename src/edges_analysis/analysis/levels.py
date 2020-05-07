@@ -61,7 +61,7 @@ class _Level(io.HDF5Object):
     }
 
     @classmethod
-    def from_previous_level(cls, prev_level, filename=None, clobber=False, **kwargs):
+    def _get_previous_level(cls):
         _prev_level = int(cls.__name__[-1]) - 1
         if _prev_level:
             _prev_level = getattr(sys.modules[__name__], f"Level{_prev_level}")
@@ -69,6 +69,11 @@ class _Level(io.HDF5Object):
             raise AttributeError(
                 f"from_previous_level is not defined for {cls.__name__}"
             )
+        return _prev_level
+
+    @classmethod
+    def from_previous_level(cls, prev_level, filename=None, clobber=False, **kwargs):
+        _prev_level = cls._get_previous_level()
 
         if not isinstance(prev_level, _prev_level):
             if hasattr(prev_level, "__len__"):
@@ -81,6 +86,12 @@ class _Level(io.HDF5Object):
 
         freq, data, ancillary, meta = cls._from_prev_level(prev_level, **kwargs)
 
+        meta["prev_level_files"] = (
+            ":".join([str(p.filename) for p in prev_level])
+            if isinstance(prev_level, list)
+            else str(prev_level.filename)
+        )
+
         if clobber and Path(filename).exists():
             os.remove(filename)
 
@@ -92,6 +103,18 @@ class _Level(io.HDF5Object):
             out.write(filename)
 
         return out
+
+    @cached_property
+    def previous_level(self):
+        try:
+            fnames = self.meta["prev_level_files"].split(":")
+        except KeyError:
+            raise TypeError(f"No previous levels for {self.__class__.__name__}")
+
+        if len(fnames) == 1:
+            return self._get_previous_level()(fnames[0])
+        else:
+            return [self._get_previous_level()(fname) for fname in fnames]
 
     @classmethod
     def _from_prev_level(cls, prev_level, **kwargs):
@@ -184,6 +207,7 @@ class Level1(_Level):
         leave_progress=True,
         xrfi_pipe: [None, dict] = None,
         s11_file_pattern: str = r"{y}_{jd}_{h}_*_input{input}.s1p",
+        ignore_s11_files: [None, List[str]] = None,
         **cal_kwargs,
     ):
         t = time.time()
@@ -224,7 +248,9 @@ class Level1(_Level):
         time_based_anc = tools.join_struct_arrays((time_based_anc, new_anc))
         logger.info(f"... finished in {time.time() - t:.2f} sec.")
 
-        s11_files = cls.get_s11_paths(s11_path, band, times[0], s11_file_pattern)
+        s11_files = cls.get_s11_paths(
+            s11_path, band, times[0], s11_file_pattern, ignore_files=ignore_s11_files
+        )
 
         logger.info("Calibrating data ...")
         t = time.time()
@@ -287,6 +313,7 @@ class Level1(_Level):
         s11_dir: Path,
         time: datetime,
         s11_file_pattern: str = "{y}_{jd}_{h}_*_input{input}.s1p",
+        ignore_files=None,
     ):
         """From a given filename pattern, within a directory, find file closest to time.
 
@@ -304,6 +331,11 @@ class Level1(_Level):
             {d}: day of month (two-digit number)
             {jd}: day of year (three-digit number)
             {h}: hour of day (observation start) (two digit number)
+        ignore_files : list, optional
+            A list of file patterns to ignore. They need only partially match
+            the actual filenames. So for example, you could specify ``ignore_files=['2020_076']``
+            and it will ignore the file ``/home/user/data/2020_076_01_02_input1.s1p``.
+            Full regex can be used.
         """
         # Replace the suffix dot with a literal dot for regex
         s11_file_pattern = s11_file_pattern.replace(".", r"\.")
@@ -329,6 +361,8 @@ class Level1(_Level):
 
         p = re.compile(s11_file_pattern.format(**dct))
 
+        ignore = [re.compile(ign) for ign in ignore_files]
+
         files = list(s11_dir.glob("*"))
 
         s11_times = []
@@ -339,9 +373,12 @@ class Level1(_Level):
             # Ignore files that don't match the pattern
             if not match:
                 continue
-            else:
+            for ign in ignore:
+                if ign.match(str(fl.name)):
+                    continue
 
-                d = match.groupdict()
+            d = match.groupdict()
+
             indx.append(i)
 
             # Different time constructor for Day of year vs Day of month
@@ -384,6 +421,7 @@ class Level1(_Level):
         band: str,
         begin_time: datetime,
         s11_file_pattern: str,
+        ignore_files: [None, List[str]] = None,
     ):
         """Given an s11_path, return list of paths for each of the inputs"""
 
@@ -622,7 +660,7 @@ class Level1(_Level):
 
     @property
     def antenna_s11(self):
-        s11_files = self.meta["s11_files"]
+        s11_files = self.meta["s11_files"].split(":")
         freq = self.raw_frequencies
         switch_state_dir = self.meta["switch_state_dir"]
         switch_state_run_num = self.meta["switch_state_run_num"]
@@ -631,6 +669,11 @@ class Level1(_Level):
         return self._get_antenna_s11(
             s11_files, freq, switch_state_dir, n_terms, switch_state_run_num
         )
+
+    @cached_property
+    def calibration(self):
+        """The Calibration object used to calibrate this observation."""
+        return Calibration(self.meta["calfile"])
 
     @classmethod
     def _calibrate(
@@ -721,7 +764,7 @@ class Level1(_Level):
             switch_state_run_num = calfile.internal_switch.run_num
 
         meta = {
-            "s11_files": [str(f) for f in s11_files],
+            "s11_files": ":".join([str(f) for f in s11_files]),
             "antenna_s11_n_terms": antenna_s11_n_terms,
             "antenna_correction": antenna_correction,
             "balun_correction": balun_correction,
@@ -734,7 +777,8 @@ class Level1(_Level):
             "n_poly_xrfi": n_fg,
             "wterms": calfile.wterms,
             "cterms": calfile.cterms,
-            "calfile": calfile.path,
+            "calfile": str(calfile.calfile),
+            "calobs_path": str(calfile.calobs_path),
             "switch_state_dir": switch_state_dir,
             "switch_state_run_num": switch_state_run_num,
         }
@@ -947,22 +991,12 @@ class Level1(_Level):
         ax: [None, plt.Axes] = None,
         logy=True,
     ):
-        if quantity in ["p0", "p1", "p2"]:
-            q = self.spectra["switch_powers"][int(quantity[-1])]
-        else:
-            q = self.spectra[quantity]
-
         if ax is not None:
             fig = ax.figure
         else:
             fig, ax = plt.subplots(1, 1)
 
-        if integrator == "mean":
-            q, w = tools.weighted_mean(q, weights=self.weights, axis=0)
-            q[w == 0] = np.nan
-        elif integrator == "median":
-            q[self.weights == 0] = np.nan
-            q = np.nanmedian(q, axis=0)
+        q, w = self.integrate_over_time(quantity=quantity, integrator=integrator)
 
         unit = "[K]"
         if quantity == "Q":
@@ -976,6 +1010,31 @@ class Level1(_Level):
             ax.set_yscale("log")
 
         return ax
+
+    def _integrate_spectra(self, quantity="spectrum", integrator="mean", axis=0):
+        """Integrate spectra over given axis."""
+        if quantity in ["p0", "p1", "p2"]:
+            q = self.spectra["switch_powers"][int(quantity[-1])]
+        else:
+            q = self.spectra[quantity]
+
+        if integrator in ("mean", "standard_deviation"):
+            q, w = getattr(tools, "weighted_" + integrator)(q, self.weights, axis=axis)
+        else:
+            q = tools.weighted_sorted_metric(
+                q, self.weights, metric=integrator, axis=axis
+            )
+            w = np.where(np.all(self.weights == np.nan, axis=axis), 0, 1)
+
+        return q, w
+
+    def integrate_over_time(self, quantity="spectrum", integrator="mean"):
+        """Integrate the spectrum over time"""
+        return self._integrate_spectra(quantity=quantity, integrator=integrator, axis=0)
+
+    def integrate_over_frequency(self, quantity="spectrum", integrator="mean"):
+        """Integrate the spectrum over time"""
+        return self._integrate_spectra(quantity=quantity, integrator=integrator, axis=1)
 
 
 class Level2(_Level):
@@ -1239,6 +1298,11 @@ class Level2(_Level):
 
         return level1[0].raw_frequencies, data, ancillary, meta
 
+    @cached_property
+    def calibration(self):
+        """The calibration object used to calibrate these spectra."""
+        return self.previous_level.calibration
+
 
 class Level3(_Level):
     _structure = {
@@ -1250,6 +1314,11 @@ class Level3(_Level):
         "ancillary": {"std_dev": None, "years": None},
         "meta": None,
     }
+
+    @cached_property
+    def calibration(self):
+        """The calibration object used to calibrate these spectra."""
+        return self.previous_level.calibration
 
     @classmethod
     def _from_prev_level(
@@ -1418,6 +1487,11 @@ class Level4(_Level):
         "ancillary": {"std_dev": None,},
         "meta": None,
     }
+
+    @cached_property
+    def calibration(self):
+        """The calibration object used to calibrate these spectra."""
+        return self.previous_level.calibration
 
     @classmethod
     def _from_prev_level(
