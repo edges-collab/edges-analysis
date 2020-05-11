@@ -5,4 +5,7 @@ balun_correction: false
 antenna_correction: false
 ground_correction: false
 ignore_s11_files:
-  - 2020_065
+  - '2020_06'
+  - '2020_070'
+  - '2020_071'
+  - '2020_072'

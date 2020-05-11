@@ -361,7 +361,7 @@ class Level1(_Level):
 
         p = re.compile(s11_file_pattern.format(**dct))
 
-        ignore = [re.compile(ign) for ign in ignore_files]
+        ignore = [re.compile(ign) for ign in (ignore_files or [])]
 
         files = list(s11_dir.glob("*"))
 
@@ -373,9 +373,8 @@ class Level1(_Level):
             # Ignore files that don't match the pattern
             if not match:
                 continue
-            for ign in ignore:
-                if ign.match(str(fl.name)):
-                    continue
+            if any(ign.match(str(fl.name)) for ign in ignore):
+                continue
 
             d = match.groupdict()
 
@@ -448,7 +447,9 @@ class Level1(_Level):
 
         if s11_path.is_dir():
             # Get closest measurement
-            return cls._get_closest_s11_time(s11_path, begin_time, s11_file_pattern)
+            return cls._get_closest_s11_time(
+                s11_path, begin_time, s11_file_pattern, ignore_files=ignore_files
+            )
         else:
             # The path *must* have an {input} tag in it which we can search on
             fls = glob.glob(str(s11_path).format(input="?"))
@@ -1009,6 +1010,22 @@ class Level1(_Level):
         if logy:
             ax.set_yscale("log")
 
+        return ax
+
+    def plot_s11(self, ax=None):
+        if ax is None:
+            fig, ax = plt.subplots(1, 2, figsize=(12, 7), sharex=True)
+        ax[0].plot(self.raw_frequencies, 20 * np.log10(np.abs(self.antenna_s11)))
+        ax[0].set_title("Magnitude of Antenna S11")
+        ax[0].set_xlabel("Frequency [MHz]")
+        ax[0].set_ylabel("$|S_{11}|$ [dB]")
+
+        ax[1].plot(
+            self.raw_frequencies, (180 / np.pi) * np.unwrap(np.angle(self.antenna_s11))
+        )
+        ax[1].set_title("Phase of Antenna S11")
+        ax[1].set_xlabel("Frequency [MHz]")
+        ax[1].set_ylabel(r"$\angle S_{11}$ [${}^\circ$]")
         return ax
 
     def _integrate_spectra(self, quantity="spectrum", integrator="mean", axis=0):

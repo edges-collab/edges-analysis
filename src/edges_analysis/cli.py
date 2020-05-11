@@ -198,6 +198,11 @@ Metadata in file:
 
         l1.write(fname)
 
+    print(
+        stylize("All files written to:", attr("bold")),
+        stylize(str(output_dir), attr("dim")),
+    )
+
 
 @main.command()
 @click.argument("level", type=int)
