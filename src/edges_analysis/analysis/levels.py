@@ -808,7 +808,7 @@ class Level1(_Level):
         # Antenna Loss (interface between panels and balun)
         G = np.ones_like(freq.freq)
         if antenna_correction:
-            G *= loss.antenna_loss("default_antenna_loss.txt", freq.freq, band=band)
+            G *= loss.antenna_loss(antenna_correction, freq.freq, band=band)
 
         # Balun+Connector Loss
         if balun_correction:
@@ -817,7 +817,7 @@ class Level1(_Level):
 
         # Ground Loss
         if ground_correction:
-            G *= loss.ground_loss("default_ground_loss.txt", freq.freq, band=band)
+            G *= loss.ground_loss(ground_correction, freq.freq, band=band)
 
         a = ambient_temp + 273.15 if ambient_temp[0] < 200 else ambient_temp
         calibrated_temp = (calibrated_temp - np.outer(a, (1 - G))) / G

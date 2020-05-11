@@ -280,8 +280,10 @@ def antenna_loss(filename, freq, band=None):
         doesn't exist and isn't an absolute path (in which case the standard directory
         structure will be searched using ``band``).
     """
-    filename = Path(filename)
-    if not (filename.exists() or filename.is_absolute()):
+
+    if str(filename).startswith(":"):
         filename = Path(config["paths"]["antenna"]) / band / "loss" / filename
+    else:
+        filename = Path(filename)
 
     return _get_loss(str(filename), freq, 11)
