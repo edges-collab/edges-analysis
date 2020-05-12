@@ -1014,7 +1014,7 @@ class Level1(_Level):
 
     def plot_s11(self, ax=None):
         if ax is None:
-            fig, ax = plt.subplots(1, 2, figsize=(12, 7), sharex=True)
+            fig, ax = plt.subplots(1, 2, figsize=(8, 4), sharex=True)
         ax[0].plot(self.raw_frequencies, 20 * np.log10(np.abs(self.antenna_s11)))
         ax[0].set_title("Magnitude of Antenna S11")
         ax[0].set_xlabel("Frequency [MHz]")
