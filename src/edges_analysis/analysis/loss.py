@@ -232,13 +232,13 @@ def balun_and_connector_loss(
     return Gb, Gc
 
 
-def _get_loss(fname, f_MHz, n_terms):
+def _get_loss(fname, freq, n_terms):
     gr = np.genfromtxt(fname)
     fr = gr[:, 0]
     dr = gr[:, 1]
 
     par = np.polyfit(fr, dr, n_terms)
-    model = np.polyval(par, f_MHz)
+    model = np.polyval(par, freq)
 
     return 1 - model
 
@@ -258,9 +258,10 @@ def ground_loss(filename, freq, band=None):
         doesn't exist and isn't an absolute path (in which case the standard directory
         structure will be searched using ``band``).
     """
-    filename = Path(filename)
-    if not (filename.exists() or filename.is_absolute()):
-        filename = Path(config["paths"]["beams"]) / band / "loss" / filename
+    if str(filename).startswith(":"):
+        filename = Path(config["paths"]["antenna"]) / band / "loss" / str(filename)[1:]
+    else:
+        filename = Path(filename)
 
     return _get_loss(str(filename), freq, 8)
 
@@ -282,7 +283,7 @@ def antenna_loss(filename, freq, band=None):
     """
 
     if str(filename).startswith(":"):
-        filename = Path(config["paths"]["antenna"]) / band / "loss" / filename
+        filename = Path(config["paths"]["antenna"]) / band / "loss" / str(filename)[1:]
     else:
         filename = Path(filename)
 
