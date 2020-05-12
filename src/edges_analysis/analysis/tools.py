@@ -179,10 +179,10 @@ def weighted_sum(data, weights=None, normalize=False, axis=0):
         weights = np.ones_like(data)
 
     if normalize:
-        weights = weights.copy() / weights.max()
+        weights = weights.copy() / weights.nanmax()
 
-    sum = np.sum(data * weights, axis=axis)
-    weights = np.sum(weights, axis=axis)
+    sum = np.nansum(data * weights, axis=axis)
+    weights = np.nansum(weights, axis=axis)
 
     sum[weights == 0] = np.nan
     return sum, weights

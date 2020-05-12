@@ -1211,6 +1211,8 @@ class Level2(_Level):
                 print(
                     f"File {l1.filename.name} has been completely filtered by its aux data."
                 )
+                level1.remove(l1)
+                continue
 
             # For each level 1 file, do xrfi
             if "explicit" in xrfi_pipe:
@@ -1247,6 +1249,13 @@ class Level2(_Level):
                 )
                 l1.weights[flags] = 0
 
+                if np.sum(l1.weights) == 0:
+                    print(
+                        f"File {l1.filename.name} has been completely filtered by its rms data."
+                    )
+                    level1.remove(l1)
+                    continue
+
         if do_total_power_filter:
             pbar = tqdm.tqdm(enumerate(level1), unit="files", total=len(level1))
             for i, l1 in pbar:
@@ -1274,6 +1283,14 @@ class Level2(_Level):
                     flags=np.sum(l1.weights, axis=1).astype("bool"),
                 )
                 l1.weights[flags] = 0
+                if np.sum(l1.weights) == 0:
+                    print(
+                        f"File {l1.filename.name} has been completely filtered by its total power data."
+                    )
+                    level1.remove(l1)
+                    continue
+
+        meta["n_files_flagged"] = meta["n_files"] - len(level1)
 
         # Averaging data within GHA bins
         weights = np.zeros((len(level1), len(gha_edges) - 1, level1[0].freq.n))
