@@ -147,7 +147,7 @@ def wipld_read(filename, az_antenna_axis=0):
 
 
 def feko_read(
-    filename, frequency=None, band=None, frequency_out=None, az_antenna_axis=0,
+    filename, frequency=None, frequency_out=None, az_antenna_axis=0,
 ):
     """
     Read a FEKO beam file.
@@ -160,9 +160,6 @@ def feko_read(
     frequency : array-like, optional
         The frequencies of the data. This usually must be given, as they are not
         included in the data file itself. By default, uses range(50, 121, 2).
-    band : str, optional
-        If the filename is not absolute, the band must be provided to search for
-        the input file.
     frequency_out : array-like, optional
         If given, input frequencies will be interpolated to these frequencies.
     az_antenna_axis : int, optional
@@ -174,8 +171,6 @@ def feko_read(
         axis azimuth.
     """
     filename = Path(filename)
-    if not filename.is_absolute():
-        filename = Path(config["paths"]["beams"]) / band / "feko" / filename
 
     data = np.genfromtxt(str(filename))
     if frequency is None:
@@ -235,27 +230,28 @@ class BeamFactor(io.HDF5Object):
 
 
 def antenna_beam_factor(
-    band,
-    beam_file,
-    simulator,
-    save_dir=None,
-    save_fname=None,
-    f_low=None,
-    f_high=None,
-    normalize_mid_band_beam=True,
-    sky_model="haslam",
-    rotation_from_north=90,
-    index_model="gaussian",
-    sigma_deg=8.5,
-    index_center=2.4,
-    index_pole=2.65,
-    band_deg=10,
-    index_inband=2.5,
-    index_outband=2.6,
-    reference_frequency=100,
-    convolution_computation="old",
-    plot_format="polar",
-    sky_plot_path=None,
+    band: str,
+    beam_file: [str, Path],
+    simulator: str,
+    ground_loss_file: [str, Path],
+    save_dir: [None, str, Path] = None,
+    save_fname: [None, str, Path] = None,
+    f_low: [None, float] = None,
+    f_high: [None, float] = None,
+    normalize_mid_band_beam: bool = True,
+    sky_model: str = "haslam",
+    rotation_from_north: float = 90,
+    index_model: str = "gaussian",
+    sigma_deg: float = 8.5,
+    index_center: float = 2.4,
+    index_pole: float = 2.65,
+    band_deg: float = 10,
+    index_inband: float = 2.5,
+    index_outband: float = 2.6,
+    reference_frequency: float = 100,
+    convolution_computation: str = "old",
+    plot_format: str = "polar",
+    sky_plot_path: [None, str, Path] = None,
 ):
     """
     Calculate the antenna beam factor.
@@ -295,14 +291,16 @@ def antenna_beam_factor(
     if not save_dir:
         save_dir = Path(config["paths"]["beams"]) / f"{band}/beam_factors/"
 
-    if not Path(save_fname).is_absolute():
-        save_fname = Path(save_dir).absolute() / save_fname
+    if str(save_fname).startswith(":"):
+        save_fname = Path(save_dir).absolute() / str(save_fname)[1:]
 
-    if not Path(beam_file).is_absolute():
+    if str(beam_file).startswith(":"):
         beam_file = (
             Path(config["paths"]["beams"])
-            / f"{band}/simulations/{simulator}/{beam_file}"
-        )
+            / f"{band}/simulations/{simulator}/{str(beam_file)[1:]}"
+        ).absolute()
+    else:
+        beam_file = Path(beam_file).absolute()
 
     # Antenna beam
     az_beam = np.arange(0, 360)
@@ -310,7 +308,7 @@ def antenna_beam_factor(
     freq_array = None
     if simulator == "feko":
         rotation_from_north -= 90
-        beam_all = feko_read(band, beam_file, az_antenna_axis=rotation_from_north)
+        beam_all = feko_read(beam_file, az_antenna_axis=rotation_from_north)
 
         # TODO: move this to actual beam reading/storing.
         if len(beam_all) == 76:
@@ -342,11 +340,11 @@ def antenna_beam_factor(
         f_low = f_low or 50
         f_high = f_high or 200
 
-    freq_mask = freq_array >= f_low & freq_array <= f_high
+    freq_mask = (freq_array >= f_low) & (freq_array <= f_high)
     freq_array = freq_array[freq_mask]
     beam_all = beam_all[freq_mask, :, :]
 
-    ground_gain = ground_loss("mid_band", freq_array)
+    ground_gain = ground_loss(ground_loss_file, band=band, freq=freq_array)
 
     # Index of reference frequency
     index_freq_array = np.arange(len(freq_array))
