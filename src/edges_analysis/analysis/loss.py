@@ -68,7 +68,7 @@ def balun_and_connector_loss(
     e0 = 1 / (u0 * c ** 2)  # permittivity of free space
 
     parameters = {
-        "low3": {
+        "low": {
             "balun_length": 43.6 * inch2m,
             "connector_length": 0.8,
             "er_air": 1.07,
