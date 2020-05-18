@@ -244,7 +244,12 @@ def _get_loss(fname, freq, n_terms):
     return 1 - model
 
 
-def ground_loss(filename, freq, band=None):
+def ground_loss(
+    filename: [str, Path, bool],
+    freq: [np.ndarray],
+    band: [None, str] = None,
+    configuration: [str] = "",
+):
     """
     Calculate ground loss of a particular antenna at given frequencies.
 
@@ -258,11 +263,18 @@ def ground_loss(filename, freq, band=None):
         The instrument to find the ground loss for. Only required if `filename`
         doesn't exist and isn't an absolute path (in which case the standard directory
         structure will be searched using ``band``).
+    configuration : str, optional
+        The configuration of the instrument. A string, such as "45deg", which defines
+        the orientation or other configuration parameters of the instrument, which may
+        affect the ground loss.
     """
     if str(filename).startswith(":"):
         if str(filename) == ":":
             # Use the built-in loss files
-            filename = Path(__file__) / "data" / "loss" / band / "ground.txt"
+            fl = "ground"
+            if configuration:
+                fl += "_" + configuration
+            filename = Path(__file__) / "data" / "loss" / band / fl + ".txt"
             if not filename.exists():
                 return np.zeros_like(freq)
         else:
@@ -277,7 +289,10 @@ def ground_loss(filename, freq, band=None):
 
 
 def antenna_loss(
-    filename: [str, Path, bool], freq: [np.ndarray], band: [None, str] = None
+    filename: [str, Path, bool],
+    freq: [np.ndarray],
+    band: [None, str] = None,
+    configuration: [str] = "",
 ):
     """
     Calculate antenna loss of a particular antenna at given frequencies.
@@ -290,14 +305,21 @@ def antenna_loss(
         Frequency in MHz. For mid-band (low-band), between 50 and 150 (120) MHz.
     band : str, optional
         The instrument to find the antenna loss for. Only required if `filename`
-        starts with the magic ':' or is simply 'True' (in which case the standard directory
+        starts with the magic ':' (in which case the standard directory
         structure will be searched using ``band``).
+    configuration : str, optional
+        The configuration of the instrument. A string, such as "45deg", which defines
+        the orientation or other configuration parameters of the instrument, which may
+        affect the antenna loss.
     """
 
     if str(filename).startswith(":"):
         if str(filename) == ":":
             # Use the built-in loss files
-            filename = Path(__file__) / "data" / "loss" / band / "antenna.txt"
+            fl = "antenna"
+            if configuration:
+                fl += "_" + configuration
+            filename = Path(__file__) / "data" / "loss" / band / fl + ".txt"
             if not filename.exists():
                 return np.zeros_like(freq)
         else:
