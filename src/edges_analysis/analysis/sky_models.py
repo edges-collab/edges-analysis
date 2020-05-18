@@ -4,6 +4,7 @@ from pathlib import Path
 from astropy import coordinates as apc
 from astropy import io as fits
 from ..config import config
+import pygsm
 
 
 def get_map_coords(reorder=False, res=9):
@@ -34,6 +35,25 @@ def haslam_408MHz_map():
         Path(config["paths"]["sky_model"]) / "haslam_map" / "lambda_haslam408_dsds.fits"
     )
     return (haslam_map[1].data)["temperature"], get_map_coords()
+
+
+def gsm_map():
+    """
+    Get the 2008 GSM in nested co-ordinates
+
+    Returns
+    -------
+
+    """
+    gsm = pygsm.GlobalSkyModel()
+    gsm = hp.reorder(gsm.generate(408), r2n=True)
+    lon, lat = hp.pix2ang(
+        nside=int(np.sqrt(len(gsm) / 12)),
+        ipix=np.arange(len(gsm)),
+        lonlat=True,
+        nest=True,
+    )
+    return gsm, (lon, lat, apc.SkyCoord(lon, lat, frame="galactic", unit="deg"))
 
 
 def remazeilles_408MHz_map():

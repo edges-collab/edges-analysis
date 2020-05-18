@@ -19,8 +19,10 @@ from .sky_models import (
     guzman_45MHz_map,
     haslam_408MHz_map,
     remazeilles_408MHz_map,
+    gsm_map,
 )
 from ..config import config
+from .._data_retrieval import retrieve_beam
 from .. import const
 from edges_cal import FrequencyRange
 
@@ -147,7 +149,7 @@ def wipld_read(filename, az_antenna_axis=0):
 
 
 def feko_read(
-    filename, frequency=None, frequency_out=None, az_antenna_axis=0,
+    filename: [str, Path], frequency=None, frequency_out=None, az_antenna_axis=0,
 ):
     """
     Read a FEKO beam file.
@@ -155,8 +157,7 @@ def feko_read(
     Parameters
     ----------
     filename : path
-        The path to the file. Will look in the configured `beams` folder if not
-        an absolute path.
+        The path to the file.
     frequency : array-like, optional
         The frequencies of the data. This usually must be given, as they are not
         included in the data file itself. By default, uses range(50, 121, 2).
@@ -234,12 +235,13 @@ def antenna_beam_factor(
     beam_file: [str, Path],
     simulator: str,
     ground_loss_file: [str, Path],
+    configuration="",
     save_dir: [None, str, Path] = None,
     save_fname: [None, str, Path] = None,
     f_low: [None, float] = None,
     f_high: [None, float] = None,
     normalize_mid_band_beam: bool = True,
-    sky_model: str = "haslam",
+    sky_model: str = "gsm",
     rotation_from_north: float = 90,
     index_model: str = "gaussian",
     sigma_deg: float = 8.5,
@@ -294,9 +296,20 @@ def antenna_beam_factor(
     if str(save_fname).startswith(":"):
         save_fname = Path(save_dir).absolute() / str(save_fname)[1:]
 
-    if str(beam_file).startswith(":"):
+    if str(beam_file) == ":":
+        # Get the default beam file.
         beam_file = (
-            Path(config["paths"]["beams"])
+            Path(__file__).parent
+            / "data"
+            / "beams"
+            / band
+            / ("default.txt" if not configuration else f"{configuration}.txt")
+        )
+
+    elif str(beam_file).startswith(":"):
+        # Use a beam file in the standard directory.
+        beam_file = (
+            Path(config["paths"]["beams"]).expanduser()
             / f"{band}/simulations/{simulator}/{str(beam_file)[1:]}"
         ).absolute()
     else:
@@ -355,12 +368,13 @@ def antenna_beam_factor(
         "remazeilles": (remazeilles_408MHz_map, 408),
         "LW": (LW_150MHz_map, 150),
         "guzman": (guzman_45MHz_map, 45),
+        "gsm": (gsm_map, 408),
     }
     if sky_model not in sky_models:
         raise ValueError("sky_model must be one of {}".format(sky_models.keys()))
 
     map_orig, (lon, lat, galac_coord_object) = sky_models[sky_model][0]()
-    v0 = sky_models[sky_model][1]
+    nu0 = sky_models[sky_model][1]
 
     # Scale sky map (the map contains the CMB, which has to be removed and then added back)
     if index_model == "gaussian":
@@ -377,7 +391,7 @@ def antenna_beam_factor(
     Tcmb = 2.725
     sky_map = np.zeros((len(map_orig), len(freq_array)))
     for i in range(len(freq_array)):
-        sky_map[:, i] = (map_orig - Tcmb) * (freq_array[i] / v0) ** (-index) + Tcmb
+        sky_map[:, i] = (map_orig - Tcmb) * (freq_array[i] / nu0) ** (-index) + Tcmb
 
     # Reference UTC observation time. At this time, the LST is 0.1666 (00:10 Hrs LST) at the
     # EDGES location.

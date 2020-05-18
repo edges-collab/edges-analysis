@@ -836,7 +836,10 @@ class Level1(_Level):
         if beam_file:
             if not Path(beam_file).exists():
                 beam_file = (
-                    Path(config["paths"]["beams"]) / band / "beam_factors" / beam_file
+                    Path(config["paths"]["beams"]).expanduser()
+                    / band
+                    / "beam_factors"
+                    / beam_file
                 )
 
             beam_fac = beams.InterpolatedBeamFactor(beam_file)
