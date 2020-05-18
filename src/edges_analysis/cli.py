@@ -22,7 +22,7 @@ def _get_settings(settings):
     with open(settings, "r") as fl:
         settings = yaml.load(fl, Loader=yaml.FullLoader)
 
-    print(stylize(f"Settings:", attr("bold")))
+    print(stylize("Settings:", attr("bold")))
     for k, v in settings.items():
         print(f"    {k}:", stylize(v, attr("dim")))
 
