@@ -2,6 +2,7 @@ from pathlib import Path
 import numpy as np
 from edges_cal import reflection_coefficient as rc
 from ..config import config
+import warnings
 
 
 def balun_and_connector_loss(
@@ -259,14 +260,25 @@ def ground_loss(filename, freq, band=None):
         structure will be searched using ``band``).
     """
     if str(filename).startswith(":"):
-        filename = Path(config["paths"]["antenna"]) / band / "loss" / str(filename)[1:]
+        if str(filename) == ":":
+            # Use the built-in loss files
+            filename = Path(__file__) / "data" / "loss" / band / "ground.txt"
+            if not filename.exists():
+                return np.zeros_like(freq)
+        else:
+            # Find the file in the standard directory structure
+            filename = (
+                Path(config["paths"]["antenna"]) / band / "loss" / str(filename)[1:]
+            )
     else:
         filename = Path(filename)
 
     return _get_loss(str(filename), freq, 8)
 
 
-def antenna_loss(filename, freq, band=None):
+def antenna_loss(
+    filename: [str, Path, bool], freq: [np.ndarray], band: [None, str] = None
+):
     """
     Calculate antenna loss of a particular antenna at given frequencies.
 
@@ -278,12 +290,21 @@ def antenna_loss(filename, freq, band=None):
         Frequency in MHz. For mid-band (low-band), between 50 and 150 (120) MHz.
     band : str, optional
         The instrument to find the antenna loss for. Only required if `filename`
-        doesn't exist and isn't an absolute path (in which case the standard directory
+        starts with the magic ':' or is simply 'True' (in which case the standard directory
         structure will be searched using ``band``).
     """
 
     if str(filename).startswith(":"):
-        filename = Path(config["paths"]["antenna"]) / band / "loss" / str(filename)[1:]
+        if str(filename) == ":":
+            # Use the built-in loss files
+            filename = Path(__file__) / "data" / "loss" / band / "antenna.txt"
+            if not filename.exists():
+                return np.zeros_like(freq)
+        else:
+            # Find the file in the standard directory structure
+            filename = (
+                Path(config["paths"]["antenna"]) / band / "loss" / str(filename)[1:]
+            )
     else:
         filename = Path(filename)
 
