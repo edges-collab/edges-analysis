@@ -270,7 +270,7 @@ class Level1(_Level):
         # We need to do any rfi cleaning desired on the raw powers right here, as in
         # future levels they are not stored.
         if xrfi_pipe:
-            logger.info(f"Running xRFI...")
+            logger.info("Running xRFI...")
             t = time.time()
             for pspec in p:
                 tools.run_xrfi_pipe(pspec, weights, xrfi_pipe)
