@@ -5,6 +5,12 @@ from astropy import coordinates as apc
 from astropy import io as fits
 from ..config import config
 import pygsm
+import time
+import logging
+
+logger = logging.getLogger(__name__)
+
+MAX_NSIDE = 7  # Corresponds to about 1/2 degree squared.
 
 
 def get_map_coords(reorder=False, res=9):
@@ -45,8 +51,13 @@ def gsm_map():
     -------
 
     """
-    gsm = pygsm.GlobalSkyModel()
-    gsm = hp.reorder(gsm.generate(408), r2n=True)
+    gsm = pygsm.GlobalSkyModel().generate(408)
+    if len(gsm) > 12 * 128 ** 2:
+        gsm = hp.ud_grade(gsm, nside_out=2 ** 7)
+
+    # Get into NESTED order
+    gsm = hp.reorder(gsm, r2n=True)
+
     lon, lat = hp.pix2ang(
         nside=int(np.sqrt(len(gsm) / 12)),
         ipix=np.arange(len(gsm)),
@@ -134,3 +145,51 @@ def guzman_45MHz_map():
     m[DEC > 68] = np.mean(m[(DEC > 60) & (DEC < 68)])
 
     return m, (LON, DEC, apc_coord)
+
+
+def interpolate_sky_to_freq(
+    sky_model,
+    freq_array,
+    index_model: str = "gaussian",
+    sigma_deg: float = 8.5,
+    index_center: float = 2.4,
+    index_pole: float = 2.65,
+    band_deg: float = 10,
+    index_inband: float = 2.5,
+    index_outband: float = 2.6,
+):
+    sky_models = {
+        "haslam": (haslam_408MHz_map, 408),
+        "remazeilles": (remazeilles_408MHz_map, 408),
+        "LW": (LW_150MHz_map, 150),
+        "guzman": (guzman_45MHz_map, 45),
+        "gsm": (gsm_map, 408),
+    }
+    if sky_model not in sky_models:
+        raise ValueError("sky_model must be one of {}".format(sky_models.keys()))
+
+    t = time.time()
+    logger.info(f"Obtaining {sky_model} sky model.")
+    map_orig, (lon, lat, galac_coord_object) = sky_models[sky_model][0]()
+    logger.info(f"Took {time.time() - t} sec.")
+
+    nu0 = sky_models[sky_model][1]
+
+    # Scale sky map (the map contains the CMB, which has to be removed and then added back)
+    if index_model == "gaussian":
+        index = index_pole - (index_pole - index_center) * np.exp(
+            -(1 / 2) * (np.abs(lat) / sigma_deg) ** 2
+        )
+    elif index_model == "step":
+        index = np.zeros(len(lat))
+        index[np.abs(lat) <= band_deg] = index_inband
+        index[np.abs(lat) > band_deg] = index_outband
+    else:
+        raise ValueError("index_model must be either 'gaussian' or 'step'")
+
+    Tcmb = 2.725
+    sky_map = np.zeros((len(map_orig), len(freq_array)))
+    for i in range(len(freq_array)):
+        sky_map[:, i] = (map_orig - Tcmb) * (freq_array[i] / nu0) ** (-index) + Tcmb
+
+    return sky_map, lon, lat, galac_coord_object

@@ -834,19 +834,10 @@ class Level1(_Level):
 
         # Beam factor
         if beam_file:
-            if not Path(beam_file).exists():
-                beam_file = (
-                    Path(config["paths"]["beams"]).expanduser()
-                    / band
-                    / "beam_factors"
-                    / beam_file
-                )
-
-            beam_fac = beams.InterpolatedBeamFactor(beam_file)
+            beam_fac = beams.InterpolatedBeamFactor.from_beam_factor(
+                beam_file, band=band, f_new=freq.freq
+            )
             bf = beam_fac.evaluate(lst)
-            bf = bf[
-                :, (beam_fac["frequency"] >= f_low) & (beam_fac["frequency"] <= f_high)
-            ]
 
             # Remove beam chromaticity
             calibrated_temp /= bf
