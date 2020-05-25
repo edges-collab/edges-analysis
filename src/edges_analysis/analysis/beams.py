@@ -240,7 +240,7 @@ def antenna_beam_factor(
     f_low: [None, float] = None,
     f_high: [None, float] = None,
     normalize_beam: bool = True,
-    sky_model: str = "gsm",
+    sky_model: str = "Haslam408",
     rotation_from_north: float = 90,
     index_model: str = "gaussian",
     sigma_deg: float = 8.5,
@@ -367,9 +367,8 @@ def antenna_beam_factor(
     # Index of reference frequency
     indx_ref_freq = np.argwhere(freq_array == reference_frequency)[0][0]
 
-    sky_models.MAX_NSIDE = max_nside
-    sky_map, lon, lat, galac_coord_object = sky_models.interpolate_sky_to_freq(
-        sky_model,
+    sky_model = getattr(sky_models, sky_model)(max_nside=max_nside)
+    sky_map = sky_model.interpolate_freq(
         freq_array,
         index_model=index_model,
         index_pole=index_pole,
@@ -379,6 +378,7 @@ def antenna_beam_factor(
         band_deg=band_deg,
         sigma_deg=sigma_deg,
     )
+    galactic_coords = sky_model.get_sky_coords()
 
     # Reference UTC observation time. At this time, the LST is 0.1666 (00:10 Hrs LST) at the
     # EDGES location.
@@ -401,7 +401,7 @@ def antenna_beam_factor(
         lst[i] = coords.utc2lst([ref_time], const.edges_lon_deg)
 
         # Transform Galactic coordinates of Sky Model to Local coordinates
-        altaz = galac_coord_object.transform_to(
+        altaz = galactic_coords.transform_to(
             apc.AltAz(
                 location=const.edges_location,
                 obstime=apt.Time(ref_time, format="datetime"),
@@ -441,7 +441,6 @@ def antenna_beam_factor(
         for j in tqdm(range(len(freq_array)), unit="Frequencies"):
             beam_above_horizon = beam_interp[j](az_el_above_horizon)
 
-            #            no_nan_array = np.ones(len(az_above_horizon)) - np.isnan(beam_above_horizon)
             index_no_nan = ~np.isnan(beam_above_horizon)
 
             sky_above_horizon_ff = sky_above_horizon[:, j].flatten()
@@ -528,6 +527,7 @@ def antenna_beam_factor(
             save_dir / f"{simulator}_{sky_model}_ref{reference_frequency:.2f}_{hsh}.h5"
         )
 
+    print(f"Writing out beam file to {save_fname}")
     bf = BeamFactor.from_data(out, filename=save_fname)
     bf.write(clobber=True)
 
