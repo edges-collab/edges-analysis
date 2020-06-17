@@ -170,12 +170,17 @@ def feko_read(
         axis azimuth.
     """
     filename = Path(filename)
-
+    print(filename)
     data = np.genfromtxt(str(filename))
-    if frequency is None:
-        frequency = np.arange(50, 121, 2)
-
-    freq = FrequencyRange(frequency)
+    frequency = []
+    with open(filename) as fl:
+        for line in fl.readlines():
+            if line.startswith('#FREQUENCY'):
+                l = line.split(' ')
+                indx = l.index('MHz')
+                frequency.append(float(l[indx-1]))    
+    freq = FrequencyRange(np.array(frequency))
+    
 
     # Loading data and convert to linear representation
     beam_maps = np.zeros((len(frequency), 91, 360))
@@ -324,8 +329,8 @@ def antenna_beam_factor(
             freq_array = np.arange(60, 201, 2, dtype="uint32")
         elif len(beam_all) == 36:
             freq_array = np.arange(50, 121, 2, dtype="uint32")
-        elif len(beam_all) == 41:
-            freq_array = np.arange(40, 201, 2, dtype="uint32")
+        elif len(beam_all) == 31:
+            freq_array = np.arange(40, 101, 2, dtype="uint32")
 
     elif simulator == "wipl-d":  # Beams from WIPL-D
         freq_array, az_beam, el_beam, beam_all = wipld_read(

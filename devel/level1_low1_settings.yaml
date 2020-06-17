@@ -1,0 +1,10 @@
+band: low
+f_low: 50
+f_high: 100
+calfile: /data4/nmahesh/edges/cal_file_Rcv01_2015_09.h5
+s11_path: /data5/edges/data/S11_antenna/low_band/20160830_a/s11
+switch_state_dir: /data5/edges/data/Receiver01/Receiver01_2015_09_02_040_to_200MHz/25C/S11/SwitchingState01
+balun_correction: true
+antenna_correction: false
+ground_correction: ':'
+beam_file: ':feko_gsm_ref100.00_a6823f3bf4d609908faaa5aeeb2b2b8a.h5'
