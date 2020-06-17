@@ -367,7 +367,7 @@ def antenna_beam_factor(
     # Index of reference frequency
     indx_ref_freq = np.argwhere(freq_array == reference_frequency)[0][0]
 
-    sky_model = getattr(sky_models, sky_model)(max_nside=max_nside)
+    sky_model = getattr(sky_models, sky_model)(max_res=max_nside)
     sky_map = sky_model.interpolate_freq(
         freq_array,
         index_model=index_model,
