@@ -140,6 +140,7 @@ class SkyModel:
 class Haslam408(SkyModel):
     url = "https://lambda.gsfc.nasa.gov/data/foregrounds/haslam/lambda_haslam408_dsds.fits"
     frequency = 408.0
+    header_hdu = 1
 
 
 class Remazeilles408(SkyModel):
