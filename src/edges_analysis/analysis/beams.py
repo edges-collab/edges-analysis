@@ -15,8 +15,9 @@ from tqdm import tqdm
 from . import coordinates as coords
 from .loss import ground_loss
 from .plots import plot_beam_factor
-from . import io
 from . import sky_models
+
+from edges_io.h5 import HDF5Object
 
 from ..config import config
 from .. import const
@@ -170,17 +171,16 @@ def feko_read(
         axis azimuth.
     """
     filename = Path(filename)
-    print(filename)
+
     data = np.genfromtxt(str(filename))
     frequency = []
     with open(filename) as fl:
         for line in fl.readlines():
-            if line.startswith('#FREQUENCY'):
-                l = line.split(' ')
-                indx = l.index('MHz')
-                frequency.append(float(l[indx-1]))    
+            if line.startswith("#FREQUENCY"):
+                line = line.split(" ")
+                indx = line.index("MHz")
+                frequency.append(float(line[indx - 1]))
     freq = FrequencyRange(np.array(frequency))
-    
 
     # Loading data and convert to linear representation
     beam_maps = np.zeros((len(frequency), 91, 360))
@@ -221,16 +221,34 @@ def shift_beam_maps(az_antenna_axis, beam_maps):
     return beam_maps_shifted
 
 
-class BeamFactor(io.HDF5Object):
+class BeamFactor(HDF5Object):
     """A non-interpolated beam factor."""
 
     _structure = {
-        "frequency": None,
-        "lst": None,
-        "antenna_temp_above_horizon": None,
-        "loss_fraction": None,
-        "beam_factor": None,
-        "meta": None,
+        "frequency": lambda x: (x.ndim == 1 and x.dtype == float),
+        "lst": lambda x: (x.ndim == 1 and x.dtype == float),
+        "antenna_temp_above_horizon": lambda x: (x.ndim == 2 and x.dtype == float),
+        "loss_fraction": lambda x: (x.ndim == 2 and x.dtype == float),
+        "beam_factor": lambda x: (x.ndim == 2 and x.dtype == float),
+        "meta": {
+            "beam_file": lambda x: isinstance(x, str),
+            "simulator": lambda x: isinstance(x, str),
+            "f_low": lambda x: isinstance(x, float),
+            "f_high": lambda x: isinstance(x, float),
+            "normalize_beam": lambda x: isinstance(x, bool),
+            "sky_model": lambda x: isinstance(x, str),
+            "rotation_from_north": lambda x: isinstance(x, float),
+            "index_model": lambda x: isinstance(x, str),
+            "sigma_deg": lambda x: isinstance(x, float),
+            "index_center": lambda x: isinstance(x, float),
+            "index_pole": lambda x: isinstance(x, float),
+            "band_deg": lambda x: isinstance(x, float),
+            "index_inband": lambda x: isinstance(x, float),
+            "index_outband": lambda x: isinstance(x, float),
+            "reference_frequency": lambda x: isinstance(x, float),
+            "convolution_computation": lambda x: isinstance(x, str),
+            "max_nside": lambda x: isinstance(x, int),
+        },
     }
 
 
@@ -259,6 +277,7 @@ def antenna_beam_factor(
     plot_format: str = "polar",
     sky_plot_path: [None, str, Path] = None,
     max_nside=7,
+    twenty_min_per_lst=1,
 ):
     """
     Calculate the antenna beam factor.
@@ -390,7 +409,7 @@ def antenna_beam_factor(
     ref_time = dt.datetime(2014, 1, 1, 9, 39, 42)
 
     # Looping over LST
-    lst = np.zeros(72)  # TODO: magic number
+    lst = np.zeros(72 // twenty_min_per_lst)  # TODO: magic number
     convolution_ref = np.zeros((len(lst), len(beam_all)))
     antenna_temperature_above_horizon = np.zeros((len(lst), len(beam_all)))
     loss_fraction = np.zeros((len(lst), len(beam_all)))
@@ -399,9 +418,9 @@ def antenna_beam_factor(
     twenty_lst_min = dt.timedelta(minutes=19, seconds=57)
 
     # TODO: consider adding progress bar.
-    for i in tqdm(range(len(lst)), unit="LSTs"):
+    for i in tqdm(range(len(lst)), unit="LST"):
         if i > 0:
-            ref_time += twenty_lst_min
+            ref_time += twenty_lst_min * twenty_min_per_lst
 
         lst[i] = coords.utc2lst([ref_time], const.edges_lon_deg)
 
@@ -443,7 +462,7 @@ def antenna_beam_factor(
 
         # Loop over frequency
         # TODO: consider adding progress bar.
-        for j in tqdm(range(len(freq_array)), unit="Frequencies"):
+        for j in tqdm(range(len(freq_array)), unit="Frequency"):
             beam_above_horizon = beam_interp[j](az_el_above_horizon)
 
             index_no_nan = ~np.isnan(beam_above_horizon)
@@ -501,28 +520,29 @@ def antenna_beam_factor(
     beam_factor = (convolution_ref.T / convolution_ref[:, indx_ref_freq]).T
 
     out = {
-        "frequency": freq_array,
+        "frequency": freq_array.astype(np.float),
         "lst": lst,
         "antenna_temp_above_horizon": antenna_temperature_above_horizon,
         "loss_fraction": loss_fraction,
         "beam_factor": beam_factor,
         "meta": {
-            "beam_file": beam_file,
+            "beam_file": str(beam_file),
             "simulator": simulator,
-            "f_low": f_low,
-            "f_high": f_high,
-            "normalize_beam": normalize_beam,
-            "sky_model": sky_model,
-            "rotation_from_north": rotation_from_north,
-            "index_model": index_model,
-            "sigma_deg": sigma_deg,
-            "index_center": index_center,
-            "index_pole": index_pole,
-            "band_deg": band_deg,
-            "index_inband": index_inband,
-            "index_outband": index_outband,
-            "reference_frequency": reference_frequency,
-            "convolution_computation": convolution_computation,
+            "f_low": float(f_low),
+            "f_high": float(f_high),
+            "normalize_beam": bool(normalize_beam),
+            "sky_model": str(sky_model),
+            "rotation_from_north": float(rotation_from_north),
+            "index_model": str(index_model),
+            "sigma_deg": float(sigma_deg),
+            "index_center": float(index_center),
+            "index_pole": float(index_pole),
+            "band_deg": float(band_deg),
+            "index_inband": float(index_inband),
+            "index_outband": float(index_outband),
+            "reference_frequency": float(reference_frequency),
+            "convolution_computation": str(convolution_computation),
+            "max_nside": int(max_nside),
         },
     }
 
@@ -539,7 +559,7 @@ def antenna_beam_factor(
     return bf
 
 
-class InterpolatedBeamFactor(io.HDF5Object):
+class InterpolatedBeamFactor(HDF5Object):
     _structure = {
         "beam_factor": None,
         "frequency": None,
