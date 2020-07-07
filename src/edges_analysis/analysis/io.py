@@ -174,17 +174,23 @@ class HDF5Object:
                     else:
                         if v is None:
                             v = "none"
+                        elif isinstance(v, Path):
+                            v = str(v)
+
                         grp[k] = v
 
                 except TypeError:
                     raise TypeError(
                         f"For key '{k}' in class '{self.__class__.__name__}', type '"
-                        f"{type(cache[k])}' is not "
+                        f"{type(v)}' is not "
                         f"allowed in HDF5."
                     )
 
         to_write = self.__memcache__
         to_write["meta"].update(self._get_extra_meta())
+
+        if not filename.parent.exists():
+            filename.parent.mkdir(parents=True)
 
         with h5py.File(filename, "w") as fl:
             _write(fl, self._structure, to_write)

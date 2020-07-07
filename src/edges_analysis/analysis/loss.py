@@ -2,6 +2,7 @@ from pathlib import Path
 import numpy as np
 from edges_cal import reflection_coefficient as rc
 from ..config import config
+import warnings
 
 
 def balun_and_connector_loss(
@@ -68,7 +69,7 @@ def balun_and_connector_loss(
     e0 = 1 / (u0 * c ** 2)  # permittivity of free space
 
     parameters = {
-        "low3": {
+        "low": {
             "balun_length": 43.6 * inch2m,
             "connector_length": 0.8,
             "er_air": 1.07,
@@ -243,7 +244,12 @@ def _get_loss(fname, freq, n_terms):
     return 1 - model
 
 
-def ground_loss(filename, freq, band=None):
+def ground_loss(
+    filename: [str, Path, bool],
+    freq: [np.ndarray],
+    band: [None, str] = None,
+    configuration: [str] = "",
+):
     """
     Calculate ground loss of a particular antenna at given frequencies.
 
@@ -257,16 +263,37 @@ def ground_loss(filename, freq, band=None):
         The instrument to find the ground loss for. Only required if `filename`
         doesn't exist and isn't an absolute path (in which case the standard directory
         structure will be searched using ``band``).
+    configuration : str, optional
+        The configuration of the instrument. A string, such as "45deg", which defines
+        the orientation or other configuration parameters of the instrument, which may
+        affect the ground loss.
     """
     if str(filename).startswith(":"):
-        filename = Path(config["paths"]["antenna"]) / band / "loss" / str(filename)[1:]
+        if str(filename) == ":":
+            # Use the built-in loss files
+            fl = "ground"
+            if configuration:
+                fl += "_" + configuration
+            filename = Path(__file__).parent / "data" / "loss" / band / (fl + ".txt")
+            if not filename.exists():
+                return np.zeros_like(freq)
+        else:
+            # Find the file in the standard directory structure
+            filename = (
+                Path(config["paths"]["antenna"]) / band / "loss" / str(filename)[1:]
+            )
     else:
         filename = Path(filename)
 
     return _get_loss(str(filename), freq, 8)
 
 
-def antenna_loss(filename, freq, band=None):
+def antenna_loss(
+    filename: [str, Path, bool],
+    freq: [np.ndarray],
+    band: [None, str] = None,
+    configuration: [str] = "",
+):
     """
     Calculate antenna loss of a particular antenna at given frequencies.
 
@@ -278,12 +305,28 @@ def antenna_loss(filename, freq, band=None):
         Frequency in MHz. For mid-band (low-band), between 50 and 150 (120) MHz.
     band : str, optional
         The instrument to find the antenna loss for. Only required if `filename`
-        doesn't exist and isn't an absolute path (in which case the standard directory
+        starts with the magic ':' (in which case the standard directory
         structure will be searched using ``band``).
+    configuration : str, optional
+        The configuration of the instrument. A string, such as "45deg", which defines
+        the orientation or other configuration parameters of the instrument, which may
+        affect the antenna loss.
     """
 
     if str(filename).startswith(":"):
-        filename = Path(config["paths"]["antenna"]) / band / "loss" / str(filename)[1:]
+        if str(filename) == ":":
+            # Use the built-in loss files
+            fl = "antenna"
+            if configuration:
+                fl += "_" + configuration
+            filename = Path(__file__).parent / "data" / "loss" / band / (fl + ".txt")
+            if not filename.exists():
+                return np.zeros_like(freq)
+        else:
+            # Find the file in the standard directory structure
+            filename = (
+                Path(config["paths"]["antenna"]) / band / "loss" / str(filename)[1:]
+            )
     else:
         filename = Path(filename)
 

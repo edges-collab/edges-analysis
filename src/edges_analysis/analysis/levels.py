@@ -200,6 +200,7 @@ class Level1(_Level):
         band,
         calfile,
         s11_path,
+        configuration="",
         weather_file=None,
         thermlog_file=None,
         out_file=None,
@@ -262,6 +263,7 @@ class Level1(_Level):
             ambient_temp=time_based_anc["ambient_temp"],
             lst=time_based_anc["lst"],
             s11_files=s11_files,
+            configuration="",
             **cal_kwargs,
         )
         logger.info(f"... finished in {time.time() - t:.2f} sec.")
@@ -686,6 +688,7 @@ class Level1(_Level):
         ambient_temp,
         lst,
         s11_files,
+        configuration="",
         switch_state_dir=None,
         weights=None,
         antenna_s11_n_terms=15,
@@ -729,6 +732,9 @@ class Level1(_Level):
         beam_file : path, optional
             Filename (not absolute) of a beam model to use for correcting for the beam
             factor. Not used if not provided.
+        configuration : str, optional
+            Specification of the antenna -- orientation etc. Should be a predefined
+            format, eg '45deg'.
         f_low : float
             Minimum frequency to use.
         f_high : float
@@ -808,7 +814,9 @@ class Level1(_Level):
         # Antenna Loss (interface between panels and balun)
         G = np.ones_like(freq.freq)
         if antenna_correction:
-            G *= loss.antenna_loss(antenna_correction, freq.freq, band=band)
+            G *= loss.antenna_loss(
+                antenna_correction, freq.freq, band=band, configuration=configuration
+            )
 
         # Balun+Connector Loss
         if balun_correction:
@@ -817,23 +825,19 @@ class Level1(_Level):
 
         # Ground Loss
         if ground_correction:
-            G *= loss.ground_loss(ground_correction, freq.freq, band=band)
+            G *= loss.ground_loss(
+                ground_correction, freq.freq, band=band, configuration=configuration
+            )
 
         a = ambient_temp + 273.15 if ambient_temp[0] < 200 else ambient_temp
         calibrated_temp = (calibrated_temp - np.outer(a, (1 - G))) / G
 
         # Beam factor
         if beam_file:
-            if not Path(beam_file).exists():
-                beam_file = (
-                    Path(config["paths"]["beams"]) / band / "beam_factors" / beam_file
-                )
-
-            beam_fac = beams.InterpolatedBeamFactor(beam_file)
+            beam_fac = beams.InterpolatedBeamFactor.from_beam_factor(
+                beam_file, band=band, f_new=freq.freq
+            )
             bf = beam_fac.evaluate(lst)
-            bf = bf[
-                :, (beam_fac["frequency"] >= f_low) & (beam_fac["frequency"] <= f_high)
-            ]
 
             # Remove beam chromaticity
             calibrated_temp /= bf
