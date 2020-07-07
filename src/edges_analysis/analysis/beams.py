@@ -201,7 +201,7 @@ def feko_read(
 
     # Shifting beam relative to true AZ (referenced at due North)
     # Due to angle of orientation of excited antenna panels relative to due North
-    return shift_beam_maps(az_antenna_axis, beam_maps)
+    return shift_beam_maps(az_antenna_axis, beam_maps), freq
 
 
 def shift_beam_maps(az_antenna_axis, beam_maps):
@@ -235,7 +235,7 @@ class BeamFactor(HDF5Object):
             "simulator": lambda x: isinstance(x, str),
             "f_low": lambda x: isinstance(x, float),
             "f_high": lambda x: isinstance(x, float),
-            "normalize_beam": lambda x: isinstance(x, bool),
+            "normalize_beam": lambda x: isinstance(x, (bool, np.bool_)),
             "sky_model": lambda x: isinstance(x, str),
             "rotation_from_north": lambda x: isinstance(x, float),
             "index_model": lambda x: isinstance(x, str),
@@ -272,7 +272,7 @@ def antenna_beam_factor(
     band_deg: float = 10,
     index_inband: float = 2.5,
     index_outband: float = 2.6,
-    reference_frequency: float = 100,
+    reference_frequency: [None, float] = None,
     convolution_computation: str = "old",
     plot_format: str = "polar",
     sky_plot_path: [None, str, Path] = None,
@@ -336,20 +336,10 @@ def antenna_beam_factor(
     # Antenna beam
     az_beam = np.arange(0, 360)
     el_beam = np.arange(0, 91)
-    freq_array = None
+
     if simulator == "feko":
         rotation_from_north -= 90
-        beam_all = feko_read(beam_file, az_antenna_axis=rotation_from_north)
-
-        # TODO: move this to actual beam reading/storing.
-        if len(beam_all) == 76:
-            freq_array = np.arange(50, 201, 2, dtype="uint32")
-        elif len(beam_all) == 71:
-            freq_array = np.arange(60, 201, 2, dtype="uint32")
-        elif len(beam_all) == 36:
-            freq_array = np.arange(50, 121, 2, dtype="uint32")
-        elif len(beam_all) == 31:
-            freq_array = np.arange(40, 101, 2, dtype="uint32")
+        beam_all, freq_array = feko_read(beam_file, az_antenna_axis=rotation_from_north)
 
     elif simulator == "wipl-d":  # Beams from WIPL-D
         freq_array, az_beam, el_beam, beam_all = wipld_read(
@@ -368,8 +358,11 @@ def antenna_beam_factor(
         f_low = 50
         f_high = 150
     else:
-        f_low = f_low or 50
-        f_high = f_high or 200
+        f_low = f_low or freq_array.min()
+        f_high = f_high or freq_array.max()
+
+    if reference_frequency is None:
+        reference_frequency = (f_high + f_low) / 2
 
     freq_mask = (freq_array >= f_low) & (freq_array <= f_high)
     freq_array = freq_array[freq_mask]
@@ -389,7 +382,8 @@ def antenna_beam_factor(
     ground_gain = ground_loss(ground_loss_file, band=band, freq=freq_array)
 
     # Index of reference frequency
-    indx_ref_freq = np.argwhere(freq_array == reference_frequency)[0][0]
+    indx_ref_freq = np.argwhere(freq_array >= reference_frequency)[0][0]
+    reference_frequency = freq_array[indx_ref_freq]
 
     sky_model = getattr(sky_models, sky_model)(max_res=max_nside)
     sky_map = sky_model.interpolate_freq(
