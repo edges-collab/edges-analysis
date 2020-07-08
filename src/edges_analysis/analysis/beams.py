@@ -247,7 +247,7 @@ class BeamFactor(HDF5Object):
             "index_outband": lambda x: isinstance(x, float),
             "reference_frequency": lambda x: isinstance(x, float),
             "convolution_computation": lambda x: isinstance(x, str),
-            "max_nside": lambda x: isinstance(x, int),
+            "max_nside": lambda x: isinstance(x, (int, np.int64)),
         },
     }
 
