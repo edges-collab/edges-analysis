@@ -201,7 +201,7 @@ def feko_read(
 
     # Shifting beam relative to true AZ (referenced at due North)
     # Due to angle of orientation of excited antenna panels relative to due North
-    return shift_beam_maps(az_antenna_axis, beam_maps), freq
+    return shift_beam_maps(az_antenna_axis, beam_maps), freq.freq
 
 
 def shift_beam_maps(az_antenna_axis, beam_maps):
