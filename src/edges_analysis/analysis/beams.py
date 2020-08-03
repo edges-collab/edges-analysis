@@ -543,7 +543,8 @@ def antenna_beam_factor(
     if save_fname is None:
         hsh = hashlib.md5(repr(out["meta"]).encode()).hexdigest()
         save_fname = (
-            save_dir / f"{simulator}_{sky_model}_ref{reference_frequency:.2f}_{hsh}.h5"
+            save_dir
+            / f"{simulator}_{sky_model.__class__.__name__}_ref{reference_frequency:.2f}_{hsh}.h5"
         )
 
     print(f"Writing out beam file to {save_fname}")
