@@ -369,7 +369,7 @@ def antenna_beam_factor(
     beam_all = beam_all[freq_mask, :, :]
 
     # Interpolate the beam for faster evaluation onto the sky model array.
-    az_array, el_array = np.meshgrid(az_beam, el_beam, indexing="ij")
+    az_array, el_array = np.meshgrid(az_beam, el_beam)
     beam_interp = []
     for j in range(len(freq_array)):
         beam_interp.append(
