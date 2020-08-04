@@ -316,7 +316,7 @@ def run_xrfi_pipe(spectrum, weights, xrfi_pipe):
     """Run an xrfi pipeline on given spectrum and weights, updating weights in place."""
     for method, kwargs in xrfi_pipe.items():
         if (
-            method in ["xrfi_poly"] and spectrum.ndim == 2
+            method in ["xrfi_model", "xrfi_poly"] and spectrum.ndim == 2
         ):  # methods that only allow 1D spectra.
             for i, psp in enumerate(spectrum):
                 flags, info = getattr(xrfi, method)(
