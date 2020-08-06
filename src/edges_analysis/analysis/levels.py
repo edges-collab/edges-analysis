@@ -1196,6 +1196,7 @@ class Level2(_Level):
         pbar = tqdm.tqdm(enumerate(level1), unit="files", total=len(level1))
         print(f"total number of files: {len(level1)}")
 
+        removable = []
         for i, l1 in pbar:
             print(f"Doing {i}, {l1.filename.name}.")
             pbar.set_description(f"Filtering RFI/aux for {l1.filename.name}")
@@ -1218,7 +1219,7 @@ class Level2(_Level):
                 print(
                     f"File {l1.filename.name} has been completely filtered by its aux data."
                 )
-                level1.remove(l1)
+                removable.append(i)
                 continue
 
             # For each level 1 file, do xrfi
@@ -1236,10 +1237,27 @@ class Level2(_Level):
 
                 l1.weights[:, flags] = 0
 
+                if np.sum(l1.weights) == 0:
+                    print(
+                        f"File {l1.filename.name} has been completely filtered by its an explicit RFI filter."
+                    )
+                    removable.append(i)
+                    continue
+
             tools.run_xrfi_pipe(l1.spectrum, l1.weights, xrfi_pipe)
+
+            if np.sum(l1.weights) == 0:
+                print(f"File {l1.filename.name} has been completely filtered by RFI.")
+                removable.append(i)
+                continue
+
+        # Remove completely filtered things.
+        level1 = [l1 for i, l1 in enumerate(level1) if i not in removable]
 
         # Apply RMS filter.
         if rms_filter_file:
+            removable = []
+
             pbar = tqdm.tqdm(enumerate(level1), unit="files", total=len(level1))
             for i, l1 in pbar:
                 pbar.set_description(f"RMS Filter for {l1.filename.name}")
@@ -1260,10 +1278,15 @@ class Level2(_Level):
                     print(
                         f"File {l1.filename.name} has been completely filtered by its rms data."
                     )
-                    level1.remove(l1)
+                    removable.append(i)
                     continue
 
+            # Remove completely filtered things.
+            level1 = [l1 for i, l1 in enumerate(level1) if i not in removable]
+
         if do_total_power_filter:
+            removable = []
+
             pbar = tqdm.tqdm(enumerate(level1), unit="files", total=len(level1))
             for i, l1 in pbar:
                 pbar.set_description(f"Total Power Filter for {l1.filename.name}")
@@ -1294,8 +1317,11 @@ class Level2(_Level):
                     print(
                         f"File {l1.filename.name} has been completely filtered by its total power data."
                     )
-                    level1.remove(l1)
+                    removable.append(i)
                     continue
+
+            # Remove completely filtered things.
+            level1 = [l1 for i, l1 in enumerate(level1) if i not in removable]
 
         meta["n_files_flagged"] = meta["n_files"] - len(level1)
 
