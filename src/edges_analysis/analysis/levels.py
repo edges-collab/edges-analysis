@@ -1325,6 +1325,9 @@ class Level2(_Level):
 
         meta["n_files_flagged"] = meta["n_files"] - len(level1)
 
+        if len(level1) == 0:
+            raise Exception("All input files have been filtered completely.")
+
         # Averaging data within GHA bins
         weights = np.zeros((len(level1), len(gha_edges) - 1, level1[0].freq.n))
         spectra = np.zeros((len(level1), len(gha_edges) - 1, level1[0].freq.n))
