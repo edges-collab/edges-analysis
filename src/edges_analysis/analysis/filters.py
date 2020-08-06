@@ -268,12 +268,28 @@ def time_filter_auxiliary(
 ):
     flags = np.zeros(len(gha), dtype=bool)
 
+    nflags = np.sum(flags)
+
     flags |= (gha < gha_range[0]) | (gha >= gha_range[1])
+    print(f"{np.sum(flags) - nflags} times flagged due to GHA range")
+    nflags = np.sum(flags)
+
     # Sun elevation, Moon elevation, ambient humidity, and receiver temperature
     flags |= sun_el > sun_el_max
+    print(f"{np.sum(flags) - nflags} times flagged due to sun position")
+    nflags = np.sum(flags)
+
     flags |= moon_el > moon_el_max
+    print(f"{np.sum(flags) - nflags} times flagged due to moon positoin")
+    nflags = np.sum(flags)
+
     flags |= humidity > amb_hum_max
+    print(f"{np.sum(flags) - nflags} times flagged due to humidity")
+    nflags = np.sum(flags)
+
     flags |= (receiver_temp >= max_receiver_temp) | (receiver_temp <= min_receiver_temp)
+    print(f"{np.sum(flags) - nflags} times flagged due to receiver temp")
+
     return flags
 
 
