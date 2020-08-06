@@ -271,24 +271,37 @@ def time_filter_auxiliary(
     nflags = np.sum(flags)
 
     flags |= (gha < gha_range[0]) | (gha >= gha_range[1])
-    print(f"{np.sum(flags) - nflags} times flagged due to GHA range")
+    print(
+        f"{np.sum(flags) - nflags}/{len(flags) - np.sum(flags)} times flagged due to GHA range"
+    )
     nflags = np.sum(flags)
 
     # Sun elevation, Moon elevation, ambient humidity, and receiver temperature
     flags |= sun_el > sun_el_max
-    print(f"{np.sum(flags) - nflags} times flagged due to sun position")
+    print(
+        f"{np.sum(flags) - nflags}/{len(flags) - np.sum(flags)} times flagged due to sun position"
+    )
     nflags = np.sum(flags)
 
     flags |= moon_el > moon_el_max
-    print(f"{np.sum(flags) - nflags} times flagged due to moon positoin")
+    print(
+        f"{np.sum(flags) - nflags}/{len(flags) - np.sum(flags)} times flagged due to moon positoin"
+    )
     nflags = np.sum(flags)
 
+    print(
+        f"Humidity range: {humidity.min()} -- {humidity.max()} [set max = {amb_hum_max}]"
+    )
     flags |= humidity > amb_hum_max
-    print(f"{np.sum(flags) - nflags} times flagged due to humidity")
+    print(
+        f"{np.sum(flags) - nflags}/{len(flags) - np.sum(flags)} times flagged due to humidity"
+    )
     nflags = np.sum(flags)
 
     flags |= (receiver_temp >= max_receiver_temp) | (receiver_temp <= min_receiver_temp)
-    print(f"{np.sum(flags) - nflags} times flagged due to receiver temp")
+    print(
+        f"{np.sum(flags) - nflags}/{len(flags) - np.sum(flags)} times flagged due to receiver temp"
+    )
 
     return flags
 
