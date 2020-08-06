@@ -1194,7 +1194,10 @@ class Level2(_Level):
 
         # For each level1 file, flag times based on ancillary data.
         pbar = tqdm.tqdm(enumerate(level1), unit="files", total=len(level1))
+        print(f"total number of files: {len(level1)}")
+
         for i, l1 in pbar:
+            print(f"Doing {i}, {l1.filename.name}.")
             pbar.set_description(f"Filtering RFI/aux for {l1.filename.name}")
 
             flags = filters.time_filter_auxiliary(
