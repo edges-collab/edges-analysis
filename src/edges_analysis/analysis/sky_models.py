@@ -157,6 +157,8 @@ class LW150(SkyModel):
         "https://lambda.gsfc.nasa.gov/data/foregrounds/landecker_150/"
         "lambda_landecker_wielebinski_150MHz_SARAS_recalibrated_hpx_r8.fits"
     )
+    header_hdu = 1
+    frequency = 150.0
 
 
 class Guzman45(SkyModel):
