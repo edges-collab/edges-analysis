@@ -163,7 +163,7 @@ class LW150(SkyModel):
 
 class Guzman45(SkyModel):
     url = "https://lambda.gsfc.nasa.gov/data/foregrounds/maipu_45/MAIPU_MU_1_64.fits"
-    freq = 45.0
+    frequency = 45.0
     header_hdu = 1
     data_name = "UNKNOWN1"
 

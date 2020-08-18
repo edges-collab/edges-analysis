@@ -252,6 +252,265 @@ class BeamFactor(HDF5Object):
     }
 
 
+def simulate_spectra(
+    band: str,
+    simulator: str = "feko",
+    beam_file: [str, Path] = ":",
+    ground_loss_file: [str, Path] = ":",
+    configuration="",
+    save_dir: [None, str, Path] = None,
+    save_fname: [None, str, Path, bool] = None,
+    f_low: [None, float] = None,
+    f_high: [None, float] = None,
+    normalize_beam: bool = True,
+    sky_model: str = "Haslam408",
+    rotation_from_north: float = 90,
+    index_model: str = "gaussian",
+    sigma_deg: float = 8.5,
+    index_center: float = 2.4,
+    index_pole: float = 2.65,
+    band_deg: float = 10,
+    index_inband: float = 2.5,
+    index_outband: float = 2.6,
+    reference_frequency: [None, float] = None,
+    convolution_computation: str = "new",
+    plot_format: str = "polar",
+    sky_plot_path: [None, str, Path] = None,
+    max_nside=7,
+    twenty_min_per_lst=1,
+):
+    """
+    Calculate the simulated sky temperature.
+
+    Parameters
+    ----------
+    band
+    simulator
+    name_save
+    f_low
+    f_high
+    beam_file
+    normalize_beam
+    sky_model
+    rotation_from_north
+    index_model
+    sigma_deg
+    index_center
+    index_pole
+    band_deg
+    index_inband
+    index_outband
+    reference_frequency
+    convolution_computation
+    sky_plots
+    plot_format
+
+    Returns
+    -------
+    simulate_spectra : :numpy array as function of LST and Frequency 
+    """
+    if not save_dir:
+        save_dir = Path(config["paths"]["beams"]) / f"{band}/beam_factors/"
+
+    if str(save_fname).startswith(":"):
+        save_fname = Path(save_dir).absolute() / str(save_fname)[1:]
+
+    if str(beam_file) == ":":
+        # Get the default beam file.
+        beam_file = (
+            Path(__file__).parent
+            / "data"
+            / "beams"
+            / band
+            / ("default.txt" if not configuration else f"{configuration}.txt")
+        )
+    elif str(beam_file).startswith(":"):
+        # Use a beam file in the standard directory.
+        beam_file = (
+            Path(config["paths"]["beams"]).expanduser()
+            / f"{band}/simulations/{simulator}/{str(beam_file)[1:]}"
+        ).absolute()
+    else:
+        beam_file = Path(beam_file).absolute()
+
+    # Antenna beam
+    az_beam = np.arange(0, 360)
+    el_beam = np.arange(0, 91)
+
+    if simulator == "feko":
+        rotation_from_north -= 90
+        beam_all, freq_array = feko_read(beam_file, az_antenna_axis=rotation_from_north)
+
+    elif simulator == "wipl-d":  # Beams from WIPL-D
+        freq_array, az_beam, el_beam, beam_all = wipld_read(
+            beam_file, az_antenna_axis=rotation_from_north
+        )
+    else:
+        raise ValueError(f"Unknown value for simulator: '{simulator}'")
+
+    # Selecting frequency range
+    if band == "mid_band" and normalize_beam:  # Beam normalization
+        if f_low is not None or f_high is not None:
+            warnings.warn(
+                "Your selected frequency range is being over-ridden due to"
+                " band='mid_band' and normalize_mid_band_beam=True."
+            )
+        f_low = 50
+        f_high = 150
+    else:
+        f_low = f_low or freq_array.min()
+        f_high = f_high or freq_array.max()
+
+    if reference_frequency is None:
+        reference_frequency = (f_high + f_low) / 2
+
+    freq_mask = (freq_array >= f_low) & (freq_array <= f_high)
+    freq_array = freq_array[freq_mask]
+    beam_all = beam_all[freq_mask, :, :]
+
+    # Interpolate the beam for faster evaluation onto the sky model array.
+    az_array, el_array = np.meshgrid(az_beam, el_beam)
+    beam_interp = []
+    for j in range(len(freq_array)):
+        beam_interp.append(
+            spi.CloughTocher2DInterpolator(
+                np.array([az_array.flatten(), el_array.flatten()]).T,
+                beam_all[j].flatten(),
+            )
+        )
+
+    ground_gain = ground_loss(ground_loss_file, band=band, freq=freq_array)
+
+    # Index of reference frequency
+    indx_ref_freq = np.argwhere(freq_array >= reference_frequency)[0][0]
+    reference_frequency = freq_array[indx_ref_freq]
+
+    sky_model = getattr(sky_models, sky_model)(max_res=max_nside)
+    sky_map = sky_model.interpolate_freq(
+        freq_array,
+        index_model=index_model,
+        index_pole=index_pole,
+        index_center=index_center,
+        index_inband=index_inband,
+        index_outband=index_outband,
+        band_deg=band_deg,
+        sigma_deg=sigma_deg,
+    )
+    galactic_coords = sky_model.get_sky_coords()
+
+    # Reference UTC observation time. At this time, the LST is 0.1666 (00:10 Hrs LST) at the
+    # EDGES location.
+    ref_time = dt.datetime(2014, 1, 1, 9, 39, 42)
+
+    # Looping over LST
+    lst = np.zeros(72 // twenty_min_per_lst)  # TODO: magic number
+    convolution_ref = np.zeros((len(lst), len(beam_all)))
+    antenna_temperature_above_horizon = np.zeros((len(lst), len(beam_all)))
+    loss_fraction = np.zeros((len(lst), len(beam_all)))
+
+    # Advancing time (19:57 minutes UTC corresponds to 20 minutes LST)
+    twenty_lst_min = dt.timedelta(minutes=19, seconds=57)
+
+    # TODO: consider adding progress bar.
+    for i in tqdm(range(len(lst)), unit="LST"):
+        if i > 0:
+            ref_time += twenty_lst_min * twenty_min_per_lst
+
+        lst[i] = coords.utc2lst([ref_time], const.edges_lon_deg)
+
+        # Transform Galactic coordinates of Sky Model to Local coordinates
+        altaz = galactic_coords.transform_to(
+            apc.AltAz(
+                location=const.edges_location,
+                obstime=apt.Time(ref_time, format="datetime"),
+            )
+        )
+        az = np.asarray(altaz.az)
+        el = np.asarray(altaz.alt)
+
+        # Selecting coordinates above the horizon
+        horizon_mask = el >= 0
+        az_above_horizon = az[horizon_mask]
+        el_above_horizon = el[horizon_mask]
+
+        # Selecting sky data above the horizon
+        sky_above_horizon = sky_map[horizon_mask, :]
+        sky_ref_above_horizon = sky_above_horizon[:, indx_ref_freq].flatten()
+
+        # Plotting sky in local coordinates
+        if sky_plot_path:
+            plot_beam_factor(
+                az_above_horizon,
+                const.edges_lat_deg,
+                el_above_horizon,
+                indx_ref_freq,
+                lst[i],
+                sky_plot_path,
+                plot_format,
+                sky_map,
+                sky_ref_above_horizon,
+            )
+
+        # Arranging AZ and EL arrays corresponding to beam model
+        az_el_above_horizon = np.array([az_above_horizon, el_above_horizon]).T
+
+        # Loop over frequency
+        # TODO: consider adding progress bar.
+        for j in tqdm(range(len(freq_array)), unit="Frequency"):
+            beam_above_horizon = beam_interp[j](az_el_above_horizon)
+
+            index_no_nan = ~np.isnan(beam_above_horizon)
+
+            sky_above_horizon_ff = sky_above_horizon[:, j].flatten()
+
+            if convolution_computation == "new":
+                # Convolution and Antenna temperature NEW 'correct' way
+                # Number of pixels over 4pi that are not 'nan'
+                n_pix_tot = len(el)
+                # The nans are only above the horizon
+                n_pix_above_horizon_nan = len(el_above_horizon) - np.sum(index_no_nan)
+                n_pix_tot_no_nan = n_pix_tot - n_pix_above_horizon_nan
+
+                if normalize_beam:
+                    solid_angle = np.nansum(beam_above_horizon) / n_pix_tot_no_nan
+                    beam_above_horizon *= ground_gain[j] / solid_angle
+
+                # Convolution between (beam at all frequencies) and (sky at reference frequency)
+                convolution_ref[i, j] = np.nansum(
+                    beam_above_horizon * sky_ref_above_horizon
+                )
+
+                # 'Correct' antenna temperature above the horizon, i.e., Convolution between (beam
+                # at all frequencies) and (sky at all frequencies)
+                antenna_temperature_above_horizon[i, j] = (
+                    np.nansum(beam_above_horizon * sky_above_horizon_ff)
+                    / n_pix_tot_no_nan
+                )
+
+                # Loss fraction
+                loss_fraction[i, j] = (
+                    1 - np.nansum(beam_above_horizon) / n_pix_tot_no_nan
+                )
+
+            elif convolution_computation == "old":
+                # Convolution and Antenna temperature OLD 'incorrect' WAY
+                # Convolution between (beam at all frequencies) and (sky at reference frequency)
+                convolution_ref[i, j] = np.nanmean(
+                    beam_above_horizon * sky_ref_above_horizon
+                )
+
+                # Antenna temperature, i.e., Convolution between (beam at all frequencies) and (
+                # sky at all frequencies)
+                antenna_temperature_above_horizon[i, j] = np.nanmean(
+                    beam_above_horizon * sky_above_horizon_ff
+                )
+
+                loss_fraction[i, j] = 0
+
+            else:
+                raise ValueError("convolution_computation must be 'old' or 'new'")
+    return antenna_temperature_above_horizon, freq_array, lst
+
 def antenna_beam_factor(
     band: str,
     simulator: str = "feko",
