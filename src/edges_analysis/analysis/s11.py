@@ -1,7 +1,7 @@
 import numpy as np
 from edges_io import io
 from edges_cal.reflection_coefficient import de_embed
-from edges_cal.S11_correction import get_switch_correction
+from edges_cal.s11_correction import get_switch_correction
 
 
 def get_corrected_s11(
