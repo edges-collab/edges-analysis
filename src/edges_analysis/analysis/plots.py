@@ -24,9 +24,7 @@ def plot_daily_residuals_nominal(f, r, w, yd, path="/home/raul/Desktop/"):
     # Filter the data.
     keep = filters.explicit_filter(
         yd,
-        os.path.join(
-            os.path.dirname(__file__), "data/bad_days_nominal_mid_band101.yaml"
-        ),
+        os.path.join(os.path.dirname(__file__), "data/bad_days_nominal_mid_band101.yaml"),
     )
     r, w, yd = r[keep], w[keep], yd[keep]
 
@@ -165,9 +163,7 @@ def comparison_switch_receiver1(reflection_measurements):
     for i in range(3):  # s11, s12, s21
         for label, coeffs in reflection_measurements.items():
             ax[i, 0].plot(f, 20 * np.log10(np.abs(coeffs[i])), label=label)
-            ax[i, 1].plot(
-                f, (180 / np.pi) * np.unwrap(np.angle(coeffs[i])), label=label
-            )
+            ax[i, 1].plot(f, (180 / np.pi) * np.unwrap(np.angle(coeffs[i])), label=label)
 
     return fig, ax
 
@@ -222,9 +218,7 @@ def plot_season_average_residuals(
         fb, ty, wy, parameters["f_low"], parameters["f_high"], n_fg
     )
     ar = np.arange(0, 25, delta_hr)
-    str_ar = [
-        "GHA=" + str(ar[i]) + "-" + str(ar[i + 1]) + " hr" for i in range(len(ar) - 1)
-    ]
+    str_ar = ["GHA=" + str(ar[i]) + "-" + str(ar[i + 1]) + " hr" for i in range(len(ar) - 1)]
 
     plot_residuals(
         ff,
@@ -246,9 +240,7 @@ def plot_season_average_residuals(
     )
 
 
-def plot_residuals_simulated_antenna_temperature(
-    filename: [str, Path], band=None, title=""
-):
+def plot_residuals_simulated_antenna_temperature(filename: [str, Path], band=None, title=""):
 
     filename = Path(filename)
     if not (filename.exists() or filename.is_absolute()):
@@ -554,9 +546,7 @@ def plot_residuals(
     plt.title(TITLE)
 
     if save:
-        plt.savefig(
-            figure_path + figure_name + "." + figure_format, bbox_inches="tight"
-        )
+        plt.savefig(figure_path + figure_name + "." + figure_format, bbox_inches="tight")
 
 
 def _scroll_through_i(
@@ -640,9 +630,7 @@ def _scroll_through_i(
             RMS = 1000 * np.std(rb[wb > 0])
             RMS_text = str(int(RMS)) + " mK"
 
-            ax.text(
-                50, -ii * K_per_division - (1 / 6) * K_per_division, str(int(yd[i, 1]))
-            )
+            ax.text(50, -ii * K_per_division - (1 / 6) * K_per_division, str(int(yd[i, 1])))
             ax.text(153, -ii * K_per_division - (1 / 6) * K_per_division, RMS_text)
 
             rms_all[i, 0] = yd[i, 0]
@@ -790,9 +778,7 @@ def plot_sky_model():
     )
 
     hp.graticule(local=True)
-    beam = beams.feko_read(
-        "mid_band", 0, frequency_interpolation=False, az_antenna_axis=90
-    )
+    beam = beams.feko_read("mid_band", 0, frequency_interpolation=False, az_antenna_axis=90)
     beam90 = beam[20, :, :]
     beam90n = beam90 / np.max(beam90)
     FWHM = np.zeros((360, 2))
@@ -1043,21 +1029,28 @@ def plot_beam_power(max_norm=True):
 
     fig, ax = plt.subplots(2, 1)
     plot_ax(
-        sm, f, "-", "Mid-Band 30mx30m ground plane",
+        sm,
+        f,
+        "-",
+        "Mid-Band 30mx30m ground plane",
     )
     plot_ax(
-        smi, f, ":", "Mid-Band infinite ground plane",
+        smi,
+        f,
+        ":",
+        "Mid-Band infinite ground plane",
     )
     plot_ax(
-        sl, fl, "--", "Low-Band 30mx30m ground plane",
+        sl,
+        fl,
+        "--",
+        "Low-Band 30mx30m ground plane",
     )
 
     if max_norm:
         ax[0].set_ylabel("solid angle of\n beam above horizon [sr]")
     else:
-        ax[0].set_ylabel(
-            "normalized total radiated power\n above horizon [fraction of 4pi]"
-        )
+        ax[0].set_ylabel("normalized total radiated power\n above horizon [fraction of 4pi]")
     ax[0].legend()
 
     ax[1].set_ylabel("residuals to\n 5-term polynomial [sr]")
@@ -1576,9 +1569,7 @@ def plot_beam_factor(
         cbar.set_label("log10( Tsky @ 50MHz [K] )", rotation=90)
         plt.xlabel("AZ [deg]")
         plt.ylabel("EL [deg]")
-        plt.title(
-            f"LAT={LAT_DEG:.3f} [deg] \n\n LST={lst:.3f} hr        GHA={GHA:.3f} hr"
-        )
+        plt.title(f"LAT={LAT_DEG:.3f} [deg] \n\n LST={lst:.3f} hr        GHA={GHA:.3f} hr")
     elif plot_format == "polar":
         fig = plt.figure(figsize=[11.5, 10])
         ax = fig.add_subplot(111, projection="polar")
@@ -1598,7 +1589,11 @@ def plot_beam_factor(
         plt.text(-2 * (np.pi / 180), 101, "AZ", fontsize=14, fontweight="bold")
         plt.text(22 * (np.pi / 180), 95, "EL", fontsize=14, fontweight="bold")
         plt.text(
-            45 * (np.pi / 180), 143, "Raul Monsalve", fontsize=8, color=[0.5, 0.5, 0.5],
+            45 * (np.pi / 180),
+            143,
+            "Raul Monsalve",
+            fontsize=8,
+            color=[0.5, 0.5, 0.5],
         )
         plt.title(
             f"LAT={LAT_DEG:.3f} [deg] \n\n LST={lst:.3f} hr        GHA={GHA:.3f} hr",
@@ -1612,5 +1607,6 @@ def plot_beam_factor(
         raise ValueError("plot_format must be either 'polar' or 'rect'.")
 
     plt.savefig(
-        path_plots + f"LST_{lst:.3f} hr.png", bbox_inches="tight",
+        path_plots + f"LST_{lst:.3f} hr.png",
+        bbox_inches="tight",
     )

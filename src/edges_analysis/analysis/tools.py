@@ -24,9 +24,7 @@ def spectrum_fit(f, t, w, n_poly=5, f1_low=60, f1_high=65, f2_low=95, f2_high=14
     tc = t[((f >= f1_low) & (f <= f1_high)) | ((f >= f2_low) & (f <= f2_high))]
     wc = w[((f >= f1_low) & (f <= f1_high)) | ((f >= f2_low) & (f <= f2_high))]
 
-    m = mdl.ModelFit("linlog", fc / 200, tc, weights=wc, n_terms=n_poly).evaluate(
-        f / 200
-    )
+    m = mdl.ModelFit("linlog", fc / 200, tc, weights=wc, n_terms=n_poly).evaluate(f / 200)
     r = t - m
 
     return f, r
@@ -98,9 +96,7 @@ def average_in_frequency(
         n_samples = max(int(resolution / (freq[1] - freq[0])), 1)
 
     if (resolution or n_samples) and freq is None:
-        raise ValueError(
-            "You must provide freq if resolution or n_samples is provided!"
-        )
+        raise ValueError("You must provide freq if resolution or n_samples is provided!")
 
     nf = spectrum.shape[axis]
 
@@ -263,9 +259,7 @@ def weighted_standard_deviation(av, data, std, axis=0):
 spectral_averaging = weighted_mean
 
 
-def average_in_gha(
-    spectrum: np.ndarray, gha: np.ndarray, gha_bins, weights: np.ndarray = None
-):
+def average_in_gha(spectrum: np.ndarray, gha: np.ndarray, gha_bins, weights: np.ndarray = None):
     """
     Average a spectrum into bins of GHA.
 
@@ -319,9 +313,7 @@ def run_xrfi_pipe(spectrum, weights, xrfi_pipe):
             method in ["xrfi_model", "xrfi_poly"] and spectrum.ndim == 2
         ):  # methods that only allow 1D spectra.
             for i, psp in enumerate(spectrum):
-                flags, info = getattr(xrfi, method)(
-                    psp, flags=weights[i] <= 0, **kwargs
-                )
+                flags, info = getattr(xrfi, method)(psp, flags=weights[i] <= 0, **kwargs)
                 weights[i][flags] = 0
         else:
             flags, info = getattr(xrfi, method)(spectrum, flags=weights <= 0, **kwargs)

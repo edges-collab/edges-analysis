@@ -99,9 +99,7 @@ if __name__ == "__main__":
     Nderived = 0
 
     # flattened gaussian
-    v, d, sigma, inv_sigma, det_sigma = simulated_data(
-        [-0.5, 78, 20, 7, 1000, 1, 1, -1, 4], v, v0
-    )
+    v, d, sigma, inv_sigma, det_sigma = simulated_data([-0.5, 78, 20, 7, 1000, 1, 1, -1, 4], v, v0)
 
     def loglikelihood(theta):
         N = len(v)
@@ -131,8 +129,6 @@ if __name__ == "__main__":
         settings.file_root = root_name
         settings.do_clustering = True
         settings.read_resume = False
-        PyPolyChord.run_polychord(
-            loglikelihood, Nparameters, Nderived, settings, prior, dumper
-        )
+        PyPolyChord.run_polychord(loglikelihood, Nparameters, Nderived, settings, prior, dumper)
 
     run("example")

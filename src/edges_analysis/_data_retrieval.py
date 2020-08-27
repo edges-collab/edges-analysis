@@ -10,7 +10,9 @@ _FILE_IDS = {
             "": "1EwAUi-piwtL9zvLbvjbwJ583XK9GR53e",
             "45deg": "11DHCK_RmDfHqiyoPXtrIodbndinGhYHa",
         },
-        "high": {"": "1MGnT14__Ooc1Y33_1Urxe3LgQOoBX7n_",},
+        "high": {
+            "": "1MGnT14__Ooc1Y33_1Urxe3LgQOoBX7n_",
+        },
         "mid": {"": "1URXyPqOiPNApnDzwWFZZC9rv4_F1Rwg7"},
     }
 }
@@ -20,9 +22,7 @@ def retrieve_beam(band, configuration=""):
     fname = "builtin"
     if configuration:
         fname += f"_{configuration}.txt"
-    abspath = (
-        Path(config["paths"]["beams"]).expanduser() / f"{band}/simulations/feko" / fname
-    )
+    abspath = Path(config["paths"]["beams"]).expanduser() / f"{band}/simulations/feko" / fname
 
     if not abspath.exists():
         # Get it from gdrive
@@ -30,9 +30,7 @@ def retrieve_beam(band, configuration=""):
         fileid = _FILE_IDS["beam_model"][band][configuration]
         print(f"Downloading new beam from Google Drive to {abspath}.")
 
-        r = requests.get(
-            urlbase, params={"id": fileid, "authuser": 0, "export": "download"}
-        )
+        r = requests.get(urlbase, params={"id": fileid, "authuser": 0, "export": "download"})
         if not abspath.parent.exists():
             abspath.parent.mkdir(parents=True)
 

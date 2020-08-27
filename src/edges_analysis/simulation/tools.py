@@ -27,9 +27,7 @@ def residuals_of_simulations(case, name_flag, n_fg=5, f_low=60, f_high=150, plot
     if case not in cases.values():
         raise ValueError("case must be one of {}".format(cases.values()))
 
-    prefix = (
-        "/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/"
-    )
+    prefix = "/run/media/raul/WD_RED_6TB/EDGES_vol2/mid_band/calibration/beam_factors/raw/"
 
     files = {
         11: "mid_band_50-200MHz_90deg_alan1_haslam_gaussian_index_2.4_2.65_sigma_deg_8"
@@ -105,9 +103,7 @@ def residuals_of_simulations(case, name_flag, n_fg=5, f_low=60, f_high=150, plot
     gg = np.arange(24)
 
     out = {}
-    for name, x in zip(
-        ["residuals", "correction", "correction_residuals"], [res, resb, bf_all]
-    ):
+    for name, x in zip(["residuals", "correction", "correction_residuals"], [res, resb, bf_all]):
         out[name]["low"] = x[(gg >= 6) & (gg <= 17), :]
         high = x[(gg < 6) | (gg > 17), :]
         high1 = high[:6]
