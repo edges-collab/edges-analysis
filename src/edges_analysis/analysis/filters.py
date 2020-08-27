@@ -5,6 +5,9 @@ import warnings
 import h5py
 from ..config import config
 import yaml
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 # TODO: clean up all the rms filtering functions in this module.
@@ -242,7 +245,7 @@ def explicit_filter(times, bad, ret_times=False):
     assert nb in (1, 2, 3), "bad must be an array of 1,2 or 3-tuples"
 
     if nt < nb:
-        bad = set(b[:nt] for b in bad)
+        bad = {b[:nt] for b in bad}
         nb = nt
 
     keep = [t[:nb] not in bad for t in times]
@@ -271,35 +274,35 @@ def time_filter_auxiliary(
     nflags = np.sum(flags)
 
     flags |= (gha < gha_range[0]) | (gha >= gha_range[1])
-    print(
+    logger.info(
         f"{np.sum(flags) - nflags}/{len(flags) - np.sum(flags)} times flagged due to GHA range"
     )
     nflags = np.sum(flags)
 
     # Sun elevation, Moon elevation, ambient humidity, and receiver temperature
     flags |= sun_el > sun_el_max
-    print(
+    logger.info(
         f"{np.sum(flags) - nflags}/{len(flags) - np.sum(flags)} times flagged due to sun position"
     )
     nflags = np.sum(flags)
 
     flags |= moon_el > moon_el_max
-    print(
+    logger.info(
         f"{np.sum(flags) - nflags}/{len(flags) - np.sum(flags)} times flagged due to moon positoin"
     )
     nflags = np.sum(flags)
 
-    print(
+    logger.info(
         f"Humidity range: {humidity.min()} -- {humidity.max()} [set max = {amb_hum_max}]"
     )
     flags |= humidity > amb_hum_max
-    print(
+    logger.info(
         f"{np.sum(flags) - nflags}/{len(flags) - np.sum(flags)} times flagged due to humidity"
     )
     nflags = np.sum(flags)
 
     flags |= (receiver_temp >= max_receiver_temp) | (receiver_temp <= min_receiver_temp)
-    print(
+    logger.info(
         f"{np.sum(flags) - nflags}/{len(flags) - np.sum(flags)} times flagged due to receiver temp"
     )
 
