@@ -84,6 +84,10 @@ class _Level(io.HDF5Object):
             else:
                 prev_level = _prev_level(prev_level)
 
+        # Sort the files by their filenames. *Usually* this will correspond to
+        # date.
+        if isinstance(prev_level, list):
+            prev_level = sorted(prev_level, key=lambda x: x.filename)
         freq, data, ancillary, meta = cls._from_prev_level(prev_level, **kwargs)
 
         meta["prev_level_files"] = (
