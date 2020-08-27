@@ -750,7 +750,7 @@ class Level1(_Level):
             The same ancillary data as contained in `level2`.
         meta : dict
             Contains all input parameters, as well as level2 meta.
-    """
+        """
         if not isinstance(calfile, Calibration):
             calfile = Calibration(calfile)
 
@@ -1127,7 +1127,10 @@ class Level2(_Level):
 
     _structure = {
         "frequency": None,
-        "spectra": {"weights": None, "spectrum": None,},
+        "spectra": {
+            "weights": None,
+            "spectrum": None,
+        },
         "ancillary": {
             "n_total_times_per_file": None,
             "years": None,
@@ -1194,11 +1197,9 @@ class Level2(_Level):
 
         # For each level1 file, flag times based on ancillary data.
         pbar = tqdm.tqdm(enumerate(level1), unit="files", total=len(level1))
-        print(f"total number of files: {len(level1)}")
 
         removable = []
         for i, l1 in pbar:
-            print(f"Doing {i}, {l1.filename.name}.")
             pbar.set_description(f"Filtering RFI/aux for {l1.filename.name}")
 
             flags = filters.time_filter_auxiliary(
@@ -1233,7 +1234,10 @@ class Level2(_Level):
                 else:
                     known_rfi_file = kwargs["file"]
 
-                flags = rfi.xrfi_explicit(l1.raw_frequencies, rfi_file=known_rfi_file,)
+                flags = rfi.xrfi_explicit(
+                    l1.raw_frequencies,
+                    rfi_file=known_rfi_file,
+                )
 
                 l1.weights[:, flags] = 0
 
@@ -1325,7 +1329,7 @@ class Level2(_Level):
 
         meta["n_files_flagged"] = meta["n_files"] - len(level1)
 
-        if len(level1) == 0:
+        if not level1:
             raise Exception("All input files have been filtered completely.")
 
         # Averaging data within GHA bins
@@ -1554,7 +1558,9 @@ class Level4(_Level):
             "weights": None,
             "spectrum": None,
         },  # All spectra components assumed to be the same shape, with last axis being frequency.
-        "ancillary": {"std_dev": None,},
+        "ancillary": {
+            "std_dev": None,
+        },
         "meta": None,
     }
 
