@@ -81,10 +81,10 @@ class _Level(io.HDF5Object):
             else:
                 prev_level = _prev_level(prev_level)
 
-        # Sort the files by their filenames. *Usually* this will correspond to
-        # date.
+        # Sort the files by their filenames. *Usually* this will correspond to date.
         if isinstance(prev_level, list):
             prev_level = sorted(prev_level, key=lambda x: x.filename)
+
         freq, data, ancillary, meta = cls._from_prev_level(prev_level, **kwargs)
 
         meta["prev_level_files"] = (
@@ -1029,6 +1029,144 @@ class Level1(_Level):
         """Integrate the spectrum over time"""
         return self._integrate_spectra(quantity=quantity, integrator=integrator, axis=1)
 
+    def aux_filter(
+        self,
+        sun_el_max: float = 90,
+        moon_el_max: float = 90,
+        ambient_humidity_max: float = 40,
+        min_receiver_temp: float = 0,
+        max_receiver_temp: float = 100,
+        flags: [None, np.ndarray] = None,
+    ) -> np.ndarray:
+        """
+        Perform an auxiliary filter on the object.
+
+        Parameters
+        ----------
+        sun_el_max
+            Maxmimum elevation of the sun to keep.
+        moon_el_max
+            Maxmimum elevation of the moon to keep.
+        ambient_humidity_max
+            Maximum ambient humidity to keep.
+        min_receiver_temp
+            Minimum receiver temperature to keep.
+        max_receiver_temp
+            Maximum receiver temp to keep.
+        flags
+            If given, do filtering in-place.
+
+        Returns
+        -------
+        flags
+            Boolean array giving which entries are bad.
+        """
+
+        return filters.time_filter_auxiliary(
+            gha=self.ancillary["gha"],
+            sun_el=self.ancillary["sun_el"],
+            moon_el=self.ancillary["moon_el"],
+            humidity=self.ancillary["ambient_hum"],
+            receiver_temp=self.ancillary["receiver_temp"],
+            sun_el_max=sun_el_max,
+            moon_el_max=moon_el_max,
+            amb_hum_max=ambient_humidity_max,
+            min_receiver_temp=min_receiver_temp,
+            max_receiver_temp=max_receiver_temp,
+            flags=flags,
+        )
+
+    aux_filter.axis = "time"
+
+    def rfi_filter(self, xrfi_pipe: dict, flags: [None, np.ndarray] = None) -> np.ndarray:
+        """
+        Perform filtering on auxiliary data and RFI for a level 1 file.
+
+        Parameters
+        ----------
+        xrfi_pipe
+            A dictionary with keys specifying RFI function names, and values being
+            dictionaries of parameters to pass to the function.
+
+        Returns
+        -------
+        flags
+            The boolean flag array, specifying which freqs/times are bad.
+        """
+        if flags is None:
+            flags = np.zeros(self.weights.shape, dtype=bool)
+
+        if "explicit" in xrfi_pipe:
+            kwargs = xrfi_pipe.pop("explicit")
+
+            if kwargs["file"] is None:
+                known_rfi_file = Path(dirname(__file__)) / "data" / "known_rfi_channels.yaml"
+            else:
+                known_rfi_file = kwargs["file"]
+
+            flags |= rfi.xrfi_explicit(
+                self.raw_frequencies,
+                rfi_file=known_rfi_file,
+            )
+
+            if np.all(flags):
+                return flags
+
+        return tools.run_xrfi_pipe(self.spectrum, flags, xrfi_pipe)
+
+    rfi_filter.axis = "both"
+
+    def rms_filter(
+        self,
+        rms_filter_file,
+        n_sigma_rms: int = 3,
+        flags=None,
+    ):
+        if flags is None:
+            flags = np.zeros(self.weights.shape, dtype=bool)
+
+        # Get RMS
+        rms_lower = self.get_model_rms(freq_range=(-np.inf, self.freq.center))
+        rms_upper = self.get_model_rms(freq_range=(self.freq.center, np.inf))
+        rms_3term = self.get_model_rms(n_terms=3)
+
+        flags |= filters.rms_filter(
+            rms_filter_file,
+            self.ancillary["gha"],
+            np.array([rms_lower, rms_upper, rms_3term]).T,
+            n_sigma_rms,
+        )
+        return flags
+
+    rms_filter.axis = "time"
+
+    def total_power_filter(self, flags=None):
+        if flags is None:
+            flags = np.zeros(self.weights.shape, dtype=bool)
+
+        flags |= filters.total_power_filter(
+            self.ancillary["gha"],
+            np.array(
+                [
+                    tools.weighted_mean(
+                        self.spectrum[:, self.raw_frequencies <= self.freq.center],
+                        self.weights[:, self.raw_frequencies <= self.freq.center],
+                        axis=1,
+                    )[0],
+                    tools.weighted_mean(
+                        self.spectrum[:, self.raw_frequencies >= self.freq.center],
+                        self.weights[:, self.raw_frequencies >= self.freq.center],
+                        axis=1,
+                    )[0],
+                    tools.weighted_mean(self.spectrum, self.weights, axis=1)[0],
+                ]
+            ),
+            flags=np.sum(flags, axis=1).astype("bool"),
+        )
+        return flags
+
+    total_power_filter.axis = "time"
+
 
 class Level2(_Level):
     """
@@ -1113,6 +1251,35 @@ class Level2(_Level):
     }
 
     @classmethod
+    def run_filter(cls, fnc, level1, flags=None, **kwargs):
+        axis = getattr(Level1, f"{fnc}_filter").axis
+
+        if flags is None:
+            flags = [np.zeros(l1.weights.shape, dtype=bool) for l1 in level1]
+
+        pbar = tqdm.tqdm(enumerate(zip(level1, flags)), unit="files", total=len(level1))
+
+        for i, (l1, flg) in pbar:
+            pbar.set_description(f"Filtering {fnc} for {l1.filename.name}")
+
+            # If already all flagged, just skip.
+            if np.all(flg):
+                continue
+
+            this_flag = getattr(l1, f"{fnc}_filter")(flags=flg, **kwargs)
+
+            if axis in ["both", "time"]:
+                flg |= this_flag
+            else:
+                flg.T |= this_flag
+
+            if np.all(flg):
+                logger.warning(f"File {l1.filename.name} has been completely filtered.")
+
+        # Remove completely filtered things.
+        return flags
+
+    @classmethod
     def _from_prev_level(
         cls,
         level1: List[Level1],
@@ -1136,10 +1303,6 @@ class Level2(_Level):
 
         if gha_max < 0 or gha_max > 24:
             raise ValueError("gha_max must be between 0 and 24")
-
-        gha_edges = np.arange(gha_min, gha_max, gha_bin_size)
-        if np.isclose(gha_max, gha_edges.max() + gha_bin_size):
-            gha_edges = np.concatenate((gha_edges, [gha_edges.max() + gha_bin_size]))
 
         meta = {
             "n_files": len(level1),
@@ -1165,159 +1328,43 @@ class Level2(_Level):
         # used in the final averages
         n_times = np.array([len(l1.spectrum) for l1 in level1])
 
-        # For each level1 file, flag times based on ancillary data.
-        pbar = tqdm.tqdm(enumerate(level1), unit="files", total=len(level1))
-
-        removable = []
-        for i, l1 in pbar:
-            pbar.set_description(f"Filtering RFI/aux for {l1.filename.name}")
-
-            flags = filters.time_filter_auxiliary(
-                gha=l1.ancillary["gha"],
-                sun_el=l1.ancillary["sun_el"],
-                moon_el=l1.ancillary["moon_el"],
-                humidity=l1.ancillary["ambient_hum"],
-                receiver_temp=l1.ancillary["receiver_temp"],
-                sun_el_max=sun_el_max,
-                moon_el_max=moon_el_max,
-                amb_hum_max=ambient_humidity_max,
-                min_receiver_temp=min_receiver_temp,
-                max_receiver_temp=max_receiver_temp,
+        flags = [np.zeros(l1.weights.shape, dtype=bool) for l1 in level1]
+        flags = cls.run_filter(
+            "aux",
+            level1,
+            flags=flags,
+            sun_el_max=sun_el_max,
+            moon_el_max=moon_el_max,
+            ambient_humidity_max=ambient_humidity_max,
+            min_receiver_temp=min_receiver_temp,
+            max_receiver_temp=max_receiver_temp,
+        )
+        flags = cls.run_filter("rfi", level1, flags=flags, xrfi_pipe=xrfi_pipe)
+        if rms_filter_file:
+            flags = cls.run_filter(
+                "rms", level1, flags=flags, rms_filter_file=rms_filter_file, n_sigma_rms=n_sigma_rms
+            )
+        if do_total_power_filter:
+            flags = cls.run_filter(
+                "total_power",
+                level1,
+                flags=flags,
             )
 
-            l1.weights[flags] = 0
-            if np.sum(l1.weights) == 0:
-                print(f"File {l1.filename.name} has been completely filtered by its aux data.")
-                removable.append(i)
-                continue
+        files_flagged = np.array([np.all(flg) for flg in flags])
+        meta["n_files_flagged"] = sum(files_flagged)
 
-            # For each level 1 file, do xrfi
-            if "explicit" in xrfi_pipe:
-                kwargs = xrfi_pipe.pop("explicit")
+        n_files = len(level1) - meta["n_files_flagged"]
 
-                if kwargs["file"] is None:
-                    known_rfi_file = Path(dirname(__file__)) / "data" / "known_rfi_channels.yaml"
-                else:
-                    known_rfi_file = kwargs["file"]
-
-                flags = rfi.xrfi_explicit(
-                    l1.raw_frequencies,
-                    rfi_file=known_rfi_file,
-                )
-
-                l1.weights[:, flags] = 0
-
-                if np.sum(l1.weights) == 0:
-                    print(
-                        f"File {l1.filename.name} has been completely filtered by its an explicit RFI filter."
-                    )
-                    removable.append(i)
-                    continue
-
-            tools.run_xrfi_pipe(l1.spectrum, l1.weights, xrfi_pipe)
-
-            if np.sum(l1.weights) == 0:
-                print(f"File {l1.filename.name} has been completely filtered by RFI.")
-                removable.append(i)
-                continue
-
-        # Remove completely filtered things.
-        level1 = [l1 for i, l1 in enumerate(level1) if i not in removable]
-
-        # Apply RMS filter.
-        if rms_filter_file:
-            removable = []
-
-            pbar = tqdm.tqdm(enumerate(level1), unit="files", total=len(level1))
-            for i, l1 in pbar:
-                pbar.set_description(f"RMS Filter for {l1.filename.name}")
-                # Get RMS
-                rms_lower = l1.get_model_rms(freq_range=(-np.inf, l1.freq.center))
-                rms_upper = l1.get_model_rms(freq_range=(l1.freq.center, np.inf))
-                rms_3term = l1.get_model_rms(n_terms=3)
-
-                flags = filters.rms_filter(
-                    rms_filter_file,
-                    l1.ancillary["gha"],
-                    np.array([rms_lower, rms_upper, rms_3term]).T,
-                    n_sigma_rms,
-                )
-                l1.weights[flags] = 0
-
-                if np.sum(l1.weights) == 0:
-                    print(f"File {l1.filename.name} has been completely filtered by its rms data.")
-                    removable.append(i)
-                    continue
-
-            # Remove completely filtered things.
-            level1 = [l1 for i, l1 in enumerate(level1) if i not in removable]
-
-        if do_total_power_filter:
-            removable = []
-
-            pbar = tqdm.tqdm(enumerate(level1), unit="files", total=len(level1))
-            for i, l1 in pbar:
-                pbar.set_description(f"Total Power Filter for {l1.filename.name}")
-                # Applying total-power filter
-                # TODO: this filter should be removed/reworked -- it uses arbitrary numbers.
-                # TODO: it at *least* should be done on the mean, not the sum.
-                flags = filters.total_power_filter(
-                    l1.ancillary["gha"],
-                    np.array(
-                        [
-                            tools.weighted_mean(
-                                l1.spectrum[:, l1.raw_frequencies <= l1.freq.center],
-                                l1.weights[:, l1.raw_frequencies <= l1.freq.center],
-                                axis=1,
-                            )[0],
-                            tools.weighted_mean(
-                                l1.spectrum[:, l1.raw_frequencies >= l1.freq.center],
-                                l1.weights[:, l1.raw_frequencies >= l1.freq.center],
-                                axis=1,
-                            )[0],
-                            tools.weighted_mean(l1.spectrum, l1.weights, axis=1)[0],
-                        ]
-                    ),
-                    flags=np.sum(l1.weights, axis=1).astype("bool"),
-                )
-                l1.weights[flags] = 0
-                if np.sum(l1.weights) == 0:
-                    print(
-                        f"File {l1.filename.name} has been completely filtered by its total power data."
-                    )
-                    removable.append(i)
-                    continue
-
-            # Remove completely filtered things.
-            level1 = [l1 for i, l1 in enumerate(level1) if i not in removable]
-
-        meta["n_files_flagged"] = meta["n_files"] - len(level1)
-
-        if not level1:
+        if not n_files:
             raise Exception("All input files have been filtered completely.")
 
-        # Averaging data within GHA bins
-        weights = np.zeros((len(level1), len(gha_edges) - 1, level1[0].freq.n))
-        spectra = np.zeros((len(level1), len(gha_edges) - 1, level1[0].freq.n))
+        remaining_l1 = [l1 for i, l1 in enumerate(level1) if not files_flagged[i]]
+        flags = [flg for flg in flags if np.any(flg)]
 
-        pbar = tqdm.tqdm(enumerate(level1), unit="files", total=len(level1))
-        for i, l1 in pbar:
-            pbar.set_description(f"GHA Binning for {l1.filename.name}")
-
-            gha = l1.ancillary["gha"]
-
-            for j, gha_low in enumerate(gha_edges[:-1]):
-
-                mask = (gha >= gha_low) & (gha < gha_edges[j + 1])
-                spec = l1.spectrum[mask]
-                wght = l1.weights[mask]
-
-                if np.any(wght):
-                    spec_mean, wght_mean = tools.weighted_mean(spec, weights=wght, axis=0)
-
-                    # Store this iteration
-                    spectra[i, j] = spec_mean
-                    weights[i, j] = wght_mean
+        spectra, weights, gha_edges = cls.bin_gha(
+            remaining_l1, gha_max, gha_max, gha_bin_size, flags=flags
+        )
 
         data = {
             "spectrum": spectra,
@@ -1326,6 +1373,7 @@ class Level2(_Level):
 
         ancillary = {
             "n_total_times_per_file": n_times,
+            "files_flagged": files_flagged,
             "years": years,
             "days": days,
             "hours": hours,
@@ -1338,6 +1386,51 @@ class Level2(_Level):
     def calibration(self):
         """The calibration object used to calibrate these spectra."""
         return self.previous_level.calibration
+
+    @property
+    def unflagged_level1(self) -> List[Level1]:
+        """List of Level1 objects kept in the Level2 spectra (in order)."""
+        return [
+            l1 for i, l1 in enumerate(self.previous_level) if not self.ancillary["files_flagged"][i]
+        ]
+
+    @classmethod
+    def bin_gha(cls, level1, gha_min, gha_max, gha_bin_size, flags=None):
+
+        gha_edges = np.arange(gha_min, gha_max, gha_bin_size)
+        if np.isclose(gha_max, gha_edges.max() + gha_bin_size):
+            gha_edges = np.concatenate((gha_edges, [gha_edges.max() + gha_bin_size]))
+
+        # Averaging data within GHA bins
+        weights = np.zeros((len(level1), len(gha_edges) - 1, level1[0].freq.n))
+        spectra = np.zeros((len(level1), len(gha_edges) - 1, level1[0].freq.n))
+
+        pbar = tqdm.tqdm(enumerate(level1), unit="files", total=len(level1))
+        for i, l1 in pbar:
+            pbar.set_description(f"GHA Binning for {l1.filename.name}")
+
+            gha = l1.ancillary["gha"]
+
+            # Apply flags to weights
+            l1_weights = l1.weights.copy()
+            if flags:
+                l1_weights[flags[i]] = 0
+
+            for j, gha_low in enumerate(gha_edges[:-1]):
+
+                mask = (gha >= gha_low) & (gha < gha_edges[j + 1])
+                spec = l1.spectrum[mask]
+
+                wght = weights[mask]
+
+                if np.any(wght):
+                    spec_mean, wght_mean = tools.weighted_mean(spec, weights=wght, axis=0)
+
+                    # Store this iteration
+                    spectra[i, j] = spec_mean
+                    weights[i, j] = wght_mean
+
+        return spectra, weights, gha_edges
 
 
 class Level3(_Level):
@@ -1448,7 +1541,7 @@ class Level3(_Level):
         # Perform xRFI on GHA-averaged spectra.
         if xrfi_pipe:
             for s, w in zip(spec, wght):
-                tools.run_xrfi_pipe(s, w, xrfi_pipe)
+                tools.run_xrfi_pipe(s, w <= 0, xrfi_pipe)
 
         # Take mean over nights.
         spec, wght = tools.weighted_mean(np.array(spec), np.array(wght), axis=0)

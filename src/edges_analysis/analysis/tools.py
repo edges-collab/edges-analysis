@@ -306,15 +306,15 @@ def average_in_gha(spectrum: np.ndarray, gha: np.ndarray, gha_bins, weights: np.
     return out_spectrum, out_weights
 
 
-def run_xrfi_pipe(spectrum, weights, xrfi_pipe):
+def run_xrfi_pipe(spectrum: np.ndarray, flags: np.ndarray, xrfi_pipe: dict) -> np.ndarray:
     """Run an xrfi pipeline on given spectrum and weights, updating weights in place."""
     for method, kwargs in xrfi_pipe.items():
         if (
             method in ["xrfi_model", "xrfi_poly"] and spectrum.ndim == 2
         ):  # methods that only allow 1D spectra.
             for i, psp in enumerate(spectrum):
-                flags, info = getattr(xrfi, method)(psp, flags=weights[i] <= 0, **kwargs)
-                weights[i][flags] = 0
+                flags, info = getattr(xrfi, method)(psp, flags=flags, **kwargs)
         else:
-            flags, info = getattr(xrfi, method)(spectrum, flags=weights <= 0, **kwargs)
-            weights[flags] = 0
+            flags, info = getattr(xrfi, method)(spectrum, flags=flags, **kwargs)
+
+    return flags

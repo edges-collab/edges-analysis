@@ -258,8 +258,12 @@ def time_filter_auxiliary(
     amb_hum_max=200,
     min_receiver_temp=0,
     max_receiver_temp=100,
+    flags=None,
 ):
-    flags = np.zeros(len(gha), dtype=bool)
+    if flags is not None:
+        assert flags.shape == (len(gha),), "flags must be a length(gha) array"
+    else:
+        flags = np.zeros(len(gha), dtype=bool)
 
     nflags = np.sum(flags)
 
