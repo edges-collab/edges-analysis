@@ -39,9 +39,7 @@ def _get_input_files(level, path, label, allow_many=False):
     if label and Path(label).is_file():
         with open(label, "r") as fl:
             settings = yaml.load(fl, Loader=yaml.FullLoader)
-            label = settings.pop(
-                "label", hashlib.md5(repr(settings).encode()).hexdigest()
-            )
+            label = settings.pop("label", hashlib.md5(repr(settings).encode()).hexdigest())
         print(
             stylize("Using auto-generated label: ", attr("bold")),
             stylize(label, attr("dim")),
@@ -168,9 +166,7 @@ def calibrate(settings, path, label, prefix, message, clobber):
                                 if ff.attrs[k] == str(v):
                                     continue
 
-                            meta = "\n\t".join(
-                                f"{kk}: {vv}" for kk, vv in ff.attrs.items()
-                            )
+                            meta = "\n\t".join(f"{kk}: {vv}" for kk, vv in ff.attrs.items())
                             raise ValueError(
                                 f"""
 The directory you want to write to has a non-consistent file for key '{k}' [required {v}].
@@ -208,9 +204,7 @@ Metadata in file:
 @click.argument("level", type=int)
 @click.argument("settings", type=click.Path(exists=True, dir_okay=False))
 @click.option("-i", "--path", default="", help="path to input files")
-@click.option(
-    "-l", "--label", default="", help="optional short label describing current settings"
-)
+@click.option("-l", "--label", default="", help="optional short label describing current settings")
 @click.option(
     "-L",
     "--prev-label",
@@ -262,9 +256,7 @@ def level(level, settings, path, label, prev_label, prefix, message, clobber):
         logger.error("The output file already exists -- use clobber!")
         return
 
-    getattr(levels, f"Level{level}").from_previous_level(
-        in_files, output_file, clobber, **settings
-    )
+    getattr(levels, f"Level{level}").from_previous_level(in_files, output_file, clobber, **settings)
 
     with h5py.File(output_file, "a") as fl:
         fl.attrs["message"] = message

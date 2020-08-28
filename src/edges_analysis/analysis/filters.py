@@ -5,6 +5,9 @@ import warnings
 import h5py
 from ..config import config
 import yaml
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 # TODO: clean up all the rms filtering functions in this module.
@@ -14,14 +17,10 @@ def rms_filter_computation(level3, path_out, band, n_files=None):
     """
     path_out = Path(path_out)
     if not path_out.is_absolute():
-        path_out = (
-            Path(config["paths"]["field_products"]) / band / "rms_filters" / path_out
-        )
+        path_out = Path(config["paths"]["field_products"]) / band / "rms_filters" / path_out
 
     # Sort the inputs in ascending date.
-    level3 = sorted(
-        level3, key=lambda x: f"{x.meta['year'] - x.meta['day'] - x.meta['hour']}"
-    )
+    level3 = sorted(level3, key=lambda x: f"{x.meta['year'] - x.meta['day'] - x.meta['hour']}")
 
     # Load data used to compute filter
     # Only using the first "N_files" to compute the filter
@@ -65,9 +64,7 @@ def rms_filter_computation(level3, path_out, band, n_files=None):
         n_terms = 16
         n_std = 6
 
-        for rms, label in zip(
-            [(rms_lower, rms_upper, rms_full), ("lower", "upper", "full")]
-        ):
+        for rms, label in zip([(rms_lower, rms_upper, rms_full), ("lower", "upper", "full")]):
 
             # Identification of bad data, within 1-hour "bins", across 24 hours
             rms, good, model, abs_res, model_std, par, par_std = perform_rms_filter(
@@ -93,9 +90,7 @@ def perform_rms_filter(rms, gha, n_poly, n_sigma, n_terms, n_std):
 
         while np.sum(good[mask]) < n_orig:
             n_orig = np.sum(good[mask])
-            res, std = _get_model_residual_iter(
-                n_poly, gha[mask], rms[mask], weights=good[mask]
-            )
+            res, std = _get_model_residual_iter(n_poly, gha[mask], rms[mask], weights=good[mask])
             good[mask] &= np.abs(res) <= n_sigma * std
 
     par = np.polyfit(gha[good], rms[good], n_terms - 1)
@@ -170,9 +165,7 @@ def total_power_filter(gha, total_power, flags=None):
             while nflags < np.sum(this_flags):
                 nflags = np.sum(this_flags)
 
-                res, std = _get_model_residual_iter(
-                    n_poly, this_gha, this_tp, this_flags
-                )
+                res, std = _get_model_residual_iter(n_poly, this_gha, this_tp, this_flags)
 
                 if std <= std_threshold:
                     this_flags |= np.abs(res) > n_sigma * std
@@ -242,7 +235,7 @@ def explicit_filter(times, bad, ret_times=False):
     assert nb in (1, 2, 3), "bad must be an array of 1,2 or 3-tuples"
 
     if nt < nb:
-        bad = set(b[:nt] for b in bad)
+        bad = {b[:nt] for b in bad}
         nb = nt
 
     keep = [t[:nb] not in bad for t in times]
@@ -268,12 +261,39 @@ def time_filter_auxiliary(
 ):
     flags = np.zeros(len(gha), dtype=bool)
 
+    nflags = np.sum(flags)
+
     flags |= (gha < gha_range[0]) | (gha >= gha_range[1])
+    logger.info(
+        f"{np.sum(flags) - nflags}/{len(flags) - np.sum(flags)} times flagged due to GHA range"
+    )
+    nflags = np.sum(flags)
+
     # Sun elevation, Moon elevation, ambient humidity, and receiver temperature
     flags |= sun_el > sun_el_max
+    logger.info(
+        f"{np.sum(flags) - nflags}/{len(flags) - np.sum(flags)} times flagged due to sun position"
+    )
+    nflags = np.sum(flags)
+
     flags |= moon_el > moon_el_max
+    logger.info(
+        f"{np.sum(flags) - nflags}/{len(flags) - np.sum(flags)} times flagged due to moon positoin"
+    )
+    nflags = np.sum(flags)
+
+    logger.info(f"Humidity range: {humidity.min()} -- {humidity.max()} [set max = {amb_hum_max}]")
     flags |= humidity > amb_hum_max
+    logger.info(
+        f"{np.sum(flags) - nflags}/{len(flags) - np.sum(flags)} times flagged due to humidity"
+    )
+    nflags = np.sum(flags)
+
     flags |= (receiver_temp >= max_receiver_temp) | (receiver_temp <= min_receiver_temp)
+    logger.info(
+        f"{np.sum(flags) - nflags}/{len(flags) - np.sum(flags)} times flagged due to receiver temp"
+    )
+
     return flags
 
 
@@ -296,9 +316,7 @@ def filter_explicit_gha(gha, first_day, last_day):
             12: np.arange(147, 150),
             13: np.array([147, 149, 157, 159]),
             14: np.arange(148, 183),
-            15: np.concatenate(
-                (np.arange(140, 183), np.arange(187, 206), np.arange(210, 300))
-            ),
+            15: np.concatenate((np.arange(140, 183), np.arange(187, 206), np.arange(210, 300))),
             23: np.arange(148, 300),
             6: np.arange(147, 300),
             7: np.concatenate(
@@ -309,9 +327,7 @@ def filter_explicit_gha(gha, first_day, last_day):
                     np.arange(210, 300),
                 )
             ),
-            8: np.concatenate(
-                (np.arange(147, 151), np.arange(160, 168), np.arange(174, 300))
-            ),
+            8: np.concatenate((np.arange(147, 151), np.arange(160, 168), np.arange(174, 300))),
             9: np.concatenate(
                 (
                     np.arange(147, 153),

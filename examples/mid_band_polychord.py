@@ -125,9 +125,7 @@ def run():
     settings.file_root = save_file_name
     settings.do_clustering = True
     settings.read_resume = False
-    PyPolyChord.run_polychord(
-        loglikelihood, Nparameters, Nderived, settings, prior, dumper
-    )
+    PyPolyChord.run_polychord(loglikelihood, Nparameters, Nderived, settings, prior, dumper)
 
 
 if __name__ == "__main__":

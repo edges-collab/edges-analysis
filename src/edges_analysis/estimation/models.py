@@ -38,9 +38,7 @@ def model_mirocha2016(theta, pars=None, hmf=None, src=None):
     }
 
     # New list of parameter values
-    updates = {
-        par: (10 ** val if is_log[par] else val) for par, val in theta_list.items()
-    }
+    updates = {par: (10 ** val if is_log[par] else val) for par, val in theta_list.items()}
 
     # Create new parameter object
     p = pars.copy()

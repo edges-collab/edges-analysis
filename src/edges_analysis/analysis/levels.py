@@ -66,9 +66,7 @@ class _Level(io.HDF5Object):
         if _prev_level:
             _prev_level = getattr(sys.modules[__name__], f"Level{_prev_level}")
         else:
-            raise AttributeError(
-                f"from_previous_level is not defined for {cls.__name__}"
-            )
+            raise AttributeError(f"from_previous_level is not defined for {cls.__name__}")
         return _prev_level
 
     @classmethod
@@ -78,8 +76,7 @@ class _Level(io.HDF5Object):
         if not isinstance(prev_level, _prev_level):
             if hasattr(prev_level, "__len__"):
                 prev_level = [
-                    p if isinstance(p, _prev_level) else _prev_level(p)
-                    for p in prev_level
+                    p if isinstance(p, _prev_level) else _prev_level(p) for p in prev_level
                 ]
             else:
                 prev_level = _prev_level(prev_level)
@@ -241,9 +238,7 @@ class Level1(_Level):
 
         logger.info("Getting ancillary weather data...")
         t = time.time()
-        new_anc, new_meta = cls._get_weather_thermlog(
-            band, times, weather_file, thermlog_file
-        )
+        new_anc, new_meta = cls._get_weather_thermlog(band, times, weather_file, thermlog_file)
         meta = {**meta, **new_meta}
 
         time_based_anc = tools.join_struct_arrays((time_based_anc, new_anc))
@@ -429,9 +424,7 @@ class Level1(_Level):
         # If we get four files, make sure they exist and pass them back
         if isinstance(s11_path, (tuple, list)):
             if len(s11_path) != 4:
-                raise ValueError(
-                    "If passing explicit paths to S11 inputs, length must be 4."
-                )
+                raise ValueError("If passing explicit paths to S11 inputs, length must be 4.")
 
             fls = []
             for pth in s11_path:
@@ -593,9 +586,7 @@ class Level1(_Level):
 
             wth_seconds = [
                 (
-                    dt_from_jd(
-                        x["year"], int(x["day"]), x["hour"], x["minute"], x["second"]
-                    )
+                    dt_from_jd(x["year"], int(x["day"]), x["hour"], x["minute"], x["second"])
                     - times[0]
                 ).total_seconds()
                 for x in weather
@@ -612,9 +603,7 @@ class Level1(_Level):
 
             wth_seconds = [
                 (
-                    dt_from_jd(
-                        x["year"], int(x["day"]), x["hour"], x["minute"], x["second"]
-                    )
+                    dt_from_jd(x["year"], int(x["day"]), x["hour"], x["minute"], x["second"])
                     - times[0]
                 ).total_seconds()
                 for x in thermlog
@@ -631,9 +620,7 @@ class Level1(_Level):
 
         # Sun/Moon coordinates
         t = time.time()
-        sun, moon = coordinates.sun_moon_azel(
-            const.edges_lat_deg, const.edges_lon_deg, times
-        )
+        sun, moon = coordinates.sun_moon_azel(const.edges_lat_deg, const.edges_lon_deg, times)
         print(f"Took {time.time() - t} sec to get sun/moon coords.")
 
         time_based_anc["sun_az"] = sun[:, 0]
@@ -648,9 +635,7 @@ class Level1(_Level):
         return time_based_anc, meta
 
     @classmethod
-    def _get_antenna_s11(
-        cls, s11_files, freq, switch_state_dir, n_terms, switch_state_run_num
-    ):
+    def _get_antenna_s11(cls, s11_files, freq, switch_state_dir, n_terms, switch_state_run_num):
         # Get files
         return s11m.antenna_s11_remove_delay(
             s11_files,
@@ -750,7 +735,7 @@ class Level1(_Level):
             The same ancillary data as contained in `level2`.
         meta : dict
             Contains all input parameters, as well as level2 meta.
-    """
+        """
         if not isinstance(calfile, Calibration):
             calfile = Calibration(calfile)
 
@@ -776,9 +761,7 @@ class Level1(_Level):
             "antenna_correction": antenna_correction,
             "balun_correction": balun_correction,
             "ground_correction": ground_correction,
-            "beam_file": str(Path(beam_file).absolute())
-            if beam_file is not None
-            else "",
+            "beam_file": str(Path(beam_file).absolute()) if beam_file is not None else "",
             "f_low": f_low,
             "f_high": f_high,
             "n_poly_xrfi": n_fg,
@@ -870,8 +853,7 @@ class Level1(_Level):
         """
         if indx is None:
             out = [
-                self.frequency_average_spectrum(i, resolution)
-                for i in range(len(self.spectrum))
+                self.frequency_average_spectrum(i, resolution) for i in range(len(self.spectrum))
             ]
             return tuple(np.array(x) for x in out)
         else:
@@ -928,23 +910,13 @@ class Level1(_Level):
                 ]
             )
         else:
-            mask = (
-                self.raw_frequencies
-                >= freq_range[0] & self.raw_frequencies
-                <= freq_range[1]
-            )
+            mask = self.raw_frequencies >= freq_range[0] & self.raw_frequencies <= freq_range[1]
 
-            model = self.model(indx, model, n_terms, resolution)(
-                self.raw_frequencies[mask]
-            )
+            model = self.model(indx, model, n_terms, resolution)(self.raw_frequencies[mask])
             resid = self.spectrum[indx, mask] - model
-            return np.sqrt(
-                np.sum((resid[self.weights > 0]) ** 2) / np.sum(self.weights > 0)
-            )
+            return np.sqrt(np.sum((resid[self.weights > 0]) ** 2) / np.sum(self.weights > 0))
 
-    def plot_waterfall(
-        self, quantity: str = "spectrum", ax: [None, plt.Axes] = None, cbar=True
-    ):
+    def plot_waterfall(self, quantity: str = "spectrum", ax: [None, plt.Axes] = None, cbar=True):
         if quantity in ["p0", "p1", "p2"]:
             q = self.spectra["switch_powers"][int(quantity[-1])]
         else:
@@ -1024,9 +996,7 @@ class Level1(_Level):
         ax[0].set_xlabel("Frequency [MHz]")
         ax[0].set_ylabel("$|S_{11}|$ [dB]")
 
-        ax[1].plot(
-            self.raw_frequencies, (180 / np.pi) * np.unwrap(np.angle(self.antenna_s11))
-        )
+        ax[1].plot(self.raw_frequencies, (180 / np.pi) * np.unwrap(np.angle(self.antenna_s11)))
         ax[1].set_title("Phase of Antenna S11")
         ax[1].set_xlabel("Frequency [MHz]")
         ax[1].set_ylabel(r"$\angle S_{11}$ [${}^\circ$]")
@@ -1042,9 +1012,7 @@ class Level1(_Level):
         if integrator in ("mean", "standard_deviation"):
             q, w = getattr(tools, "weighted_" + integrator)(q, self.weights, axis=axis)
         else:
-            q = tools.weighted_sorted_metric(
-                q, self.weights, metric=integrator, axis=axis
-            )
+            q = tools.weighted_sorted_metric(q, self.weights, metric=integrator, axis=axis)
             w = np.where(np.all(self.weights == np.nan, axis=axis), 0, 1)
 
         return q, w
@@ -1127,7 +1095,10 @@ class Level2(_Level):
 
     _structure = {
         "frequency": None,
-        "spectra": {"weights": None, "spectrum": None,},
+        "spectra": {
+            "weights": None,
+            "spectrum": None,
+        },
         "ancillary": {
             "n_total_times_per_file": None,
             "years": None,
@@ -1180,9 +1151,7 @@ class Level2(_Level):
         }
 
         # Sort the inputs in ascending date.
-        level1 = sorted(
-            level1, key=lambda x: (x.meta["year"], x.meta["day"], x.meta["hour"])
-        )
+        level1 = sorted(level1, key=lambda x: (x.meta["year"], x.meta["day"], x.meta["hour"]))
 
         years = [x.meta["year"] for x in level1]
         days = [x.meta["day"] for x in level1]
@@ -1194,6 +1163,8 @@ class Level2(_Level):
 
         # For each level1 file, flag times based on ancillary data.
         pbar = tqdm.tqdm(enumerate(level1), unit="files", total=len(level1))
+
+        removable = []
         for i, l1 in pbar:
             pbar.set_description(f"Filtering RFI/aux for {l1.filename.name}")
 
@@ -1212,10 +1183,8 @@ class Level2(_Level):
 
             l1.weights[flags] = 0
             if np.sum(l1.weights) == 0:
-                print(
-                    f"File {l1.filename.name} has been completely filtered by its aux data."
-                )
-                level1.remove(l1)
+                print(f"File {l1.filename.name} has been completely filtered by its aux data.")
+                removable.append(i)
                 continue
 
             # For each level 1 file, do xrfi
@@ -1223,20 +1192,38 @@ class Level2(_Level):
                 kwargs = xrfi_pipe.pop("explicit")
 
                 if kwargs["file"] is None:
-                    known_rfi_file = (
-                        Path(dirname(__file__)) / "data" / "known_rfi_channels.yaml"
-                    )
+                    known_rfi_file = Path(dirname(__file__)) / "data" / "known_rfi_channels.yaml"
                 else:
                     known_rfi_file = kwargs["file"]
 
-                flags = rfi.xrfi_explicit(l1.raw_frequencies, rfi_file=known_rfi_file,)
+                flags = rfi.xrfi_explicit(
+                    l1.raw_frequencies,
+                    rfi_file=known_rfi_file,
+                )
 
                 l1.weights[:, flags] = 0
 
+                if np.sum(l1.weights) == 0:
+                    print(
+                        f"File {l1.filename.name} has been completely filtered by its an explicit RFI filter."
+                    )
+                    removable.append(i)
+                    continue
+
             tools.run_xrfi_pipe(l1.spectrum, l1.weights, xrfi_pipe)
+
+            if np.sum(l1.weights) == 0:
+                print(f"File {l1.filename.name} has been completely filtered by RFI.")
+                removable.append(i)
+                continue
+
+        # Remove completely filtered things.
+        level1 = [l1 for i, l1 in enumerate(level1) if i not in removable]
 
         # Apply RMS filter.
         if rms_filter_file:
+            removable = []
+
             pbar = tqdm.tqdm(enumerate(level1), unit="files", total=len(level1))
             for i, l1 in pbar:
                 pbar.set_description(f"RMS Filter for {l1.filename.name}")
@@ -1254,13 +1241,16 @@ class Level2(_Level):
                 l1.weights[flags] = 0
 
                 if np.sum(l1.weights) == 0:
-                    print(
-                        f"File {l1.filename.name} has been completely filtered by its rms data."
-                    )
-                    level1.remove(l1)
+                    print(f"File {l1.filename.name} has been completely filtered by its rms data.")
+                    removable.append(i)
                     continue
 
+            # Remove completely filtered things.
+            level1 = [l1 for i, l1 in enumerate(level1) if i not in removable]
+
         if do_total_power_filter:
+            removable = []
+
             pbar = tqdm.tqdm(enumerate(level1), unit="files", total=len(level1))
             for i, l1 in pbar:
                 pbar.set_description(f"Total Power Filter for {l1.filename.name}")
@@ -1291,10 +1281,16 @@ class Level2(_Level):
                     print(
                         f"File {l1.filename.name} has been completely filtered by its total power data."
                     )
-                    level1.remove(l1)
+                    removable.append(i)
                     continue
 
+            # Remove completely filtered things.
+            level1 = [l1 for i, l1 in enumerate(level1) if i not in removable]
+
         meta["n_files_flagged"] = meta["n_files"] - len(level1)
+
+        if not level1:
+            raise Exception("All input files have been filtered completely.")
 
         # Averaging data within GHA bins
         weights = np.zeros((len(level1), len(gha_edges) - 1, level1[0].freq.n))
@@ -1313,9 +1309,7 @@ class Level2(_Level):
                 wght = l1.weights[mask]
 
                 if np.any(wght):
-                    spec_mean, wght_mean = tools.weighted_mean(
-                        spec, weights=wght, axis=0
-                    )
+                    spec_mean, wght_mean = tools.weighted_mean(spec, weights=wght, axis=0)
 
                     # Store this iteration
                     spectra[i, j] = spec_mean
@@ -1522,7 +1516,9 @@ class Level4(_Level):
             "weights": None,
             "spectrum": None,
         },  # All spectra components assumed to be the same shape, with last axis being frequency.
-        "ancillary": {"std_dev": None,},
+        "ancillary": {
+            "std_dev": None,
+        },
         "meta": None,
     }
 

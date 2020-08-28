@@ -72,9 +72,7 @@ class SkyModel:
 
     @classmethod
     def get_map_coords(cls, nside: int, nest: bool = True):
-        return hp.pix2ang(
-            nside, np.arange(hp.nside2npix(nside)), lonlat=True, nest=nest
-        )
+        return hp.pix2ang(nside, np.arange(hp.nside2npix(nside)), lonlat=True, nest=nest)
 
     @classmethod
     def _get_sky_model_from_lambda(cls, max_res: [None, int] = None) -> np.ndarray:
@@ -94,9 +92,7 @@ class SkyModel:
         return temp_map
 
     def get_sky_coords(self):
-        return apc.SkyCoord(
-            self.lonlat[0], self.lonlat[1], frame="galactic", unit="deg"
-        )
+        return apc.SkyCoord(self.lonlat[0], self.lonlat[1], frame="galactic", unit="deg")
 
     def _process_map(self, sky_map, lon, lat):
         """Optional over-writeable method to process the sky map before returning it."""
@@ -130,9 +126,9 @@ class SkyModel:
         Tcmb = 2.725
         sky_map = np.zeros((len(self.sky_map), len(freq_array)))
         for i in range(len(freq_array)):
-            sky_map[:, i] = (self.sky_map - Tcmb) * (
-                freq_array[i] / self.frequency
-            ) ** (-index) + Tcmb
+            sky_map[:, i] = (self.sky_map - Tcmb) * (freq_array[i] / self.frequency) ** (
+                -index
+            ) + Tcmb
 
         return sky_map
 

@@ -106,9 +106,7 @@ def plot_simulation_residuals(f, out, folder_plot, name_flag):
         ax[1].set_ylabel(f"GHA\n [{div_2 or div_1} K per division]")
         ax[1].yaxis.yticks(yticks_2 or yticks_1, np.arange(5, -7, -1))
 
-        plt.savefig(
-            folder_plot + name_flag + f"_simulated_{key}.pdf", bbox_inches="tight"
-        )
+        plt.savefig(folder_plot + name_flag + f"_simulated_{key}.pdf", bbox_inches="tight")
 
     plot_it(
         "residuals",
@@ -119,9 +117,7 @@ def plot_simulation_residuals(f, out, folder_plot, name_flag):
         yticks_2=np.arange(-22, 0.1, 2),
         div_2=2,
     )
-    plot_it(
-        "correction", ylim_1=(-0.2, 1.1), yticks_1=np.arange(-0.1, 1.01, 0.1), div_1=0.1
-    )
+    plot_it("correction", ylim_1=(-0.2, 1.1), yticks_1=np.arange(-0.1, 1.01, 0.1), div_1=0.1)
     plot_it(
         "correction_residuals",
         ylim_1=(-0.06, 0.005),

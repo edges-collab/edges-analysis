@@ -49,9 +49,7 @@ def real_data(case, f_low, f_high, gap_f_low=0, gap_f_high=0):
         1: "one_day_tests/another_one.txt",
         2: "rcv18_sw18_nominal_GHA_every_1hr/integrated_spectrum_rcv18_sw18_every_1hr_GHA_6-18hr.txt",
     }
-    data = np.genfromtxt(
-        config["edges_folder"] + "mid_band/spectra/level5/" + cases[case]
-    )
+    data = np.genfromtxt(config["edges_folder"] + "mid_band/spectra/level5/" + cases[case])
     mask = (data[:, 0] >= f_low) & (data[:, 0] <= f_high)
     data = data[mask]
 
@@ -70,9 +68,7 @@ def real_data(case, f_low, f_high, gap_f_low=0, gap_f_high=0):
     return v, t, w, sigma, inv_sigma, det_sigma
 
 
-def foreground_model(
-    model_type, theta_fg, v, vr, ion_abs_coeff="free", ion_emi_coeff="free"
-):
+def foreground_model(model_type, theta_fg, v, vr, ion_abs_coeff="free", ion_emi_coeff="free"):
     n_params = len(theta_fg)
 
     model_fg = 0
@@ -87,9 +83,7 @@ def foreground_model(
         if ion_emi_coeff == "free":
             n_params -= 1
 
-        astro_exponent = sum(
-            theta_fg[i + 1] * ((np.log(v / vr)) ** i) for i in range(n_params - 1)
-        )
+        astro_exponent = sum(theta_fg[i + 1] * ((np.log(v / vr)) ** i) for i in range(n_params - 1))
         astro_fg = theta_fg[0] * ((v / vr) ** astro_exponent)
 
         IAC = theta_fg[-2] if ion_abs_coeff == "free" else ion_abs_coeff
@@ -108,9 +102,7 @@ def signal_model(model_type, theta, v):
     )
 
 
-def full_model(
-    theta, v, vr, model_type_signal="exp", model_type_foreground="exp", n_21=4
-):
+def full_model(theta, v, vr, model_type_signal="exp", model_type_foreground="exp", n_21=4):
     model_21 = 0
     if n_21:
         model_21 = signal_model(model_type_signal, theta[:n_21], v)
@@ -134,9 +126,7 @@ def svd_functions(folder_with_spectra, f_low, f_high, remove_avg=True):
     """Compute SVD functions"""
 
     # Listing files to be processed
-    folder = (
-        config["edges_folder"] + "mid_band/spectra/level5/" + folder_with_spectra + "/"
-    )
+    folder = config["edges_folder"] + "mid_band/spectra/level5/" + folder_with_spectra + "/"
     list_of_spectra = sorted(listdir(folder))
 
     # Generate the original matrix of spectra
@@ -214,9 +204,7 @@ def signal_edges2018_uncertainties(v):
         dW = sW * x[2]
         dt = st * x[3]
 
-        model_perturbed[i, :] = signal_model(
-            "exp", [uA + dA, uv0 + dv0, uW + dW, ut + dt], v
-        )
+        model_perturbed[i, :] = signal_model("exp", [uA + dA, uv0 + dv0, uW + dW, ut + dt], v)
 
     # Limits
     limits = np.zeros((len(v), 2))
@@ -257,9 +245,7 @@ def models_calibration_spectra(path_par_spec, f, MC_spectra_noise=(0, 0, 0, 0)):
     fn = (f - 120) / 60
 
     # Evaluating models
-    models = {
-        kind: mdl.model_evaluate("fourier", p, fn) for kind, p in par_spec.items()
-    }
+    models = {kind: mdl.model_evaluate("fourier", p, fn) for kind, p in par_spec.items()}
 
     # Adding noise to models
     for i, (kind, model) in models.items():
@@ -301,9 +287,7 @@ def two_port_network_uncertainties():
     f = np.arange(50, 181)  # In MHz
     resistance_of_match = 50.1
 
-    oa, sa, la = rc.agilent_85033E(
-        (10 ** 6) * f, resistance_of_match, m=1, md_value_ps=38
-    )
+    oa, sa, la = rc.agilent_85033E((10 ** 6) * f, resistance_of_match, m=1, md_value_ps=38)
 
     # Simulated measurements at the VNA input
     one_port = [np.ones(len(f)), -np.ones(len(f)), 0.001 * np.ones(len(f))]
@@ -396,9 +380,7 @@ def get_reflections(f, path_par_s11, kinds=("s11", "s12s21", "s22"), loadname="s
     return sxx
 
 
-def MC_receiver(
-    band, MC_spectra_noise=np.ones(4), MC_s11_syst=np.ones(16), MC_temp=np.ones(4)
-):
+def MC_receiver(band, MC_spectra_noise=np.ones(4), MC_s11_syst=np.ones(16), MC_temp=np.ones(4)):
     s11_Npar_max = 14
 
     f = EdgesFrequencyRange(f_low=50, f_high=150).freq
@@ -524,7 +506,12 @@ def MC_error_propagation(s11_path, f_low=61, f_high=121, band="mid_band"):
     gamma_ant, G, tsky = [], [], []
     for i, (day, temp) in enumerate([147, 227], [1000, 3000]):
         gamma_ant.append(
-            antenna_s11_remove_delay(s11_path, f, delay_0=0.17, Nfit=14,)[mask]
+            antenna_s11_remove_delay(
+                s11_path,
+                f,
+                delay_0=0.17,
+                Nfit=14,
+            )[mask]
         )
 
         Gb, Gc = balun_and_connector_loss("mid_band", f, gamma_ant[i])
@@ -633,9 +620,7 @@ def models_calibration_s11(
     )
 
 
-def models_calibration_physical_temperature(
-    path, f, s_parameters=np.zeros(1), MC_temp=np.zeros(4)
-):
+def models_calibration_physical_temperature(path, f, s_parameters=np.zeros(1), MC_temp=np.zeros(4)):
 
     # Physical temperatures
     phys_temp = np.genfromtxt(path + "physical_temperatures.txt")

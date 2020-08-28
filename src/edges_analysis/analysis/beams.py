@@ -82,9 +82,7 @@ def wipld_read(filename, az_antenna_axis=0):
                 number_of_columns = len(line_splitted)
                 flag_columns = True
 
-        rows_per_frequency = (
-            file_length - number_of_frequencies
-        ) / number_of_frequencies
+        rows_per_frequency = (file_length - number_of_frequencies) / number_of_frequencies
 
         output = np.zeros(
             (
@@ -148,7 +146,10 @@ def wipld_read(filename, az_antenna_axis=0):
 
 
 def feko_read(
-    filename: [str, Path], frequency=None, frequency_out=None, az_antenna_axis=0,
+    filename: [str, Path],
+    frequency=None,
+    frequency_out=None,
+    az_antenna_axis=0,
 ):
     """
     Read a FEKO beam file.
@@ -189,9 +190,7 @@ def feko_read(
 
     # Frequency interpolation
     if frequency_out is not None:
-        interp_beam = np.zeros(
-            (len(frequency_out), beam_maps.shape[1], beam_maps.shape[2])
-        )
+        interp_beam = np.zeros((len(frequency_out), beam_maps.shape[1], beam_maps.shape[2]))
         for i, bm in enumerate(beam_maps.T):
             for j, b in enumerate(bm):
                 par = np.polyfit(freq.freq_recentred, b, 13)
@@ -476,28 +475,21 @@ def antenna_beam_factor(
                     beam_above_horizon *= ground_gain[j] / solid_angle
 
                 # Convolution between (beam at all frequencies) and (sky at reference frequency)
-                convolution_ref[i, j] = np.nansum(
-                    beam_above_horizon * sky_ref_above_horizon
-                )
+                convolution_ref[i, j] = np.nansum(beam_above_horizon * sky_ref_above_horizon)
 
                 # 'Correct' antenna temperature above the horizon, i.e., Convolution between (beam
                 # at all frequencies) and (sky at all frequencies)
                 antenna_temperature_above_horizon[i, j] = (
-                    np.nansum(beam_above_horizon * sky_above_horizon_ff)
-                    / n_pix_tot_no_nan
+                    np.nansum(beam_above_horizon * sky_above_horizon_ff) / n_pix_tot_no_nan
                 )
 
                 # Loss fraction
-                loss_fraction[i, j] = (
-                    1 - np.nansum(beam_above_horizon) / n_pix_tot_no_nan
-                )
+                loss_fraction[i, j] = 1 - np.nansum(beam_above_horizon) / n_pix_tot_no_nan
 
             elif convolution_computation == "old":
                 # Convolution and Antenna temperature OLD 'incorrect' WAY
                 # Convolution between (beam at all frequencies) and (sky at reference frequency)
-                convolution_ref[i, j] = np.nanmean(
-                    beam_above_horizon * sky_ref_above_horizon
-                )
+                convolution_ref[i, j] = np.nanmean(beam_above_horizon * sky_ref_above_horizon)
 
                 # Antenna temperature, i.e., Convolution between (beam at all frequencies) and (
                 # sky at all frequencies)
@@ -591,10 +583,7 @@ class InterpolatedBeamFactor(HDF5Object):
         beam_factor_file = Path(beam_factor_file).expanduser()
         if str(beam_factor_file).startswith(":"):
             beam_factor_file = (
-                Path(config["paths"]["beams"])
-                / band
-                / "beam_factors"
-                / str(beam_factor_file)[1:]
+                Path(config["paths"]["beams"]) / band / "beam_factors" / str(beam_factor_file)[1:]
             )
 
         if not beam_factor_file.exists():
@@ -628,9 +617,7 @@ class InterpolatedBeamFactor(HDF5Object):
         else:
             beam_factor_freq = beam_factor_lst
 
-        return cls.from_data(
-            {"beam_factor": beam_factor_freq, "frequency": freq, "lst": lst}
-        )
+        return cls.from_data({"beam_factor": beam_factor_freq, "frequency": freq, "lst": lst})
 
     def evaluate(self, lst):
         """Fast nearest-neighbour evaluation of the beam factor for a given LST."""
