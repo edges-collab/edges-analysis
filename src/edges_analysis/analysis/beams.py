@@ -1,7 +1,7 @@
 import datetime as dt
 import warnings
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 import logging
 import hashlib
 
@@ -147,29 +147,28 @@ def wipld_read(filename, az_antenna_axis=0):
 
 def feko_read(
     filename: [str, Path],
-    frequency=None,
-    frequency_out=None,
-    az_antenna_axis=0,
-):
+    frequency_out: [np.ndarray, None] = None,
+    az_antenna_axis: float = 0,
+) -> Tuple[np.ndarray, np.ndarray]:
     """
     Read a FEKO beam file.
 
     Parameters
     ----------
-    filename : path
+    filename
         The path to the file.
-    frequency : array-like, optional
-        The frequencies of the data. This usually must be given, as they are not
-        included in the data file itself. By default, uses range(50, 121, 2).
-    frequency_out : array-like, optional
+    frequency_out
         If given, input frequencies will be interpolated to these frequencies.
-    az_antenna_axis : int, optional
+    az_antenna_axis
+        The azimuth of the primary antenna axis, in degrees.
 
     Returns
     -------
-    beam_maps : ndarray
-        An ndarray with first axis being frequency, second axis elevation, and third
-        axis azimuth.
+    beam_maps
+        A ``(Nfreq, Nel, Naz)`` array giving values of the beam. Note that elevation
+        and azimuth are always in 1-degree increments.
+    freq
+        The frequencies at which the beam is defined.
     """
     filename = Path(filename)
 
