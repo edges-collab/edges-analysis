@@ -306,7 +306,7 @@ def simulate_spectra(
 
     Returns
     -------
-    simulate_spectra : :numpy array as function of LST and Frequency 
+    simulate_spectra : :numpy array as function of LST and Frequency
     """
     if not save_dir:
         save_dir = Path(config["paths"]["beams"]) / f"{band}/beam_factors/"
@@ -475,28 +475,21 @@ def simulate_spectra(
                     beam_above_horizon *= ground_gain[j] / solid_angle
 
                 # Convolution between (beam at all frequencies) and (sky at reference frequency)
-                convolution_ref[i, j] = np.nansum(
-                    beam_above_horizon * sky_ref_above_horizon
-                )
+                convolution_ref[i, j] = np.nansum(beam_above_horizon * sky_ref_above_horizon)
 
                 # 'Correct' antenna temperature above the horizon, i.e., Convolution between (beam
                 # at all frequencies) and (sky at all frequencies)
                 antenna_temperature_above_horizon[i, j] = (
-                    np.nansum(beam_above_horizon * sky_above_horizon_ff)
-                    / n_pix_tot_no_nan
+                    np.nansum(beam_above_horizon * sky_above_horizon_ff) / n_pix_tot_no_nan
                 )
 
                 # Loss fraction
-                loss_fraction[i, j] = (
-                    1 - np.nansum(beam_above_horizon) / n_pix_tot_no_nan
-                )
+                loss_fraction[i, j] = 1 - np.nansum(beam_above_horizon) / n_pix_tot_no_nan
 
             elif convolution_computation == "old":
                 # Convolution and Antenna temperature OLD 'incorrect' WAY
                 # Convolution between (beam at all frequencies) and (sky at reference frequency)
-                convolution_ref[i, j] = np.nanmean(
-                    beam_above_horizon * sky_ref_above_horizon
-                )
+                convolution_ref[i, j] = np.nanmean(beam_above_horizon * sky_ref_above_horizon)
 
                 # Antenna temperature, i.e., Convolution between (beam at all frequencies) and (
                 # sky at all frequencies)
@@ -509,6 +502,7 @@ def simulate_spectra(
             else:
                 raise ValueError("convolution_computation must be 'old' or 'new'")
     return antenna_temperature_above_horizon, freq_array, lst
+
 
 def antenna_beam_factor(
     band: str,
