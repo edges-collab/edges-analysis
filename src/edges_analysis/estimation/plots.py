@@ -33,10 +33,7 @@ def plot_absorption_model_comparison(models, labels, styles=None):
     """
     f = np.arange(60, 120.5, 0.5)
 
-    mdls = {
-        label: dm.signal_model(model[0], model[1], f)
-        for label, model in zip(models, labels)
-    }
+    mdls = {label: dm.signal_model(model[0], model[1], f) for label, model in zip(models, labels)}
     b18 = dm.signal_model("exp", [-0.5, 78, 19, 7], f)
 
     # x1 = dm.signal_model("exp", [-0.5, 78, 19, 7, -0.5], f)
@@ -111,9 +108,7 @@ def plot_foreground_polychord_fit(
     fg = fg[:-1]
     signal = signal[:-1]
 
-    model_fg = dm.foreground_model(
-        fg, best_fit_fg, v, vr, ion_abs_coeff=0, ion_emi_coeff=0
-    )
+    model_fg = dm.foreground_model(fg, best_fit_fg, v, vr, ion_abs_coeff=0, ion_emi_coeff=0)
     full_model = dm.full_model(
         best_fit_full,
         v,

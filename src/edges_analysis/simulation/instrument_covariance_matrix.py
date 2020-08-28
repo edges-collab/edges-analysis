@@ -34,7 +34,12 @@ def test(band, s11_path, receiver_cal_file=1, f_low=60, f_high=160, antenna_s11_
 
     # Antenna S11
     # -----------
-    ra = antenna_s11_remove_delay(s11_path, f, delay_0=0.17, n_fit=antenna_s11_nfit,)
+    ra = antenna_s11_remove_delay(
+        s11_path,
+        f,
+        delay_0=0.17,
+        n_fit=antenna_s11_nfit,
+    )
 
     # Balun+Connector Loss
     # --------------------

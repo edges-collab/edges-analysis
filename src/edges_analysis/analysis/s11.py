@@ -4,9 +4,7 @@ from edges_cal.reflection_coefficient import de_embed
 from edges_cal.s11_correction import get_switch_correction
 
 
-def get_corrected_s11(
-    files, switch_state_dir, switch_state_run_num=None, n_fit_terms=23
-):
+def get_corrected_s11(files, switch_state_dir, switch_state_run_num=None, n_fit_terms=23):
     assert len(files) == 4
 
     standards = [io.S1P.read(fl)[0] for fl in files]
@@ -21,15 +19,13 @@ def get_corrected_s11(
     # Correction at switch
     a_sw_c, x1, x2, x3 = de_embed(sw["o"], sw["s"], sw["l"], *standards)
 
-    switch_state = io.SwitchingState(
-        switch_state_dir, run_num=switch_state_run_num, fix=False
-    )
+    switch_state = io.SwitchingState(switch_state_dir, run_num=switch_state_run_num, fix=False)
 
     # Correction at receiver input
     return (
-        get_switch_correction(
-            a_sw_c, internal_switch=switch_state, f_in=f, poly_order=n_fit_terms
-        )[0],
+        get_switch_correction(a_sw_c, internal_switch=switch_state, f_in=f, poly_order=n_fit_terms)[
+            0
+        ],
         f,
     )
 

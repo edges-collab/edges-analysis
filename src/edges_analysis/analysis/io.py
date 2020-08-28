@@ -150,9 +150,7 @@ class HDF5Object:
 
     def write(self, filename=None, clobber=False):
         if filename is None and self.filename is None:
-            raise ValueError(
-                "You need to pass a filename since there is no instance filename."
-            )
+            raise ValueError("You need to pass a filename since there is no instance filename.")
 
         filename = Path(filename or self.filename)
 
