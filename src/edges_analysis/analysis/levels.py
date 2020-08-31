@@ -1332,9 +1332,9 @@ class Level2(_Level):
 
         # Create a master array of indices of good-quality spectra (over the time axis)
         # used in the final averages
-        n_times = np.array([len(l1.spectrum) for l1 in level1])
+        n_times = np.array([len(l1.ancillary) for l1 in level1])
 
-        flags = [np.zeros(l1.weights.shape, dtype=bool) for l1 in level1]
+        flags = [np.zeros((nt, l1.freq.n), dtype=bool) for nt, l1 in enumerate(level1)]
         flags = cls.run_filter(
             "aux",
             level1,
