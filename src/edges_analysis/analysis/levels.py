@@ -1268,10 +1268,14 @@ class Level2(_Level):
             if np.all(flg):
                 continue
 
-            this_flag = getattr(l1, f"{fnc}_filter")(flags=flg, **kwargs)
+            this_flag = getattr(l1, f"{fnc}_filter")(
+                flags=flg.T if axis == "time" else flg, **kwargs
+            )
 
-            if axis in ["both", "time"]:
+            if axis == "both":
                 flg |= this_flag
+            elif axis == "time":
+                flg |= this_flag.T
             else:
                 flg.T |= this_flag
 
