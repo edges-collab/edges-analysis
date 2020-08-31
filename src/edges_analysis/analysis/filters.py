@@ -261,7 +261,7 @@ def time_filter_auxiliary(
     flags=None,
 ):
     if flags is not None:
-        assert flags.shape == (len(gha),), "flags must be a length(gha) array"
+        assert flags.shape[0] == len(gha), "flags must be a length(gha) array"
     else:
         flags = np.zeros(len(gha), dtype=bool)
 
