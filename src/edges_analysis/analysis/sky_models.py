@@ -16,20 +16,20 @@ from cached_property import cached_property
 from typing import Tuple
 from contextlib import contextmanager
 import attr
-from abc import ABCMeta, abstractmethod
+from abc import ABC, abstractmethod
 
 logger = logging.getLogger(__name__)
 
 
-class IndexModel(ABCMeta):
+class IndexModel(ABC):
     """Base model for spectral index variation across the sky."""
 
     def __init_subclass__(cls, abstract=False, **kwargs):
+        super().__init_subclass__(**kwargs)
         if not hasattr(cls, "_plugins"):
             cls._plugins = {}
         if not abstract:
             cls._plugins[cls.__name__] = cls
-        return cls(**kwargs)
 
     @abstractmethod
     def get_index(self, lat=None, lon=None, sky_model=None):
@@ -73,7 +73,7 @@ class StepIndex(IndexModel):
         sky_model: [None, SkyModel] = None,
     ) -> np.ndarray:
         if lat is None:
-            raise ValueError("GaussianIndex requires passing lat")
+            raise ValueError("StepIndex requires passing lat")
 
         index = np.zeros(len(lat))
         index[np.abs(lat) <= self.band_deg] = self.index_inband

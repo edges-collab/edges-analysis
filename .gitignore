@@ -49,3 +49,4 @@ MANIFEST
 .venv*/
 
 devel/output/*
+pip-wheel-metadata/

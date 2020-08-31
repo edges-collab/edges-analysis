@@ -58,6 +58,8 @@ class Beam:
         Parameters
         ----------
         path
+            Path to the file. Use :meth:`resolve_file` to get the absolute path
+            from a a relative path (starting with ':').
         linear
         theta_min
         theta_max
@@ -68,7 +70,8 @@ class Beam:
 
         Returns
         -------
-
+        beam
+            The beam object.
         """
 
         d = np.genfromtxt(path, skip_header=1, delimiter=",")
@@ -263,7 +266,7 @@ class Beam:
         freq_obj = FrequencyRange(self.frequency)
 
         # Frequency interpolation
-        interp_beam = np.zeros((len(freq), len(self.azimuth), len(self.elevation)))
+        interp_beam = np.zeros((len(freq), len(self.elevation), len(self.azimuth)))
 
         for i, bm in enumerate(self.beam.T):
             for j, b in enumerate(bm):
@@ -292,6 +295,32 @@ class Beam:
         return beam_maps_shifted
 
     @classmethod
+    def resolve_file(
+        cls,
+        path: [str, Path],
+        band: [None, str] = None,
+        configuration: str = "default",
+        simulator: str = "feko",
+    ) -> Path:
+        if str(path) == ":":
+            if band is None:
+                raise ValueError("band must be given if path starts with a colon (:)")
+
+            # Get the default beam file.
+            return Path(__file__).parent / "data" / "beams" / band / f"{configuration}.txt"
+        elif str(path).startswith(":"):
+            if band is None:
+                raise ValueError("band must be given if path starts with a colon (:)")
+
+            # Use a beam file in the standard directory.
+            return (
+                Path(config["paths"]["beams"]).expanduser()
+                / f"{band}/simulations/{simulator}/{str(path)[1:]}"
+            ).absolute()
+        else:
+            return Path(path).absolute()
+
+    @classmethod
     def from_file(
         cls,
         band: [None, str],
@@ -300,24 +329,7 @@ class Beam:
         configuration: [str] = "default",
         rotation_from_north: float = 90,
     ) -> Beam:
-
-        if str(beam_file) == ":":
-            if band is None:
-                raise ValueError("band must be given if beam_file is not a direct path")
-
-            # Get the default beam file.
-            beam_file = Path(__file__).parent / "data" / "beams" / band / f"{configuration}.txt"
-        elif str(beam_file).startswith(":"):
-            if band is None:
-                raise ValueError("band must be given if beam_file is not a direct path")
-
-            # Use a beam file in the standard directory.
-            beam_file = (
-                Path(config["paths"]["beams"]).expanduser()
-                / f"{band}/simulations/{simulator}/{str(beam_file)[1:]}"
-            ).absolute()
-        else:
-            beam_file = Path(beam_file).absolute()
+        beam_file = cls.resolve_file(beam_file, band, configuration, simulator)
 
         if simulator == "feko":
             rotation_from_north -= 90
@@ -387,63 +399,6 @@ class BeamFactor(HDF5Object):
             "max_nside": lambda x: isinstance(x, (int, np.int64)),
         },
     }
-
-
-def simulate_spectra(
-    beam: Beam,
-    ground_loss_file: [str, Path] = ":",
-    f_low: [None, float] = 0,
-    f_high: [None, float] = np.inf,
-    normalize_beam: bool = True,
-    sky_model: sky_models.SkyModel = sky_models.Haslam408(),
-    index_model: sky_models.IndexModel = sky_models.GaussianIndex(),
-    twenty_min_per_lst: int = 1,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """
-
-    Parameters
-    ----------
-    band
-        The band of the antenna (low, mid, high).
-    beam
-        A :class:`Beam` object.
-    ground_loss_file
-        A file pointing to a ground-loss model. By default, gets the default ground loss
-        model for the given ``band``.
-    f_low
-        Minimum frequency to keep in the simulation (frequencies otherwise defined by the
-        beam).
-    f_high
-        Maximum frequency to keep in the simulation (frequencies otherwise defined by the
-        beam).
-    normalize_beam
-        Whether to normalize the beam to be maximum unity.
-    sky_model
-        A sky model to use.
-    index_model
-        An :class:`IndexModel` to use to generate different frequencies of the sky model.
-    twenty_min_per_lst
-        How many periods of twenty minutes fit into each LST bin.
-
-    Returns
-    -------
-    antenna_temperature_above_horizon
-        The antenna temperature for pixels above the horizon, shape (Nlst, Nfreq)
-    freq
-        The frequencies at which the simulation is defined.
-    lst
-        The LSTs at which the sim is defined.
-    """
-    beam = beam.between_freqs(f_low, f_high)
-    lst = np.zeros(72 // twenty_min_per_lst)  # TODO: magic number
-
-    antenna_temperature_above_horizon = np.zeros((lst, len(beam.frequency)))
-    for i, j, temperature, _, _, _ in _iterate_through_lst_freq(
-        lst, ground_loss_file, beam, twenty_min_per_lst, sky_model, index_model, normalize_beam
-    ):
-        antenna_temperature_above_horizon[i, j] = temperature
-
-    return antenna_temperature_above_horizon, beam.frequency, lst
 
 
 def _iterate_through_lst_freq(
@@ -517,6 +472,63 @@ def _iterate_through_lst_freq(
                 beam_above_horizon,
                 n_pix_tot_no_nan,
             )
+
+
+def simulate_spectra(
+    beam: Beam,
+    ground_loss_file: [str, Path] = ":",
+    f_low: [None, float] = 0,
+    f_high: [None, float] = np.inf,
+    normalize_beam: bool = True,
+    sky_model: sky_models.SkyModel = sky_models.Haslam408(),
+    index_model: sky_models.IndexModel = sky_models.GaussianIndex(),
+    twenty_min_per_lst: int = 1,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+
+    Parameters
+    ----------
+    band
+        The band of the antenna (low, mid, high).
+    beam
+        A :class:`Beam` object.
+    ground_loss_file
+        A file pointing to a ground-loss model. By default, gets the default ground loss
+        model for the given ``band``.
+    f_low
+        Minimum frequency to keep in the simulation (frequencies otherwise defined by the
+        beam).
+    f_high
+        Maximum frequency to keep in the simulation (frequencies otherwise defined by the
+        beam).
+    normalize_beam
+        Whether to normalize the beam to be maximum unity.
+    sky_model
+        A sky model to use.
+    index_model
+        An :class:`IndexModel` to use to generate different frequencies of the sky model.
+    twenty_min_per_lst
+        How many periods of twenty minutes fit into each LST bin.
+
+    Returns
+    -------
+    antenna_temperature_above_horizon
+        The antenna temperature for pixels above the horizon, shape (Nlst, Nfreq)
+    freq
+        The frequencies at which the simulation is defined.
+    lst
+        The LSTs at which the sim is defined.
+    """
+    beam = beam.between_freqs(f_low, f_high)
+    lst = np.zeros(72 // twenty_min_per_lst)  # TODO: magic number
+
+    antenna_temperature_above_horizon = np.zeros((lst, len(beam.frequency)))
+    for i, j, temperature, _, _, _ in _iterate_through_lst_freq(
+        lst, ground_loss_file, beam, twenty_min_per_lst, sky_model, index_model, normalize_beam
+    ):
+        antenna_temperature_above_horizon[i, j] = temperature
+
+    return antenna_temperature_above_horizon, beam.frequency, lst
 
 
 def antenna_beam_factor(
