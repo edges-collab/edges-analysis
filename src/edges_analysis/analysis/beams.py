@@ -467,7 +467,7 @@ def _iterate_through_lst_freq(
             yield (
                 i,
                 j,
-                np.nansum(beam_above_horizon * sky_above_horizon.flatten()) / n_pix_tot_no_nan,
+                np.nansum(beam_above_horizon * sky_above_horizon[:, j]) / n_pix_tot_no_nan,
                 sky_above_horizon,
                 beam_above_horizon,
                 n_pix_tot_no_nan,
@@ -522,7 +522,7 @@ def simulate_spectra(
     beam = beam.between_freqs(f_low, f_high)
     lst = np.zeros(72 // twenty_min_per_lst)  # TODO: magic number
 
-    antenna_temperature_above_horizon = np.zeros((lst, len(beam.frequency)))
+    antenna_temperature_above_horizon = np.zeros((len(lst), len(beam.frequency)))
     for i, j, temperature, _, _, _ in _iterate_through_lst_freq(
         lst, ground_loss_file, beam, twenty_min_per_lst, sky_model, index_model, normalize_beam
     ):

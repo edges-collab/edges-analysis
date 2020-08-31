@@ -174,13 +174,31 @@ class SkyModel:
         """Optional over-writeable method to process the sky map before returning it."""
         return sky_map
 
-    def at_freq(self, freq, index_model: IndexModel = GaussianIndex()):
+    def at_freq(
+        self, freq: [float, np.ndarray], index_model: IndexModel = GaussianIndex()
+    ) -> np.ndarray:
+        """
+        Generate the sky model at a new set of frequencies.
+
+        Parameters
+        ----------
+        freq
+            The frequencies at which to evaluate the model (can be a single float)
+        index_model
+            A spectral index model to shift to the new frequencies.
+
+        Returns
+        -------
+        maps
+            The healpix sky maps at the new frequencies, shape (Nsky, Nfreq).
+        """
         lon, lat = self.lonlat
         index = index_model.get_index(lon, lat, self)
 
         f = freq / self.frequency
         Tcmb = 2.725
-        return np.outer(self.sky_map - Tcmb, f ** -index) + Tcmb
+        scale = np.power.outer(f, -index)
+        return ((self.sky_map - Tcmb) * scale + Tcmb).T
 
 
 class Haslam408(SkyModel):
