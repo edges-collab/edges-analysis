@@ -313,7 +313,7 @@ def run_xrfi_pipe(spectrum: np.ndarray, flags: np.ndarray, xrfi_pipe: dict) -> n
             method in ["xrfi_model", "xrfi_poly"] and spectrum.ndim == 2
         ):  # methods that only allow 1D spectra.
             for i, psp in enumerate(spectrum):
-                flags, info = getattr(xrfi, method)(psp, flags=flags, **kwargs)
+                flags, info = getattr(xrfi, method)(psp, flags=flags[i], **kwargs)
         else:
             flags, info = getattr(xrfi, method)(spectrum, flags=flags, **kwargs)
 
