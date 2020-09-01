@@ -1,13 +1,10 @@
 from pathlib import Path
 import numpy as np
-import warnings
 
 import h5py
 from ..config import config
 import yaml
-import logging
-
-logger = logging.getLogger(__name__)
+from edges_io.logging import logger
 
 
 # TODO: clean up all the rms filtering functions in this module.
@@ -260,43 +257,33 @@ def time_filter_auxiliary(
     max_receiver_temp=100,
     flags=None,
 ):
+    loc_flgs = np.zeros(len(gha), dtype=bool)
+
+    def filter(condition, message, loc_flgs):
+        nflags = np.sum(loc_flgs)
+
+        loc_flgs |= condition
+        nnew = np.sum(loc_flgs) - nflags
+        if nnew:
+            logger.debug(f"{nnew}/{len(loc_flgs) - nflags} times flagged due to {message}")
+
+    filter((gha < gha_range[0]) | (gha >= gha_range[1]), "GHA range", loc_flgs)
+    filter(sun_el > sun_el_max, "sun position", loc_flgs)
+    filter(moon_el > moon_el_max, "moon position", loc_flgs)
+    filter(humidity > amb_hum_max, "humidity", loc_flgs)
+    filter(
+        (receiver_temp >= max_receiver_temp) | (receiver_temp <= min_receiver_temp),
+        "receiver temp",
+        loc_flgs,
+    )
+
     if flags is not None:
-        assert flags.shape[-1] == len(gha), "flags must be an array with last axis len(gha)"
+        assert flags.shape[-1] == len(
+            gha
+        ), f"flags must be an array with last axis len(gha). Got {flags.shape}"
+        flags |= loc_flgs
     else:
-        flags = np.zeros(len(gha), dtype=bool)
-
-    nflags = np.sum(flags)
-
-    flags |= (gha < gha_range[0]) | (gha >= gha_range[1])
-    logger.info(
-        f"{np.sum(flags) - nflags}/{len(flags) - np.sum(flags)} times flagged due to GHA range"
-    )
-    nflags = np.sum(flags)
-
-    # Sun elevation, Moon elevation, ambient humidity, and receiver temperature
-    flags |= sun_el > sun_el_max
-    logger.info(
-        f"{np.sum(flags) - nflags}/{len(flags) - np.sum(flags)} times flagged due to sun position"
-    )
-    nflags = np.sum(flags)
-
-    flags |= moon_el > moon_el_max
-    logger.info(
-        f"{np.sum(flags) - nflags}/{len(flags) - np.sum(flags)} times flagged due to moon positoin"
-    )
-    nflags = np.sum(flags)
-
-    logger.info(f"Humidity range: {humidity.min()} -- {humidity.max()} [set max = {amb_hum_max}]")
-    flags |= humidity > amb_hum_max
-    logger.info(
-        f"{np.sum(flags) - nflags}/{len(flags) - np.sum(flags)} times flagged due to humidity"
-    )
-    nflags = np.sum(flags)
-
-    flags |= (receiver_temp >= max_receiver_temp) | (receiver_temp <= min_receiver_temp)
-    logger.info(
-        f"{np.sum(flags) - nflags}/{len(flags) - np.sum(flags)} times flagged due to receiver temp"
-    )
+        flags = loc_flgs
 
     return flags
 

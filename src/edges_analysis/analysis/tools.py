@@ -1,6 +1,7 @@
 from typing import Tuple
 from datetime import datetime, timedelta
-
+from functools import partial
+from multiprocess import Pool, current_process, cpu_count
 import numpy as np
 from edges_cal import modelling as mdl, xrfi
 
@@ -312,8 +313,17 @@ def run_xrfi_pipe(spectrum: np.ndarray, flags: np.ndarray, xrfi_pipe: dict) -> n
         if (
             method in ["xrfi_model", "xrfi_poly"] and spectrum.ndim == 2
         ):  # methods that only allow 1D spectra.
-            for i, psp in enumerate(spectrum):
-                flags[i], info = getattr(xrfi, method)(psp, flags=flags[i], **kwargs)
+            rfi = getattr(xrfi, method)
+
+            def fnc(spec, flg):
+                return rfi(spec, flags=flg, **kwargs)
+
+            # Use a parallel map unless this function itself is being called by a
+            # parallel map.
+            m = Pool(cpu_count()).map if current_process().name == "MainProcess" else map
+            results = m(fnc, spectrum, flags)
+            for i, (flg, info) in enumerate(results):
+                flags[i] = flg
         else:
             flags, info = getattr(xrfi, method)(spectrum, flags=flags, **kwargs)
 
