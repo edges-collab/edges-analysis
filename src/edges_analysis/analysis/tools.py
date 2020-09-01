@@ -1,9 +1,10 @@
 from typing import Tuple
 from datetime import datetime, timedelta
-from functools import partial
 from multiprocess import Pool, current_process, cpu_count
 import numpy as np
 from edges_cal import modelling as mdl, xrfi
+import warnings
+from edges_io.logging import logger
 
 
 def join_struct_arrays(arrays):
@@ -316,14 +317,30 @@ def run_xrfi_pipe(spectrum: np.ndarray, flags: np.ndarray, xrfi_pipe: dict) -> n
             rfi = getattr(xrfi, method)
 
             def fnc(spec, flg):
-                return rfi(spec, flags=flg, **kwargs)
+                with warnings.catch_warnings(record=True) as wrn:
+                    flags, info = rfi(spec, flags=flg, **kwargs)
+                return flags, wrn
 
             # Use a parallel map unless this function itself is being called by a
             # parallel map.
             m = Pool(cpu_count()).map if current_process().name == "MainProcess" else map
             results = m(fnc, spectrum, flags)
+            wrns = []
             for i, (flg, info) in enumerate(results):
+                wrns += info
                 flags[i] = flg
+
+            if wrns:
+                messages = {}
+                for wrn in wrns:
+                    msg = str(wrn.message)
+                    if msg in messages:
+                        messages[msg].append(wrn)
+                    else:
+                        messages[msg] = [wrn]
+
+                    for msg, list_of_warnings in messages.items():
+                        logger.warning(f"Received warning '{msg}' {len(list_of_warnings)} times.")
         else:
             flags, info = getattr(xrfi, method)(spectrum, flags=flags, **kwargs)
 
