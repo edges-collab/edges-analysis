@@ -339,8 +339,8 @@ def run_xrfi_pipe(spectrum: np.ndarray, flags: np.ndarray, xrfi_pipe: dict) -> n
                     else:
                         messages[msg] = [wrn]
 
-                    for msg, list_of_warnings in messages.items():
-                        logger.warning(f"Received warning '{msg}' {len(list_of_warnings)} times.")
+                for msg, list_of_warnings in messages.items():
+                    logger.warning(f"Received warning '{msg}' {len(list_of_warnings)} times.")
         else:
             flags, info = getattr(xrfi, method)(spectrum, flags=flags, **kwargs)
 
