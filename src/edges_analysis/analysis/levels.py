@@ -1276,6 +1276,7 @@ class Level2(_Level):
             this_flag = getattr(l1, f"{fnc}_filter")(
                 flags=flg.T if axis == "time" else flg, **kwargs
             )
+            print("All flagged? ", np.all(this_flag))
 
             if axis in ("both", "freq"):
                 flg |= this_flag
