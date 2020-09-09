@@ -317,4 +317,6 @@ def run_xrfi_pipe(spectrum: np.ndarray, flags: np.ndarray, xrfi_pipe: dict) -> n
         else:
             flags, info = getattr(xrfi, method)(spectrum, flags=flags, **kwargs)
 
+        print(f"After {method}, nflags={np.sum(flags)}")
+
     return flags

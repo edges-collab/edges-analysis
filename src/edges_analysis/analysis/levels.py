@@ -1271,6 +1271,7 @@ class Level2(_Level):
             this_flag = getattr(l1, f"{fnc}_filter")(
                 flags=flg.T if axis == "time" else flg, **kwargs
             )
+            print("All flagged? ", np.all(this_flag))
 
             if axis == "both":
                 flg |= this_flag
@@ -1279,6 +1280,7 @@ class Level2(_Level):
             else:
                 flg.T |= this_flag
 
+            print("Now all flagged? ", np.all(flg))
             if np.all(flg):
                 logger.warning(f"File {l1.filename.name} has been completely filtered.")
 
