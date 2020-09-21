@@ -1387,7 +1387,7 @@ class Level2(_Level):
         flags = [flg for flg in flags if np.any(flg)]
 
         spectra, weights, gha_edges = cls.bin_gha(
-            remaining_l1, gha_max, gha_max, gha_bin_size, flags=flags
+            remaining_l1, gha_min, gha_max, gha_bin_size, flags=flags
         )
 
         data = {
@@ -1445,7 +1445,7 @@ class Level2(_Level):
                 mask = (gha >= gha_low) & (gha < gha_edges[j + 1])
                 spec = l1.spectrum[mask]
 
-                wght = weights[mask]
+                wght = l1_weights[mask]
 
                 if np.any(wght):
                     spec_mean, wght_mean = tools.weighted_mean(spec, weights=wght, axis=0)
