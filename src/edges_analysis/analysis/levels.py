@@ -1295,12 +1295,12 @@ class Level2(_Level):
         if all(all_flagged):
             logger.error(f"All files were fully flagged during {fnc} filter.")
             sys.exit()
-            # raise ValueError(f"All files were fully flagged during {fnc} filter.")
 
         if any(all_flagged):
             logger.warning(f"The following files were fully flagged during {fnc} filter:")
             for i, (flagged, l1) in enumerate(zip(all_flagged, level1)):
-                logger.warning(f"  - {l1.filename.name}")
+                if flagged:
+                    logger.warning(f"  - {l1.filename.name}")
 
         return flags
 
@@ -1384,7 +1384,7 @@ class Level2(_Level):
             raise Exception("All input files have been filtered completely.")
 
         remaining_l1 = [l1 for i, l1 in enumerate(level1) if not files_flagged[i]]
-        flags = [flg for flg in flags if np.any(flg)]
+        flags = [flg for i, flg in enumerate(flags) if not files_flagged[i]]
 
         spectra, weights, gha_edges = cls.bin_gha(
             remaining_l1, gha_min, gha_max, gha_bin_size, flags=flags
