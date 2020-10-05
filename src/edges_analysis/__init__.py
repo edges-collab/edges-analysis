@@ -14,7 +14,6 @@ from . import simulation
 
 from .analysis import (
     tools,
-    io,
     levels,
     s11,
     beams,

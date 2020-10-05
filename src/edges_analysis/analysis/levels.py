@@ -22,6 +22,7 @@ from edges_cal import (
 import p_tqdm
 from edges_io.auxiliary import auxiliary_data
 from edges_io.logging import logger
+from edges_io.h5 import HDF5Object
 import time
 import attr
 from pathlib import Path
@@ -29,7 +30,7 @@ from cached_property import cached_property
 from read_acq import decode_file
 
 # import src.edges_analysis
-from . import io, s11 as s11m, loss, beams, tools, filters, coordinates
+from . import s11 as s11m, loss, beams, tools, filters, coordinates
 from .coordinates import get_jd, dt_from_jd
 from ..config import config
 from .. import const
@@ -37,7 +38,7 @@ from datetime import datetime
 
 
 @attr.s
-class _Level(io.HDF5Object):
+class _Level(HDF5Object):
     """Base object for formal data reduction levels in edges-analysis.
 
     The structure is such that three groups will always be available:
