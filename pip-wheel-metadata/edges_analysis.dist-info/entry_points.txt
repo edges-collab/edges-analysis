@@ -1,2 +1,0 @@
-[console_scripts]
-edges-analysis = edges_analysis.cli:main
