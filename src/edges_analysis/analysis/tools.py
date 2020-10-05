@@ -118,9 +118,12 @@ def average_in_frequency(
         last_s = spectrum.take(rng, axis=axis)
         last_w = weights.take(rng, axis=axis)
 
+        # Set zeros to NaN to avoid divide by zero error.
+        last_w[last_w == 0] = np.nan
+
         ss, ww = weighted_mean(last_s, last_w, axis=axis)
         last_std = weighted_standard_deviation(
-            np.expand_dims(ss, axis), last_s, std=np.sqrt(1 / last_w), axis=axis
+            np.expand_dims(ss, axis), last_s, std=np.sqrt(1.0 / last_w), axis=axis
         )
         last_s = ss
         last_w = ww
@@ -135,6 +138,9 @@ def average_in_frequency(
     f = np.reshape(f, (-1, n_samples))
     s = np.reshape(s, s.shape[:axis] + (-1, n_samples) + s.shape[(axis + 1) :])
     w = np.reshape(w, w.shape[:axis] + (-1, n_samples) + w.shape[(axis + 1) :])
+
+    # Set zeros to NaN to avoid divide by zero error.
+    w[w == 0] = np.nan
 
     f = np.mean(f, axis=1)
     s_tmp, w_tmp = weighted_mean(s, w, axis=axis + 1)
