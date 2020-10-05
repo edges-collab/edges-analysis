@@ -1,8 +1,10 @@
 from typing import Tuple
 from datetime import datetime, timedelta
-
+from multiprocess import Pool, current_process, cpu_count
 import numpy as np
 from edges_cal import modelling as mdl, xrfi
+import warnings
+from edges_io.logging import logger
 
 
 def join_struct_arrays(arrays):
@@ -312,15 +314,42 @@ def average_in_gha(spectrum: np.ndarray, gha: np.ndarray, gha_bins, weights: np.
     return out_spectrum, out_weights
 
 
-def run_xrfi_pipe(spectrum, weights, xrfi_pipe):
+def run_xrfi_pipe(spectrum: np.ndarray, flags: np.ndarray, xrfi_pipe: dict) -> np.ndarray:
     """Run an xrfi pipeline on given spectrum and weights, updating weights in place."""
     for method, kwargs in xrfi_pipe.items():
         if (
             method in ["xrfi_model", "xrfi_poly"] and spectrum.ndim == 2
         ):  # methods that only allow 1D spectra.
-            for i, psp in enumerate(spectrum):
-                flags, info = getattr(xrfi, method)(psp, flags=weights[i] <= 0, **kwargs)
-                weights[i][flags] = 0
+            rfi = getattr(xrfi, method)
+
+            def fnc(spec, flg):
+                with warnings.catch_warnings(record=True) as wrn:
+                    flags, info = rfi(spec, flags=flg, **kwargs)
+                return flags, wrn
+
+            # Use a parallel map unless this function itself is being called by a
+            # parallel map.
+            m = Pool(cpu_count()).map if current_process().name == "MainProcess" else map
+            results = m(fnc, spectrum, flags)
+            wrns = []
+            for i, (flg, info) in enumerate(results):
+                wrns += info
+                flags[i] = flg
+
+            if wrns:
+                messages = {}
+                for wrn in wrns:
+                    msg = str(wrn.message)
+                    if msg in messages:
+                        messages[msg].append(wrn)
+                    else:
+                        messages[msg] = [wrn]
+
+                for msg, list_of_warnings in messages.items():
+                    logger.warning(f"Received warning '{msg}' {len(list_of_warnings)} times.")
         else:
-            flags, info = getattr(xrfi, method)(spectrum, flags=weights <= 0, **kwargs)
-            weights[flags] = 0
+            flags, info = getattr(xrfi, method)(spectrum, flags=flags, **kwargs)
+
+        print(f"After {method}, nflags={np.sum(flags)}")
+
+    return flags

@@ -4,6 +4,7 @@ A module defining various sky models that can be used to generate beam correctio
 The models here are preferably *not* interpolated over frequency, as that gives more
 control to us to interpolate how we wish.
 """
+from __future__ import annotations
 
 import healpy as hp
 import numpy as np
@@ -14,8 +15,83 @@ from astropy.utils.data import download_file
 from cached_property import cached_property
 from typing import Tuple
 from contextlib import contextmanager
+import attr
+from abc import ABC, abstractmethod
 
 logger = logging.getLogger(__name__)
+
+
+class IndexModel(ABC):
+    """Base model for spectral index variation across the sky."""
+
+    def __init_subclass__(cls, abstract=False, **kwargs):
+        super().__init_subclass__(**kwargs)
+        if not hasattr(cls, "_plugins"):
+            cls._plugins = {}
+        if not abstract:
+            cls._plugins[cls.__name__] = cls
+
+    @abstractmethod
+    def get_index(self, lat=None, lon=None, sky_model=None):
+        pass
+
+
+@attr.s
+class GaussianIndex(IndexModel):
+    """Spectral index model that continuously changes from pole to center."""
+
+    index_pole = attr.ib(default=2.65, converter=float)
+    index_center = attr.ib(default=2.4, converter=float)
+    sigma_deg = attr.ib(default=8.5, converter=float)
+
+    def get_index(
+        self,
+        lat: [None, np.ndarray] = None,
+        lon: [None, np.ndarray] = None,
+        sky_model: [None, SkyModel] = None,
+    ) -> np.ndarray:
+        if lat is None:
+            raise ValueError("GaussianIndex requires passing lat")
+
+        return self.index_pole - (self.index_pole - self.index_center) * np.exp(
+            -(1 / 2) * (np.abs(lat) / self.sigma_deg) ** 2
+        )
+
+
+@attr.s
+class StepIndex(IndexModel):
+    """Spectral index model with two index regions -- one around the pole."""
+
+    index_inband = attr.ib(default=2.5, converter=float)
+    index_outband = attr.ib(default=2.6, converter=float)
+    band_deg = attr.ib(default=10, converter=float)
+
+    def get_index(
+        self,
+        lat: [None, np.ndarray] = None,
+        lon: [None, np.ndarray] = None,
+        sky_model: [None, SkyModel] = None,
+    ) -> np.ndarray:
+        if lat is None:
+            raise ValueError("StepIndex requires passing lat")
+
+        index = np.zeros(len(lat))
+        index[np.abs(lat) <= self.band_deg] = self.index_inband
+        index[np.abs(lat) > self.band_deg] = self.index_outband
+        return index
+
+
+@attr.s
+class ConstantIndex(IndexModel):
+    index = attr.ib(default=2.5, converter=float)
+
+    def get_index(
+        self,
+        lat: [None, np.ndarray] = None,
+        lon: [None, np.ndarray] = None,
+        sky_model: [None, SkyModel] = None,
+    ) -> np.ndarray:
+        return self.index
 
 
 class SkyModel:
@@ -98,39 +174,31 @@ class SkyModel:
         """Optional over-writeable method to process the sky map before returning it."""
         return sky_map
 
-    def interpolate_freq(
-        self,
-        freq_array,
-        index_model: str = "gaussian",
-        sigma_deg: float = 8.5,
-        index_center: float = 2.4,
-        index_pole: float = 2.65,
-        band_deg: float = 10,
-        index_inband: float = 2.5,
-        index_outband: float = 2.6,
-    ):
+    def at_freq(
+        self, freq: [float, np.ndarray], index_model: IndexModel = GaussianIndex()
+    ) -> np.ndarray:
+        """
+        Generate the sky model at a new set of frequencies.
+
+        Parameters
+        ----------
+        freq
+            The frequencies at which to evaluate the model (can be a single float)
+        index_model
+            A spectral index model to shift to the new frequencies.
+
+        Returns
+        -------
+        maps
+            The healpix sky maps at the new frequencies, shape (Nsky, Nfreq).
+        """
         lon, lat = self.lonlat
+        index = index_model.get_index(lon, lat, self)
 
-        # Scale sky map (the map contains the CMB, which has to be removed and then added back)
-        if index_model == "gaussian":
-            index = index_pole - (index_pole - index_center) * np.exp(
-                -(1 / 2) * (np.abs(lat) / sigma_deg) ** 2
-            )
-        elif index_model == "step":
-            index = np.zeros(len(lat))
-            index[np.abs(lat) <= band_deg] = index_inband
-            index[np.abs(lat) > band_deg] = index_outband
-        else:
-            raise ValueError("index_model must be either 'gaussian' or 'step'")
-
+        f = freq / self.frequency
         Tcmb = 2.725
-        sky_map = np.zeros((len(self.sky_map), len(freq_array)))
-        for i in range(len(freq_array)):
-            sky_map[:, i] = (self.sky_map - Tcmb) * (freq_array[i] / self.frequency) ** (
-                -index
-            ) + Tcmb
-
-        return sky_map
+        scale = np.power.outer(f, -index)
+        return ((self.sky_map - Tcmb) * scale + Tcmb).T
 
 
 class Haslam408(SkyModel):
@@ -159,7 +227,7 @@ class LW150(SkyModel):
 
 class Guzman45(SkyModel):
     url = "https://lambda.gsfc.nasa.gov/data/foregrounds/maipu_45/MAIPU_MU_1_64.fits"
-    freq = 45.0
+    frequency = 45.0
     header_hdu = 1
     data_name = "UNKNOWN1"
 
@@ -168,27 +236,3 @@ class Guzman45(SkyModel):
         sky_map[lat > 68] = np.mean(sky_map[(lat > 60) & (lat < 68)])
 
         return sky_map
-
-
-# def gsm_map():
-#     """
-#     Get the 2008 GSM in nested co-ordinates
-#
-#     Returns
-#     -------
-#
-#     """
-#     gsm = pygsm.GlobalSkyModel().generate(408)
-#     if len(gsm) > 12 * 128 ** 2:
-#         gsm = hp.ud_grade(gsm, nside_out=2 ** 7)
-#
-#     # Get into NESTED order
-#     gsm = hp.reorder(gsm, r2n=True)
-#
-#     lon, lat = hp.pix2ang(
-#         nside=int(np.sqrt(len(gsm) / 12)),
-#         ipix=np.arange(len(gsm)),
-#         lonlat=True,
-#         nest=True,
-#     )
-#     return gsm, (lon, lat, apc.SkyCoord(lon, lat, frame="galactic", unit="deg"))
