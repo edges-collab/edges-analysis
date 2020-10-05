@@ -1145,30 +1145,29 @@ class Level1(_Level):
 
     rms_filter.axis = "time"
 
-    def total_power_filter(self, flags=None):
+    def total_power_filter(
+        self,
+        flags=None,
+        n_poly: int = 3,
+        n_sigma: float = 3.0,
+        bands: [None, List[Tuple[float, float]]] = None,
+        std_thresholds=None,
+    ):
         if flags is None:
             flags = np.zeros(self.weights.shape, dtype=bool)
 
-        flags |= filters.total_power_filter(
+        flagsT = flags.T
+        flagsT |= filters.total_power_filter(
             self.ancillary["gha"],
-            np.array(
-                [
-                    tools.weighted_mean(
-                        self.spectrum[:, self.raw_frequencies <= self.freq.center],
-                        self.weights[:, self.raw_frequencies <= self.freq.center],
-                        axis=1,
-                    )[0],
-                    tools.weighted_mean(
-                        self.spectrum[:, self.raw_frequencies >= self.freq.center],
-                        self.weights[:, self.raw_frequencies >= self.freq.center],
-                        axis=1,
-                    )[0],
-                    tools.weighted_mean(self.spectrum, self.weights, axis=1)[0],
-                ]
-            ),
+            self.spectrum,
+            self.freq.freq,
             flags=np.sum(flags, axis=1).astype("bool"),
+            n_poly=n_poly,
+            n_sigma=n_sigma,
+            bands=bands,
+            std_thresholds=std_thresholds,
         )
-        return flags
+        return flagsT.T
 
     total_power_filter.axis = "time"
 
@@ -1277,7 +1276,6 @@ class Level2(_Level):
             this_flag = getattr(l1, f"{fnc}_filter")(
                 flags=flg.T if axis == "time" else flg, **kwargs
             )
-            print("All flagged? ", np.all(this_flag))
 
             if axis in ("both", "freq"):
                 flg |= this_flag
@@ -1321,6 +1319,10 @@ class Level2(_Level):
         rms_filter_file: [None, Path, str] = None,
         do_total_power_filter: bool = True,
         xrfi_pipe: [None, dict] = None,
+        n_poly_tp_filter: int = 3,
+        n_sigma_tp_filter: float = 3.0,
+        bands_tp_filter: [None, List[Tuple[float, float]]] = None,
+        std_thresholds_tp_filter: [None, List[float]] = None,
         n_threads: int = cpu_count(),
     ):
         xrfi_pipe = xrfi_pipe or {}
@@ -1343,6 +1345,12 @@ class Level2(_Level):
             "max_receiver_temp": max_receiver_temp,
             "xrfi_pipe": json.dumps(xrfi_pipe),  # TODO: this is not wonderful
         }
+
+        if do_total_power_filter:
+            meta["n_poly_tp_filter"] = n_poly_tp_filter
+            meta["n_sigma_tp_filter"] = n_sigma_tp_filter
+            meta["bands_tp_filter"] = str(bands_tp_filter)
+            meta["std_thresholds_tp_filter"] = str(std_thresholds_tp_filter)
 
         # Sort the inputs in ascending date.
         level1 = sorted(level1, key=lambda x: (x.meta["year"], x.meta["day"], x.meta["hour"]))
@@ -1369,11 +1377,16 @@ class Level2(_Level):
             flags = cls.run_filter(
                 "rms", level1, flags=flags, rms_filter_file=rms_filter_file, n_sigma_rms=n_sigma_rms
             )
+
         if do_total_power_filter:
             flags = cls.run_filter(
                 "total_power",
                 level1,
                 flags=flags,
+                n_poly=n_poly_tp_filter,
+                n_sigma=n_sigma_tp_filter,
+                std_thresholds=std_thresholds_tp_filter,
+                bands=bands_tp_filter,
             )
 
         files_flagged = np.array([np.all(flg) for flg in flags])

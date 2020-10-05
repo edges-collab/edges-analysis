@@ -1,6 +1,6 @@
 from pathlib import Path
 import numpy as np
-from typing import Tuple
+from typing import Tuple, List
 
 import h5py
 from ..config import config
@@ -117,32 +117,74 @@ def rms_filter(filter_file, gx, rms, n_sigma):
     return flags
 
 
-def total_power_filter(gha, total_power, flags=None):
+def total_power_filter(
+    gha: np.ndarray,
+    spectra: np.ndarray,
+    frequencies: np.ndarray,
+    flags: [None, np.ndarray] = None,
+    n_poly: int = 3,
+    n_sigma: float = 3.0,
+    bands: [None, List[Tuple[float, float]]] = None,
+    std_thresholds=None,
+):
     """
     Filter on total power.
+
+    The algorithm of the filter is:
+
+    Get the sum of each spectrum (for a night/day) in three different bands (low half,
+    upper half, total) (yielding, for each band, a "total power" as a function of GHA).
+    For each band, split the total power into smallish chunks of GHA (nominally 1hr bins),
+    and for each bin, fit a low-order polynomial to the total power.
+    GHA's whose total power is outside some threshold are flagged, and the previous step
+    is repeated, until no new GHAs are flagged. This threshold is itself thresholded:
+    if the RMS of the residuals of the fit are very large, even 1-sigma outliers are
+    flagged. Otherwise, only 3-4-sigma outliers are flagged.
+
 
     Parameters
     ----------
     gha : array_like
         1D array of galactic hour angles
-    total_power : array_like
-        2D array where first dimension is length 3 and corresponds to different
-        frequency ranges (60-90, 90-120, 60-120), and second dimension corresponds to gha.
+    spectra
+        2D array where first dimension is length GHA and corresponds to different
+        integrations, and second dimension corresponds to frequency.
+    n_poly
+        The number of polynomial terms to fit to each 1-hour GHA bin.
+    n_sigma
+        The number of sigma at which to threshold individual integrations.
+    bands
+        A list of tuples, each with two floats: min and max of a frequency band over
+        which to take the total power. By default, use the whole band only.
+    std_thresholds
+        The absolute threshold for each band in terms of the standard deviation of
+        residuals. If very high, then individual integrations will be flagged at
+        one sigma deviation rather than ``n_sigma``. Must be the same length as ``bands``
+        if given.
     """
-    # indices = np.arange(0, len(gha))
-    n_poly = 3
-    n_sigma = 3
+    # Set the relevant frequency bands over which to take the total powers.
+    if bands is None:
+        bands = [(frequencies.min(), frequencies.max())]
 
-    assert total_power.shape == (
-        3,
-        len(gha),
-    ), f"total_power has shape {total_power.shape}"
+    for i, band in bands:
+        if band is None:
+            bands[i] = (frequencies.min(), frequencies.max())
+
+    assert spectra.shape == (len(gha), len(frequencies)), "total_power has wrong shape"
+
     if flags is None:
         flags = np.zeros(len(gha), dtype=bool)
 
-    # This only applies to mid-band, and they are gotten empirically from some set
-    # of data.
-    std_thresholds = [5e4, 2e4, 1e5]
+    # Now sum over the frequency bands.
+    total_power = np.zeros((len(bands), len(gha)))
+    for i, band in enumerate(bands):
+        freq_mask = (frequencies >= band[0]) & (frequencies < band[1])
+        total_power[i] = np.nanmean(spectra[:, freq_mask], axis=1)
+
+    print("total_power", total_power)
+
+    if std_thresholds is None:
+        std_thresholds = [None] * len(bands)
 
     for j, (tpi, std_threshold) in enumerate(zip(total_power, std_thresholds)):
         for i in range(24):
@@ -164,11 +206,13 @@ def total_power_filter(gha, total_power, flags=None):
                 nflags = np.sum(this_flags)
 
                 res, std = _get_model_residual_iter(n_poly, this_gha, this_tp, this_flags)
-
-                if std <= std_threshold:
-                    this_flags |= np.abs(res) > n_sigma * std
-                else:
+                # print("res, std", res, std)
+                if std_threshold is not None and std > std_threshold:
                     this_flags |= np.abs(res) > std
+                else:
+                    this_flags |= np.abs(res) > n_sigma * std
+
+            flags[mask] = this_flags
 
     return flags
 
