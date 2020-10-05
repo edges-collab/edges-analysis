@@ -1,5 +1,6 @@
 from pathlib import Path
 import numpy as np
+from typing import Tuple
 
 import h5py
 from ..config import config
@@ -244,19 +245,19 @@ def explicit_filter(times, bad, ret_times=False):
 
 
 def time_filter_auxiliary(
-    gha,
-    sun_el,
-    moon_el,
-    humidity,
-    receiver_temp,
-    gha_range=(0, 24),
-    sun_el_max=90,
-    moon_el_max=90,
-    amb_hum_max=200,
-    min_receiver_temp=0,
-    max_receiver_temp=100,
-    flags=None,
-):
+    gha: np.ndarray,
+    sun_el: np.ndarray,
+    moon_el: np.ndarray,
+    humidity: np.ndarray,
+    receiver_temp: np.ndarray,
+    gha_range: Tuple[float, float] = (0, 24),
+    sun_el_max: float = 90,
+    moon_el_max: float = 90,
+    amb_hum_max: float = 200,
+    min_receiver_temp: float = 0,
+    max_receiver_temp: float = 100,
+    flags: [None, np.ndarray] = None,
+) -> np.ndarray:
     loc_flgs = np.zeros(len(gha), dtype=bool)
 
     def filter(condition, message, loc_flgs):
