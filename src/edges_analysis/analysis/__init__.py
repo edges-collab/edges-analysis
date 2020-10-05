@@ -1,7 +1,6 @@
 from . import beams
 from . import coordinates
 from . import filters
-from . import io
 from . import levels
 from . import loss
 from . import plots

@@ -7,6 +7,10 @@
 - Store which files are fully flagged in Level2.
 - Beam class for easier handling of beam information
 - IndexModel class for defining models of spectral indices on the sphere.
+- Parallel filtering at Level2
+
+### Fixed
+- Warnings in xrfi are now suppressed, and a summary is given.
 
 ## Version 0.1.0
 

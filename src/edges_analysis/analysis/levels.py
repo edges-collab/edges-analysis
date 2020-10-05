@@ -2,14 +2,15 @@ from os.path import dirname, basename
 import os
 from typing import Tuple, Optional, Sequence, List, Union
 from functools import lru_cache
-import sys
 import glob
 import yaml
 import matplotlib.pyplot as plt
 import warnings
 import tqdm
 import json
+import sys
 import re
+from multiprocessing import Pool, cpu_count
 
 import numpy as np
 from edges_cal import (
@@ -18,8 +19,10 @@ from edges_cal import (
     xrfi as rfi,
     Calibration,
 )
+import p_tqdm
 from edges_io.auxiliary import auxiliary_data
 from edges_io.logging import logger
+from edges_io.h5 import HDF5Object
 import time
 import attr
 from pathlib import Path
@@ -27,7 +30,7 @@ from cached_property import cached_property
 from read_acq import decode_file
 
 # import src.edges_analysis
-from . import io, s11 as s11m, loss, beams, tools, filters, coordinates
+from . import s11 as s11m, loss, beams, tools, filters, coordinates
 from .coordinates import get_jd, dt_from_jd
 from ..config import config
 from .. import const
@@ -35,7 +38,7 @@ from datetime import datetime
 
 
 @attr.s
-class _Level(io.HDF5Object):
+class _Level(HDF5Object):
     """Base object for formal data reduction levels in edges-analysis.
 
     The structure is such that three groups will always be available:
@@ -1253,38 +1256,53 @@ class Level2(_Level):
     }
 
     @classmethod
-    def run_filter(cls, fnc, level1, flags=None, **kwargs):
+    def run_filter(cls, fnc, level1, flags=None, nthreads=None, **kwargs):
+
+        if nthreads is None:
+            nthreads = min(len(level1), cpu_count())
+
+        logger.info(f"Running {fnc} filter with {nthreads} threads...")
+
         axis = getattr(Level1, f"{fnc}_filter").axis
 
         if flags is None:
-            flags = [np.zeros(l1.weights.shape, dtype=bool) for l1 in level1]
+            flags = [None] * len(level1)
 
-        pbar = tqdm.tqdm(enumerate(zip(level1, flags)), unit="files", total=len(level1))
-
-        for i, (l1, flg) in pbar:
-            pbar.set_description(f"Filtering {fnc} for {l1.filename.name}")
-
-            # If already all flagged, just skip.
-            if np.all(flg):
-                continue
+        def filter(flg, l1):
+            if flg is None:
+                flg = ~l1.weights.astype("bool")
+            elif np.all(flg):
+                return flg
 
             this_flag = getattr(l1, f"{fnc}_filter")(
                 flags=flg.T if axis == "time" else flg, **kwargs
             )
             print("All flagged? ", np.all(this_flag))
 
-            if axis == "both":
+            if axis in ("both", "freq"):
                 flg |= this_flag
-            elif axis == "time":
-                flg |= this_flag.T
             else:
-                flg.T |= this_flag
+                flg |= this_flag.T
 
-            print("Now all flagged? ", np.all(flg))
-            if np.all(flg):
-                logger.warning(f"File {l1.filename.name} has been completely filtered.")
+            return flg
 
-        # Remove completely filtered things.
+        iterator = p_tqdm.p_imap(filter, flags, level1, num_cpus=nthreads)
+
+        for i, flg in enumerate(iterator):
+            flags[i] = flg
+
+        # Warn the user if files are fully flagged.
+        all_flagged = [np.all(flg) for flg in flags]
+        if all(all_flagged):
+            logger.error(f"All files were fully flagged during {fnc} filter.")
+            sys.exit()
+
+        if any(all_flagged):
+            logger.warning(f"The following files were fully flagged during {fnc} filter:")
+            for i, (flagged, l1) in enumerate(zip(all_flagged, level1)):
+                if flagged:
+                    logger.warning(f"  - {l1.filename.name}")
+
         return flags
 
     @classmethod
@@ -1303,6 +1321,7 @@ class Level2(_Level):
         rms_filter_file: [None, Path, str] = None,
         do_total_power_filter: bool = True,
         xrfi_pipe: [None, dict] = None,
+        n_threads: int = cpu_count(),
     ):
         xrfi_pipe = xrfi_pipe or {}
 
@@ -1334,13 +1353,11 @@ class Level2(_Level):
 
         # Create a master array of indices of good-quality spectra (over the time axis)
         # used in the final averages
-        n_times = np.array([len(l1.spectrum) for l1 in level1])
+        n_times = np.array([len(l1.ancillary) for l1 in level1])
 
-        flags = [np.zeros(l1.weights.shape, dtype=bool) for l1 in level1]
         flags = cls.run_filter(
             "aux",
             level1,
-            flags=flags,
             sun_el_max=sun_el_max,
             moon_el_max=moon_el_max,
             ambient_humidity_max=ambient_humidity_max,
@@ -1368,10 +1385,10 @@ class Level2(_Level):
             raise Exception("All input files have been filtered completely.")
 
         remaining_l1 = [l1 for i, l1 in enumerate(level1) if not files_flagged[i]]
-        flags = [flg for flg in flags if np.any(flg)]
+        flags = [flg for i, flg in enumerate(flags) if not files_flagged[i]]
 
         spectra, weights, gha_edges = cls.bin_gha(
-            remaining_l1, gha_max, gha_max, gha_bin_size, flags=flags
+            remaining_l1, gha_min, gha_max, gha_bin_size, flags=flags
         )
 
         data = {
@@ -1429,7 +1446,7 @@ class Level2(_Level):
                 mask = (gha >= gha_low) & (gha < gha_edges[j + 1])
                 spec = l1.spectrum[mask]
 
-                wght = weights[mask]
+                wght = l1_weights[mask]
 
                 if np.any(wght):
                     spec_mean, wght_mean = tools.weighted_mean(spec, weights=wght, axis=0)
