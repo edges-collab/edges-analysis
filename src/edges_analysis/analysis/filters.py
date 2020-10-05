@@ -9,7 +9,7 @@ from edges_io.logging import logger
 
 
 # TODO: clean up all the rms filtering functions in this module.
-def rms_filter_computation(level3, path_out, band, n_files=None):
+def rms_filter_computation(level1, path_out, band, n_files=None):
     """
     Computation of the RMS filter
     """
@@ -18,36 +18,21 @@ def rms_filter_computation(level3, path_out, band, n_files=None):
         path_out = Path(config["paths"]["field_products"]) / band / "rms_filters" / path_out
 
     # Sort the inputs in ascending date.
-    level3 = sorted(level3, key=lambda x: f"{x.meta['year'] - x.meta['day'] - x.meta['hour']}")
+    level1 = sorted(level1, key=lambda x: f"{x.meta['year'] - x.meta['day'] - x.meta['hour']}")
 
     # Load data used to compute filter
     # Only using the first "N_files" to compute the filter
-    n_files = n_files or len(level3)
+    n_files = n_files or len(level1)
 
     rms_lower, rms_upper, rms_full, gha = [], [], [], []
-    # Filter out high humidity
-    amb_hum_max = 40
-    for i, l3 in enumerate(level3[:n_files]):
-        good = time_filter_auxiliary(
-            gha=l3.ancillary["gha"],
-            sun_el=l3.ancillary["sun_azel"][1],
-            moon_el=l3.ancillary["moon_azel"][1],
-            humidity=l3.ancillary["ambient_humidity"],
-            receiver_temp=l3.ancillary["receiver1_temp"],
-            sun_el_max=90,
-            moon_el_max=90,
-            amb_hum_max=amb_hum_max,
-            min_receiver_temp=0,
-            max_receiver_temp=100,
-        )
-
+    for i, l1 in enumerate(level1[:n_files]):
         # Get RMS
-        rms_lower.append(l3.get_model_rms(freq_range=(-np.inf, l3.freq.center)))
-        rms_upper.append(l3.get_model_rms(freq_range=(l3.freq.center, np.inf)))
-        rms_full.append(l3.get_model_rms(n_terms=3))
+        rms_lower.append(l1.get_model_rms(freq_range=(-np.inf, l1.freq.center)))
+        rms_upper.append(l1.get_model_rms(freq_range=(l1.freq.center, np.inf)))
+        rms_full.append(l1.get_model_rms(n_terms=3))
 
         # Accumulate data
-        gha.append(l3.ancillary["gha"][good])
+        gha.append(l1.ancillary["gha"])
 
     rms_lower = np.vstack(rms_lower)
     rms_upper = np.vstack(rms_upper)
@@ -180,8 +165,6 @@ def total_power_filter(
     for i, band in enumerate(bands):
         freq_mask = (frequencies >= band[0]) & (frequencies < band[1])
         total_power[i] = np.nanmean(spectra[:, freq_mask], axis=1)
-
-    print("total_power", total_power)
 
     if std_thresholds is None:
         std_thresholds = [None] * len(bands)

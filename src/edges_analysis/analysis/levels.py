@@ -919,7 +919,7 @@ class Level1(_Level):
                 ]
             )
         else:
-            mask = self.raw_frequencies >= freq_range[0] & self.raw_frequencies <= freq_range[1]
+            mask = (self.raw_frequencies >= freq_range[0]) & (self.raw_frequencies <= freq_range[1])
 
             model = self.model(indx, model, n_terms, resolution)(self.raw_frequencies[mask])
             resid = self.spectrum[indx, mask] - model
