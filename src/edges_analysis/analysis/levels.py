@@ -1747,7 +1747,7 @@ class Level3(_Level):
         ancillary = {
             "std_dev": s,
             "years": np.unique(level2.ancillary["years"]),
-            "gha_edges": gha_edges,
+            "gha_edges": level2.ancillary["gha_edges"],
         }
         meta = {
             "day_range": day_range,
