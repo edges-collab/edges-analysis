@@ -318,7 +318,9 @@ def average_in_gha(spectrum: np.ndarray, gha: np.ndarray, gha_bins, weights: np.
     return out_spectrum, out_weights
 
 
-def run_xrfi_pipe(spectrum: np.ndarray, flags: np.ndarray, xrfi_pipe: dict) -> np.ndarray:
+def run_xrfi_pipe(
+    spectrum: np.ndarray, flags: np.ndarray, xrfi_pipe: dict, n_threads: int = cpu_count()
+) -> np.ndarray:
     """Run an xrfi pipeline on given spectrum and weights, updating weights in place."""
     for method, kwargs in xrfi_pipe.items():
         if (
@@ -326,17 +328,32 @@ def run_xrfi_pipe(spectrum: np.ndarray, flags: np.ndarray, xrfi_pipe: dict) -> n
         ):  # methods that only allow 1D spectra.
             rfi = getattr(xrfi, method)
 
-            def fnc(spec, flg):
+            flags[0], info = rfi(spectrum[0], flags=flags[0], **kwargs)
+            model = info.get("model", None)
+
+            if model is not None and "model_type" in kwargs:
+                del kwargs["model_type"]
+
+            def fnc(i):
+                spec = spectrum[i]
+                flg = flags[i]
                 with warnings.catch_warnings(record=True) as wrn:
-                    flags, info = rfi(spec, flags=flg, **kwargs)
-                return flags, wrn
+                    flg, info = rfi(spec, flags=flg, model_type=model, **kwargs)
+                return flg, wrn
+
+            n_threads = min(n_threads, len(flags))
 
             # Use a parallel map unless this function itself is being called by a
             # parallel map.
-            m = Pool(cpu_count()).map if current_process().name == "MainProcess" else map
-            results = m(fnc, spectrum, flags)
+            m = (
+                Pool(cpu_count()).map
+                if (current_process().name == "MainProcess" and n_threads > 1)
+                else map
+            )
+
+            results = m(fnc, range(1, len(spectrum)))
             wrns = []
-            for i, (flg, info) in enumerate(results):
+            for i, (flg, info) in enumerate(results, start=1):
                 wrns += info
                 flags[i] = flg
 

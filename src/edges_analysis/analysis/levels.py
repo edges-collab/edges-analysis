@@ -209,7 +209,7 @@ class Level1(_Level):
             "switch_powers": None,
         },
         "ancillary": None,  # A structured array with last axis being time
-        "meta": None,
+        "meta": {},
     }
 
     @classmethod
@@ -1153,7 +1153,9 @@ class Level1(_Level):
 
     aux_filter.axis = "time"
 
-    def rfi_filter(self, xrfi_pipe: dict, flags: [None, np.ndarray] = None) -> np.ndarray:
+    def rfi_filter(
+        self, xrfi_pipe: dict, flags: [None, np.ndarray] = None, n_threads: int = cpu_count()
+    ) -> np.ndarray:
         """
         Perform filtering on auxiliary data and RFI for a level 1 file.
 
@@ -1187,7 +1189,7 @@ class Level1(_Level):
             if np.all(flags):
                 return flags
 
-        return tools.run_xrfi_pipe(self.spectrum, flags, xrfi_pipe)
+        return tools.run_xrfi_pipe(self.spectrum, flags, xrfi_pipe, n_threads=n_threads)
 
     rfi_filter.axis = "both"
 
