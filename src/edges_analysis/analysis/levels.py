@@ -1498,11 +1498,8 @@ class Level2(_Level):
         if not n_files:
             raise Exception("All input files have been filtered completely.")
 
-        remaining_l1 = [l1 for i, l1 in enumerate(level1) if not files_flagged[i]]
-        flags = [flg for i, flg in enumerate(flags) if not files_flagged[i]]
-
         spectra, weights, gha_edges = cls.bin_gha(
-            remaining_l1, gha_min, gha_max, gha_bin_size, flags=flags
+            level1, gha_min, gha_max, gha_bin_size, flags=flags
         )
 
         data = {
