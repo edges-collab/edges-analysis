@@ -1832,6 +1832,8 @@ class Level4(_Level):
         meta = {
             "ignore_freq_ranges": ignore_freq_ranges,
             "xrfi_pipe": xrfi_pipe,
+            "gha_min": gha_min,
+            "gha_max": gha_max,
             **level3.meta,
         }
 
@@ -1855,10 +1857,11 @@ class Level4(_Level):
             f = freq.freq
             s = level3.ancillary["std_dev"]
 
-        spec, wght = tools.weighted_mean(spec, wght, axis=0)
+        mask = (level3.gha_edges[:-1] >= gha_min) & (level3.gha_edges[1:] <= gha_max)
+        spec, wght = tools.weighted_mean(spec[mask], wght[mask], axis=0)
 
         data = {"spectrum": spec, "weights": wght}
 
-        ancillary = {"std_dev": s}
+        ancillary = {"std_dev": s, "gha_edges": level3.gha_edges[:-1][mask]}
 
         return f, data, ancillary, meta
