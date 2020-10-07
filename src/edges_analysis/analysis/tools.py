@@ -188,7 +188,11 @@ def weighted_sum(data, weights=None, normalize=False, axis=0):
     sum = np.nansum(data * weights, axis=axis)
     weights = np.nansum(weights, axis=axis)
 
-    sum[weights == 0] = np.nan
+    if hasattr(sum, "__len__"):
+        sum[weights == 0] = np.nan
+    elif weights == 0:
+        sum = np.nan
+
     return sum, weights
 
 
