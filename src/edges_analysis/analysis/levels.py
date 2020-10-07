@@ -1317,7 +1317,7 @@ class Level2(_Level):
             "days": None,
             "hours": None,
         },
-        "meta": None,
+        "meta": {},
     }
 
     @classmethod
@@ -1624,7 +1624,7 @@ class Level3(_Level):
             "spectrum": None,
         },  # All spectra components assumed to be the same shape, with last axis being frequency.
         "ancillary": {"std_dev": None, "years": None},
-        "meta": None,
+        "meta": {},
     }
 
     @cached_property
@@ -1645,7 +1645,7 @@ class Level3(_Level):
         xrfi_pipe: [None, dict] = None,
     ):
         """
-        Convert a level3 to a level3.
+        Convert a level2 to a level3.
 
         This step integrates over days to form a spectrum as a function of GHA and
         frequency. It also applies an optional further frequency averaging.
@@ -1799,7 +1799,7 @@ class Level4(_Level):
         "ancillary": {
             "std_dev": None,
         },
-        "meta": None,
+        "meta": {},
     }
 
     @cached_property
@@ -1816,6 +1816,8 @@ class Level4(_Level):
         ignore_freq_ranges: Optional[Sequence[Tuple[float, float]]] = None,
         freq_resolution: Optional[float] = None,
         xrfi_pipe: [None, dict] = None,
+        gha_min=0,
+        gha_max=24,
     ):
         xrfi_pipe = xrfi_pipe or {}
         meta = {
