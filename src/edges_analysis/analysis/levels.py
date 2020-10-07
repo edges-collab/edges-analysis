@@ -1623,7 +1623,7 @@ class Level3(_Level):
             "weights": None,
             "spectrum": None,
         },  # All spectra components assumed to be the same shape, with last axis being frequency.
-        "ancillary": {"std_dev": None, "years": None},
+        "ancillary": {"std_dev": None, "years": None, "gha_edges": None},
         "meta": {},
     }
 
@@ -1744,7 +1744,11 @@ class Level3(_Level):
             "weights": w,
         }
 
-        ancillary = {"std_dev": s, "years": np.unique(level2.ancillary["years"])}
+        ancillary = {
+            "std_dev": s,
+            "years": np.unique(level2.ancillary["years"]),
+            "gha_edges": gha_edges,
+        }
         meta = {
             "day_range": day_range,
             "ignore_days": ignore_days,
@@ -1754,6 +1758,11 @@ class Level3(_Level):
         }
 
         return f, data, ancillary, meta
+
+    @property
+    def gha_edges(self):
+        """The edges of the GHA bins."""
+        return self.ancillary["gha_edges"]
 
 
 class Level4(_Level):

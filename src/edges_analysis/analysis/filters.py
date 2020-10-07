@@ -144,7 +144,10 @@ def get_rms_info(
     for j, band in enumerate(bands):
         # Put all the RMS values for all files into one long vector.
         rms[band] = np.hstack(
-            m(lambda i: level1[i].get_model_rms(freq_range=band, **rms_model_kwargs))
+            m(
+                lambda i: level1[i].get_model_rms(freq_range=band, **rms_model_kwargs),
+                range(len(level1)),
+            )
         )
 
     flags = {}
