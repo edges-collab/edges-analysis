@@ -146,7 +146,7 @@ def get_rms_info(
         rms[band] = np.hstack(
             m(
                 lambda i: level1[i].get_model_rms(freq_range=band, **rms_model_kwargs),
-                range(len(level1)),
+                list(range(len(level1))),
             )
         )
 

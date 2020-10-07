@@ -983,7 +983,7 @@ class Level1(_Level):
         freq = FrequencyRange(self.raw_frequencies, f_low=freq_range[0], f_high=freq_range[1])
 
         def _get_rms(indx):
-            m = mdl.ModelFit(model, f, s[indx], weights=w[indx]).evaluate(freq.freq)
+            m = mdl.ModelFit(model, ydata=s[indx], weights=w[indx]).evaluate(freq.freq)
             resid = self.spectrum[indx, freq.mask] - m
             mask = self.weights[indx, freq.mask] > 0
             return np.sqrt(np.mean(resid[mask] ** 2))
