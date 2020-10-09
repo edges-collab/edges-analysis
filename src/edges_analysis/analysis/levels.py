@@ -679,8 +679,8 @@ class Level1(_Level):
             switch_state_run_num=switch_state_run_num,
         )
 
-    @property
-    def antenna_s11(self):
+    @cached_property
+    def _antenna_s11(self):
         s11_files = self.meta["s11_files"].split(":")
         freq = self.raw_frequencies
         switch_state_dir = self.meta["switch_state_dir"]
@@ -690,6 +690,22 @@ class Level1(_Level):
         return self._get_antenna_s11(
             s11_files, freq, switch_state_dir, n_terms, switch_state_run_num
         )
+
+    @property
+    def antenna_s11_model(self):
+        return self._antenna_s11[0]
+
+    @property
+    def antenna_s11(self):
+        return self.antenna_s11_model(self.raw_frequencies)
+
+    @property
+    def raw_antenna_s11(self):
+        return self._antenna_s11[1]
+
+    @property
+    def raw_antenna_s11_freq(self):
+        return self._antenna_s11[2]
 
     @cached_property
     def calibration(self):
@@ -1069,16 +1085,35 @@ class Level1(_Level):
 
     def plot_s11(self, ax=None):
         if ax is None:
-            fig, ax = plt.subplots(1, 2, figsize=(8, 4), sharex=True)
-        ax[0].plot(self.raw_frequencies, 20 * np.log10(np.abs(self.antenna_s11)))
-        ax[0].set_title("Magnitude of Antenna S11")
-        ax[0].set_xlabel("Frequency [MHz]")
-        ax[0].set_ylabel("$|S_{11}|$ [dB]")
+            fig, ax = plt.subplots(2, 2, figsize=(8, 8), sharex=True)
+        ax[0, 0].plot(self.raw_frequencies, 20 * np.log10(np.abs(self.antenna_s11)))
+        ax[0, 0].set_title("Magnitude of Antenna S11")
+        ax[0, 0].set_xlabel("Frequency [MHz]")
+        ax[0, 0].set_ylabel("$|S_{11}|$ [dB]")
 
-        ax[1].plot(self.raw_frequencies, (180 / np.pi) * np.unwrap(np.angle(self.antenna_s11)))
-        ax[1].set_title("Phase of Antenna S11")
-        ax[1].set_xlabel("Frequency [MHz]")
-        ax[1].set_ylabel(r"$\angle S_{11}$ [${}^\circ$]")
+        ax[0, 1].plot(self.raw_frequencies, (180 / np.pi) * np.unwrap(np.angle(self.antenna_s11)))
+        ax[0, 1].set_title("Phase of Antenna S11")
+        ax[0, 1].set_xlabel("Frequency [MHz]")
+        ax[0, 1].set_ylabel(r"$\angle S_{11}$ [${}^\circ$]")
+
+        ax[1, 0].plot(
+            self.raw_antenna_s11_freq,
+            np.real(self.raw_antenna_s11)
+            - np.real(self.antenna_s11_model(self.raw_antenna_s11_freq)),
+        )
+        ax[1, 0].set_title("Residual (Real Part)")
+        ax[1, 0].set_xlabel("Frequency [MHz]")
+        ax[1, 0].set_ylabel(r"Data - Model")
+
+        ax[1, 1].plot(
+            self.raw_antenna_s11_freq,
+            np.imag(self.raw_antenna_s11)
+            - np.imag(self.antenna_s11_model(self.raw_antenna_s11_freq)),
+        )
+        ax[1, 1].set_title("Residual (Imag Part)")
+        ax[1, 1].set_xlabel("Frequency [MHz]")
+        ax[1, 1].set_ylabel(r"Data - Model")
+
         return ax
 
     def _integrate_spectra(self, quantity="spectrum", integrator="mean", axis=0):
