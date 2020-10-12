@@ -1664,7 +1664,7 @@ class Level2(_Level):
                 **model_kwargs,
             )
 
-            w = tools.get_binned_weights(x=gha, bins=gha_edges, weights=weights.T)
+            w = tools.get_binned_weights(x=gha, bins=gha_edges, weights=w.T)
 
             weights[i] = w.T
             spectra[i] = s.T
