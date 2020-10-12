@@ -96,7 +96,11 @@ def non_stationary_weighted_average(
             m = mdl.ModelFit(model, ydata=this_data, weights=this_weight).evaluate()
 
         res = this_data - m
-        out[indx] = np.mean(m) + np.sum(res * this_weight) / np.sum(this_weight)
+        sw = np.sum(this_weight)
+        if sw == 0:
+            out[indx] = np.nan
+        else:
+            out[indx] = np.mean(m) + np.sum(res * this_weight) / np.sum(this_weight)
 
     if out.size == 1:
         return float(out)
