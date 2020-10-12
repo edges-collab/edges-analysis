@@ -1641,6 +1641,100 @@ class Level2(_Level):
 
         return spectra, weights, gha_edges
 
+    def plot_daily_residuals(
+        self,
+        n_terms: int = 5,
+        gha_model_type: str = "polynomial",
+        freq_model_type: str = "polynomial",
+        separation: float = 1,
+        ax: [None, plt.Axes] = None,
+        gha_min: float = 0,
+        gha_max: float = 24,
+        freq_kwargs: [Dict, None] = None,
+        gha_kwargs: [Dict, None] = None,
+    ) -> plt.Axes:
+        """
+        Make a single plot of residuals for each day in the dataset.
+
+        Parameters
+        ----------
+        n_terms
+            Number of terms in each fit.
+        gha_model_type
+            The kind of model to fit to the GHA structure (in order to average).
+        freq_model_type
+            The kind of model to fit to the frequency spectra (to get residuals).
+        separation
+            The separation between residuals in K (on the plot).
+        ax
+            An optional axis on which to plot.
+        gha_min
+            A minimum GHA to include in the averaged residuals.
+        gha_max
+            A maximum GHA to include in the averaged residuals.
+        freq_kwargs
+            Arguments to the model fit to frequency
+        gha_kwargs
+            Arguments to the model fit to GHA.
+
+        Returns
+        -------
+        ax
+            The matplotlib Axes on which the plot is made.
+        """
+        freq_kwargs = freq_kwargs or {}
+        gha_kwargs = gha_kwargs or {}
+
+        gha = (self.ancillary["gha_edges"][1:] + self.ancillary["gha_edges"][:-1]) / 2
+        model_freq = mdl.Model._models[freq_model_type.lower()](
+            n_terms=n_terms, default_x=self.freq.freq, **freq_kwargs
+        )
+
+        if ax is None:
+            fig, ax = plt.subplots(1, 1, figsize=(7, 12))
+
+        mask = (gha > gha_min) & (gha < gha_max)
+        model_gha = mdl.Model._models[gha_model_type.lower()](
+            n_terms=n_terms, default_x=gha[mask], **gha_kwargs
+        )
+        for ix, (spec, weight) in enumerate(zip(self.spectrum, self.weights)):
+            mean_spec = tools.non_stationary_weighted_average(
+                data=spec[mask].T, x=gha[mask], weights=weight[mask].T, model=model_gha
+            )
+            w = np.sum(weight, axis=0)
+            fit = mdl.ModelFit(model_freq, ydata=mean_spec, weights=w)
+            ax.plot(self.freq.freq, fit.residual - ix * separation)
+            ax.text(
+                self.freq.max + 10,
+                ix * separation,
+                f'{self.previous_level[ix].meta["day"]} RMS={fit.weighted_rms()}',
+            )
+
+        return ax
+
+    def plot_waterfall(self, day=None, indx=None, quantity="flagged"):
+        days = [l1.meta["day"] for l1 in self.previous_level]
+        if day is not None:
+            indx = days.index(day)
+
+        if indx is None:
+            raise ValueError("Must either supply 'day' or 'indx'")
+
+        extent = (
+            self.freq.min,
+            self.freq.max,
+            self.ancillary["gha_edges"].min(),
+            self.ancillary["gha_edges"].max(),
+        )
+        if quantity == "flagged":
+            plt.imshow(
+                np.where(self.weights[indx] > 0, self.spectrum[indx], np.nan),
+                aspect="auto",
+                extent=extent,
+            )
+        else:
+            plt.imshow(self.spectrum, aspect="auto", extent=extent)
+
 
 class Level3(_Level):
     _structure = {
@@ -1784,6 +1878,31 @@ class Level3(_Level):
     def gha_edges(self):
         """The edges of the GHA bins."""
         return self.ancillary["gha_edges"]
+
+    def plot_waterfall(self, quantity="flagged"):
+        extent = (self.freq.min, self.freq.max, self.gha_edges.min, self.gha_edges.max)
+        if quantity == "flagged":
+            plt.imshow(np.where(self.weights > 0, self.spectrum, 0), extent=extent, aspect="auto")
+        else:
+            plt.imshow(getattr(self, quantity), extent=extent, aspect="auto")
+
+        plt.xlabel("Frequency")
+        plt.ylabel("GHA")
+
+    def bin_gha(self, gha_bins=None) -> Tuple[np.ndarray, np.ndarray]:
+        gha_centres = (self.gha_edges[:-1] + self.gha_edges[1:]) / 2
+        if gha_bins is None:
+            gha_bins = [self.gha_edges.min(), self.gha_edges.max()]
+
+        s = tools.non_stationary_bin_avg(
+            data=self.spectrum.T,
+            x=gha_centres,
+            bins=gha_bins,
+            weights=self.weights.T,
+        )
+        w = tools.get_binned_weights(x=gha_centres, bins=gha_bins, weights=self.weights.T)
+
+        return s, w
 
 
 class Level4(_Level):
