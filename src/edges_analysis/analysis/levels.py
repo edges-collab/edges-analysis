@@ -856,10 +856,12 @@ class Level1(_Level):
             G *= Gb * Gc
 
         # Ground Loss
-        if ground_correction:
+        if isinstance(ground_correction, (str, Path)):
             G *= loss.ground_loss(
                 ground_correction, freq.freq, band=band, configuration=configuration
             )
+        elif isinstance(ground_correction, float):
+            G *= ground_correction
 
         a = ambient_temp + 273.15 if ambient_temp[0] < 200 else ambient_temp
         calibrated_temp = (calibrated_temp - np.outer(a, (1 - G))) / G
