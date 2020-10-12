@@ -1447,7 +1447,7 @@ class Level2(_Level):
         per_bin_gha_model: bool = False,
         n_terms_gha_model: int = 5,
         gha_model_kind: str = "polynomial",
-        gha_model_zero: bool = False,
+        gha_quick_bin: bool = False,
     ):
         xrfi_pipe = xrfi_pipe or {}
 
@@ -1555,7 +1555,7 @@ class Level2(_Level):
             per_bin_model=per_bin_gha_model,
             n_terms=n_terms_gha_model,
             model=gha_model_kind,
-            gha_model_zero=gha_model_zero,
+            quick=gha_quick_bin,
         )
 
         data = {
@@ -1638,7 +1638,6 @@ class Level2(_Level):
         gha_max,
         gha_bin_size,
         flags=None,
-        gha_model_zero=False,
         **model_kwargs,
     ):
 
@@ -1662,7 +1661,6 @@ class Level2(_Level):
                 x=gha,
                 weights=w.T,
                 bins=gha_edges,
-                model_fit="zero" if gha_model_zero else None,
                 **model_kwargs,
             )
 

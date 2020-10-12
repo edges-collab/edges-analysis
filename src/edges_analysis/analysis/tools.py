@@ -38,6 +38,7 @@ def non_stationary_weighted_average(
     weights: [None, np.ndarray] = None,
     model_fit: [callable, None] = None,
     model: [mdl.Model, None, str] = "polynomial",
+    quick=False,
     n_terms: int = 5,
 ) -> [float, np.ndarray]:
     """
@@ -79,15 +80,15 @@ def non_stationary_weighted_average(
     assert weights.shape == data.shape, "weights and data must have the same shape"
     assert len(x) == data.shape[-1], "length of x must be the same as the last axis of data"
 
+    if quick:
+        return weighted_mean(data, weights=weights, axis=-1)[0]
+
     # Get a model.
     if not model_fit and isinstance(model, str):
         model = mdl.Model._models[model.lower()](n_terms=n_terms, default_x=x)
 
     if model_fit:
-        if model_fit == "zero":
-            m = 0
-        else:
-            m = model_fit(x)
+        m = model_fit(x)
 
     # Go through each vector.
     shape = data.shape[:-1]
