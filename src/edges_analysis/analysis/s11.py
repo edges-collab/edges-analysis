@@ -23,9 +23,7 @@ def get_corrected_s11(files, switch_state_dir, switch_state_run_num=None, n_fit_
 
     # Correction at receiver input
     return (
-        get_switch_correction(a_sw_c, internal_switch=switch_state, f_in=f, poly_order=n_fit_terms)[
-            0
-        ],
+        get_switch_correction(a_sw_c, internal_switch=switch_state, f_in=f, n_terms=n_fit_terms)[0],
         f,
     )
 
