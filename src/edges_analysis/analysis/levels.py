@@ -1631,7 +1631,7 @@ class Level2(_Level):
             pbar.set_description(f"GHA Binning for {l1.filename.name}")
 
             gha = l1.ancillary["gha"]
-            w = np.where(flags, 0, l1.weights) if flags is not None else None
+            w = np.where(flags[i], 0, l1.weights) if flags is not None else None
 
             s = tools.non_stationary_bin_avg(data=l1.spectra.T, x=gha, weights=w.T, bins=gha_edges)
             w = tools.get_binned_weights(x=gha, bins=gha_edges, weights=weights.T)
