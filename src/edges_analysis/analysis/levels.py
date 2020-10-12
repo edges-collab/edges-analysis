@@ -1554,7 +1554,7 @@ class Level2(_Level):
             flags=flags,
             per_bin_model=per_bin_gha_model,
             n_terms=n_terms_gha_model,
-            model_type=gha_model_kind,
+            model=gha_model_kind,
             gha_model_zero=gha_model_zero,
         )
 
@@ -1637,7 +1637,6 @@ class Level2(_Level):
         gha_min,
         gha_max,
         gha_bin_size,
-        per_bin_model=False,
         flags=None,
         gha_model_zero=False,
         **model_kwargs,
