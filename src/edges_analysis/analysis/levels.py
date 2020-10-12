@@ -1447,6 +1447,7 @@ class Level2(_Level):
         per_bin_gha_model: bool = False,
         n_terms_gha_model: int = 5,
         gha_model_kind: str = "polynomial",
+        gha_model_zero: bool = False,
     ):
         xrfi_pipe = xrfi_pipe or {}
 
@@ -1554,6 +1555,7 @@ class Level2(_Level):
             per_bin_model=per_bin_gha_model,
             n_terms=n_terms_gha_model,
             model_type=gha_model_kind,
+            gha_model_zero=gha_model_zero,
         )
 
         data = {
@@ -1630,7 +1632,15 @@ class Level2(_Level):
 
     @classmethod
     def bin_gha(
-        cls, level1, gha_min, gha_max, gha_bin_size, per_bin_model=False, flags=None, **model_kwargs
+        cls,
+        level1,
+        gha_min,
+        gha_max,
+        gha_bin_size,
+        per_bin_model=False,
+        flags=None,
+        gha_model_zero=False,
+        **model_kwargs,
     ):
 
         gha_edges = np.arange(gha_min, gha_max, gha_bin_size)
@@ -1649,8 +1659,14 @@ class Level2(_Level):
             w = np.where(flags[i], 0, l1.weights) if flags is not None else None
 
             s = tools.non_stationary_bin_avg(
-                data=l1.spectrum.T, x=gha, weights=w.T, bins=gha_edges, **model_kwargs
+                data=l1.spectrum.T,
+                x=gha,
+                weights=w.T,
+                bins=gha_edges,
+                model_fit="zero" if gha_model_zero else None,
+                **model_kwargs,
             )
+
             w = tools.get_binned_weights(x=gha, bins=gha_edges, weights=weights.T)
 
             weights[i] = w.T

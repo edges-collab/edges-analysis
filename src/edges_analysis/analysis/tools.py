@@ -60,7 +60,8 @@ def non_stationary_weighted_average(
     model_fit
         If provided, a callable which may be passed `x` and return an array of the
         same shape which models the data. Not very useful if the number of dimensions
-        is more than one (unless each of the other dimensions has the same model).
+        is more than one (unless each of the other dimensions has the same model). If
+        set to 'zero', a normal weighted average is performed.
     model
         Used if `model_fit` is not provided. Defines a Model which is used to fit the
         the data.
@@ -83,7 +84,10 @@ def non_stationary_weighted_average(
         model = mdl.Model._models[model.lower()](n_terms=n_terms, default_x=x)
 
     if model_fit:
-        m = model_fit(x)
+        if model_fit == "zero":
+            m = 0
+        else:
+            m = model_fit(x)
 
     # Go through each vector.
     shape = data.shape[:-1]
