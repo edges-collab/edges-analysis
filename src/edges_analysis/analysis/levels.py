@@ -1633,7 +1633,7 @@ class Level2(_Level):
             gha = l1.ancillary["gha"]
             w = np.where(flags[i], 0, l1.weights) if flags is not None else None
 
-            s = tools.non_stationary_bin_avg(data=l1.spectra.T, x=gha, weights=w.T, bins=gha_edges)
+            s = tools.non_stationary_bin_avg(data=l1.spectrum.T, x=gha, weights=w.T, bins=gha_edges)
             w = tools.get_binned_weights(x=gha, bins=gha_edges, weights=weights.T)
 
             weights[i] = w.T
