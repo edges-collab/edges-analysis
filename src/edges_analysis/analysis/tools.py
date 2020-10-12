@@ -122,6 +122,7 @@ def non_stationary_bin_avg(
     model: [mdl.Model, None, str] = "polynomial",
     n_terms: int = 5,
     per_bin_model: bool = False,
+    quick=False,
 ) -> np.ndarray:
     """
     Perform a weighted average over non-stationary data.
@@ -163,7 +164,7 @@ def non_stationary_bin_avg(
     """
     out = np.zeros(data.shape[:-1] + (len(bins) - 1,))
 
-    if per_bin_model:
+    if per_bin_model or quick:
         for i in range(len(bins[:-1])):
             mask = (x >= bins[i]) & (x < bins[i + 1])
 
@@ -174,6 +175,7 @@ def non_stationary_bin_avg(
                 model_fit=model_fit,
                 model=model,
                 n_terms=n_terms,
+                quick=quick,
             )
     else:
         if not model_fit and isinstance(model, str):
@@ -193,7 +195,11 @@ def non_stationary_bin_avg(
                 mask = (x >= bins[i]) & (x < bins[i + 1])
                 this_indx = indx + (i,)
                 out[this_indx] = non_stationary_weighted_average(
-                    this_data[mask], x=x[mask], model_fit=this_model, weights=this_wght[mask]
+                    this_data[mask],
+                    x=x[mask],
+                    model_fit=this_model,
+                    weights=this_wght[mask],
+                    quick=quick,
                 )
 
     return out
