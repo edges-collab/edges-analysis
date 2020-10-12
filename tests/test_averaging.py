@@ -76,3 +76,32 @@ def test_non_stationary_avg_1d_with_model():
     )
     assert isinstance(avg, float)
     assert np.isclose(avg, np.mean(y))
+
+
+def test_get_binned_weights_1d():
+    w = np.ones(20)
+    x = np.linspace(0, 1, 20)
+    bins = [-0.1, 1.1]
+
+    wghts = tools.get_binned_weights(x=x, bins=bins, weights=w)
+    assert wghts == 20
+
+
+def test_get_binned_weights_2d():
+    w = np.ones((10, 20))
+    x = np.linspace(0, 1, 20)
+    bins = [-0.1, 1.1]
+
+    wghts = tools.get_binned_weights(x=x, bins=bins, weights=w)
+    assert wghts.shape == (10, 1)
+    assert all(w == 20 for w in wghts)
+
+
+def test_get_binned_weights_more_bins():
+    w = np.ones((10, 20))
+    x = np.linspace(0, 1, 20, endpoint=False)
+    bins = np.linspace(0, 1, 11)
+
+    wghts = tools.get_binned_weights(x=x, bins=bins, weights=w)
+    assert wghts.shape == (10, 10)
+    assert np.allclose(wghts, 2)
