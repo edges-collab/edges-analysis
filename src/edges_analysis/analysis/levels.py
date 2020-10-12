@@ -877,7 +877,7 @@ class Level1(_Level):
         return calibrated_temp, freq, weights, meta
 
     # @lru_cache()
-    def frequency_average_spectrum(self, indx=None, resolution=0.0488):
+    def bin_in_frequency(self, indx=None, resolution=0.0488) -> Tuple[np.ndarray, np.ndarray]:
         """
         Perform a frequency-average over the spectrum.
 
@@ -891,26 +891,30 @@ class Level1(_Level):
 
         Returns
         -------
-        f : array-like
-            The mean frequency in each output bin
-        t : array-like
+        f
+            The new frequency bin-centres.
+        t
             The weighted-average of the spectrum in each bin
-        w : array-like
+        w
             The total weight in each bin
-        std : array-like
-            The standard deviation about the mean in each bin.
         """
         if indx is not None:
             s, w = self.spectrum[indx], self.weights[indx]
         else:
             s, w = self.spectrum, self.weights
 
-        return tools.average_in_frequency(
-            s,
-            freq=self.raw_frequencies,
+        bins = np.arange(self.freq.min, self.freq.max, resolution)
+
+        centres = (bins[:-1] + bins[1:]) / 2
+        new_spec = tools.non_stationary_bin_avg(
+            data=s,
+            x=self.raw_frequencies,
             weights=w,
-            resolution=resolution,
+            bins=bins,
         )
+        new_weights = tools.get_binned_weights(data=s, x=self.raw_frequencies, weights=w, bins=bins)
+
+        return centres, new_spec, new_weights
 
     # @lru_cache()
     def model(self, indx, model="polynomial", n_terms=5, resolution=0.0488, **model_kwargs):
@@ -934,7 +938,7 @@ class Level1(_Level):
             the model.
         """
         if resolution:
-            f, s, w = self.frequency_average_spectrum(indx, resolution)[:3]
+            f, s, w = self.bin_in_frequency(indx, resolution)
         else:
             f = self.raw_frequencies
             s = self.spectrum[indx]
@@ -991,7 +995,7 @@ class Level1(_Level):
         in the "mean" part of the RMS).
         """
         # Get the whole thing averaged (pretty quick)
-        f, s, w = self.frequency_average_spectrum(resolution=resolution)[:3]
+        f, s, w = self.bin_in_frequency(resolution=resolution)[:3]
 
         if isinstance(model, str):
             model = mdl.Model._models[model.lower()](default_x=f, n_terms=n_terms, **model_kwargs)
@@ -1625,25 +1629,13 @@ class Level2(_Level):
             pbar.set_description(f"GHA Binning for {l1.filename.name}")
 
             gha = l1.ancillary["gha"]
+            w = np.where(flags, 0, l1.weights) if flags is not None else None
 
-            # Apply flags to weights
-            l1_weights = l1.weights.copy()
-            if flags:
-                l1_weights[flags[i]] = 0
+            s = tools.non_stationary_bin_avg(data=l1.spectra.T, x=gha, weights=w.T, bins=gha_edges)
+            w = tools.get_binned_weights(x=gha, bins=gha_edges, weights=weights.T)
 
-            for j, gha_low in enumerate(gha_edges[:-1]):
-
-                mask = (gha >= gha_low) & (gha < gha_edges[j + 1])
-                spec = l1.spectrum[mask]
-
-                wght = l1_weights[mask]
-
-                if np.any(wght):
-                    spec_mean, wght_mean = tools.weighted_mean(spec, weights=wght, axis=0)
-
-                    # Store this iteration
-                    spectra[i, j] = spec_mean
-                    weights[i, j] = wght_mean
+            weights[i] = w.T
+            spectra[i] = s.T
 
         return spectra, weights, gha_edges
 
@@ -1759,25 +1751,20 @@ class Level3(_Level):
                 tools.run_xrfi_pipe(s, w <= 0, xrfi_pipe)
 
         # Take mean over nights.
-        spec, wght = tools.weighted_mean(np.array(spec), np.array(wght), axis=0)
+        spec, wght = tools.weighted_mean(spec, wght, axis=0)
 
         if freq_resolution:
-            f, p, w, s = tools.average_in_frequency(
-                spec, freq.freq, weights=wght, resolution=freq_resolution
-            )
-        else:
-            f = freq.freq
-            p = spec
-            w = wght
-            s = np.zeros_like(wght)
+            bins = np.arange(freq.min, freq.max, freq_resolution)
+            spec = tools.non_stationary_bin_avg(data=spec, x=freq.freq, weights=wght, bins=bins)
+            wght = tools.get_binned_weights(x=freq.freq, bins=bins, weights=wght)
+            f = (bins[1:] + bins[:-1]) / 2
 
         data = {
-            "spectrum": p,
-            "weights": w,
+            "spectrum": spec,
+            "weights": wght,
         }
 
         ancillary = {
-            "std_dev": s,
             "years": np.unique(level2.ancillary["years"]),
             "gha_edges": level2.ancillary["gha_edges"],
         }
@@ -1882,18 +1869,18 @@ class Level4(_Level):
                 wght[:, (freq.freq >= low) & (freq.freq <= high)] = 0
 
         if freq_resolution:
-            f, spec, wght, s = tools.average_in_frequency(
-                spec, freq.freq, wght, resolution=freq_resolution
-            )
+            bins = np.arange(freq.min, freq.max, freq_resolution)
+            spec = tools.non_stationary_bin_avg(data=spec, x=freq.freq, weights=wght, bins=bins)
+            wght = tools.get_binned_weights(x=freq.freq, bins=bins, weights=wght)
+            f = (bins[1:] + bins[:-1]) / 2
         else:
             f = freq.freq
-            s = level3.ancillary["std_dev"]
 
         mask = (level3.gha_edges[:-1] >= gha_min) & (level3.gha_edges[1:] <= gha_max)
         spec, wght = tools.weighted_mean(spec[mask], wght[mask], axis=0)
 
         data = {"spectrum": spec, "weights": wght}
 
-        ancillary = {"std_dev": s, "gha_edges": level3.gha_edges[:-1][mask]}
+        ancillary = {"gha_edges": level3.gha_edges[:-1][mask]}
 
         return f, data, ancillary, meta
