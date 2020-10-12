@@ -914,7 +914,7 @@ class Level1(_Level):
             weights=w,
             bins=bins,
         )
-        new_weights = tools.get_binned_weights(data=s, x=self.raw_frequencies, weights=w, bins=bins)
+        new_weights = tools.get_binned_weights(x=self.raw_frequencies, weights=w, bins=bins)
 
         return centres, new_spec, new_weights
 
@@ -1616,7 +1616,7 @@ class Level2(_Level):
         )
 
     @classmethod
-    def bin_gha(cls, level1, gha_min, gha_max, gha_bin_size, flags=None):
+    def bin_gha(cls, level1, gha_min, gha_max, gha_bin_size, per_bin_model=False, flags=None):
 
         gha_edges = np.arange(gha_min, gha_max, gha_bin_size)
         if np.isclose(gha_max, gha_edges.max() + gha_bin_size):
