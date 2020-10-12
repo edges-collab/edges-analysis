@@ -1444,6 +1444,9 @@ class Level2(_Level):
         n_std_rms: int = 6,
         n_files_rms: [None, int] = None,
         n_threads: int = cpu_count(),
+        per_bin_gha_model: bool = False,
+        n_terms_gha_model: int = 5,
+        gha_model_kind: str = "polynomial",
     ):
         xrfi_pipe = xrfi_pipe or {}
 
@@ -1464,6 +1467,9 @@ class Level2(_Level):
             "min_receiver_temp": min_receiver_temp,
             "max_receiver_temp": max_receiver_temp,
             "xrfi_pipe": json.dumps(xrfi_pipe),  # TODO: this is not wonderful
+            "per_bin_gha_model": per_bin_gha_model,
+            "n_terms_gha_model": n_terms_gha_model,
+            "gha_model_kind": gha_model_kind,
         }
 
         if do_total_power_filter:
@@ -1540,7 +1546,14 @@ class Level2(_Level):
             raise Exception("All input files have been filtered completely.")
 
         spectra, weights, gha_edges = cls.bin_gha(
-            level1, gha_min, gha_max, gha_bin_size, flags=flags
+            level1,
+            gha_min,
+            gha_max,
+            gha_bin_size,
+            flags=flags,
+            per_bin_model=per_bin_gha_model,
+            n_terms=n_terms_gha_model,
+            model_type=gha_model_kind,
         )
 
         data = {
@@ -1616,7 +1629,9 @@ class Level2(_Level):
         )
 
     @classmethod
-    def bin_gha(cls, level1, gha_min, gha_max, gha_bin_size, per_bin_model=False, flags=None):
+    def bin_gha(
+        cls, level1, gha_min, gha_max, gha_bin_size, per_bin_model=False, flags=None, **model_kwargs
+    ):
 
         gha_edges = np.arange(gha_min, gha_max, gha_bin_size)
         if np.isclose(gha_max, gha_edges.max() + gha_bin_size):
@@ -1633,7 +1648,9 @@ class Level2(_Level):
             gha = l1.ancillary["gha"]
             w = np.where(flags[i], 0, l1.weights) if flags is not None else None
 
-            s = tools.non_stationary_bin_avg(data=l1.spectrum.T, x=gha, weights=w.T, bins=gha_edges)
+            s = tools.non_stationary_bin_avg(
+                data=l1.spectrum.T, x=gha, weights=w.T, bins=gha_edges, **model_kwargs
+            )
             w = tools.get_binned_weights(x=gha, bins=gha_edges, weights=weights.T)
 
             weights[i] = w.T
