@@ -230,8 +230,7 @@ def get_binned_weights(
     indices = np.digitize(x, bins) - 1
 
     for indx in np.ndindex(*out.shape[:-1]):
-        print(weights[indx].shape, indices.shape)
-        out[indx] = np.bincount(indices, weights=weights[indx])
+        out[indx] = np.bincount(indices, weights=weights[indx], minlength=out.shape[-1])
 
     return out
 

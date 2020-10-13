@@ -1682,6 +1682,7 @@ class Level2(_Level):
         gha_max: float = 24,
         freq_kwargs: [Dict, None] = None,
         gha_kwargs: [Dict, None] = None,
+        quick: bool = True,
     ) -> plt.Axes:
         """
         Make a single plot of residuals for each day in the dataset.
@@ -1706,6 +1707,8 @@ class Level2(_Level):
             Arguments to the model fit to frequency
         gha_kwargs
             Arguments to the model fit to GHA.
+        quick
+            Whether to use a quick weighted average over GHA.
 
         Returns
         -------
@@ -1729,7 +1732,7 @@ class Level2(_Level):
         )
         for ix, (spec, weight) in enumerate(zip(self.spectrum, self.weights)):
             mean_spec = tools.non_stationary_weighted_average(
-                data=spec[mask].T, x=gha[mask], weights=weight[mask].T, model=model_gha
+                data=spec[mask].T, x=gha[mask], weights=weight[mask].T, model=model_gha, quick=quick
             )
             w = np.sum(weight, axis=0)
             fit = mdl.ModelFit(model_freq, ydata=mean_spec, weights=w)
