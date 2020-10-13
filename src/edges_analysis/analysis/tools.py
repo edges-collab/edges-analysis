@@ -97,15 +97,16 @@ def non_stationary_weighted_average(
         this_data = data[indx]
         this_weight = weights[indx]
 
+        sw = np.sum(this_weight)
+        if sw == 0:
+            out[indx] = np.nan
+
         if not model_fit:
             m = mdl.ModelFit(model, ydata=this_data, weights=this_weight).evaluate()
 
         res = this_data - m
-        sw = np.sum(this_weight)
-        if sw == 0:
-            out[indx] = np.nan
-        else:
-            out[indx] = np.mean(m) + np.sum(res * this_weight) / np.sum(this_weight)
+
+        out[indx] = np.mean(m) + np.sum(res * this_weight) / sw
 
     if out.size == 1:
         return float(out)
@@ -194,13 +195,16 @@ def non_stationary_bin_avg(
             for i in range(len(bins[:-1])):
                 mask = (x >= bins[i]) & (x < bins[i + 1])
                 this_indx = indx + (i,)
-                out[this_indx] = non_stationary_weighted_average(
-                    this_data[mask],
-                    x=x[mask],
-                    model_fit=this_model,
-                    weights=this_wght[mask],
-                    quick=quick,
-                )
+                if np.all(this_wght[mask] == 0):
+                    out[this_indx] = np.nan
+                else:
+                    out[this_indx] = non_stationary_weighted_average(
+                        this_data[mask],
+                        x=x[mask],
+                        model_fit=this_model,
+                        weights=this_wght[mask],
+                        quick=quick,
+                    )
 
     return out
 
@@ -228,6 +232,7 @@ def get_binned_weights(
     out = np.zeros(weights.shape[:-1] + (len(bins) - 1,))
 
     indices = np.digitize(x, bins) - 1
+    indices[indices >= (len(bins) - 1)] -= 1
 
     for indx in np.ndindex(*out.shape[:-1]):
         out[indx] = np.bincount(indices, weights=weights[indx], minlength=out.shape[-1])
@@ -427,6 +432,7 @@ def weighted_mean(data, weights=None, axis=0):
     if isinstance(sum, float):
         return sum / weights if mask else np.nan, weights
     else:
+        print("summask", sum[mask])
         av[mask] = sum[mask] / weights[mask]
         av[~mask] = np.nan
         return av, weights

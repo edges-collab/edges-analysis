@@ -1676,7 +1676,7 @@ class Level2(_Level):
         n_terms: int = 5,
         gha_model_type: str = "polynomial",
         freq_model_type: str = "polynomial",
-        separation: float = 1,
+        separation: float = 20,
         ax: [None, plt.Axes] = None,
         gha_min: float = 0,
         gha_max: float = 24,
@@ -1738,8 +1738,8 @@ class Level2(_Level):
             fit = mdl.ModelFit(model_freq, ydata=mean_spec, weights=w)
             ax.plot(self.freq.freq, fit.residual - ix * separation)
             ax.text(
-                self.freq.max + 10,
-                ix * separation,
+                self.freq.max + 5,
+                -ix * separation,
                 f'{self.previous_level[ix].meta["day"]} RMS={fit.weighted_rms()}',
             )
 
@@ -1776,7 +1776,7 @@ class Level3(_Level):
             "weights": None,
             "spectrum": None,
         },  # All spectra components assumed to be the same shape, with last axis being frequency.
-        "ancillary": {"std_dev": None, "years": None, "gha_edges": None},
+        "ancillary": {"years": None, "gha_edges": None},
         "meta": {},
     }
 
@@ -1887,6 +1887,8 @@ class Level3(_Level):
             spec = tools.non_stationary_bin_avg(data=spec, x=freq.freq, weights=wght, bins=bins)
             wght = tools.get_binned_weights(x=freq.freq, bins=bins, weights=wght)
             f = (bins[1:] + bins[:-1]) / 2
+        else:
+            f = freq.freq
 
         data = {
             "spectrum": spec,
@@ -1978,9 +1980,7 @@ class Level4(_Level):
             "weights": None,
             "spectrum": None,
         },  # All spectra components assumed to be the same shape, with last axis being frequency.
-        "ancillary": {
-            "std_dev": None,
-        },
+        "ancillary": {},
         "meta": {},
     }
 
@@ -2007,6 +2007,7 @@ class Level4(_Level):
             "xrfi_pipe": xrfi_pipe,
             "gha_min": gha_min,
             "gha_max": gha_max,
+            "freq_resolution": freq_resolution,
             **level3.meta,
         }
 
@@ -2026,13 +2027,18 @@ class Level4(_Level):
             bins = np.arange(freq.min, freq.max, freq_resolution)
             spec = tools.non_stationary_bin_avg(data=spec, x=freq.freq, weights=wght, bins=bins)
             wght = tools.get_binned_weights(x=freq.freq, bins=bins, weights=wght)
+            wght[np.isnan(spec)] = 0
             f = (bins[1:] + bins[:-1]) / 2
         else:
             f = freq.freq
 
+        print(spec, wght)
+        print(np.any(spec == 0))
+
         mask = (level3.gha_edges[:-1] >= gha_min) & (level3.gha_edges[1:] <= gha_max)
         spec, wght = tools.weighted_mean(spec[mask], wght[mask], axis=0)
 
+        print(spec, wght)
         data = {"spectrum": spec, "weights": wght}
 
         ancillary = {"gha_edges": level3.gha_edges[:-1][mask]}
