@@ -1352,12 +1352,7 @@ class Level2(_Level):
             "weights": None,
             "spectrum": None,
         },
-        "ancillary": {
-            "n_total_times_per_file": None,
-            "years": None,
-            "days": None,
-            "hours": None,
-        },
+        "ancillary": {"years": None, "days": None, "hours": None, "files_flagged": None},
         "meta": {},
     }
 
@@ -1496,10 +1491,6 @@ class Level2(_Level):
         days = [x.meta["day"] for x in level1]
         hours = [x.meta["hour"] for x in level1]
 
-        # Create a master array of indices of good-quality spectra (over the time axis)
-        # used in the final averages
-        n_times = np.array([len(l1.ancillary) for l1 in level1])
-
         flags, level1 = cls.run_filter(
             "aux",
             level1,
@@ -1564,7 +1555,6 @@ class Level2(_Level):
         }
 
         ancillary = {
-            "n_total_times_per_file": n_times,
             "files_flagged": files_flagged,
             "years": years,
             "days": days,
@@ -1585,6 +1575,39 @@ class Level2(_Level):
         return [
             l1 for i, l1 in enumerate(self.previous_level) if not self.ancillary["files_flagged"][i]
         ]
+
+    @property
+    def unflagged_days(self) -> np.ndarray:
+        """The days that are in the actual spectrum object."""
+        return np.array(
+            [
+                day
+                for i, day in enumerate(self.ancillary["days"])
+                if not self.ancillary["files_flagged"][i]
+            ]
+        )
+
+    @property
+    def unflagged_years(self) -> np.ndarray:
+        """The days that are in the actual spectrum object."""
+        return np.array(
+            [
+                year
+                for i, year in enumerate(self.ancillary["year"])
+                if not self.ancillary["files_flagged"][i]
+            ]
+        )
+
+    @property
+    def unflagged_hours(self) -> np.ndarray:
+        """The days that are in the actual spectrum object."""
+        return np.array(
+            [
+                hour
+                for i, hour in enumerate(self.ancillary["hours"])
+                if not self.ancillary["files_flagged"][i]
+            ]
+        )
 
     @classmethod
     def _run_rms_filter(
@@ -1735,20 +1758,19 @@ class Level2(_Level):
                 data=spec[mask].T, x=gha[mask], weights=weight[mask].T, model=model_gha, quick=quick
             )
             w = np.sum(weight, axis=0)
-            fit = mdl.ModelFit(model_freq, ydata=mean_spec, weights=w)
+            fit = model_freq.fit(ydata=mean_spec, weights=w)
             ax.plot(self.freq.freq, fit.residual - ix * separation)
             ax.text(
                 self.freq.max + 5,
                 -ix * separation,
-                f'{self.previous_level[ix].meta["day"]} RMS={fit.weighted_rms()}',
+                f'{self.unflagged_level1[ix].meta["day"]} RMS={fit.weighted_rms()}',
             )
 
         return ax
 
     def plot_waterfall(self, day=None, indx=None, quantity="flagged"):
-        days = [l1.meta["day"] for l1 in self.previous_level]
         if day is not None:
-            indx = days.index(day)
+            indx = self.unflagged_days.tolist().index(day)
 
         if indx is None:
             raise ValueError("Must either supply 'day' or 'indx'")
@@ -1767,6 +1789,10 @@ class Level2(_Level):
             )
         else:
             plt.imshow(self.spectrum, aspect="auto", extent=extent)
+
+        plt.xlabel("Frequency [MHz]")
+        plt.ylabel("GHA (hours)")
+        plt.title(f"Level2 {self.unflagged_years[indx]}-{self.unflagged_days[indx]}")
 
 
 class Level3(_Level):
