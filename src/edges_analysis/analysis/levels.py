@@ -1865,7 +1865,7 @@ class Level3(_Level):
         xrfi_pipe = xrfi_pipe or {}
 
         # Compute the residuals
-        days = level2.ancillary["days"]
+        days = level2.unflagged_days
         freq = FrequencyRange(level2.raw_frequencies, f_low=f_low, f_high=f_high)
 
         if day_range is None:
@@ -1874,31 +1874,33 @@ class Level3(_Level):
         if ignore_days is None:
             ignore_days = []
 
+        day_mask = np.array([day not in ignore_days for day in days])
+        spec = level2.spectrum[day_mask]
+        wght = level2.weights[day_mask]
+
         if gha_filter_file:
-            with open(gha_filter_file, "r") as fl:
-                # gha filter is a dict of {gha: days} specifying a list of days to
-                # *keep* for each GHA.
-                gha_filter = yaml.load(fl, Loader=yaml.FullLoader)
-
-            spec, wght = [], []
-            gha_edges = level2.ancillary["gha_edges"]
-            for i, (low, high) in enumerate(zip(gha_edges[:-1], gha_edges[1:])):
-                gha_range = range(int(np.floor(low)), int(np.floor(high)))
-
-                # a list of lists of good days for all integer GHA in this range.
-                good_days = [gha_filter[gha] for gha in gha_range]
-
-                for j, day in enumerate(days):
-                    if all(day in g for g in good_days) and day not in ignore_days:
-                        spec.append(level2.spectrum[j, i, freq.mask])
-                        wght.append(level2.weights[j, i, freq.mask])
-
-            spec = np.array(spec)
-            wght = np.array(wght)
-
-        else:
-            spec = level2.spectrum[:, :, freq.mask]
-            wght = level2.weights[:, :, freq.mask]
+            raise NotImplementedError("Using a GHA filter file is not yet implemented")
+            # TODO: the following won't work properly
+            # with open(gha_filter_file, "r") as fl:
+            #     # gha filter is a dict of {gha: days} specifying a list of days to
+            #     # *keep* for each GHA.
+            #     gha_filter = yaml.load(fl, Loader=yaml.FullLoader)
+            #
+            # spec, wght = [], []
+            # gha_edges = level2.ancillary["gha_edges"]
+            # for i, (low, high) in enumerate(zip(gha_edges[:-1], gha_edges[1:])):
+            #     gha_range = range(int(np.floor(low)), int(np.floor(high)))
+            #
+            #     # a list of lists of good days for all integer GHA in this range.
+            #     good_days = [gha_filter[gha] for gha in gha_range]
+            #
+            #     for j, day in enumerate(days):
+            #         if all(day in g for g in good_days) and day not in ignore_days:
+            #             spec.append(level2.spectrum[j, i, freq.mask])
+            #             wght.append(level2.weights[j, i, freq.mask])
+            #
+            # spec = np.array(spec)
+            # wght = np.array(wght)
 
         # Perform xRFI on GHA-averaged spectra.
         if xrfi_pipe:
