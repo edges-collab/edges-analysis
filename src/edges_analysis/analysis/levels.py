@@ -1822,6 +1822,7 @@ class Level3(_Level):
         freq_resolution: Optional[float] = None,
         gha_filter_file: [None, str, Path] = None,
         xrfi_pipe: [None, dict] = None,
+        n_threads: int = cpu_count(),
     ):
         """
         Convert a level2 to a level3.
@@ -1904,8 +1905,13 @@ class Level3(_Level):
 
         # Perform xRFI on GHA-averaged spectra.
         if xrfi_pipe:
-            for s, w in zip(spec, wght):
-                tools.run_xrfi_pipe(s, w <= 0, xrfi_pipe)
+
+            def run_pipe(i):
+                return tools.run_xrfi_pipe(spec[i], wght[i] <= 0, xrfi_pipe)
+
+            m = map if n_threads <= 1 else Pool(n_threads).map
+            flags = np.array(m(run_pipe, range(len(spec))))
+            wght[flags] = 0
 
         # Take mean over nights.
         spec, wght = tools.weighted_mean(spec, wght, axis=0)
