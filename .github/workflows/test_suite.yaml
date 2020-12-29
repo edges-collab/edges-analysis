@@ -1,0 +1,47 @@
+name: Tests
+
+# Test on all pushes, except when the push is literally just a tag (because we
+# tag automatically via CI, and therefore there's no extra code in that push).
+# Also, only test on pull requests into master.
+on:
+  push:
+    tags-ignore:
+      - 'v*'
+  pull_request:
+    branches:
+      - 'master'
+
+jobs:
+  tests:
+    env:
+      ENV_NAME: tests
+      PYTHON: ${{ matrix.python-version }}
+      OS: ${{ matrix.os }}
+    name: Testing
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python-version: [3.7, 3.8]
+    steps:
+      - uses: actions/checkout@master
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: set PY
+        run: echo "PY=$(python -c 'import hashlib, sys;print(hashlib.sha256(sys.version.encode()+sys.executable.encode()).hexdigest())')" >> $GITHUB_ENV
+      - name: Setup Environment
+        run: |
+          pip install -U coverage
+          pip install .[dev]
+      - name: Run Tests
+        run: |
+          python -m pytest --cov=edges_analysis --cov-config=.coveragerc --cov-report xml:./coverage.xml --durations=25
+      - uses: codecov/codecov-action@master
+        if: matrix.os == 'ubuntu-latest' && success()
+        with:
+          token: ${{secrets.CODECOV_TOKEN}} #required
+          file: ./coverage.xml #optional
