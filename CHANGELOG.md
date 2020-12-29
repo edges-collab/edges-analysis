@@ -11,6 +11,7 @@
 - IndexModel class for defining models of spectral indices on the sphere.
 - Parallel filtering at Level2
 - Working Total Power Filter and RMS filter
+- Faster modeling throughout
 
 ### Fixed
 - Warnings in xrfi are now suppressed, and a summary is given.
