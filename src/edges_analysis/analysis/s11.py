@@ -23,9 +23,7 @@ def get_corrected_s11(files, switch_state_dir, switch_state_run_num=None, n_fit_
 
     # Correction at receiver input
     return (
-        get_switch_correction(a_sw_c, internal_switch=switch_state, f_in=f, poly_order=n_fit_terms)[
-            0
-        ],
+        get_switch_correction(a_sw_c, internal_switch=switch_state, f_in=f, n_terms=n_fit_terms)[0],
         f,
     )
 
@@ -80,14 +78,12 @@ def antenna_s11_remove_delay(
 
     # Removing delay from S11
     delay = delay_0 * f_orig
+    gamma *= np.exp(delay * 1j)
 
-    def get_model(fnc):
-        re_wd = np.abs(gamma) * fnc(delay + np.unwrap(np.angle(gamma)))
-        par_re_wd = np.polyfit(f_orig, re_wd, n_fit - 1)
-        return np.polyval(par_re_wd, f)
+    re = np.polyfit(f_orig, np.real(gamma), n_fit - 1)
+    im = np.polyfit(f_orig, np.imag(gamma), n_fit - 1)
 
-    model_re_wd = get_model(np.cos)
-    model_im_wd = get_model(np.sin)
+    def model(f):
+        return (np.polyval(re, f) + 1j * np.polyval(im, f)) * np.exp(-1j * delay_0 * f)
 
-    model_s11_wd = model_re_wd + 1j * model_im_wd
-    return model_s11_wd * np.exp(-1j * delay_0 * f)
+    return model, gamma * np.exp(-1j * delay_0 * f_orig), f_orig
