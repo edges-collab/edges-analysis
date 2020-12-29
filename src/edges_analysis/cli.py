@@ -12,6 +12,7 @@ from .analysis import levels
 from .config import config
 from edges_io.logging import logger
 import logging
+import numpy as np
 
 main = click.Group()
 
@@ -30,8 +31,7 @@ def _get_settings(settings):
 
 
 def _get_input_files(level, path, label, allow_many=False):
-    """Get the input file to convert to the next level. Only applicable for levels
-    that require a single file."""
+    """Get the input file(s) to convert to the next level."""
     path = Path(path)
     root = Path(config["paths"]["field_products"])
     lvl = root / f"level{level}"
@@ -47,11 +47,26 @@ def _get_input_files(level, path, label, allow_many=False):
 
     fnc = _get_files if allow_many else _get_unique_file
 
-    for pth in [path, lvl / label / path, lvl / path, root / path]:
+    try_paths = np.unique(
+        [
+            path,
+            lvl / label / path,
+            lvl / path,
+            root / path,
+            path / label,
+            path / f"level{level}" / label,
+        ]
+    )
+    for pth in try_paths:
         try:
             return fnc(pth)
         except ValueError:
             pass
+
+    print(stylize("Tried Following Paths: ", attr("bold")))
+
+    for pth in try_paths:
+        print(stylize(f"\t{pth}", attr("dim")))
 
     return []
 
