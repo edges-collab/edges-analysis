@@ -353,3 +353,62 @@ def run_xrfi_pipe(spectrum: np.ndarray, flags: np.ndarray, xrfi_pipe: dict) -> n
         print(f"After {method}, nflags={np.sum(flags)}")
 
     return flags
+
+
+def model_bin_gha(
+    params: np.ndarray, resids: np.ndarray, weights: np.ndarray, gha: np.ndarray, bins: np.ndarray
+) -> [np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Bin data in an unbiased way using a model fit.
+
+    See memo #183:
+    http://loco.lab.asu.edu/wp-content/uploads/2020/10/averaging_with_weights.pdf)
+
+    Data can be in the form of multiple observations, each of which has a "model" fit
+    to it (eg. multiple GHA's with a model over frequency for each).
+
+    See
+    Parameters
+    ----------
+    params
+        Model parameters for each data point. Shape should be (Nobs, Nterms).
+    resids
+        Residuals of the models to data. Shape should be (Nobs, Ncoords)
+    weights
+        Weights of the data/residuals. Shape should be same as resids.
+    coords
+        The coordinates to bin.
+    bins
+        The bins into which the coords should be fit
+    axis
+        The axis over which to bin.
+
+    Returns
+    -------
+    params
+        An ndarray giving the averaged parameters of the model
+    resids
+        An ndarray giving residuals in the averaged bins.
+    weights
+        The new weights after averaging.
+    """
+    params_out = np.nan * np.ones((len(bins) - 1, params.shape[-1]))
+    resids_out = np.nan * np.ones((len(bins) - 1, resids.shape[-1]))
+    weights_out = np.zeros_like(resids_out)
+
+    for i, bin_low in enumerate(bins[:-1]):
+        bin_high = bins[i + 1]
+
+        mask = (gha >= bin_low) & (gha < bin_high)
+        if len(mask) == 0:
+            # Skip this bin if nothing's in it
+            continue
+
+        these_params = params[mask]
+        these_resids = resids[mask]
+        these_weights = weights[mask]
+
+        params_out[i] = np.mean(these_params, axis=0)
+        resids_out[i], weights_out[i] = weighted_mean(these_resids, weights=these_weights, axis=0)
+
+    return params_out, resids_out, weights_out

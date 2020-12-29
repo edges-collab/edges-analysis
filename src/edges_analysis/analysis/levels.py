@@ -156,6 +156,35 @@ class _Level(HDF5Object):
 
 
 @attr.s
+class _Level2Plus:
+    @cached_property
+    def model(self) -> mdl.Model:
+        """The abstract linear model that is fit to each integration.
+
+        Note that the parameters are not set on this model, but the basis vectors are
+        set.
+        """
+        return mdl.Model._models[self.meta["model_basis"].lower()](
+            default_x=self.freq.freq_recentred, n_terms=self.meta["model_nterms"]
+        )
+
+    def get_model(self, indx: int) -> np.ndarray:
+        """Obtain the fiducial fitted model spectrum for integration/gha at indx."""
+        p = self.ancillary["model_params"][indx]
+        return self.model(parameters=p)
+
+    @property
+    def resids(self):
+        """Residuals of all spectra after being fit by the fiducial model."""
+        return self.spectra["resids"]
+
+    @property
+    def spectrum(self):
+        """The GHA-averaged spectra for each night."""
+        return np.array([self.get_model(i) for i in range(len(self.resids))]) + self.resids
+
+
+@attr.s
 class Level1(_Level):
     """Object representing the level-1 stage of processing.
 
@@ -875,7 +904,14 @@ class Level1(_Level):
             )
 
     @lru_cache()
-    def model(self, indx, model="LINLOG", n_terms=5, resolution=0.0488):
+    def model(
+        self,
+        indx: int,
+        model: str = "LINLOG",
+        n_terms: int = 5,
+        resolution: float = 0.0488,
+        **kwargs,
+    ):
         """
         Determine a callable model of the spectrum at a given time, optionally
         computed over averaged original data.
@@ -888,6 +924,11 @@ class Level1(_Level):
             The kind of model to fit.
         n_terms : int, optional
             The number of terms to use in the fit.
+        resolution : float, optional
+
+        Other Parameters
+        ----------------
+        Passed through to the Model.
 
         Returns
         -------
@@ -898,9 +939,69 @@ class Level1(_Level):
         f, s, w = self.frequency_average_spectrum(indx, resolution)[:3]
 
         freq = FrequencyRange(f)
-        model = mdl.ModelFit(model, freq.freq_recentred, s, weights=w, n_terms=n_terms)
 
+        if not isinstance(model, mdl.Model):
+            model = mdl.Model._models[model.lower()](
+                default_x=freq.freq_recentred, n_terms=n_terms, **kwargs
+            )
+
+        model = mdl.ModelFit(model, freq.freq_recentred, s, weights=w)
+        model.model_parameters
         return lambda nu: model.evaluate(freq.normalize(nu))
+
+    def get_model_parameters(
+        self, model: str = "LINLOG", n_terms: int = 5, resolution: [None, float] = None, **kwargs
+    ):
+        """
+        Determine a callable model of the spectrum at a given time, optionally
+        computed over averaged original data.
+
+        Parameters
+        ----------
+        model : str, optional
+            The kind of model to fit.
+        n_terms : int, optional
+            The number of terms to use in the fit.
+        resolution : float, optional
+
+        Other Parameters
+        ----------------
+        Passed through to the Model.
+
+        Returns
+        -------
+        callable :
+            Function of frequency (in units of self.raw_frequency) that will return
+            the model.
+        """
+        if resolution:
+            f, s, w = tools.average_in_frequency(
+                self.spectrum,
+                freq=self.raw_frequencies,
+                weights=self.weights,
+                resolution=resolution,
+            )[:3]
+        else:
+            f = self.raw_frequencies
+            s = self.spectrum
+            w = self.weights
+
+        freq = FrequencyRange(f)
+
+        if not isinstance(model, mdl.Model):
+            model = mdl.Model._models[model.lower()](
+                default_x=freq.freq_recentred, n_terms=n_terms, **kwargs
+            )
+
+        params = np.zeros((len(s), model.n_terms))
+        resids = np.zeros(s.shape)
+
+        for i, (ss, ww) in enumerate(zip(s, w)):
+            fit = mdl.ModelFit(model, ydata=ss, weights=ww)
+            params[i] = fit.model_parameters
+            resids[i] = fit.residual
+
+        return model, params, resids
 
     @lru_cache()
     def get_model_rms(
@@ -1173,7 +1274,7 @@ class Level1(_Level):
     total_power_filter.axis = "time"
 
 
-class Level2(_Level):
+class Level2(_Level, _Level2Plus):
     """
     Object representing a Level-2 Calibrated Data Set.
 
@@ -1244,13 +1345,14 @@ class Level2(_Level):
         "frequency": None,
         "spectra": {
             "weights": None,
-            "spectrum": None,
+            "resids": None,
         },
         "ancillary": {
             "n_total_times_per_file": None,
             "years": None,
             "days": None,
             "hours": None,
+            "model_params": None,
         },
         "meta": None,
     }
@@ -1322,6 +1424,8 @@ class Level2(_Level):
         do_total_power_filter: bool = True,
         xrfi_pipe: [None, dict] = None,
         n_threads: int = cpu_count(),
+        model_nterms: int = 5,
+        model_basis: str = "linlog",
     ):
         xrfi_pipe = xrfi_pipe or {}
 
@@ -1341,7 +1445,9 @@ class Level2(_Level):
             "ambient_humidity_max": ambient_humidity_max,
             "min_receiver_temp": min_receiver_temp,
             "max_receiver_temp": max_receiver_temp,
-            "xrfi_pipe": json.dumps(xrfi_pipe),  # TODO: this is not wonderful
+            "xrfi_pipe": json.dumps(xrfi_pipe),  # TODO: this is not wonderful.
+            "model_nterms": model_nterms,
+            "model_basis": model_basis,
         }
 
         # Sort the inputs in ascending date.
@@ -1387,14 +1493,24 @@ class Level2(_Level):
         remaining_l1 = [l1 for i, l1 in enumerate(level1) if not files_flagged[i]]
         flags = [flg for i, flg in enumerate(flags) if not files_flagged[i]]
 
-        spectra, weights, gha_edges = cls.bin_gha(
+        # Determine models for the individual spectra
+        model = mdl.Model._models[model_basis.lower()](
+            default_x=level1[0].freq.freq_recentred, n_terms=model_nterms
+        )
+        model_params = []
+        model_resids = []
+        for l1 in remaining_l1:
+            _, params, resids = l1.get_model_parameters(model)
+            model_params.append(params)
+            model_resids.append(resids)
+
+        # Bin in GHA using the models and residuals (see memo #183:
+        # http://loco.lab.asu.edu/wp-content/uploads/2020/10/averaging_with_weights.pdf)
+        params, resids, weights, gha_edges = cls.bin_gha(
             remaining_l1, gha_min, gha_max, gha_bin_size, flags=flags
         )
 
-        data = {
-            "spectrum": spectra,
-            "weights": weights,
-        }
+        data = {"weights": weights, "resids": resids}
 
         ancillary = {
             "n_total_times_per_file": n_times,
@@ -1403,6 +1519,7 @@ class Level2(_Level):
             "days": days,
             "hours": hours,
             "gha_edges": gha_edges,
+            "model_params": params,
         }
 
         return level1[0].raw_frequencies, data, ancillary, meta
@@ -1420,7 +1537,9 @@ class Level2(_Level):
         ]
 
     @classmethod
-    def bin_gha(cls, level1, gha_min, gha_max, gha_bin_size, flags=None):
+    def bin_gha(
+        cls, level1, l1_params, l1_resids, gha_min, gha_max, gha_bin_size, flags=None, use_pbar=True
+    ):
 
         gha_edges = np.arange(gha_min, gha_max, gha_bin_size)
         if np.isclose(gha_max, gha_edges.max() + gha_bin_size):
@@ -1428,9 +1547,10 @@ class Level2(_Level):
 
         # Averaging data within GHA bins
         weights = np.zeros((len(level1), len(gha_edges) - 1, level1[0].freq.n))
-        spectra = np.zeros((len(level1), len(gha_edges) - 1, level1[0].freq.n))
+        resids = np.zeros((len(level1), len(gha_edges) - 1, level1[0].freq.n))
+        params = np.zeros((len(level1), len(gha_edges) - 1, l1_params[0].shape[-1]))
 
-        pbar = tqdm.tqdm(enumerate(level1), unit="files", total=len(level1))
+        pbar = tqdm.tqdm(enumerate(level1), unit="files", total=len(level1), disable=not use_pbar)
         for i, l1 in pbar:
             pbar.set_description(f"GHA Binning for {l1.filename.name}")
 
@@ -1441,29 +1561,19 @@ class Level2(_Level):
             if flags:
                 l1_weights[flags[i]] = 0
 
-            for j, gha_low in enumerate(gha_edges[:-1]):
+            params[i], resids[i], weights[i] = tools.model_bin_gha(
+                l1_params[i], l1_resids[i], l1_weights, gha, gha_edges
+            )
 
-                mask = (gha >= gha_low) & (gha < gha_edges[j + 1])
-                spec = l1.spectrum[mask]
-
-                wght = l1_weights[mask]
-
-                if np.any(wght):
-                    spec_mean, wght_mean = tools.weighted_mean(spec, weights=wght, axis=0)
-
-                    # Store this iteration
-                    spectra[i, j] = spec_mean
-                    weights[i, j] = wght_mean
-
-        return spectra, weights, gha_edges
+        return params, resids, weights, gha_edges
 
 
-class Level3(_Level):
+class Level3(_Level, _Level2Plus):
     _structure = {
         "frequency": None,
         "spectra": {
             "weights": None,
-            "spectrum": None,
+            "resids": None,
         },  # All spectra components assumed to be the same shape, with last axis being frequency.
         "ancillary": {"std_dev": None, "years": None},
         "meta": None,
@@ -1494,8 +1604,8 @@ class Level3(_Level):
 
         Parameters
         ----------
-        level4 : :class:`Level4` instance
-            The level4 object to convert.
+        level2 : :class:`Level2` instance
+            The level2 object to convert.
         day_range : 2-tuple
             Min and max days to include (from a given year).
         ignore_days : sequence
@@ -1543,7 +1653,7 @@ class Level3(_Level):
                 # *keep* for each GHA.
                 gha_filter = yaml.load(fl, Loader=yaml.FullLoader)
 
-            spec, wght = [], []
+            resid, wght = [], []
             gha_edges = level2.ancillary["gha_edges"]
             for i, (low, high) in enumerate(zip(gha_edges[:-1], gha_edges[1:])):
                 gha_range = range(int(np.floor(low)), int(np.floor(high)))
@@ -1553,36 +1663,39 @@ class Level3(_Level):
 
                 for j, day in enumerate(days):
                     if all(day in g for g in good_days) and day not in ignore_days:
-                        spec.append(level2.spectrum[j, i, freq.mask])
+                        resid.append(level2.spectra["resids"][j, i, freq.mask])
                         wght.append(level2.weights[j, i, freq.mask])
 
-            spec = np.array(spec)
+            resid = np.array(resid)
             wght = np.array(wght)
 
         else:
-            spec = level2.spectrum[:, :, freq.mask]
+            resid = level2.spectra["resids"][:, :, freq.mask]
             wght = level2.weights[:, :, freq.mask]
 
         # Perform xRFI on GHA-averaged spectra.
         if xrfi_pipe:
-            for s, w in zip(spec, wght):
-                tools.run_xrfi_pipe(s, w <= 0, xrfi_pipe)
+            for r, w in zip(resid, wght):
+                tools.run_xrfi_pipe(r, w <= 0, xrfi_pipe)
 
-        # Take mean over nights.
-        spec, wght = tools.weighted_mean(np.array(spec), np.array(wght), axis=0)
+        # Take mean over nights. No need to do unbiased weighted mean here, since
+        # each night should be drawn from same distribution, ideally.
+        params = np.nanmean(level2.ancillary["model_params"], axis=0)
+        resid, wght = tools.weighted_mean(np.array(resid), np.array(wght), axis=0)
 
+        # Average in frequency
         if freq_resolution:
-            f, p, w, s = tools.average_in_frequency(
-                spec, freq.freq, weights=wght, resolution=freq_resolution
+            f, r, w, s = tools.average_in_frequency(
+                resid, freq.freq, weights=wght, resolution=freq_resolution
             )
         else:
             f = freq.freq
-            p = spec
+            r = resid
             w = wght
             s = np.zeros_like(wght)
 
         data = {
-            "spectrum": p,
+            "resids": r,
             "weights": w,
         }
 
@@ -1592,22 +1705,23 @@ class Level3(_Level):
             "ignore_days": ignore_days,
             "gha_filter_file": gha_filter_file or "",
             "xrfi_pipe": xrfi_pipe,
+            "model_params": params,
             **level2.meta,
         }
 
         return f, data, ancillary, meta
 
 
-class Level4(_Level):
+class Level4(_Level, _Level2Plus):
     """
     A Level-4 Calibrated Spectrum.
 
-    This step performs a final average over GHA to yield a simple spectrum of
-    frequency. It also allows a final averaging in frequency after the GHA average.
+    This step performs a final average over GHA to yield a GHA vs frequency dataset
+    that is as averaged as one wants.
 
     Parameters
     ----------
-    level3 : :class:`Level5` instance
+    level3 : :class:`Level3` instance
         The Level3 object to convert.
     f_low : float, optional
         The min frequency to keep in the final average.
@@ -1636,7 +1750,7 @@ class Level4(_Level):
         "frequency": None,
         "spectra": {
             "weights": None,
-            "spectrum": None,
+            "resids": None,
         },  # All spectra components assumed to be the same shape, with last axis being frequency.
         "ancillary": {
             "std_dev": None,
@@ -1657,38 +1771,50 @@ class Level4(_Level):
         f_high: Optional[float] = None,
         ignore_freq_ranges: Optional[Sequence[Tuple[float, float]]] = None,
         freq_resolution: Optional[float] = None,
+        gha_min: float = 0,
+        gha_max: float = 24,
+        gha_bin_size: float = 24,
         xrfi_pipe: [None, dict] = None,
     ):
         xrfi_pipe = xrfi_pipe or {}
         meta = {
             "ignore_freq_ranges": ignore_freq_ranges,
             "xrfi_pipe": xrfi_pipe,
+            "gha_min": gha_min,
+            "gha_max": gha_max,
+            "gha_bin_size": gha_bin_size,
             **level3.meta,
         }
 
         freq = FrequencyRange(level3.raw_frequencies, f_low=f_low, f_high=f_high)
 
-        spec = level3.spectrum[:, freq.mask]
+        resid = level3.resids[:, freq.mask]
         wght = level3.weights[:, freq.mask]
 
         # Another round of XRFI
-        tools.run_xrfi_pipe(spec, wght, xrfi_pipe)
+        tools.run_xrfi_pipe(resid, wght, xrfi_pipe)
 
         if ignore_freq_ranges:
             for (low, high) in ignore_freq_ranges:
                 wght[:, (freq.freq >= low) & (freq.freq <= high)] = 0
 
         if freq_resolution:
-            f, spec, wght, s = tools.average_in_frequency(
-                spec, freq.freq, wght, resolution=freq_resolution
+            f, resid, wght, s = tools.average_in_frequency(
+                resid, freq.freq, wght, resolution=freq_resolution
             )
         else:
             f = freq.freq
             s = level3.ancillary["std_dev"]
 
-        spec, wght = tools.weighted_mean(spec, wght, axis=0)
+        gha_edges = np.arange(gha_min, gha_max, gha_bin_size)
+        if np.isclose(gha_max, gha_edges.max() + gha_bin_size):
+            gha_edges = np.concatenate((gha_edges, [gha_edges.max() + gha_bin_size]))
 
-        data = {"spectrum": spec, "weights": wght}
+        params, resid, wght = tools.model_bin_gha(
+            level3.ancillary["model_params"], resid, wght, level3.ancillary["gha"], gha_edges
+        )
+
+        data = {"resids": resid, "weights": wght}
 
         ancillary = {"std_dev": s}
 
