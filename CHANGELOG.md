@@ -4,6 +4,10 @@
 
 ## Version 2.0.0
 
+### Added
+
+- Ability to pass arbitrary settings on the command line to the "level" command
+
 ### Changed
 
 - Frequency and GHA averaging now done via averaging model and residuals.

@@ -5,9 +5,11 @@ from typing import Tuple, List, Sequence, Dict, Union
 from dataclasses import dataclass
 import h5py
 import yaml
-from edges_io.logging import logger
+import logging
 from multiprocess.pool import Pool
 from multiprocessing import cpu_count
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass

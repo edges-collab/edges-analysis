@@ -24,20 +24,20 @@ from edges_cal import (
 )
 import p_tqdm
 from edges_io.auxiliary import auxiliary_data
-from edges_io.logging import logger
+import logging
 from edges_io.h5 import HDF5Object
 import time
 import attr
 from pathlib import Path
 from cached_property import cached_property
 from read_acq import decode_file
-
-# import src.edges_analysis
 from . import s11 as s11m, loss, beams, tools, filters, coordinates
 from .coordinates import get_jd, dt_from_jd
 from ..config import config
 from .. import const
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 
 @attr.s
@@ -66,10 +66,6 @@ class _Level(HDF5Object):
         "meta": None,
     }
 
-    def clear(self):
-        """Clears all in-memory data that exists in the base file."""
-        self.__memcache__ = {}
-
     @classmethod
     def _get_previous_level(cls):
         _prev_level = int(cls.__name__[-1]) - 1
@@ -85,9 +81,11 @@ class _Level(HDF5Object):
 
         if not isinstance(prev_level, _prev_level):
             if hasattr(prev_level, "__len__"):
-                prev_level = [
-                    p if isinstance(p, _prev_level) else _prev_level(p) for p in prev_level
-                ]
+                with warnings.catch_warnings():
+                    warnings.filterwarnings(action="ignore", category=UserWarning)
+                    prev_level = [
+                        p if isinstance(p, _prev_level) else _prev_level(p) for p in prev_level
+                    ]
             else:
                 prev_level = _prev_level(prev_level)
 
@@ -138,13 +136,6 @@ class _Level(HDF5Object):
         return self.load("meta")
 
     @property
-    def spectrum(self):
-        try:
-            return self.spectra.load("spectrum")
-        except AttributeError:
-            return self.spectra["spectrum"]
-
-    @property
     def raw_frequencies(self):
         return self.load("frequency")
 
@@ -167,6 +158,14 @@ class _Level(HDF5Object):
         except AttributeError:
             return self.spectra["weights"]
 
+    @property
+    def resids(self):
+        """Residuals of all spectra after being fit by the fiducial model."""
+        try:
+            return self.spectra.load("resids")
+        except AttributeError:
+            return self.spectra["resids"]
+
 
 @attr.s
 class _Level2Plus:
@@ -178,23 +177,39 @@ class _Level2Plus:
         set.
         """
         return mdl.Model._models[self.meta["model_basis"].lower()](
-            default_x=self.freq.freq_recentred, n_terms=self.meta["model_nterms"]
+            default_x=self.freq.freq, n_terms=self.meta["model_nterms"]
         )
 
-    def get_model(self, indx: int) -> np.ndarray:
-        """Obtain the fiducial fitted model spectrum for integration/gha at indx."""
-        p = self.ancillary["model_params"][indx]
-        return self.model(parameters=p)
-
     @property
-    def resids(self):
-        """Residuals of all spectra after being fit by the fiducial model."""
-        return self.spectra["resids"]
+    def model_params(self):
+        return self.ancillary["model_params"]
+
+    def get_model(self, indx: [int, List[int]]) -> np.ndarray:
+        """Obtain the fiducial fitted model spectrum for integration/gha at indx."""
+        p = self.model_params
+        if not hasattr(indx, "__len__"):
+            indx = [indx]
+        assert (
+            len(indx) == self.resids.ndim - 1
+        ), "indx must have one element for each axis of resids, except the last."
+
+        for i in indx:
+            p = p[i]
+
+        return self.model(parameters=p)
 
     @property
     def spectrum(self):
         """The GHA-averaged spectra for each night."""
-        return np.array([self.get_model(i) for i in range(len(self.resids))]) + self.resids
+        indx = np.indices(self.resids.shape[:-1]).reshape((self.resids.ndim - 1, -1)).T
+        out = np.zeros_like(self.resids)
+        for i in indx:
+            ix = tuple(np.atleast_2d(i).T.tolist())
+            out[ix] = self.get_model(i) + self.resids[ix]
+        return out
+
+
+#        return np.array([self.get_model(i) for i in range(len(self.resids))]) + self.resids
 
 
 @attr.s
@@ -347,6 +362,13 @@ class Level1(_Level):
             },
             filename=str(out_file),
         )
+
+    @property
+    def spectrum(self):
+        try:
+            return self.spectra.load("spectrum")
+        except AttributeError:
+            return self.spectra["spectrum"]
 
     def get_subset(self, integrations=100):
         """Write a subset of the data to a new mock Level1 file."""
@@ -992,7 +1014,7 @@ class Level1(_Level):
 
     def get_model_parameters(
         self, model: str = "LINLOG", n_terms: int = 5, resolution: [None, float] = None, **kwargs
-    ):
+    ) -> Tuple[mdl.Model, np.ndarray, np.ndarray]:
         """
         Determine a callable model of the spectrum at a given time, optionally
         computed over averaged original data.
@@ -1030,9 +1052,7 @@ class Level1(_Level):
         freq = FrequencyRange(f)
 
         if not isinstance(model, mdl.Model):
-            model = mdl.Model._models[model.lower()](
-                default_x=freq.freq_recentred, n_terms=n_terms, **kwargs
-            )
+            model = mdl.Model._models[model.lower()](default_x=freq.freq, n_terms=n_terms, **kwargs)
 
         params = np.zeros((len(s), model.n_terms))
         resids = np.zeros(s.shape)
@@ -1634,19 +1654,26 @@ class Level2(_Level, _Level2Plus):
 
         # Determine models for the individual spectra
         model = mdl.Model._models[model_basis.lower()](
-            default_x=level1[0].freq.freq_recentred, n_terms=model_nterms
+            default_x=level1[0].freq.freq, n_terms=model_nterms
         )
+        logger.info(f"Determining '{model.__class__.__name__}' models for each integration...")
+
         model_params = []
         model_resids = []
-        for l1 in level1:
-            _, params, resids = l1.get_model_parameters(model)
-            model_params.append(params)
-            model_resids.append(resids)
 
-        # Bin in GHA using the models and residuals (see memo #183:
-        # http://loco.lab.asu.edu/wp-content/uploads/2020/10/averaging_with_weights.pdf)
+        def get_params_resids(l1):
+            _, params, resids = l1.get_model_parameters(model)
+            return params, resids
+
+        iterator = p_tqdm.p_imap(get_params_resids, level1, num_cpus=min(n_threads, len(level1)))
+
+        for p, r in iterator:
+            model_params.append(p)
+            model_resids.append(r)
+
+        # Bin in GHA using the models and residuals
         params, resids, weights, gha_edges = cls.bin_gha(
-            level1, gha_min, gha_max, gha_bin_size, flags=flags
+            level1, model_params, model_resids, gha_min, gha_max, gha_bin_size, flags=flags
         )
 
         data = {"weights": weights, "resids": resids}
@@ -1707,6 +1734,7 @@ class Level2(_Level, _Level2Plus):
             ]
         )
 
+    @classmethod
     def _run_rms_filter(
         cls,
         rms_filter_file: [None, str, Path, filters.RMSInfo],
@@ -1772,7 +1800,7 @@ class Level2(_Level, _Level2Plus):
 
             l1_weights = l1.weights.copy()
             if flags is not None:
-                l1_weights[flags] = 0
+                l1_weights[flags[i]] = 0
 
             params[i], resids[i], weights[i] = tools.model_bin_gha(
                 l1_params[i], l1_resids[i], l1_weights, gha, gha_edges
@@ -1782,28 +1810,16 @@ class Level2(_Level, _Level2Plus):
 
     def plot_daily_residuals(
         self,
-        n_terms: int = 5,
-        gha_model_type: str = "polynomial",
-        freq_model_type: str = "polynomial",
         separation: float = 20,
         ax: [None, plt.Axes] = None,
         gha_min: float = 0,
         gha_max: float = 24,
-        freq_kwargs: [Dict, None] = None,
-        gha_kwargs: [Dict, None] = None,
-        quick: bool = True,
     ) -> plt.Axes:
         """
         Make a single plot of residuals for each day in the dataset.
 
         Parameters
         ----------
-        n_terms
-            Number of terms in each fit.
-        gha_model_type
-            The kind of model to fit to the GHA structure (in order to average).
-        freq_model_type
-            The kind of model to fit to the frequency spectra (to get residuals).
         separation
             The separation between residuals in K (on the plot).
         ax
@@ -1812,49 +1828,61 @@ class Level2(_Level, _Level2Plus):
             A minimum GHA to include in the averaged residuals.
         gha_max
             A maximum GHA to include in the averaged residuals.
-        freq_kwargs
-            Arguments to the model fit to frequency
-        gha_kwargs
-            Arguments to the model fit to GHA.
-        quick
-            Whether to use a quick weighted average over GHA.
 
         Returns
         -------
         ax
             The matplotlib Axes on which the plot is made.
         """
-        freq_kwargs = freq_kwargs or {}
-        gha_kwargs = gha_kwargs or {}
-
         gha = (self.ancillary["gha_edges"][1:] + self.ancillary["gha_edges"][:-1]) / 2
-        model_freq = mdl.Model._models[freq_model_type.lower()](
-            n_terms=n_terms, default_x=self.freq.freq, **freq_kwargs
-        )
 
         if ax is None:
             fig, ax = plt.subplots(1, 1, figsize=(7, 12))
 
         mask = (gha > gha_min) & (gha < gha_max)
-        model_gha = mdl.Model._models[gha_model_type.lower()](
-            n_terms=n_terms, default_x=gha[mask], **gha_kwargs
-        )
-        for ix, (spec, weight) in enumerate(zip(self.spectrum, self.weights)):
-            mean_spec = tools.non_stationary_weighted_average(
-                data=spec[mask].T, x=gha[mask], weights=weight[mask].T, model=model_gha, quick=quick
+
+        for ix, (param, resid, weight) in enumerate(
+            zip(self.model_params, self.resids, self.weights)
+        ):
+            mean_p, mean_r, mean_w = tools.model_bin_gha(
+                params=param[mask],
+                resids=resid[mask],
+                weights=weight[mask],
+                gha=gha[mask],
+                bins=np.array([gha_min, gha_max]),
             )
-            w = np.sum(weight, axis=0)
-            fit = model_freq.fit(ydata=mean_spec, weights=w)
-            ax.plot(self.freq.freq, fit.residual - ix * separation)
+            # fit = model_freq.fit(ydata=mean_spec, weights=w)
+            ax.plot(self.freq.freq, mean_r[0] - ix * separation)
             ax.text(
                 self.freq.max + 5,
                 -ix * separation,
-                f'{self.unflagged_level1[ix].meta["day"]} RMS={fit.weighted_rms()}',
+                f'{self.unflagged_level1[ix].meta["day"]} RMS={np.sqrt(tools.weighted_mean(data=mean_r[0]**2, weights=mean_w[0])[0]):.2f}',
             )
 
         return ax
 
-    def plot_waterfall(self, day=None, indx=None, quantity="flagged"):
+    def plot_waterfall(
+        self,
+        day: Optional[int] = None,
+        indx: Optional[int] = None,
+        flagged: bool = False,
+        quantity: str = "spectrum",
+    ):
+        """
+        Make a single waterfall plot of any 2D quantity (weights, spectrum, resids).
+
+        Parameters
+        ----------
+        day
+            The calendar day to plot (eg. 237). Must exist in the dataset
+        indx
+            The index representing the day to plot. Can be passed instead of `day`.
+        flagged
+            Whether to render pixels that are flagged as NaN.
+        quantity
+            The quantity to plot -- must exist as an attribute and have the same shape
+            as spectrum/resids/weights.
+        """
         if day is not None:
             indx = self.unflagged_days.tolist().index(day)
 
@@ -1867,14 +1895,14 @@ class Level2(_Level, _Level2Plus):
             self.ancillary["gha_edges"].min(),
             self.ancillary["gha_edges"].max(),
         )
-        if quantity == "flagged":
-            plt.imshow(
-                np.where(self.weights[indx] > 0, self.spectrum[indx], np.nan),
-                aspect="auto",
-                extent=extent,
-            )
-        else:
-            plt.imshow(self.spectrum, aspect="auto", extent=extent)
+
+        q = getattr(self, quantity)
+        assert q.shape == self.resids.shape
+
+        if flagged:
+            q = np.where(self.weights[indx] > 0, q[indx], np.nan)
+
+        plt.imshow(q, aspect="auto", extent=extent)
 
         plt.xlabel("Frequency [MHz]")
         plt.ylabel("GHA (hours)")
@@ -2078,13 +2106,18 @@ class Level4(_Level, _Level2Plus):
     """
 
     _structure = {
-        "frequency": None,
+        "frequency": lambda x: (x.ndim == 1 and x.dtype in (float, np.float)),
         "spectra": {
-            "weights": None,
-            "resids": None,
+            "weights": lambda x: (x.ndim == 2 and x.dtype in (float, np.float)),
+            "resids": lambda x: (x.ndim == 2 and x.dtype in (float, np.float)),
         },  # All spectra components assumed to be the same shape, with last axis being frequency.
-        "ancillary": {},
-        "meta": {},
+        "ancillary": {
+            "gha_edges": lambda x: (x.ndim == 1 and x.dtype in (int, float, np.int, np.float))
+        },
+        "meta": {
+            "f_low": lambda x: isinstance(x, float),
+            "f_high": lambda x: isinstance(x, float),
+        },
     }
 
     @cached_property
@@ -2140,7 +2173,11 @@ class Level4(_Level, _Level2Plus):
             gha_edges = np.concatenate((gha_edges, [gha_edges.max() + gha_bin_size]))
 
         params, resid, wght = tools.model_bin_gha(
-            level3.ancillary["model_params"], resid, wght, level3.ancillary["gha"], gha_edges
+            level3.ancillary["model_params"],
+            resid,
+            wght,
+            (level3.gha_edges[1:] + level3.gha_edges[:-1]) / 2,
+            gha_edges,
         )
 
         data = {"resids": resid, "weights": wght}
