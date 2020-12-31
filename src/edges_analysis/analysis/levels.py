@@ -1,3 +1,4 @@
+from __future__ import annotations
 from os.path import dirname, basename
 import os
 from typing import Tuple, Optional, Sequence, List, Union, Dict
@@ -14,6 +15,8 @@ from multiprocess.pool import Pool
 from multiprocessing import cpu_count
 import h5py
 from functools import partial
+import inspect
+import functools
 
 import numpy as np
 from edges_cal import (
@@ -40,14 +43,59 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 
+def add_structure(cls, spec=False):
+    """Make sure user is logged in before proceeding"""
+
+    @functools.wraps(cls)
+    def wrapper_add_structure(*args, **kwargs):
+        if spec:
+            spectra = {
+                "weights": lambda x: x.ndim == 2 and x.dtype.name.startswith("float"),
+                "spectrum": lambda x: x.ndim == 2 and x.dtype.name.startswith("float"),
+                "Q": lambda x: x.ndim == 2 and x.dtype.name.startswith("float"),
+                "switch_powers": lambda x: x.ndim == 3 and x.dtype.name.startswith("float"),
+            }
+        else:
+            spectra = {
+                "weights": lambda x: x.ndim == 2 and x.dtype.name.startswith("float"),
+                "resids": lambda x: x.ndim == 2 and x.dtype.name.startswith("float"),
+            }
+
+        structure = {
+            "frequency": lambda x: x.ndim == 1 and x.dtype.name.startswith("float"),
+            "spectra": spectra,
+            "ancillary": cls._ancillary,  # A structured array with last axis being time
+        }
+
+        meta = cls._meta
+
+        if hasattr(cls, "_from_prev_level"):
+            # Automatically add keys from the signature of _from_prev_level
+            sig = inspect.signature(cls._from_prev_level)
+
+            for k, v in sig.parameters.items():
+                if k != "prev_level" and k not in meta:
+                    meta[k] = None
+
+        structure["meta"] = meta
+        cls._structure = structure
+
+        cls.from_previous_level.__doc__ = cls._from_prev_level.__doc__
+
+        return cls(*args, **kwargs)
+
+    return wrapper_add_structure
+
+
 @attr.s
 class _Level(HDF5Object):
     """Base object for formal data reduction levels in edges-analysis.
 
-    The structure is such that three groups will always be available:
-    * spectra : containing frequency-based data. Arrays here include ``frequency``,
-      ``antenna_temp`` and possibly ``weights``. Each of these will always have
-      the frequency as their _last_ axis.
+    The structure is such that four groups will always be available:
+    * frequency: the frequencies at which all else is measured.
+    * spectra : containing frequency-based data. Arrays here include ``weights`` and
+      possibly ``spectrum`` or ``resids`` (depending on the level).
+      Each of these will always have the frequency as their _last_ axis.
     * ancillary : containing non-defining data that is not frequency based (usually
       time based). May contain arrays such as ``time``, ``lst``, ``ambient_temp`` etc.
     * meta : parameters defining the data (eg. input parameters) or other scalars
@@ -55,16 +103,6 @@ class _Level(HDF5Object):
     """
 
     default_root = config["paths"]["field_products"]
-
-    _structure = {
-        "frequency": None,
-        "spectra": {
-            "weights": None,
-            "spectrum": None,
-        },  # All spectra components assumed to be the same shape, with last axis being frequency.
-        "ancillary": None,  # A structured array with last axis being time / GHA
-        "meta": None,
-    }
 
     @classmethod
     def _get_previous_level(cls):
@@ -127,10 +165,6 @@ class _Level(HDF5Object):
         else:
             return [self._get_previous_level()(fname) for fname in fnames]
 
-    @classmethod
-    def _from_prev_level(cls, prev_level, **kwargs):
-        pass
-
     @property
     def meta(self):
         return self.load("meta")
@@ -165,6 +199,27 @@ class _Level(HDF5Object):
             return self.spectra.load("resids")
         except AttributeError:
             return self.spectra["resids"]
+
+    @classmethod
+    def _get_meta(cls, locals):
+        sig = inspect.signature(cls._from_prev_level)
+        out = {locals[k] for k in sig.parameters if k != "prev_level"}
+
+        for k in out:
+            # Some rules for serialising to HDF5
+            if isinstance(out[k], dict):
+                out[k] = json.dumps(out[k])
+            elif out[k] is None:
+                out[k] = ""
+            elif isinstance(out[k], Path):
+                out[k] = str(out[k])
+
+        out.update(cls._extra_meta(**locals))
+        return out
+
+    @classmethod
+    def _extra_meta(cls, **kwargs):
+        return {}
 
 
 @attr.s
@@ -213,66 +268,90 @@ class _Level2Plus:
 
 
 @attr.s
+@add_structure(spec=True)
 class Level1(_Level):
     """Object representing the level-1 stage of processing.
 
-    This object essentially represents a Calibrated spectrum, replete with ancillary
-    metadata.
+    This object essentially represents a Calibrated spectrum.
 
-    Attributes
-    ----------
-    spectra : dict
-        Containing
-        * ``frequency``: the raw frequencies of the spectrum.
-        * ``antenna_temp``: the nominal un-calibrated temperature measured by the antenna.
-        * ``switch_powers``: (3, NFREQ) array containing the 3-switch position power
-          measurements from the antenna.
-        * ``Q``: (Q = (p0 - p1)/(p0 - p2))
-    ancillary : dict
-        Containing:
-        * ``times``: string representations of the time of each switch-0 reading.
-        * ``adcmin``: Minimum analog-to-digital converter value (size NTIMES)
-        * ``adcmax``: Maximum analog-to-digital converter value (size NTIMES)
-    meta : dict
-        Containing:
-        * ``year``: integer year that the data was taken (first measurement in file)
-        * ``day``: integer day that the data was taken (first measurement in file)
-        * ``hour``: integer hour that the data was taken (first measurement in file)
-        * ``temperature``: not sure what temperature this is ?? # TODO
-        * ``nblk``: also not sure what this is # TODO
+    See :class:`_Level` for documentation about the various datasets within this class
+    instance. Note that you can always check which data is inside each group by checking
+    its ``.keys()``.
 
+    Create the class either directly from a level-1 file (via normal instantiation), or
+    by calling :method:`from_acq` on a raw ACQ file (this does the calibration).
     """
 
-    _structure = {
-        "frequency": None,
-        # All spectra components assumed to be the same shape, with last axis being frequency.
-        "spectra": {
-            "weights": None,
-            "spectrum": None,
-            "Q": None,
-            "switch_powers": None,
-        },
-        "ancillary": None,  # A structured array with last axis being time
-        "meta": {},
-    }
+    _ancillary = None
+    _meta = None
 
     @classmethod
     def from_acq(
         cls,
-        filename,
-        band,
-        calfile,
-        s11_path,
-        weather_file=None,
-        thermlog_file=None,
-        out_file=None,
-        progress=True,
-        leave_progress=True,
+        filename: [str, Path],
+        band: str,
+        calfile: [str, Path],
+        s11_path: [str, Path],
+        weather_file: Optional[Union[str, Path]] = None,
+        thermlog_file: Optional[Union[str, Path]] = None,
+        out_file: Optional[Union[str, Path]] = None,
+        progress: bool = True,
+        leave_progress: bool = True,
         xrfi_pipe: [None, dict] = None,
         s11_file_pattern: str = r"{y}_{jd}_{h}_*_input{input}.s1p",
         ignore_s11_files: [None, List[str]] = None,
         **cal_kwargs,
-    ):
+    ) -> Level1:
+        """
+        Create the object directly from calibrated data.
+
+        Parameters
+        ----------
+        filename
+            The filename of the ACQ file to read.
+        band
+            Defines the instrument that took the data (mid, low, high).
+        calfile
+            A file containing the output of :method:`edges_cal.CalibrationObservation.write` --
+            i.e. all the information required to calibrate the raw data. Determination of
+            calibration parameters occurs externally and saved to this file.
+        s11_path
+            Path to the receiver S11 information relevant to this observation.
+        weather_file
+            A weather file to use in order to capture that information (may find the
+            default weather file automatically).
+        thermlog_file
+            A thermlog file to use in order to capture that information (may find the
+            default thermlog file automatically).
+        out_file
+            Specify the name of a file to output this particular data to. By default,
+            save it in the level cache with the same name as the input file.
+        progress
+            Whether to show a progress bar.
+        leave_progress
+            Whether to leave the progress bar on the screen at the end.
+        xrfi_pipe
+            A dictionary in which keys specify xrfi method names (see :module:`edges_cal.xrfi`)
+            and values are dictionaries which specify the parameters to be passed to those
+            methods (not requiring the spectrum/weights arguments).
+        s11_file_pattern
+            A format string defining the naming pattern of S11 files at ``s11_path``.
+            This is used to automatically find the S11 file closest in time to the
+            observation, if the ``s11_path`` is not explicit (i.e. it is a directory).
+        ignore_s11_files
+            A list of paths to ignore when attempting to find the S11 file closest to
+            the observation (perhaps they are known to be bad).
+
+        Other Parameters
+        ----------------
+        All other parameters are passed to :method:`_calibrate` -- see its documentation
+        for details.
+
+        Returns
+        -------
+        level1
+            An instantiated :class:`Level1` object.
+        """
         t = time.time()
         Q, p, ancillary = decode_file(
             filename,
@@ -1458,20 +1537,16 @@ class Level2(_Level, _Level2Plus):
         Containing all input parameters, and the number of files used.
     """
 
-    _structure = {
-        "frequency": None,
-        "spectra": {
-            "weights": None,
-            "resids": None,
-        },
-        "ancillary": {
-            "years": None,
-            "days": None,
-            "hours": None,
-            "model_params": None,
-            "files_flagged": None,
-        },
-        "meta": {},
+    _ancillary = {
+        "years": lambda x: x.ndim == 1 and x.dtype.name.startswith("int"),
+        "days": lambda x: x.ndim == 1 and x.dtype.name.startswith("int"),
+        "hours": lambda x: x.ndim == 1 and x.dtype.name.startswith("int"),
+        "model_params": lambda x: x.ndim == 3 and x.dtype.name.startswith("float"),
+        "files_flagged": lambda x: x.ndim == 1 and x.dtype.name.startswith("bool"),
+    }
+
+    _meta = {
+        "n_files": lambda x: isinstance(x, int) and x > 0,
     }
 
     @classmethod
@@ -1533,7 +1608,7 @@ class Level2(_Level, _Level2Plus):
     @classmethod
     def _from_prev_level(
         cls,
-        level1: List[Level1],
+        prev_level: List[Level1],
         gha_min: float = 0.0,
         gha_max: float = 24.0,
         gha_bin_size: float = 0.1,
@@ -1568,47 +1643,20 @@ class Level2(_Level, _Level2Plus):
         if gha_max < 0 or gha_max > 24:
             raise ValueError("gha_max must be between 0 and 24")
 
-        meta = {
-            "n_files": len(level1),
-            "gha_min": gha_min,
-            "gha_max": gha_max,
-            "gha_bin_size": gha_bin_size,
-            "sun_el_max": sun_el_max,
-            "moon_el_max": moon_el_max,
-            "ambient_humidity_max": ambient_humidity_max,
-            "min_receiver_temp": min_receiver_temp,
-            "max_receiver_temp": max_receiver_temp,
-            "xrfi_pipe": json.dumps(xrfi_pipe),  # TODO: this is not wonderful.
-            "model_nterms": model_nterms,
-            "model_basis": model_basis,
-        }
-
-        if do_total_power_filter:
-            meta["n_poly_tp_filter"] = n_poly_tp_filter
-            meta["n_sigma_tp_filter"] = n_sigma_tp_filter
-            meta["bands_tp_filter"] = str(bands_tp_filter)
-            meta["std_thresholds_tp_filter"] = str(std_thresholds_tp_filter)
-
-        if do_rms_filter:
-            meta["bands"] = str(rms_bands)
-            meta["n_poly_rms"] = n_poly_rms
-            meta["n_sigma_rms"] = n_sigma_rms
-            meta["n_std_rms"] = n_std_rms
-            meta["n_terms_rms"] = n_terms_rms
-            meta["n_files_rms"] = n_files_rms
-
         # Sort the inputs in ascending date.
-        level1 = sorted(level1, key=lambda x: (x.meta["year"], x.meta["day"], x.meta["hour"]))
+        prev_level = sorted(
+            prev_level, key=lambda x: (x.meta["year"], x.meta["day"], x.meta["hour"])
+        )
 
-        orig_dates = [(x.meta["year"], x.meta["day"], x.meta["hour"]) for x in level1]
+        orig_dates = [(x.meta["year"], x.meta["day"], x.meta["hour"]) for x in prev_level]
 
-        years = [x.meta["year"] for x in level1]
-        days = [x.meta["day"] for x in level1]
-        hours = [x.meta["hour"] for x in level1]
+        years = [x.meta["year"] for x in prev_level]
+        days = [x.meta["day"] for x in prev_level]
+        hours = [x.meta["hour"] for x in prev_level]
 
-        flags, level1 = cls.run_filter(
+        flags, prev_level = cls.run_filter(
             "aux",
-            level1,
+            prev_level,
             sun_el_max=sun_el_max,
             moon_el_max=moon_el_max,
             ambient_humidity_max=ambient_humidity_max,
@@ -1616,12 +1664,12 @@ class Level2(_Level, _Level2Plus):
             max_receiver_temp=max_receiver_temp,
         )
         if xrfi_pipe:
-            flags, level1 = cls.run_filter("rfi", level1, flags=flags, xrfi_pipe=xrfi_pipe)
+            flags, prev_level = cls.run_filter("rfi", prev_level, flags=flags, xrfi_pipe=xrfi_pipe)
 
         if do_total_power_filter:
-            flags, level1 = cls.run_filter(
+            flags, prev_level = cls.run_filter(
                 "total_power",
-                level1,
+                prev_level,
                 flags=flags,
                 n_poly=n_poly_tp_filter,
                 n_sigma=n_sigma_tp_filter,
@@ -1630,10 +1678,10 @@ class Level2(_Level, _Level2Plus):
             )
 
         if do_rms_filter:
-            flags, level1 = cls._run_rms_filter(
+            flags, prev_level = cls._run_rms_filter(
                 rms_filter_file=rms_filter_file,
                 flags=flags,
-                level1=level1,
+                level1=prev_level,
                 bands=rms_bands,
                 n_poly=n_poly_rms,
                 n_sigma=n_sigma_rms,
@@ -1642,19 +1690,17 @@ class Level2(_Level, _Level2Plus):
                 n_files=n_files_rms,
             )
 
-        final_dates = [(x.meta["year"], x.meta["day"], x.meta["hour"]) for x in level1]
+        final_dates = [(x.meta["year"], x.meta["day"], x.meta["hour"]) for x in prev_level]
         files_flagged = np.array([date not in final_dates for date in orig_dates])
 
-        meta["n_files_flagged"] = sum(files_flagged)
-
-        n_files = len(level1) - meta["n_files_flagged"]
+        n_files = len(prev_level) - sum(files_flagged)
 
         if not n_files:
             raise Exception("All input files have been filtered completely.")
 
         # Determine models for the individual spectra
         model = mdl.Model._models[model_basis.lower()](
-            default_x=level1[0].freq.freq, n_terms=model_nterms
+            default_x=prev_level[0].freq.freq, n_terms=model_nterms
         )
         logger.info(f"Determining '{model.__class__.__name__}' models for each integration...")
 
@@ -1665,7 +1711,9 @@ class Level2(_Level, _Level2Plus):
             _, params, resids = l1.get_model_parameters(model)
             return params, resids
 
-        iterator = p_tqdm.p_imap(get_params_resids, level1, num_cpus=min(n_threads, len(level1)))
+        iterator = p_tqdm.p_imap(
+            get_params_resids, prev_level, num_cpus=min(n_threads, len(prev_level))
+        )
 
         for p, r in iterator:
             model_params.append(p)
@@ -1673,7 +1721,7 @@ class Level2(_Level, _Level2Plus):
 
         # Bin in GHA using the models and residuals
         params, resids, weights, gha_edges = cls.bin_gha(
-            level1, model_params, model_resids, gha_min, gha_max, gha_bin_size, flags=flags
+            prev_level, model_params, model_resids, gha_min, gha_max, gha_bin_size, flags=flags
         )
 
         data = {"weights": weights, "resids": resids}
@@ -1687,7 +1735,14 @@ class Level2(_Level, _Level2Plus):
             "model_params": params,
         }
 
-        return level1[0].raw_frequencies, data, ancillary, meta
+        return prev_level[0].raw_frequencies, data, ancillary, cls._get_meta(locals())
+
+    @classmethod
+    def _extra_meta(cls, **kwargs):
+        return {
+            "n_files": len(kwargs["prev_level"]),
+            "n_files_flagged": sum(kwargs["files_flagged"]),
+        }
 
     @cached_property
     def calibration(self):
@@ -1910,15 +1965,13 @@ class Level2(_Level, _Level2Plus):
 
 
 class Level3(_Level, _Level2Plus):
-    _structure = {
-        "frequency": None,
-        "spectra": {
-            "weights": None,
-            "resids": None,
-        },  # All spectra components assumed to be the same shape, with last axis being frequency.
-        "ancillary": {"years": None, "gha_edges": None},
-        "meta": {},
+    _ancillary = {
+        "years": lambda x: x.ndim == 1 and x.dtype.name.startswith("int"),
+        "gha_edges": lambda x: x.ndim == 1 and x.dtype.name.startswith("float"),
+        "model_params": lambda x: x.ndim == 2 and x.dtype.name.startswith("float"),
+        "std_dev": lambda x: x.ndim == 2 and x.dtype.name.startswith("float"),
     }
+    _meta = {}
 
     @cached_property
     def calibration(self):
@@ -2030,15 +2083,8 @@ class Level3(_Level, _Level2Plus):
             "model_params": params,
             "std_dev": s,
         }
-        meta = {
-            "day_range": day_range,
-            "ignore_days": ignore_days,
-            "gha_filter_file": gha_filter_file or "",
-            "xrfi_pipe": xrfi_pipe,
-            **level2.meta,
-        }
 
-        return f, data, ancillary, meta
+        return f, data, ancillary, cls._get_meta(locals())
 
     @property
     def gha_edges(self):
@@ -2105,20 +2151,8 @@ class Level4(_Level, _Level2Plus):
         * ``ignore_freq_ranges``: the list of ignored frequency ranges in the object.
     """
 
-    _structure = {
-        "frequency": lambda x: (x.ndim == 1 and x.dtype in (float, np.float)),
-        "spectra": {
-            "weights": lambda x: (x.ndim == 2 and x.dtype in (float, np.float)),
-            "resids": lambda x: (x.ndim == 2 and x.dtype in (float, np.float)),
-        },  # All spectra components assumed to be the same shape, with last axis being frequency.
-        "ancillary": {
-            "gha_edges": lambda x: (x.ndim == 1 and x.dtype in (int, float, np.int, np.float))
-        },
-        "meta": {
-            "f_low": lambda x: isinstance(x, float),
-            "f_high": lambda x: isinstance(x, float),
-        },
-    }
+    _ancillary = {"gha_edges": lambda x: x.ndim == 1 and x.dtype.name.startswith("float")}
+    _meta = None
 
     @cached_property
     def calibration(self):
@@ -2139,15 +2173,6 @@ class Level4(_Level, _Level2Plus):
         xrfi_pipe: [None, dict] = None,
     ):
         xrfi_pipe = xrfi_pipe or {}
-        meta = {
-            "ignore_freq_ranges": ignore_freq_ranges,
-            "xrfi_pipe": xrfi_pipe,
-            "gha_min": gha_min,
-            "gha_max": gha_max,
-            "gha_bin_size": gha_bin_size,
-            "freq_resolution": freq_resolution,
-            **level3.meta,
-        }
 
         freq = FrequencyRange(level3.raw_frequencies, f_low=f_low, f_high=f_high)
 
@@ -2181,7 +2206,6 @@ class Level4(_Level, _Level2Plus):
         )
 
         data = {"resids": resid, "weights": wght}
-
         ancillary = {"gha_edges": gha_edges}
 
-        return f, data, ancillary, meta
+        return f, data, ancillary, cls._get_meta(locals())
