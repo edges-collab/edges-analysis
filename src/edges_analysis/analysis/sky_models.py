@@ -91,7 +91,9 @@ class ConstantIndex(IndexModel):
         lon: [None, np.ndarray] = None,
         sky_model: [None, SkyModel] = None,
     ) -> np.ndarray:
-        return self.index
+        index = np.zeros(len(lat))
+        index[:] = self.index
+        return index
 
 
 class SkyModel:
@@ -194,7 +196,6 @@ class SkyModel:
         """
         lon, lat = self.lonlat
         index = index_model.get_index(lon, lat, self)
-
         f = freq / self.frequency
         Tcmb = 2.725
         scale = np.power.outer(f, -index)
