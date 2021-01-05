@@ -388,14 +388,7 @@ class BeamFactor(HDF5Object):
             "sky_model": lambda x: isinstance(x, str),
             "rotation_from_north": lambda x: isinstance(x, float),
             "index_model": lambda x: isinstance(x, str),
-            "sigma_deg": lambda x: isinstance(x, float),
-            "index_center": lambda x: isinstance(x, float),
-            "index_pole": lambda x: isinstance(x, float),
-            "band_deg": lambda x: isinstance(x, float),
-            "index_inband": lambda x: isinstance(x, float),
-            "index_outband": lambda x: isinstance(x, float),
             "reference_frequency": lambda x: isinstance(x, float),
-            "convolution_computation": lambda x: isinstance(x, str),
             "max_nside": lambda x: isinstance(x, (int, np.int64)),
         },
     }
@@ -410,7 +403,6 @@ def _iterate_through_lst_freq(
     )
 
     ground_gain = ground_loss(ground_loss_file, band=beam.instrument, freq=beam.frequency)
-
     galactic_coords = sky_model.get_sky_coords()
 
     # Reference UTC observation time. At this time, the LST is 0.1666 (00:10 Hrs LST) at the
@@ -419,7 +411,9 @@ def _iterate_through_lst_freq(
 
     # Advancing time (19:57 minutes UTC corresponds to 20 minutes LST)
     twenty_lst_min = dt.timedelta(minutes=19, seconds=57)
-
+    convol = []
+    antenna_temperature_above_horizon_list = np.zeros((len(lst), len(beam.frequency), len(sky_map[:,0])))
+    reftime_list = []
     for i in tqdm(range(len(lst)), unit="LST"):
         if i > 0:
             ref_time += twenty_lst_min * twenty_min_per_lst
@@ -443,7 +437,8 @@ def _iterate_through_lst_freq(
         horizon_mask = el >= 0
         az_above_horizon = az[horizon_mask]
         el_above_horizon = el[horizon_mask]
-
+        
+        reftime_list.append(ref_time)
         # Selecting sky data above the horizon
         sky_above_horizon = sky_map[horizon_mask, :]
 
@@ -462,14 +457,17 @@ def _iterate_through_lst_freq(
             if normalize_beam:
                 solid_angle = np.nansum(beam_above_horizon) / n_pix_tot_no_nan
                 beam_above_horizon *= ground_gain[j] / solid_angle
-
+                #convol.append(beam_above_horizon* sky_above_horizon[:, j])
+                antenna_temperature_above_horizon_list[i,j,horizon_mask]=(beam_above_horizon * sky_above_horizon[:,j])
             # Convolution between (beam at all frequencies) and (sky at all frequencies)
             yield (
                 i,
                 j,
                 np.nansum(beam_above_horizon * sky_above_horizon[:, j]) / n_pix_tot_no_nan,
-                sky_above_horizon,
-                beam_above_horizon,
+                antenna_temperature_above_horizon_list,
+                #sky_above_horizon,
+                #beam_above_horizon,
+                reftime_list,
                 n_pix_tot_no_nan,
             )
 
@@ -481,7 +479,7 @@ def simulate_spectra(
     f_high: [None, float] = np.inf,
     normalize_beam: bool = True,
     sky_model: sky_models.SkyModel = sky_models.Haslam408(),
-    index_model: sky_models.IndexModel = sky_models.GaussianIndex(),
+    index_model: sky_models.IndexModel = sky_models.ConstantIndex(),
     twenty_min_per_lst: int = 1,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
@@ -523,12 +521,12 @@ def simulate_spectra(
     lst = np.zeros(72 // twenty_min_per_lst)  # TODO: magic number
 
     antenna_temperature_above_horizon = np.zeros((len(lst), len(beam.frequency)))
-    for i, j, temperature, _, _, _ in _iterate_through_lst_freq(
+    for i, j, temperature, convolution_product, ref_time, _ in _iterate_through_lst_freq(
         lst, ground_loss_file, beam, twenty_min_per_lst, sky_model, index_model, normalize_beam
     ):
         antenna_temperature_above_horizon[i, j] = temperature
 
-    return antenna_temperature_above_horizon, beam.frequency, lst
+    return antenna_temperature_above_horizon, beam.frequency, lst, convolution_product, ref_time
 
 
 def antenna_beam_factor(
@@ -592,6 +590,7 @@ def antenna_beam_factor(
     # Get index of reference frequency
     if reference_frequency is None:
         reference_frequency = (f_high + f_low) / 2
+
     indx_ref_freq = np.argwhere(beam.frequency >= reference_frequency)[0][0]
     reference_frequency = beam.frequency[indx_ref_freq]
 
@@ -609,7 +608,6 @@ def antenna_beam_factor(
         ground_loss_file=ground_loss_file,
     ):
         antenna_temperature_above_horizon[i, j] = temperature
-
         # Convolution between (beam at all frequencies) and (sky at reference frequency)
         convolution_ref[i, j] = np.nansum(bm * sky[:, indx_ref_freq])
 
@@ -634,8 +632,9 @@ def antenna_beam_factor(
             "sky_model": str(sky_model),
             "index_model": str(index_model),
             "reference_frequency": float(reference_frequency),
-            "max_nside": int(sky_model.max_res),
-        },
+            "rotation_from_north": float(90),
+            "max_nside": int(sky_model.max_res or 0) ,
+                    },
     }
 
     if save_fname is None:
