@@ -2,6 +2,11 @@
 
 ## Version dev
 
+### Added
+
+- Ability to fit fiducial models to frequency-binned spectra (residuals still evaluated
+  at raw resolution).
+
 ### Changed
 
 - Internally much easier tracking of metadata for levels, and validation of Level data.

@@ -733,7 +733,7 @@ class Level1(_Level):
             hour=start.hour,
             end_time=(end.year, get_jd(end), end.hour, end.minute + 1),
         )
-        print("Setting up arrays...")
+        logger.info("Setting up arrays...")
 
         t = time.time()
         # Get the seconds since obs start for the data (not the auxiliary).
@@ -762,7 +762,7 @@ class Level1(_Level):
             ],
         )
         time_based_anc["seconds"] = seconds
-        print(f".... took {time.time() - t} sec.")
+        logger.info(f".... took {time.time() - t} sec.")
 
         t = time.time()
         # Interpolate weather
@@ -796,18 +796,18 @@ class Level1(_Level):
             ]
 
             time_based_anc[name] = np.interp(seconds, wth_seconds, thermlog[name])
-        print(f"Took {time.time() - t} sec to interpolate auxiliary data.")
+        logger.info(f"Took {time.time() - t} sec to interpolate auxiliary data.")
 
         # LST
         t = time.time()
         time_based_anc["lst"] = coordinates.utc2lst(times, const.edges_lon_deg)
         time_based_anc["gha"] = coordinates.lst2gha(time_based_anc["lst"])
-        print(f"Took {time.time() - t} sec to get lst/gha")
+        logger.info(f"Took {time.time() - t} sec to get lst/gha")
 
         # Sun/Moon coordinates
         t = time.time()
         sun, moon = coordinates.sun_moon_azel(const.edges_lat_deg, const.edges_lon_deg, times)
-        print(f"Took {time.time() - t} sec to get sun/moon coords.")
+        logger.info(f"Took {time.time() - t} sec to get sun/moon coords.")
 
         time_based_anc["sun_az"] = sun[:, 0]
         time_based_anc["sun_el"] = sun[:, 1]
@@ -1115,8 +1115,8 @@ class Level1(_Level):
         return lambda nu: model.evaluate(freq.normalize(nu))
 
     def get_model_parameters(
-        self, model: str = "LINLOG", n_terms: int = 5, resolution: [None, float] = None, **kwargs
-    ) -> Tuple[mdl.Model, np.ndarray, np.ndarray]:
+        self, model: str = "LINLOG", n_terms: int = 5, n_samples: [None, int] = None, **kwargs
+    ) -> Tuple[mdl.Model, np.ndarray]:
         """
         Determine a callable model of the spectrum at a given time, optionally
         computed over averaged original data.
@@ -1139,12 +1139,9 @@ class Level1(_Level):
             Function of frequency (in units of self.raw_frequency) that will return
             the model.
         """
-        if resolution:
+        if n_samples and n_samples > 1:
             f, s, w = tools.average_in_frequency(
-                self.spectrum,
-                freq=self.raw_frequencies,
-                weights=self.weights,
-                resolution=resolution,
+                self.spectrum, freq=self.raw_frequencies, weights=self.weights, n_samples=n_samples
             )[:3]
         else:
             f = self.raw_frequencies
@@ -1157,14 +1154,12 @@ class Level1(_Level):
             model = mdl.Model._models[model.lower()](default_x=freq.freq, n_terms=n_terms, **kwargs)
 
         params = np.zeros((len(s), model.n_terms))
-        resids = np.zeros(s.shape)
 
         for i, (ss, ww) in enumerate(zip(s, w)):
             fit = mdl.ModelFit(model, ydata=ss, weights=ww)
             params[i] = fit.model_parameters
-            resids[i] = fit.residual
 
-        return model, params, resids
+        return model, params
 
     def get_model_rms(
         self,
@@ -1607,6 +1602,7 @@ class Level2(_Level, _Level2Plus):
         n_threads: int = cpu_count(),
         model_nterms: int = 5,
         model_basis: str = "linlog",
+        model_nsamples: Optional[int] = 8,
     ):
         """
         Convert a list of :class:`Level1` objects into a combined :class:`Level2` object.
@@ -1693,6 +1689,10 @@ class Level2(_Level, _Level2Plus):
             The number of terms to use when fitting smooth models to each spectrum.
         model_basis
             The model basis -- a string representing a model from :module:`edges_cal.modelling`
+        model_nsamples
+            The number of frequency samples binned together before fitting the fiducial model.
+            Residuals of the model are still evaluated at full frequency resolution -- this
+            just affects the modeling itself.
 
         Returns
         -------
@@ -1762,24 +1762,32 @@ class Level2(_Level, _Level2Plus):
         if not n_files:
             raise Exception("All input files have been filtered completely.")
 
-        # Determine models for the individual spectra
-        model = mdl.Model._models[model_basis.lower()](
-            default_x=prev_level[0].freq.freq, n_terms=model_nterms
-        )
-        logger.info(f"Determining '{model.__class__.__name__}' models for each integration...")
+        model_nsamples = model_nsamples or 1
+        f = prev_level[0].freq.freq[::model_nsamples]
 
-        model_params = []
-        model_resids = []
+        # Determine models for the individual spectra
+        model = mdl.Model._models[model_basis.lower()](default_x=f, n_terms=model_nterms)
+        logger.info(
+            f"Determining {model.n_terms}-term '{model.__class__.__name__}' models for each integration..."
+        )
 
         def get_params_resids(l1):
-            _, params, resids = l1.get_model_parameters(model)
+            params = l1.get_model_parameters(model, n_samples=model_nsamples)[1]
+            resids = np.array(
+                [
+                    l1.spectrum[j] - model(parameters=pp, x=l1.freq.freq)
+                    for j, pp in enumerate(params)
+                ]
+            )
             return params, resids
 
         iterator = p_tqdm.p_imap(
             get_params_resids, prev_level, num_cpus=min(n_threads, len(prev_level))
         )
 
-        for p, r in iterator:
+        model_params = []
+        model_resids = []
+        for i, (p, r) in enumerate(iterator):
             model_params.append(p)
             model_resids.append(r)
 
