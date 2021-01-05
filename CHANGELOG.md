@@ -2,6 +2,10 @@
 
 ## Version dev
 
+### Changed
+
+- Internally much easier tracking of metadata for levels, and validation of Level data.
+
 ## Version 2.0.0
 
 ### Added

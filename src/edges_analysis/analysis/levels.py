@@ -17,6 +17,7 @@ import h5py
 from functools import partial
 import inspect
 import functools
+from .. import __version__
 
 import numpy as np
 from edges_cal import (
@@ -43,48 +44,60 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 
-def add_structure(cls, spec=False):
+def add_structure(cls):
     """Make sure user is logged in before proceeding"""
+    lvl = int(cls.__name__[-1])
 
-    @functools.wraps(cls)
-    def wrapper_add_structure(*args, **kwargs):
-        if spec:
-            spectra = {
-                "weights": lambda x: x.ndim == 2 and x.dtype.name.startswith("float"),
-                "spectrum": lambda x: x.ndim == 2 and x.dtype.name.startswith("float"),
-                "Q": lambda x: x.ndim == 2 and x.dtype.name.startswith("float"),
-                "switch_powers": lambda x: x.ndim == 3 and x.dtype.name.startswith("float"),
-            }
-        else:
-            spectra = {
-                "weights": lambda x: x.ndim == 2 and x.dtype.name.startswith("float"),
-                "resids": lambda x: x.ndim == 2 and x.dtype.name.startswith("float"),
-            }
-
-        structure = {
-            "frequency": lambda x: x.ndim == 1 and x.dtype.name.startswith("float"),
-            "spectra": spectra,
-            "ancillary": cls._ancillary,  # A structured array with last axis being time
+    if lvl == 1:
+        spectra = {
+            "weights": lambda x: x.ndim == 2 and x.dtype.name.startswith("float"),
+            "spectrum": lambda x: x.ndim == 2 and x.dtype.name.startswith("float"),
+            "Q": lambda x: x.ndim == 2 and x.dtype.name.startswith("float"),
+            "switch_powers": lambda x: x.ndim == 3 and x.dtype.name.startswith("float"),
+        }
+    else:
+        spec_dim = 3 if lvl == 2 else 2
+        spectra = {
+            "weights": lambda x: x.ndim == spec_dim and x.dtype.name.startswith("float"),
+            "resids": lambda x: x.ndim == spec_dim and x.dtype.name.startswith("float"),
         }
 
-        meta = cls._meta
+    ancillary = cls._ancillary
 
-        if hasattr(cls, "_from_prev_level"):
-            # Automatically add keys from the signature of _from_prev_level
-            sig = inspect.signature(cls._from_prev_level)
+    if lvl > 1:
+        ancillary["gha_edges"] = lambda x: x.ndim == 1 and x.dtype.name.startswith("float")
 
-            for k, v in sig.parameters.items():
-                if k != "prev_level" and k not in meta:
-                    meta[k] = None
+    structure = {
+        "frequency": lambda x: x.ndim == 1 and x.dtype.name.startswith("float"),
+        "spectra": spectra,
+        "ancillary": ancillary,  # A structured array with last axis being time
+    }
 
-        structure["meta"] = meta
-        cls._structure = structure
+    meta = cls._meta or {}
 
-        cls.from_previous_level.__doc__ = cls._from_prev_level.__doc__
+    # Add meta keys that are in every level
+    meta["prev_level_files"] = None
+    meta["write_time"] = None
+    meta["edges_io_version"] = None
+    meta["object_name"] = None
+    meta["edges_analysis_version"] = None
+    meta["message"] = lambda x: isinstance(x, str)
 
-        return cls(*args, **kwargs)
+    if hasattr(cls, "_from_prev_level"):
+        # Automatically add keys from the signature of _from_prev_level
+        sig = inspect.signature(cls._from_prev_level)
 
-    return wrapper_add_structure
+        for k, v in sig.parameters.items():
+            if k != "prev_level" and k not in meta:
+                meta[k] = None
+
+    structure["meta"] = meta
+    cls._structure = structure
+
+    if hasattr(cls, "_from_prev_level"):
+        cls.from_previous_level.__func__.__doc__ = cls._from_prev_level.__doc__
+
+    return cls
 
 
 @attr.s
@@ -203,7 +216,7 @@ class _Level(HDF5Object):
     @classmethod
     def _get_meta(cls, locals):
         sig = inspect.signature(cls._from_prev_level)
-        out = {locals[k] for k in sig.parameters if k != "prev_level"}
+        out = {k: locals[k] for k in sig.parameters if k != "prev_level"}
 
         for k in out:
             # Some rules for serialising to HDF5
@@ -214,12 +227,20 @@ class _Level(HDF5Object):
             elif isinstance(out[k], Path):
                 out[k] = str(out[k])
 
-        out.update(cls._extra_meta(**locals))
+        out.update(cls._extra_meta(locals))
+        out.update(cls._get_extra_meta())
         return out
 
     @classmethod
-    def _extra_meta(cls, **kwargs):
+    def _extra_meta(cls, kwargs):
         return {}
+
+    @classmethod
+    def _get_extra_meta(cls):
+        out = super(_Level, cls)._get_extra_meta()
+        out["edges_analysis_version"] = __version__
+        out["message"] = ""
+        return out
 
 
 @attr.s
@@ -264,11 +285,7 @@ class _Level2Plus:
         return out
 
 
-#        return np.array([self.get_model(i) for i in range(len(self.resids))]) + self.resids
-
-
-@attr.s
-@add_structure(spec=True)
+@add_structure
 class Level1(_Level):
     """Object representing the level-1 stage of processing.
 
@@ -280,6 +297,12 @@ class Level1(_Level):
 
     Create the class either directly from a level-1 file (via normal instantiation), or
     by calling :method:`from_acq` on a raw ACQ file (this does the calibration).
+
+    The data at this level have (in this order):
+
+    * Calibration applied from existing calibration solutions
+    * Collected associated weather and thermal auxiliary data (not used at this level, just collected)
+    * Potential xRFI applied to the raw switch powers individually.
     """
 
     _ancillary = None
@@ -1470,71 +1493,20 @@ class Level1(_Level):
     total_power_filter.axis = "time"
 
 
+@add_structure
 class Level2(_Level, _Level2Plus):
     """
     Object representing a Level-2 Calibrated Data Set.
 
-    Given a sequence of :class:`Level1` objects, this class combines them,
-    filters out some times (see below), and integrates over time into given bins in
-    LST/GHA.
+    Given a sequence of :class:`Level1` objects, this class combines them into one file,
+    aligning them in (ideally small) bins in GHA/LST.
 
-    Times are filtered based on sun/moon position, humidity, receiver temperature,
-    the total RMS of two halves of the spectrum after subtraction of a 5-term polynomial
-    (fitted to frequency-binned data), the total RMS of the full spectrum after
-    subtraction of a 3-term polynomial (fitted to frequency-binned data), and the total
-    summed temperature over the spectrum (for each half, and the whole).
+    See :class:`_Level` for documentation about the various datasets within this class
+    instance. Note that you can always check which data is inside each group by checking
+    its ``.keys()``.
 
-    Times are then averaged within provided bins of GHA.
-
-    Further frequency filtering is performed based on a moving window polynomial filter
-    of the mean data within each GHA bin.
-
-    Parameters
-    ----------
-    level1 : list of :class:`Level3` instances or paths
-        A bunch of level3 objects to combine and integrate into the level4 data.
-    sun_el_max : float
-        The maximum elevation of the sun before the time is filtered.
-    moon_el_max : float
-        The maximum elevation of the moon before the time is filtered.
-    ambient_humidity_max : float, optional
-        The maximum humidity allowed before the time is filtered.
-    min_receiver_temp : float, optional
-        The minimum temperature of the receiver before the observation is filtered.
-    max_receiver_temp : float, optional
-        The maximum temperature of the receiver before the observation is filtered.
-    n_sigma_rms : int, optional
-        The number of sigma at which to filter a time due to its RMS after subtracting
-        a smooth model.
-    rfi_window_size : float, optional
-        The size of the moving polynomial window used to locate frequency-based RFI.
-        In MHz.
-    n_poly_rfi : int, optional
-        The order of the polynomial used to fit the sliding window for RFI.
-    n_bootstrap_rfi : int, optional
-        The number of bootstrap samples to take to initialize the RMS for the first
-        sliding window.
-    n_sigma_rfi : float, optional
-        Number of sigma to use for clipping RFI.
-
-    Returns
-    -------
-    data : dict
-        The same keys as in :func:`level2_to_level3`. However, the axes for the weights
-        and spectra in this case are ``(N_FILES, N_GHA, N_FREQ)``, where ``N_FILES``
-        is the original number of Level3 objects input.
-    ancillary : dict
-        Containing:
-        * "n_total_times_per_file": The number of observations per input file.
-        * "used_times": A 2D boolean array specifying which times (second axis)
-          are used for which files (first axis). The array is padded out to the maximum
-          number of times in any of the files, and the `n_total_times_per_file` should
-          be used to index the relevant arrays.
-        * 'years': The year for each file.
-        * 'days': The day for each file
-        * 'hours': The starting hour for each file.
-    meta : dict
-        Containing all input parameters, and the number of files used.
+    See :method:`Level2.from_previous_level` for detailed information about the processes
+    involved in creating this data from :class:`Level1` objects.
     """
 
     _ancillary = {
@@ -1546,7 +1518,8 @@ class Level2(_Level, _Level2Plus):
     }
 
     _meta = {
-        "n_files": lambda x: isinstance(x, int) and x > 0,
+        "n_files": lambda x: isinstance(x, (int, np.int, np.int64)) and x > 0,
+        "n_files_flagged": lambda x: isinstance(x, (int, np.int, np.int64)) and x >= 0,
     }
 
     @classmethod
@@ -1592,7 +1565,7 @@ class Level2(_Level, _Level2Plus):
 
         if any(all_flagged):
             logger.warning(
-                f"The following {len(all_flagged)} files were fully flagged during {fnc} filter:"
+                f"The following {sum(all_flagged)} files were fully flagged during {fnc} filter:"
             )
             msg = ""
             for i, (flagged, l1) in enumerate(zip(all_flagged, level1)):
@@ -1635,6 +1608,97 @@ class Level2(_Level, _Level2Plus):
         model_nterms: int = 5,
         model_basis: str = "linlog",
     ):
+        """
+        Convert a list of :class:`Level1` objects into a combined :class:`Level2` object.
+
+        Steps taken to combine/filter the files are (in order):
+
+        1. Filter entire times from each file based on auxiliary data:
+           * Sun/moon position
+           * Humidity
+           * Receiver Temperature
+        2. xRFI (arbitrary flagging routines) on each file. See :module:`edges_cal.xrfi`
+           for details.
+        3. Filter entire times from each file based on the total calibrated power in
+           in each spectrum compared to a gold standard. See :method:`~Level1.total_power_filter`
+           for details.
+        4. Filter entire times from each file based on the RMS of various models fit
+           to the spectra or some fraction thereof, and compared to a pre-prepared
+           set of fiducial "good" RMS values. See :method:`~Level2._run_rms_filter` for
+           details.
+        5. Determine fiducial smooth models for each individual spectrum for each file.
+           The parameters of these models, and the residuals, are carried through all
+           remaining levels (instead of keeping raw spectra themselves).
+        6. Each file is binned in the same regular grid of GHA so all the files can
+           be aligned. The final residuals/spectra have shape ``(Nfiles, Ngha, Nfreq)``,
+           where each file essentially describes a day/night. This binning is de-biased
+           by using the models from the previous step to "in-paint" filtered gaps.
+
+        Parameters
+        ----------
+        prev_level
+            The list of Level1 files.
+        gha_min
+            The minimum of the regular GHA grid.
+        gha_max
+            The maximum of the regular GHA grid.
+        gha_bin_size
+            The bin size of the regular GHA grid.
+        sun_el_max
+            The maximum elevation of the sun with which to still use the data.
+        moon_el_max
+            The maximum elevation of the moon with which to still use the data.
+        ambient_humidity_max
+            THe maximum ambient humidity which which to still use the data.
+        min_receiver_temp
+            Filter data where receiver was below this temperature
+        max_receiver_temp
+            Filter data where receiver was above this temperature.
+        rms_filter_file
+            A file output by :func:`~edges_analysis.analysis.filters.get_rms_info`.
+            If not given, but ``do_rms_filter=True``, then this file will be created
+            on the fly. Other arguments control how it is produced.
+        do_total_power_filter
+            Whether to use the total power filter.
+        xrfi_pipe
+            A dictionary where keys are method names in :module:`edges_cal.xrfi`, and
+            values are further dictionaries where entries are parameter-value pairs to
+            pass to each method.
+        n_poly_tp_filter
+            See :method:`Level1.total_power_filter` for details.
+        n_sigma_tp_filter
+            See :method:`Level1.total_power_filter` for details.
+        bands_tp_filter
+            See :method:`Level1.total_power_filter` for details.
+        std_thresholds_tp_filter
+            See :method:`Level1.total_power_filter` for details.
+        do_rms_filter
+            Whether to perform the RMS filter.
+        rms_bands
+            See :func:`~analysis.filters.get_rms_info` for details.
+        n_poly_rms
+            See :func:`~analysis.filters.get_rms_info` for details.
+        n_sigma_rms
+            Number of sigma at which to filter the spectrum.
+        n_terms_rms
+            See :func:`~analysis.filters.get_rms_info` for details.
+        n_std_rms
+            See :func:`~analysis.filters.get_rms_info` for details.
+        n_files_rms
+            Number of files to use to generate the RMS "golden" info.
+        n_threads
+            Number of threads to use when performing filters (each thread is used for a
+            file).
+        model_nterms
+            The number of terms to use when fitting smooth models to each spectrum.
+        model_basis
+            The model basis -- a string representing a model from :module:`edges_cal.modelling`
+
+        Returns
+        -------
+        level2
+            A :class:`Level2` object.
+        """
         xrfi_pipe = xrfi_pipe or {}
 
         if gha_min < 0 or gha_min > 24 or gha_min >= gha_max:
@@ -1650,9 +1714,9 @@ class Level2(_Level, _Level2Plus):
 
         orig_dates = [(x.meta["year"], x.meta["day"], x.meta["hour"]) for x in prev_level]
 
-        years = [x.meta["year"] for x in prev_level]
-        days = [x.meta["day"] for x in prev_level]
-        hours = [x.meta["hour"] for x in prev_level]
+        years = np.array([x.meta["year"] for x in prev_level], dtype=int)
+        days = np.array([x.meta["day"] for x in prev_level], dtype=int)
+        hours = np.array([x.meta["hour"] for x in prev_level], dtype=int)
 
         flags, prev_level = cls.run_filter(
             "aux",
@@ -1738,7 +1802,7 @@ class Level2(_Level, _Level2Plus):
         return prev_level[0].raw_frequencies, data, ancillary, cls._get_meta(locals())
 
     @classmethod
-    def _extra_meta(cls, **kwargs):
+    def _extra_meta(cls, kwargs):
         return {
             "n_files": len(kwargs["prev_level"]),
             "n_files_flagged": sum(kwargs["files_flagged"]),
@@ -1769,7 +1833,7 @@ class Level2(_Level, _Level2Plus):
 
     @property
     def unflagged_years(self) -> np.ndarray:
-        """The days that are in the actual spectrum object."""
+        """The years that are in the actual spectrum object."""
         return np.array(
             [
                 year
@@ -1780,7 +1844,7 @@ class Level2(_Level, _Level2Plus):
 
     @property
     def unflagged_hours(self) -> np.ndarray:
-        """The days that are in the actual spectrum object."""
+        """The hours that are in the actual spectrum object."""
         return np.array(
             [
                 hour
@@ -1837,6 +1901,7 @@ class Level2(_Level, _Level2Plus):
     def bin_gha(
         cls, level1, l1_params, l1_resids, gha_min, gha_max, gha_bin_size, flags=None, use_pbar=True
     ):
+        """Bin a list of files into small aligning bins of GHA."""
 
         gha_edges = np.arange(gha_min, gha_max, gha_bin_size)
         if np.isclose(gha_max, gha_edges.max() + gha_bin_size):
@@ -1964,7 +2029,22 @@ class Level2(_Level, _Level2Plus):
         plt.title(f"Level2 {self.unflagged_years[indx]}-{self.unflagged_days[indx]}")
 
 
+@add_structure
 class Level3(_Level, _Level2Plus):
+    """
+    Object representing a Level-3 Calibrated Data Set.
+
+    Level 3 primarily represents an average over the nights recorded in a Level2 object,
+    keeping the same GHA grid.
+
+    See :class:`_Level` for documentation about the various datasets within this class
+    instance. Note that you can always check which data is inside each group by checking
+    its ``.keys()``.
+
+    See :method:`Level3.from_previous_level` for detailed information about the processes
+    involved in creating this data from a :class:`Level2` object.
+    """
+
     _ancillary = {
         "years": lambda x: x.ndim == 1 and x.dtype.name.startswith("int"),
         "gha_edges": lambda x: x.ndim == 1 and x.dtype.name.startswith("float"),
@@ -1981,7 +2061,7 @@ class Level3(_Level, _Level2Plus):
     @classmethod
     def _from_prev_level(
         cls,
-        level2: [Level2],
+        prev_level: [Level2],
         day_range: Optional[Tuple[int, int]] = None,
         ignore_days: Optional[Sequence[int]] = None,
         f_low: Optional[float] = None,
@@ -1992,49 +2072,36 @@ class Level3(_Level, _Level2Plus):
         n_threads: int = cpu_count(),
     ):
         """
-        Convert a level2 to a level3.
+        Convert a :class:`Level2` to a :class:`Level3`.
 
         This step integrates over days to form a spectrum as a function of GHA and
-        frequency. It also applies an optional further frequency averaging.
+        frequency. It also applies an optional frequency averaging.
 
         Parameters
         ----------
-        level2 : :class:`Level2` instance
+        prev_level
             The level2 object to convert.
-        day_range : 2-tuple
+        day_range
             Min and max days to include (from a given year).
-        ignore_days : sequence
+        ignore_days
             A sequence of days to ignore in the integration.
-        f_low : float, optional
-            A minimum frequency to use.
-        f_high : float, optional
-            A maximum frequency to use.
-        freq_resolution : float, optional
-            A frequency resolution to average down to.
-
-        Returns
-        -------
-        data : dict
-            Consisting of ``spectrum``, ``weights`` and ``frequency``. Both spectrum and
-            weights are 2D, with the first axis the length of the GHA bins in the Level4
-            object.
-        ancillary : dict
-            Consisting of
-            * ``std_dev``: The standard deviation in each bin of (GHA, frequency)
-            * ``years``: An array of years in which all observations in the dataset were
-              taken.
-        meta : dict
-            Consisting of
-            * ``day_range``: The user-specified allowed range of days going into the
-              integration.
-            * ``ignore_days``: The user-specified list of explicit days ignored in the
-              integration.
+        f_low
+            A minimum frequency to use. Default is all frequencies.
+        f_high
+            A maximum frequency to use. Default is all frequencies
+        freq_resolution
+            A frequency resolution to average down to. Default is to not average.
+        xrfi_pipe
+            A dictionary specifying further RFI flagging methods. See
+            :method:`Level2.from_previous_level` for details.
+        n_threads
+            The number of threads to use for the xRFI.
         """
         xrfi_pipe = xrfi_pipe or {}
 
         # Compute the residuals
-        days = level2.unflagged_days
-        freq = FrequencyRange(level2.raw_frequencies, f_low=f_low, f_high=f_high)
+        days = prev_level.unflagged_days
+        freq = FrequencyRange(prev_level.raw_frequencies, f_low=f_low, f_high=f_high)
 
         if day_range is None:
             day_range = (days.min(), days.max())
@@ -2043,8 +2110,8 @@ class Level3(_Level, _Level2Plus):
             ignore_days = []
 
         day_mask = np.array([day not in ignore_days for day in days])
-        resid = level2.resids[day_mask]
-        wght = level2.weights[day_mask]
+        resid = prev_level.resids[day_mask]
+        wght = prev_level.weights[day_mask]
 
         if gha_filter_file:
             raise NotImplementedError("Using a GHA filter file is not yet implemented")
@@ -2060,7 +2127,7 @@ class Level3(_Level, _Level2Plus):
             wght[flags] = 0
 
         # Take mean over nights.
-        params = np.nanmean(level2.ancillary["model_params"], axis=0)
+        params = np.nanmean(prev_level.ancillary["model_params"], axis=0)
         resid, wght = tools.weighted_mean(resid, wght, axis=0)
 
         # Average in frequency
@@ -2078,8 +2145,8 @@ class Level3(_Level, _Level2Plus):
         }
 
         ancillary = {
-            "years": np.unique(level2.ancillary["years"]),
-            "gha_edges": level2.ancillary["gha_edges"],
+            "years": np.unique(prev_level.ancillary["years"]),
+            "gha_edges": prev_level.ancillary["gha_edges"],
             "model_params": params,
             "std_dev": s,
         }
@@ -2092,6 +2159,7 @@ class Level3(_Level, _Level2Plus):
         return self.ancillary["gha_edges"]
 
     def plot_waterfall(self, quantity="flagged"):
+        "Plot a simple waterfall plot of time vs. frequency."
         extent = (self.freq.min, self.freq.max, self.gha_edges.min, self.gha_edges.max)
         if quantity == "flagged":
             plt.imshow(np.where(self.weights > 0, self.spectrum, 0), extent=extent, aspect="auto")
@@ -2101,7 +2169,22 @@ class Level3(_Level, _Level2Plus):
         plt.xlabel("Frequency")
         plt.ylabel("GHA")
 
-    def bin_gha(self, gha_bins=None) -> Tuple[np.ndarray, np.ndarray]:
+    def bin_gha(self, gha_bins: Optional[np.ndarray] = None) -> Tuple[np.ndarray, np.ndarray]:
+        """Average in wider bins of GHA.
+
+        Parameters
+        ----------
+        gha_bins
+            A numpy array of bin edges to use. By default, average everything into
+            one big bin.
+
+        Returns
+        -------
+        s
+            The binned spectrum
+        w
+            The binned weights.
+        """
         gha_centres = (self.gha_edges[:-1] + self.gha_edges[1:]) / 2
         if gha_bins is None:
             gha_bins = [self.gha_edges.min(), self.gha_edges.max()]
@@ -2117,41 +2200,16 @@ class Level3(_Level, _Level2Plus):
         return s, w
 
 
+@add_structure
 class Level4(_Level, _Level2Plus):
     """
     A Level-4 Calibrated Spectrum.
 
     This step performs a final average over GHA to yield a GHA vs frequency dataset
     that is as averaged as one wants.
-
-    Parameters
-    ----------
-    level3 : :class:`Level3` instance
-        The Level3 object to convert.
-    f_low : float, optional
-        The min frequency to keep in the final average.
-    f_high : float, optional
-        The max frequency to keep in the final average.
-    ignore_freq_ranges : list of tuple, optional
-        An optional list of 2-tuples specifying frequency ranges to omit in the final
-        average (they are weighted to zero).
-    freq_resolution : float, optional
-        An optional frequency resolution down to which to average.
-
-    Returns
-    -------
-    data : dict
-        Consisting of ``spectrum``, ``weights`` and ``frequency``. In this step,
-        all of these are 1D and the same shape.
-    ancillary : dict
-        Consisting of
-        * ``std_dev``: The standard deviation of the spectrum in each bin.
-    meta : dict
-        Consisting of all level 5 meta info, plus
-        * ``ignore_freq_ranges``: the list of ignored frequency ranges in the object.
     """
 
-    _ancillary = {"gha_edges": lambda x: x.ndim == 1 and x.dtype.name.startswith("float")}
+    _ancillary = {}
     _meta = None
 
     @cached_property
@@ -2162,7 +2220,7 @@ class Level4(_Level, _Level2Plus):
     @classmethod
     def _from_prev_level(
         cls,
-        level3: [Level3],
+        prev_level: [Level3],
         f_low: Optional[float] = None,
         f_high: Optional[float] = None,
         ignore_freq_ranges: Optional[Sequence[Tuple[float, float]]] = None,
@@ -2172,12 +2230,45 @@ class Level4(_Level, _Level2Plus):
         gha_bin_size: float = 24,
         xrfi_pipe: [None, dict] = None,
     ):
+        """
+        Average from :class:`Level3` to :class:`Level4`
+
+        This step primarily averages further over GHA (potentially over all GHA) and
+        potentially over some frequency bins.
+
+        Parameters
+        ----------
+        prev_level
+            The :class:`Level3` objects to average.
+        f_low
+            The lowest frequency to keep.
+        f_high
+            The highest frequency to keep.
+        ignore_freq_ranges
+            Set the weights between these frequency ranges to zero, so they are completely
+            ignored in any following fits.
+        freq_resolution
+            The frequency resolution to average down to.
+        gha_min
+            The minimum GHA to keep.
+        gha_max
+            The maximum GHA to keep.
+        gha_bin_size
+            The GHA bin size after averaging.
+        xrfi_pipe
+            A final run of xRFI -- see :method:`Level2.from_previous_level` for details.
+
+        Returns
+        -------
+        level4
+            A :class:`Level4` object.
+        """
         xrfi_pipe = xrfi_pipe or {}
 
-        freq = FrequencyRange(level3.raw_frequencies, f_low=f_low, f_high=f_high)
+        freq = FrequencyRange(prev_level.raw_frequencies, f_low=f_low, f_high=f_high)
 
-        resid = level3.resids[:, freq.mask]
-        wght = level3.weights[:, freq.mask]
+        resid = prev_level.resids[:, freq.mask]
+        wght = prev_level.weights[:, freq.mask]
 
         # Another round of XRFI
         tools.run_xrfi_pipe(resid, wght, xrfi_pipe)
@@ -2193,15 +2284,15 @@ class Level4(_Level, _Level2Plus):
         else:
             f = freq.freq
 
-        gha_edges = np.arange(gha_min, gha_max, gha_bin_size)
+        gha_edges = np.arange(gha_min, gha_max, gha_bin_size, dtype=float)
         if np.isclose(gha_max, gha_edges.max() + gha_bin_size):
             gha_edges = np.concatenate((gha_edges, [gha_edges.max() + gha_bin_size]))
 
         params, resid, wght = tools.model_bin_gha(
-            level3.ancillary["model_params"],
+            prev_level.ancillary["model_params"],
             resid,
             wght,
-            (level3.gha_edges[1:] + level3.gha_edges[:-1]) / 2,
+            (prev_level.gha_edges[1:] + prev_level.gha_edges[:-1]) / 2,
             gha_edges,
         )
 
