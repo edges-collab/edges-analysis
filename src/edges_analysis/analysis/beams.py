@@ -413,6 +413,7 @@ def _iterate_through_lst_freq(
     twenty_lst_min = dt.timedelta(minutes=19, seconds=57)
     convol = []
     antenna_temperature_above_horizon_list = np.zeros((len(lst), len(beam.frequency), len(sky_map[:,0])))
+    sky_above_horizon_list = np.zeros((len(lst), len(beam.frequency), len(sky_map[:,0])))
     reftime_list = []
     for i in tqdm(range(len(lst)), unit="LST"):
         if i > 0:
@@ -459,13 +460,14 @@ def _iterate_through_lst_freq(
                 beam_above_horizon *= ground_gain[j] / solid_angle
                 #convol.append(beam_above_horizon* sky_above_horizon[:, j])
                 antenna_temperature_above_horizon_list[i,j,horizon_mask]=(beam_above_horizon * sky_above_horizon[:,j])
+                sky_above_horizon_list[i,j,horizon_mask]=sky_above_horizon[:,j]
             # Convolution between (beam at all frequencies) and (sky at all frequencies)
             yield (
                 i,
                 j,
                 np.nansum(beam_above_horizon * sky_above_horizon[:, j]) / n_pix_tot_no_nan,
                 antenna_temperature_above_horizon_list,
-                #sky_above_horizon,
+                sky_above_horizon_list,
                 #beam_above_horizon,
                 reftime_list,
                 n_pix_tot_no_nan,
@@ -521,12 +523,12 @@ def simulate_spectra(
     lst = np.zeros(72 // twenty_min_per_lst)  # TODO: magic number
 
     antenna_temperature_above_horizon = np.zeros((len(lst), len(beam.frequency)))
-    for i, j, temperature, convolution_product, ref_time, _ in _iterate_through_lst_freq(
+    for i, j, temperature, convolution_product, sky_list,ref_time, _ in _iterate_through_lst_freq(
         lst, ground_loss_file, beam, twenty_min_per_lst, sky_model, index_model, normalize_beam
     ):
         antenna_temperature_above_horizon[i, j] = temperature
 
-    return antenna_temperature_above_horizon, beam.frequency, lst, convolution_product, ref_time
+    return antenna_temperature_above_horizon, beam.frequency, lst, convolution_product, sky_list,ref_time
 
 
 def antenna_beam_factor(

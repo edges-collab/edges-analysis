@@ -276,7 +276,7 @@ def ground_loss(
                 fl += "_" + configuration
             filename = Path(__file__).parent / "data" / "loss" / band / (fl + ".txt")
             if not filename.exists():
-                return np.zeros_like(freq)
+                return np.ones_like(freq)
         else:
             # Find the file in the standard directory structure
             filename = Path(config["paths"]["antenna"]) / band / "loss" / str(filename)[1:]
