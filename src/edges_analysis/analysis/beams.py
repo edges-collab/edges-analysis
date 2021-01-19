@@ -198,6 +198,7 @@ class Beam:
         cls,
         path: [str, Path],
         az_antenna_axis: float = 0,
+        ideal: int = 1
     ) -> Beam:
         """
         Read a FEKO beam file.
@@ -237,6 +238,8 @@ class Beam:
         # Shifting beam relative to true AZ (referenced at due North)
         # Due to angle of orientation of excited antenna panels relative to due North
         beam_maps = cls.shift_beam_maps(az_antenna_axis, beam_maps)
+        if ideal ==1:
+            beam_maps = np.ones((len(frequency), 91, 360))
         return Beam(
             frequency=freq.freq,
             beam=beam_maps,
@@ -412,8 +415,8 @@ def _iterate_through_lst_freq(
     # Advancing time (19:57 minutes UTC corresponds to 20 minutes LST)
     twenty_lst_min = dt.timedelta(minutes=19, seconds=57)
     convol = []
-    antenna_temperature_above_horizon_list = np.zeros((len(lst), len(beam.frequency), len(sky_map[:,0])))
-    sky_above_horizon_list = np.zeros((len(lst), len(beam.frequency), len(sky_map[:,0])))
+    antenna_temperature_above_horizon_list = np.zeros((len(lst), len(beam.frequency), len(sky_map)))
+    sky_above_horizon_list = np.zeros((len(lst), len(beam.frequency), len(sky_map)))
     reftime_list = []
     for i in tqdm(range(len(lst)), unit="LST"):
         if i > 0:
@@ -468,7 +471,6 @@ def _iterate_through_lst_freq(
                 np.nansum(beam_above_horizon * sky_above_horizon[:, j]) / n_pix_tot_no_nan,
                 antenna_temperature_above_horizon_list,
                 sky_above_horizon_list,
-                #beam_above_horizon,
                 reftime_list,
                 n_pix_tot_no_nan,
             )

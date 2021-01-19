@@ -91,6 +91,7 @@ class ConstantIndex(IndexModel):
         lon: [None, np.ndarray] = None,
         sky_model: [None, SkyModel] = None,
     ) -> np.ndarray:
+        ## to return an array of indices of len (latidute) like the other Index functions. This avoids the error in the beams.py code. 
         index = np.zeros(len(lat))
         index[:] = self.index
         return index
