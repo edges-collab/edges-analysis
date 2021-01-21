@@ -386,7 +386,7 @@ class Level1(_Level):
 
         logger.info("Converting time strings to datetimes...")
         t = time.time()
-        times = cls.get_datetimes(ancillary.data["time"])
+        times = cls.get_datetimes(ancillary.data["times"])
         logger.info(f"...  finished in {time.time() - t:.2f} sec.")
 
         meta = {
