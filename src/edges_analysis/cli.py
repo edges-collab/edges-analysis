@@ -182,6 +182,7 @@ def get_output_path(level, settings, in_file, label, prefix):
     "--clobber/--no-clobber",
     help="whether to overwrite any existing data at the output location",
 )
+@click.pass_context
 def calibrate(ctx, settings, path, label, prefix, message, xrfi, clobber):
     """Calibrate field data to produce Level1 files."""
     console.print(
