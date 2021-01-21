@@ -725,6 +725,7 @@ class Level1(_Level):
             thermlog_file = pth / f"thermlog_{band}.txt"
 
         print("thermlog_file", thermlog_file)
+        print("start, end: ", start, end)
 
         # Get all aux data covering our times, up to the next minute (so we have some
         # overlap).
