@@ -405,7 +405,9 @@ class Level1(_Level):
         new_anc, new_meta = cls._get_weather_thermlog(band, times, weather_file, thermlog_file)
         meta = {**meta, **new_meta}
 
-        time_based_anc = tools.join_struct_arrays((time_based_anc, new_anc))
+        new_anc = {k: new_anc[k] for k in new_anc.dtype.names}
+        time_based_anc = {**time_based_anc, **new_anc}
+        # tools.join_struct_arrays((time_based_anc, new_anc))
         logger.info(f"... finished in {time.time() - t:.2f} sec.")
 
         s11_files = cls.get_s11_paths(
