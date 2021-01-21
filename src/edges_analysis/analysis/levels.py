@@ -796,6 +796,7 @@ class Level1(_Level):
                 for x in thermlog
             ]
 
+            print(seconds, wth_seconds, thermlog[name])
             time_based_anc[name] = np.interp(seconds, wth_seconds, thermlog[name])
         logger.info(f"Took {time.time() - t} sec to interpolate auxiliary data.")
 
