@@ -378,7 +378,6 @@ class Level1(_Level):
         t = time.time()
         Q, p, ancillary = decode_file(
             filename,
-            write_formats=[],
             meta=True,
             progress=progress,
             leave_progress=leave_progress,
