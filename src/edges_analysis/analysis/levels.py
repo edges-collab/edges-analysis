@@ -724,6 +724,8 @@ class Level1(_Level):
         else:
             thermlog_file = pth / f"thermlog_{band}.txt"
 
+        print("thermlog_file", thermlog_file)
+
         # Get all aux data covering our times, up to the next minute (so we have some
         # overlap).
         weather, thermlog = auxiliary_data(
@@ -734,6 +736,8 @@ class Level1(_Level):
             hour=start.hour,
             end_time=(end.year, get_jd(end), end.hour, end.minute + 1),
         )
+
+        print(thermlog)
         logger.info("Setting up arrays...")
 
         t = time.time()
@@ -796,7 +800,6 @@ class Level1(_Level):
                 for x in thermlog
             ]
 
-            print(seconds, wth_seconds, thermlog[name])
             time_based_anc[name] = np.interp(seconds, wth_seconds, thermlog[name])
         logger.info(f"Took {time.time() - t} sec to interpolate auxiliary data.")
 
