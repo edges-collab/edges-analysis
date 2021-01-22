@@ -1,6 +1,6 @@
 import datetime as dt
 import numpy as np
-from astropy import time as apt, coordinates as apc
+from astropy import time as apt, coordinates as apc, units as apu
 from .. import const
 
 
@@ -96,3 +96,39 @@ def get_jd(d):
 def dt_from_jd(y, d, *args):
     begin = dt.datetime(y, 1, 1, *args)
     return begin + dt.timedelta(days=d)
+
+
+def lst_to_earth_time(time: apt.Time):
+    """Return a factor to convert one second of earth-measured time to an LST."""
+    time2 = time + dt.timedelta(seconds=1)
+    lst = time.sidereal_time("apparent")
+    lst2 = time2.sidereal_time("apparent")
+    return (lst2.arcsecond - lst.arcsecond) / 15
+
+
+def lsts_to_times(
+    lsts: [list, np.ndarray], ref_time: apt.Time, location: apc.EarthLocation = const.edges_location
+):
+    """Convert a list of LSTs to local times at a particular location, surrounding a particular time.
+
+    Recall that any particular LST maps to some time on an infinite number of days.
+    Pass `ref_time` to set the time around which the LSTs will map.
+
+    Parameters
+    ----------
+    lsts
+        A list/array of LSTs in hours.
+    ref_time
+        An astropy time (in UTC) giving the time around which to find the LSTs.
+    location
+        The location at which the LSTs are defined.
+    """
+    ref_time.location = location
+    ref_lst = ref_time.sidereal_time("apparent")
+    lst_per_sec = lst_to_earth_time(ref_time)
+    times = []
+    for i, this_lst in enumerate(lsts):
+        lst_diff = apc.Longitude(this_lst * apu.hour) - ref_lst
+        sec_diff = dt.timedelta(seconds=int(lst_diff.arcsecond / 15 / lst_per_sec))
+        times.append(ref_time + sec_diff)
+    return times
