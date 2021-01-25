@@ -409,6 +409,21 @@ class BeamFactor(HDF5Object):
         },
     }
 
+    @property
+    def beam_factor(self):
+        """The beam chromaticity factor. Array is ``(n_lsts, n_freq)``."""
+        return self.load("beam_factor")
+
+    @property
+    def frequency(self):
+        """The frequencies at which the beam factor is defined."""
+        return self.load("frequency")
+
+    @property
+    def lsts(self):
+        """The LSTs at which the beam factor is defined."""
+        return self.load("lst")
+
 
 def sky_convolution_generator(
     lsts: np.ndarray,
