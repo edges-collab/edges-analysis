@@ -2124,6 +2124,7 @@ class Level3(_Level, _Level2Plus):
         freq_resolution: Optional[float] = None,
         gha_filter_file: [None, str, Path] = None,
         xrfi_pipe: [None, dict] = None,
+        xrfi_on_resids: bool = True,
         n_threads: int = cpu_count(),
     ):
         """
@@ -2149,6 +2150,9 @@ class Level3(_Level, _Level2Plus):
         xrfi_pipe
             A dictionary specifying further RFI flagging methods. See
             :method:`Level2.from_previous_level` for details.
+        xrfi_on_resids
+            Whether to do xRFI on the residuals of the data, or the averaged spectrum
+            itself.
         n_threads
             The number of threads to use for the xRFI.
         """
@@ -2168,6 +2172,9 @@ class Level3(_Level, _Level2Plus):
         resid = prev_level.resids[day_mask]
         wght = prev_level.weights[day_mask]
 
+        if not xrfi_on_resids:
+            spec = prev_level.spectrum[day_mask]
+
         if gha_filter_file:
             raise NotImplementedError("Using a GHA filter file is not yet implemented")
 
@@ -2175,7 +2182,9 @@ class Level3(_Level, _Level2Plus):
         if xrfi_pipe:
 
             def run_pipe(i):
-                return tools.run_xrfi_pipe(resid[i], wght[i] <= 0, xrfi_pipe)
+                return tools.run_xrfi_pipe(
+                    resid[i] if xrfi_on_resids else spec[i], wght[i] <= 0, xrfi_pipe
+                )
 
             m = map if n_threads <= 1 else Pool(n_threads).map
             flags = np.array(m(run_pipe, range(len(resid))))
@@ -2284,6 +2293,7 @@ class Level4(_Level, _Level2Plus):
         gha_max: float = 24,
         gha_bin_size: float = 24,
         xrfi_pipe: [None, dict] = None,
+        xrfi_on_resids: bool = True,
     ):
         """
         Average from :class:`Level3` to :class:`Level4`
@@ -2325,8 +2335,11 @@ class Level4(_Level, _Level2Plus):
         resid = prev_level.resids[:, freq.mask]
         wght = prev_level.weights[:, freq.mask]
 
+        if xrfi_on_resids:
+            spec = prev_level.spectrum[:, freq.mask]
+
         # Another round of XRFI
-        tools.run_xrfi_pipe(resid, wght, xrfi_pipe)
+        tools.run_xrfi_pipe(resid if xrfi_on_resids else spec, wght, xrfi_pipe)
 
         if ignore_freq_ranges:
             for (low, high) in ignore_freq_ranges:
