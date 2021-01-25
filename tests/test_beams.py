@@ -1,5 +1,6 @@
 from edges_analysis.analysis import beams
 from edges_analysis.analysis import DATA
+from edges_analysis.analysis.sky_models import Haslam408
 import numpy as np
 
 
@@ -41,3 +42,11 @@ def test_simulate_spectra():
 def test_uniform_beam():
     beam = beams.Beam.from_ideal()
     assert np.allclose(beam.beam, 1)
+
+
+def test_antenna_beam_factor():
+    beam = beams.Beam.from_file("low")
+    abf = beams.antenna_beam_factor(
+        beam=beam, f_low=50, f_high=56, lsts=np.arange(0, 24, 12), sky_model=Haslam408(max_res=3)
+    )
+    assert isinstance(abf, beams.BeamFactor)
