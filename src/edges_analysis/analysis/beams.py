@@ -523,7 +523,7 @@ def sky_convolution_generator(
                 j,
                 np.nansum(antenna_temperature_above_horizon) / n_pix_tot_no_nan,
                 antenna_temperature_above_horizon,
-                sky_above_horizon[:, j],
+                sky_above_horizon,
                 beam_above_horizon,
                 time,
                 n_pix_tot_no_nan,
