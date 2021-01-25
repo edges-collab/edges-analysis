@@ -2172,19 +2172,22 @@ class Level3(_Level, _Level2Plus):
         resid = prev_level.resids[day_mask]
         wght = prev_level.weights[day_mask]
 
-        if not xrfi_on_resids:
-            spec = prev_level.spectrum[day_mask]
-
         if gha_filter_file:
             raise NotImplementedError("Using a GHA filter file is not yet implemented")
 
         # Perform xRFI on GHA-averaged spectra.
         if xrfi_pipe:
 
-            def run_pipe(i):
-                return tools.run_xrfi_pipe(
-                    resid[i] if xrfi_on_resids else spec[i], wght[i] <= 0, xrfi_pipe
-                )
+            if xrfi_on_resids:
+
+                def run_pipe(i):
+                    return tools.run_xrfi_pipe(resid[i], wght[i] <= 0, xrfi_pipe)
+
+            else:
+                spec = prev_level.spectrum[day_mask]
+
+                def run_pipe(i):
+                    return tools.run_xrfi_pipe(spec[i], wght[i] <= 0, xrfi_pipe)
 
             m = map if n_threads <= 1 else Pool(n_threads).map
             flags = np.array(m(run_pipe, range(len(resid))))

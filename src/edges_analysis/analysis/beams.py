@@ -681,7 +681,7 @@ def antenna_beam_factor(
 
     out = {
         "frequency": beam.frequency.astype(np.float),
-        "lst": lsts,
+        "lst": np.array(lsts).astype("float"),
         "antenna_temp_above_horizon": antenna_temperature_above_horizon,
         "loss_fraction": loss_fraction,
         "beam_factor": beam_factor,
