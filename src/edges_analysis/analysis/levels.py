@@ -279,7 +279,12 @@ class _Level2Plus:
         Note that the parameters are not set on this model, but the basis vectors are
         set.
         """
-        return mdl.Model._models[self.meta["Level2"]["model_basis"].lower()](
+        # We first try accessing the hard-copy Level2 meta saved in this file.
+        # For backwards-compatibility (since this wasn't always saved into the file)
+        # also try accessing the Level2 file itself.
+        l2_meta = self.meta.get("Level2", self.level2.meta)
+
+        return mdl.Model._models[l2_meta["model_basis"].lower()](
             default_x=self.freq.freq, n_terms=self.meta["model_nterms"]
         )
 
