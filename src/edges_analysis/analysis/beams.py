@@ -498,13 +498,15 @@ def sky_convolution_generator(
         el_above_horizon = el[horizon_mask]
 
         # Selecting sky data above the horizon
-        sky_above_horizon = sky_map[horizon_mask, :]
+        sky_above_horizon = np.zeros_like(sky_map)
+        sky_above_horizon = sky_map[horizon_mask,:]
 
         # Arranging AZ and EL arrays corresponding to beam model
         az_el_above_horizon = np.array([az_above_horizon, el_above_horizon]).T
 
         # Loop over frequency
         for j in tqdm(range(len(beam.frequency)), unit="Frequency"):
+            beam_above_horizon = np.zeros_like(sky_map)
             beam_above_horizon = beam.angular_interpolator(j)(az_el_above_horizon)
 
             n_pix_ok = np.sum(~np.isnan(beam_above_horizon))
