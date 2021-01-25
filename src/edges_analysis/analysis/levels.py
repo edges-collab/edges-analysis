@@ -118,7 +118,7 @@ class _Level(HDF5Object):
     default_root = config["paths"]["field_products"]
 
     @classmethod
-    def _get_previous_level(cls):
+    def _get_previous_level_cls(cls):
         _prev_level = int(cls.__name__[-1]) - 1
         if _prev_level:
             _prev_level = getattr(sys.modules[__name__], f"Level{_prev_level}")
@@ -128,7 +128,7 @@ class _Level(HDF5Object):
 
     @classmethod
     def from_previous_level(cls, prev_level, filename=None, clobber=False, **kwargs):
-        _prev_level = cls._get_previous_level()
+        _prev_level = cls._get_previous_level_cls()
 
         if not isinstance(prev_level, _prev_level):
             if hasattr(prev_level, "__len__"):
@@ -174,13 +174,32 @@ class _Level(HDF5Object):
             raise TypeError(f"No previous levels for {self.__class__.__name__}")
 
         if len(fnames) == 1:
-            return self._get_previous_level()(fnames[0])
+            return self._get_previous_level_cls()(fnames[0])
         else:
-            return [self._get_previous_level()(fname) for fname in fnames]
+            return [self._get_previous_level_cls()(fname) for fname in fnames]
 
     @property
     def meta(self):
-        return self.load("meta")
+        """Dictionary of meta information for this and previous levels."""
+        meta = self.load("meta")
+
+        # Previous Levels
+        out = {}
+        for k, v in meta.items():
+            if "." in k:
+                level, key = k.split(".")
+                if level not in out:
+                    out[level] = {key: v}
+                else:
+                    out[level][key] = v
+            else:
+                out[k] = v
+                if self.__class__.__name__ not in out:
+                    out[self.__class__.__name__] = {k: v}
+                else:
+                    out[self.__class__.__name__][k] = v
+
+        return out
 
     @property
     def raw_frequencies(self):
@@ -214,7 +233,7 @@ class _Level(HDF5Object):
             return self.spectra["resids"]
 
     @classmethod
-    def _get_meta(cls, locals):
+    def _get_meta(cls, locals, prev_level: [None, _Level] = None):
         sig = inspect.signature(cls._from_prev_level)
         out = {k: locals[k] for k in sig.parameters if k != "prev_level"}
 
@@ -229,6 +248,14 @@ class _Level(HDF5Object):
 
         out.update(cls._extra_meta(locals))
         out.update(cls._get_extra_meta())
+
+        if prev_level:
+            for k, v in prev_level.meta.items():
+                if "." not in k:  # Don't save
+                    out[prev_level.__class__.__name__ + "." + k] = v
+                else:
+                    out[k] = v
+
         return out
 
     @classmethod
@@ -252,13 +279,26 @@ class _Level2Plus:
         Note that the parameters are not set on this model, but the basis vectors are
         set.
         """
-        return mdl.Model._models[self.meta["model_basis"].lower()](
+        return mdl.Model._models[self.meta["Level2"]["model_basis"].lower()](
             default_x=self.freq.freq, n_terms=self.meta["model_nterms"]
         )
 
+    def _get_specific_ancestor(self, lvl: int):
+        assert lvl >= 1
+
+        this = self
+        while this.__class__.__name__ != f"Level{lvl}":
+            this = self.previous_level
+        return this
+
+    @cached_property
+    def level2(self):
+        """The Level2 ancestor of this object."""
+        return self._get_specific_ancestor(2)
+
     @property
     def model_params(self):
-        return self.ancillary["model_params"]
+        return self.level2.ancillary["model_params"]
 
     def get_model(self, indx: [int, List[int]]) -> np.ndarray:
         """Obtain the fiducial fitted model spectrum for integration/gha at indx."""
