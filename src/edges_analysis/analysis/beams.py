@@ -657,7 +657,7 @@ def antenna_beam_factor(
     convolution_ref = np.zeros((len(lst), len(beam.frequency)))
     loss_fraction = np.zeros((len(lst), len(beam.frequency)))
 
-    for i, j, temperature, _, sky, bm, _, _, npix_no_nan in sky_convolution_generator(
+    for i, j, temperature, _, sky, bm, _, npix_no_nan in sky_convolution_generator(
         lst,
         beam=beam,
         sky_model=sky_model,
