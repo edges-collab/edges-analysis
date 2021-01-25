@@ -639,6 +639,8 @@ def antenna_beam_factor(
     """
     if not save_dir:
         save_dir = Path(config["paths"]["beams"]) / f"{beam.instrument}/beam_factors/"
+    else:
+        save_dir = Path(save_dir)
 
     if str(save_fname).startswith(":"):
         save_fname = Path(save_dir).absolute() / str(save_fname)[1:]
