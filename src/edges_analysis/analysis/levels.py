@@ -18,6 +18,7 @@ from functools import partial
 import inspect
 import functools
 from .. import __version__
+import dill
 
 import numpy as np
 from edges_cal import (
@@ -42,6 +43,8 @@ from .. import const
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
+
+# dill.detect.trace(True)
 
 
 def add_structure(cls):
@@ -2168,35 +2171,36 @@ class Level3(_Level, _Level2Plus):
         if ignore_days is None:
             ignore_days = []
 
+        logger.info("Masking days provided in [blue]ignore_days...")
         day_mask = np.array([day not in ignore_days for day in days])
         resid = prev_level.resids[day_mask]
         wght = prev_level.weights[day_mask]
 
+        if xrfi_on_resids:
+            rfi_data = resid
+        else:
+            rfi_data = prev_level.spectrum[day_mask]
+
         if gha_filter_file:
             raise NotImplementedError("Using a GHA filter file is not yet implemented")
 
+        logger.info("Running xRFI...")
         # Perform xRFI on GHA-averaged spectra.
         if xrfi_pipe:
 
-            if xrfi_on_resids:
-
-                def run_pipe(i):
-                    return tools.run_xrfi_pipe(resid[i], wght[i] <= 0, xrfi_pipe)
-
-            else:
-                spec = prev_level.spectrum[day_mask]
-
-                def run_pipe(i):
-                    return tools.run_xrfi_pipe(spec[i], wght[i] <= 0, xrfi_pipe)
+            def run_pipe(i):
+                return tools.run_xrfi_pipe(rfi_data[i], wght[i] <= 0, xrfi_pipe)
 
             m = map if n_threads <= 1 else Pool(n_threads).map
             flags = np.array(m(run_pipe, range(len(resid))))
             wght[flags] = 0
 
+        logger.info("Integrating over nights...")
         # Take mean over nights.
         params = np.nanmean(prev_level.ancillary["model_params"], axis=0)
         resid, wght = tools.weighted_mean(resid, wght, axis=0)
 
+        logger.info("Averaging in frequency bins...")
         # Average in frequency
         if freq_resolution:
             f, resid, wght, s = tools.average_in_frequency(
