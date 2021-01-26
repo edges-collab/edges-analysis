@@ -530,11 +530,15 @@ def run_xrfi_pipe(
                         messages[msg] = [wrn]
 
                 for msg, list_of_warnings in messages.items():
-                    logger.warning(f"Received warning '{msg}' {len(list_of_warnings)} times.")
+                    logger.warning(
+                        f"Received warning '{msg}' {len(list_of_warnings)/len(results)} times."
+                    )
         else:
             flags, info = getattr(xrfi, method)(spectrum, flags=flags, **kwargs)
 
-        print(f"After {method}, nflags={np.sum(flags)}")
+        logger.info(
+            f"After {method}, nflags={np.sum(flags)}/{flags.size} ({100*np.sum(flags)/flags.size}%)"
+        )
 
     return flags
 

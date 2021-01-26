@@ -2184,15 +2184,16 @@ class Level3(_Level, _Level2Plus):
         if gha_filter_file:
             raise NotImplementedError("Using a GHA filter file is not yet implemented")
 
-        logger.info("Running xRFI...")
+        logger.info("Running xRFI on each night and GHA...")
         # Perform xRFI on GHA-averaged spectra.
         if xrfi_pipe:
 
-            def run_pipe(i):
-                return tools.run_xrfi_pipe(rfi_data[i], wght[i] <= 0, xrfi_pipe)
+            def run_pipe(args):
+                data, w = args
+                return tools.run_xrfi_pipe(data, w <= 0, xrfi_pipe)
 
             m = map if n_threads <= 1 else Pool(n_threads).map
-            flags = np.array(m(run_pipe, range(len(resid))))
+            flags = np.array(m(run_pipe, zip(rfi_data, wght)))
             wght[flags] = 0
 
         logger.info("Integrating over nights...")
