@@ -531,7 +531,7 @@ def run_xrfi_pipe(
 
                 for msg, list_of_warnings in messages.items():
                     logger.warning(
-                        f"Received warning '{msg}' {len(list_of_warnings)/len(results)} times."
+                        f"Received warning '{msg}' {len(list_of_warnings)/len(flags)} times."
                     )
         else:
             flags, info = getattr(xrfi, method)(spectrum, flags=flags, **kwargs)

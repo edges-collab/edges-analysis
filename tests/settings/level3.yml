@@ -1,0 +1,8 @@
+# The simplest settings for level3 mean we just average over days without explicitly
+# doing any more filtering (or any averaging over frequency)
+day_range: null
+ignore_days: null
+f_low: null
+f_high: null
+freq_resolution: null
+gha_filter_file: null

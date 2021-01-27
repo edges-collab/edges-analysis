@@ -365,9 +365,9 @@ def _get_polyfit_res_std(n_poly, gha, data, flags=None):
     try:
         par = np.polyfit(gha, data, n_poly - 1)
     except np.linalg.LinAlgError:
-        print("gha:", gha)
-        print("data: ", data)
-        print("n_poly: ", n_poly)
+        logger.error("gha:", gha)
+        logger.error("data: ", data)
+        logger.error("n_poly: ", n_poly)
         raise
     model = np.polyval(par, gha)
     res = data - model

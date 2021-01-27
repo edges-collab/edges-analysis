@@ -69,6 +69,7 @@ def add_structure(cls):
 
     if lvl > 1:
         ancillary["gha_edges"] = lambda x: x.ndim == 1 and x.dtype.name.startswith("float")
+        ancillary["model_params"] = lambda x: x.dtype.name.startswith("float")
 
     structure = {
         "frequency": lambda x: x.ndim == 1 and x.dtype.name.startswith("float"),
@@ -162,6 +163,7 @@ class _Level(HDF5Object):
 
         out = cls.from_data(
             {"frequency": freq, "spectra": data, "ancillary": ancillary, "meta": meta},
+            validate=False,
         )
 
         if filename:
@@ -288,7 +290,7 @@ class _Level2Plus:
         l2_meta = self.meta.get("Level2", self.level2.meta)
 
         return mdl.Model._models[l2_meta["model_basis"].lower()](
-            default_x=self.freq.freq, n_terms=self.meta["model_nterms"]
+            default_x=self.freq.freq, n_terms=l2_meta["model_nterms"]
         )
 
     def _get_specific_ancestor(self, lvl: int):
@@ -306,7 +308,7 @@ class _Level2Plus:
 
     @property
     def model_params(self):
-        return self.level2.ancillary["model_params"]
+        return self.ancillary["model_params"]
 
     def get_model(self, indx: [int, List[int]]) -> np.ndarray:
         """Obtain the fiducial fitted model spectrum for integration/gha at indx."""
@@ -492,9 +494,9 @@ class Level1(_Level):
         data = {
             "frequency": freq.freq,
             "spectrum": calspec,
-            "switch_powers": [pp[:, freq.mask] for pp in p],
+            "switch_powers": np.array([pp[freq.mask] for pp in p]),
             "weights": weights,
-            "Q": Q[:, freq.mask],
+            "Q": Q[freq.mask],
         }
 
         if out_file is None:
@@ -691,7 +693,7 @@ class Level1(_Level):
     @property
     def raw_time_data(self):
         """Raw string times at which the spectra were taken."""
-        return self.ancillary["time"]
+        return self.ancillary["times"]
 
     @cached_property
     def datetimes(self):
@@ -783,6 +785,17 @@ class Level1(_Level):
             end_time=(end.year, get_jd(end), end.hour, end.minute + 1),
         )
 
+        if len(weather) == 0:
+            raise ValueError(
+                f"Weather file '{weather_file}' has no dates between {start.strftime('%Y/%m/%d')} and {end.strftime('%Y/%m/%d')}."
+            )
+
+        if len(thermlog) == 0:
+            raise ValueError(
+                f"Thermlog file '{thermlog_file}' has no dates between {start.strftime('%Y/%m/%d')} "
+                f"and {end.strftime('%Y/%m/%d')}."
+            )
+
         logger.info("Setting up arrays...")
 
         t = time.time()
@@ -816,36 +829,26 @@ class Level1(_Level):
 
         t = time.time()
         # Interpolate weather
-        for name, (kind, _) in weather.dtype.fields.items():
-            if kind.kind == "i":
-                continue
 
-            wth_seconds = [
+        for i, thing in enumerate([weather, thermlog]):
+            thing_seconds = [
                 (
                     dt_from_jd(x["year"], int(x["day"]), x["hour"], x["minute"], x["second"])
                     - times[0]
                 ).total_seconds()
-                for x in weather
-            ]
-            time_based_anc[name] = np.interp(seconds, wth_seconds, weather[name])
-
-            # Convert to celsius
-            if name.endswith("_temp"):
-                time_based_anc[name] -= 273.15
-
-        for name, (kind, _) in thermlog.dtype.fields.items():
-            if kind.kind == "i":
-                continue
-
-            wth_seconds = [
-                (
-                    dt_from_jd(x["year"], int(x["day"]), x["hour"], x["minute"], x["second"])
-                    - times[0]
-                ).total_seconds()
-                for x in thermlog
+                for x in thing
             ]
 
-            time_based_anc[name] = np.interp(seconds, wth_seconds, thermlog[name])
+            for name, (kind, _) in thing.dtype.fields.items():
+                if kind.kind == "i":
+                    continue
+
+                time_based_anc[name] = np.interp(seconds, thing_seconds, thing[name])
+
+                # Convert to celsius
+                if name.endswith("_temp") and np.any(time_based_anc[name] > 273.15):
+                    time_based_anc[name] -= 273.15
+
         logger.info(f"Took {time.time() - t} sec to interpolate auxiliary data.")
 
         # LST
@@ -873,14 +876,15 @@ class Level1(_Level):
     @classmethod
     def _get_antenna_s11(cls, s11_files, freq, switch_state_dir, n_terms, switch_state_run_num):
         # Get files
-        return s11m.antenna_s11_remove_delay(
+        model = s11m.antenna_s11_remove_delay(
             s11_files,
             freq,
             switch_state_dir=switch_state_dir,
             delay_0=0.17,
             n_fit=n_terms,
             switch_state_run_num=switch_state_run_num,
-        )
+        )[0]
+        return model(freq)
 
     @cached_property
     def _antenna_s11(self):
@@ -992,12 +996,18 @@ class Level1(_Level):
             calfile = Calibration(calfile)
 
         if switch_state_dir is not None:
-            warnings.warn(
-                "You should use the switch state that is inherently in the calibration object."
-            )
+            if calfile.internal_switch is not None:
+                warnings.warn(
+                    "You should use the switch state that is inherently in the calibration object."
+                )
             switch_state_dir = str(Path(switch_state_dir).absolute())
         else:
-            switch_state_dir = calfile.internal_switch.path
+            if calfile.internal_switch is None:
+                raise ValueError(
+                    "Internal switch of calfile not found, and no switch_state_dir given!"
+                )
+            else:
+                switch_state_dir = calfile.internal_switch.path
 
         if switch_state_run_num is not None:
             warnings.warn(
@@ -1005,7 +1015,10 @@ class Level1(_Level):
             )
             switch_state_run_num = switch_state_run_num
         else:
-            switch_state_run_num = calfile.internal_switch.run_num
+            if calfile.internal_switch is None:
+                switch_state_run_num = 1
+            else:
+                switch_state_run_num = calfile.internal_switch.run_num
 
         meta = {
             "s11_files": ":".join([str(f) for f in s11_files]),
@@ -1033,8 +1046,8 @@ class Level1(_Level):
 
         # Cut the frequency range
         freq = FrequencyRange(frequencies, f_low=f_low, f_high=f_high)
-        Q = spectrum[:, freq.mask]
-        weights = weights[:, freq.mask]
+        Q = spectrum.T[:, freq.mask]
+        weights = weights.T[:, freq.mask]
 
         s11_ant = cls._get_antenna_s11(
             s11_files,
@@ -1043,6 +1056,7 @@ class Level1(_Level):
             antenna_s11_n_terms,
             switch_state_run_num,
         )
+
         # Calibrated antenna temperature with losses and beam chromaticity
         calibrated_temp = calfile.calibrate_Q(freq.freq, Q, s11_ant)
 
@@ -2373,6 +2387,6 @@ class Level4(_Level, _Level2Plus):
         )
 
         data = {"resids": resid, "weights": wght}
-        ancillary = {"gha_edges": gha_edges}
+        ancillary = {"gha_edges": gha_edges, "model_params": params}
 
         return f, data, ancillary, cls._get_meta(locals())
