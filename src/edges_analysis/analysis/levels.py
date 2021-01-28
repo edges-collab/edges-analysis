@@ -2374,9 +2374,7 @@ class Level4(_Level, _Level2Plus):
         else:
             f = freq.freq
 
-        gha_edges = np.arange(gha_min, gha_max, gha_bin_size, dtype=float)
-        if np.isclose(gha_max, gha_edges.max() + gha_bin_size):
-            gha_edges = np.concatenate((gha_edges, [gha_edges.max() + gha_bin_size]))
+        gha_edges = np.arange(gha_min, gha_max + gha_bin_size / 10, gha_bin_size, dtype=float)
 
         params, resid, wght = tools.model_bin_gha(
             prev_level.ancillary["model_params"],
