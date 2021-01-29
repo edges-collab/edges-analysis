@@ -2313,7 +2313,7 @@ class Level4(_Level, _Level2Plus):
         freq_resolution: Optional[float] = None,
         gha_min: float = 0,
         gha_max: float = 24,
-        gha_bin_size: float = 24,
+        gha_bin_size: [None, float] = None,
         xrfi_pipe: [None, dict] = None,
         xrfi_on_resids: bool = True,
     ):
@@ -2376,6 +2376,9 @@ class Level4(_Level, _Level2Plus):
         else:
             f = freq.freq
         logger.info(f".... produced {len(f)} frequency bins.")
+
+        if gha_bin_size is None:
+            gha_bin_size = gha_max - gha_min
 
         gha_edges = np.arange(gha_min, gha_max + gha_bin_size / 10, gha_bin_size, dtype=float)
 
