@@ -2361,21 +2361,25 @@ class Level4(_Level, _Level2Plus):
             spec = prev_level.spectrum[:, freq.mask]
 
         # Another round of XRFI
+        logger.info("Running xRFI...")
         tools.run_xrfi_pipe(resid if xrfi_on_resids else spec, wght, xrfi_pipe)
 
         if ignore_freq_ranges:
             for (low, high) in ignore_freq_ranges:
                 wght[:, (freq.freq >= low) & (freq.freq <= high)] = 0
 
+        logger.info("Averaging in frequency bins...")
         if freq_resolution:
             f, resid, wght, s = tools.average_in_frequency(
                 resid, freq.freq, wght, resolution=freq_resolution
             )
         else:
             f = freq.freq
+        logger.info(f".... produced {len(f)} frequency bins.")
 
         gha_edges = np.arange(gha_min, gha_max + gha_bin_size / 10, gha_bin_size, dtype=float)
 
+        logger.info(f"Averaging into {len(gha_edges) - 1} GHA bins.")
         params, resid, wght = tools.model_bin_gha(
             prev_level.ancillary["model_params"],
             resid,
