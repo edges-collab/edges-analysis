@@ -293,18 +293,10 @@ class _Level2Plus:
             default_x=self.freq.freq, n_terms=l2_meta["model_nterms"]
         )
 
-    def _get_specific_ancestor(self, lvl: int):
-        assert lvl >= 1
-
-        this = self
-        while this.__class__.__name__ != f"Level{lvl}":
-            this = self.previous_level
-        return this
-
     @cached_property
     def level2(self):
         """The Level2 ancestor of this object."""
-        return self._get_specific_ancestor(2)
+        raise NotImplementedError()
 
     @property
     def model_params(self):
@@ -317,7 +309,7 @@ class _Level2Plus:
             indx = [indx]
         assert (
             len(indx) == self.resids.ndim - 1
-        ), "indx must have one element for each axis of resids, except the last."
+        ), "indx must have one element for each axis of resids, except the last (which is frequency)."
 
         for i in indx:
             p = p[i]
@@ -325,8 +317,8 @@ class _Level2Plus:
         return self.model(parameters=p)
 
     @property
-    def spectrum(self):
-        """The GHA-averaged spectra for each night."""
+    def spectrum(self) -> np.ndarray:
+        """The processed spectra at this level."""
         indx = np.indices(self.resids.shape[:-1]).reshape((self.resids.ndim - 1, -1)).T
         out = np.zeros_like(self.resids)
         for i in indx:
@@ -1597,6 +1589,10 @@ class Level2(_Level, _Level2Plus):
         "n_files_flagged": lambda x: isinstance(x, (int, np.int, np.int64)) and x >= 0,
     }
 
+    @property
+    def level2(self):
+        return self
+
     @classmethod
     def run_filter(cls, fnc, level1, flags=None, nthreads=None, **kwargs):
 
@@ -2147,6 +2143,10 @@ class Level3(_Level, _Level2Plus):
     }
     _meta = {}
 
+    @property
+    def level2(self):
+        return self.previous_level
+
     @cached_property
     def calibration(self):
         """The calibration object used to calibrate these spectra."""
@@ -2319,6 +2319,10 @@ class Level4(_Level, _Level2Plus):
 
     _ancillary = {}
     _meta = None
+
+    @property
+    def level2(self):
+        return self.previous_level.previous_level
 
     @cached_property
     def calibration(self):
