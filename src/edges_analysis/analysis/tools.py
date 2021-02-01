@@ -596,7 +596,10 @@ def model_bin_gha(
         these_resids = resids[mask]
         these_weights = weights[mask]
 
-        params_out[i] = np.mean(these_params, axis=0)
+        # Take the nanmean, because some entire integrations/GHA's might have been flagged
+        # and therefore have no applicable model. Then the params should be NaN. A nanmean
+        # of all NaNs returns NaN, so that makes sense.
+        params_out[i] = np.nanmean(these_params, axis=0)
         resids_out[i], weights_out[i] = weighted_mean(these_resids, weights=these_weights, axis=0)
 
     return params_out, resids_out, weights_out
