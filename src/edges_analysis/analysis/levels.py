@@ -1179,7 +1179,12 @@ class Level1(_Level):
         return lambda nu: model.evaluate(freq.normalize(nu))
 
     def get_model_parameters(
-        self, model: str = "LINLOG", n_terms: int = 5, n_samples: [None, int] = None, **kwargs
+        self,
+        model: str = "LINLOG",
+        n_terms: int = 5,
+        n_samples: [None, int] = None,
+        flags=None,
+        **kwargs,
     ) -> Tuple[mdl.Model, np.ndarray]:
         """
         Determine a callable model of the spectrum at a given time, optionally
@@ -1203,25 +1208,36 @@ class Level1(_Level):
             Function of frequency (in units of self.raw_frequency) that will return
             the model.
         """
+        if flags is None:
+            flags = np.zeros(self.spectrum.shape, dtype=bool)
+
         if n_samples and n_samples > 1:
             f, s, w = tools.average_in_frequency(
-                self.spectrum, freq=self.raw_frequencies, weights=self.weights, n_samples=n_samples
+                self.spectrum,
+                freq=self.raw_frequencies,
+                weights=np.where(flags, 0, self.weights),
+                n_samples=n_samples,
             )[:3]
         else:
             f = self.raw_frequencies
             s = self.spectrum
-            w = self.weights
+            w = np.where(flags, 0, self.weights)
 
         freq = FrequencyRange(f)
 
         if not isinstance(model, mdl.Model):
             model = mdl.Model._models[model.lower()](default_x=freq.freq, n_terms=n_terms, **kwargs)
 
-        params = np.zeros((len(s), model.n_terms))
+        # Start out with NaN's, because if we can't fit an integration, we should have
+        # NaN.
+        params = np.nan * np.ones((len(s), model.n_terms))
 
         for i, (ss, ww) in enumerate(zip(s, w)):
-            fit = mdl.ModelFit(model, ydata=ss, weights=ww)
-            params[i] = fit.model_parameters
+            if np.sum(w > 0) <= 2 * n_terms:
+                # Only try to fit if we have enough non-flagged data points.
+                continue
+
+            params[i] = model.fit(ydata=ss, weights=ww).model_parameters
 
         return model, params
 
@@ -1771,6 +1787,9 @@ class Level2(_Level, _Level2Plus):
         if gha_max < 0 or gha_max > 24:
             raise ValueError("gha_max must be between 0 and 24")
 
+        if gha_bin_size > (gha_max - gha_min):
+            raise ValueError(f"gha_bin_size must be smaller than the gha range, got {gha_bin_size}")
+
         # Sort the inputs in ascending date.
         prev_level = sorted(
             prev_level, key=lambda x: (x.meta["year"], x.meta["day"], x.meta["hour"])
@@ -1835,8 +1854,11 @@ class Level2(_Level, _Level2Plus):
             f"Determining {model.n_terms}-term '{model.__class__.__name__}' models for each integration..."
         )
 
-        def get_params_resids(l1):
-            params = l1.get_model_parameters(model, n_samples=model_nsamples)[1]
+        def get_params_resids(i):
+            l1 = prev_level[i]
+            flg = flags[i]
+
+            params = l1.get_model_parameters(model, n_samples=model_nsamples, flags=flg)[1]
             resids = np.array(
                 [
                     l1.spectrum[j] - model(parameters=pp, x=l1.freq.freq)
@@ -1846,7 +1868,7 @@ class Level2(_Level, _Level2Plus):
             return params, resids
 
         iterator = p_tqdm.p_imap(
-            get_params_resids, prev_level, num_cpus=min(n_threads, len(prev_level))
+            get_params_resids, range(len(prev_level)), num_cpus=min(n_threads, len(prev_level))
         )
 
         model_params = []
