@@ -1225,7 +1225,7 @@ class Level1(_Level):
         params = np.nan * np.ones((len(s), model.n_terms))
 
         for i, (ss, ww) in enumerate(zip(s, w)):
-            if np.sum(w > 0) <= 2 * n_terms:
+            if np.sum(ww > 0) <= 2 * n_terms:
                 # Only try to fit if we have enough non-flagged data points.
                 continue
 
