@@ -428,11 +428,11 @@ def weighted_mean(data, weights=None, axis=0):
     """
     sum, weights = weighted_sum(data, weights, axis=axis)
 
-    av = np.zeros_like(sum)
     mask = weights > 0
     if isinstance(sum, float):
         return sum / weights if mask else np.nan, weights
     else:
+        av = np.zeros_like(sum)
         av[mask] = sum[mask] / weights[mask]
         av[~mask] = np.nan
         return av, weights

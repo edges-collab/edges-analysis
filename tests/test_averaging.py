@@ -1,6 +1,9 @@
 from edges_analysis.analysis import tools
 import numpy as np
 from edges_cal import modelling as mdl
+import pytest
+from pytest_cases import fixture_ref as fxref
+from pytest_cases import parametrize_plus
 
 
 def test_non_stationary_avg_1d_shape():
@@ -105,3 +108,95 @@ def test_get_binned_weights_more_bins():
     wghts = tools.get_binned_weights(x=x, bins=bins, weights=w)
     assert wghts.shape == (10, 10)
     assert np.allclose(wghts, 2)
+
+
+FREQ = np.linspace(50, 100, 500)
+LINLOG = mdl.LinLog(n_terms=5, default_x=FREQ)
+N_GHA = 50
+FID_PARAMS = np.array([2500, 0, 0, 5, 1])
+
+
+@pytest.fixture(scope="module")
+def fid_params():
+    return np.array([FID_PARAMS] * N_GHA)
+
+
+@pytest.fixture(scope="module")
+def evolving_params():
+    return np.array([[2500 + (i - N_GHA // 2) * 5, 0, 0, 5, 1] for i in range(N_GHA)])
+
+
+def make_data(params, weights):
+    model = np.array([LINLOG(parameters=p) for p in params])
+    noise_level = model / 50
+    data = model + np.random.normal(loc=0, scale=noise_level)
+    return model, np.where(weights > 0, data, 1e6), noise_level
+
+
+@pytest.fixture(scope="module")
+def ideal_weights():
+    return np.ones((N_GHA, len(FREQ)))
+
+
+@pytest.fixture(scope="module")
+def row_flags():
+    weights = np.ones((N_GHA, len(FREQ)))
+    weights[1::10] = 0
+    return weights
+
+
+@pytest.fixture(scope="module")
+def bitsy_flags():
+    np.random.seed(1234)
+    return np.random.binomial(1, 0.6, size=(N_GHA, len(FREQ)))
+
+
+@parametrize_plus("params", [fxref(fid_params), fxref(evolving_params)])
+@parametrize_plus("weights", [fxref(ideal_weights), fxref(row_flags), fxref(bitsy_flags)])
+@pytest.mark.parametrize("refit", [5, 3, False])
+def test_model_bin_gha(params, weights, refit):
+
+    model, data, sigma = make_data(params, weights)
+
+    if refit:
+        refit_mdl = mdl.LinLog(n_terms=refit, default_x=FREQ)
+        fits = [
+            refit_mdl.fit(d, weights=ww) if np.any(ww > 0) else None for d, ww in zip(data, weights)
+        ]
+        fit_params = np.array(
+            [
+                fit.model_parameters if fit is not None else np.nan * np.ones(refit_mdl.n_terms)
+                for fit in fits
+            ]
+        )
+        resids = np.array(
+            [fit.residual if fit is not None else np.nan * np.ones(len(FREQ)) for fit in fits]
+        )
+    else:
+        refit_mdl = LINLOG
+        fit_params = params
+        resids = data - model
+
+    p, r, w = tools.model_bin_gha(
+        params=fit_params,
+        resids=resids,
+        weights=weights,
+        gha=np.linspace(0, 1, N_GHA),
+        bins=[0, 1.1],
+    )
+
+    # output should have one GHA bin
+    assert len(p) == 1
+    assert len(r) == 1
+    assert len(w) == 1
+
+    assert np.all(p[0] == np.nanmean(fit_params, axis=0))
+    assert np.all(w[0] == np.sum(weights, axis=0))
+    spec_out = refit_mdl(parameters=p[0]) + r[0]
+    simple_spec_mean = np.mean(model, axis=0)
+    print("Maximum deviation: ", np.abs(spec_out - simple_spec_mean).max())
+    print(
+        "Maximum dev (std): ",
+        (np.abs(spec_out - simple_spec_mean) / (sigma / np.sqrt(N_GHA))).max(),
+    )
+    assert np.allclose(spec_out, simple_spec_mean, atol=6 * sigma / np.sqrt(N_GHA))
