@@ -2024,6 +2024,8 @@ class Level2(_Level, _Level2Plus):
         ax: [None, plt.Axes] = None,
         gha_min: float = 0,
         gha_max: float = 24,
+        freq_resolution: Optional[float] = None,
+        days: Optional[List[int]] = None,
     ) -> plt.Axes:
         """
         Make a single plot of residuals for each day in the dataset.
@@ -2038,6 +2040,12 @@ class Level2(_Level, _Level2Plus):
             A minimum GHA to include in the averaged residuals.
         gha_max
             A maximum GHA to include in the averaged residuals.
+        freq_resolution
+            The frequency resolution to bin the spectra into for the plot. In same
+            units as the instance frequencies.
+        days
+            The integer day numbers to include in the plot. Default is to include
+            all days in the dataset.
 
         Returns
         -------
@@ -2054,6 +2062,13 @@ class Level2(_Level, _Level2Plus):
         for ix, (param, resid, weight) in enumerate(
             zip(self.model_params, self.resids, self.weights)
         ):
+            if np.sum(weight[mask]) == 0:
+                continue
+
+            # skip days not explicitly requested.
+            if days and self.unflagged_days[ix] not in days:
+                continue
+
             mean_p, mean_r, mean_w = tools.model_bin_gha(
                 params=param[mask],
                 resids=resid[mask],
@@ -2061,8 +2076,15 @@ class Level2(_Level, _Level2Plus):
                 gha=gha[mask],
                 bins=np.array([gha_min, gha_max]),
             )
-            # fit = model_freq.fit(ydata=mean_spec, weights=w)
-            ax.plot(self.freq.freq, mean_r[0] - ix * separation)
+
+            if freq_resolution:
+                f, mean_r, mean_w, s = tools.average_in_frequency(
+                    mean_r, self.freq.freq, mean_w, resolution=freq_resolution
+                )
+            else:
+                f = self.freq.freq
+
+            ax.plot(f, mean_r[0] - ix * separation)
             ax.text(
                 self.freq.max + 5,
                 -ix * separation,
