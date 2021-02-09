@@ -1644,9 +1644,15 @@ class Level2(_Level, _Level2Plus):
                     msg += f"{l1.filename.name} | "
             logger.warning(msg[:-3])
 
+        logger.info(f"Following flag fractions obtained during {fnc} filter:")
+        for l1 in level1:
+            logger.info(f"{l1.meta['year']}-{l1.meta['day']}: {np.sum(flg)/flg.size}")
+
+        logger.inf
         return (
             [flg for i, flg in enumerate(flags) if not all_flagged[i]],
             [l1 for i, l1 in enumerate(level1) if not all_flagged[i]],
+            [np.sum(flg) / flg.size for flg in enumerate(flags)],
         )
 
     @classmethod
@@ -1797,7 +1803,7 @@ class Level2(_Level, _Level2Plus):
         days = np.array([x.meta["day"] for x in prev_level], dtype=int)
         hours = np.array([x.meta["hour"] for x in prev_level], dtype=int)
 
-        flags, prev_level = cls.run_filter(
+        flags, prev_level, aux_flag_frac = cls.run_filter(
             "aux",
             prev_level,
             sun_el_max=sun_el_max,
@@ -1806,11 +1812,14 @@ class Level2(_Level, _Level2Plus):
             min_receiver_temp=min_receiver_temp,
             max_receiver_temp=max_receiver_temp,
         )
+
         if xrfi_pipe:
-            flags, prev_level = cls.run_filter("rfi", prev_level, flags=flags, xrfi_pipe=xrfi_pipe)
+            flags, prev_level, rfi_flag_frac = cls.run_filter(
+                "rfi", prev_level, flags=flags, xrfi_pipe=xrfi_pipe
+            )
 
         if do_total_power_filter:
-            flags, prev_level = cls.run_filter(
+            flags, prev_level, tp_flag_frac = cls.run_filter(
                 "total_power",
                 prev_level,
                 flags=flags,
@@ -1821,7 +1830,7 @@ class Level2(_Level, _Level2Plus):
             )
 
         if do_rms_filter:
-            flags, prev_level = cls._run_rms_filter(
+            flags, prev_level, rms_flag_frac = cls._run_rms_filter(
                 rms_filter_file=rms_filter_file,
                 flags=flags,
                 level1=prev_level,
@@ -1887,7 +1896,15 @@ class Level2(_Level, _Level2Plus):
             "hours": hours,
             "gha_edges": gha_edges,
             "model_params": params,
+            "aux_flag_frac": aux_flag_frac,
         }
+
+        if xrfi_pipe:
+            ancillary["rfi_flag_frac"] = rfi_flag_frac
+        if do_rms_filter:
+            ancillary["rms_flag_frac"] = rms_flag_frac
+        if do_total_power_filter:
+            ancillary["tp_flag_frac"] = tp_flag_frac
 
         return prev_level[0].raw_frequencies, data, ancillary, cls._get_meta(locals())
 
