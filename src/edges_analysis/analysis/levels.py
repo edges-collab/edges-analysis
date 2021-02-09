@@ -1582,6 +1582,10 @@ class Level2(_Level, _Level2Plus):
         "hours": lambda x: x.ndim == 1 and x.dtype.name.startswith("int"),
         "model_params": lambda x: x.ndim == 3 and x.dtype.name.startswith("float"),
         "files_flagged": lambda x: x.ndim == 1 and x.dtype.name.startswith("bool"),
+        "aux_flag_frac": lambda x: x.ndim == 1 and x.dtype.name.startswith("float"),
+        "rfi_flag_frac": lambda x: x.ndim == 1 and x.dtype.name.startswith("float"),
+        "rms_flag_frac": lambda x: x.ndim == 1 and x.dtype.name.startswith("float"),
+        "tp_flag_frac": lambda x: x.ndim == 1 and x.dtype.name.startswith("float"),
     }
 
     _meta = {
@@ -1648,11 +1652,12 @@ class Level2(_Level, _Level2Plus):
         for l1 in level1:
             logger.info(f"{l1.meta['year']}-{l1.meta['day']}: {np.sum(flg)/flg.size}")
 
-        logger.inf
+        dates = [(l1.meta["year"], l1.meta["day"], l1.meta["hour"]) for l1 in level1]
+
         return (
             [flg for i, flg in enumerate(flags) if not all_flagged[i]],
             [l1 for i, l1 in enumerate(level1) if not all_flagged[i]],
-            [np.sum(flg) / flg.size for flg in enumerate(flags)],
+            {date: np.sum(flg) / flg.size for date, flg in enumerate(zip(dates, flags))},
         )
 
     @classmethod
@@ -1817,6 +1822,9 @@ class Level2(_Level, _Level2Plus):
             flags, prev_level, rfi_flag_frac = cls.run_filter(
                 "rfi", prev_level, flags=flags, xrfi_pipe=xrfi_pipe
             )
+            rfi_flag_frac = [rfi_flag_frac.get(date, 0) for date in orig_dates]
+        else:
+            rfi_flag_frac = np.zeros(len(orig_dates))
 
         if do_total_power_filter:
             flags, prev_level, tp_flag_frac = cls.run_filter(
@@ -1828,6 +1836,9 @@ class Level2(_Level, _Level2Plus):
                 std_thresholds=std_thresholds_tp_filter,
                 bands=bands_tp_filter,
             )
+            tp_flag_frac = [tp_flag_frac.get(date, 0) for date in orig_dates]
+        else:
+            tp_flag_frac = np.zeros(len(orig_dates))
 
         if do_rms_filter:
             flags, prev_level, rms_flag_frac = cls._run_rms_filter(
@@ -1841,6 +1852,9 @@ class Level2(_Level, _Level2Plus):
                 n_std=n_std_rms,
                 n_files=n_files_rms,
             )
+            rms_flag_frac = [rms_flag_frac.get(date, 0) for date in orig_dates]
+        else:
+            rms_flag_frac = np.zeros(len(orig_dates))
 
         final_dates = [(x.meta["year"], x.meta["day"], x.meta["hour"]) for x in prev_level]
         files_flagged = np.array([date not in final_dates for date in orig_dates])
@@ -1897,14 +1911,10 @@ class Level2(_Level, _Level2Plus):
             "gha_edges": gha_edges,
             "model_params": params,
             "aux_flag_frac": aux_flag_frac,
+            "rfi_flag_frac": rfi_flag_frac,
+            "rms_flag_frac": rms_flag_frac,
+            "tp_flag_frac": tp_flag_frac,
         }
-
-        if xrfi_pipe:
-            ancillary["rfi_flag_frac"] = rfi_flag_frac
-        if do_rms_filter:
-            ancillary["rms_flag_frac"] = rms_flag_frac
-        if do_total_power_filter:
-            ancillary["tp_flag_frac"] = tp_flag_frac
 
         return prev_level[0].raw_frequencies, data, ancillary, cls._get_meta(locals())
 
