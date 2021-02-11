@@ -1582,10 +1582,10 @@ class Level2(_Level, _Level2Plus):
         "hours": lambda x: x.ndim == 1 and x.dtype.name.startswith("int"),
         "model_params": lambda x: x.ndim == 3 and x.dtype.name.startswith("float"),
         "files_flagged": lambda x: x.ndim == 1 and x.dtype.name.startswith("bool"),
-        "aux_flag_frac": lambda x: x.ndim == 1 and x.dtype.name.startswith("float"),
-        "rfi_flag_frac": lambda x: x.ndim == 1 and x.dtype.name.startswith("float"),
-        "rms_flag_frac": lambda x: x.ndim == 1 and x.dtype.name.startswith("float"),
-        "tp_flag_frac": lambda x: x.ndim == 1 and x.dtype.name.startswith("float"),
+        # "aux_flag_frac": 'optional',
+        # "rfi_flag_frac": 'optional',
+        # "rms_flag_frac": 'optional',
+        # "tp_flag_frac": 'optional',
     }
 
     _meta = {
@@ -1954,7 +1954,7 @@ class Level2(_Level, _Level2Plus):
         return np.array(
             [
                 year
-                for i, year in enumerate(self.ancillary["year"])
+                for i, year in enumerate(self.ancillary["years"])
                 if not self.ancillary["files_flagged"][i]
             ]
         )
