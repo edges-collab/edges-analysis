@@ -200,3 +200,65 @@ def test_model_bin_gha(params, weights, refit):
         (np.abs(spec_out - simple_spec_mean) / (sigma / np.sqrt(N_GHA))).max(),
     )
     assert np.allclose(spec_out, simple_spec_mean, atol=6 * sigma / np.sqrt(N_GHA))
+
+
+class TestBinArray:
+    def test_out_shape_no_coords(self, fid_params, ideal_weights):
+        model, corrupt, noise = make_data(fid_params, ideal_weights)
+
+        coords, mean, wght = tools.bin_array(corrupt, axis=0)
+        assert mean.shape == coords.shape == wght.shape == (1, 500)
+
+        coords, mean, wght = tools.bin_array(corrupt, axis=1)
+        assert mean.shape == coords.shape == wght.shape == (50, 1)
+
+        coords, mean, wght = tools.bin_array(corrupt, axis=-1)
+        assert mean.shape == coords.shape == wght.shape == (50, 1)
+
+    def test_out_shape_with_coords(self, fid_params, ideal_weights):
+        model, corrupt, noise = make_data(fid_params, ideal_weights)
+
+        coords = FREQ
+        with pytest.raises(ValueError):
+            tools.bin_array(corrupt, coords=coords, axis=0)
+
+        outc, mean, wght = tools.bin_array(corrupt, coords=coords, axis=-1)
+        assert mean.shape == outc.shape == wght.shape == (50, 1)
+
+        outc, mean, wght = tools.bin_array(corrupt, coords=coords, axis=-1, bins=5)
+        assert mean.shape == outc.shape == wght.shape == (50, 100)
+
+        outc, mean, wght = tools.bin_array(corrupt, coords=coords, axis=-1, bins=11)
+        assert mean.shape == outc.shape == wght.shape == (50, 46)
+
+        outc, mean, wght = tools.bin_array(corrupt, coords=coords, axis=-1, bins=1.0)
+        assert mean.shape == outc.shape == wght.shape == (50, 50)
+
+    def test_shape_3d_input(self, fid_params, ideal_weights):
+        model, corrupt, noise = make_data(fid_params, ideal_weights)
+
+        corrupt = corrupt.reshape((50, 20, 25))
+        outc, mean, wght = tools.bin_array(corrupt, axis=0, bins=5)
+        assert outc.shape == mean.shape == wght.shape == (10, 20, 25)
+
+        outc, mean, wght = tools.bin_array(corrupt, axis=1, bins=5)
+        assert outc.shape == mean.shape == wght.shape == (50, 4, 25)
+
+        outc, mean, wght = tools.bin_array(corrupt, axis=2, bins=5)
+        assert outc.shape == mean.shape == wght.shape == (50, 20, 5)
+
+    def test_unity_input(self):
+        data = np.ones((10, 100))
+
+        outc, mean, wght = tools.bin_array(data, axis=0, bins=5)
+        assert np.all(mean == 1)
+        assert np.all(wght == 5)
+
+    def test_unity_input_weights(self):
+        data = np.ones((10, 100))
+        weights = np.ones((10, 100))
+        weights[:, ::5] = 0
+
+        outc, mean, wght = tools.bin_array(data, axis=1, weights=weights, bins=5)
+        assert np.all(mean == 1)
+        assert np.all(wght == 4)

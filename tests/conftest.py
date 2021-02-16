@@ -5,6 +5,11 @@ from subprocess import run
 from edges_analysis.analysis import Level1, Level2, Level3, Level4
 import yaml
 from typing import Tuple
+import numpy as np
+from edges_cal.modelling import LinLog
+import datetime as dt
+from edges_io import __version__
+from edges_analysis import __version__ as eav
 
 
 @pytest.fixture(scope="session")
@@ -95,3 +100,57 @@ def level4(level3: Level3, settings: Path, integration_test_data: Path):
         s = yaml.load(fl, Loader=yaml.FullLoader)
 
     return Level4.from_previous_level(level3, filename=integration_test_data / "level4/out.h5", **s)
+
+
+@pytest.fixture(scope="session")
+def mock_level1_list(tmp_path_factory) -> Level1:
+    np.random.seed(1234)
+    tmp_path = tmp_path_factory.mktemp("mock-data")
+
+    freq = np.linspace(50, 100, 100)
+    n_gha = 50
+
+    start_time = dt.datetime(year=2015, month=1, day=1)
+    timedelta = dt.timedelta(hours=12) / n_gha
+
+    time_strings = np.array(
+        [(start_time + i * timedelta).strftime("%Y:%j:%H:%M:%S") for i in range(n_gha)], dtype="S17"
+    )
+
+    anc = Level1.get_ancillary_coords(Level1.get_datetimes(time_strings))
+    anc["times"] = time_strings
+    gha_model = 10000 * (1 + np.sin(2 * np.pi * (anc["gha"] - 18) / 24))
+
+    mdl = LinLog(default_x=freq, n_terms=2)
+
+    sky = np.array([mdl(parameters=[gg, 0]) for gg in gha_model])
+    noise = np.random.normal(0, scale=sky / 100)
+
+    data = {
+        "spectrum": sky + noise,
+        "switch_powers": np.concatenate((sky, sky, sky)).reshape((3, n_gha, len(freq))),
+        "weights": np.ones_like(sky),
+        "Q": (sky + noise - 300) / 400,
+    }
+
+    return Level1.from_data(
+        {
+            "frequency": freq,
+            "spectra": data,
+            "ancillary": anc,
+            "meta": {
+                "year": 2015,
+                "day": 1,
+                "hour": 1,
+                "band": "low",
+                "xrfi_pipe": {},
+                "prev_level_files": "non_existent_file.acq",
+                "write_time": dt.datetime.now(),
+                "edges_io_version": __version__,
+                "object_name": "Level1",
+                "edges_analysis_version": eav,
+                "message": "",
+            },
+        },
+        filename=tmp_path / "mock_level1_0.h5",
+    )

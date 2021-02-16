@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Tuple, Optional, Union
 from datetime import datetime, timedelta
 from multiprocess import Pool, current_process, cpu_count
 import numpy as np
@@ -242,6 +242,105 @@ def get_binned_weights(
     return out
 
 
+def bin_array(
+    data: np.ndarray,
+    weights: Optional[np.ndarray] = None,
+    coords: Optional[np.ndarray] = None,
+    axis: int = -1,
+    bins: Optional[Union[np.ndarray, int, float]] = None,
+) -> [np.ndarray, np.ndarray, np.ndarray]:
+    """Bin arbitrary-dimension data carefully along an axis.
+
+    There are multiple ways to "bin" data along an axis when provided with weights.
+    It is not typically accurate to return equi-spaced bins where data is averaged simply
+    via summing with the weights (and the bin coords represent the centre of each bin).
+    This results in some bias when the weights are not uniform.
+
+    One way around this is to assume some underlying model and "fill in" the lower-weight
+    bins. This would allow equi-spaced estimates.
+
+    However, this function does something simpler -- it returns non-equi-spaced bins.
+    This can be a little annoying if multiple data are to be binned, because one needs
+    to keep track of the coordinates of each data separately. However, it is simple
+    and accurate.
+
+    Parameters
+    ----------
+    data
+        The data to be binned. May be of arbitrary dimension.
+    weights
+        The weights of the data. Must be the same shape as ``data``. If not provided,
+        assume all weights are unity.
+    coords
+        The coordinates of the data along the axis to be averaged. If not provided,
+        is taken to be the indices over the axis.
+    axis
+        The axis over which to bin.
+    bins
+        The bin *edges* (lower inclusive, upper not inclusive). If an ``int``, simply
+        use ``bins`` samples per bin, starting from the first bin. If a float, use
+        equi-spaced bin edges, starting from the start of coords, and ending past the
+        end of coords. If not provided, assume a single bin encompassing the all the
+        data.
+
+    Returns
+    -------
+    coords
+        The weighted average of the coordinates in each bin. If there is no weight
+        in a bin
+    """
+    axis %= data.ndim
+
+    if weights is None:
+        weights = np.ones(data.shape, dtype=float)
+
+    if data.shape != weights.shape:
+        raise ValueError("data and weights must have same shape")
+
+    if coords is None:
+        coords = np.arange(data.shape[axis])
+
+    if len(coords) != data.shape[axis]:
+        raise ValueError("coords must be same length as the data along the given axis.")
+
+    if bins is None:
+        bins = np.array([coords[0], coords[-1] + 0.1])
+    elif isinstance(bins, int):
+        bins = np.concatenate((coords[::bins], [coords[-1] + 0.1]))
+    elif isinstance(bins, float):
+        bins = np.concatenate((np.arange(coords[0], coords[-1], bins), [coords[-1] + 0.1]))
+
+    # Get a list of tuples of bin edges
+    bins = [(b, bins[i + 1]) for i, b in enumerate(bins[:-1])]
+
+    # Generate the shape of the outputs by contracting one axis.
+    out_shape = tuple(d if i != axis else len(bins) for i, d in enumerate(data.shape))
+
+    out_data = np.ones(out_shape) * np.nan
+    out_wght = np.zeros(out_shape)
+    out_coords = np.ones(out_shape) * np.nan
+    init_shape = tuple(data.shape[-1] if i == axis else d for i, d in enumerate(data.shape[:-1]))
+
+    for i, (lower, upper) in enumerate(bins):
+        mask = np.where((coords >= lower) & (coords < upper))[0]
+        if len(mask) > 0:
+            this_data = data.take(mask, axis=axis)
+            this_wght = weights.take(mask, axis=axis)
+
+            this_crd = np.swapaxes(
+                np.broadcast_to(coords[mask], init_shape + (len(coords[mask]),)), axis, -1
+            )
+
+            this_slice = tuple(slice(None) if ax != axis else i for ax in range(data.ndim))
+            out_data[this_slice], out_wght[this_slice] = weighted_mean(
+                this_data, this_wght, axis=axis
+            )
+
+            out_coords[this_slice], _ = weighted_mean(this_crd, this_wght, axis=axis)
+
+    return out_coords, out_data, out_wght
+
+
 def average_in_frequency(
     spectrum: [list, np.ndarray],
     freq: [list, np.ndarray, None] = None,
@@ -257,7 +356,7 @@ def average_in_frequency(
     Parameters
     ----------
     spectrum : array-like
-        The spectrum to average. Must be 1D.
+        The spectrum to average. Fre
     freq : array-like, optional
         The frequencies along which to average. If provided, must be the same shape
         as ``spectrum``. Must be provided if either ``resolution`` or ``n_samples``
