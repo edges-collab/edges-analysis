@@ -9,7 +9,6 @@ finally:
     del get_distribution, DistributionNotFound
 
 from . import analysis
-from . import estimation
 from . import simulation
 
 from .analysis import (

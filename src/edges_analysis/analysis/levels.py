@@ -2,9 +2,7 @@ from __future__ import annotations
 from os.path import dirname, basename
 import os
 from typing import Tuple, Optional, Sequence, List, Union, Dict
-from methodtools import lru_cache
 import glob
-import yaml
 import matplotlib.pyplot as plt
 import warnings
 import tqdm
@@ -13,12 +11,8 @@ import sys
 import re
 from multiprocess.pool import Pool
 from multiprocessing import cpu_count
-import h5py
-from functools import partial
 import inspect
-import functools
 from .. import __version__
-import dill
 
 import numpy as np
 from edges_cal import (
@@ -43,8 +37,6 @@ from .. import const
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
-
-# dill.detect.trace(True)
 
 
 def add_structure(cls):
@@ -80,7 +72,6 @@ def add_structure(cls):
     meta = cls._meta or {}
 
     # Add meta keys that are in every level
-    meta["prev_level_files"] = None
     meta["write_time"] = None
     meta["edges_io_version"] = None
     meta["object_name"] = None
@@ -89,6 +80,8 @@ def add_structure(cls):
 
     if hasattr(cls, "_from_prev_level"):
         # Automatically add keys from the signature of _from_prev_level
+        meta["prev_level_files"] = None
+
         sig = inspect.signature(cls._from_prev_level)
 
         for k, v in sig.parameters.items():
@@ -131,7 +124,9 @@ class _Level(HDF5Object):
         return _prev_level
 
     @classmethod
-    def from_previous_level(cls, prev_level, filename=None, clobber=False, **kwargs):
+    def from_previous_level(
+        cls, prev_level, filename: [str, Path, None] = None, clobber: bool = False, **kwargs
+    ):
         _prev_level = cls._get_previous_level_cls()
 
         if not isinstance(prev_level, _prev_level):
@@ -153,10 +148,12 @@ class _Level(HDF5Object):
         freq, data, ancillary, meta = cls._from_prev_level(prev_level, **kwargs)
 
         meta["prev_level_files"] = (
-            ":".join([str(p.filename) for p in prev_level])
+            ":".join(str(p.filename) for p in prev_level)
             if isinstance(prev_level, list)
             else str(prev_level.filename)
         )
+
+        filename = Path(filename) if filename else None
 
         if clobber and Path(filename).exists():
             os.remove(filename)
@@ -484,7 +481,7 @@ class Level1(_Level):
             logger.info(f"... finished in {time.time() - t:.2f} sec.")
 
         meta = {**meta, **new_meta}
-
+        meta = {**meta, **cls._get_extra_meta()}
         data = {
             "spectrum": calspec,
             "switch_powers": np.array([pp[freq.mask] for pp in p]),
@@ -1579,10 +1576,10 @@ class Level2(_Level, _Level2Plus):
         "hours": lambda x: x.ndim == 1 and x.dtype.name.startswith("int"),
         "model_params": lambda x: x.ndim == 3 and x.dtype.name.startswith("float"),
         "files_flagged": lambda x: x.ndim == 1 and x.dtype.name.startswith("bool"),
-        # "aux_flag_frac": 'optional',
-        # "rfi_flag_frac": 'optional',
-        # "rms_flag_frac": 'optional',
-        # "tp_flag_frac": 'optional',
+        "aux_flag_frac": "optional",
+        "rfi_flag_frac": "optional",
+        "rms_flag_frac": "optional",
+        "tp_flag_frac": "optional",
     }
 
     _meta = {
@@ -1656,7 +1653,7 @@ class Level2(_Level, _Level2Plus):
         for l1 in level1:
             logger.info(f"{l1.meta['year']}-{l1.meta['day']}: {np.sum(flg)/flg.size}")
 
-        dates = [(l1.meta["year"], l1.meta["day"], l1.meta["hour"]) for l1 in level1]
+        dates = [f"{l1.meta['year']}-{l1.meta['day']}-{l1.meta['hour']}" for l1 in level1]
 
         return (
             [flg for i, flg in enumerate(flags) if not all_flagged[i]],

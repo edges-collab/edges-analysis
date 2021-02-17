@@ -9,17 +9,13 @@ min_receiver_temp: 0
 max_receiver_temp: 200
 
 # Perform a time-based filter on simple residual RMS
-do_rms_filter: false
+rms_models: {}
 rms_filter_file: rms_info.h5
 n_poly_rms: 3
 n_sigma_rms:  3
 n_terms_rms: 16
 n_std_rms:  6
-n_files_rms: 10
-rms_bands:
-  - "full"
-  - "low"
-  - "high"
+n_files_rms: 1
 
 
 # Perform a filter over mean power in the whole band

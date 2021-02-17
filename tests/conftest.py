@@ -144,7 +144,6 @@ def mock_level1_list(tmp_path_factory) -> Level1:
                 "hour": 1,
                 "band": "low",
                 "xrfi_pipe": {},
-                "prev_level_files": "non_existent_file.acq",
                 "write_time": dt.datetime.now(),
                 "edges_io_version": __version__,
                 "object_name": "Level1",

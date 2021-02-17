@@ -39,7 +39,7 @@ jobs:
           pip install .[dev]
       - name: Run Tests
         run: |
-          python -m pytest --cov=edges_analysis --cov-config=.coveragerc --cov-report xml:./coverage.xml --durations=25
+          python -m pytest --cov-report xml:./coverage.xml
       - uses: codecov/codecov-action@master
         if: matrix.os == 'ubuntu-latest' && success()
         with:
