@@ -1676,8 +1676,20 @@ class Level2(_Level, _Level2Plus):
         n_sigma_tp_filter: float = 3.0,
         bands_tp_filter: [None, List[Tuple[float, float]]] = None,
         std_thresholds_tp_filter: [None, List[float]] = None,
-        do_rms_filter: bool = True,
-        rms_bands: Sequence[Union[Tuple, str]] = ("full", "low", "high"),
+        rms_models: dict = {
+            "linlog5": {
+                "model": "linlog",
+                "resolution": 16,
+                "bands": ["low", "high"],
+                "params": {"n_terms": 5},
+            },
+            "linlog3": {
+                "model": "linlog",
+                "resolution": 16,
+                "bands": ["full"],
+                "params": {"n_terms": 3},
+            },
+        },
         n_poly_rms: int = 3,
         n_sigma_rms: float = 3,
         n_terms_rms: int = 16,
@@ -1837,12 +1849,12 @@ class Level2(_Level, _Level2Plus):
         else:
             tp_flag_frac = np.zeros(len(orig_dates))
 
-        if do_rms_filter:
+        if rms_models:
             flags, prev_level, rms_flag_frac = cls._run_rms_filter(
                 rms_filter_file=rms_filter_file,
                 flags=flags,
                 level1=prev_level,
-                bands=rms_bands,
+                models=rms_models,
                 n_poly=n_poly_rms,
                 n_sigma=n_sigma_rms,
                 n_terms=n_terms_rms,
@@ -1973,7 +1985,7 @@ class Level2(_Level, _Level2Plus):
         rms_filter_file: [None, str, Path, filters.RMSInfo],
         flags: Sequence[np.ndarray],
         level1: Sequence[Level1],
-        bands: Sequence[Union[Tuple, str]] = ("full", "low", "high"),
+        models: dict,
         n_poly: int = 3,
         n_sigma: float = 3,
         n_terms: int = 16,
@@ -1990,7 +2002,7 @@ class Level2(_Level, _Level2Plus):
         ):
             rms_info = filters.get_rms_info(
                 level1=level1[:n_files],
-                bands=bands,
+                models=models,
                 n_poly=n_poly,
                 n_sigma=n_sigma,
                 n_terms=n_terms,
