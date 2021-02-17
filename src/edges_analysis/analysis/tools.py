@@ -391,7 +391,7 @@ def average_in_frequency(
     --------
     >>> freq = np.linspace(0.1, 1, 10)
     >>> spectrum = [0, 2] * 5
-    >>> f, s, w = average_in_frequency(spectrum, freq=freq, resolution=0.2)
+    >>> f, s, w, std = average_in_frequency(spectrum, freq=freq, resolution=0.2)
     >>> f
     [0.15, 0.35, 0.55, 0.75, 0.95]
     >>> s
@@ -530,11 +530,10 @@ def weighted_mean(data, weights=None, axis=0):
     mask = weights > 0
     if isinstance(sum, float):
         return sum / weights if mask else np.nan, weights
-    else:
-        av = np.zeros_like(sum)
-        av[mask] = sum[mask] / weights[mask]
-        av[~mask] = np.nan
-        return av, weights
+    av = np.zeros_like(sum)
+    av[mask] = sum[mask] / weights[mask]
+    av[~mask] = np.nan
+    return av, weights
 
 
 def weighted_sorted_metric(data, weights=None, metric="median", **kwargs):
@@ -630,13 +629,13 @@ def run_xrfi_pipe(
 
                 for msg, list_of_warnings in messages.items():
                     logger.warning(
-                        f"Received warning '{msg}' {len(list_of_warnings)/len(flags)} times."
+                        f"Received warning '{msg}' {len(list_of_warnings)}/{len(flags)} times."
                     )
         else:
             flags, info = getattr(xrfi, method)(spectrum, flags=flags, **kwargs)
 
         logger.info(
-            f"After {method}, nflags={np.sum(flags)}/{flags.size} ({100*np.sum(flags)/flags.size}%)"
+            f"After {method}, nflags={np.sum(flags)}/{flags.size} ({100*np.sum(flags)/flags.size:.1f}%)"
         )
 
     return flags

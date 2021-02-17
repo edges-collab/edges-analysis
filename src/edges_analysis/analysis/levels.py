@@ -1649,11 +1649,11 @@ class Level2(_Level, _Level2Plus):
                     msg += f"{l1.filename.name} | "
             logger.warning(msg[:-3])
 
-        logger.info(f"Following flag fractions obtained during {fnc} filter:")
-        for l1 in level1:
-            logger.info(f"{l1.meta['year']}-{l1.meta['day']}: {np.sum(flg)/flg.size}")
-
         dates = [f"{l1.meta['year']}-{l1.meta['day']}-{l1.meta['hour']}" for l1 in level1]
+
+        logger.info(f"Following flag fractions obtained during {fnc} filter:")
+        for date, flg in zip(dates, flags):
+            logger.info(f"    {date}: {np.sum(flg)/flg.size}")
 
         return (
             [flg for i, flg in enumerate(flags) if not all_flagged[i]],
