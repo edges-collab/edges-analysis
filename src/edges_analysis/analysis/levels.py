@@ -1511,13 +1511,13 @@ class Level1(_Level):
         n_sigma_rms: int = 3,
         flags: [np.ndarray, None] = None,
     ):
-        weights = self.weights if flags is None else np.where(flags, 0, self.weights)
+        weights = self.weights.T if flags is None else np.where(flags, 0, self.weights.T)
         if not isinstance(rms_info, filters.RMSInfo):
             rms_info = filters.RMSInfo.from_file(rms_info)
 
         rms = {
             mdl_name: self.get_model_rms(
-                freq_ranges=bands, weights=weights, **rms_info.model_params[mdl_name]
+                freq_ranges=bands, weights=weights.T, **rms_info.model_params[mdl_name]
             )
             for mdl_name, bands in rms_info.bands.items()
         }
@@ -1595,7 +1595,14 @@ class Level2(_Level, _Level2Plus):
         return self
 
     @classmethod
-    def run_filter(cls, fnc, level1, flags=None, nthreads=None, **kwargs):
+    def run_filter(
+        cls,
+        fnc,
+        level1: List[Level1],
+        flags: Optional[List[np.ndarray]] = None,
+        nthreads: Optional[int] = None,
+        **kwargs,
+    ):
 
         if nthreads is None:
             nthreads = min(len(level1), cpu_count())
@@ -1654,7 +1661,7 @@ class Level2(_Level, _Level2Plus):
         return (
             [flg for i, flg in enumerate(flags) if not all_flagged[i]],
             [l1 for i, l1 in enumerate(level1) if not all_flagged[i]],
-            {date: np.sum(flg) / flg.size for date, flg in enumerate(zip(dates, flags))},
+            {date: np.sum(flg) / flg.size for date, flg in zip(dates, flags)},
         )
 
     @classmethod
