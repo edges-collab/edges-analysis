@@ -244,25 +244,30 @@ def get_rms_info(
 def get_rms_model_over_time(
     rms: np.ndarray, gha: np.ndarray, n_poly: int, n_sigma: float, n_terms: int, n_std: int
 ):
-    good = np.ones(len(rms), dtype=bool)
+    flags = np.isnan(rms)
 
     for i in range(24):  # Go through each hour
         mask = (gha >= i) & (gha < (i + 1))
-        n_orig = np.sum(mask)
+        extern_flg = flags[mask]
+        this_flg = flags[mask].copy()
 
-        while np.sum(good[mask]) < n_orig:
-            n_orig = np.sum(good[mask])
-            res, std = _get_polyfit_res_std(n_poly, gha[mask], rms[mask], weights=good[mask])
-            good[mask] &= np.abs(res) <= n_sigma * std
+        n_flg = np.sum(this_flg) - 1
 
-    par = np.polyfit(gha[good], rms[good], n_terms - 1)
+        while np.sum(this_flg) > n_flg and np.sum(~this_flg) > 2 * n_poly:
+            n_flg = np.sum(this_flg)
+            res, std = _get_polyfit_res_std(n_poly, gha[mask], rms[mask], flags=this_flg)
+            this_flg = extern_flg | (np.abs(res) > n_sigma * std)
+
+        extern_flg[:] = this_flg
+
+    par = np.polyfit(gha[~flags], rms[~flags], n_terms - 1)
     model = np.polyval(par, gha)
     abs_res = np.abs(rms - model)
-    par_std = np.polyfit(gha[good], abs_res[good], n_std - 1)
+    par_std = np.polyfit(gha[~flags], abs_res[~flags], n_std - 1)
     model_std = np.polyval(par_std, gha)
 
     return {
-        "flags": ~good,
+        "flags": flags,
         "model_eval": model,
         "abs_resids": abs_res,
         "model_stds": model_std,
@@ -276,6 +281,7 @@ def rms_filter(
     gha: np.ndarray,
     rms: Dict[str, Dict[Tuple[float, float], np.ndarray]],
     n_sigma: float = 3,
+    fl_id=None,
 ):
     """Filter RMS data based on a summary set of data.
 
@@ -300,6 +306,7 @@ def rms_filter(
         rms_info = RMSInfo.from_file(rms_info)
 
     flags = np.zeros(len(gha), dtype=bool)
+    fl_id = f"{fl_id}: " if fl_id else ""
 
     for model, rms_model in rms.items():
         for band, rms_band in rms_model.items():
@@ -311,7 +318,7 @@ def rms_filter(
             flags |= np.abs(rms_band - m) > n_sigma * ms
 
             logger.info(
-                f"{np.sum(flags)}/{len(flags)} GHA's flagged after RMS filter for model={model}, band={band}."
+                f"{fl_id}{np.sum(flags)}/{len(flags)} GHA's flagged after RMS filter for model={model}, band={band}."
             )
 
     return flags
@@ -395,49 +402,48 @@ def total_power_filter(
         for i in range(24):
             mask = (gha >= i) & (gha < (i + 1))
             this_gha = gha[mask]
-            this_flags = flags_1d[mask]
+            this_extern_flags = flags_1d[mask]
 
             this_tp = tpi[mask]
 
-            this_flags |= np.isnan(this_tp)
+            this_intern_flags = this_extern_flags | np.isnan(this_tp)
 
             # If enough data points available per hour
-            lx = len(this_flags) - np.sum(this_flags)
+            lx = np.sum(~this_intern_flags)
 
             if lx <= 10:
                 continue
 
             nflags = -1
 
-            while nflags < np.sum(this_flags):
-                nflags = np.sum(this_flags)
+            while nflags < np.sum(this_intern_flags):
+                nflags = np.sum(this_intern_flags)
 
                 if (len(this_gha) - nflags) < n_poly:
                     # If we've flagged too much, just get rid of everything here.
-                    this_flags[:] = True
+                    this_intern_flags[:] = True
                 else:
-                    res, std = _get_polyfit_res_std(n_poly, this_gha, this_tp, this_flags)
+                    res, std = _get_polyfit_res_std(n_poly, this_gha, this_tp, this_intern_flags)
 
                     if std_threshold is not None and std > std_threshold:
-                        this_flags[~this_flags] |= np.abs(res) > std
+                        this_intern_flags = this_extern_flags | (np.abs(res) > std)
                     else:
-                        this_flags[~this_flags] |= np.abs(res) > n_sigma * std
+                        this_intern_flags = this_extern_flags | (np.abs(res) > n_sigma * std)
 
-            flags_1d[mask] = this_flags
+            flags_1d[mask] = this_intern_flags
 
     return flags_1d
 
 
 def _get_polyfit_res_std(n_poly, gha, data, flags=None):
-    if flags is not None:
-        gha = gha[~flags]
-        data = data[~flags]
+    if flags is None:
+        flags = np.zeros(len(gha), dtype=bool)
 
-    if len(gha) < n_poly:
+    if np.sum(~flags) < n_poly:
         raise np.linalg.LinAlgError("After flagging, too few data points left for n_poly.")
 
     try:
-        par = np.polyfit(gha, data, n_poly - 1)
+        par = np.polyfit(gha[~flags], data[~flags], n_poly - 1)
     except np.linalg.LinAlgError:
         logger.error("gha:", gha)
         logger.error("data: ", data)
@@ -445,7 +451,7 @@ def _get_polyfit_res_std(n_poly, gha, data, flags=None):
         raise
     model = np.polyval(par, gha)
     res = data - model
-    std = np.std(res)
+    std = np.nanstd(res)
 
     return res, std
 

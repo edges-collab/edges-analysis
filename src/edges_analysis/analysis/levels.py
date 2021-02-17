@@ -1269,6 +1269,9 @@ class Level1(_Level):
                     pass
                 model.default_x = f[indx]
 
+            if np.all(w[indx] == 0):
+                return {band: np.nan for band in freq_ranges}
+
             m = model.fit(ydata=s[indx], weights=w[indx]).evaluate(self.raw_frequencies)
 
             out = {}
@@ -1498,9 +1501,16 @@ class Level1(_Level):
             if np.all(flags):
                 return flags
 
-        return tools.run_xrfi_pipe(self.spectrum, flags, xrfi_pipe, n_threads=n_threads)
+        return tools.run_xrfi_pipe(
+            self.spectrum, flags, xrfi_pipe, n_threads=n_threads, fl_id=self.datestring
+        )
 
     rfi_filter.axis = "both"
+
+    @property
+    def datestring(self):
+        """The date this observation was started, as a string."""
+        return f"{self.meta['year']}-{self.meta['day']}-{self.meta['hour']}"
 
     def rms_filter(
         self,
@@ -1522,7 +1532,9 @@ class Level1(_Level):
         if flags is None:
             flags = np.zeros(self.weights.T.shape, dtype=bool)
 
-        flags |= filters.rms_filter(rms_info, self.ancillary["gha"], rms, n_sigma_rms)
+        flags |= filters.rms_filter(
+            rms_info, self.ancillary["gha"], rms, n_sigma_rms, fl_id=self.datestring
+        )
 
         return flags
 
@@ -1652,8 +1664,9 @@ class Level2(_Level, _Level2Plus):
         dates = [f"{l1.meta['year']}-{l1.meta['day']}-{l1.meta['hour']}" for l1 in level1]
 
         logger.info(f"Following flag fractions obtained during {fnc} filter:")
-        for date, flg in zip(dates, flags):
-            logger.info(f"    {date}: {np.sum(flg)/flg.size}")
+        for flagged, date, flg in zip(all_flagged, dates, flags):
+            if not flagged:
+                logger.info(f"    {date}: {100*np.sum(flg)/flg.size:.2f}%")
 
         return (
             [flg for i, flg in enumerate(flags) if not all_flagged[i]],

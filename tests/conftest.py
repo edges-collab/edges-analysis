@@ -61,6 +61,8 @@ def level1(integration_test_data: Path, level1_settings: Path) -> Tuple[Level1, 
     with open(level1_settings) as fl:
         settings = yaml.load(fl, Loader=yaml.FullLoader)
 
+    settings["s11_path"] = str(integration_test_data / "s11")
+
     l1 = Level1.from_acq(
         integration_test_data / "2016_292_00_small.acq",
         out_file=integration_test_data / "level1/292.h5",

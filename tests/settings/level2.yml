@@ -9,8 +9,18 @@ min_receiver_temp: 0
 max_receiver_temp: 200
 
 # Perform a time-based filter on simple residual RMS
-rms_models: {}
-rms_filter_file: rms_info.h5
+rms_models:
+  linlog:
+    model: linlog
+    resolution: 0
+    params:
+      n_terms: 3
+    bands:
+      - 'full'
+      - 'low'
+      - 'high'
+
+# rms_filter_file: rms_info.h5
 n_poly_rms: 3
 n_sigma_rms:  3
 n_terms_rms: 16

@@ -5,6 +5,8 @@ import numpy as np
 from edges_cal import modelling as mdl, xrfi
 import warnings
 import logging
+import os
+from collections import defaultdict
 
 logger = logging.getLogger(__name__)
 
@@ -580,62 +582,59 @@ def weighted_standard_deviation(av, data, std, axis=0):
 
 
 def run_xrfi_pipe(
-    spectrum: np.ndarray, flags: np.ndarray, xrfi_pipe: dict, n_threads: int = cpu_count()
+    spectrum: np.ndarray,
+    flags: np.ndarray,
+    xrfi_pipe: dict,
+    n_threads: int = cpu_count(),
+    fl_id=None,
 ) -> np.ndarray:
     """Run an xrfi pipeline on given spectrum and weights, updating weights in place."""
     for method, kwargs in xrfi_pipe.items():
         if (
-            method in ["xrfi_model", "xrfi_poly"] and spectrum.ndim == 2
+            method in ["xrfi_model", "xrfi_model_sweep"] and spectrum.ndim == 2
         ):  # methods that only allow 1D spectra.
             rfi = getattr(xrfi, method)
-
-            flags[0], info = rfi(spectrum[0], flags=flags[0], **kwargs)
-            model = info.get("model", None)
-
-            if model is not None and "model_type" in kwargs:
-                del kwargs["model_type"]
 
             def fnc(i):
                 spec = spectrum[i]
                 flg = flags[i]
-                with warnings.catch_warnings(record=True) as wrn:
-                    flg, info = rfi(spec, flags=flg, model_type=model, **kwargs)
-                return flg, wrn
+                flg, info = rfi(spec, flags=flg, **kwargs)
+                return flg
 
             n_threads = min(n_threads, len(flags))
 
             # Use a parallel map unless this function itself is being called by a
             # parallel map.
+            wrns = defaultdict(lambda: 0)
+
+            def count_warnings(message, *args, **kwargs):
+                wrns[str(message)] += 1
+
+            old = warnings.showwarning
+            warnings.showwarning = count_warnings
             m = (
                 Pool(cpu_count()).map
                 if (current_process().name == "MainProcess" and n_threads > 1)
                 else map
             )
 
-            results = m(fnc, range(1, len(spectrum)))
-            wrns = []
-            for i, (flg, info) in enumerate(results, start=1):
-                wrns += info
+            results = m(fnc, range(len(spectrum)))
+            for i, flg in enumerate(results):
                 flags[i] = flg
 
-            if wrns:
-                messages = {}
-                for wrn in wrns:
-                    msg = str(wrn.message)
-                    if msg in messages:
-                        messages[msg].append(wrn)
-                    else:
-                        messages[msg] = [wrn]
+            warnings.showwarning = old
 
-                for msg, list_of_warnings in messages.items():
-                    logger.warning(
-                        f"Received warning '{msg}' {len(list_of_warnings)}/{len(flags)} times."
-                    )
+            fl_id = f"{fl_id}: " if fl_id else ""
+
+            if wrns:
+                for msg, count in wrns.items():
+                    msg = msg.replace("\n", " ")
+                    logger.warning(f"{fl_id}Received warning '{msg}' {count}/{len(flags)} times.")
         else:
             flags, info = getattr(xrfi, method)(spectrum, flags=flags, **kwargs)
 
         logger.info(
-            f"After {method}, nflags={np.sum(flags)}/{flags.size} ({100*np.sum(flags)/flags.size:.1f}%)"
+            f"{fl_id}After {method}, nflags={np.sum(flags)}/{flags.size} ({100*np.sum(flags)/flags.size:.1f}%)"
         )
 
     return flags
