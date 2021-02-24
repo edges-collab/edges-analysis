@@ -1510,7 +1510,7 @@ class Level1(_Level):
     @property
     def datestring(self):
         """The date this observation was started, as a string."""
-        return f"{self.meta['year']}-{self.meta['day']}-{self.meta['hour']}"
+        return f"{self.meta['year']:04}-{self.meta['day']:03}-{self.meta['hour']:02}"
 
     def rms_filter(
         self,
@@ -1661,7 +1661,7 @@ class Level2(_Level, _Level2Plus):
                     msg += f"{l1.filename.name} | "
             logger.warning(msg[:-3])
 
-        dates = [f"{l1.meta['year']}-{l1.meta['day']}-{l1.meta['hour']}" for l1 in level1]
+        dates = [l1.datestring for l1 in level1]
 
         logger.info(f"Following flag fractions obtained during {fnc} filter:")
         for flagged, date, flg in zip(all_flagged, dates, flags):
@@ -1673,6 +1673,14 @@ class Level2(_Level, _Level2Plus):
             [l1 for i, l1 in enumerate(level1) if not all_flagged[i]],
             {date: np.sum(flg) / flg.size for date, flg in zip(dates, flags)},
         )
+
+    @classmethod
+    def date_str2tuple(cls, date):
+        return tuple(int(d) for d in date.split("-"))
+
+    @classmethod
+    def date_tuple2str(cls, date):
+        return f"{date[0]:04}-{date[1]:03}-{date[2]:02}"
 
     @classmethod
     def _from_prev_level(
@@ -1828,7 +1836,7 @@ class Level2(_Level, _Level2Plus):
             prev_level, key=lambda x: (x.meta["year"], x.meta["day"], x.meta["hour"])
         )
 
-        orig_dates = [(x.meta["year"], x.meta["day"], x.meta["hour"]) for x in prev_level]
+        orig_dates = [x.datestring for x in prev_level]
 
         years = np.array([x.meta["year"] for x in prev_level], dtype=int)
         days = np.array([x.meta["day"] for x in prev_level], dtype=int)
@@ -1843,6 +1851,7 @@ class Level2(_Level, _Level2Plus):
             min_receiver_temp=min_receiver_temp,
             max_receiver_temp=max_receiver_temp,
         )
+        aux_flag_frac = [aux_flag_frac.get(date, 0) for date in orig_dates]
 
         if xrfi_pipe:
             flags, prev_level, rfi_flag_frac = cls.run_filter(
@@ -1882,7 +1891,7 @@ class Level2(_Level, _Level2Plus):
         else:
             rms_flag_frac = np.zeros(len(orig_dates))
 
-        final_dates = [(x.meta["year"], x.meta["day"], x.meta["hour"]) for x in prev_level]
+        final_dates = [x.datestring for x in prev_level]
         files_flagged = np.array([date not in final_dates for date in orig_dates])
 
         n_files = len(prev_level) - sum(files_flagged)
@@ -1950,6 +1959,16 @@ class Level2(_Level, _Level2Plus):
             "n_files": len(kwargs["prev_level"]),
             "n_files_flagged": sum(kwargs["files_flagged"]),
         }
+
+    @cached_property
+    def all_dates(self) -> List[Tuple[int, int, int]]:
+        """All the dates that went into this object (including fully flagged ones)."""
+        return [
+            (y, d, h)
+            for y, d, h in zip(
+                self.ancillary["years"], self.ancillary["days"], self.ancillary["hours"]
+            )
+        ]
 
     @cached_property
     def calibration(self):
