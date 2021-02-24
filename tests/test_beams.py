@@ -1,5 +1,4 @@
 from edges_analysis.analysis import beams
-from edges_analysis.analysis import DATA
 import numpy as np
 
 
