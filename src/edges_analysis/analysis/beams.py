@@ -201,7 +201,7 @@ class Beam:
     @classmethod
     def from_ideal(cls, delta_f=2, f_low=40, f_high=200, delta_az=1, delta_el=1):
         """Create an ideal beam that is completely unity."""
-        freq = np.arange(f_low, f_high, f_low)
+        freq = np.arange(f_low, f_high, delta_f)
         az = np.arange(0, 360, delta_az)
         el = np.arange(0, 90 + 0.1 * delta_el, delta_el)
         return Beam(
@@ -213,7 +213,7 @@ class Beam:
         )
 
     @classmethod
-    def from_feko(cls, path: [str, Path], az_antenna_axis: float = 0, ideal: int = 1) -> Beam:
+    def from_feko(cls, path: [str, Path], az_antenna_axis: float = 0) -> Beam:
         """
         Read a FEKO beam file.
 
