@@ -22,8 +22,24 @@ def test_feko_interp():
     assert (beam2.frequency == np.linspace(50, 60, 5)).all()
 
     indx_50 = list(beam.frequency).index(50.0)
-    assert np.isclose(
-        beam2.angular_interpolator(0)(beam.azimuth[0], beam.elevation[0]), beam.beam[indx_50, 0, 0]
+    az, el = np.meshgrid(beam.azimuth, beam.elevation[:-1])
+    interp = beam2.angular_interpolator(0)(az.flatten(), el.flatten())
+
+    print("Max Error:", np.abs(interp - beam.beam[indx_50, :-1].flatten()).max())
+    print(
+        "Max Rel. Error:",
+        np.abs(
+            (interp - beam.beam[indx_50, :-1].flatten()) / beam.beam[indx_50, :-1].flatten()
+        ).max(),
+    )
+
+    assert np.allclose(interp, beam.beam[indx_50, :-1].flatten(), rtol=1e-2, atol=1e-5)
+    interp_zenith = beam2.angular_interpolator(0)(0, 90)
+    assert np.isclose(interp_zenith, beam.beam[indx_50, -1, 0], rtol=1e-2, atol=0)
+    print(
+        "Error (abs/frac) at zenith: ",
+        interp_zenith - beam.beam[indx_50, -1, 0],
+        (interp_zenith - beam.beam[indx_50, -1, 0]) / beam.beam[indx_50, -1, 0],
     )
 
 
@@ -40,3 +56,5 @@ def test_simulate_spectra():
 def test_uniform_beam():
     beam = beams.Beam.from_ideal()
     assert np.allclose(beam.beam, 1)
+    az, el = np.meshgrid(beam.azimuth, beam.elevation[:-1])
+    assert np.allclose(beam.angular_interpolator(0)(az, el), 1)
