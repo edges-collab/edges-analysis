@@ -512,12 +512,12 @@ def sky_convolution_generator(
         el_above_horizon = el[horizon_mask]
 
         # Selecting sky data above the horizon
-        sky_above_horizon = np.zeros_like(sky_map)
+        sky_above_horizon = np.ones_like(sky_map) * np.nan
         sky_above_horizon[horizon_mask, :] = sky_map[horizon_mask, :]
 
         # Loop over frequency
         for j in tqdm(range(len(beam.frequency)), unit="Frequency"):
-            beam_above_horizon = np.zeros(len(sky_map))
+            beam_above_horizon = np.ones(len(sky_map)) * np.nan
             beam_above_horizon[horizon_mask] = beam.angular_interpolator(j)(
                 az_above_horizon, el_above_horizon
             )
