@@ -1132,10 +1132,10 @@ class Level1(_Level):
 
     def get_model_parameters(
         self,
-        model: str = "LINLOG",
-        n_terms: int = 5,
-        n_samples: [None, int] = None,
+        model: [str, mdl.Model] = "linlog",
+        resolution: [int, float, None] = 0.0488,
         weights: Optional[np.ndarray] = None,
+        indices: Optional[List[int]] = None,
         **kwargs,
     ) -> Tuple[mdl.Model, np.ndarray]:
         """
@@ -1163,37 +1163,41 @@ class Level1(_Level):
         if weights is None:
             weights = self.weights
 
-        if n_samples and n_samples > 1:
-            f, s, w = tools.bin_array(
-                self.spectrum, coords=self.raw_frequencies, weights=weights, bins=n_samples, axis=-1
-            )
+        indices = indices or range(len(self.spectrum))
+
+        if isinstance(model, str):
+            model = mdl.Model._models[model.lower()]
+
+        if resolution:
+            f, s, w = self.bin_in_frequency(resolution=resolution, weights=weights)
+            model = model(**kwargs)
         else:
-            f = self.raw_frequencies
-            s = self.spectrum
-            w = weights
+            f, s, w = self.raw_frequencies, self.spectrum, weights
+            model = model(default_x=f, **kwargs)
 
-        freq = FrequencyRange(f)
+        def get_params(indx):
+            ss = s[indx]
+            ww = w[indx]
 
-        if not isinstance(model, mdl.Model):
-            model = mdl.Model._models[model.lower()](default_x=freq.freq, n_terms=n_terms, **kwargs)
-
-        # Start out with NaN's, because if we can't fit an integration, we should have
-        # NaN.
-        params = np.nan * np.ones((len(s), model.n_terms))
-
-        for i, (ss, ww) in enumerate(zip(s, w)):
-            if np.sum(ww > 0) <= 2 * n_terms:
+            if np.sum(ww > 0) <= 2 * model.n_terms:
                 # Only try to fit if we have enough non-flagged data points.
-                continue
+                return np.nan * np.ones(model.n_terms)
 
-            params[i] = model.fit(ydata=ss, weights=ww).model_parameters
+            if resolution:
+                try:
+                    del model.default_basis
+                except AttributeError:
+                    pass
+                model.default_x = f[indx]
+
+            return model.fit(ydata=ss, weights=ww).model_parameters
+
+        params = np.array([get_params(indx) for indx in indices])
 
         return model, params
 
     def get_model_rms(
         self,
-        model: [str, mdl.Model] = "polynomial",
-        resolution: [int, float, None] = 0.0488,
         weights: Optional[np.ndarray] = None,
         freq_ranges: List[Tuple[float, float]] = [(-np.inf, np.inf)],
         indices: Optional[List[int]] = None,
@@ -1206,12 +1210,6 @@ class Level1(_Level):
 
         Parameters
         ----------
-        model
-            The model to fit (in edges-cal modelling).
-        resolution
-            The spectrum itself is able to be averaged in frequency bins before the model
-            is applied. This gives the resolution of those bins. If an int, interpreted
-            as the number of channels per bin. Falsy values indicate no binning.
         weights
             The weights of the spectrum to use in the fitting. Must be the same shape
             as :attr:`~spectrum`. Default is to use the weights intrinsic to the object.
@@ -1224,8 +1222,7 @@ class Level1(_Level):
 
         Other Parameters
         ----------------
-        All other parameters are passed to :class:`edges_cal.modelling.Model`, which
-        may be used to construct the model itself. One important parameter is ``n_terms``.
+        All other parameters are passed to :method:`~get_model_parameters`.
 
         Returns
         -------
@@ -1240,39 +1237,17 @@ class Level1(_Level):
         self-consistently with the weights  -- it uses :func:`~tools.bin_array` to do
         the binning, returning non-equi-spaced frequencies.
         """
-        if weights is None:
-            weights = self.weights
+        model, params = self.get_model_parameters(weights=weights, indices=indices, **model_kwargs)
 
         if indices is None:
             indices = range(len(self.spectrum))
-
-        # Get the whole thing averaged (pretty quick)
-        if resolution:
-            f, s, w = self.bin_in_frequency(resolution=resolution, weights=weights)
-        else:
-            f, s, w = self.raw_frequencies, self.spectrum, weights
-
-        if isinstance(model, str):
-            model = mdl.Model._models[model.lower()]
-
-        if not resolution:
-            model = model(default_x=f, **model_kwargs)
-        else:
-            model = model(default_x=f[indices[0]], **model_kwargs)
+        if weights is None:
+            weights = np.ones(self.spectrum.shape)
 
         # access the default basis
         def _get_rms(indx):
-            if resolution:
-                try:
-                    del model.default_basis
-                except AttributeError:
-                    pass
-                model.default_x = f[indx]
 
-            if np.all(w[indx] == 0):
-                return {band: np.nan for band in freq_ranges}
-
-            m = model.fit(ydata=s[indx], weights=w[indx]).evaluate(self.raw_frequencies)
+            m = model(x=self.raw_frequencies, parameters=params[indx])
 
             out = {}
             for band in freq_ranges:
@@ -1283,12 +1258,14 @@ class Level1(_Level):
 
             return out
 
-        res = [_get_rms(i) for i in indices]
+        res = [_get_rms(i) for i in range(len(indices))]
 
         # Return dict of arrays (from list of dicts).
         return {band: np.array([r[band] for r in res]) for band in res[0]}
 
-    def plot_waterfall(self, quantity: str = "spectrum", ax: [None, plt.Axes] = None, cbar=True):
+    def plot_waterfall(
+        self, quantity: str = "spectrum", ax: [None, plt.Axes] = None, cbar=True, **imshow_kwargs
+    ):
         if quantity in ["p0", "p1", "p2"]:
             q = self.spectra["switch_powers"][int(quantity[-1])]
         else:
@@ -1301,21 +1278,27 @@ class Level1(_Level):
 
         img = ax.imshow(
             q,
+            origin="lower",
             extent=(
                 self.raw_frequencies.min(),
                 self.raw_frequencies.max(),
-                self.ancillary["seconds"].min(),
-                self.ancillary["seconds"].max(),
+                self.ancillary["seconds"].min() / 60 / 60,
+                self.ancillary["seconds"].max() / 60 / 60,
             ),
             aspect="auto",
+            **imshow_kwargs,
         )
+        ax.set_xlabel("Frequency [MHz]")
+        ax.set_ylabel("Hours into Observation")
+        ax.set_title(f"Day {self.meta['day']}. GHA0={self.ancillary['gha'][0]:.2f}")
+
         if cbar:
             cb = plt.colorbar(img, ax=ax)
             cb.set_label(quantity)
 
         return ax
 
-    def plot_waterfalls(self, quanties="all"):
+    def plot_waterfalls(self, quanties="all", **imshow_kwargs):
         if quanties == "all":
             quanties = ["spectrum", "Q", "weights", "p0", "p1", "p2"]
 
@@ -1329,7 +1312,7 @@ class Level1(_Level):
         )
 
         for i, (q, axx) in enumerate(zip(quanties, ax)):
-            self.plot_waterfall(q, ax=axx)
+            self.plot_waterfall(q, ax=axx, **imshow_kwargs)
 
         return fig, ax
 
@@ -1502,7 +1485,12 @@ class Level1(_Level):
                 return flags
 
         return tools.run_xrfi_pipe(
-            self.spectrum, flags, xrfi_pipe, n_threads=n_threads, fl_id=self.datestring
+            self.spectrum,
+            self.raw_frequencies,
+            flags,
+            xrfi_pipe,
+            n_threads=n_threads,
+            fl_id=self.datestring,
         )
 
     rfi_filter.axis = "both"
@@ -1912,7 +1900,9 @@ class Level2(_Level, _Level2Plus):
             l1 = prev_level[i]
             flg = flags[i]
 
-            params = l1.get_model_parameters(model, n_samples=model_nsamples, flags=flg)[1]
+            params = l1.get_model_parameters(
+                model, n_samples=model_nsamples, weights=(~flg).astype(float)
+            )[1]
             resids = np.array(
                 [
                     l1.spectrum[j] - model(parameters=pp, x=l1.freq.freq)
@@ -2173,6 +2163,10 @@ class Level2(_Level, _Level2Plus):
         indx: Optional[int] = None,
         flagged: bool = False,
         quantity: str = "spectrum",
+        cmap: Optional[str] = None,
+        vmin: Optional[float] = None,
+        vmax: Optional[float] = None,
+        **imshow_kwargs,
     ):
         """
         Make a single waterfall plot of any 2D quantity (weights, spectrum, resids).
@@ -2188,9 +2182,21 @@ class Level2(_Level, _Level2Plus):
         quantity
             The quantity to plot -- must exist as an attribute and have the same shape
             as spectrum/resids/weights.
+        cmap
+            The colormap to use. Default is to use 'coolwarm' for residuals (since it
+            is diverging) and 'magma' for spectra.
+        vmin
+            The minimum colorbar value to use. Auto-set to encompass the range of the
+            data symmetrically if plotting residuals (so that zeros are in the middle).
+        vmax
+            Same as vmin but the max.
+
+        Other Parameters
+        ----------------
+        Other parameters are passed through to ``plt.imshow``.
         """
         if day is not None:
-            indx = self.unflagged_days.tolist().index(day)
+            indx = self.day_index(day)
 
         if indx is None:
             raise ValueError("Must either supply 'day' or 'indx'")
@@ -2208,11 +2214,52 @@ class Level2(_Level, _Level2Plus):
         if flagged:
             q = np.where(self.weights[indx] > 0, q[indx], np.nan)
 
-        plt.imshow(q, aspect="auto", extent=extent)
+        if quantity == "resids":
+            cmap = cmap or "coolwarm"
+
+            if vmin is None:
+                vmin = -np.max(np.abs(q))
+                vmax = -vmin
+        else:
+            cmap = cmap or "magma"
+
+        plt.imshow(
+            q,
+            origin="lower",
+            aspect="auto",
+            extent=extent,
+            cmap=cmap,
+            vmin=vmin,
+            vmax=vmax,
+            **imshow_kwargs,
+        )
 
         plt.xlabel("Frequency [MHz]")
         plt.ylabel("GHA (hours)")
         plt.title(f"Level2 {self.unflagged_years[indx]}-{self.unflagged_days[indx]}")
+
+    def day_index(self, day: int, unflagged: bool = True) -> int:
+        """
+        Get the index corresponding to the given day in the dataset.
+
+        Parameters
+        ----------
+        day
+            The day to find the index for.
+        unflagged
+            Whether the index should be that of the unflagged data (i.e. the index
+            to pass to ``.spectrum``) or for the full list of input files (i.e. that
+            to pass to ``previous_level``).
+
+        Returns
+        -------
+        indx
+            The index in appropriate lists of that day's data.
+        """
+        if unflagged:
+            return self.unflagged_days.tolist().index(day)
+        else:
+            return self.ancillary["days"].tolist().index(day)
 
 
 @add_structure

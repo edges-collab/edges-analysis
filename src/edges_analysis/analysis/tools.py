@@ -583,6 +583,7 @@ def weighted_standard_deviation(av, data, std, axis=0):
 
 def run_xrfi_pipe(
     spectrum: np.ndarray,
+    freq: np.ndarray,
     flags: np.ndarray,
     xrfi_pipe: dict,
     n_threads: int = cpu_count(),
@@ -598,7 +599,7 @@ def run_xrfi_pipe(
             def fnc(i):
                 spec = spectrum[i]
                 flg = flags[i]
-                flg, info = rfi(spec, flags=flg, **kwargs)
+                flg, info = rfi(spec, freq=freq, flags=flg, **kwargs)
                 return flg
 
             n_threads = min(n_threads, len(flags))
