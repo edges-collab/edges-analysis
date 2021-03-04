@@ -423,6 +423,21 @@ class BeamFactor(HDF5Object):
         },
     }
 
+    @property
+    def beam_factor(self):
+        """The beam chromaticity factor. Array is ``(n_lsts, n_freq)``."""
+        return self.load("beam_factor")
+
+    @property
+    def frequency(self):
+        """The frequencies at which the beam factor is defined."""
+        return self.load("frequency")
+
+    @property
+    def lsts(self):
+        """The LSTs at which the beam factor is defined."""
+        return self.load("lst")
+
 
 def sky_convolution_generator(
     lsts: np.ndarray,
@@ -538,7 +553,7 @@ def sky_convolution_generator(
                 j,
                 np.nansum(antenna_temperature_above_horizon) / n_pix_tot_no_nan,
                 antenna_temperature_above_horizon,
-                sky_above_horizon[:, j],
+                sky_above_horizon,
                 beam_above_horizon,
                 time,
                 n_pix_tot_no_nan,
@@ -654,12 +669,16 @@ def antenna_beam_factor(
     """
     if not save_dir:
         save_dir = Path(config["paths"]["beams"]) / f"{beam.instrument}/beam_factors/"
+    else:
+        save_dir = Path(save_dir)
 
     if str(save_fname).startswith(":"):
         save_fname = Path(save_dir).absolute() / str(save_fname)[1:]
 
     beam = beam.between_freqs(f_low, f_high)
-    lst = np.arange(0, 24, 0.5)
+
+    if lsts is None:
+        lsts = np.arange(0, 24, 0.5)
 
     # Get index of reference frequency
     if reference_frequency is None:
@@ -668,12 +687,12 @@ def antenna_beam_factor(
     indx_ref_freq = np.argwhere(beam.frequency >= reference_frequency)[0][0]
     reference_frequency = beam.frequency[indx_ref_freq]
 
-    antenna_temperature_above_horizon = np.zeros((len(lst), len(beam.frequency)))
-    convolution_ref = np.zeros((len(lst), len(beam.frequency)))
-    loss_fraction = np.zeros((len(lst), len(beam.frequency)))
+    antenna_temperature_above_horizon = np.zeros((len(lsts), len(beam.frequency)))
+    convolution_ref = np.zeros((len(lsts), len(beam.frequency)))
+    loss_fraction = np.zeros((len(lsts), len(beam.frequency)))
 
-    for i, j, temperature, _, sky, bm, _, _, npix_no_nan in sky_convolution_generator(
-        lst,
+    for i, j, temperature, _, sky, bm, _, npix_no_nan in sky_convolution_generator(
+        lsts,
         beam=beam,
         sky_model=sky_model,
         index_model=index_model,
@@ -692,7 +711,7 @@ def antenna_beam_factor(
 
     out = {
         "frequency": beam.frequency.astype(np.float),
-        "lst": lst,
+        "lst": np.array(lsts).astype("float"),
         "antenna_temp_above_horizon": antenna_temperature_above_horizon,
         "loss_fraction": loss_fraction,
         "beam_factor": beam_factor,
@@ -801,8 +820,8 @@ class InterpolatedBeamFactor(HDF5Object):
         """Fast nearest-neighbour evaluation of the beam factor for a given LST."""
         beam_factor = np.zeros((len(lst), len(self["frequency"])))
 
-        for i, lst in enumerate(lst):
-            index = np.argmin(np.abs(self["lst"] - lst))
+        for i, lst_ in enumerate(lst):
+            index = np.argmin(np.abs(self["lst"] - lst_))
             beam_factor[i] = self["beam_factor"][index]
 
         return beam_factor

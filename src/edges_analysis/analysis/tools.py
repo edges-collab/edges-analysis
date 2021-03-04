@@ -1,10 +1,12 @@
-from typing import Tuple
+from typing import Tuple, Optional, Union
 from datetime import datetime, timedelta
 from multiprocess import Pool, current_process, cpu_count
 import numpy as np
 from edges_cal import modelling as mdl, xrfi
 import warnings
 import logging
+import os
+from collections import defaultdict
 
 logger = logging.getLogger(__name__)
 
@@ -242,6 +244,105 @@ def get_binned_weights(
     return out
 
 
+def bin_array(
+    data: np.ndarray,
+    weights: Optional[np.ndarray] = None,
+    coords: Optional[np.ndarray] = None,
+    axis: int = -1,
+    bins: Optional[Union[np.ndarray, int, float]] = None,
+) -> [np.ndarray, np.ndarray, np.ndarray]:
+    """Bin arbitrary-dimension data carefully along an axis.
+
+    There are multiple ways to "bin" data along an axis when provided with weights.
+    It is not typically accurate to return equi-spaced bins where data is averaged simply
+    via summing with the weights (and the bin coords represent the centre of each bin).
+    This results in some bias when the weights are not uniform.
+
+    One way around this is to assume some underlying model and "fill in" the lower-weight
+    bins. This would allow equi-spaced estimates.
+
+    However, this function does something simpler -- it returns non-equi-spaced bins.
+    This can be a little annoying if multiple data are to be binned, because one needs
+    to keep track of the coordinates of each data separately. However, it is simple
+    and accurate.
+
+    Parameters
+    ----------
+    data
+        The data to be binned. May be of arbitrary dimension.
+    weights
+        The weights of the data. Must be the same shape as ``data``. If not provided,
+        assume all weights are unity.
+    coords
+        The coordinates of the data along the axis to be averaged. If not provided,
+        is taken to be the indices over the axis.
+    axis
+        The axis over which to bin.
+    bins
+        The bin *edges* (lower inclusive, upper not inclusive). If an ``int``, simply
+        use ``bins`` samples per bin, starting from the first bin. If a float, use
+        equi-spaced bin edges, starting from the start of coords, and ending past the
+        end of coords. If not provided, assume a single bin encompassing the all the
+        data.
+
+    Returns
+    -------
+    coords
+        The weighted average of the coordinates in each bin. If there is no weight
+        in a bin
+    """
+    axis %= data.ndim
+
+    if weights is None:
+        weights = np.ones(data.shape, dtype=float)
+
+    if data.shape != weights.shape:
+        raise ValueError("data and weights must have same shape")
+
+    if coords is None:
+        coords = np.arange(data.shape[axis])
+
+    if len(coords) != data.shape[axis]:
+        raise ValueError("coords must be same length as the data along the given axis.")
+
+    if bins is None:
+        bins = np.array([coords[0], coords[-1] + 0.1])
+    elif isinstance(bins, int):
+        bins = np.concatenate((coords[::bins], [coords[-1] + 0.1]))
+    elif isinstance(bins, float):
+        bins = np.concatenate((np.arange(coords[0], coords[-1], bins), [coords[-1] + 0.1]))
+
+    # Get a list of tuples of bin edges
+    bins = [(b, bins[i + 1]) for i, b in enumerate(bins[:-1])]
+
+    # Generate the shape of the outputs by contracting one axis.
+    out_shape = tuple(d if i != axis else len(bins) for i, d in enumerate(data.shape))
+
+    out_data = np.ones(out_shape) * np.nan
+    out_wght = np.zeros(out_shape)
+    out_coords = np.ones(out_shape) * np.nan
+    init_shape = tuple(data.shape[-1] if i == axis else d for i, d in enumerate(data.shape[:-1]))
+
+    for i, (lower, upper) in enumerate(bins):
+        mask = np.where((coords >= lower) & (coords < upper))[0]
+        if len(mask) > 0:
+            this_data = data.take(mask, axis=axis)
+            this_wght = weights.take(mask, axis=axis)
+
+            this_crd = np.swapaxes(
+                np.broadcast_to(coords[mask], init_shape + (len(coords[mask]),)), axis, -1
+            )
+
+            this_slice = tuple(slice(None) if ax != axis else i for ax in range(data.ndim))
+            out_data[this_slice], out_wght[this_slice] = weighted_mean(
+                this_data, this_wght, axis=axis
+            )
+
+            out_coords[this_slice], _ = weighted_mean(this_crd, this_wght, axis=axis)
+
+    return out_coords, out_data, out_wght
+
+
 def average_in_frequency(
     spectrum: [list, np.ndarray],
     freq: [list, np.ndarray, None] = None,
@@ -257,7 +358,7 @@ def average_in_frequency(
     Parameters
     ----------
     spectrum : array-like
-        The spectrum to average. Must be 1D.
+        The spectrum to average. Fre
     freq : array-like, optional
         The frequencies along which to average. If provided, must be the same shape
         as ``spectrum``. Must be provided if either ``resolution`` or ``n_samples``
@@ -292,7 +393,7 @@ def average_in_frequency(
     --------
     >>> freq = np.linspace(0.1, 1, 10)
     >>> spectrum = [0, 2] * 5
-    >>> f, s, w = average_in_frequency(spectrum, freq=freq, resolution=0.2)
+    >>> f, s, w, std = average_in_frequency(spectrum, freq=freq, resolution=0.2)
     >>> f
     [0.15, 0.35, 0.55, 0.75, 0.95]
     >>> s
@@ -428,14 +529,13 @@ def weighted_mean(data, weights=None, axis=0):
     """
     sum, weights = weighted_sum(data, weights, axis=axis)
 
-    av = np.zeros_like(sum)
     mask = weights > 0
     if isinstance(sum, float):
         return sum / weights if mask else np.nan, weights
-    else:
-        av[mask] = sum[mask] / weights[mask]
-        av[~mask] = np.nan
-        return av, weights
+    av = np.zeros_like(sum)
+    av[mask] = sum[mask] / weights[mask]
+    av[~mask] = np.nan
+    return av, weights
 
 
 def weighted_sorted_metric(data, weights=None, metric="median", **kwargs):
@@ -482,59 +582,60 @@ def weighted_standard_deviation(av, data, std, axis=0):
 
 
 def run_xrfi_pipe(
-    spectrum: np.ndarray, flags: np.ndarray, xrfi_pipe: dict, n_threads: int = cpu_count()
+    spectrum: np.ndarray,
+    flags: np.ndarray,
+    xrfi_pipe: dict,
+    n_threads: int = cpu_count(),
+    fl_id=None,
 ) -> np.ndarray:
     """Run an xrfi pipeline on given spectrum and weights, updating weights in place."""
     for method, kwargs in xrfi_pipe.items():
         if (
-            method in ["xrfi_model", "xrfi_poly"] and spectrum.ndim == 2
+            method in ["xrfi_model", "xrfi_model_sweep"] and spectrum.ndim == 2
         ):  # methods that only allow 1D spectra.
             rfi = getattr(xrfi, method)
-
-            flags[0], info = rfi(spectrum[0], flags=flags[0], **kwargs)
-            model = info.get("model", None)
-
-            if model is not None and "model_type" in kwargs:
-                del kwargs["model_type"]
 
             def fnc(i):
                 spec = spectrum[i]
                 flg = flags[i]
-                with warnings.catch_warnings(record=True) as wrn:
-                    flg, info = rfi(spec, flags=flg, model_type=model, **kwargs)
-                return flg, wrn
+                flg, info = rfi(spec, flags=flg, **kwargs)
+                return flg
 
             n_threads = min(n_threads, len(flags))
 
             # Use a parallel map unless this function itself is being called by a
             # parallel map.
+            wrns = defaultdict(lambda: 0)
+
+            def count_warnings(message, *args, **kwargs):
+                wrns[str(message)] += 1
+
+            old = warnings.showwarning
+            warnings.showwarning = count_warnings
             m = (
                 Pool(cpu_count()).map
                 if (current_process().name == "MainProcess" and n_threads > 1)
                 else map
             )
 
-            results = m(fnc, range(1, len(spectrum)))
-            wrns = []
-            for i, (flg, info) in enumerate(results, start=1):
-                wrns += info
+            results = m(fnc, range(len(spectrum)))
+            for i, flg in enumerate(results):
                 flags[i] = flg
 
-            if wrns:
-                messages = {}
-                for wrn in wrns:
-                    msg = str(wrn.message)
-                    if msg in messages:
-                        messages[msg].append(wrn)
-                    else:
-                        messages[msg] = [wrn]
+            warnings.showwarning = old
 
-                for msg, list_of_warnings in messages.items():
-                    logger.warning(f"Received warning '{msg}' {len(list_of_warnings)} times.")
+            fl_id = f"{fl_id}: " if fl_id else ""
+
+            if wrns:
+                for msg, count in wrns.items():
+                    msg = msg.replace("\n", " ")
+                    logger.warning(f"{fl_id}Received warning '{msg}' {count}/{len(flags)} times.")
         else:
             flags, info = getattr(xrfi, method)(spectrum, flags=flags, **kwargs)
 
-        print(f"After {method}, nflags={np.sum(flags)}")
+        logger.info(
+            f"{fl_id}After {method}, nflags={np.sum(flags)}/{flags.size} ({100*np.sum(flags)/flags.size:.1f}%)"
+        )
 
     return flags
 
@@ -592,7 +693,10 @@ def model_bin_gha(
         these_resids = resids[mask]
         these_weights = weights[mask]
 
-        params_out[i] = np.mean(these_params, axis=0)
+        # Take the nanmean, because some entire integrations/GHA's might have been flagged
+        # and therefore have no applicable model. Then the params should be NaN. A nanmean
+        # of all NaNs returns NaN, so that makes sense.
+        params_out[i] = np.nanmean(these_params, axis=0)
         resids_out[i], weights_out[i] = weighted_mean(these_resids, weights=these_weights, axis=0)
 
     return params_out, resids_out, weights_out

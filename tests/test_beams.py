@@ -1,4 +1,6 @@
 from edges_analysis.analysis import beams
+from edges_analysis.analysis import DATA
+from edges_analysis.analysis.sky_models import Haslam408
 import numpy as np
 
 
@@ -47,7 +49,9 @@ def test_simulate_spectra():
     beam = beams.Beam.from_file("low")
 
     # Do a really small simulation
-    map, freq, lst = beams.simulate_spectra(beam, f_low=50, f_high=55, lsts=np.arange(0, 24, 6))
+    map, freq, lst = beams.simulate_spectra(
+        beam, f_low=50, f_high=55, lsts=np.arange(0, 24, 12), sky_model=Haslam408(max_res=3)
+    )
 
     assert map.shape == (len(lst), len(freq))
     assert np.all(map >= 0)
@@ -58,3 +62,11 @@ def test_uniform_beam():
     assert np.allclose(beam.beam, 1)
     az, el = np.meshgrid(beam.azimuth, beam.elevation[:-1])
     assert np.allclose(beam.angular_interpolator(0)(az, el), 1)
+
+
+def test_antenna_beam_factor():
+    beam = beams.Beam.from_file("low")
+    abf = beams.antenna_beam_factor(
+        beam=beam, f_low=50, f_high=56, lsts=np.arange(0, 24, 12), sky_model=Haslam408(max_res=3)
+    )
+    assert isinstance(abf, beams.BeamFactor)

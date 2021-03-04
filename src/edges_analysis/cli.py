@@ -51,8 +51,8 @@ def _get_settings(settings, xrfi, **cli_settings):
         settings["xrfi_pipe"] = {}
 
     console.print("[bold]Settings:")
-    for k, v in settings.items():
-        console.print(f"    {k}: [dim]{v}[/]")
+    settings_str = yaml.dump(settings)
+    console.print(settings_str)
 
     return settings
 
@@ -335,7 +335,7 @@ def level(ctx, level, settings, path, label, prev_label, prefix, message, xrfi, 
         for fl in in_files:
             console.print(f"[blue]\t{fl.absolute()}")
     else:
-        console.print(f"[bold]Processing[/] '{in_files.name}'")
+        console.print(f"[bold]Processing[/] '{in_files}'")
 
     # Get the output structure ready
     output_file = get_output_path(level, settings, in_files, label, prefix)
@@ -349,8 +349,10 @@ def level(ctx, level, settings, path, label, prev_label, prefix, message, xrfi, 
     console.print()
     console.print(Rule("Beginning Level Upgrade"))
     getattr(levels, f"Level{level}").from_previous_level(in_files, output_file, clobber, **settings)
+    console.print(Rule(" Done Level Upgrade"))
 
     with h5py.File(output_file, "a") as fl:
         fl.attrs["message"] = message
 
+    console.print()
     console.print(f"[bold]Output File: [blue]{output_file}")

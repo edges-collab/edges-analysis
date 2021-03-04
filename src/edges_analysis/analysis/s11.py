@@ -7,7 +7,7 @@ from edges_cal.s11_correction import get_switch_correction
 def get_corrected_s11(files, switch_state_dir, switch_state_run_num=None, n_fit_terms=23):
     assert len(files) == 4
 
-    standards = [io.S1P.read(fl)[0] for fl in files]
+    standards = [io.S1P.read(fl)[0] for fl in sorted(files)]
     f = io.S1P.read(files[0])[1]
 
     sw = {

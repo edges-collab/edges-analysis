@@ -6,6 +6,22 @@ min_receiver_temp: 0
 max_receiver_temp: 100
 rms_filter_file: null
 do_total_power_filter: false
+rms_models:
+  linlog5:
+    model: linlog
+    params:
+      n_terms: 5
+    bands:
+      - low
+      - high
+    resolution: 0
+  linlog3:
+    model: linlog
+    params:
+      n_terms: 3
+    bands:
+        - full
+    resolution: 0
 xrfi_pipe:
   xrfi_poly:
     n_signal: 4
