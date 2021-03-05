@@ -4,7 +4,7 @@ from edges_cal.reflection_coefficient import de_embed
 from edges_cal.s11_correction import get_switch_correction
 
 
-def get_corrected_s11(files, switch_state_dir, switch_state_run_num=None, n_fit_terms=23):
+def get_corrected_s11(files, switch_state_dir, switch_state_repeat_num=None, n_fit_terms=23):
     assert len(files) == 4
 
     standards = [io.S1P.read(fl)[0] for fl in sorted(files)]
@@ -19,7 +19,9 @@ def get_corrected_s11(files, switch_state_dir, switch_state_run_num=None, n_fit_
     # Correction at switch
     a_sw_c, x1, x2, x3 = de_embed(sw["o"], sw["s"], sw["l"], *standards)
 
-    switch_state = io.SwitchingState(switch_state_dir, run_num=switch_state_run_num, fix=False)
+    switch_state = io.SwitchingState(
+        switch_state_dir, repeat_num=switch_state_repeat_num, fix=False
+    )
 
     # Correction at receiver input
     return (
@@ -35,7 +37,7 @@ def antenna_s11_remove_delay(
     delay_0=0.17,
     n_fit=10,
     n_fourier=23,
-    switch_state_run_num=None,
+    switch_state_repeat_num=None,
 ):
     """
     Remove delay from antenna S11.
@@ -61,7 +63,7 @@ def antenna_s11_remove_delay(
         s11_files,
         switch_state_dir,
         n_fit_terms=n_fourier,
-        switch_state_run_num=switch_state_run_num,
+        switch_state_repeat_num=switch_state_repeat_num,
     )
 
     f_low = np.min(f)

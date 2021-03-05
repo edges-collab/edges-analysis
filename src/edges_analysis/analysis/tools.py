@@ -582,10 +582,12 @@ def weighted_standard_deviation(av, data, std, axis=0):
 
 
 def run_xrfi_pipe(
+    *,
     spectrum: np.ndarray,
     freq: np.ndarray,
-    flags: np.ndarray,
     xrfi_pipe: dict,
+    weights: Optional[np.ndarray] = None,
+    flags: Optional[np.ndarray] = None,
     n_threads: int = cpu_count(),
     fl_id=None,
 ) -> np.ndarray:
@@ -598,8 +600,9 @@ def run_xrfi_pipe(
 
             def fnc(i):
                 spec = spectrum[i]
-                flg = flags[i]
-                flg, info = rfi(spec, freq=freq, flags=flg, **kwargs)
+                flg = flags[i] if flags is not None else None
+                wght = weights[i] if weights is not None else None
+                flg, info = rfi(spec, freq=freq, flags=flg, weights=wght, **kwargs)
                 return flg
 
             n_threads = min(n_threads, len(flags))
@@ -632,7 +635,7 @@ def run_xrfi_pipe(
                     msg = msg.replace("\n", " ")
                     logger.warning(f"{fl_id}Received warning '{msg}' {count}/{len(flags)} times.")
         else:
-            flags, info = getattr(xrfi, method)(spectrum, flags=flags, **kwargs)
+            flags, info = getattr(xrfi, method)(spectrum, flags=flags, weights=weights, **kwargs)
 
         logger.info(
             f"{fl_id}After {method}, nflags={np.sum(flags)}/{flags.size} ({100*np.sum(flags)/flags.size:.1f}%)"

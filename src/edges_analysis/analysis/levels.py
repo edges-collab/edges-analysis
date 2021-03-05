@@ -868,7 +868,7 @@ class Level1(_Level):
         return out
 
     @classmethod
-    def _get_antenna_s11(cls, s11_files, freq, switch_state_dir, n_terms, switch_state_run_num):
+    def _get_antenna_s11(cls, s11_files, freq, switch_state_dir, n_terms, switch_state_repeat_num):
         # Get files
         model = s11m.antenna_s11_remove_delay(
             s11_files,
@@ -876,7 +876,7 @@ class Level1(_Level):
             switch_state_dir=switch_state_dir,
             delay_0=0.17,
             n_fit=n_terms,
-            switch_state_run_num=switch_state_run_num,
+            switch_state_repeat_num=switch_state_repeat_num,
         )[0]
         return model(freq)
 
@@ -885,11 +885,11 @@ class Level1(_Level):
         s11_files = self.meta["s11_files"].split(":")
         freq = self.raw_frequencies
         switch_state_dir = self.meta["switch_state_dir"]
-        switch_state_run_num = self.meta["switch_state_run_num"]
+        switch_state_repeat_num = self.meta["switch_state_repeat_num"]
         n_terms = self.meta["antenna_s11_n_terms"]
 
         return self._get_antenna_s11(
-            s11_files, freq, switch_state_dir, n_terms, switch_state_run_num
+            s11_files, freq, switch_state_dir, n_terms, switch_state_repeat_num
         )
 
     @property
@@ -934,7 +934,7 @@ class Level1(_Level):
         f_low: float = 50,
         f_high: float = 150,
         n_fg=7,
-        switch_state_run_num=None,
+        switch_state_repeat_num=None,
     ) -> Tuple[np.ndarray, FrequencyRange, np.ndarray, dict]:
         """
         Calibrate data.
@@ -1003,19 +1003,19 @@ class Level1(_Level):
             else:
                 switch_state_dir = calfile.internal_switch.path
 
-        if switch_state_run_num is not None:
+        if switch_state_repeat_num is not None:
             warnings.warn(
-                "You should use the switch state run_num that is inherently in the calibration object."
+                "You should use the switch state repeat_num that is inherently in the calibration object."
             )
-            switch_state_run_num = switch_state_run_num
+            switch_state_repeat_num = switch_state_repeat_num
         else:
             if calfile.internal_switch is None:
-                switch_state_run_num = 1
+                switch_state_repeat_num = 1
             else:
-                switch_state_run_num = calfile.internal_switch.run_num
+                switch_state_repeat_num = calfile.internal_switch.repeat_num
 
         meta = {
-            "s11_files": ":".join([str(f) for f in s11_files]),
+            "s11_files": ":".join(str(f) for f in s11_files),
             "antenna_s11_n_terms": antenna_s11_n_terms,
             "antenna_correction": antenna_correction,
             "balun_correction": balun_correction,
@@ -1029,7 +1029,7 @@ class Level1(_Level):
             "calfile": str(calfile.calfile),
             "calobs_path": str(calfile.calobs_path),
             "switch_state_dir": switch_state_dir,
-            "switch_state_run_num": switch_state_run_num,
+            "switch_state_repeat_num": switch_state_repeat_num,
         }
 
         if np.all(spectrum == 0):
@@ -1048,7 +1048,7 @@ class Level1(_Level):
             freq.freq,
             switch_state_dir,
             antenna_s11_n_terms,
-            switch_state_run_num,
+            switch_state_repeat_num,
         )
 
         # Calibrated antenna temperature with losses and beam chromaticity
@@ -1485,10 +1485,10 @@ class Level1(_Level):
                 return flags
 
         return tools.run_xrfi_pipe(
-            self.spectrum,
-            self.raw_frequencies,
-            flags,
-            xrfi_pipe,
+            spectrum=self.spectrum,
+            freq=self.raw_frequencies,
+            flags=flags,
+            xrfi_pipe=xrfi_pipe,
             n_threads=n_threads,
             fl_id=self.datestring,
         )
@@ -1711,7 +1711,7 @@ class Level2(_Level, _Level2Plus):
         n_threads: int = cpu_count(),
         model_nterms: int = 5,
         model_basis: str = "linlog",
-        model_nsamples: Optional[int] = 8,
+        model_resolution: [int, float] = 8,
     ):
         """
         Convert a list of :class:`Level1` objects into a combined :class:`Level2` object.
@@ -1798,10 +1798,11 @@ class Level2(_Level, _Level2Plus):
             The number of terms to use when fitting smooth models to each spectrum.
         model_basis
             The model basis -- a string representing a model from :module:`edges_cal.modelling`
-        model_nsamples
-            The number of frequency samples binned together before fitting the fiducial model.
-            Residuals of the model are still evaluated at full frequency resolution -- this
-            just affects the modeling itself.
+        model_resolution
+            If integer, the number of frequency samples binned together before fitting
+            the fiducial model. If float, the resolution of the bins in MHz. Set to zero
+            to not bin. Residuals of the model are still evaluated at full frequency
+            resolution -- this just affects the modeling itself.
 
         Returns
         -------
@@ -1887,22 +1888,22 @@ class Level2(_Level, _Level2Plus):
         if not n_files:
             raise Exception("All input files have been filtered completely.")
 
-        model_nsamples = model_nsamples or 1
-        f = prev_level[0].freq.freq[::model_nsamples]
-
         # Determine models for the individual spectra
-        model = mdl.Model._models[model_basis.lower()](default_x=f, n_terms=model_nterms)
+        #        model = mdl.Model._models[model_basis.lower()](default_x=f, n_terms=model_nterms)
         logger.info(
-            f"Determining {model.n_terms}-term '{model.__class__.__name__}' models for each integration..."
+            f"Determining {model_nterms}-term '{model_basis}' models for each integration..."
         )
 
         def get_params_resids(i):
             l1 = prev_level[i]
             flg = flags[i]
 
-            params = l1.get_model_parameters(
-                model, n_samples=model_nsamples, weights=(~flg).astype(float)
-            )[1]
+            model, params = l1.get_model_parameters(
+                model_basis,
+                resolution=model_resolution,
+                weights=(~flg).astype(float),
+                n_terms=model_nterms,
+            )
             resids = np.array(
                 [
                     l1.spectrum[j] - model(parameters=pp, x=l1.freq.freq)
@@ -2531,7 +2532,12 @@ class Level4(_Level, _Level2Plus):
 
         # Another round of XRFI
         logger.info("Running xRFI...")
-        tools.run_xrfi_pipe(resid if xrfi_on_resids else spec, wght, xrfi_pipe)
+        tools.run_xrfi_pipe(
+            spectrum=resid if xrfi_on_resids else spec,
+            freq=freq.freq,
+            weights=wght,
+            xrfi_pipe=xrfi_pipe,
+        )
 
         if ignore_freq_ranges:
             for (low, high) in ignore_freq_ranges:
