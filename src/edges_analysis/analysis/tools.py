@@ -1,14 +1,26 @@
 from typing import Tuple, Optional, Union
 from datetime import datetime, timedelta
 from multiprocess import Pool, current_process, cpu_count
+from multiprocessing.sharedctypes import RawArray
+
 import numpy as np
 from edges_cal import modelling as mdl, xrfi
 import warnings
 import logging
-import os
 from collections import defaultdict
 
 logger = logging.getLogger(__name__)
+
+_globals = {}
+
+
+def _init_worker(spectrum, weights, shape):
+    # This just shoves things into _globals so that each worker in a pool hass access
+    # to them. If they are in shared memory space (such as a RawArray), then they are
+    # not copied to each process, just accessed therefrom.
+    _globals["spectrum"] = spectrum
+    _globals["weights"] = weights
+    _globals["shape"] = shape
 
 
 def join_struct_arrays(arrays):
@@ -347,8 +359,7 @@ def average_in_frequency(
     spectrum: [list, np.ndarray],
     freq: [list, np.ndarray, None] = None,
     weights: [list, np.ndarray, None] = None,
-    resolution: [float, None] = None,
-    n_samples: [int, None] = None,
+    resolution: [float, None, int] = None,
     axis: int = -1,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Average a spectrum, with weights, in frequency.
@@ -405,15 +416,16 @@ def average_in_frequency(
     if axis < 0:
         axis += spectrum.ndim
 
-    if resolution is not None:
-        n_samples = max(int(resolution / (freq[1] - freq[0])), 1)
-
-    if (resolution or n_samples) and freq is None:
+    if resolution and freq is None:
         raise ValueError("You must provide freq if resolution or n_samples is provided!")
 
     nf = spectrum.shape[axis]
 
-    if resolution is None and n_samples is None:
+    if isinstance(resolution, float):
+        n_samples = max(int(resolution / (freq[1] - freq[0])), 1)
+    elif isinstance(resolution, int):
+        n_samples = resolution
+    else:
         n_samples = nf
 
     if freq is None:
@@ -593,19 +605,35 @@ def run_xrfi_pipe(
 ) -> np.ndarray:
     """Run an xrfi pipeline on given spectrum and weights, updating weights in place."""
     for method, kwargs in xrfi_pipe.items():
-        if (
-            method in ["xrfi_model", "xrfi_model_sweep"] and spectrum.ndim == 2
-        ):  # methods that only allow 1D spectra.
-            rfi = getattr(xrfi, method)
+        rfi = getattr(xrfi, method)
 
-            def fnc(i):
-                spec = spectrum[i]
-                flg = flags[i] if flags is not None else None
-                wght = weights[i] if weights is not None else None
-                flg, info = rfi(spec, freq=freq, flags=flg, weights=wght, **kwargs)
-                return flg
+        if weights is None:
+            if flags is None:
+                weights = np.ones_like(spectrum)
+            else:
+                weights = (~flags).astype(float)
 
-            n_threads = min(n_threads, len(flags))
+        if flags is not None:
+            weights = np.where(flags, 0, weights)
+
+        if spectrum.ndim in rfi.ndim:
+            flags = getattr(xrfi, method)(spectrum, weights=weights, **kwargs)[0]
+        elif spectrum.ndim > max(rfi.ndim) + 1:
+            # say we have a 3-dimensional spectrum but can only do 1D in the method.
+            # then we collapse to 2D and recursively run xrfi_pipe. That will trigger
+            # the *next* clause, which will do parallel mapping over the first axis.
+            orig_shape = spectrum.shape
+            new_shape = (-1,) + orig_shape[2:]
+            flags = run_xrfi_pipe(
+                spectrum=spectrum.reshape(new_shape),
+                weights=weights.reshape(new_shape),
+                freq=freq,
+                xrfi_pipe={method: kwargs},
+                n_threads=n_threads,
+            )
+            return flags.reshape(orig_shape)
+        else:
+            n_threads = min(n_threads, len(spectrum))
 
             # Use a parallel map unless this function itself is being called by a
             # parallel map.
@@ -616,17 +644,54 @@ def run_xrfi_pipe(
 
             old = warnings.showwarning
             warnings.showwarning = count_warnings
-            m = (
-                Pool(cpu_count()).map
-                if (current_process().name == "MainProcess" and n_threads > 1)
-                else map
-            )
+
+            if current_process().name == "MainProcess" and n_threads > 1:
+
+                def fnc(i):
+                    # Gets the spectrum/weights from the global var dict, which was initialized
+                    # by the pool. See https://research.wmz.ninja/articles/2018/03/on-sharing-large-arrays-when-using-pythons-multiprocessing.html
+                    spec = np.frombuffer(_globals["spectrum"]).reshape(_globals["shape"])[i]
+                    wght = np.frombuffer(_globals["weights"]).reshape(_globals["shape"])[i]
+
+                    if np.any(wght > 0):
+                        return rfi(spec, freq=freq, weights=wght, **kwargs)[0]
+                    else:
+                        return np.ones_like(spec, dtype=bool)
+
+                shared_spectrum = RawArray("d", spectrum.size)
+                shared_weights = RawArray("d", spectrum.size)
+
+                # Wrap X as an numpy array so we can easily manipulates its data.
+                shared_spectrum_np = np.frombuffer(shared_spectrum).reshape(spectrum.shape)
+                shared_weights_np = np.frombuffer(shared_weights).reshape(spectrum.shape)
+
+                # Copy data to our shared array.
+                np.copyto(shared_spectrum_np, spectrum)
+                np.copyto(shared_weights_np, weights)
+
+                p = Pool(
+                    n_threads,
+                    initializer=_init_worker,
+                    initargs=(shared_spectrum, shared_weights, spectrum.shape),
+                )
+                m = p.map
+            else:
+
+                def fnc(i):
+                    if np.any(weights[i] > 0):
+                        return rfi(spectrum[i], freq=freq, weights=weights[i], **kwargs)[0]
+                    else:
+                        return np.ones_like(spectrum[i], dtype=bool)
+
+                m = map
 
             results = m(fnc, range(len(spectrum)))
-            for i, flg in enumerate(results):
-                flags[i] = flg
+            flags = np.array(list(results))
 
             warnings.showwarning = old
+
+            # clear global memory (not sure if it still exists)
+            _init_worker(0, 0, 0)
 
             fl_id = f"{fl_id}: " if fl_id else ""
 
@@ -634,11 +699,11 @@ def run_xrfi_pipe(
                 for msg, count in wrns.items():
                     msg = msg.replace("\n", " ")
                     logger.warning(f"{fl_id}Received warning '{msg}' {count}/{len(flags)} times.")
-        else:
-            flags, info = getattr(xrfi, method)(spectrum, flags=flags, weights=weights, **kwargs)
 
+        print(flags.dtype)
         logger.info(
-            f"{fl_id}After {method}, nflags={np.sum(flags)}/{flags.size} ({100*np.sum(flags)/flags.size:.1f}%)"
+            f"{fl_id}After {method}, nflags={np.sum(flags)}/{flags.size}"
+            f" ({100*np.sum(flags)/flags.size:.1f}%)"
         )
 
     return flags
@@ -689,7 +754,7 @@ def model_bin_gha(
         bin_high = bins[i + 1]
 
         mask = (gha >= bin_low) & (gha < bin_high)
-        if len(mask) == 0:
+        if np.sum(mask) == 0:
             # Skip this bin if nothing's in it
             continue
 

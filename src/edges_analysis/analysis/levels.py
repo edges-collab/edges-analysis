@@ -1,75 +1,109 @@
 from __future__ import annotations
-from os.path import dirname, basename
-import os
-from typing import Tuple, Optional, Sequence, List, Union, Dict
-import glob
-import matplotlib.pyplot as plt
-import warnings
-import tqdm
-import json
-import sys
-import re
-from multiprocess.pool import Pool
-from multiprocessing import cpu_count
-import inspect
-from .. import __version__
 
+import glob
+import inspect
+import json
+import logging
+import os
+import re
+import sys
+import time
+import warnings
+from copy import deepcopy
+from datetime import datetime
+from multiprocessing import cpu_count
+from os.path import dirname
+from pathlib import Path
+from typing import Tuple, Optional, Sequence, List, Union, Dict, Callable, Type
+
+import attr
+import edges_io as io
+import h5py
+import matplotlib.pyplot as plt
 import numpy as np
+import tqdm
+from cached_property import cached_property
 from edges_cal import (
     FrequencyRange,
     modelling as mdl,
     xrfi as rfi,
     Calibration,
 )
-import p_tqdm
 from edges_io.auxiliary import auxiliary_data
-import logging
 from edges_io.h5 import HDF5Object
-import time
-import attr
-from pathlib import Path
-from cached_property import cached_property
-from read_acq import decode_file
+
 from . import s11 as s11m, loss, beams, tools, filters, coordinates
 from .coordinates import get_jd, dt_from_jd
-from ..config import config
+from .. import __version__
 from .. import const
-from datetime import datetime
+from ..config import config
 
 logger = logging.getLogger(__name__)
 
 
+def float_array_ndim(n: int):
+    return lambda x: x.ndim == n and x.dtype.name.startswith("float")
+
+
+def is_array(kind: str, n: int):
+    return lambda x: x.ndim == n and x.dtype.name.startswith(kind)
+
+
+class FullyFlaggedError(ValueError):
+    pass
+
+
+class WeatherError(ValueError):
+    pass
+
+
+class _CombinedFileMixin:
+    @property
+    def days(self) -> np.ndarray:
+        return self.ancillary.load("days")
+
+    @property
+    def gha_edges(self):
+        """The edges of the GHA bins."""
+        return self.ancillary.load("gha_edges")
+
+    def get_day(self, day: int) -> ModelData:
+        """Get the :class:`ModelData` class corresponding to day."""
+        if day not in self.days:
+            raise ValueError(f"That day ({day}) does not exist. Existing days: {self.days}")
+
+        for obj in self.model_step:
+            if obj.day == day:
+                return obj
+
+    @cached_property
+    def gha_centres(self):
+        return (self.gha_edges[1:] + self.gha_edges[:-1]) / 2
+
+
 def add_structure(cls):
-    """Make sure user is logged in before proceeding"""
-    lvl = int(cls.__name__[-1])
+    """Add basic data structure information to a given class."""
 
-    if lvl == 1:
-        spectra = {
-            "weights": lambda x: x.ndim == 2 and x.dtype.name.startswith("float"),
-            "spectrum": lambda x: x.ndim == 2 and x.dtype.name.startswith("float"),
-            "Q": lambda x: x.ndim == 2 and x.dtype.name.startswith("float"),
-            "switch_powers": lambda x: x.ndim == 3 and x.dtype.name.startswith("float"),
-        }
+    # Determine the spectra keys
+    spectra = deepcopy(cls._spectra_structure)
+
+    spectra["weights"] = float_array_ndim(cls._spec_dim)
+
+    if issubclass(cls, _ModelMixin):
+        spectra["resids"] = float_array_ndim(cls._spec_dim)
     else:
-        spec_dim = 3 if lvl == 2 else 2
-        spectra = {
-            "weights": lambda x: x.ndim == spec_dim and x.dtype.name.startswith("float"),
-            "resids": lambda x: x.ndim == spec_dim and x.dtype.name.startswith("float"),
-        }
+        spectra["spectrum"] = float_array_ndim(cls._spec_dim)
 
-    ancillary = cls._ancillary
+    # Get ancillary
+    ancillary = deepcopy(cls._ancillary)
 
-    if lvl > 1:
-        ancillary["gha_edges"] = lambda x: x.ndim == 1 and x.dtype.name.startswith("float")
+    if issubclass(cls, _ModelMixin):
         ancillary["model_params"] = lambda x: x.dtype.name.startswith("float")
 
-    structure = {
-        "frequency": lambda x: x.ndim == 1 and x.dtype.name.startswith("float"),
-        "spectra": spectra,
-        "ancillary": ancillary,  # A structured array with last axis being time
-    }
+    if issubclass(cls, _CombinedFileMixin):
+        ancillary["gha_edges"] = lambda x: x.ndim == 1 and x.dtype.name.startswith("float")
 
-    meta = cls._meta or {}
+    meta = deepcopy(cls._meta) or {}
 
     # Add meta keys that are in every level
     meta["write_time"] = None
@@ -78,28 +112,31 @@ def add_structure(cls):
     meta["edges_analysis_version"] = None
     meta["message"] = lambda x: isinstance(x, str)
 
-    if hasattr(cls, "_from_prev_level"):
-        # Automatically add keys from the signature of _from_prev_level
-        meta["prev_level_files"] = None
+    # Automatically add keys from the signature of _promote
+    meta["parent_files"] = None
 
-        sig = inspect.signature(cls._from_prev_level)
+    sig = inspect.signature(cls._promote)
 
-        for k, v in sig.parameters.items():
-            if k != "prev_level" and k not in meta:
-                meta[k] = None
+    for k, v in sig.parameters.items():
+        if k != "prev_step" and k not in meta:
+            meta[k] = None
 
-    structure["meta"] = meta
+    structure = {
+        "frequency": lambda x: x.ndim == 1 and x.dtype.name.startswith("float"),
+        "spectra": spectra,
+        "ancillary": ancillary,
+        "meta": meta,
+    }
+
     cls._structure = structure
-
-    if hasattr(cls, "_from_prev_level"):
-        cls.from_previous_level.__func__.__doc__ = cls._from_prev_level.__doc__
+    cls.promote.__func__.__doc__ = cls._promote.__doc__
 
     return cls
 
 
 @attr.s
-class _Level(HDF5Object):
-    """Base object for formal data reduction levels in edges-analysis.
+class _ReductionStep(HDF5Object):
+    """Base object for formal data reduction steps in edges-analysis.
 
     The structure is such that four groups will always be available:
     * frequency: the frequencies at which all else is measured.
@@ -112,48 +149,119 @@ class _Level(HDF5Object):
       that describe the data.
     """
 
+    _spectra_structure = {}
+    _spec_dim = 2
+    _possible_parents = tuple()
     default_root = config["paths"]["field_products"]
+    _multi_input = False
+    _ancillary = {}
+    _meta = {}
 
-    @classmethod
-    def _get_previous_level_cls(cls):
-        _prev_level = int(cls.__name__[-1]) - 1
-        if _prev_level:
-            _prev_level = getattr(sys.modules[__name__], f"Level{_prev_level}")
+    def _get_parent_of_kind(self, kind: Type[_ReductionStep]):
+        def _get(c):
+            if c.__class__ == kind:
+                return c
+            elif c.__class__ == CalibratedData:
+                raise AttributeError(f"This object has no parent of kind {kind.__class__.__name__}")
+            elif hasattr(c, "__len__"):
+                return [_get(cc) for cc in c]
+            else:
+                return _get(c.parent)
+
+        return _get(self)
+
+    @cached_property
+    def calibration_step(self):
+        return self._get_parent_of_kind(CalibratedData)
+
+    @cached_property
+    def model_step(self):
+        return self._get_parent_of_kind(ModelData)
+
+    @cached_property
+    def filter_step(self):
+        return self._get_parent_of_kind(FilteredData)
+
+    @cached_property
+    def combination_step(self):
+        return self._get_parent_of_kind(CombinedData)
+
+    @cached_property
+    def day_average_step(self):
+        return self._get_parent_of_kind(DayAveragedData)
+
+    @cached_property
+    def calibration(self):
+        """The calibration object defining the calibration of this data."""
+        return self.calibration_step.calibration
+
+    @staticmethod
+    def _get_object_class(fname: [str, Path]):
+        with h5py.File(fname, "r") as fl:
+            obj_name = fl.attrs.get("object_name", None)
+
+        if obj_name:
+            try:
+                return getattr(sys.modules[__name__], obj_name)
+            except AttributeError:
+                raise AttributeError(
+                    f"File {fname} has object type {obj_name} which is not a valid ReductionStep."
+                )
         else:
-            raise AttributeError(f"from_previous_level is not defined for {cls.__name__}")
-        return _prev_level
+            raise AttributeError(f"File {fname} is not a valid HDF5Object")
 
     @classmethod
-    def from_previous_level(
-        cls, prev_level, filename: [str, Path, None] = None, clobber: bool = False, **kwargs
-    ):
-        _prev_level = cls._get_previous_level_cls()
+    def _promote(
+        cls, prev_step: [_ReductionStep, List[_ReductionStep], io.Spectrum], **kwargs
+    ) -> Tuple[np.ndarray, dict, dict, dict]:
+        pass
 
-        if not isinstance(prev_level, _prev_level):
-            if hasattr(prev_level, "__len__"):
+    @classmethod
+    def promote(
+        cls,
+        prev_step: [_ReductionStep, List[Union[_ReductionStep, str, Path]], io.Spectrum, str, Path],
+        filename: [str, Path, None] = None,
+        clobber: bool = False,
+        **kwargs,
+    ):
+        """
+        Promote a :class:`_ReductionStep` to this level.
+
+        .. notes::
+            This docstring will be overwritten by the :func:`add_structure` class
+            decorator on each subclass.
+        """
+
+        def _validate_obj(obj):
+            # Either convert str/path to the proper object, return the object, or raise.
+            if isinstance(obj, (str, Path)):
                 with warnings.catch_warnings():
                     warnings.filterwarnings(action="ignore", category=UserWarning)
-                    prev_level = [
-                        p if isinstance(p, _prev_level) else _prev_level(p) for p in prev_level
-                    ]
+                    return read_step(obj)
+            elif isinstance(obj, cls._possible_parents):
+                return obj
             else:
-                prev_level = _prev_level(prev_level)
+                raise ValueError(f"{obj} is not a valid data set.")
 
-        # Sort the files by their filenames. *Usually* this will correspond to date.
-        if isinstance(prev_level, list):
-            prev_level = sorted(
-                prev_level, key=lambda x: (x.meta["year"], x.meta["day"], x.meta["hour"])
+        if cls._multi_input:
+            # Validate each file, and sort them by date.
+            # Sorting is important because we need to be able to know which index
+            # corresponds to which file later on.
+            prev_step = sorted(
+                (_validate_obj(obj) for obj in prev_step), key=lambda x: (x.year, x.day, x.hour)
             )
+        else:
+            prev_step = _validate_obj(prev_step)
 
-        freq, data, ancillary, meta = cls._from_prev_level(prev_level, **kwargs)
+        freq, data, ancillary, meta = cls._promote(prev_step, **kwargs)
 
-        meta["prev_level_files"] = (
-            ":".join(str(p.filename) for p in prev_level)
-            if isinstance(prev_level, list)
-            else str(prev_level.filename)
+        meta["parent_files"] = (
+            ":".join(str(p.filename) for p in prev_step)
+            if isinstance(prev_step, list)
+            else str(prev_step.filename)
         )
 
-        filename = Path(filename) if filename else None
+        filename = Path(filename).absolute() if filename else None
 
         if clobber and Path(filename).exists():
             os.remove(filename)
@@ -169,39 +277,18 @@ class _Level(HDF5Object):
         return out
 
     @cached_property
-    def previous_level(self):
-        try:
-            fnames = self.meta["prev_level_files"].split(":")
-        except KeyError:
-            raise TypeError(f"No previous levels for {self.__class__.__name__}")
+    def parent(self) -> [_ReductionStep, io.Spectrum, List[Union[_ReductionStep, io.Spectrum]]]:
+        filenames = self.meta["parent_files"].split(":")
 
-        if len(fnames) == 1:
-            return self._get_previous_level_cls()(fnames[0])
+        if len(filenames) == 1:
+            return read_step(filenames[0])
         else:
-            return [self._get_previous_level_cls()(fname) for fname in fnames]
+            return [read_step(fname) for fname in filenames]
 
     @property
     def meta(self):
-        """Dictionary of meta information for this and previous levels."""
-        meta = self.load("meta")
-
-        # Previous Levels
-        out = {}
-        for k, v in meta.items():
-            if "." in k:
-                level, key = k.split(".")
-                if level not in out:
-                    out[level] = {key: v}
-                else:
-                    out[level][key] = v
-            else:
-                out[k] = v
-                if self.__class__.__name__ not in out:
-                    out[self.__class__.__name__] = {k: v}
-                else:
-                    out[self.__class__.__name__][k] = v
-
-        return out
+        """Dictionary of meta information for this object."""
+        return self["meta"]
 
     @property
     def raw_frequencies(self):
@@ -227,17 +314,17 @@ class _Level(HDF5Object):
             return self.spectra["weights"]
 
     @property
-    def resids(self):
+    def spectrum(self):
         """Residuals of all spectra after being fit by the fiducial model."""
         try:
-            return self.spectra.load("resids")
+            return self.spectra.load("spectrum")
         except AttributeError:
-            return self.spectra["resids"]
+            return self.spectra["spectrum"]
 
     @classmethod
-    def _get_meta(cls, locals, prev_level: [None, _Level] = None):
-        sig = inspect.signature(cls._from_prev_level)
-        out = {k: locals[k] for k in sig.parameters if k != "prev_level"}
+    def _get_meta(cls, params: dict) -> dict:
+        sig = inspect.signature(cls._promote)
+        out = {k: params[k] for k in sig.parameters if k != "prev_step"}
 
         for k, v_ in out.items():
             # Some rules for serialising to HDF5
@@ -248,15 +335,8 @@ class _Level(HDF5Object):
             elif isinstance(out[k], Path):
                 out[k] = str(out[k])
 
-        out.update(cls._extra_meta(locals))
+        out.update(cls._extra_meta(params))
         out.update(cls._get_extra_meta())
-
-        if prev_level:
-            for k, v in prev_level.meta.items():
-                if "." not in k:  # Don't save
-                    out[prev_level.__class__.__name__ + "." + k] = v
-                else:
-                    out[k] = v
 
         return out
 
@@ -266,14 +346,21 @@ class _Level(HDF5Object):
 
     @classmethod
     def _get_extra_meta(cls):
-        out = super(_Level, cls)._get_extra_meta()
+        out = super(_ReductionStep, cls)._get_extra_meta()
         out["edges_analysis_version"] = __version__
         out["message"] = ""
         return out
 
 
-@attr.s
-class _Level2Plus:
+def read_step(fname: [str, Path]) -> [_ReductionStep, io.HDF5RawSpectrum]:
+    fname = Path(fname)
+    if fname.suffix == ".acq":
+        return io.FieldSpectrum(fname).data
+    else:
+        return _ReductionStep._get_object_class(fname)(fname)
+
+
+class _ModelMixin:
     @cached_property
     def model(self) -> mdl.Model:
         """The abstract linear model that is fit to each integration.
@@ -281,51 +368,600 @@ class _Level2Plus:
         Note that the parameters are not set on this model, but the basis vectors are
         set.
         """
-        # We first try accessing the hard-copy Level2 meta saved in this file.
-        # For backwards-compatibility (since this wasn't always saved into the file)
-        # also try accessing the Level2 file itself.
-        l2_meta = self.meta.get("Level2", self.level2.meta)
+        if isinstance(self.model_step, (list, tuple)):
+            meta = self.model_step[0].meta
+        else:
+            meta = self.model_step.meta
 
-        return mdl.Model._models[l2_meta["model_basis"].lower()](
-            default_x=self.freq.freq, n_terms=l2_meta["model_nterms"]
+        return mdl.Model.get_mdl(meta["model_basis"])(
+            default_x=self.freq.freq, n_terms=meta["model_nterms"]
         )
-
-    @cached_property
-    def level2(self):
-        """The Level2 ancestor of this object."""
-        raise NotImplementedError()
 
     @property
     def model_params(self):
         return self.ancillary["model_params"]
 
-    def get_model(self, indx: [int, List[int]]) -> np.ndarray:
+    def get_model(self, indx: [int, List[int]], p: Optional[np.ndarray] = None) -> np.ndarray:
         """Obtain the fiducial fitted model spectrum for integration/gha at indx."""
-        p = self.model_params
+        model = self.model
+
+        if p is None:
+            p = self.model_params
+
         if not hasattr(indx, "__len__"):
             indx = [indx]
-        assert (
-            len(indx) == self.resids.ndim - 1
-        ), "indx must have one element for each axis of resids, except the last (which is frequency)."
 
         for i in indx:
             p = p[i]
 
-        return self.model(parameters=p)
+        return model(parameters=p)
 
-    @property
-    def spectrum(self) -> np.ndarray:
+    def get_spectrum(
+        self, resids: np.ndarray, params: np.ndarray, freq: Optional[np.ndarray] = None
+    ) -> np.ndarray:
         """The processed spectra at this level."""
-        indx = np.indices(self.resids.shape[:-1]).reshape((self.resids.ndim - 1, -1)).T
-        out = np.zeros_like(self.resids)
+        if freq is not None:
+            try:
+                del self.model.default_basis
+            except AttributeError:
+                pass
+            self.model.default_x = freq
+
+        indx = np.indices(resids.shape[:-1]).reshape((resids.ndim - 1, -1)).T
+        out = np.zeros_like(resids)
         for i in indx:
             ix = tuple(np.atleast_2d(i).T.tolist())
-            out[ix] = self.get_model(i) + self.resids[ix]
+            out[ix] = self.get_model(i, params) + resids[ix]
+
+        if freq is not None:
+            del self.__dict__["model"]
+
         return out
+
+    @cached_property
+    def spectrum(self):
+        return self.get_spectrum(self.resids, self.model_params)
+
+    @property
+    def resids(self):
+        """Residuals of all spectra after being fit by the fiducial model."""
+        try:
+            return self.spectra.load("resids")
+        except AttributeError:
+            return self.spectra["resids"]
+
+
+@attr.s
+class _Filters:
+    _caldata: [CalibratedData, FilteredData] = attr.ib()
+
+    @property
+    def ancillary(self):
+        return self._caldata.ancillary
+
+    @property
+    def weights(self):
+        return self._caldata.weights
+
+    @property
+    def spectrum(self):
+        return self._caldata.spectrum
+
+    @property
+    def freq(self):
+        return self._caldata.freq
+
+    @property
+    def raw_frequencies(self):
+        return self._caldata.raw_frequencies
+
+    def aux_filter(
+        self,
+        sun_el_max: float = 90,
+        moon_el_max: float = 90,
+        ambient_humidity_max: float = 40,
+        min_receiver_temp: float = 0,
+        max_receiver_temp: float = 100,
+        flags: [None, np.ndarray] = None,
+    ) -> np.ndarray:
+        """
+        Perform an auxiliary filter on the object.
+
+        Parameters
+        ----------
+        sun_el_max
+            Maximum elevation of the sun to keep.
+        moon_el_max
+            Maximum elevation of the moon to keep.
+        ambient_humidity_max
+            Maximum ambient humidity to keep.
+        min_receiver_temp
+            Minimum receiver temperature to keep.
+        max_receiver_temp
+            Maximum receiver temp to keep.
+        flags
+            If given, do filtering in-place.
+
+        Returns
+        -------
+        flags
+            Boolean array giving which entries are bad.
+        """
+
+        return filters.time_filter_auxiliary(
+            gha=self.ancillary["gha"],
+            sun_el=self.ancillary["sun_el"],
+            moon_el=self.ancillary["moon_el"],
+            humidity=self.ancillary["ambient_hum"],
+            receiver_temp=self.ancillary["receiver_temp"],
+            sun_el_max=sun_el_max,
+            moon_el_max=moon_el_max,
+            amb_hum_max=ambient_humidity_max,
+            min_receiver_temp=min_receiver_temp,
+            max_receiver_temp=max_receiver_temp,
+            flags=flags,
+        )
+
+    aux_filter.axis = "time"
+
+    def rfi_filter(
+        self, xrfi_pipe: dict, flags: [None, np.ndarray] = None, n_threads: int = cpu_count()
+    ) -> np.ndarray:
+        """
+        Perform filtering on auxiliary data and RFI for a level 1 file.
+
+        Parameters
+        ----------
+        xrfi_pipe
+            A dictionary with keys specifying RFI function names, and values being
+            dictionaries of parameters to pass to the function.
+
+        Returns
+        -------
+        flags
+            The boolean flag array, specifying which freqs/times are bad.
+        """
+        if flags is None:
+            flags = np.zeros(self.weights.shape, dtype=bool)
+
+        if "explicit" in xrfi_pipe:
+            kwargs = xrfi_pipe.pop("explicit")
+
+            if kwargs["file"] is None:
+                known_rfi_file = Path(dirname(__file__)) / "data" / "known_rfi_channels.yaml"
+            else:
+                known_rfi_file = kwargs["file"]
+
+            flags |= rfi.xrfi_explicit(
+                self.raw_frequencies,
+                rfi_file=known_rfi_file,
+            )
+
+            if np.all(flags):
+                return flags
+
+        return tools.run_xrfi_pipe(
+            spectrum=self.spectrum,
+            freq=self.raw_frequencies,
+            flags=flags,
+            xrfi_pipe=xrfi_pipe,
+            n_threads=n_threads,
+            fl_id=self.datestring,
+        )
+
+    rfi_filter.axis = "both"
+
+    @property
+    def datestring(self):
+        """The date this observation was started, as a string."""
+        return self._caldata.datestring
+
+    def rms_filter(
+        self,
+        rms_info: [filters.RMSInfo, str, Path],
+        n_sigma_rms: int = 3,
+        flags: [np.ndarray, None] = None,
+    ):
+        weights = self.weights.T if flags is None else np.where(flags, 0, self.weights.T)
+        if not isinstance(rms_info, filters.RMSInfo):
+            rms_info = filters.RMSInfo.from_file(rms_info)
+
+        rms = {
+            mdl_name: self._caldata.get_model_rms(
+                freq_ranges=bands, weights=weights.T, **rms_info.model_params[mdl_name]
+            )
+            for mdl_name, bands in rms_info.bands.items()
+        }
+
+        if flags is None:
+            flags = np.zeros(self.weights.T.shape, dtype=bool)
+
+        flags |= filters.rms_filter(
+            rms_info, self.ancillary["gha"], rms, n_sigma_rms, fl_id=self.datestring
+        )
+
+        return flags
+
+    rms_filter.axis = "time"
+
+    def total_power_filter(
+        self,
+        flags=None,
+        n_poly: int = 3,
+        n_sigma: float = 3.0,
+        bands: [None, List[Tuple[float, float]]] = None,
+        std_thresholds=None,
+    ):
+        if flags is None:
+            flags = np.zeros(self.weights.T.shape, dtype=bool)
+
+        flags |= filters.total_power_filter(
+            self.ancillary["gha"],
+            self.spectrum,
+            self.freq.freq,
+            flags=flags.T,
+            n_poly=n_poly,
+            n_sigma=n_sigma,
+            bands=bands,
+            std_thresholds=std_thresholds,
+        )
+        return flags
+
+    total_power_filter.axis = "time"
+
+    def negative_power_filter(self, flags: np.ndarray):
+        """Filter out integrations that have *any* negative/zero power.
+
+        These integrations obviously have some weird stuff going on.
+        """
+        return np.array([np.any(spec <= 0) for spec in self.spectrum])
+
+    negative_power_filter.axis = "time"
+
+
+class _SingleDayMixin:
+    @property
+    def day(self):
+        return self.calibration_step.meta["day"]
+
+    @property
+    def year(self):
+        return self.calibration_step.meta["year"]
+
+    @property
+    def hour(self):
+        return self.calibration_step.meta["hour"]
+
+    @property
+    def gha(self):
+        return self.calibration_step.ancillary.load("gha")
+
+    @property
+    def lst(self):
+        return self.calibration_step.ancillary.load("lst")
+
+    @property
+    def datestring(self):
+        """The date this observation was started, as a string."""
+        return f"{self.year:04}-{self.day:03}-{self.hour:02}"
+
+    @property
+    def raw_time_data(self):
+        """Raw string times at which the spectra were taken."""
+        return self.calibration_step.ancillary["times"]
+
+    @cached_property
+    def datetimes(self):
+        """List of python datetimes at which the spectra were taken."""
+        return self.get_datetimes(self.raw_time_data)
+
+    @classmethod
+    def get_datetimes(cls, times):
+        return [datetime.strptime(d, "%Y:%j:%H:%M:%S") for d in times.astype(str)]
+
+    def bin_in_frequency(
+        self,
+        indx: Optional[int] = None,
+        resolution: float = 0.0488,
+        weights: Optional[np.ndarray] = None,
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Perform a frequency-average over the spectrum.
+
+        Parameters
+        ----------
+        indx
+            The (time) index at which to compute the frequency-averaged spectrum.
+            If not given, returns a 2D array, with time on the first axis.
+        resolution : float, optional
+            The frequency resolution of the output.
+        weights :
+
+        Returns
+        -------
+        f
+            The new frequency bin-centres.
+        t
+            The weighted-average of the spectrum in each bin
+        w
+            The total weight in each bin
+        """
+        if weights is None:
+            weights = self.weights
+
+        if indx is not None:
+            s, w = self.spectrum[indx], weights[indx]
+        else:
+            s, w = self.spectrum, weights
+
+        new_f, new_s, new_w = tools.bin_array(
+            data=s, coords=self.raw_frequencies, weights=w, bins=resolution, axis=-1
+        )
+
+        return new_f, new_s, new_w
+
+    def get_model_parameters(
+        self,
+        model: [str, mdl.Model] = "linlog",
+        resolution: [int, float, None] = 0.0488,
+        weights: Optional[np.ndarray] = None,
+        indices: Optional[List[int]] = None,
+        **kwargs,
+    ) -> Tuple[mdl.Model, np.ndarray]:
+        """
+        Determine a callable model of the spectrum at a given time, optionally
+        computed over averaged original data.
+
+        Parameters
+        ----------
+        model
+            The kind of model to fit.
+        resolution
+            The resolution at which to bin the spectra before fitting models. If float,
+            resolution in MHz, if int the number of samples per bin.
+        weights
+            Weights with which to fit the spectra.
+        indices
+            Which integrations to generate models for.
+
+        Other Parameters
+        ----------------
+        Passed through to the Model.
+
+        Returns
+        -------
+        callable :
+            Function of frequency (in units of self.raw_frequency) that will return
+            the model.
+        """
+        if weights is None:
+            weights = self.weights
+
+        indices = indices or range(len(self.spectrum))
+
+        if isinstance(model, str):
+            model = mdl.Model.get_mdl(model)
+
+        if resolution:
+            f, s, w = self.bin_in_frequency(resolution=resolution, weights=weights)
+            model = model(**kwargs)
+        else:
+            f, s, w = self.raw_frequencies, self.spectrum, weights
+            model = model(default_x=f, **kwargs)
+
+        def get_params(indx):
+            ss = s[indx]
+            ww = w[indx]
+
+            if np.sum(ww > 0) <= 2 * model.n_terms:
+                # Only try to fit if we have enough non-flagged data points.
+                return np.nan * np.ones(model.n_terms)
+
+            if resolution:
+                try:
+                    del model.default_basis
+                except AttributeError:
+                    pass
+                model.default_x = f[indx]
+
+            return model.fit(ydata=ss, weights=ww).model_parameters
+
+        params = np.array([get_params(indx) for indx in indices])
+
+        return model, params
+
+    def get_model_rms(
+        self,
+        weights: Optional[np.ndarray] = None,
+        freq_ranges: List[Tuple[float, float]] = [(-np.inf, np.inf)],
+        indices: Optional[List[int]] = None,
+        **model_kwargs,
+    ) -> Dict[Tuple[float, float], np.ndarray]:
+        """Obtain the RMS of the residual of a model-fit to a particular integration.
+
+        This method is cached, so that calling it again for the same arguments is
+        fast.
+
+        Parameters
+        ----------
+        weights
+            The weights of the spectrum to use in the fitting. Must be the same shape
+            as :attr:`~spectrum`. Default is to use the weights intrinsic to the object.
+        freq_ranges
+            While the model given is fit to the entire spectrum, the RMS values can be
+            taken over sub-portions of the spectrum. Each frequency range should be
+            given as a tuple of (low, high) values, in a list.
+        indices
+            The integration indices for which to return the RMS.
+
+        Other Parameters
+        ----------------
+        All other parameters are passed to :method:`~get_model_parameters`.
+
+        Returns
+        -------
+        rms
+            A dictionary where keys are tuples specifying the input bands, and the values
+            are arrays of rms values, as a function of time.
+
+        Notes
+        -----
+        The averaging into frequency bins is *only* done for the fit itself. The final
+        residuals are computed on the un-averaged spectrum. The binning is done fully
+        self-consistently with the weights  -- it uses :func:`~tools.bin_array` to do
+        the binning, returning non-equi-spaced frequencies.
+        """
+        model, params = self.get_model_parameters(weights=weights, indices=indices, **model_kwargs)
+
+        if indices is None:
+            indices = range(len(self.spectrum))
+        if weights is None:
+            weights = np.ones(self.spectrum.shape)
+
+        # access the default basis
+        def _get_rms(indx):
+
+            m = model(x=self.raw_frequencies, parameters=params[indx])
+
+            out = {}
+            for band in freq_ranges:
+                freq_mask = (self.raw_frequencies >= band[0]) & (self.raw_frequencies < band[1])
+                resid = self.spectrum[indx, freq_mask] - m[freq_mask]
+                mask = weights[indx, freq_mask] > 0
+                out[band] = np.sqrt(np.nanmean(resid[mask] ** 2))
+
+            return out
+
+        res = [_get_rms(i) for i in range(len(indices))]
+
+        # Return dict of arrays (from list of dicts).
+        return {band: np.array([r[band] for r in res]) for band in res[0]}
+
+    def plot_waterfall(
+        self, quantity: str = "spectrum", ax: [None, plt.Axes] = None, cbar=True, **imshow_kwargs
+    ):
+        if quantity in ["p0", "p1", "p2"]:
+            q = self.calibration_data.spectra["switch_powers"][int(quantity[-1])]
+        else:
+            q = getattr(self, quantity)
+
+        if ax is not None:
+            fig = ax.figure
+        else:
+            fig, ax = plt.subplots(1, 1)
+
+        if quantity == "resids":
+            cmap = imshow_kwargs.pop("cmap", "coolwarm")
+        else:
+            cmap = imshow_kwargs.pop("cmap", "magma")
+
+        sec = self.calibration_step.ancillary["seconds"]
+
+        img = ax.imshow(
+            q,
+            origin="lower",
+            extent=(
+                self.raw_frequencies.min(),
+                self.raw_frequencies.max(),
+                sec.min() / 60 / 60,
+                sec.max() / 60 / 60,
+            ),
+            cmap=cmap,
+            aspect="auto",
+            **imshow_kwargs,
+        )
+
+        ax.set_xlabel("Frequency [MHz]")
+        ax.set_ylabel("Hours into Observation")
+        ax.set_title(f"{self.datestring}. GHA0={self.gha[0]:.2f}")
+
+        if cbar:
+            cb = plt.colorbar(img, ax=ax)
+            cb.set_label(quantity)
+
+        return ax
+
+    def plot_waterfalls(self, quanties="all", **imshow_kwargs):
+        if quanties == "all":
+            quanties = ["spectrum", "Q", "weights", "p0", "p1", "p2"]
+
+        fig, ax = plt.subplots(
+            len(quanties),
+            1,
+            sharex=True,
+            sharey=True,
+            figsize=(10, 10),
+            gridspec_kw={"hspace": 0.05, "wspace": 0.05},
+        )
+
+        for i, (q, axx) in enumerate(zip(quanties, ax)):
+            self.plot_waterfall(q, ax=axx, **imshow_kwargs)
+
+        return fig, ax
+
+    def plot_time_averaged_spectrum(
+        self,
+        quantity="spectrum",
+        integrator="mean",
+        ax: [None, plt.Axes] = None,
+        logy=True,
+    ):
+        if ax is not None:
+            fig = ax.figure
+        else:
+            fig, ax = plt.subplots(1, 1)
+
+        q, w = self.integrate_over_time(quantity=quantity, integrator=integrator)
+
+        unit = "[K]"
+        if quantity == "Q":
+            unit = ""
+
+        ax.plot(self.raw_frequencies, q)
+        ax.set_xlabel("Frequency [MHz]")
+        ax.set_ylabel(f"{quantity} {unit}")
+
+        if logy:
+            ax.set_yscale("log")
+
+        return ax
+
+    def plot_s11(self, ax=None):
+        if ax is None:
+            fig, ax = plt.subplots(2, 2, figsize=(8, 8), sharex=True)
+        ax[0, 0].plot(self.raw_frequencies, 20 * np.log10(np.abs(self.antenna_s11)))
+        ax[0, 0].set_title("Magnitude of Antenna S11")
+        ax[0, 0].set_xlabel("Frequency [MHz]")
+        ax[0, 0].set_ylabel("$|S_{11}|$ [dB]")
+
+        ax[0, 1].plot(self.raw_frequencies, (180 / np.pi) * np.unwrap(np.angle(self.antenna_s11)))
+        ax[0, 1].set_title("Phase of Antenna S11")
+        ax[0, 1].set_xlabel("Frequency [MHz]")
+        ax[0, 1].set_ylabel(r"$\angle S_{11}$ [${}^\circ$]")
+
+        ax[1, 0].plot(
+            self.raw_antenna_s11_freq,
+            np.real(self.raw_antenna_s11)
+            - np.real(self.antenna_s11_model(self.raw_antenna_s11_freq)),
+        )
+        ax[1, 0].set_title("Residual (Real Part)")
+        ax[1, 0].set_xlabel("Frequency [MHz]")
+        ax[1, 0].set_ylabel(r"Data - Model")
+
+        ax[1, 1].plot(
+            self.raw_antenna_s11_freq,
+            np.imag(self.raw_antenna_s11)
+            - np.imag(self.antenna_s11_model(self.raw_antenna_s11_freq)),
+        )
+        ax[1, 1].set_title("Residual (Imag Part)")
+        ax[1, 1].set_xlabel("Frequency [MHz]")
+        ax[1, 1].set_ylabel(r"Data - Model")
+
+        return ax
 
 
 @add_structure
-class Level1(_Level):
+class CalibratedData(_ReductionStep, _SingleDayMixin):
     """Object representing the level-1 stage of processing.
 
     This object essentially represents a Calibrated spectrum.
@@ -340,17 +976,63 @@ class Level1(_Level):
     The data at this level have (in this order):
 
     * Calibration applied from existing calibration solutions
-    * Collected associated weather and thermal auxiliary data (not used at this level, just collected)
+    * Collected associated weather and thermal auxiliary data (not used at this level,
+    just collected)
     * Potential xRFI applied to the raw switch powers individually.
     """
 
-    _ancillary = None
-    _meta = None
+    _spectra_structure = {
+        "Q": float_array_ndim(2),
+        "switch_powers": float_array_ndim(3),
+    }
+
+    _ancillary = {
+        "adcmax": float_array_ndim(2),
+        "adcmin": float_array_ndim(2),
+        "ambient_hum": float_array_ndim(1),
+        "ambient_temp": float_array_ndim(1),
+        "frontend_temp": float_array_ndim(1),
+        "gha": float_array_ndim(1),
+        "lna_temp": float_array_ndim(1),
+        "lst": float_array_ndim(1),
+        "moon_az": float_array_ndim(1),
+        "moon_el": float_array_ndim(1),
+        "power_percent": float_array_ndim(1),
+        "rack_temp": float_array_ndim(1),
+        "receiver_temp": float_array_ndim(1),
+        "seconds": is_array("int", 1),
+        "sun_az": float_array_ndim(1),
+        "sun_el": float_array_ndim(1),
+        "temp_set": float_array_ndim(1),
+        "times": None,
+    }
+
+    _meta = {
+        "day": lambda x: isinstance(x, (int, np.int64)),
+        "year": lambda x: isinstance(x, (int, np.int64)),
+        "hour": lambda x: isinstance(x, (int, np.int64)),
+        "calobs_path": None,
+        "cterms": lambda x: isinstance(x, (int, np.int64)),
+        "wterms": lambda x: isinstance(x, (int, np.int64)),
+        "freq_max": lambda x: isinstance(x, (float, np.float32)),
+        "freq_min": lambda x: isinstance(x, (float, np.float32)),
+        "freq_res": lambda x: isinstance(x, (float, np.float32)),
+        "n_file_lines": lambda x: isinstance(x, (int, np.int64)),
+        "nblk": lambda x: isinstance(x, (int, np.int64)),
+        "nfreq": lambda x: isinstance(x, (int, np.int64)),
+        "resolution": None,
+        "s11_files": None,
+        "temperature": None,
+    }
+
+    @cached_property
+    def filters(self):
+        return _Filters(caldata=self)
 
     @classmethod
-    def from_acq(
+    def _promote(
         cls,
-        filename: [str, Path],
+        prev_step: io.HDF5RawSpectrum,
         band: str,
         calfile: [str, Path],
         s11_path: [str, Path],
@@ -362,14 +1044,23 @@ class Level1(_Level):
         xrfi_pipe: [None, dict] = None,
         s11_file_pattern: str = r"{y}_{jd}_{h}_*_input{input}.s1p",
         ignore_s11_files: [None, List[str]] = None,
-        **cal_kwargs,
-    ) -> Level1:
+        switch_state_dir: Optional[Union[str, Path]] = None,
+        antenna_s11_n_terms: int = 15,
+        antenna_correction: [str, Path, None] = ":",
+        configuration: str = "",
+        balun_correction: [str, Path, None] = ":",
+        ground_correction: [str, Path, None, float] = ":",
+        beam_file=None,
+        f_low: float = 50.0,
+        f_high: float = 150.0,
+        switch_state_repeat_num: [int, None] = None,
+    ) -> Tuple[np.ndarray, dict, dict, dict]:
         """
         Create the object directly from calibrated data.
 
         Parameters
         ----------
-        filename
+        prev_step
             The filename of the ACQ file to read.
         band
             Defines the instrument that took the data (mid, low, high).
@@ -411,33 +1102,33 @@ class Level1(_Level):
 
         Returns
         -------
-        level1
-            An instantiated :class:`Level1` object.
+        data
+            An instantiated :class:`CalibratedData` object.
         """
         t = time.time()
-        Q, p, ancillary = decode_file(
-            filename,
-            meta=True,
-            progress=progress,
-            leave_progress=leave_progress,
-        )
+        q = prev_step["spectra"]["Q"]
+        p = [
+            prev_step["spectra"]["p0"],
+            prev_step["spectra"]["p1"],
+            prev_step["spectra"]["p2"],
+        ]
+        ancillary = prev_step.load("time_ancillary")
+
         logger.info(f"Time for reading: {time.time() - t:.2f} sec.")
 
         logger.info("Converting time strings to datetimes...")
         t = time.time()
-        times = cls.get_datetimes(ancillary.data["times"])
+        times = cls.get_datetimes(ancillary["times"])
         logger.info(f"...  finished in {time.time() - t:.2f} sec.")
 
         meta = {
             "year": times[0].year,
             "day": get_jd(times[0]),
             "hour": times[0].hour,
-            "band": band,
-            "xrfi_pipe": xrfi_pipe,
-            **ancillary.meta,
+            **prev_step.load("meta"),
         }
 
-        time_based_anc = ancillary.data
+        time_based_anc = ancillary
 
         logger.info("Getting ancillary weather data...")
         t = time.time()
@@ -457,16 +1148,24 @@ class Level1(_Level):
 
         logger.info("Calibrating data ...")
         t = time.time()
-        calspec, freq, weights, new_meta = cls._calibrate(
-            spectrum=Q,
-            frequencies=ancillary.frequencies,
+        calspec, freq, new_meta = cls.calibrate(
+            q=q,
+            freq=prev_step["freq_ancillary"]["frequencies"],
             band=band,
             calfile=Path(calfile).expanduser(),
             ambient_temp=time_based_anc["ambient_temp"],
             lst=time_based_anc["lst"],
             s11_files=s11_files,
             configuration="",
-            **cal_kwargs,
+            switch_state_dir=switch_state_dir,
+            antenna_s11_n_terms=antenna_s11_n_terms,
+            antenna_correction=antenna_correction,
+            balun_correction=balun_correction,
+            ground_correction=ground_correction,
+            beam_file=beam_file,
+            f_low=f_low,
+            f_high=f_high,
+            switch_state_repeat_num=switch_state_repeat_num,
         )
         logger.info(f"... finished in {time.time() - t:.2f} sec.")
 
@@ -477,48 +1176,26 @@ class Level1(_Level):
             logger.info("Running xRFI...")
             t = time.time()
             for pspec in p:
-                tools.run_xrfi_pipe(pspec, weights, xrfi_pipe)
+                tools.run_xrfi_pipe(spectrum=pspec, freq=freq.freq, xrfi_pipe=xrfi_pipe)
             logger.info(f"... finished in {time.time() - t:.2f} sec.")
 
         meta = {**meta, **new_meta}
-        meta = {**meta, **cls._get_extra_meta()}
+        meta = {**meta, **cls._get_meta(locals())}
         data = {
             "spectrum": calspec,
             "switch_powers": np.array([pp[freq.mask] for pp in p]),
-            "weights": weights,
-            "Q": Q[freq.mask],
+            "weights": np.ones_like(calspec),
+            "Q": q[freq.mask],
         }
 
-        if out_file is None:
-            out_file = (
-                Path(config["paths"]["field_products"])
-                / "level1"
-                / basename(filename).replace(".acq", ".h5")
-            )
-
-        return cls.from_data(
-            {
-                "frequency": freq.freq,
-                "spectra": data,
-                "ancillary": time_based_anc,
-                "meta": meta,
-            },
-            filename=str(out_file),
-        )
-
-    @property
-    def spectrum(self):
-        try:
-            return self.spectra.load("spectrum")
-        except AttributeError:
-            return self.spectra["spectrum"]
+        return freq.freq, data, time_based_anc, meta
 
     def get_subset(self, integrations=100):
-        """Write a subset of the data to a new mock Level1 file."""
+        """Write a subset of the data to a new mock :class:`CalibratedData` file."""
         freq = self.raw_frequencies
         spectra = {k: self.spectra.load(k) for k in self.spectra.keys()}
         ancillary = self.load("ancillary")
-        meta = self.meta
+        meta = self.load("meta")
 
         spectra = {k: s[:integrations] for k, s in spectra.items()}
         ancillary = ancillary[:integrations]
@@ -622,7 +1299,8 @@ class Level1(_Level):
 
         if not len(s11_times):
             raise FileNotFoundError(
-                f"No files found matching the input pattern. Available files: {[fl.name for fl in files]}. Regex pattern: {p.pattern}. "
+                f"No files found matching the input pattern. Available files: "
+                f"{[fl.name for fl in files]}. Regex pattern: {p.pattern}. "
             )
 
         files = [fl for i, fl in enumerate(files) if i in indx]
@@ -677,20 +1355,6 @@ class Level1(_Level):
         assert len(fls) == 4, f"There are not exactly four files matching {s11_path}. Found: {fls}."
         return sorted([Path(fl) for fl in fls])
 
-    @property
-    def raw_time_data(self):
-        """Raw string times at which the spectra were taken."""
-        return self.ancillary["times"]
-
-    @cached_property
-    def datetimes(self):
-        """List of python datetimes at which the spectra were taken."""
-        return self.get_datetimes(self.raw_time_data)
-
-    @classmethod
-    def get_datetimes(cls, times):
-        return [datetime.strptime(d, "%Y:%j:%H:%M:%S") for d in times.astype(str)]
-
     @classmethod
     def _get_weather_thermlog(
         cls,
@@ -704,17 +1368,17 @@ class Level1(_Level):
 
         Parameters
         ----------
-        band : str
+        band
             The band/telescope of the data (mid, low2, low3, high).
-        times : list of datetimes
+        times
             List of datetime objects giving the date-times of the (beginning of) observations.
-        weather_file : path, optional
+        weather_file
             Path to a weather file from which to read the weather data. Must be
             formatted appropriately. By default, will choose an appropriate file from
             the configured `raw_field_data` directory. If provided, will search in
             the current directory and the `raw_field_data` directory for the given
             file (if not an absolute path).
-        thermlog_file : path, optional
+        thermlog_file
             Path to a thermlog file from which to read the thermlog data. Must be
             formatted appropriately. By default, will choose an appropriate file from
             the configured `raw_field_data` directory. If provided, will search in
@@ -773,13 +1437,15 @@ class Level1(_Level):
         )
 
         if len(weather) == 0:
-            raise ValueError(
-                f"Weather file '{weather_file}' has no dates between {start.strftime('%Y/%m/%d')} and {end.strftime('%Y/%m/%d')}."
+            raise WeatherError(
+                f"Weather file '{weather_file}' has no dates between {start.strftime('%Y/%m/%d')} "
+                f"and {end.strftime('%Y/%m/%d')}."
             )
 
         if len(thermlog) == 0:
-            raise ValueError(
-                f"Thermlog file '{thermlog_file}' has no dates between {start.strftime('%Y/%m/%d')} "
+            raise WeatherError(
+                f"Thermlog file '{thermlog_file}' has no dates between "
+                f"{start.strftime('%Y/%m/%d')} "
                 f"and {end.strftime('%Y/%m/%d')}."
             )
 
@@ -868,20 +1534,28 @@ class Level1(_Level):
         return out
 
     @classmethod
-    def _get_antenna_s11(cls, s11_files, freq, switch_state_dir, n_terms, switch_state_repeat_num):
+    def _get_antenna_s11(
+        cls,
+        s11_files: Sequence[Union[str, Path]],
+        freq: FrequencyRange,
+        switch_state_dir: [str, Path],
+        n_terms: int,
+        switch_state_repeat_num: [int, None],
+    ):
         # Get files
-        model = s11m.antenna_s11_remove_delay(
+        model, raw, raw_freq = s11m.antenna_s11_remove_delay(
             s11_files,
-            freq,
+            f_low=freq.min,
+            f_high=freq.max,
             switch_state_dir=switch_state_dir,
             delay_0=0.17,
             n_fit=n_terms,
             switch_state_repeat_num=switch_state_repeat_num,
-        )[0]
-        return model(freq)
+        )
+        return model, raw, raw_freq
 
     @cached_property
-    def _antenna_s11(self):
+    def _antenna_s11(self) -> Tuple[Callable[[np.ndarray], np.ndarray], np.ndarray, np.ndarray]:
         s11_files = self.meta["s11_files"].split(":")
         freq = self.raw_frequencies
         switch_state_dir = self.meta["switch_state_dir"]
@@ -893,19 +1567,19 @@ class Level1(_Level):
         )
 
     @property
-    def antenna_s11_model(self):
+    def antenna_s11_model(self) -> Callable[[np.ndarray], np.ndarray]:
         return self._antenna_s11[0]
 
     @property
-    def antenna_s11(self):
+    def antenna_s11(self) -> np.ndarray:
         return self.antenna_s11_model(self.raw_frequencies)
 
     @property
-    def raw_antenna_s11(self):
+    def raw_antenna_s11(self) -> np.ndarray:
         return self._antenna_s11[1]
 
     @property
-    def raw_antenna_s11_freq(self):
+    def raw_antenna_s11_freq(self) -> np.ndarray:
         return self._antenna_s11[2]
 
     @cached_property
@@ -914,81 +1588,15 @@ class Level1(_Level):
         return Calibration(self.meta["calfile"])
 
     @classmethod
-    def _calibrate(
+    def _get_ant_s11_from_calfile(
         cls,
-        spectrum,
-        frequencies,
-        band,
-        calfile: [str, Calibration],
-        ambient_temp,
-        lst,
-        s11_files,
-        configuration="",
-        switch_state_dir=None,
-        weights=None,
-        antenna_s11_n_terms=15,
-        antenna_correction=True,
-        balun_correction=True,
-        ground_correction=True,
-        beam_file=None,
-        f_low: float = 50,
-        f_high: float = 150,
-        n_fg=7,
+        calfile: Calibration,
+        s11_files: Sequence[Union[str, Path]],
+        freq: FrequencyRange,
+        switch_state_dir: Optional[Union[str, Path]] = None,
+        antenna_s11_n_terms: int = 15,
         switch_state_repeat_num=None,
-    ) -> Tuple[np.ndarray, FrequencyRange, np.ndarray, dict]:
-        """
-        Calibrate data.
-
-        This method performs the following operations on the data:
-
-        * Restricts frequency range
-        * Applies a lab-based calibration solution
-        * Corrects for ground/balun/antenna losses
-        * Corrects for beam factor
-        * Flags RFI using an explicit list of channels
-        * Flags RFI using a moving window polynomial filter
-
-        Parameters
-        ----------
-        calobs : :class:`CalibrationObservation` instance or path
-            The lab-based calibration observation to use to calibrate the data.
-        s11_path : path, optional
-            Path to the S11 measurements of the antenna. It should be an absolute
-            path, to which will be appended "_inputX.s1p" to obtain the four
-            necessary inputs.
-        antenna_s11_n_terms : int, optional
-            Number of terms used in fitting the S11 model.
-        antenna_correction : bool, optional
-            Whether to perform the antenna correction
-        balun_correction : bool, optional
-            Whether to perform the balun correction
-        ground_correction : bool, optional
-            Whether to perform the ground correction
-        beam_file : path, optional
-            Filename (not absolute) of a beam model to use for correcting for the beam
-            factor. Not used if not provided.
-        configuration : str, optional
-            Specification of the antenna -- orientation etc. Should be a predefined
-            format, eg '45deg'.
-        f_low : float
-            Minimum frequency to use.
-        f_high : float
-            Maximum frequency to use.
-        n_fg : int, optional
-            Number of foreground terms to use in obtaining the model and residual.
-
-        Returns
-        -------
-        data : dict
-            Same keys as for :func:`level1_to_level2` but adding `weights`.
-        ancillary : dict
-            The same ancillary data as contained in `level2`.
-        meta : dict
-            Contains all input parameters, as well as level2 meta.
-        """
-        if not isinstance(calfile, Calibration):
-            calfile = Calibration(calfile)
-
+    ):
         if switch_state_dir is not None:
             if calfile.internal_switch is not None:
                 warnings.warn(
@@ -1005,7 +1613,8 @@ class Level1(_Level):
 
         if switch_state_repeat_num is not None:
             warnings.warn(
-                "You should use the switch state repeat_num that is inherently in the calibration object."
+                "You should use the switch state repeat_num that is inherently in the "
+                "calibration object."
             )
             switch_state_repeat_num = switch_state_repeat_num
         else:
@@ -1014,69 +1623,76 @@ class Level1(_Level):
             else:
                 switch_state_repeat_num = calfile.internal_switch.repeat_num
 
-        meta = {
-            "s11_files": ":".join(str(f) for f in s11_files),
-            "antenna_s11_n_terms": antenna_s11_n_terms,
-            "antenna_correction": antenna_correction,
-            "balun_correction": balun_correction,
-            "ground_correction": ground_correction,
-            "beam_file": str(Path(beam_file).absolute()) if beam_file is not None else "",
-            "f_low": f_low,
-            "f_high": f_high,
-            "n_poly_xrfi": n_fg,
-            "wterms": calfile.wterms,
-            "cterms": calfile.cterms,
-            "calfile": str(calfile.calfile),
-            "calobs_path": str(calfile.calobs_path),
-            "switch_state_dir": switch_state_dir,
-            "switch_state_repeat_num": switch_state_repeat_num,
-        }
-
-        if np.all(spectrum == 0):
-            raise Exception("The level2 file given has no non-zero spectra!")
-
-        if weights is None:
-            weights = np.ones_like(spectrum)
-
-        # Cut the frequency range
-        freq = FrequencyRange(frequencies, f_low=f_low, f_high=f_high)
-        Q = spectrum.T[:, freq.mask]
-        weights = weights.T[:, freq.mask]
-
-        s11_ant = cls._get_antenna_s11(
+        return cls._get_antenna_s11(
             s11_files,
-            freq.freq,
+            freq,
             switch_state_dir,
             antenna_s11_n_terms,
             switch_state_repeat_num,
-        )
+        )[0](freq.freq)
+
+    @classmethod
+    def labcal(
+        cls, *, q: np.ndarray, freq: FrequencyRange, calfile: Calibration, s11_ant: np.ndarray
+    ):
+
+        # Cut the frequency range
+        q = q.T[:, freq.mask]
 
         # Calibrated antenna temperature with losses and beam chromaticity
-        calibrated_temp = calfile.calibrate_Q(freq.freq, Q, s11_ant)
+        calibrated_temp = calfile.calibrate_Q(freq.freq, q, s11_ant)
 
+        return calibrated_temp
+
+    @classmethod
+    def loss_correct(
+        cls,
+        *,
+        spec: np.ndarray,
+        freq: FrequencyRange,
+        band: str,
+        antenna_correction: [str, Path, None] = ":",
+        ambient_temp: np.ndarray,
+        configuration="",
+        balun_correction: [str, Path, None] = ":",
+        ground_correction: [str, Path, None, float] = ":",
+        s11_ant: Optional[np.ndarray] = None,
+    ) -> np.ndarray:
         # Antenna Loss (interface between panels and balun)
-        G = np.ones_like(freq.freq)
+        gain = np.ones_like(freq.freq)
         if antenna_correction:
-            G *= loss.antenna_loss(
+            gain *= loss.antenna_loss(
                 antenna_correction, freq.freq, band=band, configuration=configuration
             )
 
         # Balun+Connector Loss
         if balun_correction:
-            Gb, Gc = loss.balun_and_connector_loss(band, freq.freq, s11_ant)
-            G *= Gb * Gc
+            balun_gain, connector_gain = loss.balun_and_connector_loss(band, freq.freq, s11_ant)
+            gain *= balun_gain * connector_gain
 
         # Ground Loss
         if isinstance(ground_correction, (str, Path)):
-            G *= loss.ground_loss(
+            gain *= loss.ground_loss(
                 ground_correction, freq.freq, band=band, configuration=configuration
             )
         elif isinstance(ground_correction, float):
-            G *= ground_correction
+            gain *= ground_correction
 
-        a = ambient_temp + 273.15 if ambient_temp[0] < 200 else ambient_temp
-        calibrated_temp = (calibrated_temp - np.outer(a, (1 - G))) / G
+        a = ambient_temp + const.absolute_zero if ambient_temp[0] < 200 else ambient_temp
+        spec = (spec - np.outer(a, (1 - gain))) / gain
 
+        return spec
+
+    @classmethod
+    def beam_correct(
+        cls,
+        *,
+        spec: np.ndarray,
+        freq: FrequencyRange,
+        lst: np.ndarray,
+        band: Optional[str] = None,
+        beam_file: Optional[Union[str, Path]] = ":",
+    ):
         # Beam factor
         if beam_file:
             beam_fac = beams.InterpolatedBeamFactor.from_beam_factor(
@@ -1084,599 +1700,198 @@ class Level1(_Level):
             )
             bf = beam_fac.evaluate(lst)
 
-            # Remove beam chromaticity
-            calibrated_temp /= bf
+        else:
+            bf = np.ones_like(freq.freq)
 
-        return calibrated_temp, freq, weights, meta
+        return spec / bf
 
-    def bin_in_frequency(
-        self,
-        indx: Optional[int] = None,
-        resolution: float = 0.0488,
-        weights: Optional[np.ndarray] = None,
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    @classmethod
+    def calibrate(
+        cls,
+        *,
+        q: np.ndarray,
+        freq: np.ndarray,
+        calfile: [str, Calibration],
+        band: Optional[str] = None,
+        s11_files: Sequence[Union[str, Path]],
+        ambient_temp: np.ndarray,
+        switch_state_dir: Optional[Union[str, Path]] = None,
+        antenna_s11_n_terms: int = 15,
+        antenna_correction: [str, Path, None] = ":",
+        configuration: str = "",
+        balun_correction: [str, Path, None] = ":",
+        ground_correction: [str, Path, None, float] = ":",
+        beam_file=None,
+        f_low: float = 50.0,
+        f_high: float = 150.0,
+        switch_state_repeat_num: [int, None] = None,
+        lst: Optional[np.ndarray] = None,
+    ) -> Tuple[np.ndarray, FrequencyRange, dict]:
         """
-        Perform a frequency-average over the spectrum.
+        Calibrate data.
+
+        This method performs the following operations on the data:
+
+        * Restricts frequency range
+        * Applies a lab-based calibration solution
+        * Corrects for ground/balun/antenna losses
+        * Corrects for beam factor
 
         Parameters
         ----------
-        indx
-            The (time) index at which to compute the frequency-averaged spectrum.
-            If not given, returns a 2D array, with time on the first axis.
-        resolution : float, optional
-            The frequency resolution of the output.
-        weights :
+        q
+            The raw Q-ratio of the spectra.
+        freq
+            An array of frequencies over which to calibrate.
+        calfile
+            The lab-based calibration observation to use to calibrate the data.
+        band
+            The band of the instrument. Required if any of the loss/beam files are
+            prepended with ':'.
+        s11_files
+            List of four files defining the S11 measurements of the antenna.
+        ambient_temp
+            The ambient temperature at which observations were taken.
+        switch_state_dir
+            The directory in which the switch state measurements for the calibration
+            live. Typically leave this as None, in which case it will be read from the
+            calibration file. However, if you are working on a different computer than
+            the one the calibration was performed on, you may need to set this.
+        antenna_s11_n_terms
+            Number of terms used in fitting the S11 model.
+        antenna_correction
+            Whether to perform the antenna correction
+        configuration
+            Specification of the antenna -- orientation etc. Should be a predefined
+            format, eg '45deg'.
+        balun_correction
+            Path to a balun correction file.
+        ground_correction
+            Path to a ground correction file.
+        beam_file
+            Filename (not absolute) of a beam model to use for correcting for the beam
+            factor. Not used if not provided.
+        f_low : float
+            Minimum frequency to use.
+        f_high : float
+            Maximum frequency to use.
+        switch_state_repeat_num
+            The repeat num of the switch state observations to use.
+        lst
+            The LST at which to apply beam correction.
 
         Returns
         -------
-        f
-            The new frequency bin-centres.
-        t
-            The weighted-average of the spectrum in each bin
-        w
-            The total weight in each bin
+        spec
+            The calibrated spectrum.
+        freq
+            The :class:`FrequencyRange` object associated with the solutions.
+        meta
+            Contains all input parameters.
         """
-        if weights is None:
-            weights = self.weights
+        freq = FrequencyRange(freq, f_low=f_low, f_high=f_high)
 
-        if indx is not None:
-            s, w = self.spectrum[indx], weights[indx]
-        else:
-            s, w = self.spectrum, weights
+        if not isinstance(calfile, Calibration):
+            calfile = Calibration(calfile)
 
-        new_f, new_s, new_w = tools.bin_array(
-            data=s, coords=self.raw_frequencies, weights=w, bins=resolution, axis=-1
+        s11_ant = cls._get_ant_s11_from_calfile(
+            calfile=calfile,
+            s11_files=s11_files,
+            freq=freq,
+            switch_state_dir=switch_state_dir,
+            antenna_s11_n_terms=antenna_s11_n_terms,
+            switch_state_repeat_num=switch_state_repeat_num,
         )
 
-        return new_f, new_s, new_w
+        calibrated_temp = cls.labcal(q=q, freq=freq, calfile=calfile, s11_ant=s11_ant)
 
-    def get_model_parameters(
-        self,
-        model: [str, mdl.Model] = "linlog",
-        resolution: [int, float, None] = 0.0488,
-        weights: Optional[np.ndarray] = None,
-        indices: Optional[List[int]] = None,
-        **kwargs,
-    ) -> Tuple[mdl.Model, np.ndarray]:
-        """
-        Determine a callable model of the spectrum at a given time, optionally
-        computed over averaged original data.
-
-        Parameters
-        ----------
-        model : str, optional
-            The kind of model to fit.
-        n_terms : int, optional
-            The number of terms to use in the fit.
-        resolution : float, optional
-
-        Other Parameters
-        ----------------
-        Passed through to the Model.
-
-        Returns
-        -------
-        callable :
-            Function of frequency (in units of self.raw_frequency) that will return
-            the model.
-        """
-        if weights is None:
-            weights = self.weights
-
-        indices = indices or range(len(self.spectrum))
-
-        if isinstance(model, str):
-            model = mdl.Model._models[model.lower()]
-
-        if resolution:
-            f, s, w = self.bin_in_frequency(resolution=resolution, weights=weights)
-            model = model(**kwargs)
-        else:
-            f, s, w = self.raw_frequencies, self.spectrum, weights
-            model = model(default_x=f, **kwargs)
-
-        def get_params(indx):
-            ss = s[indx]
-            ww = w[indx]
-
-            if np.sum(ww > 0) <= 2 * model.n_terms:
-                # Only try to fit if we have enough non-flagged data points.
-                return np.nan * np.ones(model.n_terms)
-
-            if resolution:
-                try:
-                    del model.default_basis
-                except AttributeError:
-                    pass
-                model.default_x = f[indx]
-
-            return model.fit(ydata=ss, weights=ww).model_parameters
-
-        params = np.array([get_params(indx) for indx in indices])
-
-        return model, params
-
-    def get_model_rms(
-        self,
-        weights: Optional[np.ndarray] = None,
-        freq_ranges: List[Tuple[float, float]] = [(-np.inf, np.inf)],
-        indices: Optional[List[int]] = None,
-        **model_kwargs,
-    ) -> Dict[Tuple[float, float], np.ndarray]:
-        """Obtain the RMS of the residual of a model-fit to a particular integration.
-
-        This method is cached, so that calling it again for the same arguments is
-        fast.
-
-        Parameters
-        ----------
-        weights
-            The weights of the spectrum to use in the fitting. Must be the same shape
-            as :attr:`~spectrum`. Default is to use the weights intrinsic to the object.
-        freq_ranges
-            While the model given is fit to the entire spectrum, the RMS values can be
-            taken over sub-portions of the spectrum. Each frequency range should be
-            given as a tuple of (low, high) values, in a list.
-        indices
-            The integration indices for which to return the RMS.
-
-        Other Parameters
-        ----------------
-        All other parameters are passed to :method:`~get_model_parameters`.
-
-        Returns
-        -------
-        rms
-            A dictionary where keys are tuples specifying the input bands, and the values
-            are arrays of rms values, as a function of time.
-
-        Notes
-        -----
-        The averaging into frequency bins is *only* done for the fit itself. The final
-        residuals are computed on the un-averaged spectrum. The binning is done fully
-        self-consistently with the weights  -- it uses :func:`~tools.bin_array` to do
-        the binning, returning non-equi-spaced frequencies.
-        """
-        model, params = self.get_model_parameters(weights=weights, indices=indices, **model_kwargs)
-
-        if indices is None:
-            indices = range(len(self.spectrum))
-        if weights is None:
-            weights = np.ones(self.spectrum.shape)
-
-        # access the default basis
-        def _get_rms(indx):
-
-            m = model(x=self.raw_frequencies, parameters=params[indx])
-
-            out = {}
-            for band in freq_ranges:
-                freq_mask = (self.raw_frequencies >= band[0]) & (self.raw_frequencies < band[1])
-                resid = self.spectrum[indx, freq_mask] - m[freq_mask]
-                mask = weights[indx, freq_mask] > 0
-                out[band] = np.sqrt(np.nanmean(resid[mask] ** 2))
-
-            return out
-
-        res = [_get_rms(i) for i in range(len(indices))]
-
-        # Return dict of arrays (from list of dicts).
-        return {band: np.array([r[band] for r in res]) for band in res[0]}
-
-    def plot_waterfall(
-        self, quantity: str = "spectrum", ax: [None, plt.Axes] = None, cbar=True, **imshow_kwargs
-    ):
-        if quantity in ["p0", "p1", "p2"]:
-            q = self.spectra["switch_powers"][int(quantity[-1])]
-        else:
-            q = self.spectra[quantity]
-
-        if ax is not None:
-            fig = ax.figure
-        else:
-            fig, ax = plt.subplots(1, 1)
-
-        img = ax.imshow(
-            q,
-            origin="lower",
-            extent=(
-                self.raw_frequencies.min(),
-                self.raw_frequencies.max(),
-                self.ancillary["seconds"].min() / 60 / 60,
-                self.ancillary["seconds"].max() / 60 / 60,
-            ),
-            aspect="auto",
-            **imshow_kwargs,
-        )
-        ax.set_xlabel("Frequency [MHz]")
-        ax.set_ylabel("Hours into Observation")
-        ax.set_title(f"Day {self.meta['day']}. GHA0={self.ancillary['gha'][0]:.2f}")
-
-        if cbar:
-            cb = plt.colorbar(img, ax=ax)
-            cb.set_label(quantity)
-
-        return ax
-
-    def plot_waterfalls(self, quanties="all", **imshow_kwargs):
-        if quanties == "all":
-            quanties = ["spectrum", "Q", "weights", "p0", "p1", "p2"]
-
-        fig, ax = plt.subplots(
-            len(quanties),
-            1,
-            sharex=True,
-            sharey=True,
-            figsize=(10, 10),
-            gridspec_kw={"hspace": 0.05, "wspace": 0.05},
+        calibrated_temp = cls.loss_correct(
+            spec=calibrated_temp,
+            freq=freq,
+            band=band,
+            antenna_correction=antenna_correction,
+            ambient_temp=ambient_temp,
+            configuration=configuration,
+            balun_correction=balun_correction,
+            ground_correction=ground_correction,
+            s11_ant=s11_ant,
         )
 
-        for i, (q, axx) in enumerate(zip(quanties, ax)):
-            self.plot_waterfall(q, ax=axx, **imshow_kwargs)
-
-        return fig, ax
-
-    def plot_time_averaged_spectrum(
-        self,
-        quantity="spectrum",
-        integrator="mean",
-        ax: [None, plt.Axes] = None,
-        logy=True,
-    ):
-        if ax is not None:
-            fig = ax.figure
-        else:
-            fig, ax = plt.subplots(1, 1)
-
-        q, w = self.integrate_over_time(quantity=quantity, integrator=integrator)
-
-        unit = "[K]"
-        if quantity == "Q":
-            unit = ""
-
-        ax.plot(self.raw_frequencies, q)
-        ax.set_xlabel("Frequency [MHz]")
-        ax.set_ylabel(f"{quantity} {unit}")
-
-        if logy:
-            ax.set_yscale("log")
-
-        return ax
-
-    def plot_s11(self, ax=None):
-        if ax is None:
-            fig, ax = plt.subplots(2, 2, figsize=(8, 8), sharex=True)
-        ax[0, 0].plot(self.raw_frequencies, 20 * np.log10(np.abs(self.antenna_s11)))
-        ax[0, 0].set_title("Magnitude of Antenna S11")
-        ax[0, 0].set_xlabel("Frequency [MHz]")
-        ax[0, 0].set_ylabel("$|S_{11}|$ [dB]")
-
-        ax[0, 1].plot(self.raw_frequencies, (180 / np.pi) * np.unwrap(np.angle(self.antenna_s11)))
-        ax[0, 1].set_title("Phase of Antenna S11")
-        ax[0, 1].set_xlabel("Frequency [MHz]")
-        ax[0, 1].set_ylabel(r"$\angle S_{11}$ [${}^\circ$]")
-
-        ax[1, 0].plot(
-            self.raw_antenna_s11_freq,
-            np.real(self.raw_antenna_s11)
-            - np.real(self.antenna_s11_model(self.raw_antenna_s11_freq)),
-        )
-        ax[1, 0].set_title("Residual (Real Part)")
-        ax[1, 0].set_xlabel("Frequency [MHz]")
-        ax[1, 0].set_ylabel(r"Data - Model")
-
-        ax[1, 1].plot(
-            self.raw_antenna_s11_freq,
-            np.imag(self.raw_antenna_s11)
-            - np.imag(self.antenna_s11_model(self.raw_antenna_s11_freq)),
-        )
-        ax[1, 1].set_title("Residual (Imag Part)")
-        ax[1, 1].set_xlabel("Frequency [MHz]")
-        ax[1, 1].set_ylabel(r"Data - Model")
-
-        return ax
-
-    def _integrate_spectra(self, quantity="spectrum", integrator="mean", axis=0):
-        """Integrate spectra over given axis."""
-        if quantity in ["p0", "p1", "p2"]:
-            q = self.spectra["switch_powers"][int(quantity[-1])]
-        else:
-            q = self.spectra[quantity]
-
-        if integrator in ("mean", "standard_deviation"):
-            q, w = getattr(tools, "weighted_" + integrator)(q, self.weights, axis=axis)
-        else:
-            q = tools.weighted_sorted_metric(q, self.weights, metric=integrator, axis=axis)
-            w = np.where(np.all(self.weights == np.nan, axis=axis), 0, 1)
-
-        return q, w
-
-    def integrate_over_time(self, quantity="spectrum", integrator="mean"):
-        """Integrate the spectrum over time"""
-        return self._integrate_spectra(quantity=quantity, integrator=integrator, axis=0)
-
-    def integrate_over_frequency(self, quantity="spectrum", integrator="mean"):
-        """Integrate the spectrum over time"""
-        return self._integrate_spectra(quantity=quantity, integrator=integrator, axis=1)
-
-    def aux_filter(
-        self,
-        sun_el_max: float = 90,
-        moon_el_max: float = 90,
-        ambient_humidity_max: float = 40,
-        min_receiver_temp: float = 0,
-        max_receiver_temp: float = 100,
-        flags: [None, np.ndarray] = None,
-    ) -> np.ndarray:
-        """
-        Perform an auxiliary filter on the object.
-
-        Parameters
-        ----------
-        sun_el_max
-            Maxmimum elevation of the sun to keep.
-        moon_el_max
-            Maxmimum elevation of the moon to keep.
-        ambient_humidity_max
-            Maximum ambient humidity to keep.
-        min_receiver_temp
-            Minimum receiver temperature to keep.
-        max_receiver_temp
-            Maximum receiver temp to keep.
-        flags
-            If given, do filtering in-place.
-
-        Returns
-        -------
-        flags
-            Boolean array giving which entries are bad.
-        """
-
-        return filters.time_filter_auxiliary(
-            gha=self.ancillary["gha"],
-            sun_el=self.ancillary["sun_el"],
-            moon_el=self.ancillary["moon_el"],
-            humidity=self.ancillary["ambient_hum"],
-            receiver_temp=self.ancillary["receiver_temp"],
-            sun_el_max=sun_el_max,
-            moon_el_max=moon_el_max,
-            amb_hum_max=ambient_humidity_max,
-            min_receiver_temp=min_receiver_temp,
-            max_receiver_temp=max_receiver_temp,
-            flags=flags,
+        calibrated_temp = cls.beam_correct(
+            freq=freq, spec=calibrated_temp, band=band, lst=lst, beam_file=beam_file
         )
 
-    aux_filter.axis = "time"
-
-    def rfi_filter(
-        self, xrfi_pipe: dict, flags: [None, np.ndarray] = None, n_threads: int = cpu_count()
-    ) -> np.ndarray:
-        """
-        Perform filtering on auxiliary data and RFI for a level 1 file.
-
-        Parameters
-        ----------
-        xrfi_pipe
-            A dictionary with keys specifying RFI function names, and values being
-            dictionaries of parameters to pass to the function.
-
-        Returns
-        -------
-        flags
-            The boolean flag array, specifying which freqs/times are bad.
-        """
-        if flags is None:
-            flags = np.zeros(self.weights.shape, dtype=bool)
-
-        if "explicit" in xrfi_pipe:
-            kwargs = xrfi_pipe.pop("explicit")
-
-            if kwargs["file"] is None:
-                known_rfi_file = Path(dirname(__file__)) / "data" / "known_rfi_channels.yaml"
-            else:
-                known_rfi_file = kwargs["file"]
-
-            flags |= rfi.xrfi_explicit(
-                self.raw_frequencies,
-                rfi_file=known_rfi_file,
-            )
-
-            if np.all(flags):
-                return flags
-
-        return tools.run_xrfi_pipe(
-            spectrum=self.spectrum,
-            freq=self.raw_frequencies,
-            flags=flags,
-            xrfi_pipe=xrfi_pipe,
-            n_threads=n_threads,
-            fl_id=self.datestring,
-        )
-
-    rfi_filter.axis = "both"
-
-    @property
-    def datestring(self):
-        """The date this observation was started, as a string."""
-        return f"{self.meta['year']:04}-{self.meta['day']:03}-{self.meta['hour']:02}"
-
-    def rms_filter(
-        self,
-        rms_info: [filters.RMSInfo, str, Path],
-        n_sigma_rms: int = 3,
-        flags: [np.ndarray, None] = None,
-    ):
-        weights = self.weights.T if flags is None else np.where(flags, 0, self.weights.T)
-        if not isinstance(rms_info, filters.RMSInfo):
-            rms_info = filters.RMSInfo.from_file(rms_info)
-
-        rms = {
-            mdl_name: self.get_model_rms(
-                freq_ranges=bands, weights=weights.T, **rms_info.model_params[mdl_name]
-            )
-            for mdl_name, bands in rms_info.bands.items()
+        meta = {
+            "beam_file": str(Path(beam_file).absolute()) if beam_file is not None else "",
+            "s11_files": ":".join(str(f) for f in s11_files),
+            "wterms": calfile.wterms,
+            "cterms": calfile.cterms,
+            "calfile": str(calfile.calfile),
+            "calobs_path": str(calfile.calobs_path),
         }
 
-        if flags is None:
-            flags = np.zeros(self.weights.T.shape, dtype=bool)
-
-        flags |= filters.rms_filter(
-            rms_info, self.ancillary["gha"], rms, n_sigma_rms, fl_id=self.datestring
-        )
-
-        return flags
-
-    rms_filter.axis = "time"
-
-    def total_power_filter(
-        self,
-        flags=None,
-        n_poly: int = 3,
-        n_sigma: float = 3.0,
-        bands: [None, List[Tuple[float, float]]] = None,
-        std_thresholds=None,
-    ):
-        if flags is None:
-            flags = np.zeros(self.weights.T.shape, dtype=bool)
-
-        flags |= filters.total_power_filter(
-            self.ancillary["gha"],
-            self.spectrum,
-            self.freq.freq,
-            flags=flags.T,
-            n_poly=n_poly,
-            n_sigma=n_sigma,
-            bands=bands,
-            std_thresholds=std_thresholds,
-        )
-        return flags
-
-    total_power_filter.axis = "time"
+        return calibrated_temp, freq, meta
 
 
 @add_structure
-class Level2(_Level, _Level2Plus):
-    """
-    Object representing a Level-2 Calibrated Data Set.
-
-    Given a sequence of :class:`Level1` objects, this class combines them into one file,
-    aligning them in (ideally small) bins in GHA/LST.
-
-    See :class:`_Level` for documentation about the various datasets within this class
-    instance. Note that you can always check which data is inside each group by checking
-    its ``.keys()``.
-
-    See :method:`Level2.from_previous_level` for detailed information about the processes
-    involved in creating this data from :class:`Level1` objects.
-    """
+class FilteredData(_ReductionStep, _SingleDayMixin):
+    _meta = {"flagged": lambda x: isinstance(x, (bool, np.bool_))}
 
     _ancillary = {
-        "years": lambda x: x.ndim == 1 and x.dtype.name.startswith("int"),
-        "days": lambda x: x.ndim == 1 and x.dtype.name.startswith("int"),
-        "hours": lambda x: x.ndim == 1 and x.dtype.name.startswith("int"),
-        "model_params": lambda x: x.ndim == 3 and x.dtype.name.startswith("float"),
-        "files_flagged": lambda x: x.ndim == 1 and x.dtype.name.startswith("bool"),
-        "aux_flag_frac": "optional",
-        "rfi_flag_frac": "optional",
-        "rms_flag_frac": "optional",
-        "tp_flag_frac": "optional",
+        "aux_flags": is_array("bool", 2),
+        "rms_flags": is_array("bool", 2),
+        "tp_flags": is_array("bool", 2),
+        "rfi_flags": is_array("bool", 2),
+        "neg_flags": is_array("bool", 2),
+        "gha": float_array_ndim(1),
     }
 
-    _meta = {
-        "n_files": lambda x: isinstance(x, (int, np.int, np.int64)) and x > 0,
-        "n_files_flagged": lambda x: isinstance(x, (int, np.int, np.int64)) and x >= 0,
-    }
-
-    @property
-    def level2(self):
-        return self
+    _spectra_structure = {}
 
     @classmethod
     def run_filter(
         cls,
         fnc,
-        level1: List[Level1],
+        cal_data: CalibratedData,
         flags: Optional[List[np.ndarray]] = None,
-        nthreads: Optional[int] = None,
         **kwargs,
     ):
 
-        if nthreads is None:
-            nthreads = min(len(level1), cpu_count())
+        logger.info(f"Running {fnc} filter.")
 
-        logger.info(f"Running {fnc} filter with {nthreads} threads...")
-
-        axis = getattr(Level1, f"{fnc}_filter").axis
+        method = getattr(cal_data.filters, f"{fnc}_filter")
+        axis = method.axis
 
         if flags is None:
-            flags = [None] * len(level1)
+            flg = ~cal_data.weights.astype("bool")
+        elif np.all(flags):
+            return flags
+        else:
+            flg = flags.copy()
 
-        def filter(flg, l1):
-            if flg is None:
-                flg = ~l1.weights.astype("bool")
-            elif np.all(flg):
-                return flg
+        pre_flag_n = np.sum(flg)
 
-            this_flag = getattr(l1, f"{fnc}_filter")(
-                flags=flg.T if axis == "time" else flg, **kwargs
+        this_flag = method(flags=flg.T if axis == "time" else flg, **kwargs)
+
+        flg |= this_flag if axis in ("both", "freq") else np.atleast_2d(this_flag).T
+
+        if np.all(flg):
+            logger.warning(f"{cal_data.filename.name} was fully flagged during {fnc} filter")
+        else:
+            logger.info(
+                f"'{cal_data.filename.name}': {100 * pre_flag_n / flg.size:.2f} → "
+                f"{100 * np.sum(flg) / flg.size:.2f}% [red]<+"
+                f"{100 * (np.sum(flg) - pre_flag_n) / flg.size:.2f}%>[/] flagged after "
+                f"'{fnc}' filter"
             )
 
-            if axis in ("both", "freq"):
-                flg |= this_flag
-            else:
-                flg |= this_flag.T
-
-            return flg
-
-        iterator = p_tqdm.p_imap(filter, flags, level1, num_cpus=nthreads)
-
-        for i, flg in enumerate(iterator):
-            flags[i] = flg
-
-        # Warn the user if files are fully flagged.
-        all_flagged = [np.all(flg) for flg in flags]
-        if all(all_flagged):
-            logger.error(f"All files were fully flagged during {fnc} filter.")
-            sys.exit()
-
-        if any(all_flagged):
-            logger.warning(
-                f"The following {sum(all_flagged)} files were fully flagged during {fnc} filter:"
-            )
-            msg = ""
-            for i, (flagged, l1) in enumerate(zip(all_flagged, level1)):
-                if flagged:
-                    msg += f"{l1.filename.name} | "
-            logger.warning(msg[:-3])
-
-        dates = [l1.datestring for l1 in level1]
-
-        logger.info(f"Following flag fractions obtained during {fnc} filter:")
-        for flagged, date, flg in zip(all_flagged, dates, flags):
-            if not flagged:
-                logger.info(f"    {date}: {100*np.sum(flg)/flg.size:.2f}%")
-
-        return (
-            [flg for i, flg in enumerate(flags) if not all_flagged[i]],
-            [l1 for i, l1 in enumerate(level1) if not all_flagged[i]],
-            {date: np.sum(flg) / flg.size for date, flg in zip(dates, flags)},
-        )
+        return flg
 
     @classmethod
-    def date_str2tuple(cls, date):
-        return tuple(int(d) for d in date.split("-"))
-
-    @classmethod
-    def date_tuple2str(cls, date):
-        return f"{date[0]:04}-{date[1]:03}-{date[2]:02}"
-
-    @classmethod
-    def _from_prev_level(
+    def _promote(
         cls,
-        prev_level: List[Level1],
-        gha_min: float = 0.0,
-        gha_max: float = 24.0,
-        gha_bin_size: float = 0.1,
+        prev_step: [CalibratedData, FilteredData],
+        *,
         sun_el_max: float = 90,
         moon_el_max: float = 90,
         ambient_humidity_max: float = 40,
@@ -1689,34 +1904,17 @@ class Level2(_Level, _Level2Plus):
         n_sigma_tp_filter: float = 3.0,
         bands_tp_filter: [None, List[Tuple[float, float]]] = None,
         std_thresholds_tp_filter: [None, List[float]] = None,
-        rms_models: dict = {
-            "linlog5": {
-                "model": "linlog",
-                "resolution": 16,
-                "bands": ["low", "high"],
-                "params": {"n_terms": 5},
-            },
-            "linlog3": {
-                "model": "linlog",
-                "resolution": 16,
-                "bands": ["full"],
-                "params": {"n_terms": 3},
-            },
-        },
-        n_poly_rms: int = 3,
         n_sigma_rms: float = 3,
-        n_terms_rms: int = 16,
-        n_std_rms: int = 6,
-        n_files_rms: [None, int] = None,
         n_threads: int = cpu_count(),
         model_nterms: int = 5,
         model_basis: str = "linlog",
         model_resolution: [int, float] = 8,
+        negative_power_filter: [bool] = True,
     ):
         """
         Convert a list of :class:`Level1` objects into a combined :class:`Level2` object.
 
-        Steps taken to combine/filter the files are (in order):
+        Steps taken tofilter the files are (in order):
 
         1. Filter entire times from each file based on auxiliary data:
            * Sun/moon position
@@ -1725,30 +1923,18 @@ class Level2(_Level, _Level2Plus):
         2. xRFI (arbitrary flagging routines) on each file. See :module:`edges_cal.xrfi`
            for details.
         3. Filter entire times from each file based on the total calibrated power in
-           in each spectrum compared to a gold standard. See :method:`~Level1.total_power_filter`
+           in each spectrum compared to a gold standard. See
+           :method:`~Level1.total_power_filter`
            for details.
         4. Filter entire times from each file based on the RMS of various models fit
            to the spectra or some fraction thereof, and compared to a pre-prepared
            set of fiducial "good" RMS values. See :method:`~Level2._run_rms_filter` for
            details.
-        5. Determine fiducial smooth models for each individual spectrum for each file.
-           The parameters of these models, and the residuals, are carried through all
-           remaining levels (instead of keeping raw spectra themselves).
-        6. Each file is binned in the same regular grid of GHA so all the files can
-           be aligned. The final residuals/spectra have shape ``(Nfiles, Ngha, Nfreq)``,
-           where each file essentially describes a day/night. This binning is de-biased
-           by using the models from the previous step to "in-paint" filtered gaps.
 
         Parameters
         ----------
-        prev_level
-            The list of Level1 files.
-        gha_min
-            The minimum of the regular GHA grid.
-        gha_max
-            The maximum of the regular GHA grid.
-        gha_bin_size
-            The bin size of the regular GHA grid.
+        prev_step
+            The calibrated data (or previously filtered data).
         sun_el_max
             The maximum elevation of the sun with which to still use the data.
         moon_el_max
@@ -1777,20 +1963,8 @@ class Level2(_Level, _Level2Plus):
             See :method:`Level1.total_power_filter` for details.
         std_thresholds_tp_filter
             See :method:`Level1.total_power_filter` for details.
-        do_rms_filter
-            Whether to perform the RMS filter.
-        rms_bands
-            See :func:`~analysis.filters.get_rms_info` for details.
-        n_poly_rms
-            See :func:`~analysis.filters.get_rms_info` for details.
         n_sigma_rms
             Number of sigma at which to filter the spectrum.
-        n_terms_rms
-            See :func:`~analysis.filters.get_rms_info` for details.
-        n_std_rms
-            See :func:`~analysis.filters.get_rms_info` for details.
-        n_files_rms
-            Number of files to use to generate the RMS "golden" info.
         n_threads
             Number of threads to use when performing filters (each thread is used for a
             file).
@@ -1803,13 +1977,226 @@ class Level2(_Level, _Level2Plus):
             the fiducial model. If float, the resolution of the bins in MHz. Set to zero
             to not bin. Residuals of the model are still evaluated at full frequency
             resolution -- this just affects the modeling itself.
+        negative_power_filter
+            Whether to filter out entire integrations that have any zero/negative power.
 
         Returns
         -------
-        level2
-            A :class:`Level2` object.
+        data
+            A :class:`FilteredData` object.
         """
         xrfi_pipe = xrfi_pipe or {}
+
+        cal_step = prev_step.calibration_step
+        aux_flags = cls.run_filter(
+            "aux",
+            cal_step,
+            sun_el_max=sun_el_max,
+            moon_el_max=moon_el_max,
+            ambient_humidity_max=ambient_humidity_max,
+            min_receiver_temp=min_receiver_temp,
+            max_receiver_temp=max_receiver_temp,
+        )
+
+        if negative_power_filter:
+            neg_flags = cls.run_filter(
+                "negative_power",
+                cal_step,
+                flags=aux_flags,
+            )
+        else:
+            neg_flags = aux_flags
+
+        if xrfi_pipe:
+            rfi_flags = cls.run_filter("rfi", cal_step, flags=neg_flags, xrfi_pipe=xrfi_pipe)
+        else:
+            rfi_flags = neg_flags
+
+        if do_total_power_filter:
+            tp_flags = cls.run_filter(
+                "total_power",
+                cal_step,
+                flags=rfi_flags,
+                n_poly=n_poly_tp_filter,
+                n_sigma=n_sigma_tp_filter,
+                std_thresholds=std_thresholds_tp_filter,
+                bands=bands_tp_filter,
+            )
+        else:
+            tp_flags = rfi_flags
+
+        if rms_filter_file:
+            rms_flags = cls.run_filter(
+                "rms",
+                cal_step,
+                flags=tp_flags,
+                rms_info=rms_filter_file,
+                n_sigma_rms=n_sigma_rms,
+            )
+        else:
+            rms_flags = tp_flags
+
+        data = {
+            "spectrum": prev_step.spectrum,
+            "weights": np.where(rms_flags, 0, prev_step.weights),
+        }
+
+        ancillary = {
+            "aux_flags": aux_flags,
+            "rfi_flags": rfi_flags,
+            "tp_flags": tp_flags,
+            "rms_flags": rms_flags,
+            "neg_flags": neg_flags,
+            "gha": cal_step.ancillary["gha"],
+        }
+
+        return prev_step.raw_frequencies, data, ancillary, cls._get_meta(locals())
+
+    @classmethod
+    def _extra_meta(cls, kwargs):
+        return {
+            "flagged": np.all(kwargs["rms_flags"]),
+        }
+
+    @property
+    def is_fully_flagged(self):
+        return self.meta["flagged"]
+
+
+@add_structure
+class ModelData(_ModelMixin, _ReductionStep, _SingleDayMixin):
+    _ancillary = {"gha": float_array_ndim(1)}
+
+    @classmethod
+    def _promote(
+        cls,
+        prev_step: [CalibratedData, FilteredData],
+        model_nterms: int = 5,
+        model_basis: str = "linlog",
+        model_resolution: [int, float] = 8,
+    ) -> Tuple[np.ndarray, dict, dict, dict]:
+        """
+        Fit fiducial linear models to each individual spectrum.
+
+        Parameters
+        ----------
+        prev_step
+            The previous step. Can act on calibrated data, or filtered data.
+        model_nterms
+            The number of terms to use when fitting smooth models to each spectrum.
+        model_basis
+            The model basis -- a string representing a model from :module:`edges_cal.modelling`
+        model_resolution
+            If integer, the number of frequency samples binned together before fitting
+            the fiducial model. If float, the resolution of the bins in MHz. Set to zero
+            to not bin. Residuals of the model are still evaluated at full frequency
+            resolution -- this just affects the modeling itself.
+
+        Returns
+        -------
+        data
+            A :class:`ModelData` instance.
+        """
+        logger.info(
+            f"Determining {model_nterms}-term '{model_basis}' models for each integration..."
+        )
+
+        # Exit out early if the whole file is flagged.
+        try:
+            if prev_step.is_fully_flagged:
+                raise FullyFlaggedError()
+        except AttributeError:
+            pass
+
+        model, params = prev_step.get_model_parameters(
+            model_basis,
+            resolution=model_resolution,
+            n_terms=model_nterms,
+        )
+        x = prev_step.freq.freq if model_resolution else None
+
+        resids = np.array(
+            [prev_step.spectrum[j] - model(parameters=pp, x=x) for j, pp in enumerate(params)]
+        )
+
+        ancillary = {"model_params": params, "gha": prev_step.ancillary["gha"]}
+        data = {"weights": prev_step.weights, "resids": resids}
+
+        return prev_step.raw_frequencies, data, ancillary, cls._get_meta(locals())
+
+
+@add_structure
+class CombinedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
+    """
+    Object representing many observed days combined.
+
+    Given a sequence of :class:`ModelData` objects, this class combines them into one
+    file, aligning them in (ideally small) bins in GHA/LST.
+
+    See :class:`_ReductionStep` for documentation about the various datasets within this class
+    instance. Note that you can always check which data is inside each group by checking
+    its ``.keys()``.
+
+    See :method:`CombinedData.promote` for detailed information about the processes
+    involved in creating this data from :class:`Level1` objects.
+    """
+
+    _multi_input = True
+    _spec_dim = 3
+
+    _ancillary = {
+        "years": is_array("int", 1),
+        "days": is_array("int", 1),
+        "hours": is_array("int", 1),
+        "pre_filter_weights": float_array_ndim(3),
+    }
+
+    _meta = {
+        "n_files": lambda x: isinstance(x, (int, np.int, np.int64)) and x > 0,
+    }
+
+    @classmethod
+    def _promote(
+        cls,
+        prev_step: Sequence[ModelData],
+        gha_min: Optional[float] = None,
+        gha_max: Optional[float] = None,
+        gha_bin_size: float = 0.1,
+        xrfi_pipe: Optional[dict] = None,
+        xrfi_on_resids: bool = True,
+        n_threads: int = cpu_count(),
+    ):
+        """
+        Convert a list of :class:`ModelData` objects into a combined object.
+
+        Each file is binned in the same regular grid of GHA so all the files can
+        be aligned. The final residuals/spectra have shape ``(Nfiles, Ngha, Nfreq)``,
+        where each file essentially describes a day/night. This binning is de-biased
+        by using the models from the previous step to "in-paint" filtered gaps.
+
+        Parameters
+        ----------
+        prev_step
+            The list of Level1 files.
+        gha_min
+            The minimum of the regular GHA grid.
+        gha_max
+            The maximum of the regular GHA grid.
+        gha_bin_size
+            The bin size of the regular GHA grid.
+        xrfi_pipe
+            A pipeline to apply xrfi to resulting gridded spectra.
+
+        Returns
+        -------
+        data
+            The combined data.
+        """
+
+        if gha_min is None:
+            gha_min = np.floor(min(p.ancillary["gha"].min() for p in prev_step))
+        if gha_max is None:
+            gha_max = np.ceil(min(p.ancillary["gha"].max() for p in prev_step))
 
         if gha_min < 0 or gha_min > 24 or gha_min >= gha_max:
             raise ValueError("gha_min must be between 0 and 24")
@@ -1820,140 +2207,52 @@ class Level2(_Level, _Level2Plus):
         if gha_bin_size > (gha_max - gha_min):
             raise ValueError(f"gha_bin_size must be smaller than the gha range, got {gha_bin_size}")
 
-        # Sort the inputs in ascending date.
-        prev_level = sorted(
-            prev_level, key=lambda x: (x.meta["year"], x.meta["day"], x.meta["hour"])
-        )
-
-        orig_dates = [x.datestring for x in prev_level]
-
-        years = np.array([x.meta["year"] for x in prev_level], dtype=int)
-        days = np.array([x.meta["day"] for x in prev_level], dtype=int)
-        hours = np.array([x.meta["hour"] for x in prev_level], dtype=int)
-
-        flags, prev_level, aux_flag_frac = cls.run_filter(
-            "aux",
-            prev_level,
-            sun_el_max=sun_el_max,
-            moon_el_max=moon_el_max,
-            ambient_humidity_max=ambient_humidity_max,
-            min_receiver_temp=min_receiver_temp,
-            max_receiver_temp=max_receiver_temp,
-        )
-        aux_flag_frac = [aux_flag_frac.get(date, 0) for date in orig_dates]
-
-        if xrfi_pipe:
-            flags, prev_level, rfi_flag_frac = cls.run_filter(
-                "rfi", prev_level, flags=flags, xrfi_pipe=xrfi_pipe
-            )
-            rfi_flag_frac = [rfi_flag_frac.get(date, 0) for date in orig_dates]
-        else:
-            rfi_flag_frac = np.zeros(len(orig_dates))
-
-        if do_total_power_filter:
-            flags, prev_level, tp_flag_frac = cls.run_filter(
-                "total_power",
-                prev_level,
-                flags=flags,
-                n_poly=n_poly_tp_filter,
-                n_sigma=n_sigma_tp_filter,
-                std_thresholds=std_thresholds_tp_filter,
-                bands=bands_tp_filter,
-            )
-            tp_flag_frac = [tp_flag_frac.get(date, 0) for date in orig_dates]
-        else:
-            tp_flag_frac = np.zeros(len(orig_dates))
-
-        if rms_models:
-            flags, prev_level, rms_flag_frac = cls._run_rms_filter(
-                rms_filter_file=rms_filter_file,
-                flags=flags,
-                level1=prev_level,
-                models=rms_models,
-                n_poly=n_poly_rms,
-                n_sigma=n_sigma_rms,
-                n_terms=n_terms_rms,
-                n_std=n_std_rms,
-                n_files=n_files_rms,
-            )
-            rms_flag_frac = [rms_flag_frac.get(date, 0) for date in orig_dates]
-        else:
-            rms_flag_frac = np.zeros(len(orig_dates))
-
-        final_dates = [x.datestring for x in prev_level]
-        files_flagged = np.array([date not in final_dates for date in orig_dates])
-
-        n_files = len(prev_level) - sum(files_flagged)
-
-        if not n_files:
-            raise Exception("All input files have been filtered completely.")
-
-        # Determine models for the individual spectra
-        #        model = mdl.Model._models[model_basis.lower()](default_x=f, n_terms=model_nterms)
-        logger.info(
-            f"Determining {model_nterms}-term '{model_basis}' models for each integration..."
-        )
-
-        def get_params_resids(i):
-            l1 = prev_level[i]
-            flg = flags[i]
-
-            model, params = l1.get_model_parameters(
-                model_basis,
-                resolution=model_resolution,
-                weights=(~flg).astype(float),
-                n_terms=model_nterms,
-            )
-            resids = np.array(
-                [
-                    l1.spectrum[j] - model(parameters=pp, x=l1.freq.freq)
-                    for j, pp in enumerate(params)
-                ]
-            )
-            return params, resids
-
-        iterator = p_tqdm.p_imap(
-            get_params_resids, range(len(prev_level)), num_cpus=min(n_threads, len(prev_level))
-        )
-
-        model_params = []
-        model_resids = []
-        for i, (p, r) in enumerate(iterator):
-            model_params.append(p)
-            model_resids.append(r)
+        model_params = [p.ancillary["model_params"] for p in prev_step]
+        model_resids = [p.resids for p in prev_step]
+        flags = [~p.weights.astype("bool") for p in prev_step]
 
         # Bin in GHA using the models and residuals
         params, resids, weights, gha_edges = cls.bin_gha(
-            prev_level, model_params, model_resids, gha_min, gha_max, gha_bin_size, flags=flags
+            prev_step, model_params, model_resids, gha_min, gha_max, gha_bin_size, flags=flags
         )
 
-        data = {"weights": weights, "resids": resids}
+        if xrfi_pipe:
+            logger.info("Running xRFI...")
+            t = time.time()
+            flags = tools.run_xrfi_pipe(
+                spectrum=resids if xrfi_on_resids else prev_step[0].get_spectrum(resids, params),
+                weights=weights,
+                freq=prev_step[0].raw_frequencies,
+                xrfi_pipe=xrfi_pipe,
+                n_threads=n_threads,
+            )
+            new_weights = np.where(flags, 0, weights)
+            logger.info(f"... took {time.time() - t:.2f} sec.")
+        else:
+            new_weights = weights
+
+        data = {"weights": new_weights, "resids": resids}
 
         ancillary = {
-            "files_flagged": files_flagged,
-            "years": years,
-            "days": days,
-            "hours": hours,
+            "years": [p.year for p in prev_step],
+            "days": [p.day for p in prev_step],
+            "hours": [p.hour for p in prev_step],
             "gha_edges": gha_edges,
             "model_params": params,
-            "aux_flag_frac": aux_flag_frac,
-            "rfi_flag_frac": rfi_flag_frac,
-            "rms_flag_frac": rms_flag_frac,
-            "tp_flag_frac": tp_flag_frac,
+            "pre_filter_weights": weights,
         }
 
-        return prev_level[0].raw_frequencies, data, ancillary, cls._get_meta(locals())
+        return prev_step[0].raw_frequencies, data, ancillary, cls._get_meta(locals())
 
     @classmethod
     def _extra_meta(cls, kwargs):
         return {
-            "n_files": len(kwargs["prev_level"]),
-            "n_files_flagged": sum(kwargs["files_flagged"]),
+            "n_files": len(kwargs["prev_step"]),
         }
 
     @cached_property
-    def all_dates(self) -> List[Tuple[int, int, int]]:
-        """All the dates that went into this object (including fully flagged ones)."""
+    def dates(self) -> List[Tuple[int, int, int]]:
+        """All the dates that went into this object."""
         return [
             (y, d, h)
             for y, d, h in zip(
@@ -1961,100 +2260,17 @@ class Level2(_Level, _Level2Plus):
             )
         ]
 
-    @cached_property
-    def calibration(self):
-        """The calibration object used to calibrate these spectra."""
-        return self.previous_level.calibration
-
-    @property
-    def unflagged_level1(self) -> List[Level1]:
-        """List of Level1 objects kept in the Level2 spectra (in order)."""
-        return [
-            l1 for i, l1 in enumerate(self.previous_level) if not self.ancillary["files_flagged"][i]
-        ]
-
-    @property
-    def unflagged_days(self) -> np.ndarray:
-        """The days that are in the actual spectrum object."""
-        return np.array(
-            [
-                day
-                for i, day in enumerate(self.ancillary["days"])
-                if not self.ancillary["files_flagged"][i]
-            ]
-        )
-
-    @property
-    def unflagged_years(self) -> np.ndarray:
-        """The years that are in the actual spectrum object."""
-        return np.array(
-            [
-                year
-                for i, year in enumerate(self.ancillary["years"])
-                if not self.ancillary["files_flagged"][i]
-            ]
-        )
-
-    @property
-    def unflagged_hours(self) -> np.ndarray:
-        """The hours that are in the actual spectrum object."""
-        return np.array(
-            [
-                hour
-                for i, hour in enumerate(self.ancillary["hours"])
-                if not self.ancillary["files_flagged"][i]
-            ]
-        )
-
-    @classmethod
-    def _run_rms_filter(
-        cls,
-        rms_filter_file: [None, str, Path, filters.RMSInfo],
-        flags: Sequence[np.ndarray],
-        level1: Sequence[Level1],
-        models: dict,
-        n_poly: int = 3,
-        n_sigma: float = 3,
-        n_terms: int = 16,
-        n_std: int = 6,
-        n_files: [None, int] = None,
-    ) -> Tuple[list, list]:
-        if rms_filter_file and not isinstance(rms_filter_file, dict):
-            rms_filter_file = Path(rms_filter_file)
-
-        n_files = n_files or len(level1)
-
-        if not isinstance(rms_filter_file, filters.RMSInfo) and (
-            not rms_filter_file or not rms_filter_file.exists()
-        ):
-            rms_info = filters.get_rms_info(
-                level1=level1[:n_files],
-                models=models,
-                n_poly=n_poly,
-                n_sigma=n_sigma,
-                n_terms=n_terms,
-                n_std=n_std,
-            )
-        elif not isinstance(rms_filter_file, filters.RMSInfo):
-            rms_info = filters.RMSInfo.from_file(rms_filter_file)
-        else:
-            rms_info = rms_filter_file
-
-        # Write out a file with the rms_info in it.
-        if rms_filter_file and not rms_filter_file.exists():
-            rms_info.write(rms_filter_file)
-
-        return cls.run_filter(
-            "rms",
-            level1=level1,
-            flags=flags,
-            rms_info=rms_info,
-            n_sigma_rms=n_sigma,
-        )
-
     @classmethod
     def bin_gha(
-        cls, level1, l1_params, l1_resids, gha_min, gha_max, gha_bin_size, flags=None, use_pbar=True
+        cls,
+        model_objs,
+        model_params,
+        model_resids,
+        gha_min,
+        gha_max,
+        gha_bin_size,
+        flags=None,
+        use_pbar=True,
     ):
         """Bin a list of files into small aligning bins of GHA."""
 
@@ -2063,11 +2279,13 @@ class Level2(_Level, _Level2Plus):
             gha_edges = np.concatenate((gha_edges, [gha_edges.max() + gha_bin_size]))
 
         # Averaging data within GHA bins
-        weights = np.zeros((len(level1), len(gha_edges) - 1, level1[0].freq.n))
-        resids = np.zeros((len(level1), len(gha_edges) - 1, level1[0].freq.n))
-        params = np.zeros((len(level1), len(gha_edges) - 1, l1_params[0].shape[-1]))
+        weights = np.zeros((len(model_objs), len(gha_edges) - 1, model_objs[0].freq.n))
+        resids = np.zeros((len(model_objs), len(gha_edges) - 1, model_objs[0].freq.n))
+        params = np.zeros((len(model_objs), len(gha_edges) - 1, model_params[0].shape[-1]))
 
-        pbar = tqdm.tqdm(enumerate(level1), unit="files", total=len(level1), disable=not use_pbar)
+        pbar = tqdm.tqdm(
+            enumerate(model_objs), unit="files", total=len(model_objs), disable=not use_pbar
+        )
         for i, l1 in pbar:
             pbar.set_description(f"GHA Binning for {l1.filename.name}")
 
@@ -2078,7 +2296,7 @@ class Level2(_Level, _Level2Plus):
                 l1_weights[flags[i]] = 0
 
             params[i], resids[i], weights[i] = tools.model_bin_gha(
-                l1_params[i], l1_resids[i], l1_weights, gha, gha_edges
+                model_params[i], model_resids[i], l1_weights, gha, gha_edges
             )
 
         return params, resids, weights, gha_edges
@@ -2091,6 +2309,7 @@ class Level2(_Level, _Level2Plus):
         gha_max: float = 24,
         freq_resolution: Optional[float] = None,
         days: Optional[List[int]] = None,
+        weights: Optional[Union[np.ndarray, str]] = None,
     ) -> plt.Axes:
         """
         Make a single plot of residuals for each day in the dataset.
@@ -2117,6 +2336,11 @@ class Level2(_Level, _Level2Plus):
         ax
             The matplotlib Axes on which the plot is made.
         """
+        if weights is None:
+            weights = self.weights
+        elif weights == "old":
+            weights = self.ancillary["pre_filter_weights"]
+
         gha = (self.ancillary["gha_edges"][1:] + self.ancillary["gha_edges"][:-1]) / 2
 
         if ax is None:
@@ -2124,14 +2348,14 @@ class Level2(_Level, _Level2Plus):
 
         mask = (gha > gha_min) & (gha < gha_max)
 
-        for ix, (param, resid, weight) in enumerate(
-            zip(self.model_params, self.resids, self.weights)
+        for ix, (param, resid, weight, day) in enumerate(
+            zip(self.model_params, self.resids, weights, self.days)
         ):
             if np.sum(weight[mask]) == 0:
                 continue
 
             # skip days not explicitly requested.
-            if days and self.unflagged_days[ix] not in days:
+            if days and day not in days:
                 continue
 
             mean_p, mean_r, mean_w = tools.model_bin_gha(
@@ -2153,7 +2377,8 @@ class Level2(_Level, _Level2Plus):
             ax.text(
                 self.freq.max + 5,
                 -ix * separation,
-                f'{self.unflagged_level1[ix].meta["day"]} RMS={np.sqrt(tools.weighted_mean(data=mean_r[0]**2, weights=mean_w[0])[0]):.2f}',
+                f"{day} RMS="
+                f"{np.sqrt(tools.weighted_mean(data=mean_r[0] ** 2, weights=mean_w[0])[0]):.2f}",
             )
 
         return ax
@@ -2212,9 +2437,7 @@ class Level2(_Level, _Level2Plus):
         q = getattr(self, quantity)
         assert q.shape == self.resids.shape
 
-        if flagged:
-            q = np.where(self.weights[indx] > 0, q[indx], np.nan)
-
+        q = np.where(self.weights[indx] > 0, q[indx], np.nan) if flagged else q[indx]
         if quantity == "resids":
             cmap = cmap or "coolwarm"
 
@@ -2237,9 +2460,9 @@ class Level2(_Level, _Level2Plus):
 
         plt.xlabel("Frequency [MHz]")
         plt.ylabel("GHA (hours)")
-        plt.title(f"Level2 {self.unflagged_years[indx]}-{self.unflagged_days[indx]}")
+        plt.title(f"Level2 {self.dates[indx][0]}-{self.dates[indx][1]}")
 
-    def day_index(self, day: int, unflagged: bool = True) -> int:
+    def day_index(self, day: int) -> int:
         """
         Get the index corresponding to the given day in the dataset.
 
@@ -2257,14 +2480,11 @@ class Level2(_Level, _Level2Plus):
         indx
             The index in appropriate lists of that day's data.
         """
-        if unflagged:
-            return self.unflagged_days.tolist().index(day)
-        else:
-            return self.ancillary["days"].tolist().index(day)
+        return self.days.tolist().index(day)
 
 
 @add_structure
-class Level3(_Level, _Level2Plus):
+class DayAveragedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
     """
     Object representing a Level-3 Calibrated Data Set.
 
@@ -2280,31 +2500,20 @@ class Level3(_Level, _Level2Plus):
     """
 
     _ancillary = {
-        "years": lambda x: x.ndim == 1 and x.dtype.name.startswith("int"),
-        "gha_edges": lambda x: x.ndim == 1 and x.dtype.name.startswith("float"),
-        "model_params": lambda x: x.ndim == 2 and x.dtype.name.startswith("float"),
-        "std_dev": lambda x: x.ndim == 2 and x.dtype.name.startswith("float"),
+        "years": is_array("int", 1),
+        "days": is_array("int", 1),
+        "hours": is_array("int", 1),
+        "pre_filter_weights": float_array_ndim(2),
     }
+
     _meta = {}
 
-    @property
-    def level2(self):
-        return self.previous_level
-
-    @cached_property
-    def calibration(self):
-        """The calibration object used to calibrate these spectra."""
-        return self.previous_level.calibration
-
     @classmethod
-    def _from_prev_level(
+    def _promote(
         cls,
-        prev_level: [Level2],
+        prev_step: [CombinedData],
         day_range: Optional[Tuple[int, int]] = None,
         ignore_days: Optional[Sequence[int]] = None,
-        f_low: Optional[float] = None,
-        f_high: Optional[float] = None,
-        freq_resolution: Optional[float] = None,
         gha_filter_file: [None, str, Path] = None,
         xrfi_pipe: [None, dict] = None,
         xrfi_on_resids: bool = True,
@@ -2318,18 +2527,12 @@ class Level3(_Level, _Level2Plus):
 
         Parameters
         ----------
-        prev_level
+        prev_step
             The level2 object to convert.
         day_range
             Min and max days to include (from a given year).
         ignore_days
             A sequence of days to ignore in the integration.
-        f_low
-            A minimum frequency to use. Default is all frequencies.
-        f_high
-            A maximum frequency to use. Default is all frequencies
-        freq_resolution
-            A frequency resolution to average down to. Default is to not average.
         xrfi_pipe
             A dictionary specifying further RFI flagging methods. See
             :method:`Level2.from_previous_level` for details.
@@ -2342,8 +2545,8 @@ class Level3(_Level, _Level2Plus):
         xrfi_pipe = xrfi_pipe or {}
 
         # Compute the residuals
-        days = prev_level.unflagged_days
-        freq = FrequencyRange(prev_level.raw_frequencies, f_low=f_low, f_high=f_high)
+        days = prev_step.ancillary["days"]
+        freq = prev_step.freq
 
         if day_range is None:
             day_range = (days.min(), days.max())
@@ -2351,109 +2554,143 @@ class Level3(_Level, _Level2Plus):
         if ignore_days is None:
             ignore_days = []
 
-        logger.info("Masking days provided in [blue]ignore_days...")
-        day_mask = np.array([day not in ignore_days for day in days])
-        resid = prev_level.resids[day_mask]
-        wght = prev_level.weights[day_mask]
-
-        if xrfi_on_resids:
-            rfi_data = resid
+        if ignore_days:
+            logger.info("Masking days provided in [blue]ignore_days...")
+            day_mask = np.array([day not in ignore_days for day in days])
+            resid = prev_step.resids[day_mask]
+            wght = prev_step.weights[day_mask]
         else:
-            rfi_data = prev_level.spectrum[day_mask]
+            resid = prev_step.resids
+            wght = prev_step.weights
+            day_mask = [True] * len(resid)
 
         if gha_filter_file:
             raise NotImplementedError("Using a GHA filter file is not yet implemented")
 
-        logger.info("Running xRFI on each night and GHA...")
-        # Perform xRFI on GHA-averaged spectra.
-        if xrfi_pipe:
-
-            def run_pipe(args):
-                data, w = args
-                return tools.run_xrfi_pipe(data, w <= 0, xrfi_pipe)
-
-            m = map if n_threads <= 1 else Pool(n_threads).map
-            flags = np.array(m(run_pipe, zip(rfi_data, wght)))
-            wght[flags] = 0
-
         logger.info("Integrating over nights...")
         # Take mean over nights.
-        params = np.nanmean(prev_level.ancillary["model_params"], axis=0)
+        params = np.nanmean(prev_step.ancillary["model_params"], axis=0)
         resid, wght = tools.weighted_mean(resid, wght, axis=0)
 
-        logger.info("Averaging in frequency bins...")
-        # Average in frequency
-        if freq_resolution:
-            f, resid, wght, s = tools.average_in_frequency(
-                resid, freq.freq, weights=wght, resolution=freq_resolution
+        # Perform xRFI on GHA-averaged spectra.
+        if xrfi_pipe:
+            logger.info("Running xRFI...")
+            t = time.time()
+            flags = tools.run_xrfi_pipe(
+                spectrum=resid if xrfi_on_resids else prev_step.get_spectrum(resid, params),
+                weights=wght,
+                freq=prev_step.raw_frequencies,
+                xrfi_pipe=xrfi_pipe,
+                n_threads=n_threads,
             )
+            new_wght = np.where(flags, 0, wght)
+            logger.info(f"... took {time.time() - t:.2f} sec.")
         else:
-            f = freq.freq
-            s = np.zeros_like(wght)
+            new_wght = wght
 
         data = {
             "resids": resid,
-            "weights": wght,
+            "weights": new_wght,
         }
 
         ancillary = {
-            "years": np.unique(prev_level.ancillary["years"]),
-            "gha_edges": prev_level.ancillary["gha_edges"],
+            "years": np.unique(prev_step.ancillary["years"]),
+            "days": np.unique(prev_step.ancillary["days"]),
+            "hours": np.unique(prev_step.ancillary["hours"]),
+            "gha_edges": prev_step.ancillary["gha_edges"],
             "model_params": params,
-            "std_dev": s,
+            "pre_filter_weights": wght,
         }
 
-        return f, data, ancillary, cls._get_meta(locals())
+        return prev_step.raw_frequencies, data, ancillary, cls._get_meta(locals())
 
-    @property
-    def gha_edges(self):
-        """The edges of the GHA bins."""
-        return self.ancillary["gha_edges"]
+    def bin_gha(
+        self,
+        gha_min: float,
+        gha_max: float,
+        gha_bin_size: float = 1.0,
+        weights: Optional[Union[np.ndarray, str]] = None,
+    ):
+        gha_edges = np.arange(gha_min, gha_max, gha_bin_size)
+        if np.isclose(gha_max, gha_edges.max() + gha_bin_size):
+            gha_edges = np.concatenate((gha_edges, [gha_edges.max() + gha_bin_size]))
 
-    def plot_waterfall(self, quantity="flagged"):
-        "Plot a simple waterfall plot of time vs. frequency."
-        extent = (self.freq.min, self.freq.max, self.gha_edges.min, self.gha_edges.max)
-        if quantity == "flagged":
-            plt.imshow(np.where(self.weights > 0, self.spectrum, 0), extent=extent, aspect="auto")
+        if weights is None:
+            weights = self.weights
+        elif weights == "old":
+            weights = self.ancillary["pre_filter_weights"]
+
+        params, resids, weights = tools.model_bin_gha(
+            self.model_params, self.resids, weights, self.gha_centres, gha_edges
+        )
+        return params, resids, weights, gha_edges
+
+    def plot_waterfall(self, quantity="resids", flagged=True, weights=None, **kwargs):
+        """Plot a simple waterfall plot of time vs. frequency."""
+        extent = (self.freq.min, self.freq.max, self.gha_edges.min(), self.gha_edges.max())
+
+        if weights is None:
+            weights = self.weights
+        elif weights == "old":
+            weights = self.ancillary["pre_filter_weights"]
+
+        q = getattr(self, quantity)
+        if flagged:
+            q = np.where(weights > 0, q, np.nan)
+
+        if quantity == "resids":
+            cmap = kwargs.get("cmap", "coolwarm")
         else:
-            plt.imshow(getattr(self, quantity), extent=extent, aspect="auto")
+            cmap = kwargs.get("cmap", "magma")
+
+        plt.imshow(q, origin="lower", extent=extent, aspect="auto", cmap=cmap, **kwargs)
 
         plt.xlabel("Frequency")
         plt.ylabel("GHA")
 
-    def bin_gha(self, gha_bins: Optional[np.ndarray] = None) -> Tuple[np.ndarray, np.ndarray]:
-        """Average in wider bins of GHA.
-
-        Parameters
-        ----------
-        gha_bins
-            A numpy array of bin edges to use. By default, average everything into
-            one big bin.
-
-        Returns
-        -------
-        s
-            The binned spectrum
-        w
-            The binned weights.
-        """
-        gha_centres = (self.gha_edges[:-1] + self.gha_edges[1:]) / 2
-        if gha_bins is None:
-            gha_bins = [self.gha_edges.min(), self.gha_edges.max()]
-
-        s = tools.non_stationary_bin_avg(
-            data=self.spectrum.T,
-            x=gha_centres,
-            bins=gha_bins,
-            weights=self.weights.T,
+    def plot_resids(
+        self,
+        gha_min: float,
+        gha_max: float,
+        weights: Optional[Union[np.ndarray, str]] = None,
+        gha_bin_size: float = 1.0,
+        ax: plt.Axes = None,
+        freq_resolution=0,
+        separation=10,
+    ):
+        params, resids, weights, gha_edges = self.bin_gha(
+            gha_min, gha_max, gha_bin_size=gha_bin_size, weights=weights
         )
-        w = tools.get_binned_weights(x=gha_centres, bins=gha_bins, weights=self.weights.T)
 
-        return s, w
+        if ax is None:
+            fig, ax = plt.subplots(1, 1, figsize=(7, 12))
+
+        for ix, (rr, ww) in enumerate(zip(resids, weights)):
+            if np.sum(ww) == 0:
+                continue
+
+            if freq_resolution:
+                f, rr, ww, s = tools.average_in_frequency(
+                    rr, self.freq.freq, ww, resolution=freq_resolution
+                )
+            else:
+                f = self.freq.freq
+
+            rr = np.where(ww > 0, rr, np.nan)
+
+            ax.plot(f, rr - ix * separation)
+            ax.text(
+                self.freq.max + 5,
+                -ix * separation,
+                f"GHA={gha_edges[ix]:.2f} RMS="
+                f"{np.sqrt(tools.weighted_mean(data=rr ** 2, weights=ww)[0]):.2f}",
+            )
+
+        return ax
 
 
 @add_structure
-class Level4(_Level, _Level2Plus):
+class BinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
     """
     A Level-4 Calibrated Spectrum.
 
@@ -2461,22 +2698,18 @@ class Level4(_Level, _Level2Plus):
     that is as averaged as one wants.
     """
 
-    _ancillary = {}
+    _ancillary = {
+        "years": is_array("int", 1),
+        "days": is_array("int", 1),
+        "hours": is_array("int", 1),
+        "pre_filter_weights": float_array_ndim(2),
+    }
     _meta = None
 
-    @property
-    def level2(self):
-        return self.previous_level.previous_level
-
-    @cached_property
-    def calibration(self):
-        """The calibration object used to calibrate these spectra."""
-        return self.previous_level.calibration
-
     @classmethod
-    def _from_prev_level(
+    def _promote(
         cls,
-        prev_level: [Level3],
+        prev_step: [DayAveragedData, BinnedData],
         f_low: Optional[float] = None,
         f_high: Optional[float] = None,
         ignore_freq_ranges: Optional[Sequence[Tuple[float, float]]] = None,
@@ -2486,6 +2719,7 @@ class Level4(_Level, _Level2Plus):
         gha_bin_size: [None, float] = None,
         xrfi_pipe: [None, dict] = None,
         xrfi_on_resids: bool = True,
+        n_threads: int = cpu_count(),
     ):
         """
         Average from :class:`Level3` to :class:`Level4`
@@ -2495,7 +2729,7 @@ class Level4(_Level, _Level2Plus):
 
         Parameters
         ----------
-        prev_level
+        prev_step
             The :class:`Level3` objects to average.
         f_low
             The lowest frequency to keep.
@@ -2522,35 +2756,23 @@ class Level4(_Level, _Level2Plus):
         """
         xrfi_pipe = xrfi_pipe or {}
 
-        freq = FrequencyRange(prev_level.raw_frequencies, f_low=f_low, f_high=f_high)
+        freq = FrequencyRange(prev_step.raw_frequencies, f_low=f_low, f_high=f_high)
 
-        resid = prev_level.resids[:, freq.mask]
-        wght = prev_level.weights[:, freq.mask]
-
-        if xrfi_on_resids:
-            spec = prev_level.spectrum[:, freq.mask]
-
-        # Another round of XRFI
-        logger.info("Running xRFI...")
-        tools.run_xrfi_pipe(
-            spectrum=resid if xrfi_on_resids else spec,
-            freq=freq.freq,
-            weights=wght,
-            xrfi_pipe=xrfi_pipe,
-        )
+        resid = prev_step.resids[:, freq.mask]
+        wght = prev_step.weights[:, freq.mask]
 
         if ignore_freq_ranges:
             for (low, high) in ignore_freq_ranges:
                 wght[:, (freq.freq >= low) & (freq.freq <= high)] = 0
 
-        logger.info("Averaging in frequency bins...")
         if freq_resolution:
+            logger.info("Averaging in frequency bins...")
             f, resid, wght, s = tools.average_in_frequency(
                 resid, freq.freq, wght, resolution=freq_resolution
             )
+            logger.info(f".... produced {len(f)} frequency bins.")
         else:
             f = freq.freq
-        logger.info(f".... produced {len(f)} frequency bins.")
 
         if gha_bin_size is None:
             gha_bin_size = gha_max - gha_min
@@ -2559,14 +2781,111 @@ class Level4(_Level, _Level2Plus):
 
         logger.info(f"Averaging into {len(gha_edges) - 1} GHA bins.")
         params, resid, wght = tools.model_bin_gha(
-            prev_level.ancillary["model_params"],
+            prev_step.ancillary["model_params"],
             resid,
             wght,
-            (prev_level.gha_edges[1:] + prev_level.gha_edges[:-1]) / 2,
+            prev_step.gha_centres,
             gha_edges,
         )
 
-        data = {"resids": resid, "weights": wght}
-        ancillary = {"gha_edges": gha_edges, "model_params": params}
+        # Perform xRFI on GHA-averaged spectra.
+        if xrfi_pipe:
+            logger.info("Running xRFI...")
+            flags = tools.run_xrfi_pipe(
+                spectrum=resid if xrfi_on_resids else prev_step.get_spectrum(resid, params, freq=f),
+                weights=wght,
+                freq=f,
+                xrfi_pipe=xrfi_pipe,
+                n_threads=n_threads,
+            )
+            new_wght = np.where(flags, 0, wght)
+        else:
+            new_wght = wght
+
+        data = {"resids": resid, "weights": new_wght}
+        ancillary = {
+            "years": np.unique(prev_step.ancillary["years"]),
+            "days": np.unique(prev_step.ancillary["days"]),
+            "hours": np.unique(prev_step.ancillary["hours"]),
+            "gha_edges": gha_edges,
+            "model_params": params,
+            "pre_filter_weights": wght,
+        }
 
         return f, data, ancillary, cls._get_meta(locals())
+
+    def plot_resids(
+        self,
+        weights=None,
+        freq_resolution=0,
+        separation=10,
+        refit_model: Optional[mdl.Model] = None,
+        ax=None,
+        labels=True,
+        f_range: Tuple[Optional[float], Optional[float]] = (0, np.inf),
+        plot_full_avg: bool = False,
+    ):
+
+        if ax is None:
+            fig, ax = plt.subplots(1, 1, figsize=(7, 12))
+
+        if weights is None:
+            weights = self.weights
+        elif weights == "old":
+            weights = self.ancillary["pre_filter_weights"]
+
+        for ix, (rr, ww) in enumerate(zip(self.resids, weights)):
+            if np.sum(ww) == 0:
+                continue
+
+            ww = np.where((self.freq.freq > f_range[0]) & (self.freq.freq < f_range[1]), ww, 0)
+            if refit_model is not None:
+                rr = refit_model.fit(ydata=self.spectrum[ix], weights=ww).residual
+
+            if freq_resolution:
+                f, rr, ww, s = tools.average_in_frequency(
+                    rr, self.freq.freq, ww, resolution=freq_resolution
+                )
+            else:
+                f = self.freq.freq
+
+            rr = np.where(ww > 0, rr, np.nan)
+
+            ax.plot(f, rr - ix * separation)
+            if labels:
+                ax.text(
+                    self.freq.max + 5,
+                    -ix * separation,
+                    f"GHA={self.gha_edges[ix]:.2f} RMS="
+                    f"{np.sqrt(tools.weighted_mean(data=rr ** 2, weights=ww)[0]):.2f}",
+                )
+
+        if plot_full_avg:
+            # Now average EVERYTHING
+            avg_p, avg_r, avg_w = tools.model_bin_gha(
+                self.model_params,
+                self.resids,
+                weights,
+                self.gha_centres,
+                bins=[self.gha_edges.min(), self.gha_edges.max()],
+            )
+
+            if refit_model is not None:
+                avg_r = refit_model.fit(
+                    ydata=avg_r[0] + self.model(parameters=avg_p[0]), weights=avg_w[0]
+                ).residual
+
+            ax.plot(f, avg_r[0] - (ix + 2) * separation)
+
+            if labels:
+                ax.text(
+                    self.freq.max + 5,
+                    -(ix + 2) * separation,
+                    f"Full Avg. RMS={np.sqrt(tools.weighted_mean(data=avg_r[0] ** 2, weights=avg_w[0])[0]):.2f}",
+                )
+
+        return ax
+
+
+def run_complete_process():
+    pass

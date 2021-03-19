@@ -2,7 +2,7 @@
 import pytest
 from pathlib import Path
 from subprocess import run
-from edges_analysis.analysis import Level1, Level2, Level3, Level4
+from edges_analysis.analysis import CalibratedData, CombinedData, DayAveragedData, BinnedData
 import yaml
 from typing import Tuple
 import numpy as np
@@ -57,20 +57,22 @@ def level1_settings(integration_test_data: Path) -> Path:
 
 
 @pytest.fixture(scope="session")
-def level1(integration_test_data: Path, level1_settings: Path) -> Tuple[Level1, Level1]:
+def level1(
+    integration_test_data: Path, level1_settings: Path
+) -> Tuple[CalibratedData, CalibratedData]:
     with open(level1_settings) as fl:
         settings = yaml.load(fl, Loader=yaml.FullLoader)
 
     settings["s11_path"] = str(integration_test_data / "s11")
 
-    l1 = Level1.from_acq(
+    l1 = CalibratedData.from_acq(
         integration_test_data / "2016_292_00_small.acq",
         out_file=integration_test_data / "level1/292.h5",
         **settings
     )
     l1.write()
 
-    l2 = Level1.from_acq(
+    l2 = CalibratedData.from_acq(
         integration_test_data / "2016_295_00_small.acq",
         out_file=integration_test_data / "level1/295.h5",
         **settings
@@ -81,31 +83,31 @@ def level1(integration_test_data: Path, level1_settings: Path) -> Tuple[Level1, 
 
 
 @pytest.fixture(scope="session")
-def level2(level1: Level1, settings: Path, integration_test_data: Path):
+def level2(level1: CalibratedData, settings: Path, integration_test_data: Path):
     with open(settings / "level2.yml") as fl:
         s = yaml.load(fl, Loader=yaml.FullLoader)
 
-    return Level2.from_previous_level(level1, filename=integration_test_data / "level2/out.h5", **s)
+    return CombinedData.promote(level1, filename=integration_test_data / "level2/out.h5", **s)
 
 
 @pytest.fixture(scope="session")
-def level3(level2: Level2, settings: Path, integration_test_data: Path):
+def level3(level2: CombinedData, settings: Path, integration_test_data: Path):
     with open(settings / "level3.yml") as fl:
         s = yaml.load(fl, Loader=yaml.FullLoader)
 
-    return Level3.from_previous_level(level2, filename=integration_test_data / "level3/out.h5", **s)
+    return DayAveragedData.promote(level2, filename=integration_test_data / "level3/out.h5", **s)
 
 
 @pytest.fixture(scope="session")
-def level4(level3: Level3, settings: Path, integration_test_data: Path):
+def level4(level3: DayAveragedData, settings: Path, integration_test_data: Path):
     with open(settings / "level4.yml") as fl:
         s = yaml.load(fl, Loader=yaml.FullLoader)
 
-    return Level4.from_previous_level(level3, filename=integration_test_data / "level4/out.h5", **s)
+    return BinnedData.promote(level3, filename=integration_test_data / "level4/out.h5", **s)
 
 
 @pytest.fixture(scope="session")
-def mock_level1_list(tmp_path_factory) -> Level1:
+def mock_level1_list(tmp_path_factory) -> CalibratedData:
     np.random.seed(1234)
     tmp_path = tmp_path_factory.mktemp("mock-data")
 
@@ -119,7 +121,7 @@ def mock_level1_list(tmp_path_factory) -> Level1:
         [(start_time + i * timedelta).strftime("%Y:%j:%H:%M:%S") for i in range(n_gha)], dtype="S17"
     )
 
-    anc = Level1.get_ancillary_coords(Level1.get_datetimes(time_strings))
+    anc = CalibratedData.get_ancillary_coords(CalibratedData.get_datetimes(time_strings))
     anc["times"] = time_strings
     gha_model = 10000 * (1 + np.sin(2 * np.pi * (anc["gha"] - 18) / 24))
 
@@ -135,7 +137,7 @@ def mock_level1_list(tmp_path_factory) -> Level1:
         "Q": (sky + noise - 300) / 400,
     }
 
-    return Level1.from_data(
+    return CalibratedData.from_data(
         {
             "frequency": freq,
             "spectra": data,
