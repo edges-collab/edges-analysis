@@ -60,12 +60,12 @@ class WeatherError(ValueError):
 class _CombinedFileMixin:
     @property
     def days(self) -> np.ndarray:
-        return self.ancillary.load("days")
+        return np.array(self.ancillary["days"])
 
     @property
-    def gha_edges(self):
+    def gha_edges(self) -> np.ndarray:
         """The edges of the GHA bins."""
-        return self.ancillary.load("gha_edges")
+        return np.array(self.ancillary["gha_edges"])
 
     def get_day(self, day: int) -> ModelData:
         """Get the :class:`ModelData` class corresponding to day."""
@@ -77,7 +77,7 @@ class _CombinedFileMixin:
                 return obj
 
     @cached_property
-    def gha_centres(self):
+    def gha_centres(self) -> np.ndarray:
         return (self.gha_edges[1:] + self.gha_edges[:-1]) / 2
 
 
@@ -149,6 +149,7 @@ class _ReductionStep(HDF5Object):
       that describe the data.
     """
 
+    _structure = {}
     _spectra_structure = {}
     _spec_dim = 2
     _possible_parents = tuple()
@@ -238,7 +239,9 @@ class _ReductionStep(HDF5Object):
                 with warnings.catch_warnings():
                     warnings.filterwarnings(action="ignore", category=UserWarning)
                     return read_step(obj)
-            elif isinstance(obj, cls._possible_parents):
+            elif isinstance(obj, cls._possible_parents) or (
+                "self" in cls._possible_parents and obj.__class__ == cls
+            ):
                 return obj
             else:
                 raise ValueError(f"{obj} is not a valid data set.")
@@ -254,7 +257,7 @@ class _ReductionStep(HDF5Object):
             prev_step = _validate_obj(prev_step)
 
         freq, data, ancillary, meta = cls._promote(prev_step, **kwargs)
-
+        print("initial meta: ", meta)
         meta["parent_files"] = (
             ":".join(str(p.filename) for p in prev_step)
             if isinstance(prev_step, list)
@@ -270,7 +273,7 @@ class _ReductionStep(HDF5Object):
             {"frequency": freq, "spectra": data, "ancillary": ancillary, "meta": meta},
             validate=False,
         )
-
+        print("final meta: ", out.meta)
         if filename:
             out.write(filename)
 
@@ -292,7 +295,7 @@ class _ReductionStep(HDF5Object):
 
     @property
     def raw_frequencies(self):
-        return self.load("frequency")
+        return self["frequency"]
 
     @property
     def freq(self):
@@ -300,7 +303,7 @@ class _ReductionStep(HDF5Object):
 
     @property
     def ancillary(self):
-        return self.load("ancillary")
+        return self["ancillary"]
 
     @property
     def spectra(self):
@@ -308,18 +311,12 @@ class _ReductionStep(HDF5Object):
 
     @property
     def weights(self):
-        try:
-            return self.spectra.load("weights")
-        except AttributeError:
-            return self.spectra["weights"]
+        return self.spectra["weights"]
 
     @property
     def spectrum(self):
         """Residuals of all spectra after being fit by the fiducial model."""
-        try:
-            return self.spectra.load("spectrum")
-        except AttributeError:
-            return self.spectra["spectrum"]
+        return self.spectra["spectrum"]
 
     @classmethod
     def _get_meta(cls, params: dict) -> dict:
@@ -346,9 +343,16 @@ class _ReductionStep(HDF5Object):
 
     @classmethod
     def _get_extra_meta(cls):
-        out = super(_ReductionStep, cls)._get_extra_meta()
+        out = HDF5Object._get_extra_meta()
         out["edges_analysis_version"] = __version__
         out["message"] = ""
+
+        # Need to forcibly overwrite the object name here, because it will be `HDF5Object`
+        # Problematically, can just call super()._get_extra_meta, because this function
+        # is called in __init_subclass__, and so doesn't know about this class definition
+        # when it is called.
+        out["object_name"] = cls.__name__
+
         return out
 
 
@@ -425,10 +429,7 @@ class _ModelMixin:
     @property
     def resids(self):
         """Residuals of all spectra after being fit by the fiducial model."""
-        try:
-            return self.spectra.load("resids")
-        except AttributeError:
-            return self.spectra["resids"]
+        return self.spectra["resids"]
 
 
 @attr.s
@@ -634,11 +635,11 @@ class _SingleDayMixin:
 
     @property
     def gha(self):
-        return self.calibration_step.ancillary.load("gha")
+        return self.calibration_step.ancillary["gha"]
 
     @property
     def lst(self):
-        return self.calibration_step.ancillary.load("lst")
+        return self.calibration_step.ancillary["lst"]
 
     @property
     def datestring(self):
@@ -1112,7 +1113,7 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
             prev_step["spectra"]["p1"],
             prev_step["spectra"]["p2"],
         ]
-        ancillary = prev_step.load("time_ancillary")
+        ancillary = prev_step["time_ancillary"]
 
         logger.info(f"Time for reading: {time.time() - t:.2f} sec.")
 
@@ -1125,7 +1126,7 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
             "year": times[0].year,
             "day": get_jd(times[0]),
             "hour": times[0].hour,
-            **prev_step.load("meta"),
+            **prev_step["meta"],
         }
 
         time_based_anc = ancillary
@@ -1193,9 +1194,9 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
     def get_subset(self, integrations=100):
         """Write a subset of the data to a new mock :class:`CalibratedData` file."""
         freq = self.raw_frequencies
-        spectra = {k: self.spectra.load(k) for k in self.spectra.keys()}
-        ancillary = self.load("ancillary")
-        meta = self.load("meta")
+        spectra = {k: self.spectra[k] for k in self.spectra.keys()}
+        ancillary = self.ancillary
+        meta = self.meta
 
         spectra = {k: s[:integrations] for k, s in spectra.items()}
         ancillary = ancillary[:integrations]
@@ -1836,6 +1837,7 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
 @add_structure
 class FilteredData(_ReductionStep, _SingleDayMixin):
     _meta = {"flagged": lambda x: isinstance(x, (bool, np.bool_))}
+    _possible_parents = (CalibratedData, "self")
 
     _ancillary = {
         "aux_flags": is_array("bool", 2),
@@ -2066,6 +2068,7 @@ class FilteredData(_ReductionStep, _SingleDayMixin):
 @add_structure
 class ModelData(_ModelMixin, _ReductionStep, _SingleDayMixin):
     _ancillary = {"gha": float_array_ndim(1)}
+    _possible_parents = (CalibratedData, FilteredData)
 
     @classmethod
     def _promote(
@@ -2141,6 +2144,7 @@ class CombinedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
     involved in creating this data from :class:`Level1` objects.
     """
 
+    _possible_parents = (ModelData,)
     _multi_input = True
     _spec_dim = 3
 
@@ -2499,6 +2503,7 @@ class DayAveragedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
     involved in creating this data from a :class:`Level2` object.
     """
 
+    _possible_parents = (CombinedData,)
     _ancillary = {
         "years": is_array("int", 1),
         "days": is_array("int", 1),
@@ -2511,7 +2516,7 @@ class DayAveragedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
     @classmethod
     def _promote(
         cls,
-        prev_step: [CombinedData],
+        prev_step: CombinedData,
         day_range: Optional[Tuple[int, int]] = None,
         ignore_days: Optional[Sequence[int]] = None,
         gha_filter_file: [None, str, Path] = None,
@@ -2520,7 +2525,7 @@ class DayAveragedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         n_threads: int = cpu_count(),
     ):
         """
-        Convert a :class:`Level2` to a :class:`Level3`.
+        Convert a :class:`CombinedData` object into a :class:`DayAveragedData` object.
 
         This step integrates over days to form a spectrum as a function of GHA and
         frequency. It also applies an optional frequency averaging.
@@ -2528,7 +2533,7 @@ class DayAveragedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         Parameters
         ----------
         prev_step
-            The level2 object to convert.
+            The :class:`CombinedData` object to convert.
         day_range
             Min and max days to include (from a given year).
         ignore_days
@@ -2545,7 +2550,7 @@ class DayAveragedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         xrfi_pipe = xrfi_pipe or {}
 
         # Compute the residuals
-        days = prev_step.ancillary["days"]
+        days = prev_step.days
         freq = prev_step.freq
 
         if day_range is None:
@@ -2698,6 +2703,7 @@ class BinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
     that is as averaged as one wants.
     """
 
+    _possible_parents = (DayAveragedData, "self")
     _ancillary = {
         "years": is_array("int", 1),
         "days": is_array("int", 1),
@@ -2722,7 +2728,7 @@ class BinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         n_threads: int = cpu_count(),
     ):
         """
-        Average from :class:`Level3` to :class:`Level4`
+        Average over GHA and Frequency.
 
         This step primarily averages further over GHA (potentially over all GHA) and
         potentially over some frequency bins.
@@ -2813,6 +2819,37 @@ class BinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         }
 
         return f, data, ancillary, cls._get_meta(locals())
+
+    def rebin(
+        self, gha_min=None, gha_max=None, gha_bin_size=None, f_low=None, f_high=None, resolution=0
+    ):
+        gha_edges = np.arange(gha_min, gha_max + gha_bin_size / 10, gha_bin_size, dtype=float)
+        avg_p, avg_r, avg_w = tools.model_bin_gha(
+            self.model_params,
+            self.resids,
+            self.weights,
+            self.gha_centres,
+            bins=gha_edges,
+        )
+
+        f, w, s, new_r, new_p = tools.unbiased_freq_bin(
+            model_type=self.model.__class__,
+            params=avg_p,
+            freq=self.raw_frequencies,
+            resids=avg_r,
+            weights=avg_w,
+            new_freq_edges=np.linspace(f_low, f_high, resolution),
+            n_terms=self.model_step.meta["model_nterms"],
+        )
+
+        return BinnedData.from_data(
+            {
+                "frequency": f,
+                "spectra": {"weights": w, "resids": new_r},
+                "ancillary": {"gha_edges": gha_edges, "model_params": new_p},
+                "meta": {},
+            }
+        )
 
     def plot_resids(
         self,

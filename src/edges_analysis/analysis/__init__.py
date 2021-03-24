@@ -8,4 +8,12 @@ from . import s11
 from . import sky_models
 from . import tools
 
-from .levels import CalibratedData, CombinedData, BinnedData, DayAveragedData, read_step
+from .levels import (
+    CalibratedData,
+    CombinedData,
+    BinnedData,
+    DayAveragedData,
+    read_step,
+    FilteredData,
+    ModelData,
+)

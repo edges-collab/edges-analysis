@@ -1,4 +1,4 @@
-from typing import Tuple, Optional, Union
+from typing import Tuple, Optional, Union, Type
 from datetime import datetime, timedelta
 from multiprocess import Pool, current_process, cpu_count
 from multiprocessing.sharedctypes import RawArray
@@ -353,6 +353,77 @@ def bin_array(
             out_coords[this_slice], _ = weighted_mean(this_crd, this_wght, axis=axis)
 
     return out_coords, out_data, out_wght
+
+
+def unbiased_freq_bin(
+    model_type: Type[mdl.Model],
+    params: np.ndarray,
+    freq: np.ndarray,
+    resids: np.ndarray,
+    weights: np.ndarray,
+    new_freq_edges: np.ndarray,
+    **kwargs,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Bin an array along the frequency axis into *regular* bins.
+
+    To make the bins regular, we use a model over the frequency axis to evaluate central
+    value, and add the residuals to it.
+
+    Parameters
+    ----------
+    model_type
+        The model for which the residuals are defined.
+    params
+        2D array of parameters (parameters for each model along last axis).
+    freq
+        The frequencies of the input
+    resids
+        The residuals of the input model
+    weights
+        The weights of the data.
+    new_freq_edges
+        The new frequency bins.
+    kwargs
+        Anything else passed to construct the model.
+
+    Returns
+    -------
+    freq
+        The new frequencies
+    weights
+        The binned weights
+    spec
+        The binned spectrum
+    resid
+        The new residuals to the same model
+    params
+        The new parameters of the same model
+    """
+
+    new_f = (new_freq_edges[1:] + new_freq_edges[:-1]) / 2
+
+    model = model_type(default_x=new_f, **kwargs)
+
+    ev = np.array([model(parameters=p) for p in params])
+
+    _, r, w = bin_array(
+        resids,
+        weights=weights,
+        coords=freq,
+        bins=new_freq_edges,
+    )
+    s = ev + r
+
+    new_r = []
+    new_p = []
+
+    for ss, ww in zip(s, w):
+        m = model.fit(ss, ww)
+        new_r.append(m.residual)
+        new_p.append(m.model_parameters)
+
+    return new_f, w, s, new_r, new_p
 
 
 def average_in_frequency(

@@ -2,7 +2,14 @@
 import pytest
 from pathlib import Path
 from subprocess import run
-from edges_analysis.analysis import CalibratedData, CombinedData, DayAveragedData, BinnedData
+from edges_analysis.analysis import (
+    CalibratedData,
+    CombinedData,
+    DayAveragedData,
+    BinnedData,
+    FilteredData,
+    ModelData,
+)
 import yaml
 from typing import Tuple
 import numpy as np
@@ -33,7 +40,7 @@ def settings() -> Path:
 
 
 @pytest.fixture(scope="session")
-def level1_settings(integration_test_data: Path) -> Path:
+def calibrate_settings(integration_test_data: Path) -> Path:
     settings = {
         "band": "low",
         "f_low": 50,
@@ -49,7 +56,7 @@ def level1_settings(integration_test_data: Path) -> Path:
         "weather_file": str(integration_test_data / "weather.txt"),
     }
 
-    out = integration_test_data / "level1_settings.yaml"
+    out = integration_test_data / "calibrate.yaml"
     with open(out, "w") as fl:
         yaml.dump(settings, fl)
 
@@ -57,53 +64,72 @@ def level1_settings(integration_test_data: Path) -> Path:
 
 
 @pytest.fixture(scope="session")
-def level1(
-    integration_test_data: Path, level1_settings: Path
+def cal_step(
+    integration_test_data: Path, calibrate_settings
 ) -> Tuple[CalibratedData, CalibratedData]:
-    with open(level1_settings) as fl:
+    with open(calibrate_settings) as fl:
         settings = yaml.load(fl, Loader=yaml.FullLoader)
 
-    settings["s11_path"] = str(integration_test_data / "s11")
-
-    l1 = CalibratedData.from_acq(
+    cal_1 = CalibratedData.promote(
         integration_test_data / "2016_292_00_small.acq",
-        out_file=integration_test_data / "level1/292.h5",
-        **settings
+        filename=integration_test_data / "calibrate/292.h5",
+        **settings,
     )
-    l1.write()
-
-    l2 = CalibratedData.from_acq(
+    cal_2 = CalibratedData.promote(
         integration_test_data / "2016_295_00_small.acq",
-        out_file=integration_test_data / "level1/295.h5",
-        **settings
+        filename=integration_test_data / "calibrate/295.h5",
+        **settings,
     )
-    l2.write()
 
-    return l1, l2
-
-
-@pytest.fixture(scope="session")
-def level2(level1: CalibratedData, settings: Path, integration_test_data: Path):
-    with open(settings / "level2.yml") as fl:
-        s = yaml.load(fl, Loader=yaml.FullLoader)
-
-    return CombinedData.promote(level1, filename=integration_test_data / "level2/out.h5", **s)
+    return cal_1, cal_2
 
 
 @pytest.fixture(scope="session")
-def level3(level2: CombinedData, settings: Path, integration_test_data: Path):
-    with open(settings / "level3.yml") as fl:
+def filter_step(cal_step, settings: Path, integration_test_data: Path):
+    with open(settings / "filter.yml") as fl:
         s = yaml.load(fl, Loader=yaml.FullLoader)
 
-    return DayAveragedData.promote(level2, filename=integration_test_data / "level3/out.h5", **s)
+    return [
+        FilteredData.promote(obj, filename=integration_test_data / f"filter/{obj.day}.h5", **s)
+        for obj in cal_step
+    ]
 
 
 @pytest.fixture(scope="session")
-def level4(level3: DayAveragedData, settings: Path, integration_test_data: Path):
-    with open(settings / "level4.yml") as fl:
+def model_step(filter_step, settings: Path, integration_test_data: Path):
+    with open(settings / "model.yml") as fl:
         s = yaml.load(fl, Loader=yaml.FullLoader)
 
-    return BinnedData.promote(level3, filename=integration_test_data / "level4/out.h5", **s)
+    return [
+        ModelData.promote(obj, filename=integration_test_data / f"model/{obj.day}.h5", **s)
+        for obj in filter_step
+    ]
+
+
+@pytest.fixture(scope="session")
+def combo_step(model_step, settings: Path, integration_test_data: Path):
+    with open(settings / "combine.yml") as fl:
+        s = yaml.load(fl, Loader=yaml.FullLoader)
+
+    return CombinedData.promote(model_step, filename=integration_test_data / "combined.h5", **s)
+
+
+@pytest.fixture(scope="session")
+def day_step(combo_step: CombinedData, settings: Path, integration_test_data: Path):
+    with open(settings / "day_average.yml") as fl:
+        s = yaml.load(fl, Loader=yaml.FullLoader)
+
+    return DayAveragedData.promote(
+        combo_step, filename=integration_test_data / "day_averaged.h5", **s
+    )
+
+
+@pytest.fixture(scope="session")
+def gha_step(day_step: DayAveragedData, settings: Path, integration_test_data: Path):
+    with open(settings / "gha_average.yml") as fl:
+        s = yaml.load(fl, Loader=yaml.FullLoader)
+
+    return BinnedData.promote(day_step, filename=integration_test_data / "gha_averaged.h5", **s)
 
 
 @pytest.fixture(scope="session")
