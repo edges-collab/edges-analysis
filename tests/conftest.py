@@ -133,7 +133,7 @@ def gha_step(day_step: DayAveragedData, settings: Path, integration_test_data: P
 
 
 @pytest.fixture(scope="session")
-def mock_level1_list(tmp_path_factory) -> CalibratedData:
+def mock_calibrated_data(tmp_path_factory) -> CalibratedData:
     np.random.seed(1234)
     tmp_path = tmp_path_factory.mktemp("mock-data")
 
@@ -149,6 +149,9 @@ def mock_level1_list(tmp_path_factory) -> CalibratedData:
 
     anc = CalibratedData.get_ancillary_coords(CalibratedData.get_datetimes(time_strings))
     anc["times"] = time_strings
+    anc["ambient_hum"] = np.zeros(len(time_strings))
+    anc["receiver_temp"] = np.ones(len(time_strings)) * 25
+
     gha_model = 10000 * (1 + np.sin(2 * np.pi * (anc["gha"] - 18) / 24))
 
     mdl = LinLog(default_x=freq, n_terms=2)
@@ -174,12 +177,8 @@ def mock_level1_list(tmp_path_factory) -> CalibratedData:
                 "hour": 1,
                 "band": "low",
                 "xrfi_pipe": {},
-                "write_time": dt.datetime.now(),
-                "edges_io_version": __version__,
-                "object_name": "Level1",
-                "edges_analysis_version": eav,
-                "message": "",
             },
         },
-        filename=tmp_path / "mock_level1_0.h5",
+        filename=tmp_path / "mock_calibrated_data_0.h5",
+        validate=False,
     )

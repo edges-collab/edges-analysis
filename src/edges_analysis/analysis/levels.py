@@ -257,7 +257,6 @@ class _ReductionStep(HDF5Object):
             prev_step = _validate_obj(prev_step)
 
         freq, data, ancillary, meta = cls._promote(prev_step, **kwargs)
-        print("initial meta: ", meta)
         meta["parent_files"] = (
             ":".join(str(p.filename) for p in prev_step)
             if isinstance(prev_step, list)
@@ -273,7 +272,6 @@ class _ReductionStep(HDF5Object):
             {"frequency": freq, "spectra": data, "ancillary": ancillary, "meta": meta},
             validate=False,
         )
-        print("final meta: ", out.meta)
         if filename:
             out.write(filename)
 

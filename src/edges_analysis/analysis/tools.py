@@ -319,10 +319,15 @@ def bin_array(
 
     if bins is None:
         bins = np.array([coords[0], coords[-1] + 0.1])
-    elif isinstance(bins, int):
-        bins = np.concatenate((coords[::bins], [coords[-1] + 0.1]))
-    elif isinstance(bins, float):
-        bins = np.concatenate((np.arange(coords[0], coords[-1], bins), [coords[-1] + 0.1]))
+    elif hasattr(bins, "__len__"):
+        bins = np.array(bins)
+    else:
+        try:
+            # works if its an integer
+            bins = np.concatenate((coords[::bins], [coords[-1] + 0.1]))
+        except TypeError:
+            # works if its a float
+            bins = np.concatenate((np.arange(coords[0], coords[-1], bins), [coords[-1] + 0.1]))
 
     # Get a list of tuples of bin edges
     bins = [(b, bins[i + 1]) for i, b in enumerate(bins[:-1])]
