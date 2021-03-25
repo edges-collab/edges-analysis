@@ -16,3 +16,4 @@ dependencies:
     - bidict
     - rich
     - sphinx-rtd-theme
+    - sphinx_click
