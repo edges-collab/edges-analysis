@@ -3,17 +3,30 @@ channels:
   - conda-forge
 
 dependencies:
-  - pip
-  - ipython
-  - nbsphinx
-  - numpydoc
-  - sphinx>=2.0
-  - numpy
-  - scipy
-  - h5py
-  - pyyaml
+  - pip==20.3
+  - ipython==7.4.0
+  - nbsphinx==0.8.2
+  - numpydoc==1.1.0
+  - sphinx>=3.5
+  - numpy==1.16.2
+  - scipy==1.2.1
+  - pyyaml==5.1
+  - matplotlib==3.1.0
+  - astropy==3.2.3
+  - h5py==2.10.0
+  - requests==2.23.0
+  - tqdm==4.54.0
+  - attrs==20.3.0
   - pip:
-    - bidict
-    - rich
+    - bidict==0.18.3
     - sphinx-rtd-theme
     - sphinx_click
+    - cached_property==1.5.1
+    - edges-io @ git+git://github.com/edges-collab/edges-io.git
+    - edges-cal @ git+git://github.com/edges-collab/edges-cal.git
+    - healpy==1.13.0
+    - rich==9.9.0
+    - pygsm @ git+git://github.com/telegraphic/pygsm.git
+    - methodtools==0.4.2
+    - p_tqdm==1.3.3
+    - questionary==1.9.0
