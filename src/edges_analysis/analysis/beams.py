@@ -489,8 +489,8 @@ def sky_convolution_generator(
     n_pixels
         The total number of pixels that are not masked.
 
-    Usage
-    -----
+    Examples
+    --------
     Use this function as follows:
 
     >>> for i, j, mean_temp, conv_temp, sky, beam, time, n_pixels in sky_convolution_generator():

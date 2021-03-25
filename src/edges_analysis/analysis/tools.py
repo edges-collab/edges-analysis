@@ -797,7 +797,6 @@ def model_bin_gha(
     Data can be in the form of multiple observations, each of which has a "model" fit
     to it (eg. multiple GHA's with a model over frequency for each).
 
-    See
     Parameters
     ----------
     params

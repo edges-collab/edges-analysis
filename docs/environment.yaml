@@ -1,0 +1,18 @@
+channels:
+  - defaults
+  - conda-forge
+
+dependencies:
+  - pip
+  - ipython
+  - nbsphinx
+  - numpydoc
+  - sphinx>=2.0
+  - numpy
+  - scipy
+  - h5py
+  - pyyaml
+  - pip:
+    - bidict
+    - rich
+    - sphinx-rtd-theme

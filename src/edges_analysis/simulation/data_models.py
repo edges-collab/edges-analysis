@@ -8,7 +8,6 @@ from edges_cal.cal_coefficients import EdgesFrequencyRange
 
 from ..analysis.loss import balun_and_connector_loss
 from ..analysis.s11 import antenna_s11_remove_delay
-from ..estimation import models
 from ..config import config
 
 
@@ -94,25 +93,6 @@ def foreground_model(model_type, theta_fg, v, vr, ion_abs_coeff="free", ion_emi_
 
         model_fg = (astro_fg * ionos_abs) + ionos_emi
     return model_fg
-
-
-def signal_model(model_type, theta, v):
-    return models.model_eor_flattened_gaussian(
-        v, model_type=["exp", "tanh"].index(model_type), *theta
-    )
-
-
-def full_model(theta, v, vr, model_type_signal="exp", model_type_foreground="exp", n_21=4):
-    model_21 = 0
-    if n_21:
-        model_21 = signal_model(model_type_signal, theta[:n_21], v)
-
-    # Foreground model
-    model_fg = foreground_model(
-        model_type_foreground, theta[n_21:], v, vr, ion_abs_coeff=0, ion_emi_coeff=0
-    )
-
-    return model_21 + model_fg
 
 
 def spectrum_channel_to_channel_difference(f, t, w, f_low, f_high, n_fg=5):

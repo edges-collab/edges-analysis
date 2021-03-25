@@ -965,18 +965,18 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
 
     This object essentially represents a Calibrated spectrum.
 
-    See :class:`_Level` for documentation about the various datasets within this class
+    See :class:`_ReductionStep` for documentation about the various datasets within this class
     instance. Note that you can always check which data is inside each group by checking
     its ``.keys()``.
 
     Create the class either directly from a level-1 file (via normal instantiation), or
-    by calling :method:`from_acq` on a raw ACQ file (this does the calibration).
+    by calling :meth:`from_acq` on a raw ACQ file (this does the calibration).
 
     The data at this level have (in this order):
 
     * Calibration applied from existing calibration solutions
     * Collected associated weather and thermal auxiliary data (not used at this level,
-    just collected)
+      just collected)
     * Potential xRFI applied to the raw switch powers individually.
     """
 
@@ -2138,7 +2138,7 @@ class CombinedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
     instance. Note that you can always check which data is inside each group by checking
     its ``.keys()``.
 
-    See :method:`CombinedData.promote` for detailed information about the processes
+    See :meth:`CombinedData.promote` for detailed information about the processes
     involved in creating this data from :class:`Level1` objects.
     """
 
@@ -2488,17 +2488,11 @@ class CombinedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
 @add_structure
 class DayAveragedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
     """
-    Object representing a Level-3 Calibrated Data Set.
+    Object representing a dataset that is averaged over days.
 
-    Level 3 primarily represents an average over the nights recorded in a Level2 object,
-    keeping the same GHA grid.
-
-    See :class:`_Level` for documentation about the various datasets within this class
+    See :class:`_ReductionStep` for documentation about the various datasets within this class
     instance. Note that you can always check which data is inside each group by checking
     its ``.keys()``.
-
-    See :method:`Level3.from_previous_level` for detailed information about the processes
-    involved in creating this data from a :class:`Level2` object.
     """
 
     _possible_parents = (CombinedData,)

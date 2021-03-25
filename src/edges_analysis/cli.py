@@ -151,18 +151,66 @@ def expand_colon(pth: str, band: str = "", raw=True) -> Path:
     ),
 )
 @click.argument("settings", type=click.Path(dir_okay=False, exists=True))
-@click.option("-i", "--path", type=click.Path(dir_okay=True), multiple=True)
-@click.option("-l", "--label", default="")
-@click.option("-m", "--message", default="")
-@click.option("-x/-X", "--xrfi/--no-xrfi", default=True, help="manually turn off xRFI")
+@click.option(
+    "-i",
+    "--path",
+    type=click.Path(dir_okay=True),
+    multiple=True,
+    help="""The path(s) to input files. Multiple specifications of ``-i`` can be included.
+    Each input path may have glob-style wildcards, eg. ``/path/to/file.*``. If the path
+    is a directory, all HDF5/ACQ files in the directory will be used. You may prefix the
+    path with a colon to indicate the "standard" location (given by ``config['paths']``),
+    e.g. ``-i :big-calibration/``.
+    """,
+)
+@click.option(
+    "-l",
+    "--label",
+    default="",
+    help="""A label for the output. This label should be unique to the input settings
+    (but may be applied to different input files). If the same label is used for different
+    settings, the existing processed data will be removed (after prompting).
+    """,
+)
+@click.option(
+    "-m",
+    "--message",
+    default="",
+    help="""A message to save with the data. The message will be saved in a README.txt
+    file alongside the output data file(s). It is intended to provide a human-understandable
+    "reason" for running the particular analysis with the particular settings.
+    """,
+)
+@click.option(
+    "-x/-X",
+    "--xrfi/--no-xrfi",
+    default=True,
+    help="Manually turn off xRFI. Useful to quickly shut off xRFI without changing settings.",
+)
 @click.option(
     "-c/-C",
     "--clobber/--no-clobber",
-    help="whether to overwrite any existing data at the output location",
+    help="Whether to overwrite any existing data at the output location",
 )
-@click.option("-j", "--nthreads", default=1, help="how many threads to use")
+@click.option("-j", "--nthreads", default=1, help="How many threads to use.")
 @click.pass_context
 def process(ctx, step, settings, path, label, message, xrfi, clobber, nthreads):
+    """Process a dataset to the STEP level of averaging/filtering using SETTINGS.
+
+    STEP
+        defines the analysis step as a string. Each of the steps should be applied
+        in turn.
+    SETTINGS
+        is a YAML settings file. The available settings for each step can be seen
+        in the respective documentation for the classes "promote" method.
+
+    Each STEP should take one or more ``--input`` files that are the output of a previous
+    step. The first step (``calibrate``) should take raw ``.acq`` or ``.h5`` spectrum
+    files.
+
+    The output files are placed in a directory inside the input file directory, with a
+    name determined by the ``--label``.
+    """
     console.print(
         Panel(f"edges-analysis [blue]{step}[/]", box=box.DOUBLE_EDGE),
         style="bold",
