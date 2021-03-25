@@ -20,6 +20,7 @@
 
    .. autosummary::
       :toctree: {{ objname }}
+      :template: class.rst
    {% for item in classes %}
       {{ item }}
    {%- endfor %}

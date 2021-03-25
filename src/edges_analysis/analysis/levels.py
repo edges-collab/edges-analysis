@@ -153,6 +153,7 @@ class _ReductionStep(HDF5Object):
     _spectra_structure = {}
     _spec_dim = 2
     _possible_parents = tuple()
+    _self_parent = False
     default_root = config["paths"]["field_products"]
     _multi_input = False
     _ancillary = {}
@@ -240,7 +241,7 @@ class _ReductionStep(HDF5Object):
                     warnings.filterwarnings(action="ignore", category=UserWarning)
                     return read_step(obj)
             elif isinstance(obj, cls._possible_parents) or (
-                "self" in cls._possible_parents and obj.__class__ == cls
+                cls._self_parent and obj.__class__ == cls
             ):
                 return obj
             else:
@@ -275,16 +276,20 @@ class _ReductionStep(HDF5Object):
         if filename:
             out.write(filename)
 
+        out._parent = prev_step
         return out
 
     @cached_property
     def parent(self) -> [_ReductionStep, io.Spectrum, List[Union[_ReductionStep, io.Spectrum]]]:
-        filenames = self.meta["parent_files"].split(":")
+        try:
+            return self._parent
+        except AttributeError:
+            filenames = self.meta["parent_files"].split(":")
 
-        if len(filenames) == 1:
-            return read_step(filenames[0])
-        else:
-            return [read_step(fname) for fname in filenames]
+            if len(filenames) == 1:
+                return read_step(filenames[0])
+            else:
+                return [read_step(fname) for fname in filenames]
 
     @property
     def meta(self):
@@ -837,12 +842,28 @@ class _SingleDayMixin:
         return {band: np.array([r[band] for r in res]) for band in res[0]}
 
     def plot_waterfall(
-        self, quantity: str = "spectrum", ax: [None, plt.Axes] = None, cbar=True, **imshow_kwargs
+        self,
+        quantity: str = "spectrum",
+        flagged: [str, bool] = True,
+        ax: [None, plt.Axes] = None,
+        cbar=True,
+        xlab=True,
+        ylab=True,
+        title=True,
+        **imshow_kwargs,
     ):
         if quantity in ["p0", "p1", "p2"]:
-            q = self.calibration_data.spectra["switch_powers"][int(quantity[-1])]
+            q = self.calibration_step.spectra["switch_powers"][int(quantity[-1])]
+        elif quantity == "Q":
+            q = self.calibration_step.spectra["Q"]
         else:
             q = getattr(self, quantity)
+
+        if flagged:
+            if isinstance(flagged, bool):
+                q = np.where(self.weights, q, np.nan)
+            else:
+                q = np.where(self.filter_step.ancillary[f"{flagged}_flags"], np.nan, q)
 
         if ax is not None:
             fig = ax.figure
@@ -856,6 +877,18 @@ class _SingleDayMixin:
 
         sec = self.calibration_step.ancillary["seconds"]
 
+        if quantity == "spectrum":
+            vmax = imshow_kwargs.pop("vmax", 13000)
+        elif quantity == "Q":
+            vmax = imshow_kwargs.pop("vmax", 7)
+        elif quantity == "p0":
+            vmax = imshow_kwargs.pop("vmax", 5e-8)
+        elif quantity == "resids":
+            vmin = imshow_kwargs.pop("vmin", -np.nanmax(np.abs(q)))
+            vmax = imshow_kwargs.pop("vmax", -vmin)
+        else:
+            vmax = imshow_kwargs.pop("vmax", None)
+
         img = ax.imshow(
             q,
             origin="lower",
@@ -867,12 +900,17 @@ class _SingleDayMixin:
             ),
             cmap=cmap,
             aspect="auto",
+            vmax=vmax,
+            interpolation="none",
             **imshow_kwargs,
         )
 
-        ax.set_xlabel("Frequency [MHz]")
-        ax.set_ylabel("Hours into Observation")
-        ax.set_title(f"{self.datestring}. GHA0={self.gha[0]:.2f}")
+        if xlab:
+            ax.set_xlabel("Frequency [MHz]")
+        if ylab:
+            ax.set_ylabel("Hours into Observation")
+        if title:
+            ax.set_title(f"{self.datestring}. GHA0={self.gha[0]:.2f}")
 
         if cbar:
             cb = plt.colorbar(img, ax=ax)
@@ -894,7 +932,9 @@ class _SingleDayMixin:
         )
 
         for i, (q, axx) in enumerate(zip(quanties, ax)):
-            self.plot_waterfall(q, ax=axx, **imshow_kwargs)
+            self.plot_waterfall(
+                q, ax=axx, **imshow_kwargs.get(q, {}), xlab=i == (len(quanties) - 1), title=i == 0
+            )
 
         return fig, ax
 
@@ -1835,7 +1875,8 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
 @add_structure
 class FilteredData(_ReductionStep, _SingleDayMixin):
     _meta = {"flagged": lambda x: isinstance(x, (bool, np.bool_))}
-    _possible_parents = (CalibratedData, "self")
+    _possible_parents = (CalibratedData,)
+    _self_parent = True
 
     _ancillary = {
         "aux_flags": is_array("bool", 2),
@@ -2332,6 +2373,10 @@ class CombinedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         days
             The integer day numbers to include in the plot. Default is to include
             all days in the dataset.
+        weights
+            The weights to use for flagging. By default, use the weights of the object.
+            If 'old' is given, use the pre-filter weights. Otherwise, must be an array
+            the same size as the spectrum/resids.
 
         Returns
         -------
@@ -2389,11 +2434,17 @@ class CombinedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         self,
         day: Optional[int] = None,
         indx: Optional[int] = None,
-        flagged: bool = False,
+        flagged: bool = True,
         quantity: str = "spectrum",
         cmap: Optional[str] = None,
         vmin: Optional[float] = None,
         vmax: Optional[float] = None,
+        weights: Optional[np.ndarray, str] = None,
+        ax: Optional[plt.Axes] = None,
+        cbar: bool = True,
+        xlab: bool = True,
+        ylab: bool = True,
+        title: bool = True,
         **imshow_kwargs,
     ):
         """
@@ -2418,6 +2469,10 @@ class CombinedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
             data symmetrically if plotting residuals (so that zeros are in the middle).
         vmax
             Same as vmin but the max.
+        weights
+            The weights to use for flagging. By default, use the weights of the object.
+            If 'old' is given, use the pre-filter weights. Otherwise, must be an array
+            the same size as the spectrum/resids.
 
         Other Parameters
         ----------------
@@ -2436,18 +2491,28 @@ class CombinedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
             self.ancillary["gha_edges"].max(),
         )
 
-        q = getattr(self, quantity)
-        assert q.shape == self.resids.shape
+        q = getattr(self, quantity)[indx]
+        assert q.shape == self.resids[indx].shape
 
-        q = np.where(self.weights[indx] > 0, q[indx], np.nan) if flagged else q[indx]
+        if flagged:
+            if weights is None:
+                weights = self.weights[indx]
+            elif weights == "old":
+                weights = self.ancillary["pre_filter_weights"][indx]
+
+            q = np.where(weights, q, np.nan)
+
         if quantity == "resids":
             cmap = cmap or "coolwarm"
 
             if vmin is None:
-                vmin = -np.max(np.abs(q))
+                vmin = -np.nanmax(np.abs(q))
                 vmax = -vmin
         else:
             cmap = cmap or "magma"
+
+        if ax:
+            plt.sca(ax)
 
         plt.imshow(
             q,
@@ -2457,12 +2522,19 @@ class CombinedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
             cmap=cmap,
             vmin=vmin,
             vmax=vmax,
+            interpolation=imshow_kwargs.pop("interpolation", "none"),
             **imshow_kwargs,
         )
 
-        plt.xlabel("Frequency [MHz]")
-        plt.ylabel("GHA (hours)")
-        plt.title(f"Level2 {self.dates[indx][0]}-{self.dates[indx][1]}")
+        if xlab:
+            plt.xlabel("Frequency [MHz]")
+        if ylab:
+            plt.ylabel("GHA (hours)")
+        if title:
+            plt.title(f"{self.dates[indx][0]}-{self.dates[indx][1]}")
+
+        if cbar:
+            plt.colorbar()
 
     def day_index(self, day: int) -> int:
         """
@@ -2603,11 +2675,16 @@ class DayAveragedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
 
     def bin_gha(
         self,
-        gha_min: float,
-        gha_max: float,
+        gha_min: Optional[float] = None,
+        gha_max: Optional[float] = None,
         gha_bin_size: float = 1.0,
         weights: Optional[Union[np.ndarray, str]] = None,
     ):
+        if gha_min is None:
+            gha_min = self.gha_edges.min()
+        if gha_max is None:
+            gha_max = self.gha_edges.max()
+
         gha_edges = np.arange(gha_min, gha_max, gha_bin_size)
         if np.isclose(gha_max, gha_edges.max() + gha_bin_size):
             gha_edges = np.concatenate((gha_edges, [gha_edges.max() + gha_bin_size]))
@@ -2647,14 +2724,15 @@ class DayAveragedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
 
     def plot_resids(
         self,
-        gha_min: float,
-        gha_max: float,
+        gha_min: Optional[float] = None,
+        gha_max: Optional[float] = None,
         weights: Optional[Union[np.ndarray, str]] = None,
         gha_bin_size: float = 1.0,
         ax: plt.Axes = None,
         freq_resolution=0,
         separation=10,
     ):
+
         params, resids, weights, gha_edges = self.bin_gha(
             gha_min, gha_max, gha_bin_size=gha_bin_size, weights=weights
         )
@@ -2695,7 +2773,8 @@ class BinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
     that is as averaged as one wants.
     """
 
-    _possible_parents = (DayAveragedData, "self")
+    _possible_parents = (DayAveragedData,)
+    _self_parent = True
     _ancillary = {
         "years": is_array("int", 1),
         "days": is_array("int", 1),

@@ -1,0 +1,36 @@
+# Filter on auxiliary information
+sun_el_max: -10
+moon_el_max: 90
+ambient_humidity_max: 40
+min_receiver_temp: 0
+max_receiver_temp: 100
+
+do_total_power_filter: true
+n_poly_tp_filter: 3
+n_sigma_tp_filter: 3.0
+bands_tp_filter: null # whole band
+
+negative_power_filter: true
+
+# How to filter out RFI
+xrfi_pipe:
+  xrfi_model:
+    model_type: linlog
+    beta: -2.5
+    max_iter: 15
+    increase_order: true
+    threshold: 6
+    decrement_threshold: 1
+    min_threshold: 4
+    min_terms: 4
+    max_terms: 7
+    n_signal: 3
+    n_resid: 3
+    watershed: 4
+    init_flags: [90., 100.0]
+
+  xrfi_watershed:
+    tol: 0.7
+
+
+n_threads: 32

@@ -100,8 +100,12 @@ def get_output_dir(prefix, label, settings):
     out = Path(prefix) / label
 
     if out.exists():
-        with open(out / "settings.yaml") as fl:
-            existing_settings = yaml.load(fl, Loader=yaml.FullLoader)
+        try:
+            with open(out / "settings.yaml") as fl:
+                existing_settings = yaml.load(fl, Loader=yaml.FullLoader)
+        except FileNotFoundError:
+            # Empty directory most likely due to an error in a previous run.
+            return out
 
         if existing_settings != settings:
             tab = Table("existing", "proposed", width=console.width)
@@ -192,9 +196,15 @@ def expand_colon(pth: str, band: str = "", raw=True) -> Path:
     "--clobber/--no-clobber",
     help="Whether to overwrite any existing data at the output location",
 )
+@click.option(
+    "-o",
+    "--output",
+    default="",
+    help="Name of an output file. Only required for the 'combine' step.",
+)
 @click.option("-j", "--nthreads", default=1, help="How many threads to use.")
 @click.pass_context
-def process(ctx, step, settings, path, label, message, xrfi, clobber, nthreads):
+def process(ctx, step, settings, path, label, message, xrfi, clobber, output, nthreads):
     """Process a dataset to the STEP level of averaging/filtering using SETTINGS.
 
     STEP
@@ -277,18 +287,21 @@ def process(ctx, step, settings, path, label, message, xrfi, clobber, nthreads):
     # In most cases, the output filename will be the same as the (sole) input.
     # However, when combining files, we need some extra label.
     if step == "combine":
-        output_fname = [
-            Path(qs.text("Provide a filename for the output combined file:").ask()).with_suffix(
-                ".h5"
-            )
-        ]
+        if not output:
+            output = [
+                Path(qs.text("Provide a filename for the output combined file:").ask()).with_suffix(
+                    ".h5"
+                )
+            ]
+        else:
+            output = [Path(output).with_suffix(".h5")]
     elif step != "calibrate":
-        output_fname = [p.name for p in input_files]
+        output = [p.name for p in input_files]
     else:
-        output_fname = None
+        output = None
 
-    if output_fname:
-        for pth in output_fname:
+    if output:
+        for pth in output:
             if (output_dir / pth).exists():
                 if clobber:
                     (output_dir / pth).unlink()
@@ -307,7 +320,7 @@ def process(ctx, step, settings, path, label, message, xrfi, clobber, nthreads):
     # Actually call the relevant function
     console.print()
     console.print(Rule("Beginning Processing"))
-    out_paths = promote(input_files, nthreads, output_dir, output_fname, step_cls, settings)
+    out_paths = promote(input_files, nthreads, output_dir, output, step_cls, settings)
     console.print(Rule("Done Processing"))
 
     for pth in out_paths:
@@ -323,7 +336,7 @@ def process(ctx, step, settings, path, label, message, xrfi, clobber, nthreads):
         )
     else:
         console.print("[bold]Output Files:")
-        for fname in output_fname:
+        for fname in output:
             console.print(f"\t[bold]{output_dir}/{fname}")
 
 

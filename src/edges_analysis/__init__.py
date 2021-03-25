@@ -10,6 +10,7 @@ finally:
 
 from . import analysis
 from . import simulation
+from .config import config as cfg
 
 from .analysis import (
     tools,
