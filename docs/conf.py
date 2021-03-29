@@ -10,50 +10,9 @@
 
 import os
 import sys
-import inspect
-import shutil
+from pathlib import Path
 
-__location__ = os.path.join(os.getcwd(), os.path.dirname(inspect.getfile(inspect.currentframe())))
-
-# If extensions (or modules to document with autodoc) are in another directory,
-# add these directories to sys.path here. If the directory is relative to the
-# documentation root, use os.path.abspath to make it absolute, like shown here.
-sys.path.insert(0, os.path.join(__location__, "../src"))
-
-# -- Run sphinx-apidoc ------------------------------------------------------
-# This hack is necessary since RTD does not issue `sphinx-apidoc` before running
-# `sphinx-build -b html . _build/html`. See Issue:
-# https://github.com/rtfd/readthedocs.org/issues/1139
-# DON'T FORGET: Check the box "Install your project inside a virtualenv using
-# setup.py install" in the RTD Advanced Settings.
-# Additionally it helps us to avoid running apidoc manually
-
-try:  # for Sphinx >= 1.7
-    from sphinx.ext import apidoc
-except ImportError:
-    from sphinx import apidoc
-
-output_dir = os.path.join(__location__, "api")
-module_dir = os.path.join(__location__, "../src/edges_analysis")
-try:
-    shutil.rmtree(output_dir)
-except FileNotFoundError:
-    pass
-
-try:
-    import sphinx
-    from pkg_resources import parse_version
-
-    cmd_line_template = "sphinx-apidoc -f -o {outputdir} {moduledir}"
-    cmd_line = cmd_line_template.format(outputdir=output_dir, moduledir=module_dir)
-
-    args = cmd_line.split(" ")
-    if parse_version(sphinx.__version__) >= parse_version("1.7"):
-        args = args[1:]
-
-    apidoc.main(args)
-except Exception as e:
-    print("Running `sphinx-apidoc` failed!\n{}".format(e))
+sys.path.insert(0, str(Path(__file__).absolute().parent.parent / "src"))
 
 # -- General configuration -----------------------------------------------------
 
@@ -73,10 +32,34 @@ extensions = [
     "sphinx.ext.ifconfig",
     "sphinx.ext.mathjax",
     "sphinx.ext.napoleon",
+    "sphinx.ext.autosectionlabel",
+    "numpydoc",
+    "nbsphinx",
+    "IPython.sphinxext.ipython_console_highlighting",
+    "sphinx_click",
+]
+
+autosectionlabel_prefix_document = True
+
+autosummary_generate = True
+numpydoc_show_class_members = False
+
+napoleon_use_ivar = True
+napoleon_use_rtype = False
+napoleon_use_param = False
+
+mathjax_path = "http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"
+
+exclude_patterns = [
+    "_build",
+    "Thumbs.db",
+    ".DS_Store",
+    "templates",
+    "**.ipynb_checkpoints",
 ]
 
 # Add any paths that contain templates here, relative to this directory.
-templates_path = ["_templates"]
+templates_path = ["templates"]
 
 # The suffix of source filenames.
 source_suffix = ".rst"
@@ -112,7 +95,7 @@ release = ""  # Is set by calling `setup.py docs`
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
-exclude_patterns = ["_build"]
+# exclude_patterns = ["_build"]
 
 # The reST default role (used for this markup: `text`) to use for all documents.
 # default_role = None
@@ -142,12 +125,17 @@ pygments_style = "sphinx"
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
-html_theme = "alabaster"
+# on_rtd is whether we are on readthedocs.org
+on_rtd = os.environ.get("READTHEDOCS", None) == "True"
+
+if not on_rtd:  # only set the theme if we're building docs locally
+    html_theme = "sphinx_rtd_theme"
+
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
 # documentation.
-html_theme_options = {"sidebar_width": "300px", "page_width": "1200px"}
+# html_theme_options = {"sidebar_width": "300px", "page_width": "1200px"}
 
 # Add any paths that contain custom themes here, relative to this directory.
 # html_theme_path = []

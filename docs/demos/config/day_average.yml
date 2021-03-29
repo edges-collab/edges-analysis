@@ -1,0 +1,21 @@
+day_range: null
+ignore_days: null
+
+xrfi_on_resids: false
+xrfi_pipe:
+  xrfi_model:
+    model_type: linlog
+    beta: -2.55
+    max_iter: 15
+    increase_order: true
+    threshold: 4.5
+    decrement_threshold: 1
+    min_threshold: 3.5
+    min_terms: 5
+    max_terms: 7
+    n_signal: 4
+    n_resid: 3
+    watershed: 4
+
+  xrfi_watershed:
+    tol: 0.7

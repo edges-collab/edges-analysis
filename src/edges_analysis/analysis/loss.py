@@ -2,12 +2,11 @@ from pathlib import Path
 import numpy as np
 from edges_cal import reflection_coefficient as rc
 from ..config import config
-import warnings
 
 
 def balun_and_connector_loss(
-    band,
-    f,
+    band: str,
+    freq,
     gamma_ant,
     monte_carlo_flags=(False, False, False, False, False, False, False, False),
 ):
@@ -18,7 +17,7 @@ def balun_and_connector_loss(
     ----------
     band : str {'low3', 'mid'}
         Parameters of the loss are different for each antenna.
-    f : array-like
+    freq : array-like
         Frequency in MHz
     gamma_ant: float
         Reflection coefficient of antenna at the reference plane, the LNA input.
@@ -41,7 +40,7 @@ def balun_and_connector_loss(
         The connector loss
     """
     # Angular frequency
-    w = 2 * np.pi * f * 1e6
+    w = 2 * np.pi * freq * 1e6
 
     # Inch-to-meters conversion
     inch2m = 1 / 39.370
@@ -196,7 +195,7 @@ def balun_and_connector_loss(
 
     # Impedance of Agilent terminations
     Zref = 50
-    Ropen, Rshort, Rmatch = rc.agilent_85033E(f * 1e6, Zref, 1)
+    Ropen, Rshort, Rmatch = rc.agilent_85033E(freq * 1e6, Zref, 1)
 
     def get_gamma(R):
         Z = rc.gamma2impedance(R, Zref)

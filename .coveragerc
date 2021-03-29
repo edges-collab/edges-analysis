@@ -1,8 +1,9 @@
 # .coveragerc to control coverage.py
 [run]
 branch = True
-source = cal_coefficients
-# omit = bad_file.py
+source = edges_analysis
+omit =
+    src/edges_analysis/simulation/*
 
 [paths]
 source =

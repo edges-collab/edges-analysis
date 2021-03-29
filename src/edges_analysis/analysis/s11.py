@@ -2,12 +2,19 @@ import numpy as np
 from edges_io import io
 from edges_cal.reflection_coefficient import de_embed
 from edges_cal.s11_correction import get_switch_correction
+from typing import Sequence, Union
+from pathlib import Path
 
 
-def get_corrected_s11(files, switch_state_dir, switch_state_run_num=None, n_fit_terms=23):
+def get_corrected_s11(
+    files: Sequence[Union[str, Path]],
+    switch_state_dir: [str, Path],
+    switch_state_repeat_num: [None, int] = None,
+    n_fit_terms: int = 23,
+):
     assert len(files) == 4
 
-    standards = [io.S1P.read(fl)[0] for fl in files]
+    standards = [io.S1P.read(fl)[0] for fl in sorted(files)]
     f = io.S1P.read(files[0])[1]
 
     sw = {
@@ -19,7 +26,9 @@ def get_corrected_s11(files, switch_state_dir, switch_state_run_num=None, n_fit_
     # Correction at switch
     a_sw_c, x1, x2, x3 = de_embed(sw["o"], sw["s"], sw["l"], *standards)
 
-    switch_state = io.SwitchingState(switch_state_dir, run_num=switch_state_run_num, fix=False)
+    switch_state = io.SwitchingState(
+        switch_state_dir, repeat_num=switch_state_repeat_num, fix=False
+    )
 
     # Correction at receiver input
     return (
@@ -29,28 +38,35 @@ def get_corrected_s11(files, switch_state_dir, switch_state_run_num=None, n_fit_
 
 
 def antenna_s11_remove_delay(
-    s11_files,
-    f,
-    switch_state_dir,
-    delay_0=0.17,
-    n_fit=10,
-    n_fourier=23,
-    switch_state_run_num=None,
+    s11_files: Sequence[Union[str, Path]],
+    switch_state_dir: [str, Path],
+    f_low: float = -np.inf,
+    f_high: float = np.inf,
+    delay_0: float = 0.17,
+    n_fit: int = 10,
+    n_fourier: int = 23,
+    switch_state_repeat_num: [int, None] = None,
 ):
     """
     Remove delay from antenna S11.
 
     Parameters
     ----------
-    s11_path : str
-        Path to a file with the S11 data in it.
-    f : array-like
-        Frequencies at which to return *output*, in MHz.
-    delay_0 : float, optional
+    s11_files
+        Paths to four files with the S11 data in them.
+    switch_state_dir
+        The directory containing the switching_state measurements to use.
+    f_low, f_high
+        The min/max frequencies for which to perform the fit.
+    delay_0
         Delay of the antenna (at 1 MHz?)
-    n_fit : int, optional
+    n_fit
         Number of terms in polynomial fit to the S11, in order to recast at new
         frequencies.
+    n_fourier
+        Number of terms to use in getting switch correction.
+    switch_state_repeat_num
+        The repeat number to use when getting the switching state measurements.
 
     Returns
     -------
@@ -61,16 +77,8 @@ def antenna_s11_remove_delay(
         s11_files,
         switch_state_dir,
         n_fit_terms=n_fourier,
-        switch_state_run_num=switch_state_run_num,
+        switch_state_repeat_num=switch_state_repeat_num,
     )
-
-    f_low = np.min(f)
-    f_high = np.max(f)
-
-    if f_orig.min() > f_low:
-        raise ValueError("Would be extrapolating beyond low end of frequency.")
-    if f_orig.max() < f_high:
-        raise ValueError("Would be extrapolating beyond high end of frequency.")
 
     mask = (f_orig >= f_low) & (f_orig <= f_high)
     gamma = gamma[mask]

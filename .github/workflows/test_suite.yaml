@@ -8,8 +8,7 @@ on:
     tags-ignore:
       - 'v*'
   pull_request:
-    branches:
-      - 'master'
+
 
 jobs:
   tests:
@@ -27,7 +26,7 @@ jobs:
     steps:
       - uses: actions/checkout@master
         with:
-          fetch-depth: 1
+          fetch-depth: 0
       - uses: actions/setup-python@v2
         with:
           python-version: ${{ matrix.python-version }}
@@ -39,7 +38,7 @@ jobs:
           pip install .[dev]
       - name: Run Tests
         run: |
-          python -m pytest --cov=edges_analysis --cov-config=.coveragerc --cov-report xml:./coverage.xml --durations=25
+          python -m pytest --cov-report xml:./coverage.xml
       - uses: codecov/codecov-action@master
         if: matrix.os == 'ubuntu-latest' && success()
         with:

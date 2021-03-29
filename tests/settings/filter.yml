@@ -1,0 +1,35 @@
+# Filter on auxiliary information
+sun_el_max: 90
+moon_el_max: 90
+ambient_humidity_max: 100
+min_receiver_temp: 0
+max_receiver_temp: 200
+
+# Perform a time-based filter on simple residual RMS
+rms_filter_file: null
+
+
+# Perform a filter over mean power in the whole band
+do_total_power_filter: false
+n_poly_tp_filter: 3
+n_sigma_tp_filter: 3.0
+bands_tp_filter: null # whole band
+std_thresholds_tp_filter: null #doesnt implement
+
+
+# How to filter out RFI
+xrfi_pipe:
+  xrfi_model:
+    n_signal: 6
+    n_resid: 6
+    threshold: 4
+    max_iter: 20
+    increase_order: false
+    decrement_threshold: 0
+    min_threshold: 3
+    watershed: 4
+  xrfi_watershed:
+        tol: 0.7
+
+
+n_threads: 32

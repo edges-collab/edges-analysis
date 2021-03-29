@@ -1,47 +1,68 @@
 from __future__ import annotations
-from pathlib import Path
-import numpy as np
-from typing import Tuple, List, Sequence, Dict, Union
+
+import logging
 from dataclasses import dataclass
-import h5py
-import yaml
-from edges_io.logging import logger
-from multiprocess.pool import Pool
 from multiprocessing import cpu_count
+from pathlib import Path
+from typing import Tuple, List, Sequence, Dict
+
+import h5py
+import numpy as np
+import yaml
+from multiprocess.pool import Pool
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
 class RMSInfo:
     gha: np.ndarray
+    model_params: dict
+    meta: dict
     rms: dict
     flags: dict
-    models: dict
+    model_eval: dict
     abs_resids: dict
     model_stds: dict
     poly_params: dict
     poly_params_std: dict
-    bands: List[Tuple[float, float]]
-    model: dict
-    meta: dict
 
     @classmethod
     def from_file(cls, fname: [str, Path]) -> RMSInfo:
         fname = Path(fname)
 
+        def get_key(fl, key):
+            return {
+                model: {
+                    (float(band[1:].split(",")[0]), float(band[:-1].split(",")[1])): v[...]
+                    for band, v in model_dct.items()
+                }
+                for model, model_dct in fl[key].items()
+            }
+
         with h5py.File(fname, "r") as fl:
-            bands = fl["bands"][...]
+            data = {
+                key: get_key(fl, key)
+                for key in [
+                    "rms",
+                    "flags",
+                    "model_eval",
+                    "abs_resids",
+                    "model_stds",
+                    "poly_params",
+                    "poly_params_std",
+                ]
+            }
+
+            model_params = {}
+            for mdl_name, mdl_data in fl["model_params"].items():
+                model_params[mdl_name] = dict(mdl_data.attrs)
+
             out = cls(
                 gha=fl["gha"][...],
-                rms={k: v[...] for k, v in fl["rms"].items()},
-                flags={k: v[...] for k, v in fl["flags"].items()},
-                models={k: v[...] for k, v in fl["models"].items()},
-                abs_resids={k: v[...] for k, v in fl["abs_resids"].items()},
-                model_stds={k: v[...] for k, v in fl["model_stds"].items()},
-                poly_params={k: v[...] for k, v in fl["poly_params"].items()},
-                poly_params_std={k: v[...] for k, v in fl["poly_params_std"].items()},
-                bands=[(bands[2 * i], bands[2 * i + 1]) for i in range(len(bands) // 2)],
                 meta={k: v for k, v in fl.attrs.items() if not k.startswith("model_")},
-                model={k[6:]: v for k, v in fl.attrs.items() if k.startswith("model_")},
+                model_params=model_params,
+                **data,
             )
         return out
 
@@ -52,34 +73,49 @@ class RMSInfo:
             for key in [
                 "rms",
                 "flags",
-                "models",
+                "model_eval",
                 "abs_resids",
                 "model_stds",
                 "poly_params",
                 "poly_params_std",
             ]:
                 grp = fl.create_group(key)
-                for band in self.bands:
-                    grp[str(band)] = getattr(self, key)[band]
+
+                for model in self.model_names:
+                    mdl_grp = grp.create_group(model)
+
+                    for band in self.bands[model]:
+                        mdl_grp[str(band)] = getattr(self, key)[model][band]
 
             for key, val in self.meta.items():
                 fl.attrs[key] = val
 
-            for key, val in self.model.items():
-                fl.attrs[f"model_{key}"] = val
+            grp = fl.create_group("model_params")
+            for model in self.model_names:
+                mdl_grp = grp.create_group(model)
 
-            fl["bands"] = [v for k in self.bands for v in k]
+                for k, v in self.model_params[model].items():
+                    mdl_grp.attrs[k] = v
+
+    @property
+    def model_names(self):
+        """The names of the models used to generate RMS"""
+        return tuple(self.model_eval.keys())
+
+    @property
+    def bands(self) -> Dict[str, List[Tuple[float, float]]]:
+        """The bands."""
+        return {m: list(self.model_eval[m].keys()) for m in self.model_names}
 
 
 def get_rms_info(
     level1: Sequence,
-    bands: Sequence[Union[Tuple, str]] = ("full", "low", "high"),
+    models: Dict[str, Dict],
     n_poly: int = 3,
     n_sigma: float = 3,
     n_terms: int = 16,
     n_std: int = 6,
     n_threads: int = cpu_count(),
-    **rms_model_kwargs,
 ) -> RMSInfo:
     """Computation of RMS info on a subset of files.
 
@@ -88,11 +124,20 @@ def get_rms_info(
 
     Parameters
     ----------
+    n_threads
+
     level1
         A list of :class:`~Level1` objects on which to compute the RMS statistics.
-    bands
-        The frequency bands in which to compute the model RMS values. By default,
-        compute for the entire frequency band, the lower half, and the upper half.
+    models
+        List of models to fit in order to obtain the RMS. Each should be a dictionary,
+        with keys "model", "params", "resolution", and "bands". The "model" should be a
+        string matching an edges-cal model, the "params" should be a dictionary of
+        parameters to pass to this :class:`Model`. The "resolution" should be an int or
+        float specifying the frequency bin size (in no. of channels or bandwidth in MHz).
+        The "bands" should be a list of tuples of frequency ranges (in MHz), or the
+        strings "full", "low" or "high" (corresponding to the full band, lower half,
+        or upper half). These are used to compute the RMS (the model itself is fit over
+        the full range every time).
     n_poly
         Number of polynomial terms with which to fit the the RMS as a function of GHA,
         purely for flagging bad RMS values.
@@ -107,8 +152,8 @@ def get_rms_info(
 
     Returns
     -------
-    dict
-        A dictionary of output arrays, each a model/residual of the fits.
+    rms_info
+        A special data structure representing the RMS calculation.
 
     See Also
     --------
@@ -116,19 +161,8 @@ def get_rms_info(
         The output of this function is supposed to be used in ``rms_filter`` to actually
         filter files (those files may not be the same as went into this function).
     """
-
     # Get a tuple representation of the bands.
-    bands_ = []
     l1 = level1[0]
-    for b in bands:
-        if b == "full":
-            b = (l1.freq.min, l1.freq.max)
-        elif b == "low":
-            b = (l1.freq.min, l1.freq.center)
-        elif b == "high":
-            b = (l1.freq.center, l1.freq.max)
-        bands_.append(b)
-    bands = bands_
 
     # Make a big vector of all GHA's in all files.
     gha = np.hstack([l1.ancillary["gha"] for l1 in level1])
@@ -139,76 +173,115 @@ def get_rms_info(
         m = pool.map
     else:
         m = map
-    # Get the RMS values for each of the files, for each of the bands.
-    rms = {}
-    for j, band in enumerate(bands):
+
+    bands = {name: [] for name in models}
+    for name, model in models.items():
+        bands_ = model.get("bands", ["full"])
+        if not bands_:
+            raise ValueError("'bands' must be a list of strings/tuples")
+
+        for b in bands_:
+            if b == "full":
+                b = (np.floor(l1.freq.min), np.ceil(l1.freq.max))
+            elif b == "low":
+                b = (np.floor(l1.freq.min), np.floor(l1.freq.center))
+            elif b == "high":
+                b = (np.floor(l1.freq.center), np.ceil(l1.freq.max))
+            elif not isinstance(b, tuple):
+                raise ValueError(f"'bands' must be a list of strings/tuples, got {b}")
+
+            bands[name].append(b)
+
+    out = {name: {b: {} for b in bands} for name, bands in bands.items()}
+    params = {}
+    for name, model in models.items():
+        # Get the RMS values for each of the files, for each of the bands.
+        mdl = model.get("model")
+        prms = model.get("params", {})
+
         # Put all the RMS values for all files into one long vector.
-        rms[band] = np.hstack(
+        rms = list(
             m(
-                lambda i: level1[i].get_model_rms(freq_range=band, **rms_model_kwargs),
+                lambda i: level1[i].get_model_rms(
+                    freq_ranges=list(bands[name]),
+                    model=mdl,
+                    resolution=model.get("resolution", 0.0488),
+                    **prms,
+                ),
                 list(range(len(level1))),
             )
         )
+        params[name] = prms.copy()
+        params[name].update(**{k: v for k, v in model.items() if k not in ["params", "bands"]})
 
-    flags = {}
-    models = {}
-    abs_resids = {}
-    model_stds = {}
-    poly_params = {}
-    poly_params_std = {}
+        for band in bands[name]:
+            this = out[name][band]
+            this["rms"] = np.hstack([r[band] for r in rms])
 
-    for band in bands:
-        good, model, abs_res, model_std, par, par_std = get_rms_model_over_time(
-            rms[band], gha, n_poly, n_sigma, n_terms, n_std
-        )
+            this.update(get_rms_model_over_time(this["rms"], gha, n_poly, n_sigma, n_terms, n_std))
 
-        flags[band] = ~good
-        models[band] = model
-        abs_resids[band] = abs_res
-        model_stds[band] = model_std
-        poly_params[band] = par
-        poly_params_std[band] = par_std
+    # Transform the out dict to have the measurements as top-level keys
+    for name, value_ in out.items():
+        for band in value_:
+            keys = value_[band].keys()
+
+    new_out = {}
+    for key in keys:
+        new_out[key] = {}
+        for name, value in out.items():
+            new_out[key][name] = {}
+            for band in value:
+                new_out[key][name][band] = out[name][band][key]
 
     return RMSInfo(
         gha=gha,
-        rms=rms,
-        flags=flags,
-        models=models,
-        abs_resids=abs_resids,
-        model_stds=model_stds,
-        poly_params=poly_params,
-        poly_params_std=poly_params_std,
-        bands=bands,
-        model=rms_model_kwargs,
         meta={"n_poly": n_poly, "n_sigma": n_sigma, "n_terms": n_terms, "n_std": n_std},
+        model_params=params,
+        **new_out,
     )
 
 
 def get_rms_model_over_time(
     rms: np.ndarray, gha: np.ndarray, n_poly: int, n_sigma: float, n_terms: int, n_std: int
 ):
-    good = np.ones(len(rms), dtype=bool)
+    flags = np.isnan(rms)
 
     for i in range(24):  # Go through each hour
         mask = (gha >= i) & (gha < (i + 1))
-        n_orig = np.sum(mask)
+        extern_flg = flags[mask]
+        this_flg = flags[mask].copy()
 
-        while np.sum(good[mask]) < n_orig:
-            n_orig = np.sum(good[mask])
-            res, std = _get_polyfit_res_std(n_poly, gha[mask], rms[mask], weights=good[mask])
-            good[mask] &= np.abs(res) <= n_sigma * std
+        n_flg = np.sum(this_flg) - 1
 
-    par = np.polyfit(gha[good], rms[good], n_terms - 1)
+        while np.sum(this_flg) > n_flg and np.sum(~this_flg) > 2 * n_poly:
+            n_flg = np.sum(this_flg)
+            res, std = _get_polyfit_res_std(n_poly, gha[mask], rms[mask], flags=this_flg)
+            this_flg = extern_flg | (np.abs(res) > n_sigma * std)
+
+        extern_flg[:] = this_flg
+
+    par = np.polyfit(gha[~flags], rms[~flags], n_terms - 1)
     model = np.polyval(par, gha)
     abs_res = np.abs(rms - model)
-    par_std = np.polyfit(gha[good], abs_res[good], n_std - 1)
+    par_std = np.polyfit(gha[~flags], abs_res[~flags], n_std - 1)
     model_std = np.polyval(par_std, gha)
 
-    return good, model, abs_res, model_std, par, par_std
+    return {
+        "flags": flags,
+        "model_eval": model,
+        "abs_resids": abs_res,
+        "model_stds": model_std,
+        "poly_params": par,
+        "poly_params_std": par_std,
+    }
 
 
 def rms_filter(
-    rms_info: [str, Path, RMSInfo], gha: np.ndarray, rms: np.ndarray, n_sigma: float = 3
+    rms_info: [str, Path, RMSInfo],
+    gha: np.ndarray,
+    rms: Dict[str, Dict[Tuple[float, float], np.ndarray]],
+    n_sigma: float = 3,
+    fl_id=None,
 ):
     """Filter RMS data based on a summary set of data.
 
@@ -219,7 +292,8 @@ def rms_filter(
     gha
         1D array of the GHA's of the current data.
     rms
-        The RMS of the current data.
+        The RMS of the current data. Keys are different models (must match those in
+        ``rms_info``, and values are dicts with keys that are the bands.
     n_sigma
         The threshold at which individual RMS values are flagged.
 
@@ -232,11 +306,20 @@ def rms_filter(
         rms_info = RMSInfo.from_file(rms_info)
 
     flags = np.zeros(len(gha), dtype=bool)
+    fl_id = f"{fl_id}: " if fl_id else ""
 
-    for pp, pstd, rr in zip(rms_info.poly_params.values(), rms_info.poly_params_std.values(), rms):
-        m = np.polyval(pp, gha)
-        ms = np.polyval(pstd, gha)
-        flags |= np.abs(rr - m) > n_sigma * ms
+    for model, rms_model in rms.items():
+        for band, rms_band in rms_model.items():
+            pp = rms_info.poly_params[model][band]
+            pstd = rms_info.poly_params_std[model][band]
+
+            m = np.polyval(pp, gha)
+            ms = np.polyval(pstd, gha)
+            flags |= np.abs(rms_band - m) > n_sigma * ms
+
+            logger.info(
+                f"{fl_id}{np.sum(flags)}/{len(flags)} GHA's flagged after RMS filter for model={model}, band={band}."
+            )
 
     return flags
 
@@ -319,57 +402,56 @@ def total_power_filter(
         for i in range(24):
             mask = (gha >= i) & (gha < (i + 1))
             this_gha = gha[mask]
-            this_flags = flags_1d[mask]
+            this_extern_flags = flags_1d[mask]
 
             this_tp = tpi[mask]
 
-            this_flags |= np.isnan(this_tp)
+            this_intern_flags = this_extern_flags | np.isnan(this_tp)
 
             # If enough data points available per hour
-            lx = len(this_flags) - np.sum(this_flags)
+            lx = np.sum(~this_intern_flags)
 
             if lx <= 10:
                 continue
 
             nflags = -1
 
-            while nflags < np.sum(this_flags):
-                nflags = np.sum(this_flags)
+            while nflags < np.sum(this_intern_flags):
+                nflags = np.sum(this_intern_flags)
 
                 if (len(this_gha) - nflags) < n_poly:
                     # If we've flagged too much, just get rid of everything here.
-                    this_flags[:] = True
+                    this_intern_flags[:] = True
                 else:
-                    res, std = _get_polyfit_res_std(n_poly, this_gha, this_tp, this_flags)
+                    res, std = _get_polyfit_res_std(n_poly, this_gha, this_tp, this_intern_flags)
 
                     if std_threshold is not None and std > std_threshold:
-                        this_flags[~this_flags] |= np.abs(res) > std
+                        this_intern_flags = this_extern_flags | (np.abs(res) > std)
                     else:
-                        this_flags[~this_flags] |= np.abs(res) > n_sigma * std
+                        this_intern_flags = this_extern_flags | (np.abs(res) > n_sigma * std)
 
-            flags_1d[mask] = this_flags
+            flags_1d[mask] = this_intern_flags
 
     return flags_1d
 
 
 def _get_polyfit_res_std(n_poly, gha, data, flags=None):
-    if flags is not None:
-        gha = gha[~flags]
-        data = data[~flags]
+    if flags is None:
+        flags = np.zeros(len(gha), dtype=bool)
 
-    if len(gha) < n_poly:
+    if np.sum(~flags) < n_poly:
         raise np.linalg.LinAlgError("After flagging, too few data points left for n_poly.")
 
     try:
-        par = np.polyfit(gha, data, n_poly - 1)
+        par = np.polyfit(gha[~flags], data[~flags], n_poly - 1)
     except np.linalg.LinAlgError:
-        print("gha:", gha)
-        print("data: ", data)
-        print("n_poly: ", n_poly)
+        logger.error("gha:", gha)
+        logger.error("data: ", data)
+        logger.error("n_poly: ", n_poly)
         raise
     model = np.polyval(par, gha)
     res = data - model
-    std = np.std(res)
+    std = np.nanstd(res)
 
     return res, std
 
