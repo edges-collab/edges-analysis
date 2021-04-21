@@ -393,9 +393,12 @@ def rms_info(path, settings, outfile):
     input_files = sorted(sum((_get_files(p) for p in path), []))
     objects = [levels.read_step(p) for p in input_files]
 
+    if any(not isinstance(o, (levels.CalibratedData, levels.FilteredData)) for o in objects):
+        raise ValueError("One of the files you input is not calibrated or filtered data!")
+
     n_files = settings.pop("n_files", len(input_files))
 
-    rms_info = filters.get_rms_info(level1=objects[:n_files], **settings)
+    rms_info = filters.get_rms_info(objects[:n_files], **settings)
 
     rms_info.write(outfile)
 

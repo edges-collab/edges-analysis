@@ -41,6 +41,7 @@ def test_rms_filter(mock_calibrated_data, resolution, tmpdir: Path):
             }
         },
     )
+    rms_info.write("rms_info_tmp.h5")
     rms_info.write(tmpdir / "rms_info.h5")
 
     fd = FilteredData.promote(

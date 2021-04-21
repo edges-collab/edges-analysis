@@ -4,13 +4,15 @@ import logging
 from dataclasses import dataclass
 from multiprocessing import cpu_count
 from pathlib import Path
-from typing import Tuple, List, Sequence, Dict, Union
+from typing import Tuple, List, Sequence, Dict, Union, Optional
 from .levels import FilteredData, CalibratedData, FrequencyRange
 
 import h5py
 import numpy as np
 import yaml
 from multiprocess.pool import Pool
+
+from matplotlib import pyplot as plt
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +110,32 @@ class RMSInfo:
         """The bands."""
         return {m: list(self.model_eval[m].keys()) for m in self.model_names}
 
+    def plot(
+        self,
+        n_sigma: int = 3,
+        data_gha: Optional[np.ndarray] = None,
+        data_rms: Optional[np.ndarray] = None,
+    ):
+        isort = np.argsort(self.gha)
+        gha = self.gha[isort]
+
+        i = 0
+        for name, data in self.rms.items():
+            for band, rms in data.items():
+                model = self.model_eval[name][band][isort]
+                std = self.model_stds[name][band][isort]
+
+                plt.plot(gha, rms[isort], label=f"{name}: {band}", color=f"C{i}")
+                plt.plot(gha, model, ls="--", color=f"C{i}")
+                plt.fill_between(
+                    gha, model - n_sigma * std, model + n_sigma * std, color=f"C{i}", alpha=0.4
+                )
+                if data_gha is not None:
+                    plt.scatter(data_gha, data_rms[name][band], color=f"C{i}")
+                i += 1
+
+        plt.legend()
+
 
 def get_rms_info(
     steps: Sequence[Union[FilteredData, CalibratedData]],
@@ -129,7 +157,7 @@ def get_rms_info(
         A list of :class:`~FilteredData` or :class:`~CalibratedData` objects on which
         to compute the RMS statistics.
     models
-        List of models to fit in order to obtain the RMS. Each should be a dictionary,
+        Dictionary of models to fit in order to obtain the RMS. Each should be a dictionary,
         with keys "model", "params", "resolution", and "bands". The "model" should be a
         string matching an edges-cal model, the "params" should be a dictionary of
         parameters to pass to this :class:`Model`. The "resolution" should be an int or

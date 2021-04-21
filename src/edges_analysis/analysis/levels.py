@@ -576,22 +576,28 @@ class _Filters:
         """The date this observation was started, as a string."""
         return self._caldata.datestring
 
+    def get_rms_data(
+        self, rms_info: [filters.RMSInfo, str, Path], flags: [np.ndarray, None] = None
+    ):
+        """Generate the RMS data for this observation corresponding to RMSInfo."""
+        weights = self.weights.T if flags is None else np.where(flags, 0, self.weights.T)
+        if not isinstance(rms_info, filters.RMSInfo):
+            rms_info = filters.RMSInfo.from_file(rms_info)
+
+        return {
+            mdl_name: self._caldata.get_model_rms(
+                freq_ranges=bands, weights=weights.T, **rms_info.model_params[mdl_name]
+            )
+            for mdl_name, bands in rms_info.bands.items()
+        }
+
     def rms_filter(
         self,
         rms_info: [filters.RMSInfo, str, Path],
         n_sigma_rms: int = 3,
         flags: [np.ndarray, None] = None,
     ):
-        weights = self.weights.T if flags is None else np.where(flags, 0, self.weights.T)
-        if not isinstance(rms_info, filters.RMSInfo):
-            rms_info = filters.RMSInfo.from_file(rms_info)
-
-        rms = {
-            mdl_name: self._caldata.get_model_rms(
-                freq_ranges=bands, weights=weights.T, **rms_info.model_params[mdl_name]
-            )
-            for mdl_name, bands in rms_info.bands.items()
-        }
+        rms = self.get_rms_data(rms_info, flags)
 
         if flags is None:
             flags = np.zeros(self.weights.T.shape, dtype=bool)
@@ -1969,9 +1975,9 @@ class FilteredData(_ReductionStep, _SingleDayMixin):
         negative_power_filter: [bool] = True,
     ):
         """
-        Convert a list of :class:`Level1` objects into a combined :class:`Level2` object.
+        Filter a :class:`CalibratedData` object.
 
-        Steps taken tofilter the files are (in order):
+        Steps taken to filter the files are (in order):
 
         1. Filter entire times from each file based on auxiliary data:
            * Sun/moon position
@@ -2118,6 +2124,27 @@ class FilteredData(_ReductionStep, _SingleDayMixin):
     @property
     def is_fully_flagged(self):
         return self.meta["flagged"]
+
+    @cached_property
+    def rms_info(self) -> Union[None, filters.RMSInfo]:
+        """The golden-set RMS information used to flag on RMS."""
+        if not self.meta["rms_filter_file"]:
+            return None
+        else:
+            return filters.RMSInfo.from_file(self.meta["rms_filter_file"])
+
+    def plot_rms_diagnosis(self, flagged: bool = True):
+        """Make a plot to diagnose RMS."""
+        self.rms_info.plot(
+            n_sigma=self.meta["n_sigma_rms"],
+            data_gha=self.gha,
+            data_rms=self.get_rms_data(
+                self.rms_info,
+                flags=~self.weights.astype(bool)
+                if flagged
+                else np.zeros(self.weights.shape, dtype=bool),
+            ),
+        )
 
 
 @add_structure
@@ -2572,6 +2599,25 @@ class CombinedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
             The index in appropriate lists of that day's data.
         """
         return self.days.tolist().index(day)
+
+    def plot_daily_rms(self):
+        """Plot all RMS diagnostic plots for all days."""
+        sqrtn = int(np.ceil(np.sqrt(len(self.days))))
+        fig, ax = plt.subplots(
+            sqrtn,
+            sqrtn,
+            sharey=True,
+            sharex=True,
+            figsize=(2 * sqrtn, 2 * sqrtn),
+            gridspec_kw={"hspace": 0.05, "wspace": 0.05},
+        )
+
+        for i, day in enumerate(self.days):
+            plt.sca(ax.flatten()[i])
+            obj = self.get_day(day).filter_step
+            obj.plot_rms_diagnosis(flagged=False)
+
+        return fig
 
 
 @add_structure
