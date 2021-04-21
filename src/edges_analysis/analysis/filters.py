@@ -211,9 +211,9 @@ def get_rms_info(
         mdl = model.get("model")
         prms = model.get("params", {})
 
-        for k, v in steps[0].__memcache__["ancillary"].__dict__.items():
-            print(k)
-            pickle.dumps(v)
+        # for k, v in steps[0].__memcache__["ancillary"].__dict__.items():
+        #     print(k)
+        #     pickle.dumps(v)
 
         # Put all the RMS values for all files into one long vector.
         rms = list(
