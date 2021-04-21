@@ -401,78 +401,12 @@ def rms_info(path, settings, outfile):
 
     n_files = settings.pop("n_files", len(input_files))
 
+    console.print(f"[bold]Using {n_files} input files to calculate RMS:")
+    for obj in objects:
+        console.print(f"    {obj.filename}")
+
     rms_info = filters.get_rms_info(objects[:n_files], **settings)
 
     rms_info.write(outfile)
 
     console.print(f"Wrote RMSInfo to {outfile}.")
-
-
-# def check_existing_file_settings(output_dir, settings, clobber):
-#     # If the directory is not empty, we need to check whether the files that are
-#     # already there are consistent with these files.
-#     if not output_dir.glob("*.h5"):
-#         return
-#
-#     current_files = output_dir.glob("*")
-#
-#     if clobber:
-#         for fl in current_files:
-#             os.remove(str(fl))
-#         return
-#
-#     for fl in [fl for fl in current_files if h5py.is_hdf5(fl)]:
-#         with h5py.File(fl, "r") as ff:
-#             for k, v in settings.items():
-#                 if k not in ["calfile", "s11_path"] and (
-#                     k not in ff.attrs or ff.attrs[k] != v
-#                 ):
-#                     if k in ff.attrs:
-#                         try:
-#                             v = Path(v).expanduser().absolute()
-#                         except Exception:
-#                             pass
-#
-#                         if ff.attrs[k] == str(v):
-#                             continue
-#
-#                     meta = "\n\t".join(f"{kk}: {vv}" for kk, vv in ff.attrs.items())
-#                     raise ValueError(
-#                         f"""
-# The directory you want to write to has a non-consistent file for key '{k}' [required {v}].
-# Filename: {fl.name}
-# Metadata in file:
-#     {meta}
-# """
-#                     )
-#
-#
-# @process.command()
-# @click.pass_context
-# def level(ctx, level, settings, path, label, prev_label, prefix, message, xrfi, clobber):
-#     """Bump from a level to the next level."""
-#     assert level > 1
-#
-#     console.print(
-#         Panel(f"edges-analysis [blue]Level {level}[/]", box=box.DOUBLE_EDGE),
-#         style="bold",
-#         justify="center",
-#     )
-#
-#     in_files = _get_input_files(level - 1, path, prev_label, level in [2])
-#
-#     if isinstance(in_files, list):
-#         console.print(f"[bold]Combining {len(in_files)} Level{level - 1} files:")
-#         for fl in in_files:
-#             console.print(f"[blue]\t{fl.absolute()}")
-#     else:
-#         console.print(f"[bold]Processing[/] '{in_files}'")
-#
-#     # Get the output structure ready
-#     output_file = get_output_path(level, settings, in_files, label, prefix)
-#
-#     if output_file.exists() and not clobber:
-#         logger.error(
-#             f"[bold red]The output file [blue]'{output_file}'[/] already exists -- use clobber!"
-#         )
-#         return
