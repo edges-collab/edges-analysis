@@ -388,6 +388,9 @@ def rms_info(path, settings, outfile):
         justify="center",
     )
 
+    with open(settings, "r") as fl:
+        settings = yaml.load(fl, Loader=yaml.FullLoader)
+
     # Get input file(s).
     path = [expand_colon(p, raw=False).expanduser() for p in path]
     input_files = sorted(sum((_get_files(p) for p in path), []))
