@@ -370,20 +370,35 @@ def read_step(fname: [str, Path]) -> [_ReductionStep, io.HDF5RawSpectrum]:
 
 class _ModelMixin:
     @cached_property
-    def model(self) -> mdl.Model:
-        """The abstract linear model that is fit to each integration.
-
-        Note that the parameters are not set on this model, but the basis vectors are
-        set.
+    def model_cls(self) -> Type[mdl.Model]:
+        """
+        The Model class that is used to fit foregrounds.
         """
         if isinstance(self.model_step, (list, tuple)):
             meta = self.model_step[0].meta
         else:
             meta = self.model_step.meta
 
-        return mdl.Model.get_mdl(meta["model_basis"])(
-            default_x=self.freq.freq, n_terms=meta["model_nterms"]
-        )
+        return mdl.Model.get_mdl(meta["model_basis"])
+
+    @cached_property
+    def model(self) -> mdl.Model:
+        """The abstract linear model that is fit to each integration.
+
+        Note that the parameters are not set on this model, but the basis vectors are
+        set.
+        """
+        return self.model_cls(default_x=self.freq.freq, n_terms=self.model_nterms)
+
+    @property
+    def model_nterms(self):
+        """Number of terms in the foreground model."""
+        if isinstance(self.model_step, (list, tuple)):
+            meta = self.model_step[0].meta
+        else:
+            meta = self.model_step.meta
+
+        return meta["model_nterms"]
 
     @property
     def model_params(self):
@@ -2415,9 +2430,10 @@ class CombinedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
             )
 
             if freq_resolution:
-                f, mean_r, mean_w, s = averaging.bin_freq_unbiased_irregular(
+                f, mean_r, mean_w = averaging.bin_freq_unbiased_irregular(
                     mean_r, self.freq.freq, mean_w, resolution=freq_resolution
                 )
+                f = f[0]
             else:
                 f = self.freq.freq
 
@@ -2815,7 +2831,7 @@ class DayAveragedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
 @add_structure
 class BinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
     """
-    A Level-4 Calibrated Spectrum.
+    Data that is binned in GHA and/or frequency.
 
     This step performs a final average over GHA to yield a GHA vs frequency dataset
     that is as averaged as one wants.
@@ -2892,12 +2908,19 @@ class BinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
 
         if freq_resolution:
             logger.info("Averaging in frequency bins...")
-            f, resid, wght = averaging.bin_freq_unbiased_irregular(
-                resid, freq.freq, wght, resolution=freq_resolution
+            f, wght, spec, resid, params = averaging.bin_freq_unbiased_regular(
+                model_type=prev_step.model_cls,
+                params=prev_step.model_params,
+                freq=freq.freq,
+                resids=resid,
+                weights=wght,
+                resolution=freq_resolution,
+                n_terms=prev_step.model_nterms,
             )
             logger.info(f".... produced {len(f)} frequency bins.")
         else:
             f = freq.freq
+            params = prev_step.model_params
 
         if gha_bin_size is None:
             gha_bin_size = gha_max - gha_min
@@ -2906,11 +2929,11 @@ class BinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
 
         logger.info(f"Averaging into {len(gha_edges) - 1} GHA bins.")
         params, resid, wght = averaging.bin_gha_unbiased_regular(
-            prev_step.ancillary["model_params"],
-            resid,
-            wght,
-            prev_step.gha_centres,
-            gha_edges,
+            params=params,
+            resids=resid,
+            weights=wght,
+            gha=prev_step.gha_centres,
+            bins=gha_edges,
         )
 
         # Perform xRFI on GHA-averaged spectra.

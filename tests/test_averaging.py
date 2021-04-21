@@ -5,90 +5,7 @@ import pytest
 from pytest_cases import fixture_ref as fxref
 from pytest_cases import parametrize_plus
 
-import src.edges_analysis.analysis.averaging
-
-
-def test_non_stationary_avg_1d_shape():
-    x = np.linspace(0, 1, 20)
-    y = x ** 2
-
-    avg = src.edges_analysis.analysis.averaging.non_stationary_weighted_average(
-        data=y, x=x, n_terms=3
-    )
-
-    assert isinstance(avg, float)
-    assert np.isclose(avg, np.mean(y))
-
-
-def test_non_stationary_avg_2d_shape():
-    x = np.linspace(0, 1, 20)
-    y = np.array([x ** 2 for _ in range(4)])
-
-    avg = src.edges_analysis.analysis.averaging.non_stationary_weighted_average(
-        data=y, x=x, n_terms=3
-    )
-
-    assert avg.shape == (4,)
-    assert np.allclose(avg, np.mean(y))
-
-
-def test_non_stationary_avg_1d_weights():
-    x = np.linspace(0, 1, 50)
-    y = x ** 2
-
-    weights = np.ones(len(x), dtype=bool)
-    weights[::4] = 0
-
-    avg = src.edges_analysis.analysis.averaging.non_stationary_weighted_average(
-        data=y, x=x, n_terms=3, weights=weights
-    )
-    assert isinstance(avg, float)
-    assert np.isclose(avg, np.mean(y))
-
-
-def test_non_stationary_avg_1d_nonzero_weights():
-    x = np.linspace(0, 1, 50)
-    y = x ** 2
-
-    weights = np.linspace(1, 4, len(x))
-    #    weights[::4] = 0
-
-    avg = src.edges_analysis.analysis.averaging.non_stationary_weighted_average(
-        data=y, x=x, n_terms=3, weights=weights
-    )
-    assert isinstance(avg, float)
-    assert np.isclose(avg, np.mean(y))
-
-
-def test_non_stationary_avg_1d_with_model_fit():
-    x = np.linspace(0, 1, 50)
-    y = x ** 2
-
-    def model(x):
-        return x ** 2
-
-    weights = np.linspace(1, 4, len(x))
-
-    avg = src.edges_analysis.analysis.averaging.non_stationary_weighted_average(
-        data=y, x=x, n_terms=3, weights=weights, model_fit=model
-    )
-    assert isinstance(avg, float)
-    assert np.isclose(avg, np.mean(y))
-
-
-def test_non_stationary_avg_1d_with_model():
-    x = np.linspace(0, 1, 50)
-    y = x ** 2
-
-    model = mdl.Polynomial(default_x=x, n_terms=3)
-
-    weights = np.linspace(1, 4, len(x))
-
-    avg = src.edges_analysis.analysis.averaging.non_stationary_weighted_average(
-        data=y, x=x, n_terms=3, weights=weights, model=model
-    )
-    assert isinstance(avg, float)
-    assert np.isclose(avg, np.mean(y))
+from edges_analysis.analysis import averaging
 
 
 def test_get_binned_weights_1d():
@@ -96,7 +13,7 @@ def test_get_binned_weights_1d():
     x = np.linspace(0, 1, 20)
     bins = [-0.1, 1.1]
 
-    wghts = src.edges_analysis.analysis.averaging.get_binned_weights(x=x, bins=bins, weights=w)
+    wghts = averaging.get_binned_weights(x=x, bins=bins, weights=w)
     assert wghts == 20
 
 
@@ -105,7 +22,7 @@ def test_get_binned_weights_2d():
     x = np.linspace(0, 1, 20)
     bins = [-0.1, 1.1]
 
-    wghts = src.edges_analysis.analysis.averaging.get_binned_weights(x=x, bins=bins, weights=w)
+    wghts = averaging.get_binned_weights(x=x, bins=bins, weights=w)
     assert wghts.shape == (10, 1)
     assert all(w == 20 for w in wghts)
 
@@ -115,7 +32,7 @@ def test_get_binned_weights_more_bins():
     x = np.linspace(0, 1, 20, endpoint=False)
     bins = np.linspace(0, 1, 11)
 
-    wghts = src.edges_analysis.analysis.averaging.get_binned_weights(x=x, bins=bins, weights=w)
+    wghts = averaging.get_binned_weights(x=x, bins=bins, weights=w)
     assert wghts.shape == (10, 10)
     assert np.allclose(wghts, 2)
 
@@ -187,7 +104,7 @@ def test_model_bin_gha(params, weights, refit):
         fit_params = params
         resids = data - model
 
-    p, r, w = src.edges_analysis.analysis.averaging.bin_gha_unbiased_regular(
+    p, r, w = averaging.bin_gha_unbiased_regular(
         params=fit_params,
         resids=resids,
         weights=weights,
@@ -216,19 +133,13 @@ class TestBinArray:
     def test_out_shape_no_coords(self, fid_params, ideal_weights):
         model, corrupt, noise = make_data(fid_params, ideal_weights)
 
-        coords, mean, wght = src.edges_analysis.analysis.averaging.bin_array_unbiased_irregular(
-            corrupt, axis=0
-        )
+        coords, mean, wght = averaging.bin_array_unbiased_irregular(corrupt, axis=0)
         assert mean.shape == coords.shape == wght.shape == (1, 500)
 
-        coords, mean, wght = src.edges_analysis.analysis.averaging.bin_array_unbiased_irregular(
-            corrupt, axis=1
-        )
+        coords, mean, wght = averaging.bin_array_unbiased_irregular(corrupt, axis=1)
         assert mean.shape == coords.shape == wght.shape == (50, 1)
 
-        coords, mean, wght = src.edges_analysis.analysis.averaging.bin_array_unbiased_irregular(
-            corrupt, axis=-1
-        )
+        coords, mean, wght = averaging.bin_array_unbiased_irregular(corrupt, axis=-1)
         assert mean.shape == coords.shape == wght.shape == (50, 1)
 
     def test_out_shape_with_coords(self, fid_params, ideal_weights):
@@ -236,26 +147,22 @@ class TestBinArray:
 
         coords = FREQ
         with pytest.raises(ValueError):
-            src.edges_analysis.analysis.averaging.bin_array_unbiased_irregular(
-                corrupt, coords=coords, axis=0
-            )
+            averaging.bin_array_unbiased_irregular(corrupt, coords=coords, axis=0)
 
-        outc, mean, wght = src.edges_analysis.analysis.averaging.bin_array_unbiased_irregular(
-            corrupt, coords=coords, axis=-1
-        )
+        outc, mean, wght = averaging.bin_array_unbiased_irregular(corrupt, coords=coords, axis=-1)
         assert mean.shape == outc.shape == wght.shape == (50, 1)
 
-        outc, mean, wght = src.edges_analysis.analysis.averaging.bin_array_unbiased_irregular(
+        outc, mean, wght = averaging.bin_array_unbiased_irregular(
             corrupt, coords=coords, axis=-1, bins=5
         )
         assert mean.shape == outc.shape == wght.shape == (50, 100)
 
-        outc, mean, wght = src.edges_analysis.analysis.averaging.bin_array_unbiased_irregular(
+        outc, mean, wght = averaging.bin_array_unbiased_irregular(
             corrupt, coords=coords, axis=-1, bins=11
         )
         assert mean.shape == outc.shape == wght.shape == (50, 46)
 
-        outc, mean, wght = src.edges_analysis.analysis.averaging.bin_array_unbiased_irregular(
+        outc, mean, wght = averaging.bin_array_unbiased_irregular(
             corrupt, coords=coords, axis=-1, bins=1.0
         )
         assert mean.shape == outc.shape == wght.shape == (50, 50)
@@ -264,27 +171,19 @@ class TestBinArray:
         model, corrupt, noise = make_data(fid_params, ideal_weights)
 
         corrupt = corrupt.reshape((50, 20, 25))
-        outc, mean, wght = src.edges_analysis.analysis.averaging.bin_array_unbiased_irregular(
-            corrupt, axis=0, bins=5
-        )
+        outc, mean, wght = averaging.bin_array_unbiased_irregular(corrupt, axis=0, bins=5)
         assert outc.shape == mean.shape == wght.shape == (10, 20, 25)
 
-        outc, mean, wght = src.edges_analysis.analysis.averaging.bin_array_unbiased_irregular(
-            corrupt, axis=1, bins=5
-        )
+        outc, mean, wght = averaging.bin_array_unbiased_irregular(corrupt, axis=1, bins=5)
         assert outc.shape == mean.shape == wght.shape == (50, 4, 25)
 
-        outc, mean, wght = src.edges_analysis.analysis.averaging.bin_array_unbiased_irregular(
-            corrupt, axis=2, bins=5
-        )
+        outc, mean, wght = averaging.bin_array_unbiased_irregular(corrupt, axis=2, bins=5)
         assert outc.shape == mean.shape == wght.shape == (50, 20, 5)
 
     def test_unity_input(self):
         data = np.ones((10, 100))
 
-        outc, mean, wght = src.edges_analysis.analysis.averaging.bin_array_unbiased_irregular(
-            data, axis=0, bins=5
-        )
+        outc, mean, wght = averaging.bin_array_unbiased_irregular(data, axis=0, bins=5)
         assert np.all(mean == 1)
         assert np.all(wght == 5)
 
@@ -293,7 +192,7 @@ class TestBinArray:
         weights = np.ones((10, 100))
         weights[:, ::5] = 0
 
-        outc, mean, wght = src.edges_analysis.analysis.averaging.bin_array_unbiased_irregular(
+        outc, mean, wght = averaging.bin_array_unbiased_irregular(
             data, axis=1, weights=weights, bins=5
         )
         assert np.all(mean == 1)
