@@ -32,6 +32,7 @@ from edges_cal import (
 from edges_io.auxiliary import auxiliary_data
 from edges_io.h5 import HDF5Object
 
+from . import averaging
 from . import s11 as s11m, loss, beams, tools, filters, coordinates
 from .coordinates import get_jd, dt_from_jd
 from .. import __version__
@@ -369,20 +370,35 @@ def read_step(fname: [str, Path]) -> [_ReductionStep, io.HDF5RawSpectrum]:
 
 class _ModelMixin:
     @cached_property
-    def model(self) -> mdl.Model:
-        """The abstract linear model that is fit to each integration.
-
-        Note that the parameters are not set on this model, but the basis vectors are
-        set.
+    def model_cls(self) -> Type[mdl.Model]:
+        """
+        The Model class that is used to fit foregrounds.
         """
         if isinstance(self.model_step, (list, tuple)):
             meta = self.model_step[0].meta
         else:
             meta = self.model_step.meta
 
-        return mdl.Model.get_mdl(meta["model_basis"])(
-            default_x=self.freq.freq, n_terms=meta["model_nterms"]
-        )
+        return mdl.Model.get_mdl(meta["model_basis"])
+
+    @cached_property
+    def model(self) -> mdl.Model:
+        """The abstract linear model that is fit to each integration.
+
+        Note that the parameters are not set on this model, but the basis vectors are
+        set.
+        """
+        return self.model_cls(default_x=self.freq.freq, n_terms=self.model_nterms)
+
+    @property
+    def model_nterms(self):
+        """Number of terms in the foreground model."""
+        if isinstance(self.model_step, (list, tuple)):
+            meta = self.model_step[0].meta
+        else:
+            meta = self.model_step.meta
+
+        return meta["model_nterms"]
 
     @property
     def model_params(self):
@@ -698,7 +714,7 @@ class _SingleDayMixin:
         else:
             s, w = self.spectrum, weights
 
-        new_f, new_s, new_w = tools.bin_array(
+        new_f, new_s, new_w = averaging.bin_array_unbiased_irregular(
             data=s, coords=self.raw_frequencies, weights=w, bins=resolution, axis=-1
         )
 
@@ -2338,7 +2354,7 @@ class CombinedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
             if flags is not None:
                 l1_weights[flags[i]] = 0
 
-            params[i], resids[i], weights[i] = tools.model_bin_gha(
+            params[i], resids[i], weights[i] = averaging.bin_gha_unbiased_regular(
                 model_params[i], model_resids[i], l1_weights, gha, gha_edges
             )
 
@@ -2405,7 +2421,7 @@ class CombinedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
             if days and day not in days:
                 continue
 
-            mean_p, mean_r, mean_w = tools.model_bin_gha(
+            mean_p, mean_r, mean_w = averaging.bin_gha_unbiased_regular(
                 params=param[mask],
                 resids=resid[mask],
                 weights=weight[mask],
@@ -2414,9 +2430,10 @@ class CombinedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
             )
 
             if freq_resolution:
-                f, mean_r, mean_w, s = tools.average_in_frequency(
+                f, mean_r, mean_w = averaging.bin_freq_unbiased_irregular(
                     mean_r, self.freq.freq, mean_w, resolution=freq_resolution
                 )
+                f = f[0]
             else:
                 f = self.freq.freq
 
@@ -2425,7 +2442,7 @@ class CombinedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
                 self.freq.max + 5,
                 -ix * separation,
                 f"{day} RMS="
-                f"{np.sqrt(tools.weighted_mean(data=mean_r[0] ** 2, weights=mean_w[0])[0]):.2f}",
+                f"{np.sqrt(averaging.weighted_mean(data=mean_r[0] ** 2, weights=mean_w[0])[0]):.2f}",
             )
 
         return ax
@@ -2639,7 +2656,7 @@ class DayAveragedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         logger.info("Integrating over nights...")
         # Take mean over nights.
         params = np.nanmean(prev_step.ancillary["model_params"], axis=0)
-        resid, wght = tools.weighted_mean(resid, wght, axis=0)
+        resid, wght = averaging.weighted_mean(resid, wght, axis=0)
 
         # Perform xRFI on GHA-averaged spectra.
         if xrfi_pipe:
@@ -2673,6 +2690,49 @@ class DayAveragedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
 
         return prev_step.raw_frequencies, data, ancillary, cls._get_meta(locals())
 
+    def fully_averaged_spectrum(
+        self,
+        gha_min: Optional[float] = None,
+        gha_max: Optional[float] = None,
+        weights: Optional[Union[np.ndarray, str]] = None,
+        freq_resolution: [int, float] = 0,
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Get a single fully averaged spectrum at a given frequency resolution.
+
+        Parameters
+        ----------
+        gha_min
+            Minimum GHA to use.
+        gha_max
+            Maximum GHA to use.
+        weights
+            The weights to use in the averaging. By default, the weights of the instance.
+
+        Returns
+        -------
+        f
+            The frequencies (irregularly spaced).
+        spec
+            The averaged spectrum (1D)
+        weights
+            The final weights (1D)
+        """
+        p, r, w, _ = self.bin_gha(
+            gha_min=gha_min, gha_max=gha_max, gha_bin_size=24, weights=weights
+        )
+
+        if freq_resolution:
+            f, s, w = averaging.bin_freq_unbiased_irregular(
+                r[0], self.freq.freq, w[0], resolution=freq_resolution
+            )
+        else:
+            f = self.freq.freq
+            s = self.model(parameters=p[0]) + r[0]
+            w = w[0]
+
+        return f, s, w
+
     def bin_gha(
         self,
         gha_min: Optional[float] = None,
@@ -2686,7 +2746,11 @@ class DayAveragedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
             gha_max = self.gha_edges.max()
 
         gha_edges = np.arange(gha_min, gha_max, gha_bin_size)
-        if np.isclose(gha_max, gha_edges.max() + gha_bin_size):
+        if (
+            np.isclose(gha_max, gha_edges.max() + gha_bin_size)
+            or np.isscalar(gha_max)
+            or len(gha_max) == 1
+        ):
             gha_edges = np.concatenate((gha_edges, [gha_edges.max() + gha_bin_size]))
 
         if weights is None:
@@ -2694,7 +2758,7 @@ class DayAveragedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         elif weights == "old":
             weights = self.ancillary["pre_filter_weights"]
 
-        params, resids, weights = tools.model_bin_gha(
+        params, resids, weights = averaging.bin_gha_unbiased_regular(
             self.model_params, self.resids, weights, self.gha_centres, gha_edges
         )
         return params, resids, weights, gha_edges
@@ -2738,14 +2802,14 @@ class DayAveragedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         )
 
         if ax is None:
-            fig, ax = plt.subplots(1, 1, figsize=(7, 12))
+            fig, ax = plt.subplots(1, 1, figsize=(7, 3 + 2 * len(params)))
 
         for ix, (rr, ww) in enumerate(zip(resids, weights)):
             if np.sum(ww) == 0:
                 continue
 
             if freq_resolution:
-                f, rr, ww, s = tools.average_in_frequency(
+                f, rr, ww = averaging.bin_freq_unbiased_irregular(
                     rr, self.freq.freq, ww, resolution=freq_resolution
                 )
             else:
@@ -2758,7 +2822,7 @@ class DayAveragedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
                 self.freq.max + 5,
                 -ix * separation,
                 f"GHA={gha_edges[ix]:.2f} RMS="
-                f"{np.sqrt(tools.weighted_mean(data=rr ** 2, weights=ww)[0]):.2f}",
+                f"{np.sqrt(averaging.weighted_mean(data=rr ** 2, weights=ww)[0]):.2f}",
             )
 
         return ax
@@ -2767,7 +2831,7 @@ class DayAveragedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
 @add_structure
 class BinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
     """
-    A Level-4 Calibrated Spectrum.
+    Data that is binned in GHA and/or frequency.
 
     This step performs a final average over GHA to yield a GHA vs frequency dataset
     that is as averaged as one wants.
@@ -2844,12 +2908,19 @@ class BinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
 
         if freq_resolution:
             logger.info("Averaging in frequency bins...")
-            f, resid, wght, s = tools.average_in_frequency(
-                resid, freq.freq, wght, resolution=freq_resolution
+            f, wght, spec, resid, params = averaging.bin_freq_unbiased_regular(
+                model_type=prev_step.model_cls,
+                params=prev_step.model_params,
+                freq=freq.freq,
+                resids=resid,
+                weights=wght,
+                resolution=freq_resolution,
+                n_terms=prev_step.model_nterms,
             )
             logger.info(f".... produced {len(f)} frequency bins.")
         else:
             f = freq.freq
+            params = prev_step.model_params
 
         if gha_bin_size is None:
             gha_bin_size = gha_max - gha_min
@@ -2857,12 +2928,12 @@ class BinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         gha_edges = np.arange(gha_min, gha_max + gha_bin_size / 10, gha_bin_size, dtype=float)
 
         logger.info(f"Averaging into {len(gha_edges) - 1} GHA bins.")
-        params, resid, wght = tools.model_bin_gha(
-            prev_step.ancillary["model_params"],
-            resid,
-            wght,
-            prev_step.gha_centres,
-            gha_edges,
+        params, resid, wght = averaging.bin_gha_unbiased_regular(
+            params=params,
+            resids=resid,
+            weights=wght,
+            gha=prev_step.gha_centres,
+            bins=gha_edges,
         )
 
         # Perform xRFI on GHA-averaged spectra.
@@ -2895,7 +2966,7 @@ class BinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         self, gha_min=None, gha_max=None, gha_bin_size=None, f_low=None, f_high=None, resolution=0
     ):
         gha_edges = np.arange(gha_min, gha_max + gha_bin_size / 10, gha_bin_size, dtype=float)
-        avg_p, avg_r, avg_w = tools.model_bin_gha(
+        avg_p, avg_r, avg_w = averaging.bin_gha_unbiased_regular(
             self.model_params,
             self.resids,
             self.weights,
@@ -2903,7 +2974,7 @@ class BinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
             bins=gha_edges,
         )
 
-        f, w, s, new_r, new_p = tools.unbiased_freq_bin(
+        f, w, s, new_r, new_p = averaging.bin_freq_unbiased_regular(
             model_type=self.model.__class__,
             params=avg_p,
             freq=self.raw_frequencies,
@@ -2951,7 +3022,7 @@ class BinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
                 rr = refit_model.fit(ydata=self.spectrum[ix], weights=ww).residual
 
             if freq_resolution:
-                f, rr, ww, s = tools.average_in_frequency(
+                f, rr, ww = averaging.bin_freq_unbiased_irregular(
                     rr, self.freq.freq, ww, resolution=freq_resolution
                 )
             else:
@@ -2965,17 +3036,17 @@ class BinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
                     self.freq.max + 5,
                     -ix * separation,
                     f"GHA={self.gha_edges[ix]:.2f} RMS="
-                    f"{np.sqrt(tools.weighted_mean(data=rr ** 2, weights=ww)[0]):.2f}",
+                    f"{np.sqrt(averaging.weighted_mean(data=rr ** 2, weights=ww)[0]):.2f}",
                 )
 
         if plot_full_avg:
             # Now average EVERYTHING
-            avg_p, avg_r, avg_w = tools.model_bin_gha(
+            avg_p, avg_r, avg_w = averaging.bin_gha_unbiased_regular(
                 self.model_params,
                 self.resids,
                 weights,
                 self.gha_centres,
-                bins=[self.gha_edges.min(), self.gha_edges.max()],
+                bins=np.array([self.gha_edges.min(), self.gha_edges.max()]),
             )
 
             if refit_model is not None:
@@ -2989,7 +3060,7 @@ class BinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
                 ax.text(
                     self.freq.max + 5,
                     -(ix + 2) * separation,
-                    f"Full Avg. RMS={np.sqrt(tools.weighted_mean(data=avg_r[0] ** 2, weights=avg_w[0])[0]):.2f}",
+                    f"Full Avg. RMS={np.sqrt(averaging.weighted_mean(data=avg_r[0] ** 2, weights=avg_w[0])[0]):.2f}",
                 )
 
         return ax

@@ -38,5 +38,6 @@ def test_day_step(day_step: DayAveragedData):
 
 
 def test_bin_step(gha_step: BinnedData):
+    print(gha_step.resids.shape, gha_step.raw_frequencies.shape)
     assert gha_step.resids.shape[-1] == len(gha_step.raw_frequencies)
     assert gha_step.resids.shape == gha_step.spectrum.shape

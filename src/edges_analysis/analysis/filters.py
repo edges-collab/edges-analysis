@@ -4,7 +4,8 @@ import logging
 from dataclasses import dataclass
 from multiprocessing import cpu_count
 from pathlib import Path
-from typing import Tuple, List, Sequence, Dict
+from typing import Tuple, List, Sequence, Dict, Union
+from .levels import FilteredData, CalibratedData, FrequencyRange
 
 import h5py
 import numpy as np
@@ -109,7 +110,7 @@ class RMSInfo:
 
 
 def get_rms_info(
-    level1: Sequence,
+    steps: Sequence[Union[FilteredData, CalibratedData]],
     models: Dict[str, Dict],
     n_poly: int = 3,
     n_sigma: float = 3,
@@ -124,10 +125,9 @@ def get_rms_info(
 
     Parameters
     ----------
-    n_threads
-
-    level1
-        A list of :class:`~Level1` objects on which to compute the RMS statistics.
+    steps
+        A list of :class:`~FilteredData` or :class:`~CalibratedData` objects on which
+        to compute the RMS statistics.
     models
         List of models to fit in order to obtain the RMS. Each should be a dictionary,
         with keys "model", "params", "resolution", and "bands". The "model" should be a
@@ -149,6 +149,8 @@ def get_rms_info(
     n_std
         The number of polynomial terms to fit to the absolute residual of RMS
         as a function of GHA.
+    n_threads
+        The number of threads to use to compute the RMS.
 
     Returns
     -------
@@ -161,36 +163,17 @@ def get_rms_info(
         The output of this function is supposed to be used in ``rms_filter`` to actually
         filter files (those files may not be the same as went into this function).
     """
-    # Get a tuple representation of the bands.
-    l1 = level1[0]
-
     # Make a big vector of all GHA's in all files.
-    gha = np.hstack([l1.ancillary["gha"] for l1 in level1])
+    gha = np.hstack([l1.ancillary["gha"] for l1 in steps])
 
-    n_threads = min(n_threads, len(level1))
+    n_threads = min(n_threads, len(steps))
     if n_threads > 1:
         pool = Pool(n_threads)
         m = pool.map
     else:
         m = map
 
-    bands = {name: [] for name in models}
-    for name, model in models.items():
-        bands_ = model.get("bands", ["full"])
-        if not bands_:
-            raise ValueError("'bands' must be a list of strings/tuples")
-
-        for b in bands_:
-            if b == "full":
-                b = (np.floor(l1.freq.min), np.ceil(l1.freq.max))
-            elif b == "low":
-                b = (np.floor(l1.freq.min), np.floor(l1.freq.center))
-            elif b == "high":
-                b = (np.floor(l1.freq.center), np.ceil(l1.freq.max))
-            elif not isinstance(b, tuple):
-                raise ValueError(f"'bands' must be a list of strings/tuples, got {b}")
-
-            bands[name].append(b)
+    bands = _get_band_specs(models, steps[0].freq)
 
     out = {name: {b: {} for b in bands} for name, bands in bands.items()}
     params = {}
@@ -202,13 +185,13 @@ def get_rms_info(
         # Put all the RMS values for all files into one long vector.
         rms = list(
             m(
-                lambda i: level1[i].get_model_rms(
+                lambda i: steps[i].get_model_rms(
                     freq_ranges=list(bands[name]),
                     model=mdl,
                     resolution=model.get("resolution", 0.0488),
                     **prms,
                 ),
-                list(range(len(level1))),
+                list(range(len(steps))),
             )
         )
         params[name] = prms.copy()
@@ -217,10 +200,20 @@ def get_rms_info(
         for band in bands[name]:
             this = out[name][band]
             this["rms"] = np.hstack([r[band] for r in rms])
-
             this.update(get_rms_model_over_time(this["rms"], gha, n_poly, n_sigma, n_terms, n_std))
 
     # Transform the out dict to have the measurements as top-level keys
+    new_out = _bring_measurements_to_top(out)
+
+    return RMSInfo(
+        gha=gha,
+        meta={"n_poly": n_poly, "n_sigma": n_sigma, "n_terms": n_terms, "n_std": n_std},
+        model_params=params,
+        **new_out,
+    )
+
+
+def _bring_measurements_to_top(out: Dict) -> Dict[str, Dict]:
     for name, value_ in out.items():
         for band in value_:
             keys = value_[band].keys()
@@ -233,12 +226,31 @@ def get_rms_info(
             for band in value:
                 new_out[key][name][band] = out[name][band][key]
 
-    return RMSInfo(
-        gha=gha,
-        meta={"n_poly": n_poly, "n_sigma": n_sigma, "n_terms": n_terms, "n_std": n_std},
-        model_params=params,
-        **new_out,
-    )
+    return new_out
+
+
+def _get_band_specs(
+    models: Dict[str, Dict], freq: FrequencyRange
+) -> Dict[str, List[Tuple[float, float]]]:
+    bands = {name: [] for name in models}
+    for name, model in models.items():
+        bands_ = model.get("bands", ["full"])
+        if not bands_:
+            raise ValueError("'bands' must be a list of strings/tuples")
+
+        for b in bands_:
+            if b == "full":
+                b = (np.floor(freq.min), np.ceil(freq.max))
+            elif b == "low":
+                b = (np.floor(freq.min), np.floor(freq.center))
+            elif b == "high":
+                b = (np.floor(freq.center), np.ceil(freq.max))
+            elif not isinstance(b, tuple):
+                raise ValueError(f"'bands' must be a list of strings/tuples, got {b}")
+
+            bands[name].append(b)
+
+    return bands
 
 
 def get_rms_model_over_time(

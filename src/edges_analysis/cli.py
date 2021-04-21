@@ -393,6 +393,9 @@ def rms_info(path, settings, outfile):
     input_files = sorted(sum((_get_files(p) for p in path), []))
     objects = [levels.read_step(p) for p in input_files]
 
+    with open(settings, "r") as fl:
+        settings = yaml.load(fl, Loader=yaml.FullLoader)
+
     n_files = settings.pop("n_files", len(input_files))
 
     rms_info = filters.get_rms_info(level1=objects[:n_files], **settings)
