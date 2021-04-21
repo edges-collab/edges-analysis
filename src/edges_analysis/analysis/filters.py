@@ -6,6 +6,7 @@ from multiprocessing import cpu_count
 from pathlib import Path
 from typing import Tuple, List, Sequence, Dict, Union, Optional
 from .levels import FilteredData, CalibratedData, FrequencyRange
+import dill as pickle
 
 import h5py
 import numpy as np
@@ -209,6 +210,9 @@ def get_rms_info(
         # Get the RMS values for each of the files, for each of the bands.
         mdl = model.get("model")
         prms = model.get("params", {})
+
+        pickle.dumps(steps[0])
+        pickle.dumps(prms)
 
         # Put all the RMS values for all files into one long vector.
         rms = list(
