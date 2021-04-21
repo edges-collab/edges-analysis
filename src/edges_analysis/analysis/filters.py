@@ -211,7 +211,7 @@ def get_rms_info(
         mdl = model.get("model")
         prms = model.get("params", {})
 
-        for k, v in steps[0].__dict__.items():
+        for k, v in steps[0].__memcache__.items():
             print(k)
             pickle.dumps(v)
 
