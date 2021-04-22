@@ -855,9 +855,8 @@ class _SingleDayMixin:
                 resid = self.spectrum[indx, freq_mask] - m[freq_mask]
                 mask = weights[indx, freq_mask] > 0
                 out[band] = np.sqrt(np.nanmean(resid[mask] ** 2))
-                out[band][out[band] == 0] = np.nan
 
-            return out
+            return out or np.nan
 
         res = [_get_rms(i) for i in range(len(indices))]
 
