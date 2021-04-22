@@ -402,7 +402,7 @@ def rms_info(path, settings, outfile):
     n_files = settings.pop("n_files", len(input_files))
 
     console.print(f"[bold]Using {n_files} input files to calculate RMS:")
-    for obj in objects:
+    for obj in objects[:n_files]:
         console.print(f"    {obj.filename}")
 
     rms_info = filters.get_rms_info(objects[:n_files], **settings)
