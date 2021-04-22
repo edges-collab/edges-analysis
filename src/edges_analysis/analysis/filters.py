@@ -211,10 +211,6 @@ def get_rms_info(
         mdl = model.get("model")
         prms = model.get("params", {})
 
-        # for k, v in steps[0].__memcache__["ancillary"].__dict__.items():
-        #     print(k)
-        #     pickle.dumps(v)
-
         # Put all the RMS values for all files into one long vector.
         rms = list(
             m(
@@ -222,6 +218,7 @@ def get_rms_info(
                     freq_ranges=list(bands[name]),
                     model=mdl,
                     resolution=model.get("resolution", 0.0488),
+                    weights=steps[i].weights,
                     **prms,
                 ),
                 list(range(len(steps))),
