@@ -1,3 +1,4 @@
+exclude: '(^docs/conf.py|^src/edges_analysis/simulation/*|changethelog.py)'
 repos:
 - repo: git://github.com/pre-commit/pre-commit-hooks
   rev: v3.4.0

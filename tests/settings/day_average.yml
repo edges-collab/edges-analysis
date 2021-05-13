@@ -1,0 +1,5 @@
+# The simplest settings for day averaging mean we just average over days without explicitly
+# doing any more filtering (or any averaging over frequency)
+day_range: null
+ignore_days: null
+gha_filter_file: null

@@ -39,7 +39,7 @@ coverage.xml
 build/*
 dist/*
 sdist/*
-docs/api/*
+docs/reference/_autosummary/*
 docs/_rst/*
 docs/_build/*
 cover/*

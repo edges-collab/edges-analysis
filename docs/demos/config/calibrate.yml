@@ -1,0 +1,9 @@
+band: low
+f_low: 50
+f_high: 100
+calfile: /data4/smurray/cal_file_Rcv01_2015_09.h5
+s11_path: /data5/edges/data/S11_antenna/low_band/20160830_a/s11
+balun_correction: true
+antenna_correction: false
+ground_correction: ':'
+beam_file: /home/nmahesh/edges-beams/low/beam_factors/feko_Haslam408_ref70.00_22f61e7c4b66d33e811dc6825b04001a.h5

@@ -1,12 +1,14 @@
 from edges_analysis.analysis.filters import get_rms_info, RMSInfo
 import numpy as np
 import pytest
+from edges_analysis import FilteredData
+from pathlib import Path
 
 
 @pytest.mark.parametrize("resolution", [0, 0.0488, 5])
-def test_get_rms(mock_level1_list, resolution):
+def test_get_rms(mock_calibrated_data, resolution):
     rms_info = get_rms_info(
-        [mock_level1_list],
+        [mock_calibrated_data],
         models={
             "linlog": {
                 "model": "linlog",
@@ -27,9 +29,9 @@ def test_get_rms(mock_level1_list, resolution):
 
 
 @pytest.mark.parametrize("resolution", [0, 0.0488, 5])
-def test_rms_filter(mock_level1_list, resolution):
+def test_rms_filter(mock_calibrated_data, resolution, tmpdir: Path):
     rms_info = get_rms_info(
-        [mock_level1_list],
+        [mock_calibrated_data],
         models={
             "linlog": {
                 "model": "linlog",
@@ -39,10 +41,13 @@ def test_rms_filter(mock_level1_list, resolution):
             }
         },
     )
+    rms_info.write(tmpdir / "rms_info.h5")
 
-    flags = mock_level1_list.rms_filter(rms_info, n_sigma_rms=4)
-    assert flags.size == mock_level1_list.spectrum.size == 5000
+    fd = FilteredData.promote(
+        mock_calibrated_data, rms_filter_file=tmpdir / "rms_info.h5", n_sigma_rms=4
+    )
+    assert fd.weights.size == mock_calibrated_data.spectrum.size == 5000
 
     # We only consider flags that are not near the edges of GHA, since
     # these are hard to fit with the model.
-    assert np.sum(flags[:, 5:45]) == 0
+    assert np.isclose(np.mean(fd.weights[:, 5:45]), 1.0, rtol=0.07)
