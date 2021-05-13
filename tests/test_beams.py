@@ -1,5 +1,4 @@
 from edges_analysis.analysis import beams
-from edges_analysis.analysis import DATA
 from edges_analysis.analysis.sky_models import Haslam408
 import numpy as np
 

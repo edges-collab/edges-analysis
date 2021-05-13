@@ -1,0 +1,13 @@
+freq_resolution: 0.1
+gha_bin_size: 1.0
+
+xrfi_on_resids: true
+xrfi_pipe:
+  xrfi_model_sweep:
+    max_iter: 10
+    threshold: 3.5
+    which_bin: all
+    watershed: 1
+    window_width: 100
+
+n_threads: 32

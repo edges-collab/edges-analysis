@@ -2,7 +2,14 @@
 import pytest
 from pathlib import Path
 from subprocess import run
-from edges_analysis.analysis import Level1, Level2, Level3, Level4
+from edges_analysis.analysis import (
+    CalibratedData,
+    CombinedData,
+    DayAveragedData,
+    BinnedData,
+    FilteredData,
+    ModelData,
+)
 import yaml
 from typing import Tuple
 import numpy as np
@@ -33,7 +40,7 @@ def settings() -> Path:
 
 
 @pytest.fixture(scope="session")
-def level1_settings(integration_test_data: Path) -> Path:
+def calibrate_settings(integration_test_data: Path) -> Path:
     settings = {
         "band": "low",
         "f_low": 50,
@@ -49,7 +56,7 @@ def level1_settings(integration_test_data: Path) -> Path:
         "weather_file": str(integration_test_data / "weather.txt"),
     }
 
-    out = integration_test_data / "level1_settings.yaml"
+    out = integration_test_data / "calibrate.yaml"
     with open(out, "w") as fl:
         yaml.dump(settings, fl)
 
@@ -57,55 +64,76 @@ def level1_settings(integration_test_data: Path) -> Path:
 
 
 @pytest.fixture(scope="session")
-def level1(integration_test_data: Path, level1_settings: Path) -> Tuple[Level1, Level1]:
-    with open(level1_settings) as fl:
+def cal_step(
+    integration_test_data: Path, calibrate_settings
+) -> Tuple[CalibratedData, CalibratedData]:
+    with open(calibrate_settings) as fl:
         settings = yaml.load(fl, Loader=yaml.FullLoader)
 
-    settings["s11_path"] = str(integration_test_data / "s11")
-
-    l1 = Level1.from_acq(
+    cal_1 = CalibratedData.promote(
         integration_test_data / "2016_292_00_small.acq",
-        out_file=integration_test_data / "level1/292.h5",
-        **settings
+        filename=integration_test_data / "calibrate/292.h5",
+        **settings,
     )
-    l1.write()
-
-    l2 = Level1.from_acq(
+    cal_2 = CalibratedData.promote(
         integration_test_data / "2016_295_00_small.acq",
-        out_file=integration_test_data / "level1/295.h5",
-        **settings
+        filename=integration_test_data / "calibrate/295.h5",
+        **settings,
     )
-    l2.write()
 
-    return l1, l2
+    return cal_1, cal_2
 
 
 @pytest.fixture(scope="session")
-def level2(level1: Level1, settings: Path, integration_test_data: Path):
-    with open(settings / "level2.yml") as fl:
+def filter_step(cal_step, settings: Path, integration_test_data: Path):
+    with open(settings / "filter.yml") as fl:
         s = yaml.load(fl, Loader=yaml.FullLoader)
 
-    return Level2.from_previous_level(level1, filename=integration_test_data / "level2/out.h5", **s)
+    return [
+        FilteredData.promote(obj, filename=integration_test_data / f"filter/{obj.day}.h5", **s)
+        for obj in cal_step
+    ]
 
 
 @pytest.fixture(scope="session")
-def level3(level2: Level2, settings: Path, integration_test_data: Path):
-    with open(settings / "level3.yml") as fl:
+def model_step(filter_step, settings: Path, integration_test_data: Path):
+    with open(settings / "model.yml") as fl:
         s = yaml.load(fl, Loader=yaml.FullLoader)
 
-    return Level3.from_previous_level(level2, filename=integration_test_data / "level3/out.h5", **s)
+    return [
+        ModelData.promote(obj, filename=integration_test_data / f"model/{obj.day}.h5", **s)
+        for obj in filter_step
+    ]
 
 
 @pytest.fixture(scope="session")
-def level4(level3: Level3, settings: Path, integration_test_data: Path):
-    with open(settings / "level4.yml") as fl:
+def combo_step(model_step, settings: Path, integration_test_data: Path):
+    with open(settings / "combine.yml") as fl:
         s = yaml.load(fl, Loader=yaml.FullLoader)
 
-    return Level4.from_previous_level(level3, filename=integration_test_data / "level4/out.h5", **s)
+    return CombinedData.promote(model_step, filename=integration_test_data / "combined.h5", **s)
 
 
 @pytest.fixture(scope="session")
-def mock_level1_list(tmp_path_factory) -> Level1:
+def day_step(combo_step: CombinedData, settings: Path, integration_test_data: Path):
+    with open(settings / "day_average.yml") as fl:
+        s = yaml.load(fl, Loader=yaml.FullLoader)
+
+    return DayAveragedData.promote(
+        combo_step, filename=integration_test_data / "day_averaged.h5", **s
+    )
+
+
+@pytest.fixture(scope="session")
+def gha_step(day_step: DayAveragedData, settings: Path, integration_test_data: Path):
+    with open(settings / "gha_average.yml") as fl:
+        s = yaml.load(fl, Loader=yaml.FullLoader)
+
+    return BinnedData.promote(day_step, filename=integration_test_data / "gha_averaged.h5", **s)
+
+
+@pytest.fixture(scope="session")
+def mock_calibrated_data(tmp_path_factory) -> CalibratedData:
     np.random.seed(1234)
     tmp_path = tmp_path_factory.mktemp("mock-data")
 
@@ -119,8 +147,11 @@ def mock_level1_list(tmp_path_factory) -> Level1:
         [(start_time + i * timedelta).strftime("%Y:%j:%H:%M:%S") for i in range(n_gha)], dtype="S17"
     )
 
-    anc = Level1.get_ancillary_coords(Level1.get_datetimes(time_strings))
+    anc = CalibratedData.get_ancillary_coords(CalibratedData.get_datetimes(time_strings))
     anc["times"] = time_strings
+    anc["ambient_hum"] = np.zeros(len(time_strings))
+    anc["receiver_temp"] = np.ones(len(time_strings)) * 25
+
     gha_model = 10000 * (1 + np.sin(2 * np.pi * (anc["gha"] - 18) / 24))
 
     mdl = LinLog(default_x=freq, n_terms=2)
@@ -135,7 +166,7 @@ def mock_level1_list(tmp_path_factory) -> Level1:
         "Q": (sky + noise - 300) / 400,
     }
 
-    return Level1.from_data(
+    return CalibratedData.from_data(
         {
             "frequency": freq,
             "spectra": data,
@@ -146,12 +177,8 @@ def mock_level1_list(tmp_path_factory) -> Level1:
                 "hour": 1,
                 "band": "low",
                 "xrfi_pipe": {},
-                "write_time": dt.datetime.now(),
-                "edges_io_version": __version__,
-                "object_name": "Level1",
-                "edges_analysis_version": eav,
-                "message": "",
             },
         },
-        filename=tmp_path / "mock_level1_0.h5",
+        filename=tmp_path / "mock_calibrated_data_0.h5",
+        validate=False,
     )

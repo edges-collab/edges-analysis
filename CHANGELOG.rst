@@ -1,29 +1,31 @@
-# Changelog
+Changelog
+=========
 
-## Version dev
-
-### Added
-
+Version dev
+-----------
+Added
+~~~~~
 - Ability to fit fiducial models to frequency-binned spectra (residuals still evaluated
   at raw resolution).
 
-### Changed
-
+Changed
+~~~~~~~
 - Internally much easier tracking of metadata for levels, and validation of Level data.
 
-## Version 2.0.0
-
-### Added
-
+Version 2.0.0
+-------------
+Added
+~~~~~
 - Ability to pass arbitrary settings on the command line to the "level" command
 
-### Changed
-
+Changed
+~~~~~~~
 - Frequency and GHA averaging now done via averaging model and residuals.
 
-## Version 1.1.0
-
-### Added
+Version 1.1.0
+-------------
+Added
+~~~~~
 - Methods for filtering on Level1 objects, and calling them consistently from Level2.
 - Store which files are fully flagged in Level2.
 - Beam class for easier handling of beam information
@@ -32,9 +34,11 @@
 - Working Total Power Filter and RMS filter
 - Faster modeling throughout
 
-### Fixed
+Fixed
+~~~~~
 - Warnings in xrfi are now suppressed, and a summary is given.
 
-## Version 0.1.0
+Version 0.1.0
+-------------
 
-First version compatible with new `edges-collab` set of repos.
+First version compatible with new ``edges-collab`` set of repos.

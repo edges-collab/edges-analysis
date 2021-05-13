@@ -1,23 +1,25 @@
-import hashlib
 import glob
+import logging
 import os
-import click
+import sys
 from pathlib import Path
-import yaml
+from typing import List, Type, Optional, Union
+
+import click
 import h5py
-import tqdm
+import p_tqdm
+import questionary as qs
+import yaml
+from edges_io import io
+from rich import box
 from rich.console import Console
 from rich.logging import RichHandler
-from .analysis.levels import Level1
-from .analysis import levels
-from .config import config
-import logging
-import numpy as np
-
 from rich.panel import Panel
-from rich import box
 from rich.rule import Rule
 from rich.table import Table
+from .analysis import filters
+from .analysis import levels
+from .config import config
 
 console = Console()
 
@@ -29,12 +31,13 @@ logging.basicConfig(
     datefmt="[%X]",
     handlers=[
         RichHandler(
-            # console=console,
+            console=console,
             show_time=False,
             show_path=False,
             markup=True,
             rich_tracebacks=True,
             tracebacks_show_locals=True,
+            tracebacks_width=console.width,
         )
     ],
 )
@@ -50,9 +53,14 @@ def _get_settings(settings, xrfi, **cli_settings):
     if not xrfi and settings["xrfi_pipe"]:
         settings["xrfi_pipe"] = {}
 
-    console.print("[bold]Settings:")
-    settings_str = yaml.dump(settings)
-    console.print(settings_str)
+    console.print()
+    tab = Table(title="Settings", show_header=False)
+    tab.add_column()
+    tab.add_column()
+    for k, v in settings.items():
+        tab.add_row(k, str(v))
+    console.print(tab)
+    console.print()
 
     return settings
 
@@ -81,88 +89,57 @@ def _ctx_to_dct(args):
     return dct
 
 
-def _get_input_files(level, path, label, allow_many=False):
-    """Get the input file(s) to convert to the next level."""
-    path = Path(path)
-    root = Path(config["paths"]["field_products"])
-    lvl = root / f"level{level}"
+def _get_files(pth: Path, filter=h5py.is_hdf5) -> List[Path]:
+    if pth.is_dir():
+        return [fl for fl in pth.glob("*") if filter(fl)]
+    else:
+        return [Path(fl) for fl in glob.glob(str(pth)) if filter(Path(fl))]
 
-    if label and Path(label).is_file():
-        with open(label, "r") as fl:
-            settings = yaml.load(fl, Loader=yaml.FullLoader)
-            label = settings.pop("label", hashlib.md5(repr(settings).encode()).hexdigest())
-        console.print(f"[bold]Using auto-generated label: [dim]{label}[/]")
 
-    fnc = _get_files if allow_many else _get_unique_file
+def get_output_dir(prefix, label, settings):
+    out = Path(prefix) / label
 
-    try_paths = np.unique(
-        [
-            path,
-            lvl / label / path,
-            lvl / path,
-            root / path,
-            path / label,
-            path / f"level{level}" / label,
-        ]
-    )
-    for pth in try_paths:
+    if out.exists():
         try:
-            return fnc(pth)
-        except ValueError:
-            pass
+            with open(out / "settings.yaml") as fl:
+                existing_settings = yaml.load(fl, Loader=yaml.FullLoader)
+        except FileNotFoundError:
+            # Empty directory most likely due to an error in a previous run.
+            return out
 
-    console.print("[bold]Tried Following Paths: ")
+        if existing_settings != settings:
+            tab = Table("existing", "proposed", width=console.width)
+            tab.add_row(yaml.dump(existing_settings), yaml.dump(settings))
+            console.print(tab)
 
-    for pth in try_paths:
-        console.print(f"[dim]\t{pth}")
+            if qs.confirm(
+                f"{out} has existing files with different settings. Remove existing and "
+                f"continue?"
+            ).ask():
+                for fl in out.glob("*"):
+                    if fl.is_file():
+                        fl.unlink()
+            else:
+                console.print("Fine. Be that way.")
+                sys.exit()
 
-    return []
+        else:
+            console.print("Using existing label with identical settings.")
+
+    return out
 
 
-def _get_all_files(pth: Path, filter=h5py.is_hdf5):
-    if pth.is_file():
-        return [pth]
-    elif pth.is_dir():
-        return [fl for fl in pth.glob("*.h5") if filter(fl)]
+def expand_colon(pth: str, band: str = "", raw=True) -> Path:
+    """Expand the meaning of : in front of a path pointing to raw field data."""
+    if pth[0] != ":":
+        return Path(pth)
+    elif raw:
+        if not band:
+            raise ValueError("must provide 'band' in settings to find raw files!")
+
+        return Path(config["paths"]["raw_field_data"]) / "mro" / band / pth[1:]
     else:
-        return [Path(fl) for fl in glob.glob(str(pth)) if filter(fl)]
-
-
-def _get_unique_file(pth):
-    files = _get_all_files(pth)
-    if not files:
-        raise ValueError
-    elif len(files) > 1:
-        raise IOError(f"More than one file found in {pth}")
-
-    return files[0]
-
-
-def _get_files(pth: Path, filter=h5py.is_hdf5):
-    files = _get_all_files(pth, filter)
-    if not files:
-        raise ValueError
-
-    return files
-
-
-def get_output_dir(level, settings, label, prefix):
-    hsh = hashlib.md5(repr(settings).encode()).hexdigest()
-    label = label or hsh
-    prefix = prefix or Path(config["paths"]["field_products"]) / f"level{level}"
-
-    prefix = Path(prefix) / label
-    prefix.mkdir(parents=True, exist_ok=True)
-    return prefix
-
-
-def get_output_path(level, settings, in_file, label, prefix):
-    prefix = get_output_dir(level, settings, label, prefix)
-
-    if isinstance(in_file, list):
-        return prefix / (hashlib.md5(repr(in_file).encode()).hexdigest() + ".h5")
-    else:
-        return prefix / in_file.name
+        return Path(config["paths"]["field_products"]) / pth[1:]
 
 
 @main.command(
@@ -171,87 +148,167 @@ def get_output_path(level, settings, in_file, label, prefix):
         "allow_extra_args": True,
     }
 )
+@click.argument(
+    "step",
+    type=click.Choice(
+        ["calibrate", "filter", "model", "combine", "day", "bin"], case_sensitive=False
+    ),
+)
 @click.argument("settings", type=click.Path(dir_okay=False, exists=True))
-@click.argument("path", type=click.Path(dir_okay=True), nargs=-1)
-@click.option("-l", "--label", default="")
-@click.option("-p", "--prefix", default="")
-@click.option("-m", "--message", default="")
-@click.option("-x/-X", "--xrfi/--no-xrfi", default=True, help="manually turn off xRFI")
+@click.option(
+    "-i",
+    "--path",
+    type=click.Path(dir_okay=True),
+    multiple=True,
+    help="""The path(s) to input files. Multiple specifications of ``-i`` can be included.
+    Each input path may have glob-style wildcards, eg. ``/path/to/file.*``. If the path
+    is a directory, all HDF5/ACQ files in the directory will be used. You may prefix the
+    path with a colon to indicate the "standard" location (given by ``config['paths']``),
+    e.g. ``-i :big-calibration/``.
+    """,
+)
+@click.option(
+    "-l",
+    "--label",
+    default="",
+    help="""A label for the output. This label should be unique to the input settings
+    (but may be applied to different input files). If the same label is used for different
+    settings, the existing processed data will be removed (after prompting).
+    """,
+)
+@click.option(
+    "-m",
+    "--message",
+    default="",
+    help="""A message to save with the data. The message will be saved in a README.txt
+    file alongside the output data file(s). It is intended to provide a human-understandable
+    "reason" for running the particular analysis with the particular settings.
+    """,
+)
+@click.option(
+    "-x/-X",
+    "--xrfi/--no-xrfi",
+    default=True,
+    help="Manually turn off xRFI. Useful to quickly shut off xRFI without changing settings.",
+)
 @click.option(
     "-c/-C",
     "--clobber/--no-clobber",
-    help="whether to overwrite any existing data at the output location",
+    help="Whether to overwrite any existing data at the output location",
 )
+@click.option(
+    "-o",
+    "--output",
+    default="",
+    help="Name of an output file. Only required for the 'combine' step.",
+)
+@click.option("-j", "--nthreads", default=1, help="How many threads to use.")
 @click.pass_context
-def calibrate(ctx, settings, path, label, prefix, message, xrfi, clobber):
-    """Calibrate field data to produce Level1 files."""
+def process(ctx, step, settings, path, label, message, xrfi, clobber, output, nthreads):
+    """Process a dataset to the STEP level of averaging/filtering using SETTINGS.
+
+    STEP
+        defines the analysis step as a string. Each of the steps should be applied
+        in turn.
+    SETTINGS
+        is a YAML settings file. The available settings for each step can be seen
+        in the respective documentation for the classes "promote" method.
+
+    Each STEP should take one or more ``--input`` files that are the output of a previous
+    step. The first step (``calibrate``) should take raw ``.acq`` or ``.h5`` spectrum
+    files.
+
+    The output files are placed in a directory inside the input file directory, with a
+    name determined by the ``--label``.
+    """
     console.print(
-        Panel("edges-analysis [blue]calibrate[/]", box=box.DOUBLE_EDGE),
+        Panel(f"edges-analysis [blue]{step}[/]", box=box.DOUBLE_EDGE),
         style="bold",
         justify="center",
     )
 
+    console.print(Rule("Setting Up"))
+
+    step_cls = {
+        "calibrate": levels.CalibratedData,
+        "filter": levels.FilteredData,
+        "model": levels.ModelData,
+        "combine": levels.CombinedData,
+        "day": levels.DayAveragedData,
+        "bin": levels.BinnedData,
+    }[step]
+
     cli_settings = _ctx_to_dct(ctx.args)
     settings = _get_settings(settings, xrfi, **cli_settings)
-
     label = settings.pop("label", "") or label
 
-    path = [Path(p) for p in path]
+    if not label:
+        label = qs.text("Provide a short label to identify this run:").ask()
 
-    root = Path(config["paths"]["raw_field_data"])
-    root_data = root / "mro" / settings["band"]
+    if step == "calibrate":
 
-    files = []
-    for p in path:
-        for pth in [p, root / p, root_data / p]:
-            try:
-                files += _get_files(pth, filter=lambda x: True)
-                break
-            except ValueError:
-                pass
+        def file_filter(pth: Path):
+            return pth.suffix[1:] in io.Spectrum.supported_formats
 
-    if not files:
-        logger.warning("No input files were found!")
+    else:
+        file_filter = h5py.is_hdf5
+
+    # Get input file(s). If doing initial calibration, get them from raw_field_data
+    # otherwise they should be in field_products.
+    path = [
+        expand_colon(p, band=settings.get("band"), raw=step == "calibrate").expanduser()
+        for p in path
+    ]
+    input_files = sum((_get_files(p, filter=file_filter) for p in path), [])
+
+    if not input_files:
+        logger.error(f"No input files were found! Paths: {path}")
         return
+    else:
+        console.print("[bold]Input Files:")
+        for fl in input_files:
+            console.print(f"   {fl}")
+        console.print()
+    # Check that input files are all homogeneously processed
+    if step != "calibrate" and len({p.parent for p in input_files}) != 1:
+        raise ValueError("Your input files do not come from a single processing.")
 
-    output_dir = get_output_dir(1, settings, label, prefix)
+    # Get unique output directory
+    if step == "calibrate":
+        output_dir = Path(config["paths"]["field_products"]) / label
+    else:
+        output_dir = get_output_dir(input_files[0].parent, label, settings)
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     console.print(
         f"[bold]Output Directory: [dim]{output_dir}",
     )
 
-    # If the directory is not empty, we need to check whether the files that are
-    # already there are consistent with these files.
-    if output_dir.glob("*.h5"):
-        current_files = output_dir.glob("*")
-        if clobber:
-            for fl in current_files:
-                os.remove(str(fl))
+    # In most cases, the output filename will be the same as the (sole) input.
+    # However, when combining files, we need some extra label.
+    if step == "combine":
+        if not output:
+            output = [
+                Path(qs.text("Provide a filename for the output combined file:").ask()).with_suffix(
+                    ".h5"
+                )
+            ]
         else:
-            for fl in [fl for fl in current_files if h5py.is_hdf5(fl)]:
-                with h5py.File(fl, "r") as ff:
-                    for k, v in settings.items():
-                        if k not in ["calfile", "s11_path"] and (
-                            k not in ff.attrs or ff.attrs[k] != v
-                        ):
-                            if k in ff.attrs:
-                                try:
-                                    v = Path(v).expanduser().absolute()
-                                except Exception:
-                                    pass
+            output = [Path(output).with_suffix(".h5")]
+    elif step != "calibrate":
+        output = [p.name for p in input_files]
+    else:
+        output = None
 
-                                if ff.attrs[k] == str(v):
-                                    continue
-
-                            meta = "\n\t".join(f"{kk}: {vv}" for kk, vv in ff.attrs.items())
-                            raise ValueError(
-                                f"""
-The directory you want to write to has a non-consistent file for key '{k}' [required {v}].
-Filename: {fl.name}
-Metadata in file:
-        {meta}
-"""
-                            )
+    if output:
+        for pth in output:
+            if (output_dir / pth).exists():
+                if clobber:
+                    (output_dir / pth).unlink()
+                else:
+                    raise FileExistsError(
+                        f"File {output_dir/pth} exists. Use --clobber to overwrite!"
+                    )
 
     if message:
         with open(output_dir / "README.txt", "w") as fl:
@@ -260,99 +317,156 @@ Metadata in file:
     with open(output_dir / "settings.yaml", "w") as fl:
         yaml.dump(settings, fl)
 
-    pbar = tqdm.tqdm(files, unit="files")
-    for fl in pbar:
-        pbar.set_description(f"{fl.name}")
-        l1 = Level1.from_acq(filename=fl, leave_progress=False, **settings)
+    # Actually call the relevant function
+    console.print()
+    console.print(Rule("Beginning Processing"))
+    out_paths = promote(input_files, nthreads, output_dir, output, step_cls, settings)
+    console.print(Rule("Done Processing"))
 
-        t = l1.datetimes[0]
-        fname = f"{t.year}_{l1.meta['day']:>03}_{t.hour:>02}_{t.minute:>02}_{t.second:>02}.h5"
-        fname = output_dir / fname
+    for pth in out_paths:
+        with h5py.File(pth, "a") as fl:
+            fl.attrs["message"] = message
 
-        l1.write(fname)
+    console.print()
+    if step == "combine":
+        console.print(f"[bold]Output File: [blue]{out_paths[0]}")
+    elif step == "calibrate":
+        console.print(
+            f"[bold]All files written to: [dim]{output_dir}",
+        )
+    else:
+        console.print("[bold]Output Files:")
+        for fname in output:
+            console.print(f"\t[bold]{output_dir}/{fname}")
 
-    console.print(
-        f"[bold]All files written to: [dim]{output_dir}",
-    )
+
+def promote(
+    input_files: List[Path],
+    nthreads: int,
+    output_dir: Path,
+    output_fname: Optional[List[Path]],
+    step_cls: Type[levels._ReductionStep],
+    settings: dict,
+) -> List[Path]:
+    """Calibrate field data to produce CalibratedData files."""
+
+    if step_cls._multi_input:
+        data = step_cls.promote(prev_step=input_files, **settings)
+        data.write(output_dir / output_fname[0])
+        return [output_dir / output_fname[0]]
+    else:
+        output_fname = output_fname or [None] * len(input_files)
+
+        def _pro(fl, fname):
+            try:
+                data = step_cls.promote(prev_step=fl, **settings)
+            except (levels.FullyFlaggedError, levels.WeatherError) as e:
+                logger.warning(str(e))
+                return
+            fname = fname or f"{data.datestring}.h5"
+            fname = output_dir / fname
+            data.write(fname)
+            return fname
+
+        if len(input_files) == 1:
+            out = [_pro(input_files[0], output_fname[0])]
+        else:
+            out = list(
+                p_tqdm.p_umap(_pro, input_files, output_fname, unit="files", num_cpus=nthreads)
+            )
+        return [o for o in out if o is not None]
 
 
-@main.command(
-    context_settings={  # Doing this allows arbitrary options to override config
-        "ignore_unknown_options": True,
-        "allow_extra_args": True,
-    }
-)
-@click.argument("level", type=int)
+@main.command()
+@click.argument("path", nargs=-1)
 @click.argument("settings", type=click.Path(exists=True, dir_okay=False))
-@click.option("-i", "--path", default="", help="path to input files")
-@click.option("-l", "--label", default="", help="optional short label describing current settings")
-@click.option(
-    "-L",
-    "--prev-label",
-    default="",
-    help="optional short label describing settings of input data",
-)
-@click.option(
-    "-p",
-    "--prefix",
-    default="",
-    help="optional non-standard location to write the data",
-)
-@click.option(
-    "-m",
-    "--message",
-    default="",
-    help="optional message to insert into the HDF5 file describing the reason for this analysis",
-)
-@click.option("-x/-X", "--xrfi/--no-xrfi", default=True, help="manually turn off xRFI")
-@click.option(
-    "-c/-C",
-    "--clobber/--no-clobber",
-    help="whether to overwrite any existing data at the output location",
-)
-@click.pass_context
-def level(ctx, level, settings, path, label, prev_label, prefix, message, xrfi, clobber):
-    """Bump from a level to the next level."""
-    assert level > 1
-
+@click.argument("outfile", type=click.Path(exists=False, dir_okay=False))
+def rms_info(path, settings, outfile):
     console.print(
-        Panel(f"edges-analysis [blue]Level {level}[/]", box=box.DOUBLE_EDGE),
+        Panel("edges-analysis [blue]RMSInfo[/]", box=box.DOUBLE_EDGE),
         style="bold",
         justify="center",
     )
 
-    cli_settings = _ctx_to_dct(ctx.args)
-    settings = _get_settings(settings, xrfi, **cli_settings)
-    label = settings.pop("label", "") or label
+    # Get input file(s).
+    path = [expand_colon(p, raw=False).expanduser() for p in path]
+    input_files = sorted(sum((_get_files(p) for p in path), []))
+    objects = [levels.read_step(p) for p in input_files]
 
-    in_files = _get_input_files(level - 1, path, prev_label, level in [2])
-    if not in_files:
-        console.print("[bold red]Found no input files!")
-        return
+    n_files = settings.pop("n_files", len(input_files))
 
-    if isinstance(in_files, list):
-        console.print(f"[bold]Combining {len(in_files)} Level{level-1} files:")
-        for fl in in_files:
-            console.print(f"[blue]\t{fl.absolute()}")
-    else:
-        console.print(f"[bold]Processing[/] '{in_files}'")
+    rms_info = filters.get_rms_info(level1=objects[:n_files], **settings)
 
-    # Get the output structure ready
-    output_file = get_output_path(level, settings, in_files, label, prefix)
+    rms_info.write(outfile)
 
-    if output_file.exists() and not clobber:
-        logger.error(
-            f"[bold red]The output file [blue]'{output_file}'[/] already exists -- use clobber!"
-        )
-        return
+    console.print(f"Wrote RMSInfo to {outfile}.")
 
-    console.print()
-    console.print(Rule("Beginning Level Upgrade"))
-    getattr(levels, f"Level{level}").from_previous_level(in_files, output_file, clobber, **settings)
-    console.print(Rule(" Done Level Upgrade"))
 
-    with h5py.File(output_file, "a") as fl:
-        fl.attrs["message"] = message
-
-    console.print()
-    console.print(f"[bold]Output File: [blue]{output_file}")
+# def check_existing_file_settings(output_dir, settings, clobber):
+#     # If the directory is not empty, we need to check whether the files that are
+#     # already there are consistent with these files.
+#     if not output_dir.glob("*.h5"):
+#         return
+#
+#     current_files = output_dir.glob("*")
+#
+#     if clobber:
+#         for fl in current_files:
+#             os.remove(str(fl))
+#         return
+#
+#     for fl in [fl for fl in current_files if h5py.is_hdf5(fl)]:
+#         with h5py.File(fl, "r") as ff:
+#             for k, v in settings.items():
+#                 if k not in ["calfile", "s11_path"] and (
+#                     k not in ff.attrs or ff.attrs[k] != v
+#                 ):
+#                     if k in ff.attrs:
+#                         try:
+#                             v = Path(v).expanduser().absolute()
+#                         except Exception:
+#                             pass
+#
+#                         if ff.attrs[k] == str(v):
+#                             continue
+#
+#                     meta = "\n\t".join(f"{kk}: {vv}" for kk, vv in ff.attrs.items())
+#                     raise ValueError(
+#                         f"""
+# The directory you want to write to has a non-consistent file for key '{k}' [required {v}].
+# Filename: {fl.name}
+# Metadata in file:
+#     {meta}
+# """
+#                     )
+#
+#
+# @process.command()
+# @click.pass_context
+# def level(ctx, level, settings, path, label, prev_label, prefix, message, xrfi, clobber):
+#     """Bump from a level to the next level."""
+#     assert level > 1
+#
+#     console.print(
+#         Panel(f"edges-analysis [blue]Level {level}[/]", box=box.DOUBLE_EDGE),
+#         style="bold",
+#         justify="center",
+#     )
+#
+#     in_files = _get_input_files(level - 1, path, prev_label, level in [2])
+#
+#     if isinstance(in_files, list):
+#         console.print(f"[bold]Combining {len(in_files)} Level{level - 1} files:")
+#         for fl in in_files:
+#             console.print(f"[blue]\t{fl.absolute()}")
+#     else:
+#         console.print(f"[bold]Processing[/] '{in_files}'")
+#
+#     # Get the output structure ready
+#     output_file = get_output_path(level, settings, in_files, label, prefix)
+#
+#     if output_file.exists() and not clobber:
+#         logger.error(
+#             f"[bold red]The output file [blue]'{output_file}'[/] already exists -- use clobber!"
+#         )
+#         return
