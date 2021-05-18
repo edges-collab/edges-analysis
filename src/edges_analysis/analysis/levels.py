@@ -282,7 +282,9 @@ class _ReductionStep(HDF5Object):
         return out
 
     @cached_property
-    def parent(self) -> Union[_ReductionStep, io.Spectrum, List[Union[_ReductionStep, io.Spectrum]]]:
+    def parent(
+        self,
+    ) -> Union[_ReductionStep, io.Spectrum, List[Union[_ReductionStep, io.Spectrum]]]:
         try:
             return self._parent
         except AttributeError:
@@ -1199,8 +1201,8 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
 
         labcal = LabCalibration(
             calobs=Calibration(Path(calfile).expanduser()),
-            s11_files = s11_files,
-            antenna_s11_n_terms =antenna_s11_n_terms,
+            s11_files=s11_files,
+            antenna_s11_n_terms=antenna_s11_n_terms,
             switch_state_dir=switch_state_dir,
             switch_state_repeat_num=switch_state_repeat_num,
         )
@@ -1219,6 +1221,8 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
             balun_correction=balun_correction,
             ground_correction=ground_correction,
             beam_file=beam_file,
+            f_low=labcal.freq.min,
+            f_high=labcal.freq.max,
         )
         logger.info(f"... finished in {time.time() - t:.2f} sec.")
 
@@ -1591,10 +1595,10 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
         """Object that performs lab-based calibration on the data."""
         return LabCalibration(
             calobs=self.calibration,
-            s11_files = self.s11_files,
-            antenna_s11_n_terms = self.antenna_s11_n_terms,
-            switch_state_dir = self.meta['switch_state_dir'],
-            switch_state_repeat_num = self.meta['switch_state_repeat_num'],
+            s11_files=self.s11_files,
+            antenna_s11_n_terms=self.antenna_s11_n_terms,
+            switch_state_dir=self.meta["switch_state_dir"],
+            switch_state_repeat_num=self.meta["switch_state_repeat_num"],
         )
 
     def antenna_s11_model(self, freq) -> Callable[[np.ndarray], np.ndarray]:
@@ -1618,9 +1622,7 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
         return Calibration(self.meta["calfile"])
 
     @classmethod
-    def labcal(
-        cls, *, q: np.ndarray, freq: FrequencyRange, labcal: LabCalibration
-    ) -> np.ndarray:
+    def labcal(cls, *, q: np.ndarray, freq: FrequencyRange, labcal: LabCalibration) -> np.ndarray:
         """Perform lab calibration on given three-position switch ratio data."""
         # Cut the frequency range
         q = q.T[:, freq.mask]
@@ -1702,6 +1704,8 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
         ground_correction: [str, Path, None, float] = ":",
         beam_file=None,
         lst: Optional[np.ndarray] = None,
+        f_low: float = 50,
+        f_high: float = 150.0,
     ) -> Tuple[np.ndarray, FrequencyRange, dict]:
         """
         Calibrate data.
@@ -1767,10 +1771,6 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
         """
         freq = FrequencyRange(freq, f_low=f_low, f_high=f_high)
 
-        if not isinstance(calfile, Calibration):
-            calfile = Calibration(calfile)
-
-        
         calibrated_temp = cls.labcal(q=q, freq=freq, labcal=labcal)
 
         calibrated_temp = cls.loss_correct(
@@ -1782,7 +1782,7 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
             configuration=configuration,
             balun_correction=balun_correction,
             ground_correction=ground_correction,
-            s11_ant=s11_ant,
+            s11_ant=labcal.antenna_s11,
         )
 
         calibrated_temp = cls.beam_correct(
@@ -1792,8 +1792,8 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
         meta = {
             "beam_file": str(Path(beam_file).absolute()) if beam_file is not None else "",
             "s11_files": ":".join(str(f) for f in labcal.s11_files),
-            "wterms": calfile.wterms,
-            "cterms": calfile.cterms,
+            "wterms": labcal.calobs.wterms,
+            "cterms": labcal.calobs.cterms,
             "calfile": str(labcal.calobs.calfile),
             "calobs_path": str(labcal.calobs.calobs_path),
         }

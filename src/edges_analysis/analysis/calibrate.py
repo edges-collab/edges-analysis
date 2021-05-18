@@ -10,9 +10,9 @@ from pathlib import Path
 import warnings
 from edges_cal import receiver_calibration_func as rcf
 
+
 def optional(type):
     return lambda x: None if x is None else type(x)
-
 
 
 @attr.s(kw_only=True)
@@ -28,12 +28,9 @@ class LabCalibration:
     @_switch_state_dir.validator
     def _ssd_validator(self, att, val):
         if self.calobs.internal_switch is None and val is None:
-            raise ValueError(
-                "Internal switch of calobs not found, and no switch_state_dir given!"
-            )
+            raise ValueError("Internal switch of calobs not found, and no switch_state_dir given!")
         if val is not None and not val.exists():
             raise IOError(f"Provided switch_state_dir does not exist! {val}")
-
 
     @property
     def switch_state_dir(self) -> Path:
@@ -94,24 +91,29 @@ class LabCalibration:
         """The raw antenna s11 frequencies."""
         return self._antenna_s11[2]
 
-    def get_K(self, freq: Optional[np.ndarray]=None):
-        """Get the K-vector for calibration that is dependent on LNA and Antenna S11.
-        """
+    def get_K(self, freq: Optional[np.ndarray] = None):
+        """Get the K-vector for calibration that is dependent on LNA and Antenna S11."""
         if freq is None:
             freq = self.calobs.freq.freq
 
         lna = self.calobs.lna_s11(freq)
         return rcf.get_K(lna, self.antenna_s11_model(freq))
 
-    def get_linear_coefficients(self, freq: Optional[np.ndarray]=None) -> Tuple[np.ndarray, np.ndarray]:
-        """Get the linear coefficients that transform uncalibrated to calibrated temp.
-        """
+    def get_linear_coefficients(
+        self, freq: Optional[np.ndarray] = None
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """Get the linear coefficients that transform uncalibrated to calibrated temp."""
         if freq is None:
             freq = self.calobs.freq.freq
 
         K = self.get_K(freq)
         a, b = rcf.get_linear_coefficients_from_K(
-            K, self.calobs.C1(freq), self.calobs.C2(freq), self.calobs.Tunc(freq), self.calobs.Tcos(freq), self.calobs.Tsin(freq),
+            K,
+            self.calobs.C1(freq),
+            self.calobs.C2(freq),
+            self.calobs.Tunc(freq),
+            self.calobs.Tcos(freq),
+            self.calobs.Tsin(freq),
             t_load=self.calobs.t_load,
         )
         return a, b
@@ -119,7 +121,6 @@ class LabCalibration:
     def clone(self, **kwargs):
         """Create a new instance based off this one."""
         return attr.evolve(self, **kwargs)
-
 
     def calibrate_q(self, q: np.ndarray) -> np.ndarray:
         """Convert three-position switch ratio to fully calibrated temperature."""
