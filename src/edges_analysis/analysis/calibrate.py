@@ -1,6 +1,6 @@
 """Module providing routines for calibration of field data."""
 import attr
-from edges_cal import Calibration
+from edges_cal import Calibration, CalibrationObservation
 from . import s11 as s11m
 from cached_property import cached_property
 from typing import Callable, Union, Tuple, Sequence, Optional
@@ -19,44 +19,30 @@ def optional(type):
 class LabCalibration:
     """Lab calibration of field data."""
 
-    calobs: Calibration = attr.ib()
+    calobs: Union[Calibration, CalibrationObservation] = attr.ib()
     s11_files: Sequence[Union[str, Path]] = attr.ib()
     antenna_s11_n_terms: int = attr.ib(default=15)
-    _switch_state_dir: Optional[Union[str, Path]] = attr.ib(default=None, converter=optional(Path))
-    _switch_state_repeat_num: Optional[int] = attr.ib(default=None, converter=optional(int))
-
-    @_switch_state_dir.validator
-    def _ssd_validator(self, att, val):
-        if self.calobs.internal_switch is None and val is None:
-            raise ValueError("Internal switch of calobs not found, and no switch_state_dir given!")
-        if val is not None and not val.exists():
-            raise IOError(f"Provided switch_state_dir does not exist! {val}")
 
     @property
-    def switch_state_dir(self) -> Path:
-        """The directory in which switching state data exists."""
-        if self._switch_state_dir is None:
-            return self.calobs.internal_switch.path
-
-        if self.calobs.internal_switch is not None:
-            warnings.warn(
-                "You should use the switch state that is inherently in the calibration object."
-            )
-        return self._switch_state_dir.absolute()
+    def internal_switch_s11(self):
+        try:  # if a calibration observation
+            return self.calobs.internal_switch.s11_model
+        except AttributeError:  # if a calfile
+            return self.calobs.internal_switch_s11
 
     @property
-    def switch_state_repeat_num(self):
-        if self._switch_state_repeat_num is not None:
-            warnings.warn(
-                "You should use the switch state repeat_num that is inherently in the "
-                "calibration object."
-            )
-            return self._switch_state_repeat_num
-        else:
-            if self.calobs.internal_switch is None:
-                return 1
-            else:
-                return self.calobs.internal_switch.repeat_num
+    def internal_switch_s12(self):
+        try:
+            return self.calobs.internal_switch.s12_model
+        except AttributeError:
+            return self.calobs.internal_switch_s12
+
+    @property
+    def internal_switch_s22(self):
+        try:
+            return self.calobs.internal_switch.s22_model
+        except AttributeError:
+            return self.calobs.internal_switch_s22
 
     @cached_property
     def _antenna_s11(self) -> Tuple[Callable[[np.ndarray], np.ndarray], np.ndarray, np.ndarray]:
@@ -64,10 +50,10 @@ class LabCalibration:
             self.s11_files,
             f_low=self.calobs.freq.min,
             f_high=self.calobs.freq.max,
-            switch_state_dir=self.switch_state_dir,
             delay_0=0.17,
-            n_fit=self.antenna_s11_n_terms,
-            switch_state_repeat_num=self.switch_state_repeat_num,
+            internal_switch_s11=self.internal_switch_s11,
+            internal_switch_s12=self.internal_switch_s12,
+            internal_switch_s22=self.internal_switch_s22,
         )
 
         return model, raw, raw_freq
@@ -91,22 +77,28 @@ class LabCalibration:
         """The raw antenna s11 frequencies."""
         return self._antenna_s11[2]
 
-    def get_K(self, freq: Optional[np.ndarray] = None):
+    def get_K(self, freq: Optional[np.ndarray] = None, ant_s11: Optional[np.ndarray] = None):
         """Get the K-vector for calibration that is dependent on LNA and Antenna S11."""
         if freq is None:
             freq = self.calobs.freq.freq
 
-        lna = self.calobs.lna_s11(freq)
-        return rcf.get_K(lna, self.antenna_s11_model(freq))
+        try:
+            lna = self.calobs.lna_s11(freq)  # from Calibration
+        except TypeError:
+            lna = self.calobs.lna_s11  # from CalibrationObservation
+
+        if ant_s11 is None:
+            ant_s11 = self.antenna_s11_model(freq)
+        return rcf.get_K(lna, ant_s11)
 
     def get_linear_coefficients(
-        self, freq: Optional[np.ndarray] = None
+        self, freq: Optional[np.ndarray] = None, ant_s11: Optional[np.ndarray] = None
     ) -> Tuple[np.ndarray, np.ndarray]:
         """Get the linear coefficients that transform uncalibrated to calibrated temp."""
         if freq is None:
             freq = self.calobs.freq.freq
 
-        K = self.get_K(freq)
+        K = self.get_K(freq, ant_s11=ant_s11)
         a, b = rcf.get_linear_coefficients_from_K(
             K,
             self.calobs.C1(freq),
@@ -122,14 +114,38 @@ class LabCalibration:
         """Create a new instance based off this one."""
         return attr.evolve(self, **kwargs)
 
-    def calibrate_q(self, q: np.ndarray) -> np.ndarray:
+    def calibrate_q(self, q: np.ndarray, freq: Optional[np.ndarray] = None) -> np.ndarray:
         """Convert three-position switch ratio to fully calibrated temperature."""
-        return self.calobs.calibrate_Q(self.calobs.freq.freq, q, self.antenna_s11)
+        if freq is None:
+            freq = self.calobs.freq.freq
+            ant_s11 = self.antenna_s11
+        else:
+            ant_s11 = self.antenna_s11_model(freq)
 
-    def calibrate_temp(self, temp: np.ndarray) -> np.ndarray:
+        return self.calobs.calibrate_Q(freq, q, ant_s11)
+
+    def calibrate_temp(self, temp: np.ndarray, freq: Optional[np.ndarray] = None) -> np.ndarray:
         """Convert semi-calibrated temperature to fully calibrated temperature."""
-        return self.calobs.calibrate_temp(self.calobs.freq.freq, temp, self.antenna_s11)
+        if freq is None:
+            freq = self.calobs.freq.freq
+            ant_s11 = self.antenna_s11
+        else:
+            ant_s11 = self.antenna_s11_model(freq)
+        return self.calobs.calibrate_temp(freq, temp, ant_s11)
 
-    def decalibrate_temp(self, temp: np.ndarray) -> np.ndarray:
+    def decalibrate_temp(
+        self, temp: np.ndarray, freq: Optional[np.ndarray] = None, to_q=False
+    ) -> np.ndarray:
         """Convert fully-calibrated temp to semi-calibrated temp."""
-        return self.calobs.decalibrate_temp(self.calobs.freq.freq, temp, self.antenna_s11)
+        if freq is None:
+            freq = self.calobs.freq.freq
+            ant_s11 = self.antenna_s11
+        else:
+            ant_s11 = self.antenna_s11_model(freq)
+
+        out = self.calobs.decalibrate_temp(freq, temp, ant_s11)
+
+        if to_q:
+            return (out - self.calobs.t_load) / self.calobs.t_load_ns
+        else:
+            return out
