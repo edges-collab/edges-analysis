@@ -1203,8 +1203,8 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
             calobs=Calibration(Path(calfile).expanduser()),
             s11_files=s11_files,
             antenna_s11_n_terms=antenna_s11_n_terms,
-            switch_state_dir=switch_state_dir,
-            switch_state_repeat_num=switch_state_repeat_num,
+            # switch_state_dir=switch_state_dir,
+            # switch_state_repeat_num=switch_state_repeat_num,
         )
 
         logger.info("Calibrating data ...")
@@ -1221,8 +1221,8 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
             balun_correction=balun_correction,
             ground_correction=ground_correction,
             beam_file=beam_file,
-            f_low=labcal.freq.min,
-            f_high=labcal.freq.max,
+            f_low=labcal.calobs.freq.min,
+            f_high=labcal.calobs.freq.max,
         )
         logger.info(f"... finished in {time.time() - t:.2f} sec.")
 
