@@ -399,6 +399,9 @@ def rms_info(path, settings, outfile):
     if any(not isinstance(o, (levels.CalibratedData, levels.FilteredData)) for o in objects):
         raise ValueError("One of the files you input is not calibrated or filtered data!")
 
+    with open(settings, "r") as fl:
+        settings = yaml.load(fl, Loader=yaml.FullLoader)
+
     n_files = settings.pop("n_files", len(input_files))
 
     console.print(f"[bold]Using {n_files} input files to calculate RMS:")

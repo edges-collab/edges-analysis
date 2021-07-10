@@ -261,6 +261,99 @@ class Beam:
         )
 
     @classmethod
+    def from_feko_raw(
+        cls,
+        file_name_prefix: [str, Path],
+        ext: str = "txt",
+        f_low: int = 40,
+        f_high: int = 100,
+        freq_p: int = 61,
+        theta_p: float = 181,
+        phi_p: float = 361,
+        az_antenna_axis: float = 0,
+    ) -> Beam:
+        """
+        Read a FEKO beam file.
+
+        Parameters
+        ----------
+        filename
+            The path to the file.
+        az_antenna_axis
+            The azimuth of the primary antenna axis, in degrees.
+        f_low and f_high: lower and higher frequency bounds
+        freq_p: No of frequency points in the file for which the simulation was carried out for
+        theta_p: no.of the theta points the simulation was carried out for
+        phi_p: No of phi points the simulation was carried out for
+
+        Returns
+        -------
+        beam_maps
+            A ``(Nfreq, Nel, Naz)`` array giving values of the beam. Note that elevation
+            and azimuth are always in 1-degree increments.
+        freq
+            The frequencies at which the beam is defined.
+        """
+        beam_square = np.zeros((freq_p, theta_p, phi_p))
+        frequency = np.linspace(f_low, f_high, freq_p)
+        f1 = open(file_name_prefix + "_0-90." + ext)
+        f2 = open(file_name_prefix + "_91-180." + ext)
+        f3 = open(file_name_prefix + "_181-270." + ext)
+        f4 = open(file_name_prefix + "_271-360." + ext)
+
+        z = 181 * 91 + 10  # ---> change this to no.of theta * no.of phi + No.of header lines
+
+        for index, line in enumerate(f1):
+            if index % z == 0:
+                co = 0
+            if index % z >= 10:
+                x = list(map(float, line.split()))
+                beam_square[int(index / z), co % 181, int(co / 181)] = 10 ** (x[8] / 10)
+                co += 1
+
+        z = 181 * 90 + 10  #
+
+        for index, line in enumerate(f2):
+            if index % z == 0:
+                co = 0
+            if index % z >= 10:
+                x = list(map(float, line.split()))
+                beam_square[int(index / z), co % 181, int(co / 181) + 91] = 10 ** (x[8] / 10)
+                co += 1
+
+        for index, line in enumerate(f3):
+            if index % z == 0:
+                co = 0
+            if index % z >= 10:
+                x = list(map(float, line.split()))
+                beam_square[int(index / z), co % 181, int(co / 181) + 181] = 10 ** (x[8] / 10)
+                co += 1
+
+        for index, line in enumerate(f4):
+            if index % z == 0:
+                co = 0
+            if index % z >= 10:
+                x = list(map(float, line.split()))
+                beam_square[int(index / z), co % 181, int(co / 181) + 271] = 10 ** (x[8] / 10)
+                co += 1
+
+        freq = FrequencyRange(np.array(frequency))
+        beam_square[:, 90:, :] = 0
+        beam_maps = np.flip(beam_square[:, :91, :360], axis=1)
+        # Shifting beam relative to true AZ (referenced at due North)
+        # Due to angle of orientation of excited antenna panels relative to due North
+        beam_maps = cls.shift_beam_maps(az_antenna_axis, beam_maps)
+
+        return Beam(
+            frequency=freq.freq,
+            beam=beam_maps,
+            azimuth=np.arange(0, 360),
+            elevation=np.arange(0, 91),
+            simulator="feko",
+            raw_file=file_name_prefix,
+        )
+
+    @classmethod
     def get_beam_path(cls, band: str, kind: Optional[str] = None) -> Path:
         pth = BEAM_PATH / band / "default.txt" if not kind else kind + ".txt"
         if not pth.exists():
