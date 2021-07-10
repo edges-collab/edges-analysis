@@ -1,18 +1,30 @@
 import numpy as np
 from edges_io import io
-from edges_cal.reflection_coefficient import de_embed
-from edges_cal.s11_correction import get_switch_correction
-from typing import Sequence, Union
+from edges_cal.s11_correction import InternalSwitch
+from typing import Sequence, Union, Type, Callable, Optional
 from pathlib import Path
+from edges_cal.modelling import Model
+from edges_cal import reflection_coefficient as rc
 
 
 def get_corrected_s11(
     files: Sequence[Union[str, Path]],
-    switch_state_dir: [str, Path],
-    switch_state_repeat_num: [None, int] = None,
-    n_fit_terms: int = 23,
+    internal_switch: Optional[InternalSwitch] = None,
+    internal_switch_s11: Optional[Callable] = None,
+    internal_switch_s12: Optional[Callable] = None,
+    internal_switch_s22: Optional[Callable] = None,
 ):
     assert len(files) == 4
+
+    if internal_switch is None:
+        assert internal_switch_s11 is not None
+        assert internal_switch_s12 is not None
+        assert internal_switch_s22 is not None
+    else:
+        assert isinstance(internal_switch, InternalSwitch)
+        internal_switch_s11 = internal_switch.s11_model
+        internal_switch_s12 = internal_switch.s12_model
+        internal_switch_s22 = internal_switch.s22_model
 
     standards = [io.S1P.read(fl)[0] for fl in sorted(files)]
     f = io.S1P.read(files[0])[1]
@@ -24,28 +36,29 @@ def get_corrected_s11(
     }
 
     # Correction at switch
-    a_sw_c, x1, x2, x3 = de_embed(sw["o"], sw["s"], sw["l"], *standards)
+    a_sw_c = rc.de_embed(sw["o"], sw["s"], sw["l"], *standards)[0]
 
-    switch_state = io.SwitchingState(
-        switch_state_dir, repeat_num=switch_state_repeat_num, fix=False
-    )
-
-    # Correction at receiver input
     return (
-        get_switch_correction(a_sw_c, internal_switch=switch_state, f_in=f, n_terms=n_fit_terms)[0],
+        rc.gamma_de_embed(
+            internal_switch_s11(f),
+            internal_switch_s12(f),
+            internal_switch_s22(f),
+            a_sw_c,
+        ),
         f,
     )
 
 
 def antenna_s11_remove_delay(
     s11_files: Sequence[Union[str, Path]],
-    switch_state_dir: [str, Path],
     f_low: float = -np.inf,
     f_high: float = np.inf,
     delay_0: float = 0.17,
     n_fit: int = 10,
-    n_fourier: int = 23,
-    switch_state_repeat_num: [int, None] = None,
+    internal_switch: Optional[InternalSwitch] = None,
+    internal_switch_s11: Optional[Callable] = None,
+    internal_switch_s12: Optional[Callable] = None,
+    internal_switch_s22: Optional[Callable] = None,
 ):
     """
     Remove delay from antenna S11.
@@ -54,8 +67,6 @@ def antenna_s11_remove_delay(
     ----------
     s11_files
         Paths to four files with the S11 data in them.
-    switch_state_dir
-        The directory containing the switching_state measurements to use.
     f_low, f_high
         The min/max frequencies for which to perform the fit.
     delay_0
@@ -63,10 +74,6 @@ def antenna_s11_remove_delay(
     n_fit
         Number of terms in polynomial fit to the S11, in order to recast at new
         frequencies.
-    n_fourier
-        Number of terms to use in getting switch correction.
-    switch_state_repeat_num
-        The repeat number to use when getting the switching state measurements.
 
     Returns
     -------
@@ -75,9 +82,10 @@ def antenna_s11_remove_delay(
     """
     gamma, f_orig = get_corrected_s11(
         s11_files,
-        switch_state_dir,
-        n_fit_terms=n_fourier,
-        switch_state_repeat_num=switch_state_repeat_num,
+        internal_switch,
+        internal_switch_s11,
+        internal_switch_s12,
+        internal_switch_s22,
     )
 
     mask = (f_orig >= f_low) & (f_orig <= f_high)

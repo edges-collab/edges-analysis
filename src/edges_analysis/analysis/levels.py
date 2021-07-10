@@ -38,6 +38,7 @@ from .coordinates import get_jd, dt_from_jd
 from .. import __version__
 from .. import const
 from ..config import config
+from .calibrate import LabCalibration
 
 logger = logging.getLogger(__name__)
 
@@ -281,7 +282,9 @@ class _ReductionStep(HDF5Object):
         return out
 
     @cached_property
-    def parent(self) -> [_ReductionStep, io.Spectrum, List[Union[_ReductionStep, io.Spectrum]]]:
+    def parent(
+        self,
+    ) -> Union[_ReductionStep, io.Spectrum, List[Union[_ReductionStep, io.Spectrum]]]:
         try:
             return self._parent
         except AttributeError:
@@ -1095,26 +1098,20 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
         cls,
         prev_step: io.HDF5RawSpectrum,
         band: str,
-        calfile: [str, Path],
-        s11_path: [str, Path],
+        calfile: Union[str, Path],
+        s11_path: Union[str, Path],
         weather_file: Optional[Union[str, Path]] = None,
         thermlog_file: Optional[Union[str, Path]] = None,
-        out_file: Optional[Union[str, Path]] = None,
-        progress: bool = True,
-        leave_progress: bool = True,
-        xrfi_pipe: [None, dict] = None,
+        xrfi_pipe: Optional[dict] = None,
         s11_file_pattern: str = r"{y}_{jd}_{h}_*_input{input}.s1p",
-        ignore_s11_files: [None, List[str]] = None,
+        ignore_s11_files: Optional[List[str]] = None,
         switch_state_dir: Optional[Union[str, Path]] = None,
         antenna_s11_n_terms: int = 15,
-        antenna_correction: [str, Path, None] = ":",
-        configuration: str = "",
-        balun_correction: [str, Path, None] = ":",
-        ground_correction: [str, Path, None, float] = ":",
+        antenna_correction: Optional[Union[str, Path]] = ":",
+        balun_correction: Optional[Union[str, Path]] = ":",
+        ground_correction: Union[str, Path, None, float] = ":",
         beam_file=None,
-        f_low: float = 50.0,
-        f_high: float = 150.0,
-        switch_state_repeat_num: [int, None] = None,
+        switch_state_repeat_num: Optional[int] = None,
     ) -> Tuple[np.ndarray, dict, dict, dict]:
         """
         Create the object directly from calibrated data.
@@ -1137,11 +1134,6 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
         thermlog_file
             A thermlog file to use in order to capture that information (may find the
             default thermlog file automatically).
-        out_file
-            Specify the name of a file to output this particular data to. By default,
-            save it in the level cache with the same name as the input file.
-        progress
-            Whether to show a progress bar.
         leave_progress
             Whether to leave the progress bar on the screen at the end.
         xrfi_pipe
@@ -1207,26 +1199,30 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
             s11_path, band, times[0], s11_file_pattern, ignore_files=ignore_s11_files
         )
 
+        labcal = LabCalibration(
+            calobs=Calibration(Path(calfile).expanduser()),
+            s11_files=s11_files,
+            antenna_s11_n_terms=antenna_s11_n_terms,
+            # switch_state_dir=switch_state_dir,
+            # switch_state_repeat_num=switch_state_repeat_num,
+        )
+
         logger.info("Calibrating data ...")
         t = time.time()
         calspec, freq, new_meta = cls.calibrate(
             q=q,
             freq=prev_step["freq_ancillary"]["frequencies"],
             band=band,
-            calfile=Path(calfile).expanduser(),
+            labcal=labcal,
             ambient_temp=time_based_anc["ambient_temp"],
             lst=time_based_anc["lst"],
-            s11_files=s11_files,
             configuration="",
-            switch_state_dir=switch_state_dir,
-            antenna_s11_n_terms=antenna_s11_n_terms,
             antenna_correction=antenna_correction,
             balun_correction=balun_correction,
             ground_correction=ground_correction,
             beam_file=beam_file,
-            f_low=f_low,
-            f_high=f_high,
-            switch_state_repeat_num=switch_state_repeat_num,
+            f_low=labcal.calobs.freq.min,
+            f_high=labcal.calobs.freq.max,
         )
         logger.info(f"... finished in {time.time() - t:.2f} sec.")
 
@@ -1379,11 +1375,11 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
     @classmethod
     def get_s11_paths(
         cls,
-        s11_path: [str, Path, Tuple, List],
+        s11_path: Union[str, Path, Tuple, List],
         band: str,
         begin_time: datetime,
         s11_file_pattern: str,
-        ignore_files: [None, List[str]] = None,
+        ignore_files: Optional[List[str]] = None,
     ):
         """Given an s11_path, return list of paths for each of the inputs"""
 
@@ -1594,42 +1590,19 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
 
         return out
 
-    @classmethod
-    def _get_antenna_s11(
-        cls,
-        s11_files: Sequence[Union[str, Path]],
-        freq: FrequencyRange,
-        switch_state_dir: [str, Path],
-        n_terms: int,
-        switch_state_repeat_num: [int, None],
-    ):
-        # Get files
-        model, raw, raw_freq = s11m.antenna_s11_remove_delay(
-            s11_files,
-            f_low=freq.min,
-            f_high=freq.max,
-            switch_state_dir=switch_state_dir,
-            delay_0=0.17,
-            n_fit=n_terms,
-            switch_state_repeat_num=switch_state_repeat_num,
-        )
-        return model, raw, raw_freq
-
     @cached_property
-    def _antenna_s11(self) -> Tuple[Callable[[np.ndarray], np.ndarray], np.ndarray, np.ndarray]:
-        s11_files = self.meta["s11_files"].split(":")
-        freq = self.raw_frequencies
-        switch_state_dir = self.meta["switch_state_dir"]
-        switch_state_repeat_num = self.meta["switch_state_repeat_num"]
-        n_terms = self.meta["antenna_s11_n_terms"]
-
-        return self._get_antenna_s11(
-            s11_files, freq, switch_state_dir, n_terms, switch_state_repeat_num
+    def lab_calibrator(self) -> LabCalibration:
+        """Object that performs lab-based calibration on the data."""
+        return LabCalibration(
+            calobs=self.calibration,
+            s11_files=self.s11_files,
+            antenna_s11_n_terms=self.antenna_s11_n_terms,
+            switch_state_dir=self.meta["switch_state_dir"],
+            switch_state_repeat_num=self.meta["switch_state_repeat_num"],
         )
 
-    @property
-    def antenna_s11_model(self) -> Callable[[np.ndarray], np.ndarray]:
-        return self._antenna_s11[0]
+    def antenna_s11_model(self, freq) -> Callable[[np.ndarray], np.ndarray]:
+        return self.lab_calibrator.antenna_s11_model(freq)
 
     @property
     def antenna_s11(self) -> np.ndarray:
@@ -1637,11 +1610,11 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
 
     @property
     def raw_antenna_s11(self) -> np.ndarray:
-        return self._antenna_s11[1]
+        return self.lab_calibrator.raw_antenna_s11
 
     @property
     def raw_antenna_s11_freq(self) -> np.ndarray:
-        return self._antenna_s11[2]
+        return self.lab_calibrator.raw_antenna_s11_freq
 
     @cached_property
     def calibration(self):
@@ -1649,61 +1622,11 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
         return Calibration(self.meta["calfile"])
 
     @classmethod
-    def _get_ant_s11_from_calfile(
-        cls,
-        calfile: Calibration,
-        s11_files: Sequence[Union[str, Path]],
-        freq: FrequencyRange,
-        switch_state_dir: Optional[Union[str, Path]] = None,
-        antenna_s11_n_terms: int = 15,
-        switch_state_repeat_num=None,
-    ):
-        if switch_state_dir is not None:
-            if calfile.internal_switch is not None:
-                warnings.warn(
-                    "You should use the switch state that is inherently in the calibration object."
-                )
-            switch_state_dir = str(Path(switch_state_dir).absolute())
-        else:
-            if calfile.internal_switch is None:
-                raise ValueError(
-                    "Internal switch of calfile not found, and no switch_state_dir given!"
-                )
-            else:
-                switch_state_dir = calfile.internal_switch.path
-
-        if switch_state_repeat_num is not None:
-            warnings.warn(
-                "You should use the switch state repeat_num that is inherently in the "
-                "calibration object."
-            )
-            switch_state_repeat_num = switch_state_repeat_num
-        else:
-            if calfile.internal_switch is None:
-                switch_state_repeat_num = 1
-            else:
-                switch_state_repeat_num = calfile.internal_switch.repeat_num
-
-        return cls._get_antenna_s11(
-            s11_files,
-            freq,
-            switch_state_dir,
-            antenna_s11_n_terms,
-            switch_state_repeat_num,
-        )[0](freq.freq)
-
-    @classmethod
-    def labcal(
-        cls, *, q: np.ndarray, freq: FrequencyRange, calfile: Calibration, s11_ant: np.ndarray
-    ):
-
+    def labcal(cls, *, q: np.ndarray, freq: FrequencyRange, labcal: LabCalibration) -> np.ndarray:
+        """Perform lab calibration on given three-position switch ratio data."""
         # Cut the frequency range
         q = q.T[:, freq.mask]
-
-        # Calibrated antenna temperature with losses and beam chromaticity
-        calibrated_temp = calfile.calibrate_Q(freq.freq, q, s11_ant)
-
-        return calibrated_temp
+        return labcal.calibrate_q(q)
 
     @classmethod
     def loss_correct(
@@ -1772,21 +1695,17 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
         *,
         q: np.ndarray,
         freq: np.ndarray,
-        calfile: [str, Calibration],
+        labcal: LabCalibration,
         band: Optional[str] = None,
-        s11_files: Sequence[Union[str, Path]],
         ambient_temp: np.ndarray,
-        switch_state_dir: Optional[Union[str, Path]] = None,
-        antenna_s11_n_terms: int = 15,
         antenna_correction: [str, Path, None] = ":",
         configuration: str = "",
         balun_correction: [str, Path, None] = ":",
         ground_correction: [str, Path, None, float] = ":",
         beam_file=None,
-        f_low: float = 50.0,
-        f_high: float = 150.0,
-        switch_state_repeat_num: [int, None] = None,
         lst: Optional[np.ndarray] = None,
+        f_low: float = 50,
+        f_high: float = 150.0,
     ) -> Tuple[np.ndarray, FrequencyRange, dict]:
         """
         Calibrate data.
@@ -1852,19 +1771,7 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
         """
         freq = FrequencyRange(freq, f_low=f_low, f_high=f_high)
 
-        if not isinstance(calfile, Calibration):
-            calfile = Calibration(calfile)
-
-        s11_ant = cls._get_ant_s11_from_calfile(
-            calfile=calfile,
-            s11_files=s11_files,
-            freq=freq,
-            switch_state_dir=switch_state_dir,
-            antenna_s11_n_terms=antenna_s11_n_terms,
-            switch_state_repeat_num=switch_state_repeat_num,
-        )
-
-        calibrated_temp = cls.labcal(q=q, freq=freq, calfile=calfile, s11_ant=s11_ant)
+        calibrated_temp = cls.labcal(q=q, freq=freq, labcal=labcal)
 
         calibrated_temp = cls.loss_correct(
             spec=calibrated_temp,
@@ -1875,7 +1782,7 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
             configuration=configuration,
             balun_correction=balun_correction,
             ground_correction=ground_correction,
-            s11_ant=s11_ant,
+            s11_ant=labcal.antenna_s11,
         )
 
         calibrated_temp = cls.beam_correct(
@@ -1884,11 +1791,11 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
 
         meta = {
             "beam_file": str(Path(beam_file).absolute()) if beam_file is not None else "",
-            "s11_files": ":".join(str(f) for f in s11_files),
-            "wterms": calfile.wterms,
-            "cterms": calfile.cterms,
-            "calfile": str(calfile.calfile),
-            "calobs_path": str(calfile.calobs_path),
+            "s11_files": ":".join(str(f) for f in labcal.s11_files),
+            "wterms": labcal.calobs.wterms,
+            "cterms": labcal.calobs.cterms,
+            "calfile": str(labcal.calobs.calfile),
+            "calobs_path": str(labcal.calobs.calobs_path),
         }
 
         return calibrated_temp, freq, meta
