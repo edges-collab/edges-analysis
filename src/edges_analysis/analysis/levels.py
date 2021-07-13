@@ -39,6 +39,7 @@ from .. import __version__
 from .. import const
 from ..config import config
 from .calibrate import LabCalibration
+from . import types as tp
 
 logger = logging.getLogger(__name__)
 
@@ -1860,26 +1861,22 @@ class FilteredData(_ReductionStep, _SingleDayMixin):
     @classmethod
     def _promote(
         cls,
-        prev_step: [CalibratedData, FilteredData],
+        prev_step: Union[CalibratedData, FilteredData],
         *,
         sun_el_max: float = 90,
         moon_el_max: float = 90,
         ambient_humidity_max: float = 40,
         min_receiver_temp: float = 0,
         max_receiver_temp: float = 100,
-        rms_filter_file: [None, Path, str] = None,
+        rms_filter_file: tp.PathLike = None,
         do_total_power_filter: bool = True,
-        xrfi_pipe: [None, dict] = None,
+        xrfi_pipe: Optional[dict] = None,
         n_poly_tp_filter: int = 3,
         n_sigma_tp_filter: float = 3.0,
-        bands_tp_filter: [None, List[Tuple[float, float]]] = None,
-        std_thresholds_tp_filter: [None, List[float]] = None,
+        bands_tp_filter: Optional[List[Tuple[float, float]]] = None,
+        std_thresholds_tp_filter: Optional[List[float]] = None,
         n_sigma_rms: float = 3,
-        n_threads: int = cpu_count(),
-        model_nterms: int = 5,
-        model_basis: str = "linlog",
-        model_resolution: [int, float] = 8,
-        negative_power_filter: [bool] = True,
+        negative_power_filter: bool = True,
     ):
         """
         Filter a :class:`CalibratedData` object.

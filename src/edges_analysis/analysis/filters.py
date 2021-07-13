@@ -4,812 +4,533 @@ import logging
 from dataclasses import dataclass
 from multiprocessing import cpu_count
 from pathlib import Path
+from sys import stderr
 from typing import Tuple, List, Sequence, Dict, Union, Optional, Type, Callable
-from .levels import FilteredData, CalibratedData, FrequencyRange
+from .levels import FilteredData, CalibratedData, FrequencyRange, read_step
+from . import types as tp
 import dill as pickle
-
+import attr
 import h5py
 import numpy as np
 import yaml
 from multiprocess.pool import Pool
-from edges_cal.modelling import Model, Polynomial, _get_mad, flagged_filter, robust_divide
-from edges_cal import FrequencyRange
+from edges_cal.modelling import Model, Polynomial
+from edges_cal.xrfi import _get_mad, flagged_filter, robust_divide
+from cached_property import cached_property
+import abc
 
 from matplotlib import pyplot as plt
 
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class RMSInfo:
-    gha: np.ndarray
-    model_params: dict
-    meta: dict
-    rms: dict
-    flags: dict
-    model_eval: dict
-    abs_resids: dict
-    model_stds: dict
-    poly_params: dict
-    poly_params_std: dict
+@attr.s(frozen=True)
+class GHAModelFilter:
+    """A filter that is able to act upon data that has been aggregated along frequency.
+
+    Parameters
+    ----------
+    metric_model
+        A linear model that provides a good guess of the typical aggregated metric as it
+        evolves over GHA.
+    std_model
+        A linear model that provides a good guess of the typical standard deviation of
+        the metric as it evolves over GHA. This may be gotten by fitting a model to the
+        absolute residuals, for example.
+    meta
+        A dictionary holding meta-information about how the models were obtained.
+    n_sigma
+        The number of sigma to threshold at.
+    """
+
+    metric_model: Model = attr.ib()
+    std_model: Model = attr.ib()
+    meta: dict = attr.ib(factory=dict)
+
+    n_sigma: float = attr.ib(default=3.0)
+
+    def apply_filter(self, gha: np.ndarray, metric: np.ndarray) -> np.ndarray:
+        """Apply the filter to a set of metric data.
+
+        Parameters
+        ----------
+        gha
+            The GHAs at which the data to be filtered was measured (1D array)
+        metric
+            The metric to filter on (eg. RMS or Total Power) as a function of GHA
+            (1D array)
+
+        Returns
+        -------
+        flags
+            Boolean array specifying which data points should be flagged.
+        """
+        resids = metric - self.metric_model(x=gha)
+        return np.abs(resids) > (self.n_sigma * self.std_model(x=gha))
 
     @classmethod
-    def from_file(cls, fname: [str, Path]) -> RMSInfo:
-        fname = Path(fname)
-
-        def get_key(fl, key):
-            return {
-                model: {
-                    (float(band[1:].split(",")[0]), float(band[:-1].split(",")[1])): v[...]
-                    for band, v in model_dct.items()
-                }
-                for model, model_dct in fl[key].items()
-            }
-
-        with h5py.File(fname, "r") as fl:
-            data = {
-                key: get_key(fl, key)
-                for key in [
-                    "rms",
-                    "flags",
-                    "model_eval",
-                    "abs_resids",
-                    "model_stds",
-                    "poly_params",
-                    "poly_params_std",
-                ]
-            }
-
-            model_params = {}
-            for mdl_name, mdl_data in fl["model_params"].items():
-                model_params[mdl_name] = dict(mdl_data.attrs)
-
-            out = cls(
-                gha=fl["gha"][...],
-                meta={k: v for k, v in fl.attrs.items() if not k.startswith("model_")},
-                model_params=model_params,
-                **data,
-            )
-        return out
-
-    def write(self, fname: [str, Path]):
-        with h5py.File(fname, "w") as fl:
-            fl["gha"] = self.gha
-
-            for key in [
-                "rms",
-                "flags",
-                "model_eval",
-                "abs_resids",
-                "model_stds",
-                "poly_params",
-                "poly_params_std",
-            ]:
-                grp = fl.create_group(key)
-
-                for model in self.model_names:
-                    mdl_grp = grp.create_group(model)
-
-                    for band in self.bands[model]:
-                        mdl_grp[str(band)] = getattr(self, key)[model][band]
-
-            for key, val in self.meta.items():
-                fl.attrs[key] = val
-
-            grp = fl.create_group("model_params")
-            for model in self.model_names:
-                mdl_grp = grp.create_group(model)
-
-                for k, v in self.model_params[model].items():
-                    mdl_grp.attrs[k] = v
-
-    @property
-    def model_names(self):
-        """The names of the models used to generate RMS"""
-        return tuple(self.model_eval.keys())
-
-    @property
-    def bands(self) -> Dict[str, List[Tuple[float, float]]]:
-        """The bands."""
-        return {m: list(self.model_eval[m].keys()) for m in self.model_names}
-
-    def plot(
-        self,
-        n_sigma: int = 3,
-        data_gha: Optional[np.ndarray] = None,
-        data_rms: Optional[np.ndarray] = None,
+    def from_data(
+        cls,
+        info: GHAModelFilterInfo,
+        metric_model: Model,
+        std_model: Model,
+        n_sigma: float = 3.0,
+        meta=None,
     ):
-        isort = np.argsort(self.gha)
-        gha = self.gha[isort]
+        """Create the object from input metric data and models."""
+        flags = np.where(np.isnan(info.metric) | np.isinf(info.metric), True, info.flags)
 
-        i = 0
-        for name, data in self.rms.items():
-            for band, rms in data.items():
-                model = self.model_eval[name][band][isort]
-                std = self.model_stds[name][band][isort]
+        mmodel = metric_model.fit(xdata=info.gha, ydata=info.metric, weights=(~flags).astype(float))
 
-                plt.plot(gha, rms[isort], label=f"{name}: {band}", color=f"C{i}")
-                plt.plot(gha, model, ls="--", color=f"C{i}")
-                plt.fill_between(
-                    gha, model - n_sigma * std, model + n_sigma * std, color=f"C{i}", alpha=0.4
-                )
-                if data_gha is not None:
-                    plt.scatter(data_gha, data_rms[name][band], color=f"C{i}")
-                i += 1
+        flags = np.where(np.isnan(info.std) | np.isinf(info.std), True, info.flags)
+        smodel = std_model.fit(xdata=info.gha, ydata=info.std, weights=(~flags).astype(float))
 
-        plt.legend()
+        return cls(metric_model=mmodel.fit, std_model=smodel.fit, n_sigma=n_sigma, meta=meta or {})
 
+    @classmethod
+    def from_file(cls, fname: tp.PathLike) -> GHAModelFilter:
+        """Create the class from a h5 file."""
+        with h5py.File(fname, "r") as fl:
+            metric_model_kwargs = dict(fl["metric"].attrs)
+            metric_model_type = Model.get_mdl(metric_model_kwargs.pop("model_type"))
+            metric_model_params = fl["metric"]["params"]
 
-def get_rms_info(
-    steps: Sequence[Union[FilteredData, CalibratedData]],
-    models: Dict[str, Dict],
-    n_poly: int = 3,
-    n_sigma: float = 3,
-    n_terms: int = 16,
-    n_std: int = 6,
-    n_threads: int = cpu_count(),
-) -> RMSInfo:
-    """Computation of RMS info on a subset of files.
+            std_model_kwargs = dict(fl["std"].attrs)
+            std_model_type = Model.get_mdl(std_model_kwargs.pop("model_type"))
+            std_model_params = fl["std"]["params"]
 
-    This function computes the RMS, and polynomial models of the RMS over GHA. It
-    also computes an estimated model of the standard deviation of the model.
+            gha = fl["gha"][...]
 
-    Parameters
-    ----------
-    steps
-        A list of :class:`~FilteredData` or :class:`~CalibratedData` objects on which
-        to compute the RMS statistics.
-    models
-        Dictionary of models to fit in order to obtain the RMS. Each should be a dictionary,
-        with keys "model", "params", "resolution", and "bands". The "model" should be a
-        string matching an edges-cal model, the "params" should be a dictionary of
-        parameters to pass to this :class:`Model`. The "resolution" should be an int or
-        float specifying the frequency bin size (in no. of channels or bandwidth in MHz).
-        The "bands" should be a list of tuples of frequency ranges (in MHz), or the
-        strings "full", "low" or "high" (corresponding to the full band, lower half,
-        or upper half). These are used to compute the RMS (the model itself is fit over
-        the full range every time).
-    n_poly
-        Number of polynomial terms with which to fit the the RMS as a function of GHA,
-        purely for flagging bad RMS values.
-    n_sigma
-        Number of sigma at which to threshold individual RMS values from the model
-        fit over GHA.
-    n_terms
-        The number of polynomial terms to fit to the final model of RMS vs GHA.
-    n_std
-        The number of polynomial terms to fit to the absolute residual of RMS
-        as a function of GHA.
-    n_threads
-        The number of threads to use to compute the RMS.
-
-    Returns
-    -------
-    rms_info
-        A special data structure representing the RMS calculation.
-
-    See Also
-    --------
-    rms_filter
-        The output of this function is supposed to be used in ``rms_filter`` to actually
-        filter files (those files may not be the same as went into this function).
-    """
-    # Make a big vector of all GHA's in all files.
-    gha = np.hstack([l1.ancillary["gha"] for l1 in steps])
-
-    n_threads = min(n_threads, len(steps))
-    if n_threads > 1:
-        pool = Pool(n_threads)
-        m = pool.map
-    else:
-        m = map
-
-    bands = _get_band_specs(models, steps[0].freq)
-
-    out = {name: {b: {} for b in bands} for name, bands in bands.items()}
-    params = {}
-    for name, model in models.items():
-        # Get the RMS values for each of the files, for each of the bands.
-        mdl = model.get("model")
-        prms = model.get("params", {})
-
-        # Put all the RMS values for all files into one long vector.
-        rms = list(
-            m(
-                lambda i: steps[i].get_model_rms(
-                    freq_ranges=list(bands[name]),
-                    model=mdl,
-                    resolution=model.get("resolution", 0.0488),
-                    weights=steps[i].weights,
-                    **prms,
-                ),
-                list(range(len(steps))),
+            metric_model = Model.get_mdl(metric_model_type)(
+                default_x=gha, parameters=metric_model_params, **metric_model_kwargs
             )
-        )
-        params[name] = prms.copy()
-        params[name].update(**{k: v for k, v in model.items() if k not in ["params", "bands"]})
-
-        for band in bands[name]:
-            this = out[name][band]
-            this["rms"] = np.hstack([r[band] for r in rms])
-            this.update(get_rms_model_over_time(this["rms"], gha, n_poly, n_sigma, n_terms, n_std))
-
-    # Transform the out dict to have the measurements as top-level keys
-    new_out = _bring_measurements_to_top(out)
-
-    return RMSInfo(
-        gha=gha,
-        meta={"n_poly": n_poly, "n_sigma": n_sigma, "n_terms": n_terms, "n_std": n_std},
-        model_params=params,
-        **new_out,
-    )
-
-
-def _bring_measurements_to_top(out: Dict) -> Dict[str, Dict]:
-    for name, value_ in out.items():
-        for band in value_:
-            keys = value_[band].keys()
-
-    new_out = {}
-    for key in keys:
-        new_out[key] = {}
-        for name, value in out.items():
-            new_out[key][name] = {}
-            for band in value:
-                new_out[key][name][band] = out[name][band][key]
-
-    return new_out
-
-
-def _get_band_specs(
-    models: Dict[str, Dict], freq: FrequencyRange
-) -> Dict[str, List[Tuple[float, float]]]:
-    bands = {name: [] for name in models}
-    for name, model in models.items():
-        bands_ = model.get("bands", ["full"])
-        if not bands_:
-            raise ValueError("'bands' must be a list of strings/tuples")
-
-        for b in bands_:
-            bands[name].append(_get_bands(b, freq))
-
-    return bands
-
-
-def _get_bands(b, freq) -> Tuple[float, float]:
-    freq = FrequencyRange(freq)
-    if b == "full" or b is None:
-        return (np.floor(freq.min), np.ceil(freq.max))
-    elif b == "low":
-        return (np.floor(freq.min), np.floor(freq.center))
-    elif b == "high":
-        return (np.floor(freq.center), np.ceil(freq.max))
-    elif isinstance(b, tuple) and len(b) == 2:
-        return (float(b[0]), float(b[1]))
-    else:
-        raise ValueError(f"'bands' must be a list of strings/tuples, got {b}")
-
-
-def get_rms_model_over_time(
-    rms: np.ndarray, gha: np.ndarray, n_poly: int, n_sigma: float, n_terms: int, n_std: int
-):
-    flags = np.isnan(rms)
-
-    for i in range(24):  # Go through each hour
-        mask = (gha >= i) & (gha < (i + 1))
-        extern_flg = flags[mask]
-        this_flg = flags[mask].copy()
-
-        n_flg = np.sum(this_flg) - 1
-
-        while np.sum(this_flg) > n_flg and np.sum(~this_flg) > 2 * n_poly:
-            n_flg = np.sum(this_flg)
-            res, std = _get_polyfit_res_std(n_poly, gha[mask], rms[mask], flags=this_flg)
-            this_flg = extern_flg | (np.abs(res) > n_sigma * std)
-
-        extern_flg[:] = this_flg
-
-    par = np.polyfit(gha[~flags], rms[~flags], n_terms - 1)
-    model = np.polyval(par, gha)
-    abs_res = np.abs(rms - model)
-    par_std = np.polyfit(gha[~flags], abs_res[~flags], n_std - 1)
-    model_std = np.polyval(par_std, gha)
-
-    return {
-        "flags": flags,
-        "model_eval": model,
-        "abs_resids": abs_res,
-        "model_stds": model_std,
-        "poly_params": par,
-        "poly_params_std": par_std,
-    }
-
-
-def rms_filter(
-    rms_info: [str, Path, RMSInfo],
-    gha: np.ndarray,
-    rms: Dict[str, Dict[Tuple[float, float], np.ndarray]],
-    n_sigma: float = 3,
-    fl_id=None,
-):
-    """Filter RMS data based on a summary set of data.
-
-    Parameters
-    ----------
-    rms_info
-        The output of ``get_rms_info``, or a file containing it.
-    gha
-        1D array of the GHA's of the current data.
-    rms
-        The RMS of the current data. Keys are different models (must match those in
-        ``rms_info``, and values are dicts with keys that are the bands.
-    n_sigma
-        The threshold at which individual RMS values are flagged.
-
-    Returns
-    -------
-    flags
-        1D array of len(gha) specifying which integrations to flag.
-    """
-    if not isinstance(rms_info, RMSInfo):
-        rms_info = RMSInfo.from_file(rms_info)
-
-    flags = np.zeros(len(gha), dtype=bool)
-    fl_id = f"{fl_id}: " if fl_id else ""
-
-    for model, rms_model in rms.items():
-        for band, rms_band in rms_model.items():
-            pp = rms_info.poly_params[model][band]
-            pstd = rms_info.poly_params_std[model][band]
-
-            m = np.polyval(pp, gha)
-            ms = np.polyval(pstd, gha)
-            flags |= np.abs(rms_band - m) > n_sigma * ms
-
-            logger.info(
-                f"{fl_id}{np.sum(flags)}/{len(flags)} GHA's flagged after RMS filter for model={model}, band={band}."
+            std_model = Model.get_mdl(std_model_type)(
+                default_x=gha, parameters=std_model_params, **std_model_kwargs
             )
 
-    return flags
+            n_sigma = fl.attrs["n_sigma"]
+            meta = dict(fl["meta"].attrs)
+
+            return cls(metric_model=metric_model, std_model=std_model, n_sigma=n_sigma, meta=meta)
+
+    def write(self, fname: tp.PathLike):
+        """Write a h5 file."""
+        with h5py.File(fname, "w") as fl:
+            metric = fl.create_group("metric")
+            metric.attrs["n_terms"] = self.std_model.n_terms
+            metric.attrs["model_type"] = self.std_model.__class__.__name__
+            metric["params"] = self.std_model.parameters
+
+            std = fl.create_group("std")
+            std.attrs["n_terms"] = self.std_model.n_terms
+            std.attrs["model_type"] = self.std_model.__class__.__name__
+            std["params"] = self.std_model.parameters
+
+            fl["gha"] = self.metric_model["default_x"]
+            fl.attrs["n_sigma"] = self.n_sigma
+            meta = fl.create_group("meta")
+            for k, v in self.meta:
+                meta[k] = v
 
 
-def total_power_filter(
-    gha: np.ndarray,
-    spectra: np.ndarray,
-    frequencies: np.ndarray,
-    flags: [None, np.ndarray] = None,
-    n_poly: int = 3,
+@attr.s(frozen=True, auto_attribs=True, kw_only=True)
+class GHAModelFilterInfo:
+    """An object containing the data going into creating a :class:`GHAModelFIlter`.
+
+    This is useful for saving the full information to disk, or as an intermediate object
+    used when determining the model information.
+    """
+
+    gha: np.ndarray
+    metric: np.ndarray
+    std: np.ndarray
+    flags: np.ndarray
+
+    def __attrs_post_init__(self):
+        """Run post-init scripts.
+
+        This just runs validation on all of the inputs after they are set on the class.
+        """
+        self._validate_inputs()
+
+    def _validate_inputs(self) -> bool:
+        assert self.gha.shape == self.metric.shape == self.flags.shape == self.std.shape
+        assert self.gha.ndim == 1
+        assert self.gha.dtype == float
+        assert self.metric.dtype == float
+        assert self.std.dtype == float
+        assert self.flags.dtype == bool
+
+    def get_metric_residuals(
+        self, model_filter: GHAModelFilter, params: Optional[np.ndarray] = None
+    ) -> np.ndarray:
+        """Get the residuals of the metric to a smooth model fit over all GHA."""
+        return self.metric - model_filter.metric_model(parameters=params)
+
+
+@attr.s(frozen=True)
+class FrequencyAggregator(metaclass=abc.ABCMeta):
+    @abc.abstractmethod
+    def aggregate_file(self, data: Union[FilteredData, CalibratedData]) -> np.ndarray:
+        """Actually aggregate over frequency."""
+        raise NotImplementedError
+
+    def aggregate(
+        self, data: Sequence[Union[tp.PathLike, FilteredData, CalibratedData]]
+    ) -> Union[np.ndarray, np.ndarray]:
+        """Aggregate a set of data files over frequency.
+
+        Parameters
+        ----------
+        data
+            A sequence of data files to use to obtain the metric over which to filter.
+
+        Returns
+        -------
+        gha
+            The GHA's at which the aggregated metric is measured. Sorted in ascending
+            order.
+        metric
+            The aggregated metric at each GHA.
+        """
+        # Convert the data to actual Step objects
+        data = [read_step(d) for d in data]
+
+        # get the total number of GHAs in all the files
+        n_gha_total = sum(len(d.gha) for d in data)
+
+        # Put all the GHA's together
+        gha = np.concatenate(tuple(d.gha for d in data))
+
+        # Get the aggregated metrics for all input files.
+        metric = np.empty(n_gha_total)
+        count = 0
+        for datafile in data:
+            n_gha = len(datafile.gha)
+            metric[count : count + n_gha] = self.aggregate_file(datafile)
+            count += n_gha
+
+        # Now, sort the output
+        sortidx = np.argsort(gha)
+
+        return gha[sortidx], metric[sortidx]
+
+
+def get_gha_model_filter(
+    data: Sequence[Union[tp.PathLike, FilteredData, CalibratedData]],
+    aggregator: FrequencyAggregator,
+    metric_model_type: tp.Modelable,
+    std_model_type: tp.Modelable,
+    metric_model_kwargs: Optional[Dict] = None,
+    std_model_kwargs: Optional[Dict] = None,
+    detrend_metric_model: Optional[Model] = None,
+    detrend_std_model: Optional[Model] = None,
+    detrend_gha_chunk_size: float = 24.0,
     n_sigma: float = 3.0,
-    bands: [None, List[Tuple[float, float]]] = None,
-    std_thresholds=None,
-    width: int = 100,
-):
-    """
-    Filter on total power.
+    std_estimator: str = "absres",
+    medfilt_width: int = 100,
+) -> Tuple[GHAModelFilter, GHAModelFilterInfo]:
+    """Obtain a filtering object from a given set of representative data.
 
-    The algorithm of the filter is:
-
-    Get the sum of each spectrum (for a night/day) in three different bands (low half,
-    upper half, total) (yielding, for each band, a "total power" as a function of GHA).
-    For each band, split the total power into smallish chunks of GHA (nominally 1hr bins),
-    and for each bin, fit a low-order polynomial to the total power.
-    GHA's whose total power is outside some threshold are flagged, and the previous step
-    is repeated, until no new GHAs are flagged. This threshold is itself thresholded:
-    if the RMS of the residuals of the fit are very large, even 1-sigma outliers are
-    flagged. Otherwise, only 3-4-sigma outliers are flagged.
-
+    The algorithm here is to first intrinsically flag the input data, then fit a model
+    to it over GHA, which can be used to flag further files. The initial intrinsice
+    flagging is *by default* done with the same model that will be applied to other data,
+    but it can be done at a more fine-grained level, fitting to small chunks of GHA
+    at a time with a lower-order model.
 
     Parameters
     ----------
-    gha : array_like
-        1D array of galactic hour angles
-    spectra
-        2D array where first dimension is length GHA and corresponds to different
-        integrations, and second dimension corresponds to frequency.
-    frequencies
-        The frequencies at which the spectra are defined.
-    flags
-        Any flagged entries in the spectra (2D array, shape (GHA, freq)).
-    n_poly
-        The number of polynomial terms to fit to each 1-hour GHA bin.
+    data
+        A sequence of data files to use to obtain the metric over which to filter.
+    aggregator
+        A specialized function that takes a file and some parameters and returns
+        an aggregated metric.
+    metric_model_type
+        A linear model to be fit to the aggregated metric data.
+    std_model_type
+        A linear model to be fit to the absolute residuals of the metric data.
+    metric_model_kwargs
+        Parameters for the linear model (such as ``n_terms``) to fit to the metric.
+    std_model_kwargs
+        Parameters for the linear model (such as ``n_terms``) to fit to the std.
+    detrend_metric_model
+        A model to fit to the data to detrend it in order to determine flags. This is
+        a model *instance*, but it should not have the ``default_x`` set on it. By
+        default, the same as ``metric_model_type`` (with the same parameters).
+    detrend_std_model
+        A model to fit to the residuals of the data in order to determine flags. This is
+        a model *instance*, but it should not have the ``default_x`` set on it. By
+        default, the same as ``std_model_type`` (with the same parameters).
+    detrend_gha_chunk_size
+        The chunk size (in GHA) to use for model-fitting, in order to detrend and find
+        flags in the input data. By default, use the whole data set to find flags.
     n_sigma
-        The number of sigma at which to threshold individual integrations.
-    bands
-        A list of tuples, each with two floats: min and max of a frequency band over
-        which to take the total power. By default, use the whole band only.
-    std_thresholds
-        The absolute threshold for each band in terms of the standard deviation of
-        residuals. If very high, then individual integrations will be flagged at
-        one sigma deviation rather than ``n_sigma``. Must be the same length as ``bands``
-        if given.
+        The number of sigma the data can be away from the model before being flagged.
+
+    Returns
+    -------
+    filter
+        An object that can be used to filter other files based on the same aggregation.
+    info
+        An object containing information about the fit itself -- useful for inspection.
 
     """
-    # Set the relevant frequency bands over which to take the total powers.
-    if bands is None:
-        bands = [None]
+    # Aggregate the data for each file along the frequency axis.
+    gha, metric = aggregator.aggregate(data)
 
-    for i, band in bands:
-        bands[i] = _get_bands(band, frequencies)
+    # Remove nan/inf values from the data.
+    mask = np.isnan(metric) | np.isinf(metric)
+    gha = gha[~mask]
+    metric = metric[~mask]
 
-    assert spectra.shape == (len(gha), len(frequencies)), "total_power has wrong shape"
+    # Now get the metric model.
+    # Here, we do things like iteratively flagging on the data so that the metric is
+    # well defined.
+    metric_model = Model.get_mdl(metric_model_type)(**metric_model_kwargs)
+    std_model = Model.get_mdl(std_model_type)(**std_model_kwargs)
 
-    if flags is None:
-        flags = np.zeros(spectra.shape, dtype=bool)
+    if detrend_metric_model is None:
+        detrend_metric_model = metric_model
+    if detrend_std_model is None:
+        detrend_std_model = std_model
 
-    flags_1d = np.prod(flags, axis=1).astype(bool)
+    flags, resid, std = chunked_iterative_model_filter(
+        x=gha,
+        data=metric,
+        model=detrend_metric_model,
+        std_model=detrend_std_model,
+        chunk_size=detrend_gha_chunk_size,
+        n_sigma=n_sigma,
+        std_estimator=std_estimator,
+        medfilt_width=medfilt_width,
+    )
 
-    # Now sum over the frequency bands.
-    total_power = np.zeros((len(bands), len(gha)))
-    for i, band in enumerate(bands):
-        freq_mask = (frequencies >= band[0]) & (frequencies < band[1])
-        total_power[i] = np.nanmean(np.where((~flags) | freq_mask, spectra, np.nan), axis=1)
-
-    if std_thresholds is None:
-        std_thresholds = [np.inf] * len(bands)
-
-    res_collect = {}
-    std_collect = {}
-    tp_collect = {}
-    mdl_collect = {}
-    init_flags = {}
-    gha_collect = {}
-    flg_collect = {}
-
-    for j, (tpi, std_threshold, band) in enumerate(zip(total_power, std_thresholds, bands)):
-        # First flag really bad stuff
-        expected_mean = mean_power_model(gha, bands[j][0], bands[j][1])
-        flags_1d |= (total_power[j] < expected_mean / 3) | (total_power[j] > expected_mean * 3)
-
-        (
-            flg_collect[band],
-            res_collect[band],
-            std_collect[band],
-            mdl_collect[band],
-            tp_collect[band],
-            gha_collect[band],
-            init_flags[band],
-        ) = gha_based_poly_filter_in_chunks(
-            tpi,
-            gha,
-            flags=flags_1d,
-            std_threshold=std_threshold,
-            gha_bin_size=gha_bin_size,
-            n_poly=n_poly,
-            std_estimator=std_estimator,
-        )
-
-        flags_1d |= flg_collect[-1]
-
+    info = GHAModelFilterInfo(gha=gha, metric=metric, std=std, flags=flags)
     return (
-        flags_1d,
-        flg_collect,
-        res_collect,
-        std_collect,
-        tp_collect,
-        mdl_collect,
-        init_flags,
-        gha_collect,
-        total_power,
+        GHAModelFilter.from_data(
+            info,
+            metric_model,
+            std_model,
+            n_sigma=n_sigma,
+            meta={
+                "infiles": [getattr(d, "filename", str(d)) for d in data],
+                "gha_chunk_size": detrend_gha_chunk_size,
+                "detrend_model_type": detrend_metric_model.__class__.__name__,
+                "detrend_std_model_type": detrend_std_model.__class__.__name__,
+                "detrend_model_nterms": detrend_metric_model.n_terms,
+                "detrend_std_nterms": detrend_std_model.n_terms,
+                "std_estimator": std_estimator,
+                "medfilt_width": medfilt_width,
+            },
+        ),
+        info,
     )
 
 
-def gha_based_filter(
-    *,
-    spectra: np.ndarray,
-    gha: np.ndarray,
-    freq: np.ndarray,
-    aggregator: Callable,
-    bands: [None, List[Tuple[float, float]]] = None,
-    flags: Optional[np.ndarray] = None,
-    filter_fnc: Callable = model_filter_1d_chunks,
-    **kwargs,
-):
-    """
-    Filter data that has been aggregated over the frequency dimension.
-
-    This essentially performs an aggregate over frequency for a given band.
-    """
-    if flags is not None:
-        flags_1d = np.prod(flags, axis=1).astype(bool)
-    else:
-        flags_1d = np.zeros(len(gha), dtype=bool)
-
-    assert spectra.shape == (len(gha), len(freq)), "spectra has wrong shape"
-
-    # Set the relevant frequency bands over which to take the aggregates
-    if bands is None:
-        bands = [None]
-
-    for i, band in enumerate(bands):
-        bands[i] = _get_bands(band, freq)
-
-    gha_data = aggregator(spectra, bands)
-
-    out = filter_fnc(gha_data, gha, flags=flags_1d, **kwargs)
-    flags_1d |= out[0]
-    meta = out[1:]
-
-    return flags_1d, meta
-
-
-# @dataclass
-# class MultiDayGHAFilter:
-
-#     @classmethod
-#     def from_data(cls, objs: Sequence[Union[FilteredData, CalibratedData]], n_threads: int=1):
-#         # Make a big vector of all GHA's in all files.
-#         gha = np.hstack([obj.gha for obj in objs])
-
-#         n_threads = min(n_threads, len(objs))
-#         if n_threads > 1:
-#             pool = Pool(n_threads)
-#             m = pool.map
-#         else:
-#             m = map
-
-#         bands = _get_band_specs(models, objs[0].freq)
-
-#         out = {name: {b: {} for b in bands} for name, bands in bands.items()}
-#         params = {}
-#         for name, model in models.items():
-#             # Get the RMS values for each of the files, for each of the bands.
-#             mdl = model.get("model")
-#             prms = model.get("params", {})
-
-#             # Put all the RMS values for all files into one long vector.
-#             rms = list(
-#                 m(
-#                     lambda i: steps[i].get_model_rms(
-#                         freq_ranges=list(bands[name]),
-#                         model=mdl,
-#                         resolution=model.get("resolution", 0.0488),
-#                         weights=steps[i].weights,
-#                         **prms,
-#                     ),
-#                     list(range(len(steps))),
-#                 )
-#             )
-#             params[name] = prms.copy()
-#             params[name].update(**{k: v for k, v in model.items() if k not in ["params", "bands"]})
-
-#             for band in bands[name]:
-#                 this = out[name][band]
-#                 this["rms"] = np.hstack([r[band] for r in rms])
-#                 this.update(get_rms_model_over_time(this["rms"], gha, n_poly, n_sigma, n_terms, n_std))
-
-#         # Transform the out dict to have the measurements as top-level keys
-#         new_out = _bring_measurements_to_top(out)
-
-#         return RMSInfo(
-#             gha=gha,
-#             meta={"n_poly": n_poly, "n_sigma": n_sigma, "n_terms": n_terms, "n_std": n_std},
-#             model_params=params,
-#             **new_out,
-#         )
-
-
-def model_filter_1d_chunks(
-    data, x, bin_size, flags=None, **kwargs
-) -> Tuple[
-    np.ndarray,
-    List[float],
-    List[List[np.ndarray]],
-    List[List[np.ndarray]],
-    List[List[np.ndarray]],
-    List[List[np.ndarray]],
-    List[np.ndarray],
-    List[np.ndarray],
-]:
-    """
-    Filter data non-parametrically in smaller chunks.
-
-    Essentially, this just calls :func:`model_filter_1d` on small independent chunks
-    of data. See that function for details.
-
-
-    Parameters
-    ----------
-    data
-        The data to be filtered. 1D.
-    x
-        The coordinates of the data.
-    bin_size
-        The size of each independent chunk to be filtered
-        (in units of x)
-    flags
-        The initial flags to be applied.
-
-    Other Parameters
-    ----------------
-    kwargs
-        Passed through to :func:`model_filter_1d`.
-
-    Returns
-    -------
-    flags
-        The final flags
-    bins
-        The coordinates bins in which the flags were estimated.
-    flg_list, res_list, std_list, mdl_lst
-        The flags/residuals/standard deviation/model estimated for
-        each chunk and each iteration of the flagger.
-    data_list, x_list
-        The data and coordinates in their bins.
-    """
-    if flags is None:
-        flags = np.zeros(len(data), dtype=bool)
-
-    res_collect = []
-    std_collect = []
-    data_collect = []
-    mdl_collect = []
-    x_collect = []
-    flg_collect = []
-
-    bins = []
-
-    for i, xmin in enumerate(range(x.min(), x.max(), bin_size)):
-        mask = (x >= xmin) & (x < xmin + bin_size)
-        bins.append(xmin)
-
-        out_flags, res, std, mdl, flg = model_filter_1d(data[mask], x[mask], flags=flags, **kwargs)
-        if kwargs.get("return_models", True):
-            res_collect.append(res)
-            std_collect.append(std)
-            mdl_collect.append(mdl)
-            flg_collect.append(flg)
-            data_collect.append(data[mask])
-            x_collect.append(x[mask])
-
-        flags[mask] = out_flags
-
-    meta = {
-        "flags": flg_collect,
-        "residuals": res_collect,
-        "stds": std_collect,
-        "models": mdl_collect,
-        "data": data_collect,
-        "x": x_collect,
-        "bins": bins,
-    }
-
-    # Need an extra modeling step here.
-    return flags, meta
-
-
-def model_filter_1d(
-    data: np.ndarray,
+def iterative_model_filter(
     x: np.ndarray,
-    flags: Optional[np.ndarray] = None,
-    init_flags: Optional[np.ndarray] = None,
-    n_sigma: int = 3,
-    std_estimator: str = "running_mad",
-    std_threshold: float = np.inf,
-    model: [str, Type[Model]] = Polynomial,
-    return_models: bool = True,
-    median_width: int = 100,
-    max_iter: int = 20,
-    **model_kwargs,
-) -> Tuple[np.ndarray, List[np.ndarray], List[np.ndarray], List[np.ndarray], List[np.ndarray]]:
-    """
-    A non-parametric filter over a 1D dataset that uses a model fit to detrend the data.
+    data: np.ndarray,
+    model: Model,
+    std_model: Model,
+    n_sigma: float = 3.0,
+    flags: np.ndarray = None,
+    init_flags: np.ndarray = None,
+    std_estimator: str = "absres",
+    medfilt_width: int = 100,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Iteratively determine a model fit to a given array of data.
 
-    This algorithm is iterative. For each iteration, it fits a model to unflagged data,
-    and then estimates the standard deviation of the residuals (as a function of the
-    coordinates). Residuals greater than some sigma threshold are flagged, and the process
-    is repeated (on each iteration, the flags of the previous iteration can be reversed
-    either way). This continues until no new flags are identified.
+    This function takes a set of input data as a function of a variable ``x`` and
+    iteratively fits a particular model to it, fits a model to the absolute residuals,
+    and then flags out data that has residuals greater than ``n_sigma`` times the
+    absolute residual model. The newly-flagged data is then re-modelled, and so on until
+    no new flags are obtained between iterations.
+
+    The model of the absolute residuals is a good approximation of the local standard
+    deviation if there is enough data to hand.
 
     Parameters
     ----------
-    data
-        The data to be filtered.
     x
-        The coordinates of the data.
-    flags
-        Optional initial flags to apply to the data. The final flags
-        will always include these.
-    init_flags
-        Optional initial *temporary* flags to apply to the data. These can be modified
-        after the first iteration.
-    std_estimator
-        An idenfifier for which kind of method to use to estimate the standard deviation
-        of the residuals. Options are 'running_mad' for a running/sliding median absolute
-        deviation, 'absres' for a model fit to the absolute residuals, 'std' for the
-        standard deviation of the entire series, and 'mad' for the median absolute deviation
-        of the entire series.
-    std_threshold
-        If the estimated std is above this threshold, flags will be applied at 1-sigma.
+        The coordinates of the data
+    data
+        The data to which to fit a model.
     model
-        The kind of model to fit to the data.
-    return_models
-        Whether to return all the information about the fit (useful for diagnostics)
-    median_width
-        If using "running_mad" for the ``std_estimator``, the width of the window
-        used to estimate the running MAD.
-    max_iter
-        The maximum number of iterations to use.
-
-    Other Parameters
-    ----------------
-    model_kwargs
-        Any parameters to be passed onto the :class:`Model`.
+        The linear model to fit to the data
+    std_model
+        The linear model to fit to the absolute residuals.
+    n_sigma
+        The threshold number of standard deviations the data may be away from the model
+        before being flagged.
+    flags
+        Any pre-known flags of the data (i.e. data that is known to be bad and should
+        always be flagged).
+    init_flags
+        This is an initial guess of the flags. This is useful to do a rough initial
+        flagging of VERY bad values that would otherwise distort the initial modelling.
+        These flags do no persist to the second iteration, but of course very bad values
+        will still be flagged.
+    std_estimator
+        The estimator to use to get the standard deviation each data point. One of
+        'medfilt' (to use a median filtered RMS), 'absres' (to use a model fit to the
+        absolute residuals), 'std' (to use a simple standard deviation within the window)
+        or 'mad' (to use a simple median absolute deviation within the window).
 
     Returns
     -------
     flags
-        The final flags.
-    res
-        A list of model residuals, one for each flagging iteration.
-        Only if ``return_models=True``.
+        A boolean array specifying which data is bad. All input ``flags`` are still
+        flagged in this array. The function is careful to NOT overwrite the input flags
+        internally, however.
+    resid
+        Residuals to the model
     std
-        A list of residual standard deviation estimates, one for each flagging iteration.
-        Only if ``return_models=True``.
-    mdl
-        A list of models, one for each flagging iteration.
-        Only if ``return_models=True``.
-    flg
-        A list of flag arrays, one for each flagging iteration.
-        Only if ``return_models=True``.
+        Estimates of the standard deviation of the data at each data point.
     """
     if flags is None:
-        flags = np.zeros(len(data), dtype=bool)
+        flags = np.zeros(len(x), dtype=bool)
+    if init_flags is None:
+        init_flags = np.zeros(len(x), dtype=bool)
 
-    intern_flags = flags | np.isnan(data) | init_flags
+    this_flg = flags | init_flags
+    old_flg = np.ones(len(this_flg), dtype=bool)
 
-    ndata = len(x)
+    while np.any(this_flg != old_flg):
+        old_flg = this_flg.copy()
 
-    if isinstance(model, str):
-        model = Model.get_mdl(model)
+        wght = (~this_flg).astype(float)
 
-    model = model(default_x=x, **model_kwargs)
+        # TODO: this is not as efficient as possible, since we keep specifying
+        # the basis functions.
+        resid = model.fit(ydata=data, xdata=x, weights=wght).residual
 
-    res_collect = []
-    std_collect = []
-    mdl_collect = []
-    flg_collect = []
-
-    nflags = -1
-    while nflags < np.sum(intern_flags):
-        nflags = np.sum(intern_flags)
-
-        if (ndata - nflags) < model.n_terms:
-            # If we've flagged too much, just get rid of everything here.
-            intern_flags[:] = True
-            break
-
-        wght = (~intern_flags).astype(int)
-        fit = model.fit(ydata=data, weights=wght)
-        res = fit.residuals
-
-        # Estimate the standard deviation of the residuals.
+        # Here we estimate the standard deviation of the data at each data point.
+        # There are lots of ways to do this.
         if std_estimator == "medfilt":
-            sig = np.sqrt(
+            std = np.sqrt(
                 flagged_filter(
-                    res ** 2, size=2 * (median_width // 2) + 1, kind="median", flags=intern_flags
+                    resid ** 2, size=2 * (medfilt_width // 2) + 1, kind="median", flags=this_flg
                 )
                 / 0.456
             )
         elif std_estimator == "absres":
-            sig = model.fit(ydata=np.abs(res), weights=wght).residuals
+            std = std_model.fit(ydata=np.abs(resid), xdata=x, weights=wght).evaluate()
         elif std_estimator == "std":
-            sig = np.std(res) * np.ones_like(x)
+            std = np.std(resid) * np.ones_like(x)
         elif std_estimator == "mad":
-            sig = _get_mad(res) * np.ones_like(x)
+            std = _get_mad(resid) * np.ones_like(x)
+        else:
+            raise ValueError("std_estimator must be one of 'medfilt', 'absres','std' or 'mad'.")
 
-        zscore = robust_divide(res, sig)
+        std = std_model.fit(ydata=np.abs(resid), xdata=x, weights=wght).evaluate()
 
-        mask = sig > std_threshold
-        intern_flags[mask] = flags[mask] | (zscore[mask] > 1)
-        intern_flags[~mask] = flags[~mask] | (zscore[~mask] > n_sigma)
+        this_flg = flags | (np.abs(resid) > n_sigma * std)
 
-        if return_models:
-            res_collect.append(res)
-            std_collect.append(sig)
-            mdl_collect.append(model)
-            flg_collect.append(intern_flags)
+    return this_flg, resid, std
 
-    return intern_flags, res_collect, std_collect, mdl_collect, flg_collect
+
+def chunked_iterative_model_filter(
+    *,
+    x: np.ndarray,
+    data: np.ndarray,
+    flags: Optional[np.ndarray] = None,
+    init_flags: Optional[np.ndarray] = None,
+    chunk_size: float = np.inf,
+    **kwargs,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Perform a chunk-wise iterative model filter.
+
+    This breaks the given data into smaller chunks and then calls
+    :func:`iterative_model_filter` on each chunk, returning the full 1D array of flags
+    after all the chunks have been processed.
+
+    Parameters
+    ----------
+    chunk_size
+        The size of the chunks to process, in units of the input coordinates, ``x``.
+    **kwargs
+        Everything else is passed to :func:`iterative_model_filter`.
+
+    Returns
+    -------
+    flags
+        The 1D array of flags corresponding to the data. Note that input flags are not
+        modified in the course of this function, but the output does already contain
+        those flags.
+    resid
+        Residuals to the model
+    std
+        Estimates of the standard deviation of the data at each data point.
+    """
+
+    if flags is None:
+        flags = np.zeros(len(x), dtype=bool)
+    if init_flags is None:
+        init_flags = np.zeros(len(x), dtype=bool)
+
+    out_flags = flags | np.isnan(data)
+    resids = np.zeros_like(data)
+    std = np.zeros_like(data)
+
+    xmin = x.min()
+    while xmin < x.max():
+        mask = (x >= xmin) & (x < xmin + chunk_size)
+
+        out_flags[mask], resids[mask], std[mask] = iterative_model_filter(
+            x=x[mask], data=data[mask], flags=out_flags[mask], init_flags=init_flags[mask], **kwargs
+        )
+        xmin += chunk_size
+
+    return out_flags, resids, std
+
+
+@attr.s(frozen=True)
+class RMSAggregator(FrequencyAggregator):
+    """An aggregator that fits a model and yields the RMS over a given freq range."""
+
+    model_type: tp.Modelable = attr.ib(default="LinLog")
+    band: Tuple[float, float] = attr.ib(default=(0, np.inf))
+    model_kwargs: Optional[dict] = attr.ib(factory=dict)
+
+    def aggregate_file(self, data: Union[FilteredData, CalibratedData]) -> np.ndarray:
+        freq_mask = (data.raw_frequencies >= self.band[0]) & (data.raw_frequencies < self.band[1])
+
+        model = Model.get_mdl(self.model_type)(
+            default_x=data.raw_frequencies[freq_mask], **self.model_kwargs
+        )
+
+        rms = np.empty(len(data.gha))
+        for i, spectrum in enumerate(data.spectrum):
+            fit = model.fit(ydata=spectrum[freq_mask], weights=data.weights[i, freq_mask])
+            rms[i] = np.sqrt(np.mean(fit.residual ** 2))
+
+        return rms
+
+
+@attr.s(frozen=True)
+class TotalPowerAggregator(FrequencyAggregator):
+    """An aggregator that fits a model and yields the RMS over a given freq range."""
+
+    band: Tuple[float, float] = attr.ib(default=(0, np.inf))
+
+    def aggregate_file(self, data: Union[FilteredData, CalibratedData]) -> np.ndarray:
+        freq_mask = (data.raw_frequencies >= self.band[0]) & (data.raw_frequencies < self.band[1])
+        return np.sum(data.spectrum[:, freq_mask], axis=1)
+
+
+def apply_gha_model_filter(
+    data: Sequence[Union[tp.PathLike, FilteredData, CalibratedData]],
+    aggregator: FrequencyAggregator,
+    filt: Optional[GHAModelFilter] = None,
+    n_files: int = 0,
+    **kwargs,
+):
+    """Apply a GHA-based model filter to a set of data files."""
+    if n_files == 0:
+        n_files = len(data)
+
+    if filt is None:
+        filt, info = get_gha_model_filter(data=data[:n_files], aggregator=aggregator, **kwargs)
 
 
 def mean_power_model(gha, nu_min, nu_max, beta=-2.5):
@@ -863,8 +584,8 @@ def explicit_filter(times, bad, ret_times=False):
     except AttributeError:
         nb = 1
 
-    assert nt in (1, 2, 3), "times must be an array of 1,2 or 3-tuples"
-    assert nb in (1, 2, 3), "bad must be an array of 1,2 or 3-tuples"
+    assert nt in {1, 2, 3}, "times must be an array of 1,2 or 3-tuples"
+    assert nb in {1, 2, 3}, "bad must be an array of 1,2 or 3-tuples"
 
     if nt < nb:
         bad = {b[:nt] for b in bad}
@@ -890,7 +611,7 @@ def time_filter_auxiliary(
     amb_hum_max: float = 200,
     min_receiver_temp: float = 0,
     max_receiver_temp: float = 100,
-    flags: [None, np.ndarray] = None,
+    flags: Optional[np.ndarray] = None,
 ) -> np.ndarray:
     loc_flgs = np.zeros(len(gha), dtype=bool)
 
