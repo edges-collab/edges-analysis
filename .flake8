@@ -1,13 +1,23 @@
 [flake8]
 ignore =
-    E203
-    E266
-    E501
-    W503
-    F403
-    F401
-    E231
-max-line-length = 100
-# Should be 18.
-max-complexity = 25
-select = B,C,E,F,W,T4,B9
+  E203    # No space before colon
+  W503
+  N806    # Variable name should be lower case. We have some single-letter variables that make more sense to be caps.
+  A003    # Class attribute shadows a python builtin -- not much chance of that causing a problem
+  D401    # First line should be in imperative mood -- cached_properties don't fit this bill.
+  D101    # Missing docstring in public class -- my docstrings are in the __init__ which seems to fail this ?
+  RST210  # because **kwargs is allowed.
+max-line-length = 88
+max-complexity = 20
+inline-quotes = double
+docstring-convention=numpy
+rst-roles =
+  class
+  method
+  func
+  attr
+exclude =
+    devel/*
+per-file-ignores =
+    tests/*:D
+    src/edges-analysis/__init__.py:F401

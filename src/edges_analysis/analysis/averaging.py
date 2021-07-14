@@ -11,183 +11,6 @@ import numpy as np
 from edges_cal import modelling as mdl
 
 
-# def non_stationary_weighted_average(
-#     data: np.ndarray,
-#     x: np.ndarray,
-#     weights: [None, np.ndarray] = None,
-#     model_fit: [callable, None] = None,
-#     model: [mdl.Model, None, str] = "polynomial",
-#     quick=False,
-#     n_terms: int = 5,
-# ) -> [float, np.ndarray]:
-#     """
-#     Perform a weighted average over non-stationary data.
-#
-#     This function does an unbiased weighted average for data whose mean (and potentially
-#     variance) vary throughout the data. See LoCo Memo #183 for details:
-#     http://loco.lab.asu.edu/wp-content/uploads/2020/10/averaging_with_weights.pdf
-#
-#     This function always averages over the last axis.
-#
-#     Parameters
-#     ----------
-#     data
-#         The data to be averaged. Can be of arbitrary dimension.
-#     x
-#         The co-ordinate of the data along the dimension to be averaged.
-#     weights
-#         The weight of each data point. Must be the same shape as `data`.
-#     model_fit
-#         If provided, a callable which may be passed `x` and return an array of the
-#         same shape which models the data. Not very useful if the number of dimensions
-#         is more than one (unless each of the other dimensions has the same model). If
-#         set to 'zero', a normal weighted average is performed.
-#     model
-#         Used if `model_fit` is not provided. Defines a Model which is used to fit the
-#         the data.
-#     n_terms
-#         The number of terms to fit in the model.
-#
-#     Returns
-#     -------
-#     avg
-#         An array (or float) of the weighted average.
-#     """
-#     if weights is None:
-#         weights = np.ones_like(data)
-#
-#     assert weights.shape == data.shape, "weights and data must have the same shape"
-#     assert len(x) == data.shape[-1], "length of x must be the same as the last axis of data"
-#
-#     if quick:
-#         return weighted_mean(data, weights=weights, axis=-1)[0]
-#
-#     # Get a model.
-#     if not model_fit and isinstance(model, str):
-#         model = mdl.Model._models[model.lower()](n_terms=n_terms, default_x=x)
-#
-#     if model_fit:
-#         m = model_fit(x)
-#
-#     # Go through each vector.
-#     shape = data.shape[:-1]
-#     out = np.zeros(shape)
-#     for indx in np.ndindex(*shape):
-#         this_data = data[indx]
-#         this_weight = weights[indx]
-#
-#         sw = np.sum(this_weight)
-#         if sw == 0:
-#             out[indx] = np.nan
-#
-#         if not model_fit:
-#             m = mdl.ModelFit(model, ydata=this_data, weights=this_weight).evaluate()
-#
-#         res = this_data - m
-#
-#         out[indx] = np.mean(m) + np.sum(res * this_weight) / sw
-#
-#     if out.size == 1:
-#         return float(out)
-#     else:
-#         return out
-#
-#
-# def non_stationary_bin_avg(
-#     data: np.ndarray,
-#     x: np.ndarray,
-#     bins: np.ndarray,
-#     weights: [None, np.ndarray] = None,
-#     model_fit: [callable, None] = None,
-#     model: [mdl.Model, None, str] = "polynomial",
-#     n_terms: int = 5,
-#     per_bin_model: bool = False,
-#     quick=False,
-# ) -> np.ndarray:
-#     """
-#     Perform a weighted average over non-stationary data.
-#
-#     This function does an unbiased weighted average for data whose mean (and potentially
-#     variance) vary throughout the data. See LoCo Memo #183 for details:
-#     http://loco.lab.asu.edu/wp-content/uploads/2020/10/averaging_with_weights.pdf
-#
-#     This function always averages over the last axis.
-#
-#     Parameters
-#     ----------
-#     data
-#         The data to be averaged. Can be of arbitrary dimension.
-#     x
-#         The co-ordinate of the data along the dimension to be averaged.
-#     bins
-#         1D array of bin edges into which to make averages.
-#     weights
-#         The weight of each data point. Must be the same shape as `data`.
-#     model_fit
-#         If provided, a callable which may be passed `x` and return an array of the
-#         same shape which models the data. Not very useful if the number of dimensions
-#         is more than one (unless each of the other dimensions has the same model).
-#     model
-#         Used if `model_fit` is not provided. Defines a Model which is used to fit the
-#         the data.
-#     n_terms
-#         The number of terms to fit in the model.
-#     per_bin_model
-#         Whether to make a model independently in each bin, or a single model for the
-#         entire data. The latter is faster, but may be prone to bias if the underlying
-#         data model is more complex than the input model.
-#
-#     Returns
-#     -------
-#     avg
-#         An array of length bins - 1 with the binned average.
-#     """
-#     out = np.zeros(data.shape[:-1] + (len(bins) - 1,))
-#
-#     if per_bin_model or quick:
-#         for i in range(len(bins[:-1])):
-#             mask = (x >= bins[i]) & (x < bins[i + 1])
-#
-#             out[..., i] = non_stationary_weighted_average(
-#                 data=data[..., mask],
-#                 x=x[mask],
-#                 weights=weights[..., mask] if weights is not None else None,
-#                 model_fit=model_fit,
-#                 model=model,
-#                 n_terms=n_terms,
-#                 quick=quick,
-#             )
-#     else:
-#         if not model_fit and isinstance(model, str):
-#             model = mdl.Model._models[model.lower()](n_terms=n_terms, default_x=x)
-#
-#         if weights is None:
-#             weights = np.ones_like(data)
-#
-#         for indx in np.ndindex(*data.shape[:-1]):
-#             this_model = (
-#                 model_fit or mdl.ModelFit(model, ydata=data[indx], weights=weights[indx]).evaluate
-#             )
-#             this_data = data[indx]
-#             this_wght = weights[indx]
-#
-#             for i in range(len(bins[:-1])):
-#                 mask = (x >= bins[i]) & (x < bins[i + 1])
-#                 this_indx = indx + (i,)
-#                 if np.all(this_wght[mask] == 0):
-#                     out[this_indx] = np.nan
-#                 else:
-#                     out[this_indx] = non_stationary_weighted_average(
-#                         this_data[mask],
-#                         x=x[mask],
-#                         model_fit=this_model,
-#                         weights=this_wght[mask],
-#                         quick=quick,
-#                     )
-#
-#     return out
-
-
 def get_binned_weights(
     x: np.ndarray, bins: np.ndarray, weights: [None, np.ndarray] = None
 ) -> np.ndarray:
@@ -245,7 +68,9 @@ def get_bin_edges(
             bins = np.concatenate((coords[::bins], [coords[-1] + 0.1]))
         except TypeError:
             # works if its a float
-            bins = np.concatenate((np.arange(coords[0], coords[-1], bins), [coords[-1] + 0.1]))
+            bins = np.concatenate(
+                (np.arange(coords[0], coords[-1], bins), [coords[-1] + 0.1])
+            )
     return bins
 
 
@@ -320,7 +145,9 @@ def bin_array_unbiased_irregular(
     out_data = np.ones(out_shape) * np.nan
     out_wght = np.zeros(out_shape)
     out_coords = np.ones(out_shape) * np.nan
-    init_shape = tuple(data.shape[-1] if i == axis else d for i, d in enumerate(data.shape[:-1]))
+    init_shape = tuple(
+        data.shape[-1] if i == axis else d for i, d in enumerate(data.shape[:-1])
+    )
 
     for i, (lower, upper) in enumerate(bins):
         mask = np.where((coords >= lower) & (coords < upper))[0]
@@ -329,10 +156,14 @@ def bin_array_unbiased_irregular(
             this_wght = weights.take(mask, axis=axis)
 
             this_crd = np.swapaxes(
-                np.broadcast_to(coords[mask], init_shape + (len(coords[mask]),)), axis, -1
+                np.broadcast_to(coords[mask], init_shape + (len(coords[mask]),)),
+                axis,
+                -1,
             )
 
-            this_slice = tuple(slice(None) if ax != axis else i for ax in range(data.ndim))
+            this_slice = tuple(
+                slice(None) if ax != axis else i for ax in range(data.ndim)
+            )
             out_data[this_slice], out_wght[this_slice] = weighted_mean(
                 this_data, this_wght, axis=axis
             )
@@ -494,7 +325,11 @@ def bin_freq_unbiased_regular(
 
 
 def bin_gha_unbiased_regular(
-    params: np.ndarray, resids: np.ndarray, weights: np.ndarray, gha: np.ndarray, bins: np.ndarray
+    params: np.ndarray,
+    resids: np.ndarray,
+    weights: np.ndarray,
+    gha: np.ndarray,
+    bins: np.ndarray,
 ) -> [np.ndarray, np.ndarray, np.ndarray]:
     """
     Bin data in an unbiased way using a model fit.
@@ -548,7 +383,9 @@ def bin_gha_unbiased_regular(
         # and therefore have no applicable model. Then the params should be NaN. A nanmean
         # of all NaNs returns NaN, so that makes sense.
         params_out[i] = np.nanmean(these_params, axis=0)
-        resids_out[i], weights_out[i] = weighted_mean(these_resids, weights=these_weights, axis=0)
+        resids_out[i], weights_out[i] = weighted_mean(
+            these_resids, weights=these_weights, axis=0
+        )
 
     return params_out, resids_out, weights_out
 

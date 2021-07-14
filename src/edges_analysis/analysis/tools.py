@@ -42,7 +42,9 @@ def spectrum_fit(f, t, w, n_poly=5, f1_low=60, f1_high=65, f2_low=95, f2_high=14
     tc = t[((f >= f1_low) & (f <= f1_high)) | ((f >= f2_low) & (f <= f2_high))]
     wc = w[((f >= f1_low) & (f <= f1_high)) | ((f >= f2_low) & (f <= f2_high))]
 
-    m = mdl.ModelFit("linlog", fc / 200, tc, weights=wc, n_terms=n_poly).evaluate(f / 200)
+    m = mdl.ModelFit("linlog", fc / 200, tc, weights=wc, n_terms=n_poly).evaluate(
+        f / 200
+    )
     r = t - m
 
     return f, r
@@ -105,8 +107,12 @@ def run_xrfi_pipe(
                 def fnc(i):
                     # Gets the spectrum/weights from the global var dict, which was initialized
                     # by the pool. See https://research.wmz.ninja/articles/2018/03/on-sharing-large-arrays-when-using-pythons-multiprocessing.html
-                    spec = np.frombuffer(_globals["spectrum"]).reshape(_globals["shape"])[i]
-                    wght = np.frombuffer(_globals["weights"]).reshape(_globals["shape"])[i]
+                    spec = np.frombuffer(_globals["spectrum"]).reshape(
+                        _globals["shape"]
+                    )[i]
+                    wght = np.frombuffer(_globals["weights"]).reshape(
+                        _globals["shape"]
+                    )[i]
 
                     if np.any(wght > 0):
                         return rfi(spec, freq=freq, weights=wght, **kwargs)[0]
@@ -117,8 +123,12 @@ def run_xrfi_pipe(
                 shared_weights = RawArray("d", spectrum.size)
 
                 # Wrap X as an numpy array so we can easily manipulates its data.
-                shared_spectrum_np = np.frombuffer(shared_spectrum).reshape(spectrum.shape)
-                shared_weights_np = np.frombuffer(shared_weights).reshape(spectrum.shape)
+                shared_spectrum_np = np.frombuffer(shared_spectrum).reshape(
+                    spectrum.shape
+                )
+                shared_weights_np = np.frombuffer(shared_weights).reshape(
+                    spectrum.shape
+                )
 
                 # Copy data to our shared array.
                 np.copyto(shared_spectrum_np, spectrum)
@@ -134,7 +144,9 @@ def run_xrfi_pipe(
 
                 def fnc(i):
                     if np.any(weights[i] > 0):
-                        return rfi(spectrum[i], freq=freq, weights=weights[i], **kwargs)[0]
+                        return rfi(
+                            spectrum[i], freq=freq, weights=weights[i], **kwargs
+                        )[0]
                     else:
                         return np.ones_like(spectrum[i], dtype=bool)
 
@@ -153,7 +165,9 @@ def run_xrfi_pipe(
             if wrns:
                 for msg, count in wrns.items():
                     msg = msg.replace("\n", " ")
-                    logger.warning(f"{fl_id}Received warning '{msg}' {count}/{len(flags)} times.")
+                    logger.warning(
+                        f"{fl_id}Received warning '{msg}' {count}/{len(flags)} times."
+                    )
 
         print(flags.dtype)
         logger.info(

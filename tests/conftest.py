@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 import pytest
 from pathlib import Path
 from subprocess import run
@@ -90,7 +89,9 @@ def filter_step(cal_step, settings: Path, integration_test_data: Path):
         s = yaml.load(fl, Loader=yaml.FullLoader)
 
     return [
-        FilteredData.promote(obj, filename=integration_test_data / f"filter/{obj.day}.h5", **s)
+        FilteredData.promote(
+            obj, filename=integration_test_data / f"filter/{obj.day}.h5", **s
+        )
         for obj in cal_step
     ]
 
@@ -101,7 +102,9 @@ def model_step(filter_step, settings: Path, integration_test_data: Path):
         s = yaml.load(fl, Loader=yaml.FullLoader)
 
     return [
-        ModelData.promote(obj, filename=integration_test_data / f"model/{obj.day}.h5", **s)
+        ModelData.promote(
+            obj, filename=integration_test_data / f"model/{obj.day}.h5", **s
+        )
         for obj in filter_step
     ]
 
@@ -111,7 +114,9 @@ def combo_step(model_step, settings: Path, integration_test_data: Path):
     with open(settings / "combine.yml") as fl:
         s = yaml.load(fl, Loader=yaml.FullLoader)
 
-    return CombinedData.promote(model_step, filename=integration_test_data / "combined.h5", **s)
+    return CombinedData.promote(
+        model_step, filename=integration_test_data / "combined.h5", **s
+    )
 
 
 @pytest.fixture(scope="session")
@@ -129,7 +134,9 @@ def gha_step(day_step: DayAveragedData, settings: Path, integration_test_data: P
     with open(settings / "gha_average.yml") as fl:
         s = yaml.load(fl, Loader=yaml.FullLoader)
 
-    return BinnedData.promote(day_step, filename=integration_test_data / "gha_averaged.h5", **s)
+    return BinnedData.promote(
+        day_step, filename=integration_test_data / "gha_averaged.h5", **s
+    )
 
 
 @pytest.fixture(scope="session")
@@ -144,10 +151,13 @@ def mock_calibrated_data(tmp_path_factory) -> CalibratedData:
     timedelta = dt.timedelta(hours=12) / n_gha
 
     time_strings = np.array(
-        [(start_time + i * timedelta).strftime("%Y:%j:%H:%M:%S") for i in range(n_gha)], dtype="S17"
+        [(start_time + i * timedelta).strftime("%Y:%j:%H:%M:%S") for i in range(n_gha)],
+        dtype="S17",
     )
 
-    anc = CalibratedData.get_ancillary_coords(CalibratedData.get_datetimes(time_strings))
+    anc = CalibratedData.get_ancillary_coords(
+        CalibratedData.get_datetimes(time_strings)
+    )
     anc["times"] = time_strings
     anc["ambient_hum"] = np.zeros(len(time_strings))
     anc["receiver_temp"] = np.ones(len(time_strings)) * 25

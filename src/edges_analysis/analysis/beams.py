@@ -127,7 +127,9 @@ class Beam:
                     number_of_columns = len(line_splitted)
                     flag_columns = True
 
-            rows_per_frequency = (file_length - number_of_frequencies) / number_of_frequencies
+            rows_per_frequency = (
+                file_length - number_of_frequencies
+            ) / number_of_frequencies
 
             output = np.zeros(
                 (
@@ -161,7 +163,9 @@ class Beam:
             out_2D = output[i, :, :]
 
             phi = out_2D[:, 0]
-            theta = 90 - out_2D[:, 1]  # theta is zero at the zenith, and goes to 180 deg
+            theta = (
+                90 - out_2D[:, 1]
+            )  # theta is zero at the zenith, and goes to 180 deg
             gain = out_2D[:, 6]
 
             theta_u = np.unique(theta)
@@ -301,7 +305,9 @@ class Beam:
         f3 = open(file_name_prefix + "_181-270." + ext)
         f4 = open(file_name_prefix + "_271-360." + ext)
 
-        z = 181 * 91 + 10  # ---> change this to no.of theta * no.of phi + No.of header lines
+        z = (
+            181 * 91 + 10
+        )  # ---> change this to no.of theta * no.of phi + No.of header lines
 
         for index, line in enumerate(f1):
             if index % z == 0:
@@ -318,7 +324,9 @@ class Beam:
                 co = 0
             if index % z >= 10:
                 x = list(map(float, line.split()))
-                beam_square[int(index / z), co % 181, int(co / 181) + 91] = 10 ** (x[8] / 10)
+                beam_square[int(index / z), co % 181, int(co / 181) + 91] = 10 ** (
+                    x[8] / 10
+                )
                 co += 1
 
         for index, line in enumerate(f3):
@@ -326,7 +334,9 @@ class Beam:
                 co = 0
             if index % z >= 10:
                 x = list(map(float, line.split()))
-                beam_square[int(index / z), co % 181, int(co / 181) + 181] = 10 ** (x[8] / 10)
+                beam_square[int(index / z), co % 181, int(co / 181) + 181] = 10 ** (
+                    x[8] / 10
+                )
                 co += 1
 
         for index, line in enumerate(f4):
@@ -334,7 +344,9 @@ class Beam:
                 co = 0
             if index % z >= 10:
                 x = list(map(float, line.split()))
-                beam_square[int(index / z), co % 181, int(co / 181) + 271] = 10 ** (x[8] / 10)
+                beam_square[int(index / z), co % 181, int(co / 181) + 271] = 10 ** (
+                    x[8] / 10
+                )
                 co += 1
 
         freq = FrequencyRange(np.array(frequency))
@@ -354,7 +366,7 @@ class Beam:
         )
 
     @classmethod
-    def get_beam_path(cls, band: str, kind: Optional[str] = None) -> Path:
+    def get_beam_path(cls, band: str, kind: str | None = None) -> Path:
         pth = BEAM_PATH / band / "default.txt" if not kind else kind + ".txt"
         if not pth.exists():
             raise FileNotFoundError(f"No beam exists for band={band}.")
@@ -375,7 +387,9 @@ class Beam:
             The Beam object at the new frequencies.
         """
         if len(self.frequency) < 3:
-            raise ValueError("Can't freq-interpolate beam that has fewer than three frequencies.")
+            raise ValueError(
+                "Can't freq-interpolate beam that has fewer than three frequencies."
+            )
 
         freq_obj = FrequencyRange(self.frequency)
 
@@ -388,7 +402,10 @@ class Beam:
                 model = np.polyval(par, freq_obj.normalize(freq))
                 interp_beam[:, j, i] = model
         return Beam(
-            frequency=freq, azimuth=self.azimuth, elevation=self.elevation, beam=interp_beam
+            frequency=freq,
+            azimuth=self.azimuth,
+            elevation=self.elevation,
+            beam=interp_beam,
         )
 
     @staticmethod
@@ -473,9 +490,15 @@ class Beam:
             beam = beam[:-1]
 
         spl = spi.RectSphereBivariateSpline(
-            el, self.azimuth * np.pi / 180, beam, pole_values=(None, beam[-1]), pole_exact=True
+            el,
+            self.azimuth * np.pi / 180,
+            beam,
+            pole_values=(None, beam[-1]),
+            pole_exact=True,
         )
-        return lambda az, el: spl(el * np.pi / 180 + np.pi / 2, az * np.pi / 180, grid=False)
+        return lambda az, el: spl(
+            el * np.pi / 180 + np.pi / 2, az * np.pi / 180, grid=False
+        )
 
     def between_freqs(self, low=0, high=np.inf):
         mask = (self.frequency >= low) & (self.frequency <= high)
@@ -594,7 +617,9 @@ def sky_convolution_generator(
         index_model=index_model,
     )
 
-    ground_gain = ground_loss(ground_loss_file, band=beam.instrument, freq=beam.frequency)
+    ground_gain = ground_loss(
+        ground_loss_file, band=beam.instrument, freq=beam.frequency
+    )
     galactic_coords = sky_model.get_sky_coords()
 
     # Get the local times corresponding to the given LSTs
@@ -639,7 +664,9 @@ def sky_convolution_generator(
                 solid_angle = np.nansum(beam_above_horizon) / n_pix_tot_no_nan
                 beam_above_horizon *= ground_gain[j] / solid_angle
 
-            antenna_temperature_above_horizon = beam_above_horizon * sky_above_horizon[:, j]
+            antenna_temperature_above_horizon = (
+                beam_above_horizon * sky_above_horizon[:, j]
+            )
 
             yield (
                 i,
@@ -662,7 +689,7 @@ def simulate_spectra(
     sky_model: sky_models.SkyModel = sky_models.Haslam408(),
     index_model: sky_models.IndexModel = sky_models.ConstantIndex(),
     lsts: np.ndarray = None,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
 
     Parameters
@@ -847,9 +874,9 @@ class InterpolatedBeamFactor(HDF5Object):
     def from_beam_factor(
         cls,
         beam_factor_file,
-        band: Optional[str] = None,
-        lst_new: Optional[np.ndarray] = None,
-        f_new: Optional[np.ndarray] = None,
+        band: str | None = None,
+        lst_new: np.ndarray | None = None,
+        f_new: np.ndarray | None = None,
     ):
         """
         Interpolate beam factor to a new set of LSTs and frequencies.
@@ -873,7 +900,10 @@ class InterpolatedBeamFactor(HDF5Object):
         beam_factor_file = Path(beam_factor_file).expanduser()
         if str(beam_factor_file).startswith(":"):
             beam_factor_file = (
-                Path(config["paths"]["beams"]) / band / "beam_factors" / str(beam_factor_file)[1:]
+                Path(config["paths"]["beams"])
+                / band
+                / "beam_factors"
+                / str(beam_factor_file)[1:]
             )
 
         if not beam_factor_file.exists():
@@ -907,7 +937,9 @@ class InterpolatedBeamFactor(HDF5Object):
         else:
             beam_factor_freq = beam_factor_lst
 
-        return cls.from_data({"beam_factor": beam_factor_freq, "frequency": freq, "lst": lst})
+        return cls.from_data(
+            {"beam_factor": beam_factor_freq, "frequency": freq, "lst": lst}
+        )
 
     def evaluate(self, lst):
         """Fast nearest-neighbour evaluation of the beam factor for a given LST."""

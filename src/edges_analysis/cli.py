@@ -46,7 +46,7 @@ logger = logging.getLogger(__name__)
 
 
 def _get_settings(settings, xrfi, **cli_settings):
-    with open(settings, "r") as fl:
+    with open(settings) as fl:
         settings = yaml.load(fl, Loader=yaml.FullLoader)
 
     settings.update(cli_settings)
@@ -289,9 +289,9 @@ def process(ctx, step, settings, path, label, message, xrfi, clobber, output, nt
     if step == "combine":
         if not output:
             output = [
-                Path(qs.text("Provide a filename for the output combined file:").ask()).with_suffix(
-                    ".h5"
-                )
+                Path(
+                    qs.text("Provide a filename for the output combined file:").ask()
+                ).with_suffix(".h5")
             ]
         else:
             output = [Path(output).with_suffix(".h5")]
@@ -372,7 +372,9 @@ def promote(
             out = [_pro(input_files[0], output_fname[0])]
         else:
             out = list(
-                p_tqdm.p_umap(_pro, input_files, output_fname, unit="files", num_cpus=nthreads)
+                p_tqdm.p_umap(
+                    _pro, input_files, output_fname, unit="files", num_cpus=nthreads
+                )
             )
         return [o for o in out if o is not None]
 
@@ -388,7 +390,7 @@ def rms_info(path, settings, outfile):
         justify="center",
     )
 
-    with open(settings, "r") as fl:
+    with open(settings) as fl:
         settings = yaml.load(fl, Loader=yaml.FullLoader)
 
     # Get input file(s).
@@ -396,10 +398,14 @@ def rms_info(path, settings, outfile):
     input_files = sorted(sum((_get_files(p) for p in path), []))
     objects = [levels.read_step(p) for p in input_files]
 
-    if any(not isinstance(o, (levels.CalibratedData, levels.FilteredData)) for o in objects):
-        raise ValueError("One of the files you input is not calibrated or filtered data!")
+    if any(
+        not isinstance(o, (levels.CalibratedData, levels.FilteredData)) for o in objects
+    ):
+        raise ValueError(
+            "One of the files you input is not calibrated or filtered data!"
+        )
 
-    with open(settings, "r") as fl:
+    with open(settings) as fl:
         settings = yaml.load(fl, Loader=yaml.FullLoader)
 
     n_files = settings.pop("n_files", len(input_files))

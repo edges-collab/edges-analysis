@@ -138,7 +138,7 @@ class SkyModel:
         return self._process_map(sky_map, self.lonlat[0], self.lonlat[1])
 
     @cached_property
-    def lonlat(self) -> Tuple[np.ndarray, np.ndarray]:
+    def lonlat(self) -> tuple[np.ndarray, np.ndarray]:
         """The galactic latitude/longitude co-ordinates of the map."""
         with self.open() as fl:
             ordering = fl[self.header_hdu].header["ORDERING"]
@@ -148,7 +148,9 @@ class SkyModel:
 
     @classmethod
     def get_map_coords(cls, nside: int, nest: bool = True):
-        return hp.pix2ang(nside, np.arange(hp.nside2npix(nside)), lonlat=True, nest=nest)
+        return hp.pix2ang(
+            nside, np.arange(hp.nside2npix(nside)), lonlat=True, nest=nest
+        )
 
     @classmethod
     def _get_sky_model_from_lambda(cls, max_res: [None, int] = None) -> np.ndarray:
@@ -168,7 +170,9 @@ class SkyModel:
         return temp_map
 
     def get_sky_coords(self):
-        return apc.SkyCoord(self.lonlat[0], self.lonlat[1], frame="galactic", unit="deg")
+        return apc.SkyCoord(
+            self.lonlat[0], self.lonlat[1], frame="galactic", unit="deg"
+        )
 
     def _process_map(self, sky_map, lon, lat):
         """Optional over-writeable method to process the sky map before returning it."""

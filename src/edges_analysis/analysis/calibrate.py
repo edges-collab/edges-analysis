@@ -45,7 +45,9 @@ class LabCalibration:
             return self.calobs.internal_switch_s22
 
     @cached_property
-    def _antenna_s11(self) -> Tuple[Callable[[np.ndarray], np.ndarray], np.ndarray, np.ndarray]:
+    def _antenna_s11(
+        self,
+    ) -> Tuple[Callable[[np.ndarray], np.ndarray], np.ndarray, np.ndarray]:
         model, raw, raw_freq = s11m.antenna_s11_remove_delay(
             self.s11_files,
             f_low=self.calobs.freq.min,
@@ -77,7 +79,9 @@ class LabCalibration:
         """The raw antenna s11 frequencies."""
         return self._antenna_s11[2]
 
-    def get_K(self, freq: Optional[np.ndarray] = None, ant_s11: Optional[np.ndarray] = None):
+    def get_K(
+        self, freq: Optional[np.ndarray] = None, ant_s11: Optional[np.ndarray] = None
+    ):
         """Get the K-vector for calibration that is dependent on LNA and Antenna S11."""
         if freq is None:
             freq = self.calobs.freq.freq
@@ -114,7 +118,9 @@ class LabCalibration:
         """Create a new instance based off this one."""
         return attr.evolve(self, **kwargs)
 
-    def calibrate_q(self, q: np.ndarray, freq: Optional[np.ndarray] = None) -> np.ndarray:
+    def calibrate_q(
+        self, q: np.ndarray, freq: Optional[np.ndarray] = None
+    ) -> np.ndarray:
         """Convert three-position switch ratio to fully calibrated temperature."""
         if freq is None:
             freq = self.calobs.freq.freq
@@ -124,7 +130,9 @@ class LabCalibration:
 
         return self.calobs.calibrate_Q(freq, q, ant_s11)
 
-    def calibrate_temp(self, temp: np.ndarray, freq: Optional[np.ndarray] = None) -> np.ndarray:
+    def calibrate_temp(
+        self, temp: np.ndarray, freq: Optional[np.ndarray] = None
+    ) -> np.ndarray:
         """Convert semi-calibrated temperature to fully calibrated temperature."""
         if freq is None:
             freq = self.calobs.freq.freq

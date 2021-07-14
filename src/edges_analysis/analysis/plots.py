@@ -37,7 +37,9 @@ def plot_sky_model():
     )
 
     hp.graticule(local=True)
-    beam = beams.feko_read("mid_band", 0, frequency_interpolation=False, az_antenna_axis=90)
+    beam = beams.feko_read(
+        "mid_band", 0, frequency_interpolation=False, az_antenna_axis=90
+    )
     beam90 = beam[20, :, :]
     beam90n = beam90 / np.max(beam90)
     FWHM = np.zeros((360, 2))

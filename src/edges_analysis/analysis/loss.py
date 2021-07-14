@@ -278,7 +278,9 @@ def ground_loss(
                 return np.ones_like(freq)
         else:
             # Find the file in the standard directory structure
-            filename = Path(config["paths"]["antenna"]) / band / "loss" / str(filename)[1:]
+            filename = (
+                Path(config["paths"]["antenna"]) / band / "loss" / str(filename)[1:]
+            )
     else:
         filename = Path(filename)
 
@@ -321,7 +323,9 @@ def antenna_loss(
                 return np.zeros_like(freq)
         else:
             # Find the file in the standard directory structure
-            filename = Path(config["paths"]["antenna"]) / band / "loss" / str(filename)[1:]
+            filename = (
+                Path(config["paths"]["antenna"]) / band / "loss" / str(filename)[1:]
+            )
     else:
         filename = Path(filename)
 

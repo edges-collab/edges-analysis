@@ -26,7 +26,9 @@ def utc2lst(utc_time_array, longitude):
     """
     # convert input array to "int"
     if not isinstance(utc_time_array[0], dt.datetime):
-        utc_time_array = [dt.datetime(*utc) for utc in np.atleast_2d(utc_time_array).astype(int)]
+        utc_time_array = [
+            dt.datetime(*utc) for utc in np.atleast_2d(utc_time_array).astype(int)
+        ]
 
     # python "datetime" to astropy "Time" format
     t = apt.Time(utc_time_array, format="datetime", scale="utc")
@@ -47,7 +49,9 @@ def sun_moon_azel(lat, lon, utc_array):
     sun = np.zeros((len(utc_array), 2))
     moon = np.zeros((len(utc_array), 2))
 
-    utc_array = [utc if isinstance(utc, dt.datetime) else dt.datetime(*utc) for utc in utc_array]
+    utc_array = [
+        utc if isinstance(utc, dt.datetime) else dt.datetime(*utc) for utc in utc_array
+    ]
     times = apt.Time(utc_array, format="datetime")
 
     Sun = apc.get_sun(times).transform_to(apc.AltAz(location=obs_location))
@@ -107,7 +111,9 @@ def lst_to_earth_time(time: apt.Time):
 
 
 def lsts_to_times(
-    lsts: [list, np.ndarray], ref_time: apt.Time, location: apc.EarthLocation = const.edges_location
+    lsts: [list, np.ndarray],
+    ref_time: apt.Time,
+    location: apc.EarthLocation = const.edges_location,
 ):
     """Convert a list of LSTs to local times at a particular location, surrounding a particular time.
 
