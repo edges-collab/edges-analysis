@@ -1,3 +1,4 @@
+"""Functions defining expected losses from the instruments."""
 from pathlib import Path
 import numpy as np
 from edges_cal import reflection_coefficient as rc
@@ -197,8 +198,8 @@ def balun_and_connector_loss(
     Zref = 50
     Ropen, Rshort, Rmatch = rc.agilent_85033E(freq * 1e6, Zref, 1)
 
-    def get_gamma(R):
-        Z = rc.gamma2impedance(R, Zref)
+    def get_gamma(r):
+        Z = rc.gamma2impedance(r, Zref)
         Zin_b = rc.input_impedance_transmission_line(Zchar_b, gamma_b, l_b, Z)
         Zin_c = rc.input_impedance_transmission_line(Zchar_c, gamma_c, l_c, Z)
         Rin_b = rc.impedance2gamma(Zin_b, Zref)
@@ -209,7 +210,8 @@ def balun_and_connector_loss(
     Rin_b_short, Rin_c_short = get_gamma(Rshort)
     Rin_b_match, Rin_c_match = get_gamma(Rmatch)
 
-    # S-parameters (it has to be done in this order, first the Connector+Bend, then the Balun)
+    # S-parameters (it has to be done in this order, first the Connector+Bend, then the
+    # Balun)
     ra_c, S11c, S12S21c, S22c = rc.de_embed(
         Ropen, Rshort, Rmatch, Rin_c_open, Rin_c_short, Rin_c_match, gamma_ant
     )
@@ -219,15 +221,15 @@ def balun_and_connector_loss(
         Ropen, Rshort, Rmatch, Rin_b_open, Rin_b_short, Rin_b_match, ra_c
     )
 
-    def get_G(S11_rev, S12S21, ra_x, ra_y):
+    def get_g(S11_rev, S12S21, ra_x, ra_y):
         return (
             np.abs(S12S21)
             * (1 - np.abs(ra_x) ** 2)
             / ((np.abs(1 - S11_rev * ra_x)) ** 2 * (1 - (np.abs(ra_y)) ** 2))
         )
 
-    Gb = get_G(S22b, S12S21b, ra_b, ra_c)
-    Gc = get_G(S22c, S12S21c, ra_c, gamma_ant)
+    Gb = get_g(S22b, S12S21b, ra_b, ra_c)
+    Gc = get_g(S22c, S12S21c, ra_c, gamma_ant)
 
     return Gb, Gc
 
@@ -311,7 +313,6 @@ def antenna_loss(
         the orientation or other configuration parameters of the instrument, which may
         affect the antenna loss.
     """
-
     if str(filename).startswith(":"):
         if str(filename) == ":":
             # Use the built-in loss files

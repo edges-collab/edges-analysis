@@ -1,4 +1,3 @@
-from edges_analysis.analysis import tools
 import numpy as np
 from edges_cal import modelling as mdl
 import pytest

@@ -14,8 +14,6 @@ from typing import Tuple
 import numpy as np
 from edges_cal.modelling import LinLog
 import datetime as dt
-from edges_io import __version__
-from edges_analysis import __version__ as eav
 
 
 @pytest.fixture(scope="session")

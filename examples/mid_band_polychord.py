@@ -1,9 +1,10 @@
 #!/usr/bin/python
-
 """
-how to run:
+An example of running polychord for mid-band data.
 
-$ python mid_band_polychord.py 0 5
+How to run::
+
+    python mid_band_polychord.py 0 5
 """
 
 import sys

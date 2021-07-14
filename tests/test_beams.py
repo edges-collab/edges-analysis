@@ -49,7 +49,7 @@ def test_simulate_spectra():
     beam = beams.Beam.from_file("low")
 
     # Do a really small simulation
-    map, freq, lst = beams.simulate_spectra(
+    sky_map, freq, lst = beams.simulate_spectra(
         beam,
         f_low=50,
         f_high=55,
@@ -57,8 +57,8 @@ def test_simulate_spectra():
         sky_model=Haslam408(max_res=3),
     )
 
-    assert map.shape == (len(lst), len(freq))
-    assert np.all(map >= 0)
+    assert sky_map.shape == (len(lst), len(freq))
+    assert np.all(sky_map >= 0)
 
 
 def test_uniform_beam():

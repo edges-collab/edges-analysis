@@ -1,9 +1,9 @@
+"""CLI routines for edges-analysis."""
 import glob
 import logging
-import os
 import sys
 from pathlib import Path
-from typing import List, Type, Optional, Union
+from typing import List, Type, Optional
 
 import click
 import h5py
@@ -17,7 +17,6 @@ from rich.logging import RichHandler
 from rich.panel import Panel
 from rich.rule import Rule
 from rich.table import Table
-from .analysis import filters
 from .analysis import levels
 from .config import config
 
@@ -89,14 +88,15 @@ def _ctx_to_dct(args):
     return dct
 
 
-def _get_files(pth: Path, filter=h5py.is_hdf5) -> List[Path]:
+def _get_files(pth: Path, filt=h5py.is_hdf5) -> List[Path]:
     if pth.is_dir():
-        return [fl for fl in pth.glob("*") if filter(fl)]
+        return [fl for fl in pth.glob("*") if filt(fl)]
     else:
-        return [Path(fl) for fl in glob.glob(str(pth)) if filter(Path(fl))]
+        return [Path(fl) for fl in glob.glob(str(pth)) if filt(Path(fl))]
 
 
 def get_output_dir(prefix, label, settings):
+    """Get an output directory from given settings."""
     out = Path(prefix) / label
 
     if out.exists():
@@ -113,7 +113,7 @@ def get_output_dir(prefix, label, settings):
             console.print(tab)
 
             if qs.confirm(
-                f"{out} has existing files with different settings. Remove existing and "
+                f"{out} has existing files with different settings. Remove existing and"
                 f"continue?"
             ).ask():
                 for fl in out.glob("*"):
@@ -160,11 +160,11 @@ def expand_colon(pth: str, band: str = "", raw=True) -> Path:
     "--path",
     type=click.Path(dir_okay=True),
     multiple=True,
-    help="""The path(s) to input files. Multiple specifications of ``-i`` can be included.
-    Each input path may have glob-style wildcards, eg. ``/path/to/file.*``. If the path
-    is a directory, all HDF5/ACQ files in the directory will be used. You may prefix the
-    path with a colon to indicate the "standard" location (given by ``config['paths']``),
-    e.g. ``-i :big-calibration/``.
+    help="""The path(s) to input files. Multiple specifications of ``-i`` can be
+    included. Each input path may have glob-style wildcards, eg. ``/path/to/file.*``.
+    If the path is a directory, all HDF5/ACQ files in the directory will be used. You
+    may prefix the path with a colon to indicate the "standard" location (given by
+    ``config['paths']``), e.g. ``-i :big-calibration/``.
     """,
 )
 @click.option(
@@ -172,8 +172,8 @@ def expand_colon(pth: str, band: str = "", raw=True) -> Path:
     "--label",
     default="",
     help="""A label for the output. This label should be unique to the input settings
-    (but may be applied to different input files). If the same label is used for different
-    settings, the existing processed data will be removed (after prompting).
+    (but may be applied to different input files). If the same label is used for
+    different settings, the existing processed data will be removed (after prompting).
     """,
 )
 @click.option(
@@ -181,15 +181,19 @@ def expand_colon(pth: str, band: str = "", raw=True) -> Path:
     "--message",
     default="",
     help="""A message to save with the data. The message will be saved in a README.txt
-    file alongside the output data file(s). It is intended to provide a human-understandable
-    "reason" for running the particular analysis with the particular settings.
+    file alongside the output data file(s). It is intended to provide a
+    human-understandable "reason" for running the particular analysis with the
+    particular settings.
     """,
 )
 @click.option(
     "-x/-X",
     "--xrfi/--no-xrfi",
     default=True,
-    help="Manually turn off xRFI. Useful to quickly shut off xRFI without changing settings.",
+    help=(
+        "Manually turn off xRFI. Useful to quickly shut off xRFI without changing "
+        "settings."
+    ),
 )
 @click.option(
     "-c/-C",
@@ -214,9 +218,9 @@ def process(ctx, step, settings, path, label, message, xrfi, clobber, output, nt
         is a YAML settings file. The available settings for each step can be seen
         in the respective documentation for the classes "promote" method.
 
-    Each STEP should take one or more ``--input`` files that are the output of a previous
-    step. The first step (``calibrate``) should take raw ``.acq`` or ``.h5`` spectrum
-    files.
+    Each STEP should take one or more ``--input`` files that are the output of a
+    previous step. The first step (``calibrate``) should take raw ``.acq`` or ``.h5``
+    spectrum files.
 
     The output files are placed in a directory inside the input file directory, with a
     name determined by the ``--label``.
@@ -259,7 +263,7 @@ def process(ctx, step, settings, path, label, message, xrfi, clobber, output, nt
         expand_colon(p, band=settings.get("band"), raw=step == "calibrate").expanduser()
         for p in path
     ]
-    input_files = sum((_get_files(p, filter=file_filter) for p in path), [])
+    input_files = sum((_get_files(p, filt=file_filter) for p in path), [])
 
     if not input_files:
         logger.error(f"No input files were found! Paths: {path}")
@@ -349,7 +353,6 @@ def promote(
     settings: dict,
 ) -> List[Path]:
     """Calibrate field data to produce CalibratedData files."""
-
     if step_cls._multi_input:
         data = step_cls.promote(prev_step=input_files, **settings)
         data.write(output_dir / output_fname[0])
@@ -377,45 +380,3 @@ def promote(
                 )
             )
         return [o for o in out if o is not None]
-
-
-@main.command()
-@click.argument("path", nargs=-1)
-@click.argument("settings", type=click.Path(exists=True, dir_okay=False))
-@click.argument("outfile", type=click.Path(exists=False, dir_okay=False))
-def rms_info(path, settings, outfile):
-    console.print(
-        Panel("edges-analysis [blue]RMSInfo[/]", box=box.DOUBLE_EDGE),
-        style="bold",
-        justify="center",
-    )
-
-    with open(settings) as fl:
-        settings = yaml.load(fl, Loader=yaml.FullLoader)
-
-    # Get input file(s).
-    path = [expand_colon(p, raw=False).expanduser() for p in path]
-    input_files = sorted(sum((_get_files(p) for p in path), []))
-    objects = [levels.read_step(p) for p in input_files]
-
-    if any(
-        not isinstance(o, (levels.CalibratedData, levels.FilteredData)) for o in objects
-    ):
-        raise ValueError(
-            "One of the files you input is not calibrated or filtered data!"
-        )
-
-    with open(settings) as fl:
-        settings = yaml.load(fl, Loader=yaml.FullLoader)
-
-    n_files = settings.pop("n_files", len(input_files))
-
-    console.print(f"[bold]Using {n_files} input files to calculate RMS:")
-    for obj in objects[:n_files]:
-        console.print(f"    {obj.filename}")
-
-    rms_info = filters.get_rms_info(objects[:n_files], **settings)
-
-    rms_info.write(outfile)
-
-    console.print(f"Wrote RMSInfo to {outfile}.")

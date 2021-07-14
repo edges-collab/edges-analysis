@@ -1,5 +1,7 @@
+"""Functions for working with earth/sky coordinates."""
 import datetime as dt
 import numpy as np
+from typing import List
 from astropy import time as apt, coordinates as apc, units as apu
 from .. import const
 
@@ -41,7 +43,6 @@ def utc2lst(utc_time_array, longitude):
 
 def sun_moon_azel(lat, lon, utc_array):
     """Get local coordinates of the Sun using Astropy."""
-
     obs_location = apc.EarthLocation(lat=lat, lon=lon)
 
     # Compute local coordinates of Sun and Moon
@@ -65,7 +66,8 @@ def sun_moon_azel(lat, lon, utc_array):
     return sun, moon
 
 
-def f2z(fe):
+def f2z(fe: float | np.ndarray) -> float | np.ndarray:
+    """Convert observed 21cm frequency to redshift."""
     # Constants and definitions
     c = 299792458  # wikipedia, m/s
     f21 = 1420.40575177e6  # wikipedia,
@@ -76,7 +78,8 @@ def f2z(fe):
     return (lmbda - lambda21) / lambda21
 
 
-def z2f(z):
+def z2f(z: float | np.ndarray) -> float | np.ndarray:
+    """Convert observed redshift to 21cm frequency."""
     # Constants and definitions
     c = 299792458  # wikipedia, m/s
     f21 = 1420.40575177e6  # wikipedia,
@@ -85,24 +88,26 @@ def z2f(z):
     return c / (lmbda * 1e6)
 
 
-def lst2gha(lst):
+def lst2gha(lst: float | np.ndarray) -> float | np.ndarray:
+    """Convert LST to GHA."""
     gha = lst - const.galactic_centre_lst
     gha[gha < 0] += 24
     return gha
 
 
-def get_jd(d):
-    """Get the day of the year from a datetime object"""
+def get_jd(d: dt.datetime) -> int:
+    """Get the day of the year from a datetime object."""
     dt0 = dt.datetime(d.year, 1, 1)
     return (d - dt0).days + 1
 
 
-def dt_from_jd(y, d, *args):
+def dt_from_jd(y: int, d: int, *args) -> dt.datetime:
+    """Get a datetime object from a julian date."""
     begin = dt.datetime(y, 1, 1, *args)
-    return begin + dt.timedelta(days=d)
+    return begin + dt.timedelta(days=d - 1)
 
 
-def lst_to_earth_time(time: apt.Time):
+def lst_to_earth_time(time: apt.Time) -> float:
     """Return a factor to convert one second of earth-measured time to an LST."""
     time2 = time + dt.timedelta(seconds=1)
     lst = time.sidereal_time("apparent")
@@ -111,11 +116,13 @@ def lst_to_earth_time(time: apt.Time):
 
 
 def lsts_to_times(
-    lsts: [list, np.ndarray],
+    lsts: np.typing.ArrayLike,
     ref_time: apt.Time,
     location: apc.EarthLocation = const.edges_location,
-):
-    """Convert a list of LSTs to local times at a particular location, surrounding a particular time.
+) -> List[apt.Time]:
+    """Convert a list of LSTs to local times at a particular location.
+
+    The times are generated close to (surrounding) a particular time.
 
     Recall that any particular LST maps to some time on an infinite number of days.
     Pass `ref_time` to set the time around which the LSTs will map.

@@ -1,9 +1,9 @@
+"""Corrections for S11 measurements."""
 import numpy as np
 from edges_io import io
 from edges_cal.s11_correction import InternalSwitch
-from typing import Sequence, Union, Type, Callable, Optional
+from typing import Sequence, Union, Callable, Optional
 from pathlib import Path
-from edges_cal.modelling import Model
 from edges_cal import reflection_coefficient as rc
 
 
@@ -14,6 +14,7 @@ def get_corrected_s11(
     internal_switch_s12: Optional[Callable] = None,
     internal_switch_s22: Optional[Callable] = None,
 ):
+    """Correct a measured S11 with the internal switch."""
     assert len(files) == 4
 
     if internal_switch is None:

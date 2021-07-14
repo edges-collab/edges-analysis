@@ -3,16 +3,15 @@ import attr
 from edges_cal import Calibration, CalibrationObservation
 from . import s11 as s11m
 from cached_property import cached_property
-from typing import Callable, Union, Tuple, Sequence, Optional
+from typing import Callable, Union, Tuple, Sequence, Optional, Type
 import numpy as np
-from edges_cal import FrequencyRange
 from pathlib import Path
-import warnings
 from edges_cal import receiver_calibration_func as rcf
 
 
-def optional(type):
-    return lambda x: None if x is None else type(x)
+def optional(tp: Type) -> Callable:
+    """Define a function that checks if a value is optionally a cetain type."""
+    return lambda x: None if x is None else tp(x)
 
 
 @attr.s(kw_only=True)
@@ -24,21 +23,24 @@ class LabCalibration:
     antenna_s11_n_terms: int = attr.ib(default=15)
 
     @property
-    def internal_switch_s11(self):
+    def internal_switch_s11(self) -> Callable:
+        """The internal switch S11 model."""
         try:  # if a calibration observation
             return self.calobs.internal_switch.s11_model
         except AttributeError:  # if a calfile
             return self.calobs.internal_switch_s11
 
     @property
-    def internal_switch_s12(self):
+    def internal_switch_s12(self) -> Callable:
+        """The internal switch S12 model."""
         try:
             return self.calobs.internal_switch.s12_model
         except AttributeError:
             return self.calobs.internal_switch_s12
 
     @property
-    def internal_switch_s22(self):
+    def internal_switch_s22(self) -> Callable:
+        """The internal switch S22 modle."""
         try:
             return self.calobs.internal_switch.s22_model
         except AttributeError:
@@ -79,7 +81,7 @@ class LabCalibration:
         """The raw antenna s11 frequencies."""
         return self._antenna_s11[2]
 
-    def get_K(
+    def get_gamma_coeffs(
         self, freq: Optional[np.ndarray] = None, ant_s11: Optional[np.ndarray] = None
     ):
         """Get the K-vector for calibration that is dependent on LNA and Antenna S11."""
@@ -98,13 +100,13 @@ class LabCalibration:
     def get_linear_coefficients(
         self, freq: Optional[np.ndarray] = None, ant_s11: Optional[np.ndarray] = None
     ) -> Tuple[np.ndarray, np.ndarray]:
-        """Get the linear coefficients that transform uncalibrated to calibrated temp."""
+        """Get the linear coeffs that transform uncalibrated to calibrated temp."""
         if freq is None:
             freq = self.calobs.freq.freq
 
-        K = self.get_K(freq, ant_s11=ant_s11)
+        coeffs = self.get_gamma_coeffs(freq, ant_s11=ant_s11)
         a, b = rcf.get_linear_coefficients_from_K(
-            K,
+            coeffs,
             self.calobs.C1(freq),
             self.calobs.C2(freq),
             self.calobs.Tunc(freq),

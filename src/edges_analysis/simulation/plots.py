@@ -1,3 +1,4 @@
+"""Plotting utilities."""
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -5,6 +6,7 @@ from . import data_models as dm
 
 
 def plot_monte_carlo_receiver():
+    """Plot MC receiver."""
     plt.figure(1)
 
     f, r1, r2, t1, t2, t3, t4, m1, m2, m3, m4 = dm.MC_error_propagation()
@@ -84,6 +86,8 @@ def plot_monte_carlo_receiver():
 
 
 def plot_simulation_residuals(f, out, folder_plot, name_flag):
+    """Plot simulation residuals."""
+
     def plot_it(key, ylim_1, yticks_1, div_1, ylim_2=None, yticks_2=None, div_2=None):
         fig, ax = plt.subplots(1, 2, figsize=[13, 11], sharex=True)
 

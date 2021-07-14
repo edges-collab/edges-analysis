@@ -1,3 +1,4 @@
+"""A package for analysing EDGES field data."""
 from pkg_resources import get_distribution, DistributionNotFound
 
 try:

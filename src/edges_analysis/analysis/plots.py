@@ -1,3 +1,4 @@
+"""Plotting utilities."""
 import datetime as dt
 
 import healpy as hp
@@ -14,6 +15,7 @@ from .. import const
 
 
 def plot_sky_model():
+    """Plot a Haslam sky model."""
     # Loading Haslam map
     map408, (lon, lat, gc) = sky_models.haslam_408MHz_map()
     ipole = 2.65

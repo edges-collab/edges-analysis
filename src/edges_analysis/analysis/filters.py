@@ -989,10 +989,10 @@ def rms_filter(
     **kwargs,
 ) -> np.ndarray[bool]:
     """Perform a filter on the RMS of an integration.
-    
+
     Parameters
     ----------
-    band 
+    band
         A frequency range in which to fit the model and take the RMS.
     model_type
         The type of :class:`~edges_cal.modelling.Model` to fit to each spectrum.
@@ -1020,10 +1020,10 @@ def total_power_filter(
     **kwargs,
 ):
     """Perform a filter on the total power of an integration.
-    
+
     Parameters
     ----------
-    band 
+    band
         A frequency range in which to fit the model and take the RMS.
     **kwargs
         Other arguments to :func:`apply_gha_model_filter`.

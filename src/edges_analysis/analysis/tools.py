@@ -1,10 +1,10 @@
+"""Various utility functions."""
 from typing import Optional
-from datetime import datetime, timedelta
 from multiprocess import Pool, current_process, cpu_count
 from multiprocessing.sharedctypes import RawArray
 
 import numpy as np
-from edges_cal import modelling as mdl, xrfi
+from edges_cal import modelling as xrfi
 import warnings
 import logging
 from collections import defaultdict
@@ -31,23 +31,6 @@ def join_struct_arrays(arrays):
         for name in a.dtype.names:
             out[name] = a[name]
     return out
-
-
-def dt_from_year_day(year, day, *args):
-    return datetime(year, 1, 1, *args) + timedelta(days=day - 1)
-
-
-def spectrum_fit(f, t, w, n_poly=5, f1_low=60, f1_high=65, f2_low=95, f2_high=140):
-    fc = f[((f >= f1_low) & (f <= f1_high)) | ((f >= f2_low) & (f <= f2_high))]
-    tc = t[((f >= f1_low) & (f <= f1_high)) | ((f >= f2_low) & (f <= f2_high))]
-    wc = w[((f >= f1_low) & (f <= f1_high)) | ((f >= f2_low) & (f <= f2_high))]
-
-    m = mdl.ModelFit("linlog", fc / 200, tc, weights=wc, n_terms=n_poly).evaluate(
-        f / 200
-    )
-    r = t - m
-
-    return f, r
 
 
 def run_xrfi_pipe(
@@ -105,8 +88,10 @@ def run_xrfi_pipe(
             if current_process().name == "MainProcess" and n_threads > 1:
 
                 def fnc(i):
-                    # Gets the spectrum/weights from the global var dict, which was initialized
-                    # by the pool. See https://research.wmz.ninja/articles/2018/03/on-sharing-large-arrays-when-using-pythons-multiprocessing.html
+                    # Gets the spectrum/weights from the global var dict, which was
+                    # initialized by the pool.
+                    # See https://research.wmz.ninja/articles/2018/03/on-sharing-large-
+                    # arrays-when-using-pythons-multiprocessing.html
                     spec = np.frombuffer(_globals["spectrum"]).reshape(
                         _globals["shape"]
                     )[i]

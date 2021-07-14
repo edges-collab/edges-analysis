@@ -39,13 +39,14 @@ from .. import const
 from ..config import config
 from .calibrate import LabCalibration
 from . import types as tp
+from . import coordinates as coords
 
 logger = logging.getLogger(__name__)
 
 
 def float_array_ndim(n: int) -> Callable:
     """Define a function that validates array type and dimension."""
-    ret"""urn lambda x: x.ndim == n and x.dtype.name.startswith("float")
+    return lambda x: x.ndim == n and x.dtype.name.startswith("float")
 
 
 def is_array(kind: str, n: int) -> Callable:
@@ -237,7 +238,7 @@ class _ReductionStep(HDF5Object):
 
         Notes
         -----
-        .. notes::
+        .. note::
             This docstring will be overwritten by the :func:`add_structure` class
             decorator on each subclass.
         """
@@ -371,9 +372,9 @@ class _ReductionStep(HDF5Object):
         out["edges_analysis_version"] = __version__
         out["message"] = ""
 
-        # Need to forcibly overwrite the object name here, because it will be 
-        # `HDF5Object`. Problematically, can just call super()._get_extra_meta, because 
-        # this function is called in __init_subclass__, and so doesn't know about this 
+        # Need to forcibly overwrite the object name here, because it will be
+        # `HDF5Object`. Problematically, can just call super()._get_extra_meta, because
+        # this function is called in __init_subclass__, and so doesn't know about this
         # class definition when it is called.
         out["object_name"] = cls.__name__
 
@@ -405,7 +406,8 @@ class _ReductionStep(HDF5Object):
         filt
             If a string, should be the name of an existing filter (i.e. it should exist
             in :attr:`filters_applied`). If an int, retrieve the flags corresponding to
-            that index. By default, retrieve the flags after the latest round of filtering.
+            that index. By default, retrieve the flags after the latest round of
+            filtering.
 
         Returns
         -------
@@ -434,7 +436,8 @@ class _ReductionStep(HDF5Object):
         """
         if filt not in self.filters_applied:
             raise ValueError(
-                f"The filter {filt} does not exist in this data! Existing filters: {self.filters_applied}"
+                f"The filter {filt} does not exist in this data! Existing filters: "
+                f"{self.filters_applied}"
             )
 
         with self.open() as fl:
@@ -448,9 +451,16 @@ class _ReductionStep(HDF5Object):
         return np.all(self.get_flags())
 
 
-def read_step(fname: tp.PathLike | _ReductionStep | io.HDF5RawSpectrum) -> _ReductionStep | io.HDF5RawSpectrum:
+def read_step(
+    fname: tp.PathLike | _ReductionStep | io.HDF5RawSpectrum,
+) -> _ReductionStep | io.HDF5RawSpectrum:
+    """Read a filename as a processing reduction step.
 
-    if isinstance(fname)
+    The function is idempotent, so calling it on a step object just returns the object.
+    """
+    if isinstance(fname, (_ReductionStep, io.HDF5RawSpectrum)):
+        return fname
+
     fname = Path(fname)
     if fname.suffix == ".acq":
         return io.FieldSpectrum(fname).data
@@ -461,9 +471,7 @@ def read_step(fname: tp.PathLike | _ReductionStep | io.HDF5RawSpectrum) -> _Redu
 class _ModelMixin:
     @cached_property
     def model_cls(self) -> type[mdl.Model]:
-        """
-        The Model class that is used to fit foregrounds.
-        """
+        """The Model class that is used to fit foregrounds."""
         if isinstance(self.model_step, (list, tuple)):
             meta = self.model_step[0].meta
         else:
@@ -599,7 +607,8 @@ class _SingleDayMixin:
             If not given, returns a 2D array, with time on the first axis.
         resolution : float, optional
             The frequency resolution of the output.
-        weights :
+        weights
+            The weights to use when binning.
 
         Returns
         -------
@@ -634,8 +643,9 @@ class _SingleDayMixin:
         **kwargs,
     ) -> tuple[mdl.Model, np.ndarray]:
         """
-        Determine a callable model of the spectrum at a given time, optionally
-        computed over averaged original data.
+        Determine a callable model of the spectrum at a given time.
+
+        Optionally computed over averaged original data.
 
         Parameters
         ----------
@@ -725,13 +735,13 @@ class _SingleDayMixin:
 
         Other Parameters
         ----------------
-        All other parameters are passed to :method:`~get_model_parameters`.
+        All other parameters are passed to :meth:`~get_model_parameters`.
 
         Returns
         -------
         rms
-            A dictionary where keys are tuples specifying the input bands, and the values
-            are arrays of rms values, as a function of time.
+            A dictionary where keys are tuples specifying the input bands, and the
+            values are arrays of rms values, as a function of time.
 
         Notes
         -----
@@ -940,9 +950,9 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
 
     This object essentially represents a Calibrated spectrum.
 
-    See :class:`_ReductionStep` for documentation about the various datasets within this class
-    instance. Note that you can always check which data is inside each group by checking
-    its ``.keys()``.
+    See :class:`_ReductionStep` for documentation about the various datasets within this
+    class instance. Note that you can always check which data is inside each group by
+    checking its ``.keys()``.
 
     Create the class either directly from a level-1 file (via normal instantiation), or
     by calling :meth:`from_acq` on a raw ACQ file (this does the calibration).
@@ -1029,9 +1039,10 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
         band
             Defines the instrument that took the data (mid, low, high).
         calfile
-            A file containing the output of :method:`edges_cal.CalibrationObservation.write` --
-            i.e. all the information required to calibrate the raw data. Determination of
-            calibration parameters occurs externally and saved to this file.
+            A file containing the output of
+            :meth:`edges_cal.CalibrationObservation.write` -- i.e. all the information
+            required to calibrate the raw data. Determination of calibration parameters
+            occurs externally and saved to this file.
         s11_path
             Path to the receiver S11 information relevant to this observation.
         weather_file
@@ -1043,9 +1054,10 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
         leave_progress
             Whether to leave the progress bar on the screen at the end.
         xrfi_pipe
-            A dictionary in which keys specify xrfi method names (see :module:`edges_cal.xrfi`)
-            and values are dictionaries which specify the parameters to be passed to those
-            methods (not requiring the spectrum/weights arguments).
+            A dictionary in which keys specify xrfi method names (see
+            :mod:`edges_cal.xrfi`) and values are dictionaries which specify the
+            parameters to be passed to those methods (not requiring the spectrum/weights
+            arguments).
         s11_file_pattern
             A format string defining the naming pattern of S11 files at ``s11_path``.
             This is used to automatically find the S11 file closest in time to the
@@ -1056,7 +1068,7 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
 
         Other Parameters
         ----------------
-        All other parameters are passed to :method:`_calibrate` -- see its documentation
+        All other parameters are passed to :meth:`_calibrate` -- see its documentation
         for details.
 
         Returns
@@ -1172,7 +1184,8 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
         )
 
     @classmethod
-    def default_s11_directory(cls, band):
+    def default_s11_directory(cls, band: str) -> Path:
+        """Get the default S11 directory for this observation."""
         return Path(config["paths"]["raw_field_data"]) / "mro" / band / "s11"
 
     @classmethod
@@ -1201,9 +1214,9 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
             {h}: hour of day (observation start) (two digit number)
         ignore_files : list, optional
             A list of file patterns to ignore. They need only partially match
-            the actual filenames. So for example, you could specify ``ignore_files=['2020_076']``
-            and it will ignore the file ``/home/user/data/2020_076_01_02_input1.s1p``.
-            Full regex can be used.
+            the actual filenames. So for example, you could specify
+            ``ignore_files=['2020_076']`` and it will ignore the file
+            ``/home/user/data/2020_076_01_02_input1.s1p``. Full regex can be used.
         """
         # Replace the suffix dot with a literal dot for regex
         s11_file_pattern = s11_file_pattern.replace(".", r"\.")
@@ -1250,7 +1263,7 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
 
             # Different time constructor for Day of year vs Day of month
             if "jd" in d:
-                dt = tools.dt_from_year_day(
+                dt = coords.dt_from_jd(
                     int(d.get("year", time.year)),
                     int(d.get("jd")),
                     int(d.get("hour", 0)),
@@ -1291,8 +1304,7 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
         s11_file_pattern: str,
         ignore_files: list[str] | None = None,
     ):
-        """Given an s11_path, return list of paths for each of the inputs"""
-
+        """Given an s11_path, return list of paths for each of the inputs."""
         # If we get four files, make sure they exist and pass them back
         if isinstance(s11_path, (tuple, list)):
             if len(s11_path) != 4:
@@ -1342,7 +1354,8 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
         band
             The band/telescope of the data (mid, low2, low3, high).
         times
-            List of datetime objects giving the date-times of the (beginning of) observations.
+            List of datetime objects giving the date-times of the (beginning of)
+            observations.
         weather_file
             Path to a weather file from which to read the weather data. Must be
             formatted appropriately. By default, will choose an appropriate file from
@@ -1358,8 +1371,9 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
 
         Returns
         -------
-        auxiliary : numpy structured array
-            Containing
+        auxiliary
+            Containing:
+
             * "ambient_temp": Ambient temperature as a function of time
             * "ambient_humidity": Ambient humidity as a function of time
             * "receiver1_temp": Receiver1 temperature as a function of time
@@ -1367,14 +1381,16 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
             * "lst": LST for each observation in the spectrum.
             * "gha": GHA for each observation in the spectrum.
             * "sun_moon_azel": Coordinates of the sun and moon as function of time.
-        meta : dict
-            Containing
-            * "thermlog_file": absolute path to the thermlog information used (filled in with
-              the default if necessary).
-            * "weather_file": absolute path to the weather information used (filled in with
-              the default if necessary).
-        """
 
+        meta : dict
+            Containing:
+
+            * "thermlog_file": absolute path to the thermlog information used (filled in
+              with the default if necessary).
+            * "weather_file": absolute path to the weather information used (filled in
+              with the default if necessary).
+
+        """
         start = min(times)
         end = max(times)
 
@@ -1409,7 +1425,8 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
 
         if len(weather) == 0:
             raise WeatherError(
-                f"Weather file '{weather_file}' has no dates between {start.strftime('%Y/%m/%d')} "
+                f"Weather file '{weather_file}' has no dates between "
+                f"{start.strftime('%Y/%m/%d')} "
                 f"and {end.strftime('%Y/%m/%d')}."
             )
 
@@ -1520,18 +1537,22 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
         )
 
     def antenna_s11_model(self, freq) -> Callable[[np.ndarray], np.ndarray]:
+        """The antennas S11 model, evaluated at ``freq``."""
         return self.lab_calibrator.antenna_s11_model(freq)
 
     @property
     def antenna_s11(self) -> np.ndarray:
+        """The anatenna S11 array after calibration."""
         return self.antenna_s11_model(self.raw_frequencies)
 
     @property
     def raw_antenna_s11(self) -> np.ndarray:
+        """The raw antenna S11 (i.e. directly from file, before calibration)."""
         return self.lab_calibrator.raw_antenna_s11
 
     @property
     def raw_antenna_s11_freq(self) -> np.ndarray:
+        """The frequencies of the raw antenna S11."""
         return self.lab_calibrator.raw_antenna_s11_freq
 
     @cached_property
@@ -1555,13 +1576,14 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
         spec: np.ndarray,
         freq: FrequencyRange,
         band: str,
-        antenna_correction: [str, Path, None] = ":",
+        antenna_correction: tp.PathLike | None = ":",
         ambient_temp: np.ndarray,
         configuration="",
-        balun_correction: [str, Path, None] = ":",
-        ground_correction: [str, Path, None, float] = ":",
+        balun_correction: tp.PathLike | None = ":",
+        ground_correction: tp.PathLike | None | float = ":",
         s11_ant: np.ndarray | None = None,
     ) -> np.ndarray:
+        """Correct a spectrum for losses."""
         # Antenna Loss (interface between panels and balun)
         gain = np.ones_like(freq.freq)
         if antenna_correction:
@@ -1601,8 +1623,9 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
         freq: FrequencyRange,
         lst: np.ndarray,
         band: str | None = None,
-        beam_file: str | Path | None = ":",
+        beam_file: tp.PathLike | None = ":",
     ):
+        """Correct a spectrum for beam chromaticity."""
         # Beam factor
         if beam_file:
             beam_fac = beams.InterpolatedBeamFactor.from_beam_factor(
@@ -1624,10 +1647,10 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
         labcal: LabCalibration,
         band: str | None = None,
         ambient_temp: np.ndarray,
-        antenna_correction: [str, Path, None] = ":",
+        antenna_correction: tp.PathLike | None = ":",
         configuration: str = "",
-        balun_correction: [str, Path, None] = ":",
-        ground_correction: [str, Path, None, float] = ":",
+        balun_correction: tp.PathLike | None = ":",
+        ground_correction: tp.PathLike | None | float = ":",
         beam_file=None,
         lst: np.ndarray | None = None,
         f_low: float = 50,
@@ -1752,7 +1775,8 @@ class ModelData(_ModelMixin, _ReductionStep, _SingleDayMixin):
         model_nterms
             The number of terms to use when fitting smooth models to each spectrum.
         model_basis
-            The model basis -- a string representing a model from :module:`edges_cal.modelling`
+            The model basis -- a string representing a model from
+            :mod:`edges_cal.modelling`
         model_resolution
             If integer, the number of frequency samples binned together before fitting
             the fiducial model. If float, the resolution of the bins in MHz. Set to zero
@@ -1765,7 +1789,8 @@ class ModelData(_ModelMixin, _ReductionStep, _SingleDayMixin):
             A :class:`ModelData` instance.
         """
         logger.info(
-            f"Determining {model_nterms}-term '{model_basis}' models for each integration..."
+            f"Determining {model_nterms}-term '{model_basis}' models for each "
+            "integration..."
         )
 
         # Exit out early if the whole file is flagged.
@@ -1803,9 +1828,9 @@ class CombinedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
     Given a sequence of :class:`ModelData` objects, this class combines them into one
     file, aligning them in (ideally small) bins in GHA/LST.
 
-    See :class:`_ReductionStep` for documentation about the various datasets within this class
-    instance. Note that you can always check which data is inside each group by checking
-    its ``.keys()``.
+    See :class:`_ReductionStep` for documentation about the various datasets within this
+    class instance. Note that you can always check which data is inside each group by
+    checking its ``.keys()``.
 
     See :meth:`CombinedData.promote` for detailed information about the processes
     involved in creating this data from :class:`Level1` objects.
@@ -1863,7 +1888,6 @@ class CombinedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         data
             The combined data.
         """
-
         if gha_min is None:
             gha_min = np.floor(min(p.ancillary["gha"].min() for p in prev_step))
         if gha_max is None:
@@ -1954,7 +1978,6 @@ class CombinedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         use_pbar=True,
     ):
         """Bin a list of files into small aligning bins of GHA."""
-
         gha_edges = np.arange(gha_min, gha_max, gha_bin_size)
         if np.isclose(gha_max, gha_edges.max() + gha_bin_size):
             gha_edges = np.concatenate((gha_edges, [gha_edges.max() + gha_bin_size]))
@@ -2065,11 +2088,13 @@ class CombinedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
                 f = self.freq.freq
 
             ax.plot(f, mean_r[0] - ix * separation)
+            rms = np.sqrt(
+                averaging.weighted_mean(data=mean_r[0] ** 2, weights=mean_w[0])[0]
+            )
             ax.text(
                 self.freq.max + 5,
                 -ix * separation,
-                f"{day} RMS="
-                f"{np.sqrt(averaging.weighted_mean(data=mean_r[0] ** 2, weights=mean_w[0])[0]):.2f}",
+                f"{day} RMS={rms:.2f}",
             )
 
         return ax
@@ -2225,9 +2250,9 @@ class DayAveragedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
     """
     Object representing a dataset that is averaged over days.
 
-    See :class:`_ReductionStep` for documentation about the various datasets within this class
-    instance. Note that you can always check which data is inside each group by checking
-    its ``.keys()``.
+    See :class:`_ReductionStep` for documentation about the various datasets within this
+    class instance. Note that you can always check which data is inside each group by
+    checking its ``.keys()``.
     """
 
     _possible_parents = (CombinedData,)
@@ -2267,7 +2292,7 @@ class DayAveragedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
             A sequence of days to ignore in the integration.
         xrfi_pipe
             A dictionary specifying further RFI flagging methods. See
-            :method:`Level2.from_previous_level` for details.
+            :meth:`Level2.from_previous_level` for details.
         xrfi_on_resids
             Whether to do xRFI on the residuals of the data, or the averaged spectrum
             itself.
@@ -2355,7 +2380,8 @@ class DayAveragedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         gha_max
             Maximum GHA to use.
         weights
-            The weights to use in the averaging. By default, the weights of the instance.
+            The weights to use in the averaging. By default, the weights of the
+            instance.
 
         Returns
         -------
@@ -2388,6 +2414,7 @@ class DayAveragedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         gha_bin_size: float = 1.0,
         weights: np.ndarray | str | None = None,
     ):
+        """Bin the data in GHA bins."""
         if gha_min is None:
             gha_min = self.gha_edges.min()
         if gha_max is None:
@@ -2449,7 +2476,7 @@ class DayAveragedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         freq_resolution=0,
         separation=10,
     ):
-
+        """Plot the residuals."""
         params, resids, weights, gha_edges = self.bin_gha(
             gha_min, gha_max, gha_bin_size=gha_bin_size, weights=weights
         )
@@ -2530,8 +2557,8 @@ class BinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         f_high
             The highest frequency to keep.
         ignore_freq_ranges
-            Set the weights between these frequency ranges to zero, so they are completely
-            ignored in any following fits.
+            Set the weights between these frequency ranges to zero, so they are
+            completely ignored in any following fits.
         freq_resolution
             The frequency resolution to average down to.
         gha_min
@@ -2541,7 +2568,7 @@ class BinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         gha_bin_size
             The GHA bin size after averaging.
         xrfi_pipe
-            A final run of xRFI -- see :method:`Level2.from_previous_level` for details.
+            A final run of xRFI -- see :meth:`Level2.from_previous_level` for details.
 
         Returns
         -------
@@ -2628,6 +2655,7 @@ class BinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         f_high=None,
         resolution=0,
     ):
+        """Rebin the data in GHA and frequency."""
         gha_edges = np.arange(
             gha_min, gha_max + gha_bin_size / 10, gha_bin_size, dtype=float
         )
@@ -2669,7 +2697,7 @@ class BinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         f_range: tuple[float | None, float | None] = (0, np.inf),
         plot_full_avg: bool = False,
     ):
-
+        """Plot residuals."""
         if ax is None:
             fig, ax = plt.subplots(1, 1, figsize=(7, 12))
 
@@ -2699,11 +2727,11 @@ class BinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
 
             ax.plot(f, rr - ix * separation)
             if labels:
+                rms = np.sqrt(averaging.weighted_mean(data=rr ** 2, weights=ww)[0])
                 ax.text(
                     self.freq.max + 5,
                     -ix * separation,
-                    f"GHA={self.gha_edges[ix]:.2f} RMS="
-                    f"{np.sqrt(averaging.weighted_mean(data=rr ** 2, weights=ww)[0]):.2f}",
+                    f"GHA={self.gha_edges[ix]:.2f} RMS={rms:.2f}",
                 )
 
         if plot_full_avg:
@@ -2724,14 +2752,13 @@ class BinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
             ax.plot(f, avg_r[0] - (ix + 2) * separation)
 
             if labels:
+                rms = np.sqrt(
+                    averaging.weighted_mean(data=avg_r[0] ** 2, weights=avg_w[0])[0]
+                )
                 ax.text(
                     self.freq.max + 5,
                     -(ix + 2) * separation,
-                    f"Full Avg. RMS={np.sqrt(averaging.weighted_mean(data=avg_r[0] ** 2, weights=avg_w[0])[0]):.2f}",
+                    f"Full Avg. RMS={rms:.2f}",
                 )
 
         return ax
-
-
-def run_complete_process():
-    pass

@@ -84,12 +84,12 @@ def bin_array_unbiased_irregular(
     """Bin arbitrary-dimension data carefully along an axis.
 
     There are multiple ways to "bin" data along an axis when provided with weights.
-    It is not typically accurate to return equi-spaced bins where data is averaged simply
-    via summing with the weights (and the bin coords represent the centre of each bin).
-    This results in some bias when the weights are not uniform.
+    It is not typically accurate to return equi-spaced bins where data is averaged
+    simply via summing with the weights (and the bin coords represent the centre of each
+    bin). This results in some bias when the weights are not uniform.
 
-    One way around this is to assume some underlying model and "fill in" the lower-weight
-    bins. This would allow equi-spaced estimates.
+    One way around this is to assume some underlying model and "fill in" the
+    lower-weight bins. This would allow equi-spaced estimates.
 
     However, this function does something simpler -- it returns non-equi-spaced bins.
     This can be a little annoying if multiple data are to be binned, because one needs
@@ -231,7 +231,8 @@ def bin_freq_unbiased_irregular(
 
     if freq is not None and len(freq) != spectrum.shape[-1]:
         raise ValueError(
-            f"provided freq ({len(freq)}) does not match final axis of spectrum {spectrum.shape}!"
+            f"provided freq ({len(freq)}) does not match final axis of spectrum "
+            f"{spectrum.shape}!"
         )
 
     out_freq, out_spec, out_wght = bin_array_unbiased_irregular(
@@ -286,7 +287,6 @@ def bin_freq_unbiased_regular(
     params
         The new parameters of the same model
     """
-
     if resolution is None or resolution:
         new_f_edges = get_bin_edges(freq, resolution)
         new_f = (new_f_edges[1:] + new_f_edges[:-1]) / 2
@@ -379,9 +379,9 @@ def bin_gha_unbiased_regular(
         these_resids = resids[mask]
         these_weights = weights[mask]
 
-        # Take the nanmean, because some entire integrations/GHA's might have been flagged
-        # and therefore have no applicable model. Then the params should be NaN. A nanmean
-        # of all NaNs returns NaN, so that makes sense.
+        # Take the nanmean, because some entire integrations/GHA's might have been
+        # flagged and therefore have no applicable model. Then the params should be NaN.
+        # A nanmean of all NaNs returns NaN, so that makes sense.
         params_out[i] = np.nanmean(these_params, axis=0)
         resids_out[i], weights_out[i] = weighted_mean(
             these_resids, weights=these_weights, axis=0
@@ -401,6 +401,7 @@ def bin_spectrum_unbiased_regular(
     resolution: [float, int, None] = None,
     **kwargs,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Bin a spectrum in GHA and frequency in an unbiased and regular manner."""
     p, r, w = bin_gha_unbiased_regular(
         params=params, resids=resids, weights=weights, gha=gha, bins=gha_bins
     )
@@ -444,15 +445,15 @@ def weighted_sum(data, weights=None, normalize=False, axis=0):
     if normalize:
         weights = weights.copy() / weights.nanmax()
 
-    sum = np.nansum(data * weights, axis=axis)
+    sm = np.nansum(data * weights, axis=axis)
     weights = np.nansum(weights, axis=axis)
 
-    if hasattr(sum, "__len__"):
-        sum[weights == 0] = np.nan
+    if hasattr(sm, "__len__"):
+        sm[weights == 0] = np.nan
     elif weights == 0:
-        sum = np.nan
+        sm = np.nan
 
-    return sum, weights
+    return sm, weights
 
 
 def weighted_mean(data, weights=None, axis=0):
@@ -475,13 +476,13 @@ def weighted_mean(data, weights=None, axis=0):
         The weighted mean over `axis`, where elements with zero total weight are
         set to nan.
     """
-    sum, weights = weighted_sum(data, weights, axis=axis)
+    sm, weights = weighted_sum(data, weights, axis=axis)
 
     mask = weights > 0
-    if isinstance(sum, float):
-        return sum / weights if mask else np.nan, weights
-    av = np.zeros_like(sum)
-    av[mask] = sum[mask] / weights[mask]
+    if isinstance(sm, float):
+        return sm / weights if mask else np.nan, weights
+    av = np.zeros_like(sm)
+    av[mask] = sm[mask] / weights[mask]
     av[~mask] = np.nan
     return av, weights
 
@@ -526,4 +527,5 @@ def weighted_sorted_metric(data, weights=None, metric="median", **kwargs):
 
 
 def weighted_standard_deviation(av, data, std, axis=0):
+    """Calcualte a careful weighted standard deviation."""
     return np.sqrt(weighted_mean((data - av) ** 2, 1 / std ** 2, axis=axis)[0])

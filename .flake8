@@ -12,12 +12,27 @@ max-complexity = 20
 inline-quotes = double
 docstring-convention=numpy
 rst-roles =
-  class
-  method
-  func
-  attr
+    class
+    func
+    mod
+    data
+    const
+    meth
+    attr
+    exc
+    obj
+rst-directives =
+    note
+    warning
+    versionadded
+    versionchanged
+    deprecated
+    seealso
 exclude =
     devel/*
+    examples/*
 per-file-ignores =
     tests/*:D
-    src/edges-analysis/__init__.py:F401
+    src/edges_analysis/__init__.py:F401
+    src/edges_analysis/analysis/__init__.py:F401
+    src/edges_analysis/analysis/loss.py:N803
