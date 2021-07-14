@@ -732,10 +732,11 @@ class _SingleDayMixin:
 
     def get_model_parameters(
         self,
-        model: [str, mdl.Model] = "linlog",
-        resolution: [int, float, None] = 0.0488,
+        model: tp.Modelable = "linlog",
+        resolution: Optional[Union[int, float]] = 0.0488,
         weights: Optional[np.ndarray] = None,
         indices: Optional[List[int]] = None,
+        freq_range: Tuple[float, float] = (0, np.inf),
         **kwargs,
     ) -> Tuple[mdl.Model, np.ndarray]:
         """
@@ -753,6 +754,8 @@ class _SingleDayMixin:
             Weights with which to fit the spectra.
         indices
             Which integrations to generate models for.
+        freq_range
+            The frequency range over which to fit the model.
 
         Other Parameters
         ----------------
@@ -767,7 +770,8 @@ class _SingleDayMixin:
         if weights is None:
             weights = self.weights
 
-        indices = indices or range(len(self.spectrum))
+        if indices is None:
+            indices = range(len(self.spectrum))
 
         if isinstance(model, str):
             model = mdl.Model.get_mdl(model)
@@ -777,22 +781,28 @@ class _SingleDayMixin:
             model = model(**kwargs)
         else:
             f, s, w = self.raw_frequencies, self.spectrum, weights
+            mask = (f >= freq_range[0]) & (f < freq_range[1])
+            f = f[mask]
+            s = s[:, mask]
+            w = w[:, mask]
+
             model = model(default_x=f, **kwargs)
 
         def get_params(indx):
             ss = s[indx]
             ww = w[indx]
 
+            if resolution:
+                ff = f[indx]
+                mask = (ff >= freq_range[0]) & (ff < freq_range[1])
+                ff = ff[mask]
+                ss = ss[mask]
+                ww = ww[mask]
+                model.set_default_x(ff)
+
             if np.sum(ww > 0) <= 2 * model.n_terms:
                 # Only try to fit if we have enough non-flagged data points.
                 return np.nan * np.ones(model.n_terms)
-
-            if resolution:
-                try:
-                    del model.default_basis
-                except AttributeError:
-                    pass
-                model.default_x = f[indx]
 
             return model.fit(ydata=ss, weights=ww).model_parameters
 
@@ -803,24 +813,19 @@ class _SingleDayMixin:
     def get_model_rms(
         self,
         weights: Optional[np.ndarray] = None,
-        freq_ranges: List[Tuple[float, float]] = [(-np.inf, np.inf)],
+        freq_range: Tuple[float, float] = (-np.inf, np.inf),
         indices: Optional[List[int]] = None,
         **model_kwargs,
-    ) -> Dict[Tuple[float, float], np.ndarray]:
+    ) -> np.ndarray:
         """Obtain the RMS of the residual of a model-fit to a particular integration.
-
-        This method is cached, so that calling it again for the same arguments is
-        fast.
 
         Parameters
         ----------
         weights
             The weights of the spectrum to use in the fitting. Must be the same shape
             as :attr:`~spectrum`. Default is to use the weights intrinsic to the object.
-        freq_ranges
-            While the model given is fit to the entire spectrum, the RMS values can be
-            taken over sub-portions of the spectrum. Each frequency range should be
-            given as a tuple of (low, high) values, in a list.
+        freq_range
+            The frequency range over which to fit the model (min, max in MHz)
         indices
             The integration indices for which to return the RMS.
 
@@ -841,44 +846,42 @@ class _SingleDayMixin:
         self-consistently with the weights  -- it uses :func:`~tools.bin_array` to do
         the binning, returning non-equi-spaced frequencies.
         """
-        model, params = self.get_model_parameters(weights=weights, indices=indices, **model_kwargs)
+        model, params = self.get_model_parameters(
+            weights=weights, indices=indices, freq_range=freq_range, resolution=0, **model_kwargs
+        )
 
         if indices is None:
             indices = range(len(self.spectrum))
         if weights is None:
-            weights = np.ones(self.spectrum.shape)
+            weights = self.weights[indices]
+
+        freq_mask = (self.raw_frequencies >= freq_range[0]) & (self.raw_frequencies < freq_range[1])
+
+        # Index by indices so they have the same length as 'params'
+        spec = self.spectrum[indices][:, freq_mask]
+
+        model.set_default_x(self.raw_frequencies[freq_mask])
 
         # access the default basis
         def _get_rms(indx):
+            mask = weights[indx, freq_mask] > 0
+            resid = spec[indx] - model(parameters=params[indx])
+            return np.sqrt(np.nanmean(resid[mask] ** 2))
 
-            m = model(x=self.raw_frequencies, parameters=params[indx])
-
-            out = {}
-            for band in freq_ranges:
-                freq_mask = (self.raw_frequencies >= band[0]) & (self.raw_frequencies < band[1])
-                resid = self.spectrum[indx, freq_mask] - m[freq_mask]
-                mask = weights[indx, freq_mask] > 0
-                out[band] = np.sqrt(np.nanmean(resid[mask] ** 2))
-
-            return out or np.nan
-
-        res = [_get_rms(i) for i in range(len(indices))]
-
-        # Return dict of arrays (from list of dicts).
-        return {band: np.array([r[band] for r in res]) for band in res[0]}
+        return np.array([_get_rms(i) for i in range(len(indices))])
 
     def plot_waterfall(
         self,
         quantity: str = "spectrum",
-        flagged: [str, bool] = True,
-        ax: [None, plt.Axes] = None,
+        flagged: Union[str, bool] = True,
+        ax: Optional[plt.Axes] = None,
         cbar=True,
         xlab=True,
         ylab=True,
         title=True,
         **imshow_kwargs,
     ):
-        if quantity in ["p0", "p1", "p2"]:
+        if quantity in {"p0", "p1", "p2"}:
             q = self.calibration_step.spectra["switch_powers"][int(quantity[-1])]
         elif quantity == "Q":
             q = self.calibration_step.spectra["Q"]

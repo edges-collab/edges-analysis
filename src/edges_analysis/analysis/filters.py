@@ -145,6 +145,8 @@ class GHAModelFilterInfo:
     metric: np.ndarray
     std: np.ndarray
     flags: np.ndarray
+    files: List[Union[tp.PathLike, FilteredData, CalibratedData]]
+    indx_map: List[np.ndarray]
 
     def __attrs_post_init__(self):
         """Run post-init scripts.
@@ -177,7 +179,7 @@ class FrequencyAggregator(metaclass=abc.ABCMeta):
 
     def aggregate(
         self, data: Sequence[Union[tp.PathLike, FilteredData, CalibratedData]]
-    ) -> Union[np.ndarray, np.ndarray]:
+    ) -> Union[np.ndarray, np.ndarray, List[np.ndarray]]:
         """Aggregate a set of data files over frequency.
 
         Parameters
@@ -192,12 +194,16 @@ class FrequencyAggregator(metaclass=abc.ABCMeta):
             order.
         metric
             The aggregated metric at each GHA.
+        indx_map
+            A list of integer arrays that give the index of each file's GHAs back to
+            the sorted array.
         """
         # Convert the data to actual Step objects
         data = [read_step(d) for d in data]
 
         # get the total number of GHAs in all the files
-        n_gha_total = sum(len(d.gha) for d in data)
+        n_ghas = [len(d.gha) for d in data]
+        n_gha_total = sum(n_ghas)
 
         # Put all the GHA's together
         gha = np.concatenate(tuple(d.gha for d in data))
@@ -205,15 +211,22 @@ class FrequencyAggregator(metaclass=abc.ABCMeta):
         # Get the aggregated metrics for all input files.
         metric = np.empty(n_gha_total)
         count = 0
-        for datafile in data:
-            n_gha = len(datafile.gha)
+        for n_gha, datafile in zip(n_ghas, data):
             metric[count : count + n_gha] = self.aggregate_file(datafile)
             count += n_gha
 
         # Now, sort the output
         sortidx = np.argsort(gha)
 
-        return gha[sortidx], metric[sortidx]
+        # Build a dictionary mapping indices in the sorted array to file/gha index in
+        # the files
+        indx_map = []
+        counter = 0
+        for n in n_ghas:
+            indx_map.append(sortidx[counter : counter + n])
+            counter += n
+
+        return gha[sortidx], metric[sortidx], indx_map
 
 
 def get_gha_model_filter(
@@ -276,7 +289,7 @@ def get_gha_model_filter(
 
     """
     # Aggregate the data for each file along the frequency axis.
-    gha, metric = aggregator.aggregate(data)
+    gha, metric, indx_map = aggregator.aggregate(data)
 
     # Remove nan/inf values from the data.
     mask = np.isnan(metric) | np.isinf(metric)
@@ -305,7 +318,9 @@ def get_gha_model_filter(
         medfilt_width=medfilt_width,
     )
 
-    info = GHAModelFilterInfo(gha=gha, metric=metric, std=std, flags=flags)
+    info = GHAModelFilterInfo(
+        gha=gha, metric=metric, std=std, flags=flags, files=data, indx_map=indx_map
+    )
     return (
         GHAModelFilter.from_data(
             info,
@@ -493,18 +508,7 @@ class RMSAggregator(FrequencyAggregator):
     model_kwargs: Optional[dict] = attr.ib(factory=dict)
 
     def aggregate_file(self, data: Union[FilteredData, CalibratedData]) -> np.ndarray:
-        freq_mask = (data.raw_frequencies >= self.band[0]) & (data.raw_frequencies < self.band[1])
-
-        model = Model.get_mdl(self.model_type)(
-            default_x=data.raw_frequencies[freq_mask], **self.model_kwargs
-        )
-
-        rms = np.empty(len(data.gha))
-        for i, spectrum in enumerate(data.spectrum):
-            fit = model.fit(ydata=spectrum[freq_mask], weights=data.weights[i, freq_mask])
-            rms[i] = np.sqrt(np.mean(fit.residual ** 2))
-
-        return rms
+        return data.get_model_rms(freq_range=self.band, **self.model_kwargs, model=self.model_type)
 
 
 @attr.s(frozen=True)
@@ -515,7 +519,12 @@ class TotalPowerAggregator(FrequencyAggregator):
 
     def aggregate_file(self, data: Union[FilteredData, CalibratedData]) -> np.ndarray:
         freq_mask = (data.raw_frequencies >= self.band[0]) & (data.raw_frequencies < self.band[1])
-        return np.sum(data.spectrum[:, freq_mask], axis=1)
+        weights = np.sum(data.weights[:, freq_mask], axis=1)
+        return np.where(
+            weights > 0,
+            np.sum(data.spectrum[:, freq_mask] * data.weights[:, freq_mask], axis=1) / weights,
+            np.nan,
+        )
 
 
 def apply_gha_model_filter(
@@ -523,14 +532,41 @@ def apply_gha_model_filter(
     aggregator: FrequencyAggregator,
     filt: Optional[GHAModelFilter] = None,
     n_files: int = 0,
+    use_intrinsic_flags: bool = True,
+    out_file: Optional[tp.PathLike] = None,
     **kwargs,
-):
-    """Apply a GHA-based model filter to a set of data files."""
+) -> Tuple[GHAModelFilter, Optional[GHAModelFilterInfo]]:
+    """Apply a GHA-based model filter to a set of data files.
+
+    Parameters
+    ----------
+    data
+
+    """
     if n_files == 0:
         n_files = len(data)
 
+    info = None
     if filt is None:
         filt, info = get_gha_model_filter(data=data[:n_files], aggregator=aggregator, **kwargs)
+
+        # If desired, go ahead and just flag the objects themselves.
+        # Can only do this if we just computed the filter.
+        if use_intrinsic_flags:
+            for i, d in enumerate(data[:n_files]):
+                dd = read_step(d)
+                dd.weights[info.indx_map[i]] = info.flags
+
+        if out_file:
+            filt.write(out_file)
+
+    for d in data[n_files:]:
+        dd = read_step(d)
+        metric = aggregator.aggregate_file(dd)
+        flags = filt.apply_filter(gha=dd.gha, metric=metric)
+        dd.weights[flags] = True
+
+    return filt, info
 
 
 def mean_power_model(gha, nu_min, nu_max, beta=-2.5):
