@@ -17,6 +17,8 @@ import functools
 from .data import DATA_PATH
 from . import tools
 from edges_cal import xrfi as rfi
+import inspect
+import p_tqdm
 
 logger = logging.getLogger(__name__)
 
@@ -81,47 +83,51 @@ def step_filter(
     ):
         STEP_FILTERS[fnc.__name__] = fnc
 
+        uses_flags = "flags" in inspect.signature(fnc).parameters
+
         @functools.wraps(fnc)
         def wrapper(
             *,
-            data: tp.PathLike | _ReductionStep | Sequence[tp.PathLike | _ReductionStep],
-            flags: np.ndarray | Sequence[np.ndarray] = None,
+            data: Sequence[tp.PathLike | _ReductionStep],
+            flags: Sequence[np.ndarray] | None = None,
             in_place: bool = False,
+            n_threads: int = 1,
             **kwargs,
         ) -> np.ndarray:
             logger.info(f"Running {fnc.__name__} filter.")
 
             # Read all the data, in case they haven't been turned into objects yet.
             # And check that everything is the right type.
-            if multi_data:
-                data = [read_step(d) for d in data]
-                assert all(isinstance(d, data_type) for d in data)
-            else:
-                data = [read_step(data)]
-                assert isinstance(data[0], data_type)
+            data = [read_step(d) for d in data]
+            assert all(isinstance(d, data_type) for d in data)
 
             # Specify initial flags (can either be list or single array)
-            if flags is None:
-                flg = [~d.weights.astype("bool") for d in data]
-            elif np.all(flags):
+            flg = (
+                [d.get_flags() for d in data]
+                if flags is None
+                else [f.copy() for f in flags]
+            )
+
+            if np.all(flg):
                 return flags
-            else:
-                flg = [f.copy() for f in flags] if multi_data else [flags.copy()]
 
             pre_flag_n = [np.sum(f) for f in flg]
 
             if multi_data:
-                this_flag = fnc(
-                    data=data, flags=flg.T if axis == "time" else flg, **kwargs
-                )
+                if uses_flags:
+                    kwargs.update(flags=flg)
+                this_flag = fnc(data=data, **kwargs)
             else:
-                this_flag = [
-                    fnc(
-                        data=data[0],
-                        flags=flg[0].T if axis == "time" else flg[0],
-                        **kwargs,
-                    )
-                ]
+
+                def fnc_(data, flags, **kwargs):
+                    if uses_flags:
+                        return fnc(data=data, flags=flags, **kwargs)
+                    else:
+                        return fnc(data=data, **kwargs)
+
+                this_flag = list(
+                    p_tqdm.p_umap(fnc_, data, flags, unit="files", num_cpus=n_threads)
+                )
 
             if flags is not None and any(
                 np.any(f0 != f1) for f0, f1 in zip(flg, flags)
@@ -847,38 +853,27 @@ def time_filter_auxiliary(
     amb_hum_max: float = 200,
     min_receiver_temp: float = 0,
     max_receiver_temp: float = 100,
-    flags: np.ndarray | None = None,
 ) -> np.ndarray:
     """Flag on auxiliary data."""
-    loc_flgs = np.zeros(len(gha), dtype=bool)
+    flags = np.zeros(len(gha), dtype=bool)
 
-    def filt(condition, message, loc_flgs):
-        nflags = np.sum(loc_flgs)
+    def filt(condition, message, flags):
+        nflags = np.sum(flags)
 
-        loc_flgs |= condition
-        nnew = np.sum(loc_flgs) - nflags
+        flags |= condition
+        nnew = np.sum(flags) - nflags
         if nnew:
-            logger.debug(
-                f"{nnew}/{len(loc_flgs) - nflags} times flagged due to {message}"
-            )
+            logger.debug(f"{nnew}/{len(flags) - nflags} times flagged due to {message}")
 
-    filt((gha < gha_range[0]) | (gha >= gha_range[1]), "GHA range", loc_flgs)
-    filt(sun_el > sun_el_max, "sun position", loc_flgs)
-    filt(moon_el > moon_el_max, "moon position", loc_flgs)
-    filt(humidity > amb_hum_max, "humidity", loc_flgs)
+    filt((gha < gha_range[0]) | (gha >= gha_range[1]), "GHA range", flags)
+    filt(sun_el > sun_el_max, "sun position", flags)
+    filt(moon_el > moon_el_max, "moon position", flags)
+    filt(humidity > amb_hum_max, "humidity", flags)
     filt(
         (receiver_temp >= max_receiver_temp) | (receiver_temp <= min_receiver_temp),
         "receiver temp",
-        loc_flgs,
+        flags,
     )
-
-    if flags is not None:
-        assert flags.shape[-1] == len(
-            gha
-        ), f"flags must be an array with last axis len(gha). Got {flags.shape}"
-        flags |= loc_flgs
-    else:
-        flags = loc_flgs
 
     return flags
 
@@ -887,7 +882,6 @@ def time_filter_auxiliary(
 def aux_filter(
     *,
     data: CalibratedData,
-    flags: np.ndarray[bool],
     sun_el_max: float = 90,
     moon_el_max: float = 90,
     ambient_humidity_max: float = 40,
@@ -926,7 +920,6 @@ def aux_filter(
         amb_hum_max=ambient_humidity_max,
         min_receiver_temp=min_receiver_temp,
         max_receiver_temp=max_receiver_temp,
-        flags=flags,
     )
 
 
@@ -1034,7 +1027,7 @@ def total_power_filter(
 
 
 @step_filter(axis="time", data_type=CalibratedData)
-def negative_power_filter(*, data: CalibratedData, flags: np.ndarray):
+def negative_power_filter(*, data: CalibratedData):
     """Filter out integrations that have *any* negative/zero power.
 
     These integrations obviously have some weird stuff going on.

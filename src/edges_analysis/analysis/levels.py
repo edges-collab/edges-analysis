@@ -1844,7 +1844,6 @@ class CombinedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         "years": is_array("int", 1),
         "days": is_array("int", 1),
         "hours": is_array("int", 1),
-        "pre_filter_weights": float_array_ndim(3),
     }
 
     _meta = {
@@ -1858,8 +1857,6 @@ class CombinedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         gha_min: float | None = None,
         gha_max: float | None = None,
         gha_bin_size: float = 0.1,
-        xrfi_pipe: dict | None = None,
-        xrfi_on_resids: bool = True,
         n_threads: int = cpu_count(),
     ):
         """
@@ -1919,24 +1916,7 @@ class CombinedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
             flags=flags,
         )
 
-        if xrfi_pipe:
-            logger.info("Running xRFI...")
-            t = time.time()
-            flags = tools.run_xrfi_pipe(
-                spectrum=resids
-                if xrfi_on_resids
-                else prev_step[0].get_spectrum(resids, params),
-                weights=weights,
-                freq=prev_step[0].raw_frequencies,
-                xrfi_pipe=xrfi_pipe,
-                n_threads=n_threads,
-            )
-            new_weights = np.where(flags, 0, weights)
-            logger.info(f"... took {time.time() - t:.2f} sec.")
-        else:
-            new_weights = weights
-
-        data = {"weights": new_weights, "resids": resids}
+        data = {"weights": weights, "resids": resids}
 
         ancillary = {
             "years": [p.year for p in prev_step],
@@ -1944,7 +1924,6 @@ class CombinedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
             "hours": [p.hour for p in prev_step],
             "gha_edges": gha_edges,
             "model_params": params,
-            "pre_filter_weights": weights,
         }
 
         return prev_step[0].raw_frequencies, data, ancillary, cls._get_meta(locals())
@@ -2052,7 +2031,7 @@ class CombinedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         if weights is None:
             weights = self.weights
         elif weights == "old":
-            weights = self.ancillary["pre_filter_weights"]
+            weights = self.raw_weights
 
         gha = (self.ancillary["gha_edges"][1:] + self.ancillary["gha_edges"][:-1]) / 2
 
@@ -2167,7 +2146,7 @@ class CombinedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
             if weights is None:
                 weights = self.weights[indx]
             elif weights == "old":
-                weights = self.ancillary["pre_filter_weights"][indx]
+                weights = self.raw_weights[indx]
 
             q = np.where(weights, q, np.nan)
 
@@ -2260,7 +2239,6 @@ class DayAveragedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         "years": is_array("int", 1),
         "days": is_array("int", 1),
         "hours": is_array("int", 1),
-        "pre_filter_weights": float_array_ndim(2),
     }
 
     _meta = {}
@@ -2272,8 +2250,6 @@ class DayAveragedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         day_range: tuple[int, int] | None = None,
         ignore_days: Sequence[int] | None = None,
         gha_filter_file: [None, str, Path] = None,
-        xrfi_pipe: [None, dict] = None,
-        xrfi_on_resids: bool = True,
         n_threads: int = cpu_count(),
     ):
         """
@@ -2299,8 +2275,6 @@ class DayAveragedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         n_threads
             The number of threads to use for the xRFI.
         """
-        xrfi_pipe = xrfi_pipe or {}
-
         # Compute the residuals
         days = prev_step.days
         freq = prev_step.freq
@@ -2329,27 +2303,9 @@ class DayAveragedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         params = np.nanmean(prev_step.ancillary["model_params"], axis=0)
         resid, wght = averaging.weighted_mean(resid, wght, axis=0)
 
-        # Perform xRFI on GHA-averaged spectra.
-        if xrfi_pipe:
-            logger.info("Running xRFI...")
-            t = time.time()
-            flags = tools.run_xrfi_pipe(
-                spectrum=resid
-                if xrfi_on_resids
-                else prev_step.get_spectrum(resid, params),
-                weights=wght,
-                freq=prev_step.raw_frequencies,
-                xrfi_pipe=xrfi_pipe,
-                n_threads=n_threads,
-            )
-            new_wght = np.where(flags, 0, wght)
-            logger.info(f"... took {time.time() - t:.2f} sec.")
-        else:
-            new_wght = wght
-
         data = {
             "resids": resid,
-            "weights": new_wght,
+            "weights": wght,
         }
 
         ancillary = {
@@ -2358,7 +2314,6 @@ class DayAveragedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
             "hours": np.unique(prev_step.ancillary["hours"]),
             "gha_edges": prev_step.ancillary["gha_edges"],
             "model_params": params,
-            "pre_filter_weights": wght,
         }
 
         return prev_step.raw_frequencies, data, ancillary, cls._get_meta(locals())
@@ -2431,7 +2386,7 @@ class DayAveragedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         if weights is None:
             weights = self.weights
         elif weights == "old":
-            weights = self.ancillary["pre_filter_weights"]
+            weights = self.raw_weights
 
         params, resids, weights = averaging.bin_gha_unbiased_regular(
             self.model_params, self.resids, weights, self.gha_centres, gha_edges
@@ -2450,7 +2405,7 @@ class DayAveragedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         if weights is None:
             weights = self.weights
         elif weights == "old":
-            weights = self.ancillary["pre_filter_weights"]
+            weights = self.raw_weights
 
         q = getattr(self, quantity)
         if flagged:
@@ -2523,7 +2478,6 @@ class BinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         "years": is_array("int", 1),
         "days": is_array("int", 1),
         "hours": is_array("int", 1),
-        "pre_filter_weights": float_array_ndim(2),
     }
     _meta = None
 
@@ -2538,8 +2492,6 @@ class BinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         gha_min: float = 0,
         gha_max: float = 24,
         gha_bin_size: [None, float] = None,
-        xrfi_pipe: [None, dict] = None,
-        xrfi_on_resids: bool = True,
         n_threads: int = cpu_count(),
     ):
         """
@@ -2575,8 +2527,6 @@ class BinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         level4
             A :class:`Level4` object.
         """
-        xrfi_pipe = xrfi_pipe or {}
-
         freq = FrequencyRange(prev_step.raw_frequencies, f_low=f_low, f_high=f_high)
 
         resid = prev_step.resids[:, freq.mask]
@@ -2618,30 +2568,14 @@ class BinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
             bins=gha_edges,
         )
 
-        # Perform xRFI on GHA-averaged spectra.
-        if xrfi_pipe:
-            logger.info("Running xRFI...")
-            flags = tools.run_xrfi_pipe(
-                spectrum=resid
-                if xrfi_on_resids
-                else prev_step.get_spectrum(resid, params, freq=f),
-                weights=wght,
-                freq=f,
-                xrfi_pipe=xrfi_pipe,
-                n_threads=n_threads,
-            )
-            new_wght = np.where(flags, 0, wght)
-        else:
-            new_wght = wght
+        data = {"resids": resid, "weights": wght}
 
-        data = {"resids": resid, "weights": new_wght}
         ancillary = {
             "years": np.unique(prev_step.ancillary["years"]),
             "days": np.unique(prev_step.ancillary["days"]),
             "hours": np.unique(prev_step.ancillary["hours"]),
             "gha_edges": gha_edges,
             "model_params": params,
-            "pre_filter_weights": wght,
         }
 
         return f, data, ancillary, cls._get_meta(locals())
@@ -2704,7 +2638,7 @@ class BinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         if weights is None:
             weights = self.weights
         elif weights == "old":
-            weights = self.ancillary["pre_filter_weights"]
+            weights = self.raw_weights
 
         for ix, (rr, ww) in enumerate(zip(self.resids, weights)):
             if np.sum(ww) == 0:

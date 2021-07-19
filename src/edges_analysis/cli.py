@@ -17,7 +17,7 @@ from rich.logging import RichHandler
 from rich.panel import Panel
 from rich.rule import Rule
 from rich.table import Table
-from .analysis import levels
+from .analysis import levels, filters
 from .config import config
 
 console = Console()
@@ -151,7 +151,7 @@ def expand_colon(pth: str, band: str = "", raw=True) -> Path:
 @click.argument(
     "step",
     type=click.Choice(
-        ["calibrate", "filter", "model", "combine", "day", "bin"], case_sensitive=False
+        ["calibrate", "model", "combine", "day", "bin"], case_sensitive=False
     ),
 )
 @click.argument("settings", type=click.Path(dir_okay=False, exists=True))
@@ -235,7 +235,6 @@ def process(ctx, step, settings, path, label, message, xrfi, clobber, output, nt
 
     step_cls = {
         "calibrate": levels.CalibratedData,
-        "filter": levels.FilteredData,
         "model": levels.ModelData,
         "combine": levels.CombinedData,
         "day": levels.DayAveragedData,
@@ -380,3 +379,89 @@ def promote(
                 )
             )
         return [o for o in out if o is not None]
+
+
+@main.command(  # noqa: A001
+    context_settings={  # Doing this allows arbitrary options to override config
+        "ignore_unknown_options": True,
+        "allow_extra_args": True,
+    }
+)
+@click.argument("settings", type=click.Path(dir_okay=False, exists=True))
+@click.option(
+    "-i",
+    "--path",
+    type=click.Path(dir_okay=True),
+    multiple=True,
+    help="""The path(s) to input files. Multiple specifications of ``-i`` can be
+    included. Each input path may have glob-style wildcards, eg. ``/path/to/file.*``.
+    If the path is a directory, all HDF5/ACQ files in the directory will be used. You
+    may prefix the path with a colon to indicate the "standard" location (given by
+    ``config['paths']``), e.g. ``-i :big-calibration/``.
+    """,
+)
+@click.option("-j", "--nthreads", default=1, help="How many threads to use.")
+@click.pass_context
+def filter(ctx, settings, path, nthreads):
+    """Filter a dataset using SETTINGS.
+
+    SETTINGS
+        is a YAML settings file. The available settings for each step can be seen
+        in the respective documentation for the classes "promote" method.
+
+    Takes one or more ``--input`` files that are the output of a
+    previous step. The first step (``calibrate``) should take raw ``.acq`` or ``.h5``
+    spectrum files.
+
+    The output is written within the given input files, inside a special "flags"
+    hDF5 group.
+    """
+    console.print(
+        Panel("edges-analysis [blue]filter[/]", box=box.DOUBLE_EDGE),
+        style="bold",
+        justify="center",
+    )
+
+    console.print(Rule("Setting Up"))
+
+    cli_settings = _ctx_to_dct(ctx.args)
+    settings = _get_settings(settings, xrfi=True, **cli_settings)
+
+    file_filter = h5py.is_hdf5
+
+    # Get input file(s). If doing initial calibration, get them from raw_field_data
+    # otherwise they should be in field_products.
+    path = [
+        expand_colon(p, band=settings.get("band"), raw=False).expanduser() for p in path
+    ]
+    input_files = sum((_get_files(p, filt=file_filter) for p in path), [])
+
+    if not input_files:
+        logger.error(f"No input files were found! Paths: {path}")
+        return
+    else:
+        console.print("[bold]Input Files:")
+        for fl in input_files:
+            console.print(f"   {fl}")
+        console.print()
+
+    # Check that input files are all homogeneously processed
+    if len({p.parent for p in input_files}) != 1:
+        raise ValueError("Your input files do not come from a single processing.")
+
+    # Save the settings file
+    output_dir = input_files[0].parent
+    n_filters = len(output_dir.glob("filter_*.yaml"))
+    with open(output_dir / f"filter_settings_{n_filters}.yaml", "w") as fl:
+        yaml.dump(settings, fl)
+
+    # Actually call the relevant function
+    console.print()
+    console.print(Rule("Beginning Processing"))
+    for filt, cfg in settings.items():
+        fnc = filters.get_step_filter(filt)
+        fnc(data=input_files, in_place=True, n_threads=nthreads, **cfg)
+    console.print(Rule("Done Processing"))
+
+    console.print()
+    console.print("[bold]All flags written inside input files.")
