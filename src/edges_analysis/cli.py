@@ -4,6 +4,7 @@ import logging
 import sys
 from pathlib import Path
 from typing import List, Type, Optional
+import shutil
 
 import click
 import h5py
@@ -44,13 +45,11 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def _get_settings(settings, xrfi, **cli_settings):
+def _get_settings(settings, **cli_settings):
     with open(settings) as fl:
         settings = yaml.load(fl, Loader=yaml.FullLoader)
 
     settings.update(cli_settings)
-    if not xrfi and settings["xrfi_pipe"]:
-        settings["xrfi_pipe"] = {}
 
     console.print()
     tab = Table(title="Settings", show_header=False)
@@ -187,15 +186,6 @@ def expand_colon(pth: str, band: str = "", raw=True) -> Path:
     """,
 )
 @click.option(
-    "-x/-X",
-    "--xrfi/--no-xrfi",
-    default=True,
-    help=(
-        "Manually turn off xRFI. Useful to quickly shut off xRFI without changing "
-        "settings."
-    ),
-)
-@click.option(
     "-c/-C",
     "--clobber/--no-clobber",
     help="Whether to overwrite any existing data at the output location",
@@ -208,7 +198,7 @@ def expand_colon(pth: str, band: str = "", raw=True) -> Path:
 )
 @click.option("-j", "--nthreads", default=1, help="How many threads to use.")
 @click.pass_context
-def process(ctx, step, settings, path, label, message, xrfi, clobber, output, nthreads):
+def process(ctx, step, settings, path, label, message, clobber, output, nthreads):
     """Process a dataset to the STEP level of averaging/filtering using SETTINGS.
 
     STEP
@@ -242,7 +232,7 @@ def process(ctx, step, settings, path, label, message, xrfi, clobber, output, nt
     }[step]
 
     cli_settings = _ctx_to_dct(ctx.args)
-    settings = _get_settings(settings, xrfi, **cli_settings)
+    settings = _get_settings(settings, **cli_settings)
     label = settings.pop("label", "") or label
 
     if not label:
@@ -401,8 +391,26 @@ def promote(
     """,
 )
 @click.option("-j", "--nthreads", default=1, help="How many threads to use.")
+@click.option(
+    "--flag-idx",
+    default=-1,
+    type=int,
+    help="""
+    Set this to a non-negative integer to copy the input files to a new location
+    and clear all flags up to the given index, performing the filter based on those
+    flags.
+    """,
+)
+@click.option(
+    "-l",
+    "--label",
+    default="",
+    help="""A label for the output. This label should be unique to the input settings
+    (but may be applied to different input files).
+    """,
+)
 @click.pass_context
-def filter(ctx, settings, path, nthreads):
+def filter(ctx, settings, path, nthreads, flag_idx, label):
     """Filter a dataset using SETTINGS.
 
     SETTINGS
@@ -424,16 +432,30 @@ def filter(ctx, settings, path, nthreads):
 
     console.print(Rule("Setting Up"))
 
-    cli_settings = _ctx_to_dct(ctx.args)
-    settings = _get_settings(settings, xrfi=True, **cli_settings)
+    with open(settings) as fl:
+        settings = yaml.load(fl, Loader=yaml.FullLoader)
+
+    if isinstance(settings, dict):
+        raise OSError("The settings file for filters should be a list")
+
+    console.print()
+    tab = Table(title="Settings", show_header=False)
+    tab.add_column()
+    tab.add_column()
+    tab.add_column()
+    for item in settings:
+        k = list(item.keys())[0]
+        v = item[k]
+        for i, (param, val) in enumerate(v.items()):
+            tab.add_row(k if not i else "", param, str(val))
+    console.print(tab)
+    console.print()
 
     file_filter = h5py.is_hdf5
 
     # Get input file(s). If doing initial calibration, get them from raw_field_data
     # otherwise they should be in field_products.
-    path = [
-        expand_colon(p, band=settings.get("band"), raw=False).expanduser() for p in path
-    ]
+    path = [expand_colon(p, raw=False).expanduser() for p in path]
     input_files = sum((_get_files(p, filt=file_filter) for p in path), [])
 
     if not input_files:
@@ -449,19 +471,58 @@ def filter(ctx, settings, path, nthreads):
     if len({p.parent for p in input_files}) != 1:
         raise ValueError("Your input files do not come from a single processing.")
 
+    input_data = [levels.read_step(fl) for fl in input_files]
+
     # Save the settings file
     output_dir = input_files[0].parent
-    n_filters = len(output_dir.glob("filter_*.yaml"))
+
+    if flag_idx >= 0:
+        if label:
+            output_dir /= label
+
+            if output_dir.exists():
+                if qs.confirm(f"The label '{label}' already exists. Remove?").ask():
+                    shutil.rmtree(output_dir)
+                else:
+                    logger.info("OK. Exiting")
+                    sys.exit()
+
+            output_dir.mkdir()
+
+            for fl in input_files:
+                shutil.copy(fl, output_dir / fl.name)
+
+            input_files = [output_dir / fl.name for fl in input_files]
+
+        elif not qs.confirm(
+            "Using flag_idx without a label removes flagging steps in place. Is this really what you want?"
+        ).ask():
+            logger.info("OK. Exiting.")
+
+        for d in input_data:
+            with d.open("r+") as flobj:
+                dset = flobj["flags"]["flags"]
+                dset.resize(flag_idx, axis=0)
+
+                for name, indx in dict(flobj["flags"].attrs).items():
+                    if indx >= flag_idx:
+                        del flobj["flags"].attrs[name]
+                        del flobj["flags"][name]
+
+    n_filters = len(list(output_dir.glob("filter_*.yaml")))
     with open(output_dir / f"filter_settings_{n_filters}.yaml", "w") as fl:
         yaml.dump(settings, fl)
 
     # Actually call the relevant function
     console.print()
-    console.print(Rule("Beginning Processing"))
-    for filt, cfg in settings.items():
+    console.print(Rule("Beginning Filtering"))
+
+    for item in settings:
+        filt = list(item.keys())[0]
+        cfg = item[filt]
         fnc = filters.get_step_filter(filt)
-        fnc(data=input_files, in_place=True, n_threads=nthreads, **cfg)
-    console.print(Rule("Done Processing"))
+        fnc(data=input_data, in_place=True, n_threads=nthreads, **cfg)
+    console.print(Rule("Done Filtering"))
 
     console.print()
     console.print("[bold]All flags written inside input files.")

@@ -23,7 +23,6 @@ from .analysis import (
     loss,
     CalibratedData,
     CombinedData,
-    FilteredData,
     ModelData,
     DayAveragedData,
     BinnedData,

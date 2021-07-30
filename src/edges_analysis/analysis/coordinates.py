@@ -1,4 +1,5 @@
 """Functions for working with earth/sky coordinates."""
+from __future__ import annotations
 import datetime as dt
 import numpy as np
 from typing import List
@@ -119,7 +120,7 @@ def lsts_to_times(
     lsts: np.typing.ArrayLike,
     ref_time: apt.Time,
     location: apc.EarthLocation = const.edges_location,
-) -> List[apt.Time]:
+) -> list[apt.Time]:
     """Convert a list of LSTs to local times at a particular location.
 
     The times are generated close to (surrounding) a particular time.

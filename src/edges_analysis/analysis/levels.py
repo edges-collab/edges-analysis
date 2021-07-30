@@ -171,11 +171,6 @@ class _ReductionStep(HDF5Object):
 
         return _get(self)
 
-    @property
-    def datestring(self):
-        """The date this observation was started, as a string."""
-        return self.calibration_step.datestring
-
     @cached_property
     def calibration_step(self):
         return self._get_parent_of_kind(CalibratedData)
@@ -384,7 +379,7 @@ class _ReductionStep(HDF5Object):
     def filters_applied(self) -> dict[str, int]:
         """A map of filters that have been applied to their respective index order."""
         with self.open() as fl:
-            filter_map = dict(fl["flags"].attrs)
+            filter_map = dict(fl["flags"].attrs) if "flags" in fl else {}
         return filter_map
 
     def _get_filter_index(self, filt: int | str | None) -> int:
@@ -398,7 +393,7 @@ class _ReductionStep(HDF5Object):
 
         return int(filt)
 
-    def get_flags(self, filt: int | str | None) -> np.ndarray:
+    def get_flags(self, filt: int | str | None = None) -> np.ndarray:
         """Get the flags associated with a given filter.
 
         Paramaters
@@ -414,10 +409,12 @@ class _ReductionStep(HDF5Object):
         flags
             The array of flags.
         """
-        filt = self._get_filter_index(filt)
-
-        with self.open() as fl:
-            flags = fl["flags"]["flags"][filt, ...]
+        try:
+            filt = self._get_filter_index(filt)
+            with self.open() as fl:
+                flags = fl["flags"]["flags"][filt, ...]
+        except OSError:
+            flags = np.zeros(self.spectrum.shape, dtype=bool)
 
         return flags
 
@@ -783,7 +780,7 @@ class _SingleDayMixin:
     def plot_waterfall(
         self,
         quantity: str = "spectrum",
-        flagged: str | bool = True,
+        filt: str | int | None = None,
         ax: plt.Axes | None = None,
         cbar=True,
         xlab=True,
@@ -798,16 +795,10 @@ class _SingleDayMixin:
         else:
             q = getattr(self, quantity)
 
-        if flagged:
-            if isinstance(flagged, bool):
-                q = np.where(self.weights, q, np.nan)
-            else:
-                q = np.where(self.filter_step.ancillary[f"{flagged}_flags"], np.nan, q)
+        q = np.where(self.get_flags(filt), np.nan, q)
 
-        if ax is not None:
-            fig = ax.figure
-        else:
-            fig, ax = plt.subplots(1, 1)
+        if ax is None:
+            ax = plt.subplots(1, 1)[1]
 
         if quantity == "resids":
             cmap = imshow_kwargs.pop("cmap", "coolwarm")
@@ -885,7 +876,7 @@ class _SingleDayMixin:
         self,
         quantity="spectrum",
         integrator="mean",
-        ax: [None, plt.Axes] = None,
+        ax: plt.Axes | None = None,
         logy=True,
     ):
         if ax is not None:

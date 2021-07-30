@@ -15,6 +15,5 @@ from .levels import (
     BinnedData,
     DayAveragedData,
     read_step,
-    FilteredData,
     ModelData,
 )
