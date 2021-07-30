@@ -2,7 +2,6 @@
 from __future__ import annotations
 import datetime as dt
 import numpy as np
-from typing import List
 from astropy import time as apt, coordinates as apc, units as apu
 from .. import const
 

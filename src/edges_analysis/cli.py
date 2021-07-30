@@ -410,7 +410,7 @@ def promote(
     """,
 )
 @click.pass_context
-def filter(ctx, settings, path, nthreads, flag_idx, label):
+def filter(ctx, settings, path, nthreads, flag_idx, label):  # noqa: A001
     """Filter a dataset using SETTINGS.
 
     SETTINGS
@@ -495,7 +495,8 @@ def filter(ctx, settings, path, nthreads, flag_idx, label):
             input_files = [output_dir / fl.name for fl in input_files]
 
         elif not qs.confirm(
-            "Using flag_idx without a label removes flagging steps in place. Is this really what you want?"
+            "Using flag_idx without a label removes flagging steps in place. "
+            "Is this really what you want?"
         ).ask():
             logger.info("OK. Exiting.")
 

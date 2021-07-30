@@ -13,8 +13,6 @@ import yaml
 from edges_cal.modelling import Model
 from edges_cal.xrfi import (
     ModelFilterInfoContainer,
-    _get_mad,
-    flagged_filter,
     model_filter,
 )
 import abc
@@ -25,7 +23,6 @@ from edges_cal import xrfi as rfi
 import inspect
 import p_tqdm
 from pathlib import Path
-import warnings
 
 
 logger = logging.getLogger(__name__)
@@ -365,6 +362,7 @@ class GHAModelFilterInfo:
         return self.metric - model_filter.metric_model(parameters=params)
 
     def write(self, fname: tp.PathLike):
+        """Write the object to H5 file."""
         with h5py.File(fname, "w") as fl:
             fl["gha"] = self.gha
             fl["metric"] = self.metric
@@ -378,6 +376,7 @@ class GHAModelFilterInfo:
 
     @classmethod
     def from_file(cls, fname: tp.PathLike):
+        """Create an object from a file."""
         with h5py.File(fname, "r") as fl:
             gha = fl["gha"][...]
             metric = fl["metric"][...]
@@ -385,9 +384,7 @@ class GHAModelFilterInfo:
             flags = fl["flags"][...]
 
             idx_map = [
-                fl[key][...]
-                for key in sorted(list(fl.keys()))
-                if key.startswith("idx_map")
+                fl[key][...] for key in sorted(fl.keys()) if key.startswith("idx_map")
             ]
 
             files = fl.attrs["files"].split(":")
@@ -563,120 +560,6 @@ def get_gha_model_filter(
     )
 
 
-# def iterative_model_filter(
-#     x: np.ndarray,
-#     data: np.ndarray,
-#     model: Model,
-#     std_model: Model,
-#     n_sigma: float = 3.0,
-#     flags: np.ndarray = None,
-#     init_flags: np.ndarray = None,
-#     std_estimator: str = "absres",
-#     medfilt_width: int = 100,
-#     max_iter: int = 20,
-# ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-#     """Iteratively determine a model fit to a given array of data.
-
-#     This function takes a set of input data as a function of a variable ``x`` and
-#     iteratively fits a particular model to it, fits a model to the absolute residuals,
-#     and then flags out data that has residuals greater than ``n_sigma`` times the
-#     absolute residual model. The newly-flagged data is then re-modelled, and so on until
-#     no new flags are obtained between iterations.
-
-#     The model of the absolute residuals is a good approximation of the local standard
-#     deviation if there is enough data to hand.
-
-#     Parameters
-#     ----------
-#     x
-#         The coordinates of the data
-#     data
-#         The data to which to fit a model.
-#     model
-#         The linear model to fit to the data
-#     std_model
-#         The linear model to fit to the absolute residuals.
-#     n_sigma
-#         The threshold number of standard deviations the data may be away from the model
-#         before being flagged.
-#     flags
-#         Any pre-known flags of the data (i.e. data that is known to be bad and should
-#         always be flagged).
-#     init_flags
-#         This is an initial guess of the flags. This is useful to do a rough initial
-#         flagging of VERY bad values that would otherwise distort the initial modelling.
-#         These flags do no persist to the second iteration, but of course very bad values
-#         will still be flagged.
-#     std_estimator
-#         The estimator to use to get the standard deviation each data point. One of
-#         'medfilt' (to use a median filtered RMS), 'absres' (to use a model fit to the
-#         absolute residuals), 'std' (to use a simple standard deviation within the
-#         window) or 'mad' (to use a simple median absolute deviation within the window).
-
-#     Returns
-#     -------
-#     flags
-#         A boolean array specifying which data is bad. All input ``flags`` are still
-#         flagged in this array. The function is careful to NOT overwrite the input flags
-#         internally, however.
-#     resid
-#         Residuals to the model
-#     std
-#         Estimates of the standard deviation of the data at each data point.
-#     """
-#     if flags is None:
-#         flags = np.zeros(len(x), dtype=bool)
-#     if init_flags is None:
-#         init_flags = np.zeros(len(x), dtype=bool)
-
-#     this_flg = flags | init_flags
-#     old_flg = np.ones(len(this_flg), dtype=bool)
-
-#     iters = 0
-#     while np.any(this_flg != old_flg) and iters < max_iter:
-#         old_flg = this_flg.copy()
-
-#         wght = (~this_flg).astype(float)
-
-#         # TODO: this is not as efficient as possible, since we keep specifying
-#         # the basis functions.
-#         resid = model.fit(ydata=data, xdata=x, weights=wght).residual
-
-#         # Here we estimate the standard deviation of the data at each data point.
-#         # There are lots of ways to do this.
-#         if std_estimator == "medfilt":
-#             std = np.sqrt(
-#                 flagged_filter(
-#                     resid ** 2,
-#                     size=2 * (medfilt_width // 2) + 1,
-#                     kind="median",
-#                     flags=this_flg,
-#                 )
-#                 / 0.456
-#             )
-#         elif std_estimator == "absres":
-#             std = std_model.fit(ydata=np.log(np.abs(resid)**2), xdata=x, weights=wght).evaluate()
-#             std = np.sqrt(np.exp(std)) / 0.53
-#         elif std_estimator == "std":
-#             std = np.std(resid) * np.ones_like(x)
-#         elif std_estimator == "mad":
-#             std = _get_mad(resid) * np.ones_like(x)
-#         else:
-#             raise ValueError(
-#                 "std_estimator must be one of 'medfilt', 'absres','std' or 'mad'."
-#             )
-
-#         this_flg = flags | (np.abs(resid) > n_sigma * std)
-#         iters += 1
-
-#     if iters == max_iter and max_iter > 1:
-#         warnings.warn(
-#             f"max iterations ({max_iter}) reached, not all bad data might have been caught."
-#         )
-
-#     return this_flg, resid, std
-
-
 def chunked_iterative_model_filter(
     *,
     x: np.ndarray,
@@ -689,8 +572,8 @@ def chunked_iterative_model_filter(
     """Perform a chunk-wise iterative model filter.
 
     This breaks the given data into smaller chunks and then calls
-    :func:`edges_cal.xrfi.model_filter` on each chunk, returning the full 1D array of flags
-    after all the chunks have been processed.
+    :func:`edges_cal.xrfi.model_filter` on each chunk, returning the full 1D array of
+    flags after all the chunks have been processed.
 
     Parameters
     ----------
@@ -1011,62 +894,14 @@ rfi_watershed_filter = _rfi_filter_factory("watershed")
 
 @step_filter(axis="freq")
 def rfi_explicit_filter(*, data: _ReductionStep, file: tp.PathLike | None = None):
-
+    """A filter of explicit channels of RFI."""
     if file is None:
         file = DATA_PATH / "known_rfi_channels.yaml"
 
     return rfi.xrfi_explicit(
         data.raw_frequencies,
-        rfi_file=known_rfi_file,
+        rfi_file=file,
     )
-
-
-# @step_filter(axis="both")
-# def rfi_filter(
-#     *,
-#     data: _ReductionStep,
-#     flags: np.ndarray[bool],
-#     m
-#     n_threads: int = cpu_count(),
-# ) -> np.ndarray:
-#     """
-#     Perform xRFI for a data file.
-
-#     Parameters
-#     ----------
-#     xrfi_pipe
-#         A dictionary with keys specifying RFI function names, and values being
-#         dictionaries of parameters to pass to the function.
-
-#     Returns
-#     -------
-#     flags
-#         The boolean flag array, specifying which freqs/times are bad.
-#     """
-#     if "explicit" in xrfi_pipe:
-#         kwargs = xrfi_pipe.pop("explicit")
-
-#         if kwargs["file"] is None:
-#             known_rfi_file = DATA_PATH / "known_rfi_channels.yaml"
-#         else:
-#             known_rfi_file = kwargs["file"]
-
-#         flags |= rfi.xrfi_explicit(
-#             data.raw_frequencies,
-#             rfi_file=known_rfi_file,
-#         )
-
-#         if np.all(flags):
-#             return flags
-
-#     return tools.run_xrfi(
-#         spectrum=data.spectrum,
-#         freq=data.raw_frequencies,
-#         flags=flags,
-#         xrfi_pipe=xrfi_pipe,
-#         n_threads=n_threads,
-#         fl_id=data.datestring,  # TODO: this is not useful for combined files.
-#     )
 
 
 @step_filter(axis="time", multi_data=True, data_type=CalibratedData)
