@@ -589,6 +589,7 @@ def sky_convolution_generator(
     >>> for i, j, mean_temp, conv_temp, sky, beam, time, n_pixels in sky_convolution_generator():
     >>>     print(mean_conv_temp)
     """
+    beam = beam.at_freq(beam.frequency)
     sky_map = sky_model.at_freq(
         beam.frequency,
         index_model=index_model,
