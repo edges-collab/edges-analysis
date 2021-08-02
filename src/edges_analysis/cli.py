@@ -446,8 +446,9 @@ def filter(ctx, settings, path, nthreads, flag_idx, label):  # noqa: A001
     for item in settings:
         k = list(item.keys())[0]
         v = item[k]
-        for i, (param, val) in enumerate(v.items()):
-            tab.add_row(k if not i else "", param, str(val))
+        if v:
+            for i, (param, val) in enumerate(v.items()):
+                tab.add_row(k if not i else "", param, str(val))
     console.print(tab)
     console.print()
 
@@ -520,7 +521,7 @@ def filter(ctx, settings, path, nthreads, flag_idx, label):  # noqa: A001
 
     for item in settings:
         filt = list(item.keys())[0]
-        cfg = item[filt]
+        cfg = item[filt] or {}
         fnc = filters.get_step_filter(filt)
         fnc(data=input_data, in_place=True, n_threads=nthreads, **cfg)
     console.print(Rule("Done Filtering"))
