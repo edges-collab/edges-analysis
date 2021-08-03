@@ -632,12 +632,11 @@ class _SingleDayMixin:
 
     def get_model_parameters(
         self,
-        model: tp.Modelable = "linlog",
+        model: mdl.Model = mdl.LinLog(n_terms=5),
         resolution: int | float | None = 0.0488,
         weights: np.ndarray | None = None,
         indices: list[int] | None = None,
         freq_range: tuple[float, float] = (0, np.inf),
-        **kwargs,
     ) -> tuple[mdl.Model, np.ndarray]:
         """
         Determine a callable model of the spectrum at a given time.
@@ -674,12 +673,8 @@ class _SingleDayMixin:
         if indices is None:
             indices = range(len(self.spectrum))
 
-        if isinstance(model, str):
-            model = mdl.Model.get_mdl(model)
-
         if resolution:
             f, s, w = self.bin_in_frequency(resolution=resolution, weights=weights)
-            model = model(**kwargs)
         else:
             f, s, w = self.raw_frequencies, self.spectrum, weights
             mask = (f >= freq_range[0]) & (f < freq_range[1])
@@ -687,9 +682,9 @@ class _SingleDayMixin:
             s = s[:, mask]
             w = w[:, mask]
 
-            model = model(default_x=f, **kwargs)
+            model = model.at(x=f)
 
-        def get_params(indx):
+        def get_params(indx, model):
             ss = s[indx]
             ww = w[indx]
 
@@ -699,15 +694,17 @@ class _SingleDayMixin:
                 ff = ff[mask]
                 ss = ss[mask]
                 ww = ww[mask]
-                model.set_default_x(ff)
+                modelx = model.at_x(ff)
+            else:
+                modelx = model
 
             if np.sum(ww > 0) <= 2 * model.n_terms:
                 # Only try to fit if we have enough non-flagged data points.
                 return np.nan * np.ones(model.n_terms)
 
-            return model.fit(ydata=ss, weights=ww).model_parameters
+            return modelx.fit(ydata=ss, weights=ww).model_parameters
 
-        params = np.array([get_params(indx) for indx in indices])
+        params = np.array([get_params(indx, model) for indx in indices])
 
         return model, params
 

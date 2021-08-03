@@ -3,14 +3,14 @@ from __future__ import annotations
 
 import logging
 from multiprocessing import cpu_count
-from typing import Sequence, Callable, Literal, Any
+from typing import Sequence, Callable, Literal
 from .levels import CalibratedData, read_step, _ReductionStep
 from . import types as tp
 import attr
 import h5py
 import numpy as np
 import yaml
-from edges_cal.modelling import Model
+from edges_cal.modelling import Model, LinLog
 from edges_cal.xrfi import (
     ModelFilterInfoContainer,
     model_filter,
@@ -626,15 +626,12 @@ def chunked_iterative_model_filter(
 class RMSAggregator(FrequencyAggregator):
     """An aggregator that fits a model and yields the RMS over a given freq range."""
 
-    model_type: tp.Modelable = attr.ib(default="LinLog")
-    model_kwargs: dict = attr.ib(factory=dict)
+    model: Model = attr.ib(default=LinLog(n_terms=5))
     band: tuple[float, float] = attr.ib(default=(0, np.inf))
 
     def aggregate_file(self, data: CalibratedData) -> np.ndarray:
         """Compute the RMS over frequency for each integration in a file."""
-        return data.get_model_rms(
-            freq_range=self.band, model=self.model_type, **self.model_kwargs
-        )
+        return data.get_model_rms(freq_range=self.band, model=self.model)
 
 
 @attr.s(frozen=True)
@@ -909,8 +906,7 @@ def rms_filter(
     *,
     data: Sequence[CalibratedData],
     bands: Sequence[tuple[float, float]] = ((0, np.inf),),
-    model_type: tp.Modelable = "linlog",
-    model_kwargs: dict[str, Any] | None = None,
+    model: Model = LinLog(n_terms=5),
     **kwargs,
 ) -> np.ndarray[bool]:
     """Perform a filter on the RMS of an integration.
@@ -926,13 +922,10 @@ def rms_filter(
     **kwargs
         Other arguments to :func:`apply_gha_model_filter`.
     """
-    model_kwargs = model_kwargs or {}
     flags = [
         apply_gha_model_filter(
             data=data,
-            aggregator=RMSAggregator(
-                band=band, model_type=model_type, model_kwargs=model_kwargs
-            ),
+            aggregator=RMSAggregator(band=band, model=model),
             **kwargs,
         )
         for band in bands
