@@ -681,8 +681,7 @@ class _SingleDayMixin:
             f = f[mask]
             s = s[:, mask]
             w = w[:, mask]
-
-            model = model.at(x=f)
+        model = model.at(x=f)
 
         def get_params(indx, model):
             ss = s[indx]
@@ -705,7 +704,6 @@ class _SingleDayMixin:
             return modelx.fit(ydata=ss, weights=ww).model_parameters
 
         params = np.array([get_params(indx, model) for indx in indices])
-
         return model, params
 
     def get_model_rms(
@@ -760,14 +758,13 @@ class _SingleDayMixin:
         freq_mask = (self.raw_frequencies >= freq_range[0]) & (
             self.raw_frequencies < freq_range[1]
         )
-
         # Index by indices so they have the same length as 'params'
         spec = self.spectrum[indices][:, freq_mask]
 
         # access the default basis
         def _get_rms(indx):
             mask = weights[indx, freq_mask] > 0
-            resid = spec[indx] - model(parameters=params[indx])[freq_mask]
+            resid = spec[indx] - model(parameters=params[indx])
             return np.sqrt(np.nanmean(resid[mask] ** 2))
 
         return np.array([_get_rms(i) for i in range(len(indices))])
