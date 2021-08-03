@@ -764,12 +764,10 @@ class _SingleDayMixin:
         # Index by indices so they have the same length as 'params'
         spec = self.spectrum[indices][:, freq_mask]
 
-        model.set_default_x(self.raw_frequencies[freq_mask])
-
         # access the default basis
         def _get_rms(indx):
             mask = weights[indx, freq_mask] > 0
-            resid = spec[indx] - model(parameters=params[indx])
+            resid = spec[indx] - model(parameters=params[indx])[freq_mask]
             return np.sqrt(np.nanmean(resid[mask] ** 2))
 
         return np.array([_get_rms(i) for i in range(len(indices))])
