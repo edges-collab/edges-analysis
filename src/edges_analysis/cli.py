@@ -371,12 +371,7 @@ def promote(
         return [o for o in out if o is not None]
 
 
-@main.command(  # noqa: A001
-    context_settings={  # Doing this allows arbitrary options to override config
-        "ignore_unknown_options": True,
-        "allow_extra_args": True,
-    }
-)
+@main.command()  # noqa: A001
 @click.argument("settings", type=click.Path(dir_okay=False, exists=True))
 @click.option(
     "-i",
