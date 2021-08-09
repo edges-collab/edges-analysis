@@ -489,7 +489,7 @@ def filter(ctx, settings, path, nthreads, flag_idx, label):  # noqa: A001
                 shutil.copy(fl, output_dir / fl.name)
 
             input_files = [output_dir / fl.name for fl in input_files]
-
+            input_data = [levels.read_step(fl) for fl in input_files]
         elif not qs.confirm(
             "Using flag_idx without a label removes flagging steps in place. "
             "Is this really what you want?"
