@@ -467,43 +467,44 @@ def read_step(
 
 class _ModelMixin:
     @cached_property
-    def model_cls(self) -> type[mdl.Model]:
+    def _model(self) -> mdl.Model:
         """The Model class that is used to fit foregrounds."""
         if isinstance(self.model_step, (list, tuple)):
             meta = self.model_step[0].meta
         else:
             meta = self.model_step.meta
 
-        return mdl.Model.get_mdl(meta["model_basis"])
+        return meta["model"]
 
     @cached_property
-    def model(self) -> mdl.Model:
+    def model(self) -> mdl.FixedLinearModel:
         """The abstract linear model that is fit to each integration.
 
         Note that the parameters are not set on this model, but the basis vectors are
         set.
         """
-        return self.model_cls(default_x=self.freq.freq, n_terms=self.model_nterms)
+        return self._model.at(x=self.freq.freq)
 
     @property
     def model_nterms(self):
         """Number of terms in the foreground model."""
-        if isinstance(self.model_step, (list, tuple)):
-            meta = self.model_step[0].meta
-        else:
-            meta = self.model_step.meta
-
-        return meta["model_nterms"]
+        return self._model.n_terms
 
     @property
     def model_params(self):
         return self.ancillary["model_params"]
 
     def get_model(
-        self, indx: int | list[int], p: np.ndarray | None = None
+        self,
+        indx: int | list[int],
+        p: np.ndarray | None = None,
+        freq: np.ndarray | None = None,
     ) -> np.ndarray:
         """Obtain the fiducial fitted model spectrum for integration/gha at indx."""
-        model = self.model
+        if freq is None:
+            model = self.model
+        else:
+            model = self.model.at_x(freq)
 
         if p is None:
             p = self.model_params
@@ -520,21 +521,11 @@ class _ModelMixin:
         self, resids: np.ndarray, params: np.ndarray, freq: np.ndarray | None = None
     ) -> np.ndarray:
         """The processed spectra at this level."""
-        if freq is not None:
-            try:
-                del self.model.default_basis
-            except AttributeError:
-                pass
-            self.model.default_x = freq
-
         indx = np.indices(resids.shape[:-1]).reshape((resids.ndim - 1, -1)).T
         out = np.zeros_like(resids)
         for i in indx:
             ix = tuple(np.atleast_2d(i).T.tolist())
-            out[ix] = self.get_model(i, params) + resids[ix]
-
-        if freq is not None:
-            del self.__dict__["model"]
+            out[ix] = self.get_model(i, params, freq=freq) + resids[ix]
 
         return out
 
@@ -1744,8 +1735,7 @@ class ModelData(_ModelMixin, _ReductionStep, _SingleDayMixin):
     def _promote(
         cls,
         prev_step: CalibratedData,
-        model_nterms: int = 5,
-        model_basis: str = "linlog",
+        model: mdl.LinLog(n_terms=5),
         model_resolution: int | float = 8,
     ) -> tuple[np.ndarray, dict, dict, dict]:
         """
@@ -1771,10 +1761,7 @@ class ModelData(_ModelMixin, _ReductionStep, _SingleDayMixin):
         data
             A :class:`ModelData` instance.
         """
-        logger.info(
-            f"Determining {model_nterms}-term '{model_basis}' models for each "
-            "integration..."
-        )
+        logger.info(f"Determining '{model}' models for each integration...")
 
         # Exit out early if the whole file is flagged.
         try:
@@ -1783,16 +1770,17 @@ class ModelData(_ModelMixin, _ReductionStep, _SingleDayMixin):
         except AttributeError:
             pass
 
-        model, params = prev_step.get_model_parameters(
-            model_basis,
+        modelx, params = prev_step.get_model_parameters(
+            model,
             resolution=model_resolution,
-            n_terms=model_nterms,
         )
-        x = prev_step.freq.freq if model_resolution else None
+
+        if model_resolution:
+            modelx = modelx.at_x(x=prev_step.freq.freq)
 
         resids = np.array(
             [
-                prev_step.spectrum[j] - model(parameters=pp, x=x)
+                prev_step.spectrum[j] - modelx(parameters=pp)
                 for j, pp in enumerate(params)
             ]
         )
@@ -2522,13 +2510,12 @@ class BinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         if freq_resolution:
             logger.info("Averaging in frequency bins...")
             f, wght, spec, resid, params = averaging.bin_freq_unbiased_regular(
-                model_type=prev_step.model_cls,
+                model=prev_step._model,
                 params=prev_step.model_params,
                 freq=freq.freq,
                 resids=resid,
                 weights=wght,
                 resolution=freq_resolution,
-                n_terms=prev_step.model_nterms,
             )
             logger.info(f".... produced {len(f)} frequency bins.")
         else:
@@ -2585,13 +2572,12 @@ class BinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         )
 
         f, w, s, new_r, new_p = averaging.bin_freq_unbiased_regular(
-            model_type=self.model.__class__,
+            model=self._model,
             params=avg_p,
             freq=self.raw_frequencies,
             resids=avg_r,
             weights=avg_w,
             new_freq_edges=np.linspace(f_low, f_high, resolution),
-            n_terms=self.model_step.meta["model_nterms"],
         )
 
         return BinnedData.from_data(

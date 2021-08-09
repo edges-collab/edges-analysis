@@ -147,13 +147,18 @@ class LabCalibration:
         self, temp: np.ndarray, freq: Optional[np.ndarray] = None, to_q=False
     ) -> np.ndarray:
         """Convert fully-calibrated temp to semi-calibrated temp."""
+        if not isinstance(self.calobs, Calibration):
+            calobs = self.calobs.to_calfile()
+        else:
+            calobs = self.calobs
+
         if freq is None:
             freq = self.calobs.freq.freq
             ant_s11 = self.antenna_s11
         else:
             ant_s11 = self.antenna_s11_model(freq)
 
-        out = self.calobs.decalibrate_temp(freq, temp, ant_s11)
+        out = calobs.decalibrate_temp(freq, temp, ant_s11)
 
         if to_q:
             return (out - self.calobs.t_load) / self.calobs.t_load_ns

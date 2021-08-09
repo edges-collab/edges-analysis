@@ -5,7 +5,7 @@ done in different ways. There are ultimately three axes over which we might bin 
 nights, LST/GHA and frequency. Each of these in fact requires slightly different methods
 for averaging, in order to make the average unbiased (given flags).
 """
-from typing import Optional, Union, Type, Tuple
+from typing import Optional, Union, Tuple
 
 import numpy as np
 from edges_cal import modelling as mdl
@@ -243,13 +243,12 @@ def bin_freq_unbiased_irregular(
 
 
 def bin_freq_unbiased_regular(
-    model_type: Union[str, Type[mdl.Model]],
+    model: mdl.Model,
     params: np.ndarray,
     freq: np.ndarray,
     resids: np.ndarray,
     weights: np.ndarray,
     resolution: [float, int, None] = None,
-    **kwargs,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Bin an array along the frequency axis into *regular* bins.
@@ -293,10 +292,7 @@ def bin_freq_unbiased_regular(
     else:
         new_f = freq
 
-    if isinstance(model_type, str):
-        model_type = mdl.Model.get_mdl(model_type)
-
-    model = model_type(default_x=new_f, **kwargs)
+    model = model.at(x=new_f)
 
     ev = np.array([model(parameters=p) for p in params])
 
@@ -396,10 +392,9 @@ def bin_spectrum_unbiased_regular(
     weights: np.ndarray,
     gha: np.ndarray,
     gha_bins: np.ndarray,
-    model_type: Type[mdl.Model],
+    model: mdl.Model,
     freq: np.ndarray,
     resolution: [float, int, None] = None,
-    **kwargs,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Bin a spectrum in GHA and frequency in an unbiased and regular manner."""
     p, r, w = bin_gha_unbiased_regular(
@@ -407,13 +402,12 @@ def bin_spectrum_unbiased_regular(
     )
 
     new_f, w, s, new_r, new_p = bin_freq_unbiased_regular(
-        model_type=model_type,
+        model=model,
         params=p,
         freq=freq,
         resids=r,
         weights=w,
         resolution=resolution,
-        **kwargs,
     )
 
     return new_f, new_r, w, s, new_p
