@@ -501,11 +501,7 @@ class _ModelMixin:
         freq: np.ndarray | None = None,
     ) -> np.ndarray:
         """Obtain the fiducial fitted model spectrum for integration/gha at indx."""
-        if freq is None:
-            model = self.model
-        else:
-            model = self.model.at_x(freq)
-
+        model = self.model if freq is None else self.model.at_x(freq)
         if p is None:
             p = self.model_params
 
@@ -2003,6 +1999,8 @@ class CombinedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
             weights = self.weights
         elif weights == "old":
             weights = self.raw_weights
+        elif isinstance(weights, str):
+            weights = np.where(self.get_flags(weights), 0, self.raw_weights)
 
         gha = (self.ancillary["gha_edges"][1:] + self.ancillary["gha_edges"][:-1]) / 2
 
@@ -2118,6 +2116,10 @@ class CombinedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
                 weights = self.weights[indx]
             elif weights == "old":
                 weights = self.raw_weights[indx]
+            elif isinstance(weights, str):
+                weights = np.where(
+                    self.get_flags(weights)[indx], 0, self.raw_weights[indx]
+                )
 
             q = np.where(weights, q, np.nan)
 
@@ -2358,6 +2360,8 @@ class DayAveragedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
             weights = self.weights
         elif weights == "old":
             weights = self.raw_weights
+        elif isinstance(weights, str):
+            weights = np.where(self.get_flags(weights), 0, self.raw_weights)
 
         params, resids, weights = averaging.bin_gha_unbiased_regular(
             self.model_params, self.resids, weights, self.gha_centres, gha_edges
@@ -2377,6 +2381,8 @@ class DayAveragedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
             weights = self.weights
         elif weights == "old":
             weights = self.raw_weights
+        elif isinstance(weights, str):
+            weights = np.where(self.get_flags(weights), 0, self.raw_weights)
 
         q = getattr(self, quantity)
         if flagged:
@@ -2608,6 +2614,8 @@ class BinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
             weights = self.weights
         elif weights == "old":
             weights = self.raw_weights
+        elif isinstance(weights, str):
+            weights = np.where(self.get_flags(weights), 0, self.raw_weights)
 
         for ix, (rr, ww) in enumerate(zip(self.resids, weights)):
             if np.sum(ww) == 0:
