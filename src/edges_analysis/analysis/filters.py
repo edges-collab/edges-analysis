@@ -10,7 +10,7 @@ import attr
 import h5py
 import numpy as np
 import yaml
-from edges_cal.modelling import Model, LinLog
+from edges_cal.modelling import Model, LinLog, FourierDay
 from edges_cal.xrfi import (
     ModelFilterInfoContainer,
     model_filter,
@@ -401,6 +401,10 @@ class FrequencyAggregator(metaclass=abc.ABCMeta):
         """Actually aggregate over frequency."""
         raise NotImplementedError
 
+    def get_init_flags(self, gha, metric):
+        """Base function to define some inital set of flags."""
+        return np.zeros(len(gha), dtype=bool)
+
     def aggregate(
         self, data: Sequence[tp.PathLike | CalibratedData]
     ) -> np.ndarray | np.ndarray | list[np.ndarray]:
@@ -512,6 +516,7 @@ def get_gha_model_filter(
     """
     # Aggregate the data for each file along the frequency axis.
     gha, metric, indx_map = aggregator.aggregate(data)
+    init_flags = aggregator.get_init_flags(gha, metric)
 
     if detrend_metric_model is None:
         detrend_metric_model = metric_model
@@ -521,6 +526,7 @@ def get_gha_model_filter(
     flags, resid, std, flag_info = chunked_iterative_model_filter(
         x=gha,
         data=metric,
+        init_flags=init_flags,
         flags=np.isnan(metric) | np.isinf(metric),
         model=detrend_metric_model,
         resid_model=detrend_std_model,
@@ -636,15 +642,41 @@ class RMSAggregator(FrequencyAggregator):
 
 @attr.s(frozen=True)
 class TotalPowerAggregator(FrequencyAggregator):
-    """An aggregator that fits a model and yields the RMS over a given freq range."""
+    """An aggregator that fits a model and yields the mean over a given freq range."""
 
     band: tuple[float, float] = attr.ib(default=(0, np.inf))
+    model: Model = attr.ib(default=FourierDay(n_terms=40))
+    init_threshold: float = attr.ib(default=1.0)
+
+    def get_init_flags(self, gha, metric):
+        """Compute the inital flags based on the power in a simulated spectra."""
+        path_simulated_spectra = "/data4/nmahesh/edges/simulated_spectra/"
+        fiducial_data = np.load(
+            path_simulated_spectra + "Lowband_30mx30m_Haslam_2p5_20minlst_50_100.npy",
+            allow_pickle=True,
+        )
+        band_mask = (fiducial_data[1] >= self.band[0]) & (
+            fiducial_data[1] <= self.band[1]
+        )
+        fiducial_spectrum = fiducial_data[0][:, band_mask]
+
+        standard_model = (
+            self.model.at(x=fiducial_data[2])
+            .fit(ydata=np.nanmean(fiducial_spectrum, axis=1))
+            .fit
+        )
+        init_flags = (
+            np.abs(standard_model(gha) - metric) / standard_model(gha)
+        ) > self.init_threshold
+        print(np.shape(init_flags), len(np.where(init_flags)))
+        return init_flags
 
     def aggregate_file(self, data: CalibratedData) -> np.ndarray:
         """Compute the total power over frequency for each integration in a file."""
         freq_mask = (data.raw_frequencies >= self.band[0]) & (
             data.raw_frequencies < self.band[1]
         )
+
         weights = np.sum(data.weights[:, freq_mask], axis=1)
         return np.where(
             weights > 0,
