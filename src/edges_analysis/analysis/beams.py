@@ -269,6 +269,84 @@ class Beam:
         )
 
     @classmethod
+    def from_cst(
+        cls,
+        file_name_prefix: tp.PathLike,
+        f_low: int = 40,
+        f_high: int = 100,
+        freq_p: int = 61,
+        theta_p: float = 181,
+        phi_p: float = 361,
+        az_antenna_axis: float = 0,
+    ) -> Beam:
+        """
+        Read a CST beam file.
+
+        Parameters
+        ----------
+        filename
+            The path to the file.
+        az_antenna_axis
+            The azimuth of the primary antenna axis, in degrees.
+        f_low, f_high
+            lower and higher frequency bounds
+        freq_p
+            Number of frequency points in the simulation file.
+        theta_p
+            Number of zenith angle points in the simulation file.
+        phi_p
+            Number of azimuth points in the simulation file.
+
+        Returns
+        -------
+        beam
+            The beam object.
+        """
+        phi_t = np.zeros((freq_p, theta_p * phi_p))
+        frequency = np.linspace(f_low, f_high, freq_p)
+        beam_square = np.zeros((freq_p, theta_p, phi_p))
+        res = (f_high - f_low) / (freq_p - 1)
+
+        for i in range(freq_p):
+            n = int(i * res + f_low)
+            fc_file = open(
+                file_name_prefix + "farfield (f=" + str(n) + ") [1].txt", "rb"
+            )  #
+            for x, line in enumerate(fc_file):
+                if x > 1:
+                    check = 0
+                    for o in range(len(line)):
+
+                        if line[o] != "":
+                            check = check + 1
+                            if check == 3:
+                                phi_t[i][x - 2] = float(line.split()[2])
+
+            fc_file.close()
+        for i in range(freq_p):
+            for x in range(phi_p):
+                beam_square[i, :, x] = phi_t[i, x * theta_p : (x + 1) * theta_p]
+            beam_square[i, :, 0 : int(phi_p / 2)] = beam_square[
+                i, :, int(phi_p / 2) : phi_p - 1
+            ]
+
+        freq = FrequencyRange(np.array(frequency))
+        beam_square[:, 91:, :] = 0
+        beam_maps = np.flip(beam_square[:, :91, :360], axis=1)
+        # Shifting beam relative to true AZ (referenced at due North)
+        # Due to angle of orientation of excited antenna panels relative to due North
+        beam_maps = cls.shift_beam_maps(az_antenna_axis, beam_maps)
+
+        return Beam(
+            frequency=freq.freq,
+            beam=beam_maps,
+            azimuth=np.arange(0, 360),
+            elevation=np.arange(0, 91),
+            simulator="cst",
+            raw_file=file_name_prefix,
+        )
+
+    @classmethod
     def from_feko_raw(
         cls,
         file_name_prefix: tp.PathLike,
