@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+"""A package for analysing EDGES field data."""
 from pkg_resources import get_distribution, DistributionNotFound
 
 try:
@@ -23,7 +23,6 @@ from .analysis import (
     loss,
     CalibratedData,
     CombinedData,
-    FilteredData,
     ModelData,
     DayAveragedData,
     BinnedData,

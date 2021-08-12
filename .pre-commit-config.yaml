@@ -1,11 +1,11 @@
-exclude: '(^docs/conf.py|^src/edges_analysis/simulation/*|changethelog.py)'
+exclude: '^docs/conf.py|^tests/data/*'
+
 repos:
 - repo: git://github.com/pre-commit/pre-commit-hooks
-  rev: v3.4.0
+  rev: v4.0.1
   hooks:
   - id: trailing-whitespace
   - id: check-added-large-files
-    args: ['--maxkb=25000']
   - id: check-ast
   - id: check-json
   - id: check-merge-conflict
@@ -14,14 +14,42 @@ repos:
   - id: debug-statements
   - id: end-of-file-fixer
   - id: requirements-txt-fixer
-  - id: check-merge-conflict
   - id: mixed-line-ending
     args: ['--fix=no']
--   repo: https://gitlab.com/pycqa/flake8
-    rev: 3.8.4  # pick a git hash / tag to point to
+- repo: https://gitlab.com/pycqa/flake8
+  rev: 3.9.2  # pick a git hash / tag to point to
+  hooks:
+  - id: flake8
+    additional_dependencies:
+      - flake8-quotes
+      - flake8-comprehensions
+      - flake8-builtins
+      - flake8-eradicate
+      - pep8-naming
+      - flake8-pytest
+      - flake8-docstrings
+      - flake8-rst-docstrings
+      - flake8-rst
+#      - darglint
+      - flake8-copyright
+      - flake8-ownership
+# - repo: https://github.com/timothycrosley/isort
+#   rev: 5.8.0
+#   hooks:
+#   - id: isort
+
+- repo: https://github.com/psf/black
+  rev: 21.5b2
+  hooks:
+  - id: black
+- repo: https://github.com/pre-commit/pygrep-hooks
+  rev: v1.8.0
+  hooks:
+    - id: rst-backticks
+    - id: rst-directive-colons
+    - id: rst-inline-touching-normal
+-   repo: https://github.com/asottile/pyupgrade
+    rev: v2.19.1
     hooks:
-    -   id: flake8
--   repo: https://github.com/psf/black
-    rev: 20.8b1
-    hooks:
-    - id: black
+    -   id: pyupgrade
+        args: [--py36-plus]

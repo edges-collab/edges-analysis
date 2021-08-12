@@ -1,9 +1,10 @@
+"""CLI routines for edges-analysis."""
 import glob
 import logging
-import os
 import sys
 from pathlib import Path
-from typing import List, Type, Optional, Union
+from typing import List, Type, Optional
+import shutil
 
 import click
 import h5py
@@ -17,8 +18,7 @@ from rich.logging import RichHandler
 from rich.panel import Panel
 from rich.rule import Rule
 from rich.table import Table
-from .analysis import filters
-from .analysis import levels
+from .analysis import levels, filters
 from .config import config
 
 console = Console()
@@ -45,13 +45,11 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def _get_settings(settings, xrfi, **cli_settings):
-    with open(settings, "r") as fl:
+def _get_settings(settings, **cli_settings):
+    with open(settings) as fl:
         settings = yaml.load(fl, Loader=yaml.FullLoader)
 
     settings.update(cli_settings)
-    if not xrfi and settings["xrfi_pipe"]:
-        settings["xrfi_pipe"] = {}
 
     console.print()
     tab = Table(title="Settings", show_header=False)
@@ -89,14 +87,15 @@ def _ctx_to_dct(args):
     return dct
 
 
-def _get_files(pth: Path, filter=h5py.is_hdf5) -> List[Path]:
+def _get_files(pth: Path, filt=h5py.is_hdf5) -> List[Path]:
     if pth.is_dir():
-        return [fl for fl in pth.glob("*") if filter(fl)]
+        return [fl for fl in pth.glob("*") if filt(fl)]
     else:
-        return [Path(fl) for fl in glob.glob(str(pth)) if filter(Path(fl))]
+        return [Path(fl) for fl in glob.glob(str(pth)) if filt(Path(fl))]
 
 
 def get_output_dir(prefix, label, settings):
+    """Get an output directory from given settings."""
     out = Path(prefix) / label
 
     if out.exists():
@@ -113,7 +112,7 @@ def get_output_dir(prefix, label, settings):
             console.print(tab)
 
             if qs.confirm(
-                f"{out} has existing files with different settings. Remove existing and "
+                f"{out} has existing files with different settings. Remove existing and"
                 f"continue?"
             ).ask():
                 for fl in out.glob("*"):
@@ -151,7 +150,7 @@ def expand_colon(pth: str, band: str = "", raw=True) -> Path:
 @click.argument(
     "step",
     type=click.Choice(
-        ["calibrate", "filter", "model", "combine", "day", "bin"], case_sensitive=False
+        ["calibrate", "model", "combine", "day", "bin"], case_sensitive=False
     ),
 )
 @click.argument("settings", type=click.Path(dir_okay=False, exists=True))
@@ -160,11 +159,11 @@ def expand_colon(pth: str, band: str = "", raw=True) -> Path:
     "--path",
     type=click.Path(dir_okay=True),
     multiple=True,
-    help="""The path(s) to input files. Multiple specifications of ``-i`` can be included.
-    Each input path may have glob-style wildcards, eg. ``/path/to/file.*``. If the path
-    is a directory, all HDF5/ACQ files in the directory will be used. You may prefix the
-    path with a colon to indicate the "standard" location (given by ``config['paths']``),
-    e.g. ``-i :big-calibration/``.
+    help="""The path(s) to input files. Multiple specifications of ``-i`` can be
+    included. Each input path may have glob-style wildcards, eg. ``/path/to/file.*``.
+    If the path is a directory, all HDF5/ACQ files in the directory will be used. You
+    may prefix the path with a colon to indicate the "standard" location (given by
+    ``config['paths']``), e.g. ``-i :big-calibration/``.
     """,
 )
 @click.option(
@@ -172,8 +171,8 @@ def expand_colon(pth: str, band: str = "", raw=True) -> Path:
     "--label",
     default="",
     help="""A label for the output. This label should be unique to the input settings
-    (but may be applied to different input files). If the same label is used for different
-    settings, the existing processed data will be removed (after prompting).
+    (but may be applied to different input files). If the same label is used for
+    different settings, the existing processed data will be removed (after prompting).
     """,
 )
 @click.option(
@@ -181,15 +180,10 @@ def expand_colon(pth: str, band: str = "", raw=True) -> Path:
     "--message",
     default="",
     help="""A message to save with the data. The message will be saved in a README.txt
-    file alongside the output data file(s). It is intended to provide a human-understandable
-    "reason" for running the particular analysis with the particular settings.
+    file alongside the output data file(s). It is intended to provide a
+    human-understandable "reason" for running the particular analysis with the
+    particular settings.
     """,
-)
-@click.option(
-    "-x/-X",
-    "--xrfi/--no-xrfi",
-    default=True,
-    help="Manually turn off xRFI. Useful to quickly shut off xRFI without changing settings.",
 )
 @click.option(
     "-c/-C",
@@ -204,7 +198,7 @@ def expand_colon(pth: str, band: str = "", raw=True) -> Path:
 )
 @click.option("-j", "--nthreads", default=1, help="How many threads to use.")
 @click.pass_context
-def process(ctx, step, settings, path, label, message, xrfi, clobber, output, nthreads):
+def process(ctx, step, settings, path, label, message, clobber, output, nthreads):
     """Process a dataset to the STEP level of averaging/filtering using SETTINGS.
 
     STEP
@@ -214,9 +208,9 @@ def process(ctx, step, settings, path, label, message, xrfi, clobber, output, nt
         is a YAML settings file. The available settings for each step can be seen
         in the respective documentation for the classes "promote" method.
 
-    Each STEP should take one or more ``--input`` files that are the output of a previous
-    step. The first step (``calibrate``) should take raw ``.acq`` or ``.h5`` spectrum
-    files.
+    Each STEP should take one or more ``--input`` files that are the output of a
+    previous step. The first step (``calibrate``) should take raw ``.acq`` or ``.h5``
+    spectrum files.
 
     The output files are placed in a directory inside the input file directory, with a
     name determined by the ``--label``.
@@ -231,7 +225,6 @@ def process(ctx, step, settings, path, label, message, xrfi, clobber, output, nt
 
     step_cls = {
         "calibrate": levels.CalibratedData,
-        "filter": levels.FilteredData,
         "model": levels.ModelData,
         "combine": levels.CombinedData,
         "day": levels.DayAveragedData,
@@ -239,7 +232,7 @@ def process(ctx, step, settings, path, label, message, xrfi, clobber, output, nt
     }[step]
 
     cli_settings = _ctx_to_dct(ctx.args)
-    settings = _get_settings(settings, xrfi, **cli_settings)
+    settings = _get_settings(settings, **cli_settings)
     label = settings.pop("label", "") or label
 
     if not label:
@@ -259,7 +252,7 @@ def process(ctx, step, settings, path, label, message, xrfi, clobber, output, nt
         expand_colon(p, band=settings.get("band"), raw=step == "calibrate").expanduser()
         for p in path
     ]
-    input_files = sum((_get_files(p, filter=file_filter) for p in path), [])
+    input_files = sum((_get_files(p, filt=file_filter) for p in path), [])
 
     if not input_files:
         logger.error(f"No input files were found! Paths: {path}")
@@ -289,9 +282,9 @@ def process(ctx, step, settings, path, label, message, xrfi, clobber, output, nt
     if step == "combine":
         if not output:
             output = [
-                Path(qs.text("Provide a filename for the output combined file:").ask()).with_suffix(
-                    ".h5"
-                )
+                Path(
+                    qs.text("Provide a filename for the output combined file:").ask()
+                ).with_suffix(".h5")
             ]
         else:
             output = [Path(output).with_suffix(".h5")]
@@ -349,7 +342,6 @@ def promote(
     settings: dict,
 ) -> List[Path]:
     """Calibrate field data to produce CalibratedData files."""
-
     if step_cls._multi_input:
         data = step_cls.promote(prev_step=input_files, **settings)
         data.write(output_dir / output_fname[0])
@@ -372,44 +364,162 @@ def promote(
             out = [_pro(input_files[0], output_fname[0])]
         else:
             out = list(
-                p_tqdm.p_umap(_pro, input_files, output_fname, unit="files", num_cpus=nthreads)
+                p_tqdm.p_umap(
+                    _pro, input_files, output_fname, unit="files", num_cpus=nthreads
+                )
             )
         return [o for o in out if o is not None]
 
 
-@main.command()
-@click.argument("path", nargs=-1)
-@click.argument("settings", type=click.Path(exists=True, dir_okay=False))
-@click.argument("outfile", type=click.Path(exists=False, dir_okay=False))
-def rms_info(path, settings, outfile):
+@main.command()  # noqa: A001
+@click.argument("settings", type=click.Path(dir_okay=False, exists=True))
+@click.option(
+    "-i",
+    "--path",
+    type=click.Path(dir_okay=True),
+    multiple=True,
+    help="""The path(s) to input files. Multiple specifications of ``-i`` can be
+    included. Each input path may have glob-style wildcards, eg. ``/path/to/file.*``.
+    If the path is a directory, all HDF5/ACQ files in the directory will be used. You
+    may prefix the path with a colon to indicate the "standard" location (given by
+    ``config['paths']``), e.g. ``-i :big-calibration/``.
+    """,
+)
+@click.option("-j", "--nthreads", default=1, help="How many threads to use.")
+@click.option(
+    "--flag-idx",
+    default=-1,
+    type=int,
+    help="""
+    Set this to a non-negative integer to copy the input files to a new location
+    and clear all flags up to the given index, performing the filter based on those
+    flags.
+    """,
+)
+@click.option(
+    "-l",
+    "--label",
+    default="",
+    help="""A label for the output. This label should be unique to the input settings
+    (but may be applied to different input files).
+    """,
+)
+@click.pass_context
+def filter(ctx, settings, path, nthreads, flag_idx, label):  # noqa: A001
+    """Filter a dataset using SETTINGS.
+
+    SETTINGS
+        is a YAML settings file. The available settings for each step can be seen
+        in the respective documentation for the classes "promote" method.
+
+    Takes one or more ``--input`` files that are the output of a
+    previous step. The first step (``calibrate``) should take raw ``.acq`` or ``.h5``
+    spectrum files.
+
+    The output is written within the given input files, inside a special "flags"
+    hDF5 group.
+    """
     console.print(
-        Panel("edges-analysis [blue]RMSInfo[/]", box=box.DOUBLE_EDGE),
+        Panel("edges-analysis [blue]filter[/]", box=box.DOUBLE_EDGE),
         style="bold",
         justify="center",
     )
 
-    with open(settings, "r") as fl:
+    console.print(Rule("Setting Up"))
+
+    with open(settings) as fl:
         settings = yaml.load(fl, Loader=yaml.FullLoader)
 
-    # Get input file(s).
+    if isinstance(settings, dict):
+        raise OSError("The settings file for filters should be a list")
+
+    console.print()
+    tab = Table(title="Settings", show_header=False)
+    tab.add_column()
+    tab.add_column()
+    tab.add_column()
+    for item in settings:
+        k = list(item.keys())[0]
+        v = item[k]
+        if v:
+            for i, (param, val) in enumerate(v.items()):
+                tab.add_row(k if not i else "", param, str(val))
+    console.print(tab)
+    console.print()
+
+    file_filter = h5py.is_hdf5
+
+    # Get input file(s). If doing initial calibration, get them from raw_field_data
+    # otherwise they should be in field_products.
     path = [expand_colon(p, raw=False).expanduser() for p in path]
-    input_files = sorted(sum((_get_files(p) for p in path), []))
-    objects = [levels.read_step(p) for p in input_files]
+    input_files = sum((_get_files(p, filt=file_filter) for p in path), [])
 
-    if any(not isinstance(o, (levels.CalibratedData, levels.FilteredData)) for o in objects):
-        raise ValueError("One of the files you input is not calibrated or filtered data!")
+    if not input_files:
+        logger.error(f"No input files were found! Paths: {path}")
+        return
+    else:
+        console.print("[bold]Input Files:")
+        for fl in input_files:
+            console.print(f"   {fl}")
+        console.print()
 
-    with open(settings, "r") as fl:
-        settings = yaml.load(fl, Loader=yaml.FullLoader)
+    # Check that input files are all homogeneously processed
+    if len({p.parent for p in input_files}) != 1:
+        raise ValueError("Your input files do not come from a single processing.")
 
-    n_files = settings.pop("n_files", len(input_files))
+    input_data = [levels.read_step(fl) for fl in input_files]
 
-    console.print(f"[bold]Using {n_files} input files to calculate RMS:")
-    for obj in objects[:n_files]:
-        console.print(f"    {obj.filename}")
+    # Save the settings file
+    output_dir = input_files[0].parent
 
-    rms_info = filters.get_rms_info(objects[:n_files], **settings)
+    if flag_idx >= 0:
+        if label:
+            output_dir /= label
 
-    rms_info.write(outfile)
+            if output_dir.exists():
+                if qs.confirm(f"The label '{label}' already exists. Remove?").ask():
+                    shutil.rmtree(output_dir)
+                else:
+                    logger.info("OK. Exiting")
+                    sys.exit()
 
-    console.print(f"Wrote RMSInfo to {outfile}.")
+            output_dir.mkdir()
+
+            for fl in input_files:
+                shutil.copy(fl, output_dir / fl.name)
+
+            input_files = [output_dir / fl.name for fl in input_files]
+            input_data = [levels.read_step(fl) for fl in input_files]
+        elif not qs.confirm(
+            "Using flag_idx without a label removes flagging steps in place. "
+            "Is this really what you want?"
+        ).ask():
+            logger.info("OK. Exiting.")
+
+        for d in input_data:
+            with d.open("r+") as flobj:
+                dset = flobj["flags"]["flags"]
+                dset.resize(flag_idx, axis=0)
+
+                for name, indx in dict(flobj["flags"].attrs).items():
+                    if indx >= flag_idx:
+                        del flobj["flags"].attrs[name]
+                        del flobj["flags"][name]
+
+    n_filters = len(list(output_dir.glob("filter_*.yaml")))
+    with open(output_dir / f"filter_settings_{n_filters}.yaml", "w") as fl:
+        yaml.dump(settings, fl)
+
+    # Actually call the relevant function
+    console.print()
+    console.print(Rule("Beginning Filtering"))
+
+    for item in settings:
+        filt = list(item.keys())[0]
+        cfg = item[filt] or {}
+        fnc = filters.get_step_filter(filt)
+        fnc(data=input_data, in_place=True, n_threads=nthreads, **cfg)
+    console.print(Rule("Done Filtering"))
+
+    console.print()
+    console.print("[bold]All flags written inside input files.")

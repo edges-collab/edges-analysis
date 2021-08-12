@@ -19,10 +19,21 @@ _FILE_IDS = {
 
 
 def retrieve_beam(band, configuration=""):
+    """Retrieve a beam model from Google Drive and cache it locally.
+
+    Parameters
+    ----------
+    band
+        The instrument to download the model for (low, mid, high).
+    configuration
+        Any extra configuration string (eg '45' for `low45`).
+    """
     fname = "builtin"
     if configuration:
         fname += f"_{configuration}.txt"
-    abspath = Path(config["paths"]["beams"]).expanduser() / f"{band}/simulations/feko" / fname
+    abspath = (
+        Path(config["paths"]["beams"]).expanduser() / f"{band}/simulations/feko" / fname
+    )
 
     if not abspath.exists():
         # Get it from gdrive
@@ -30,7 +41,9 @@ def retrieve_beam(band, configuration=""):
         fileid = _FILE_IDS["beam_model"][band][configuration]
         print(f"Downloading new beam from Google Drive to {abspath}.")
 
-        r = requests.get(urlbase, params={"id": fileid, "authuser": 0, "export": "download"})
+        r = requests.get(
+            urlbase, params={"id": fileid, "authuser": 0, "export": "download"}
+        )
         if not abspath.parent.exists():
             abspath.parent.mkdir(parents=True)
 

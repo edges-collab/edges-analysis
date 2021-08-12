@@ -1,3 +1,4 @@
+"""An example of running polychord for EDGES data."""
 import PyPolyChord
 import numpy as np
 from PyPolyChord.settings import PolyChordSettings
@@ -6,6 +7,7 @@ import scipy as sp
 
 
 def simulated_data(theta, v, v0):
+    """Simulate some data."""
     std_dev_vec = 0.03 * (v / v0) ** (-2.5)
 
     sigma = np.diag(std_dev_vec ** 2)  # uncertainty covariance matrix
@@ -20,15 +22,19 @@ def simulated_data(theta, v, v0):
     return v, d, sigma, inv_sigma, det_sigma
 
 
-def prior(cube):
+def prior(cube: np.typing.ArrayLike) -> list:
     """
-    A function defining the tranform between the parameterisation in the unit hypercube to the
-    true parameters.
+    Define the tranform between the unit hypercube to the true parameters.
 
-    Args: cube (array, list): a list containing the parameters as drawn from a unit hypercube.
+    Parameters
+    ----------
+    cube
+        a list containing the parameters as drawn from a unit hypercube.
 
-    Returns:
-    list: the transformed parameters.
+    Returns
+    -------
+    params
+        the transformed parameters.
     """
     # Unpack the parameters (in their unit hypercube form)
     T21_prime = cube[0]
@@ -83,7 +89,8 @@ def prior(cube):
     return [T21, vr, dv, tau, a0, a1, a2, a3, a4]
 
 
-def dumper(live, dead, logweights, logZ, logZerr):
+def dumper(live, dead, logweights, log_z, log_z_err):
+    """How to dump stuff."""
     print(dead[-1])
 
 
@@ -99,9 +106,12 @@ if __name__ == "__main__":
     Nderived = 0
 
     # flattened gaussian
-    v, d, sigma, inv_sigma, det_sigma = simulated_data([-0.5, 78, 20, 7, 1000, 1, 1, -1, 4], v, v0)
+    v, d, sigma, inv_sigma, det_sigma = simulated_data(
+        [-0.5, 78, 20, 7, 1000, 1, 1, -1, 4], v, v0
+    )
 
     def loglikelihood(theta):
+        """The log-likelihood."""
         N = len(v)
 
         # Evaluating model
@@ -122,13 +132,14 @@ if __name__ == "__main__":
         return lnL2, 0
 
     def run(root_name):
-        # in python, or ipython >>
-
+        """Run the function."""
         settings = PolyChordSettings(Nparameters, Nderived)
         settings.base_dir = "/home/raul/Desktop/"
         settings.file_root = root_name
         settings.do_clustering = True
         settings.read_resume = False
-        PyPolyChord.run_polychord(loglikelihood, Nparameters, Nderived, settings, prior, dumper)
+        PyPolyChord.run_polychord(
+            loglikelihood, Nparameters, Nderived, settings, prior, dumper
+        )
 
     run("example")

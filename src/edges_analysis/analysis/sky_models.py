@@ -13,7 +13,6 @@ from astropy.io import fits
 import logging
 from astropy.utils.data import download_file
 from cached_property import cached_property
-from typing import Tuple
 from contextlib import contextmanager
 import attr
 from abc import ABC, abstractmethod
@@ -25,6 +24,7 @@ class IndexModel(ABC):
     """Base model for spectral index variation across the sky."""
 
     def __init_subclass__(cls, abstract=False, **kwargs):
+        """Provide plugin architecture for index models."""
         super().__init_subclass__(**kwargs)
         if not hasattr(cls, "_plugins"):
             cls._plugins = {}
@@ -33,6 +33,7 @@ class IndexModel(ABC):
 
     @abstractmethod
     def get_index(self, lat=None, lon=None, sky_model=None):
+        """Overloadable method to compute the index at a specific sky location."""
         pass
 
 
@@ -50,6 +51,7 @@ class GaussianIndex(IndexModel):
         lon: [None, np.ndarray] = None,
         sky_model: [None, SkyModel] = None,
     ) -> np.ndarray:
+        """Generate the index at a given sky location."""
         if lat is None:
             raise ValueError("GaussianIndex requires passing lat")
 
@@ -72,6 +74,7 @@ class StepIndex(IndexModel):
         lon: [None, np.ndarray] = None,
         sky_model: [None, SkyModel] = None,
     ) -> np.ndarray:
+        """Generate the spectral index at a given sky location."""
         if lat is None:
             raise ValueError("StepIndex requires passing lat")
 
@@ -91,6 +94,7 @@ class ConstantIndex(IndexModel):
         lon: [None, np.ndarray] = None,
         sky_model: [None, SkyModel] = None,
     ) -> np.ndarray:
+        """Generate the spectral index at a given sky location."""
         return np.ones_like(lat) * self.index
 
 
@@ -104,8 +108,8 @@ class SkyModel:
     is downloaded and cached on disk using astropy.
 
     The primary attribute is `sky_map`, which is always in NESTED galactic co-ordinates.
-    Other methods/attributes exist to help with understanding the metadata of the object,
-    and interpolating in frequency.
+    Other methods/attributes exist to help with understanding the metadata of the
+    object, and interpolating in frequency.
 
     Examples
     --------
@@ -127,6 +131,7 @@ class SkyModel:
 
     @contextmanager
     def open(self):
+        """Open the FITS file for reading."""
         fl = fits.open(self.filename)
         yield fl
         fl.close()
@@ -138,7 +143,7 @@ class SkyModel:
         return self._process_map(sky_map, self.lonlat[0], self.lonlat[1])
 
     @cached_property
-    def lonlat(self) -> Tuple[np.ndarray, np.ndarray]:
+    def lonlat(self) -> tuple[np.ndarray, np.ndarray]:
         """The galactic latitude/longitude co-ordinates of the map."""
         with self.open() as fl:
             ordering = fl[self.header_hdu].header["ORDERING"]
@@ -148,7 +153,10 @@ class SkyModel:
 
     @classmethod
     def get_map_coords(cls, nside: int, nest: bool = True):
-        return hp.pix2ang(nside, np.arange(hp.nside2npix(nside)), lonlat=True, nest=nest)
+        """Get the angular co-ordinates of the map pixels."""
+        return hp.pix2ang(
+            nside, np.arange(hp.nside2npix(nside)), lonlat=True, nest=nest
+        )
 
     @classmethod
     def _get_sky_model_from_lambda(cls, max_res: [None, int] = None) -> np.ndarray:
@@ -168,14 +176,17 @@ class SkyModel:
         return temp_map
 
     def get_sky_coords(self):
-        return apc.SkyCoord(self.lonlat[0], self.lonlat[1], frame="galactic", unit="deg")
+        """Get the sky coords of the map as :class:`astropy.coordinates.SkyCoord`."""
+        return apc.SkyCoord(
+            self.lonlat[0], self.lonlat[1], frame="galactic", unit="deg"
+        )
 
     def _process_map(self, sky_map, lon, lat):
         """Optional over-writeable method to process the sky map before returning it."""
         return sky_map
 
     def at_freq(
-        self, freq: [float, np.ndarray], index_model: IndexModel = GaussianIndex()
+        self, freq: float | np.ndarray, index_model: IndexModel = GaussianIndex()
     ) -> np.ndarray:
         """
         Generate the sky model at a new set of frequencies.
@@ -201,7 +212,10 @@ class SkyModel:
 
 
 class Haslam408(SkyModel):
-    url = "https://lambda.gsfc.nasa.gov/data/foregrounds/haslam/lambda_haslam408_dsds.fits"
+    url = (
+        "https://lambda.gsfc.nasa.gov/data/foregrounds/haslam/"
+        "lambda_haslam408_dsds.fits"
+    )
     frequency = 408.0
     header_hdu = 1
 

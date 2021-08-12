@@ -1,4 +1,3 @@
-from edges_analysis.analysis import tools
 import numpy as np
 from edges_cal import modelling as mdl
 import pytest
@@ -79,7 +78,9 @@ def bitsy_flags():
 
 
 @parametrize_plus("params", [fxref(fid_params), fxref(evolving_params)])
-@parametrize_plus("weights", [fxref(ideal_weights), fxref(row_flags), fxref(bitsy_flags)])
+@parametrize_plus(
+    "weights", [fxref(ideal_weights), fxref(row_flags), fxref(bitsy_flags)]
+)
 @pytest.mark.parametrize("refit", [5, 3, False])
 def test_model_bin_gha(params, weights, refit):
 
@@ -88,16 +89,22 @@ def test_model_bin_gha(params, weights, refit):
     if refit:
         refit_mdl = mdl.LinLog(n_terms=refit, default_x=FREQ)
         fits = [
-            refit_mdl.fit(d, weights=ww) if np.any(ww > 0) else None for d, ww in zip(data, weights)
+            refit_mdl.fit(d, weights=ww) if np.any(ww > 0) else None
+            for d, ww in zip(data, weights)
         ]
         fit_params = np.array(
             [
-                fit.model_parameters if fit is not None else np.nan * np.ones(refit_mdl.n_terms)
+                fit.model_parameters
+                if fit is not None
+                else np.nan * np.ones(refit_mdl.n_terms)
                 for fit in fits
             ]
         )
         resids = np.array(
-            [fit.residual if fit is not None else np.nan * np.ones(len(FREQ)) for fit in fits]
+            [
+                fit.residual if fit is not None else np.nan * np.ones(len(FREQ))
+                for fit in fits
+            ]
         )
     else:
         refit_mdl = LINLOG
@@ -149,7 +156,9 @@ class TestBinArray:
         with pytest.raises(ValueError):
             averaging.bin_array_unbiased_irregular(corrupt, coords=coords, axis=0)
 
-        outc, mean, wght = averaging.bin_array_unbiased_irregular(corrupt, coords=coords, axis=-1)
+        outc, mean, wght = averaging.bin_array_unbiased_irregular(
+            corrupt, coords=coords, axis=-1
+        )
         assert mean.shape == outc.shape == wght.shape == (50, 1)
 
         outc, mean, wght = averaging.bin_array_unbiased_irregular(
@@ -171,13 +180,19 @@ class TestBinArray:
         model, corrupt, noise = make_data(fid_params, ideal_weights)
 
         corrupt = corrupt.reshape((50, 20, 25))
-        outc, mean, wght = averaging.bin_array_unbiased_irregular(corrupt, axis=0, bins=5)
+        outc, mean, wght = averaging.bin_array_unbiased_irregular(
+            corrupt, axis=0, bins=5
+        )
         assert outc.shape == mean.shape == wght.shape == (10, 20, 25)
 
-        outc, mean, wght = averaging.bin_array_unbiased_irregular(corrupt, axis=1, bins=5)
+        outc, mean, wght = averaging.bin_array_unbiased_irregular(
+            corrupt, axis=1, bins=5
+        )
         assert outc.shape == mean.shape == wght.shape == (50, 4, 25)
 
-        outc, mean, wght = averaging.bin_array_unbiased_irregular(corrupt, axis=2, bins=5)
+        outc, mean, wght = averaging.bin_array_unbiased_irregular(
+            corrupt, axis=2, bins=5
+        )
         assert outc.shape == mean.shape == wght.shape == (50, 20, 5)
 
     def test_unity_input(self):
