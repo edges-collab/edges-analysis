@@ -17,7 +17,7 @@ repos:
   - id: mixed-line-ending
     args: ['--fix=no']
 - repo: https://gitlab.com/pycqa/flake8
-  rev: 3.9.2  # pick a git hash / tag to point to
+  rev: 3.9.2
   hooks:
   - id: flake8
     additional_dependencies:
@@ -39,17 +39,17 @@ repos:
 #   - id: isort
 
 - repo: https://github.com/psf/black
-  rev: 21.5b2
+  rev: 21.7b0
   hooks:
   - id: black
 - repo: https://github.com/pre-commit/pygrep-hooks
-  rev: v1.8.0
+  rev: v1.9.0
   hooks:
     - id: rst-backticks
     - id: rst-directive-colons
     - id: rst-inline-touching-normal
--   repo: https://github.com/asottile/pyupgrade
-    rev: v2.19.1
-    hooks:
-    -   id: pyupgrade
-        args: [--py36-plus]
+- repo: https://github.com/asottile/pyupgrade
+  rev: v2.23.3
+  hooks:
+  -   id: pyupgrade
+      args: [--py36-plus]
