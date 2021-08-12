@@ -820,12 +820,14 @@ def time_filter_auxiliary(
     moon_el: np.ndarray,
     humidity: np.ndarray,
     receiver_temp: np.ndarray,
+    adcmax: np.ndarray,
     gha_range: tuple[float, float] = (0, 24),
     sun_el_max: float = 90,
     moon_el_max: float = 90,
     amb_hum_max: float = 200,
     min_receiver_temp: float = 0,
     max_receiver_temp: float = 100,
+    adcmax_max: float = 0.4,
 ) -> np.ndarray:
     """Flag on auxiliary data."""
     flags = np.zeros(len(gha), dtype=bool)
@@ -847,6 +849,7 @@ def time_filter_auxiliary(
         "receiver temp",
         flags,
     )
+    filt(adcmax > adcmax_max, "adc max level", flags)
 
     return flags
 
@@ -860,6 +863,7 @@ def aux_filter(
     ambient_humidity_max: float = 40,
     min_receiver_temp: float = 0,
     max_receiver_temp: float = 100,
+    adcmax_max: float = 0.4,
 ) -> np.ndarray:
     """
     Perform an auxiliary filter on the object.
@@ -876,6 +880,8 @@ def aux_filter(
         Minimum receiver temperature to keep.
     max_receiver_temp
         Maximum receiver temp to keep.
+    adcmax_max
+        Maximum adcmax level to keep.
 
     Returns
     -------
@@ -888,11 +894,13 @@ def aux_filter(
         moon_el=data.ancillary["moon_el"],
         humidity=data.ancillary["ambient_hum"],
         receiver_temp=data.ancillary["receiver_temp"],
+        adcmax=data.ancillary["adcmax"],
         sun_el_max=sun_el_max,
         moon_el_max=moon_el_max,
         amb_hum_max=ambient_humidity_max,
         min_receiver_temp=min_receiver_temp,
         max_receiver_temp=max_receiver_temp,
+        adcmax_max=adcmax_max,
     )
 
 
