@@ -539,6 +539,7 @@ def sky_convolution_generator(
     sky_model: sky_models.SkyModel,
     index_model: sky_models.IndexModel,
     normalize_beam: bool,
+    beam_interpolation: bool,
     location: apc.EarthLocation = const.edges_location,
     ref_time: apt.Time = REFERENCE_TIME,
 ):
@@ -561,6 +562,8 @@ def sky_convolution_generator(
         The spectral index model of the sky model.
     normalize_beam
         Whether to ensure the beam is properly normalised.
+    beam_interpolation
+        Whether to smooth over freq axis
 
     Yields
     ------
@@ -589,7 +592,8 @@ def sky_convolution_generator(
     >>> for i, j, mean_temp, conv_temp, sky, beam, time, n_pixels in sky_convolution_generator():
     >>>     print(mean_conv_temp)
     """
-    beam = beam.at_freq(beam.frequency)
+    if beam_interpolation:
+        beam = beam.at_freq(beam.frequency)
     sky_map = sky_model.at_freq(
         beam.frequency,
         index_model=index_model,
@@ -663,6 +667,7 @@ def simulate_spectra(
     sky_model: sky_models.SkyModel = sky_models.Haslam408(),
     index_model: sky_models.IndexModel = sky_models.ConstantIndex(),
     lsts: np.ndarray = None,
+    beam_interpolation: bool = True,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
 
@@ -705,7 +710,7 @@ def simulate_spectra(
 
     antenna_temperature_above_horizon = np.zeros((len(lsts), len(beam.frequency)))
     for i, j, temperature, _, _, _, _, _ in sky_convolution_generator(
-        lsts, ground_loss_file, beam, sky_model, index_model, normalize_beam
+        lsts, ground_loss_file, beam, sky_model, index_model, normalize_beam, beam_interpolation
     ):
         antenna_temperature_above_horizon[i, j] = temperature
 
