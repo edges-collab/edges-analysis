@@ -14,6 +14,7 @@ from typing import Tuple
 import numpy as np
 from edges_cal.modelling import LinLog
 import datetime as dt
+from edges_analysis.config import config
 
 
 @pytest.fixture(scope="session")
@@ -29,6 +30,13 @@ def integration_test_data(tmp_path_factory) -> Path:
         ]
     )
     return tmp_path / "edges-analysis-test-data"
+
+
+@pytest.fixture(scope="function")
+def tmpconfig(tmp_path_factory):
+    new_path = tmp_path_factory.mktemp("edges-levels")
+    config["paths"]["field_products"] = str(new_path)
+    return config
 
 
 @pytest.fixture(scope="session")
