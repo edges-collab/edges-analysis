@@ -4,8 +4,8 @@ edges-analysis
 
 .. image:: https://github.com/edges-collab/edges-analysis/actions/workflows/test_suite.yaml/badge.svg
   :target: https://github.com/edges-collab/edges-analysis/actions/workflows/test_suite.yaml
-.. image:: https://readthedocs.org/projects/black/badge/?version=stable
-  :target: https://black.readthedocs.io/en/stable/?badge=stable
+.. image:: https://readthedocs.org/projects/edges-analysis/badge/?version=stable
+  :target: https://edges-analysis.readthedocs.io/en/stable/?badge=stable
 .. image:: https://codecov.io/gh/edges-collab/edges-analysis/branch/master/graph/badge.svg
   :target: https://codecov.io/gh/edges-collab/edges-analysis
 .. image:: https://img.shields.io/badge/code%20style-black-000000.svg"
