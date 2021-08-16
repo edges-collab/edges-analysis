@@ -82,7 +82,9 @@ def cal_step(
             filename=integration_test_data / f"calibrate/{day}.h5",
             **cal_settings,
         )
-        filters.rfi_model_filter(data=[cal], in_place=True, **xrfi_pipe["xrfi_model"])
+        filters.rfi_model_filter(
+            data=[cal], in_place=True, **xrfi_pipe[0]["rfi_model_filter"]
+        )
         cals.append(cal)
 
     return cals
