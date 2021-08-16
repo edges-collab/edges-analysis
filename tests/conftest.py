@@ -6,8 +6,8 @@ from edges_analysis.analysis import (
     CombinedData,
     DayAveragedData,
     BinnedData,
-    FilteredData,
     ModelData,
+    filters,
 )
 import yaml
 from typing import Tuple
@@ -40,11 +40,8 @@ def settings() -> Path:
 def calibrate_settings(integration_test_data: Path) -> Path:
     settings = {
         "band": "low",
-        "f_low": 50,
-        "f_high": 100,
-        "calfile": str(integration_test_data / "cal_file_Rcv01_2015_09.h5"),
+        "calfile": str(integration_test_data / "calfile_Rcv_2017_05.h5"),
         "s11_path": str(integration_test_data / "s11"),
-        "switch_state_dir": str(integration_test_data / "SwitchingState01"),
         "balun_correction": True,
         "antenna_correction": False,
         "ground_correction": ":",
@@ -62,40 +59,29 @@ def calibrate_settings(integration_test_data: Path) -> Path:
 
 @pytest.fixture(scope="session")
 def cal_step(
-    integration_test_data: Path, calibrate_settings
+    integration_test_data: Path, calibrate_settings, settings
 ) -> Tuple[CalibratedData, CalibratedData]:
     with open(calibrate_settings) as fl:
-        settings = yaml.load(fl, Loader=yaml.FullLoader)
+        cal_settings = yaml.load(fl, Loader=yaml.FullLoader)
 
-    cal_1 = CalibratedData.promote(
-        integration_test_data / "2016_292_00_small.acq",
-        filename=integration_test_data / "calibrate/292.h5",
-        **settings,
-    )
-    cal_2 = CalibratedData.promote(
-        integration_test_data / "2016_295_00_small.acq",
-        filename=integration_test_data / "calibrate/295.h5",
-        **settings,
-    )
+    with open(settings / "xrfi.yml") as fl:
+        xrfi_pipe = yaml.load(fl, Loader=yaml.FullLoader)
 
-    return cal_1, cal_2
-
-
-@pytest.fixture(scope="session")
-def filter_step(cal_step, settings: Path, integration_test_data: Path):
-    with open(settings / "filter.yml") as fl:
-        s = yaml.load(fl, Loader=yaml.FullLoader)
-
-    return [
-        FilteredData.promote(
-            obj, filename=integration_test_data / f"filter/{obj.day}.h5", **s
+    cals = []
+    for day in ("292", "295"):
+        cal = CalibratedData.promote(
+            integration_test_data / f"2016_{day}_00_small.acq",
+            filename=integration_test_data / f"calibrate/{day}.h5",
+            **cal_settings,
         )
-        for obj in cal_step
-    ]
+        filters.rfi_model_filter(data=[cal], in_place=True, **xrfi_pipe["xrfi_model"])
+        cals.append(cal)
+
+    return cals
 
 
 @pytest.fixture(scope="session")
-def model_step(filter_step, settings: Path, integration_test_data: Path):
+def model_step(cal_step, settings: Path, integration_test_data: Path):
     with open(settings / "model.yml") as fl:
         s = yaml.load(fl, Loader=yaml.FullLoader)
 
@@ -103,7 +89,7 @@ def model_step(filter_step, settings: Path, integration_test_data: Path):
         ModelData.promote(
             obj, filename=integration_test_data / f"model/{obj.day}.h5", **s
         )
-        for obj in filter_step
+        for obj in cal_step
     ]
 
 

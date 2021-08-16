@@ -991,13 +991,11 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
         xrfi_pipe: dict | None = None,
         s11_file_pattern: str = r"{y}_{jd}_{h}_*_input{input}.s1p",
         ignore_s11_files: list[str] | None = None,
-        switch_state_dir: str | Path | None = None,
         antenna_s11_n_terms: int = 15,
         antenna_correction: str | Path | None = ":",
         balun_correction: str | Path | None = ":",
         ground_correction: str | Path | None | float = ":",
         beam_file=None,
-        switch_state_repeat_num: int | None = None,
     ) -> tuple[np.ndarray, dict, dict, dict]:
         """
         Create the object directly from calibrated data.

@@ -29,6 +29,7 @@ def test_aux_filter():
         moon_el_max=50,
         amb_hum_max=100,
         max_receiver_temp=100,
+        adcmax=0.4,
     )
 
     assert np.all(out_flags[:4])

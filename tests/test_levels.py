@@ -3,32 +3,32 @@ from edges_analysis.analysis import (
     CombinedData,
     DayAveragedData,
     BinnedData,
-    FilteredData,
     ModelData,
 )
 from typing import List
 import dill as pickle
+import numpy as np
 
 
 def test_calibrate_step(cal_step: List[CalibratedData]):
-    assert cal_step[0].raw_frequencies.shape == (8192,)
-    assert cal_step[1].raw_frequencies.shape == (8192,)
+    assert cal_step[0].raw_frequencies.shape == (8193,)
+    assert cal_step[1].raw_frequencies.shape == (8193,)
 
     # Ensure it's pickleable
     pickle.dumps(cal_step[0])
 
 
-def test_filter_step(filter_step: List[FilteredData]):
-    assert filter_step[0].raw_frequencies.shape == (8192,)
-    assert filter_step[1].raw_frequencies.shape == (8192,)
-
-    # Ensure it's pickleable
-    pickle.dumps(filter_step)
+def test_filtering(cal_step: CalibratedData):
+    assert cal_step[0].raw_frequencies.shape == (8193,)
+    assert cal_step[1].raw_frequencies.shape == (8193,)
+    assert not np.all(cal_step[0].weights == cal_step[0].raw_weights)
+    assert len(cal_step[0].filters_applied) == 1
+    assert "rfi_model_filter" in cal_step[0].filters_applied
 
 
 def test_model_step(model_step: List[ModelData]):
-    assert model_step[0].raw_frequencies.shape == (8192,)
-    assert model_step[1].raw_frequencies.shape == (8192,)
+    assert model_step[0].raw_frequencies.shape == (8193,)
+    assert model_step[1].raw_frequencies.shape == (8193,)
 
     # Ensure it's pickleable
     pickle.dumps(model_step)
