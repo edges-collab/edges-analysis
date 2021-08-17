@@ -1,8 +1,32 @@
 channels:
-  - defaults
   - conda-forge
+  - nodefaults
+
 
 dependencies:
   - pip
   - python>=3.8
   - h5py
+  - sphinx
+  - nbsphinx
+  - numpydoc
+  - sphinx_rtd_theme
+  - sphinx_click
+  - ipython
+  # - numpy
+  # - scipy
+  # - matplotlib
+  # - cached_property
+  # - astropy
+  # - edges-io
+  # - edges-cal
+  # - healpy
+  # - h5py
+  # - rich>=9.0
+  # - requests
+  # - tqdm
+  # - methodtools
+  # - p_tqdm
+  # - rich
+  # - attrs
+  # - questionary
