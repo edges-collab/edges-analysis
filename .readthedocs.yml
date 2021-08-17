@@ -19,4 +19,4 @@ conda:
 # We don't install 21cmFAST -- we just load it into the path in conf.py, and mock
 # out the C stuff.
 python:
-  py_setup_install: true
+  setup_py_install: true
