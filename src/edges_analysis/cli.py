@@ -342,6 +342,9 @@ def promote(
     settings: dict,
 ) -> List[Path]:
     """Calibrate field data to produce CalibratedData files."""
+    if not input_files:
+        raise ValueError("No input files!")
+
     if step_cls._multi_input:
         data = step_cls.promote(prev_step=input_files, **settings)
         data.write(output_dir / output_fname[0])
@@ -361,13 +364,20 @@ def promote(
             return fname
 
         if len(input_files) == 1:
-            out = [_pro(input_files[0], output_fname[0])]
+            out = [
+                _pro(infile, outfile)
+                for infile, outfile in zip(input_files, output_fname)
+            ]
         else:
-            out = list(
-                p_tqdm.p_umap(
-                    _pro, input_files, output_fname, unit="files", num_cpus=nthreads
-                )
-            )
+            if nthreads > 1:
+
+                def prg(fnc, x, y, **args):
+                    return p_tqdm.p_map(fnc, x, y, num_cpus=nthreads, **args)
+
+            else:
+                prg = p_tqdm.t_map
+
+            out = list(prg(_pro, input_files, output_fname, unit="files"))
         return [o for o in out if o is not None]
 
 

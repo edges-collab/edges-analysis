@@ -71,3 +71,6 @@ def test_flag_idx_filter(edges_config: dict, cal_step, settings: Path):
     assert obj2.filters_applied["rfi_model_filter"] == 0
 
     assert np.all(cal_step[0].weights == obj2.weights)
+    assert obj.get_filter_meta("rfi_model_filter") == obj2.get_filter_meta(
+        "rfi_model_filter"
+    )

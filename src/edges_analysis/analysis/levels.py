@@ -662,13 +662,14 @@ class _SingleDayMixin:
 
         if resolution:
             f, s, w = self.bin_in_frequency(resolution=resolution, weights=weights)
+            model = model.at(x=f[0])
         else:
             f, s, w = self.raw_frequencies, self.spectrum, weights
             mask = (f >= freq_range[0]) & (f < freq_range[1])
             f = f[mask]
             s = s[:, mask]
             w = w[:, mask]
-        model = model.at(x=f)
+            model = model.at(x=f)
 
         def get_params(indx, model):
             ss = s[indx]
@@ -692,6 +693,28 @@ class _SingleDayMixin:
 
         params = np.array([get_params(indx, model) for indx in indices])
         return model, params
+
+    def get_model_residuals(
+        self,
+        params: np.ndarray | None = None,
+        indices: list[int] | None = None,
+        **kwargs,
+    ) -> np.ndarray:
+        if params is None:
+            model, params = self.get_model_parameters(**kwargs)
+        else:
+            try:
+                model = kwargs["model"].at(x=self.raw_frequencies)
+            except KeyError:
+                raise KeyError("You must supply 'model' if supplying params.")
+
+        if indices is None:
+            indices = range(len(self.spectrum))
+
+        # Index by indices so they have the same length as 'params'
+        spec = self.spectrum[indices]
+
+        return np.array([s - model(parameters=p) for s, p in zip(spec, params)])
 
     def get_model_rms(
         self,
@@ -729,30 +752,21 @@ class _SingleDayMixin:
         self-consistently with the weights  -- it uses :func:`~tools.bin_array` to do
         the binning, returning non-equi-spaced frequencies.
         """
-        model, params = self.get_model_parameters(
-            weights=weights,
-            indices=indices,
-            freq_range=freq_range,
-            resolution=0,
-            **model_kwargs,
+        resids = self.get_model_residuals(
+            indices=indices, freq_range=freq_range, **model_kwargs
         )
 
-        if indices is None:
-            indices = range(len(self.spectrum))
         if weights is None:
             weights = self.weights[indices]
 
         freq_mask = (self.raw_frequencies >= freq_range[0]) & (
             self.raw_frequencies < freq_range[1]
         )
-        # Index by indices so they have the same length as 'params'
-        spec = self.spectrum[indices][:, freq_mask]
 
         # access the default basis
         def _get_rms(indx):
             mask = weights[indx, freq_mask] > 0
-            resid = spec[indx] - model(parameters=params[indx])
-            return np.sqrt(np.nanmean(resid[mask] ** 2))
+            return np.sqrt(np.nanmean(resids[indx, mask] ** 2))
 
         return np.array([_get_rms(i) for i in range(len(indices))])
 
@@ -851,27 +865,37 @@ class _SingleDayMixin:
 
         return fig, ax
 
+    def bin_gha(
+        self, gha_bins=(0, 24), **model_kwargs
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        model, params = self.get_model_parameters(resolution=0, **model_kwargs)
+        resids = self.get_model_residuals(params=params, model=model.model)
+
+        p, r, w = averaging.bin_gha_unbiased_regular(
+            params=params,
+            resids=resids,
+            weights=self.weights,
+            gha=self.gha,
+            bins=gha_bins,
+        )
+        print(p.shape, r.shape, w.shape)
+        print(model.x.shape)
+        spec = [model(parameters=pp) + rr for pp, rr in zip(p, r)]
+        return np.squeeze(np.array(spec)), np.squeeze(r), np.squeeze(w)
+
     def plot_time_averaged_spectrum(
-        self,
-        quantity="spectrum",
-        integrator="mean",
-        ax: plt.Axes | None = None,
-        logy=True,
+        self, ax: plt.Axes | None = None, logy=True, gha_bins=(0, 24), **model_kwargs
     ):
         if ax is not None:
             fig = ax.figure
         else:
             fig, ax = plt.subplots(1, 1)
 
-        q, w = self.integrate_over_time(quantity=quantity, integrator=integrator)
+        spec, r, w = self.bin_gha(gha_bins, **model_kwargs)
 
-        unit = "[K]"
-        if quantity == "Q":
-            unit = ""
-
-        ax.plot(self.raw_frequencies, q)
+        ax.plot(self.raw_frequencies, spec)
         ax.set_xlabel("Frequency [MHz]")
-        ax.set_ylabel(f"{quantity} {unit}")
+        ax.set_ylabel("Average Spectrum [K]")
 
         if logy:
             ax.set_yscale("log")
@@ -1123,14 +1147,21 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
 
         meta = {**meta, **new_meta}
         meta = {**meta, **cls._get_meta(locals())}
+        meta["s11_files"] = ":".join(str(fl) for fl in s11_files)
+
         data = {
             "spectrum": calspec,
-            "switch_powers": np.array([pp[freq.mask] for pp in p]),
+            "switch_powers": np.array([pp[freq.mask].T for pp in p]),
             "weights": np.ones_like(calspec),
-            "Q": q[freq.mask],
+            "Q": q[freq.mask].T,
         }
 
         return freq.freq, data, time_based_anc, meta
+
+    @property
+    def s11_files(self):
+        """The antenna S11 files used by the calibration."""
+        return self.meta["s11_files"].split(":")
 
     def get_subset(self, integrations=100):
         """Write a subset of the data to a new mock :class:`CalibratedData` file."""
@@ -1499,9 +1530,7 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
         return LabCalibration(
             calobs=self.calibration,
             s11_files=self.s11_files,
-            antenna_s11_n_terms=self.antenna_s11_n_terms,
-            switch_state_dir=self.meta["switch_state_dir"],
-            switch_state_repeat_num=self.meta["switch_state_repeat_num"],
+            antenna_s11_n_terms=self.meta["antenna_s11_n_terms"],
         )
 
     def antenna_s11_model(self, freq) -> Callable[[np.ndarray], np.ndarray]:

@@ -17,6 +17,11 @@ def test_calibrate_step(cal_step: List[CalibratedData]):
     # Ensure it's pickleable
     pickle.dumps(cal_step[0])
 
+    # ensure plotting functions don't error
+    cal_step[0].plot_waterfalls()
+    cal_step[0].plot_time_averaged_spectrum()
+    cal_step[0].plot_s11()
+
 
 def test_filtering(cal_step: CalibratedData):
     assert cal_step[0].raw_frequencies.shape == (8193,)

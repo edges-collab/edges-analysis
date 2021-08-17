@@ -21,6 +21,15 @@ from edges_analysis import cli
 runner = CliRunner()
 
 
+def invoke(cmd, args, **kwargs):
+    result = runner.invoke(cmd, args, **kwargs)
+    print(result.output)
+    if result.exit_code > 0:
+        raise result.exc_info[1]
+
+    return result
+
+
 @pytest.fixture(scope="session")
 def integration_test_data(tmp_path_factory) -> Path:
     tmp_path = tmp_path_factory.mktemp("integration-data")
@@ -31,6 +40,8 @@ def integration_test_data(tmp_path_factory) -> Path:
             "clone",
             "https://github.com/edges-collab/edges-analysis-test-data",
             str(tmp_path / "edges-analysis-test-data"),
+            "--depth",
+            "1",
         ]
     )
     return tmp_path / "edges-analysis-test-data"
@@ -80,7 +91,7 @@ def cal_step(
     edges_config: dict,
     settings: Path,
 ) -> Tuple[CalibratedData, CalibratedData]:
-    result = runner.invoke(
+    invoke(
         cli.process,
         [
             "calibrate",
@@ -91,10 +102,8 @@ def cal_step(
             "calibrated",
         ],
     )
-    print(result.output)
-    assert result.exit_code == 0
 
-    result = runner.invoke(
+    invoke(
         cli.filter,
         [
             str(settings / "xrfi.yml"),
@@ -102,8 +111,6 @@ def cal_step(
             str(edges_config["paths"]["field_products"] / "calibrated/*.h5"),
         ],
     )
-    print(result.output)
-    assert result.exit_code == 0
 
     return [
         read_step(fl)
