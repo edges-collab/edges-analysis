@@ -11,8 +11,9 @@ dependencies:
   - nbsphinx
   - numpydoc
   - sphinx_rtd_theme
-  - sphinx_click
   - ipython
+  - pip:
+    - sphinx_click
   # - numpy
   # - scipy
   # - matplotlib
