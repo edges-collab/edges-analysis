@@ -331,6 +331,9 @@ class _ReductionStep(HDF5Object):
 
     def get_weights(self, filt: str | int | None = None) -> np.ndarray[float]:
         """Get the weights of the data after taking account of some flags."""
+        if filt in {"old", "initial"}:
+            return self.raw_weights
+
         return np.where(self.get_flags(filt), 0, self.raw_weights)
 
     @property
@@ -409,6 +412,9 @@ class _ReductionStep(HDF5Object):
         flags
             The array of flags.
         """
+        if filt in {"initial", "old"}:
+            return self.raw_weights == 0
+
         try:
             filt = self._get_filter_index(filt)
             with self.open() as fl:
@@ -878,8 +884,6 @@ class _SingleDayMixin:
             gha=self.gha,
             bins=gha_bins,
         )
-        print(p.shape, r.shape, w.shape)
-        print(model.x.shape)
         spec = [model(parameters=pp) + rr for pp, rr in zip(p, r)]
         return np.squeeze(np.array(spec)), np.squeeze(r), np.squeeze(w)
 
@@ -1986,12 +1990,12 @@ class CombinedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
     def plot_daily_residuals(
         self,
         separation: float = 20,
-        ax: [None, plt.Axes] = None,
+        ax: plt.Axes | None = None,
         gha_min: float = 0,
         gha_max: float = 24,
         freq_resolution: float | None = None,
         days: list[int] | None = None,
-        weights: np.ndarray | str | None = None,
+        weights: np.ndarray | str | int | None = None,
     ) -> plt.Axes:
         """
         Make a single plot of residuals for each day in the dataset.
@@ -2022,12 +2026,8 @@ class CombinedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         ax
             The matplotlib Axes on which the plot is made.
         """
-        if weights is None:
-            weights = self.weights
-        elif weights == "old":
-            weights = self.raw_weights
-        elif isinstance(weights, str):
-            weights = np.where(self.get_flags(weights), 0, self.raw_weights)
+        if not isinstance(weights, np.ndarray):
+            weights = self.get_weights(weights)
 
         gha = (self.ancillary["gha_edges"][1:] + self.ancillary["gha_edges"][:-1]) / 2
 
@@ -2078,12 +2078,11 @@ class CombinedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         self,
         day: int | None = None,
         indx: int | None = None,
-        flagged: bool = True,
         quantity: str = "spectrum",
         cmap: str | None = None,
         vmin: float | None = None,
         vmax: float | None = None,
-        weights: np.ndarray | str | None = None,
+        filt: str | int | None = None,
         ax: plt.Axes | None = None,
         cbar: bool = True,
         xlab: bool = True,
@@ -2100,8 +2099,6 @@ class CombinedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
             The calendar day to plot (eg. 237). Must exist in the dataset
         indx
             The index representing the day to plot. Can be passed instead of `day`.
-        flagged
-            Whether to render pixels that are flagged as NaN.
         quantity
             The quantity to plot -- must exist as an attribute and have the same shape
             as spectrum/resids/weights.
@@ -2113,10 +2110,6 @@ class CombinedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
             data symmetrically if plotting residuals (so that zeros are in the middle).
         vmax
             Same as vmin but the max.
-        weights
-            The weights to use for flagging. By default, use the weights of the object.
-            If 'old' is given, use the pre-filter weights. Otherwise, must be an array
-            the same size as the spectrum/resids.
 
         Other Parameters
         ----------------
@@ -2138,17 +2131,8 @@ class CombinedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         q = getattr(self, quantity)[indx]
         assert q.shape == self.resids[indx].shape
 
-        if flagged:
-            if weights is None:
-                weights = self.weights[indx]
-            elif weights == "old":
-                weights = self.raw_weights[indx]
-            elif isinstance(weights, str):
-                weights = np.where(
-                    self.get_flags(weights)[indx], 0, self.raw_weights[indx]
-                )
-
-            q = np.where(weights, q, np.nan)
+        flags = self.get_flags(filt)
+        q = np.where(flags, np.nan, q)
 
         if quantity == "resids":
             cmap = cmap or "coolwarm"
@@ -2277,7 +2261,6 @@ class DayAveragedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         """
         # Compute the residuals
         days = prev_step.days
-        freq = prev_step.freq
 
         if day_range is None:
             day_range = (days.min(), days.max())
@@ -2322,8 +2305,8 @@ class DayAveragedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         self,
         gha_min: float | None = None,
         gha_max: float | None = None,
-        weights: np.ndarray | str | None = None,
-        freq_resolution: [int, float] = 0,
+        weights: np.ndarray | str | int | None = None,
+        freq_resolution: int | float = 0,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Get a single fully averaged spectrum at a given frequency resolution.
@@ -2367,7 +2350,7 @@ class DayAveragedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         gha_min: float | None = None,
         gha_max: float | None = None,
         gha_bin_size: float = 1.0,
-        weights: np.ndarray | str | None = None,
+        weights: np.ndarray | str | int | None = None,
     ):
         """Bin the data in GHA bins."""
         if gha_min is None:
@@ -2383,19 +2366,17 @@ class DayAveragedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         ):
             gha_edges = np.concatenate((gha_edges, [gha_edges.max() + gha_bin_size]))
 
-        if weights is None:
-            weights = self.weights
-        elif weights == "old":
-            weights = self.raw_weights
-        elif isinstance(weights, str):
-            weights = np.where(self.get_flags(weights), 0, self.raw_weights)
+        if not isinstance(weights, np.ndarray):
+            weights = self.get_weights(weights)
 
         params, resids, weights = averaging.bin_gha_unbiased_regular(
             self.model_params, self.resids, weights, self.gha_centres, gha_edges
         )
         return params, resids, weights, gha_edges
 
-    def plot_waterfall(self, quantity="resids", flagged=True, weights=None, **kwargs):
+    def plot_waterfall(
+        self, quantity="resids", filt: str | int | None = None, **kwargs
+    ):
         """Plot a simple waterfall plot of time vs. frequency."""
         extent = (
             self.freq.min,
@@ -2404,16 +2385,10 @@ class DayAveragedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
             self.gha_edges.max(),
         )
 
-        if weights is None:
-            weights = self.weights
-        elif weights == "old":
-            weights = self.raw_weights
-        elif isinstance(weights, str):
-            weights = np.where(self.get_flags(weights), 0, self.raw_weights)
+        flags = self.get_flags(filt)
 
         q = getattr(self, quantity)
-        if flagged:
-            q = np.where(weights > 0, q, np.nan)
+        q = np.where(flags, np.nan, q)
 
         if quantity == "resids":
             cmap = kwargs.get("cmap", "coolwarm")
@@ -2429,7 +2404,7 @@ class DayAveragedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         self,
         gha_min: float | None = None,
         gha_max: float | None = None,
-        weights: np.ndarray | str | None = None,
+        weights: np.ndarray | str | int | None = None,
         gha_bin_size: float = 1.0,
         ax: plt.Axes = None,
         freq_resolution=0,
@@ -2624,7 +2599,7 @@ class BinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
 
     def plot_resids(
         self,
-        weights=None,
+        weights: np.ndarray | int | str | None = None,
         freq_resolution=0,
         separation=10,
         refit_model: mdl.Model | None = None,
@@ -2637,12 +2612,8 @@ class BinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         if ax is None:
             fig, ax = plt.subplots(1, 1, figsize=(7, 12))
 
-        if weights is None:
-            weights = self.weights
-        elif weights == "old":
-            weights = self.raw_weights
-        elif isinstance(weights, str):
-            weights = np.where(self.get_flags(weights), 0, self.raw_weights)
+        if not isinstance(weights, np.ndarray):
+            weights = self.get_weights(weights)
 
         for ix, (rr, ww) in enumerate(zip(self.resids, weights)):
             if np.sum(ww) == 0:
