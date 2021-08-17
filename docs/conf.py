@@ -49,7 +49,8 @@ autodoc_mock_imports = [
     'h5py',
     'tqdm',
     'p_tqdm',
-    'bidict'
+    'bidict',
+    'methodtools'
 ]
 
 autosectionlabel_prefix_document = True
