@@ -7,7 +7,7 @@ from edges_analysis.analysis import (
     DayAveragedData,
     BinnedData,
     ModelData,
-    filters,
+    read_step,
 )
 import yaml
 from typing import Tuple
@@ -15,6 +15,10 @@ import numpy as np
 from edges_cal.modelling import LinLog
 import datetime as dt
 from edges_analysis.config import config
+from click.testing import CliRunner
+from edges_analysis import cli
+
+runner = CliRunner()
 
 
 @pytest.fixture(scope="session")
@@ -32,11 +36,15 @@ def integration_test_data(tmp_path_factory) -> Path:
     return tmp_path / "edges-analysis-test-data"
 
 
-@pytest.fixture(scope="function")
-def tmpconfig(tmp_path_factory):
+@pytest.fixture(scope="session", autouse=True)
+def edges_config(tmp_path_factory):
     new_path = tmp_path_factory.mktemp("edges-levels")
-    config["paths"]["field_products"] = str(new_path)
-    return config
+
+    old_paths = config["paths"]
+    new_paths = {**old_paths, **{"field_products": new_path}}
+
+    with config.use(paths=new_paths) as cfg:
+        yield cfg
 
 
 @pytest.fixture(scope="session")
@@ -67,27 +75,42 @@ def calibrate_settings(integration_test_data: Path) -> Path:
 
 @pytest.fixture(scope="session")
 def cal_step(
-    integration_test_data: Path, calibrate_settings, settings
+    integration_test_data: Path,
+    calibrate_settings: Path,
+    edges_config: dict,
+    settings: Path,
 ) -> Tuple[CalibratedData, CalibratedData]:
-    with open(calibrate_settings) as fl:
-        cal_settings = yaml.load(fl, Loader=yaml.FullLoader)
+    result = runner.invoke(
+        cli.process,
+        [
+            "calibrate",
+            str(calibrate_settings),
+            "-i",
+            str(integration_test_data / "2016_*_00_small.acq"),
+            "-l",
+            "calibrated",
+        ],
+    )
+    print(result.output)
+    assert result.exit_code == 0
 
-    with open(settings / "xrfi.yml") as fl:
-        xrfi_pipe = yaml.load(fl, Loader=yaml.FullLoader)
+    result = runner.invoke(
+        cli.filter,
+        [
+            str(settings / "xrfi.yml"),
+            "-i",
+            str(edges_config["paths"]["field_products"] / "calibrated/*.h5"),
+        ],
+    )
+    print(result.output)
+    assert result.exit_code == 0
 
-    cals = []
-    for day in ("292", "295"):
-        cal = CalibratedData.promote(
-            integration_test_data / f"2016_{day}_00_small.acq",
-            filename=integration_test_data / f"calibrate/{day}.h5",
-            **cal_settings,
+    return [
+        read_step(fl)
+        for fl in sorted(
+            (edges_config["paths"]["field_products"] / "calibrated").glob("*.h5")
         )
-        filters.rfi_model_filter(
-            data=[cal], in_place=True, **xrfi_pipe[0]["rfi_model_filter"]
-        )
-        cals.append(cal)
-
-    return cals
+    ]
 
 
 @pytest.fixture(scope="session")
