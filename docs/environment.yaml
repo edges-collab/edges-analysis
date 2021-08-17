@@ -4,13 +4,5 @@ channels:
 
 dependencies:
   - pip
-  - ipython
-  - nbsphinx
-  - numpydoc
-  - sphinx>=3.5
-  - attrs
   - python>=3.8
-  - pip:
-    - sphinx-rtd-theme
-    - sphinx_click
-    - cached_property==1.5.1
+  - h5py
