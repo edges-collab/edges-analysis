@@ -39,6 +39,19 @@ extensions = [
     "sphinx_click",
 ]
 
+autodoc_mock_imports = [
+    "edges-io", 
+    'edges-cal',
+    'numpy',
+    'scipy',
+    'astropy',
+    'yaml',
+    'h5py',
+    'tqdm',
+    'p_tqdm',
+    'bidict'
+]
+
 autosectionlabel_prefix_document = True
 
 autosummary_generate = True

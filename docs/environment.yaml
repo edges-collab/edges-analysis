@@ -3,30 +3,14 @@ channels:
   - conda-forge
 
 dependencies:
-  - pip==20.3
-  - ipython==7.4.0
-  - nbsphinx==0.8.1
-  - numpydoc==1.1.0
+  - pip
+  - ipython
+  - nbsphinx
+  - numpydoc
   - sphinx>=3.5
-  - numpy==1.16.2
-  - scipy==1.2.1
-  - pyyaml==5.1
-  - matplotlib==3.1.0
-  - astropy==3.2.3
-  - h5py==2.10.0
-  - requests==2.23.0
-  - tqdm==4.54.0
-  - attrs==21.2.0
+  - attrs
   - python>=3.8
   - pip:
-    - bidict==0.18.3
     - sphinx-rtd-theme
     - sphinx_click
     - cached_property==1.5.1
-    - edges-io
-    - edges-cal
-    - healpy==1.13.0
-    - rich==9.9.0
-    - methodtools==0.4.2
-    - p_tqdm==1.3.3
-    - questionary==1.9.0
