@@ -17,6 +17,7 @@ dependencies:
   - requests==2.23.0
   - tqdm==4.54.0
   - attrs==21.2.0
+  - python>=3.8
   - pip:
     - bidict==0.18.3
     - sphinx-rtd-theme
