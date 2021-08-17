@@ -724,10 +724,10 @@ def apply_gha_model_filter(
         if write_info:
             if out_file is None:
                 hsh = hash(
-                    "".join(f"{k}:{repr(v)}" for k, v in kwargs)
+                    "".join(f"{k}:{repr(v)}" for k, v in kwargs.items())
                     + ":".join(str(d) for d in data[:n_files])
                 )
-                out_file = Path("GHAModel_" + str(aggregator) + hsh)
+                out_file = Path("GHAModel_" + str(aggregator) + str(hsh))
             else:
                 out_file = Path(out_file)
 
@@ -744,16 +744,6 @@ def apply_gha_model_filter(
         flags.append(filt.apply_filter(gha=dd.gha, metric=metric))
 
     return flags
-
-
-def mean_power_model(gha, nu_min, nu_max, beta=-2.5):
-    """A really rough model of expected mean power between two frequencies."""
-    t75 = 1750 * np.cos(np.pi * gha / 12) + 3250  # approximate model based on haslam
-    return (
-        t75
-        / ((beta + 1) * 75.0 ** beta)
-        * (nu_max ** (beta + 1) - nu_min ** (beta + 1))
-    ) / (nu_max - nu_min)
 
 
 def explicit_filter(times, bad, ret_times=False):

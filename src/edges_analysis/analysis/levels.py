@@ -707,7 +707,7 @@ class _SingleDayMixin:
         **kwargs,
     ) -> np.ndarray:
         if params is None:
-            model, params = self.get_model_parameters(**kwargs)
+            model, params = self.get_model_parameters(resolution=0, **kwargs)
         else:
             try:
                 model = kwargs["model"].at(x=self.raw_frequencies)
@@ -761,6 +761,9 @@ class _SingleDayMixin:
         resids = self.get_model_residuals(
             indices=indices, freq_range=freq_range, **model_kwargs
         )
+
+        if indices is None:
+            indices = range(len(self.spectrum))
 
         if weights is None:
             weights = self.weights[indices]
@@ -2131,7 +2134,7 @@ class CombinedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         q = getattr(self, quantity)[indx]
         assert q.shape == self.resids[indx].shape
 
-        flags = self.get_flags(filt)
+        flags = self.get_flags(filt)[indx]
         q = np.where(flags, np.nan, q)
 
         if quantity == "resids":
@@ -2187,25 +2190,6 @@ class CombinedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
             The index in appropriate lists of that day's data.
         """
         return self.days.tolist().index(day)
-
-    def plot_daily_rms(self):
-        """Plot all RMS diagnostic plots for all days."""
-        sqrtn = int(np.ceil(np.sqrt(len(self.days))))
-        fig, ax = plt.subplots(
-            sqrtn,
-            sqrtn,
-            sharey=True,
-            sharex=True,
-            figsize=(2 * sqrtn, 2 * sqrtn),
-            gridspec_kw={"hspace": 0.05, "wspace": 0.05},
-        )
-
-        for i, day in enumerate(self.days):
-            plt.sca(ax.flatten()[i])
-            obj = self.get_day(day).filter_step
-            obj.plot_rms_diagnosis(flagged=False)
-
-        return fig
 
 
 @add_structure
