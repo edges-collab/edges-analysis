@@ -11,6 +11,7 @@
 import os
 import sys
 from pathlib import Path
+import mock
 
 sys.path.insert(0, str(Path(__file__).absolute().parent.parent / "src"))
 
@@ -38,6 +39,36 @@ extensions = [
     "IPython.sphinxext.ipython_console_highlighting",
     "sphinx_click",
 ]
+
+# autodoc_mock_imports = [
+#     "edges_io", 
+#     'edges_io.h5',
+#     'edges_io.auxiliary',
+#     'edges_cal',
+#     'edges_cal.modelling',
+#     'edges_cal.xrfi',
+#     'edges_cal.s11_correction',
+#     'numpy',
+#     'scipy',
+#     'scipy.interpolate',
+#     'astropy',
+#     'astropy.coordinates',
+#     'astropy.utils.data',
+#     'astropy.io',
+#     'astropy.time',
+#     'yaml',
+#     'h5py',
+#     'tqdm',
+#     'p_tqdm',
+#     'bidict',
+#     'methodtools',
+#     'lru_cache',
+#     'matplotlib',
+#     'matplotlib.pyplot'
+# ]
+
+# for thing in autodoc_mock_imports:
+#     sys.modules[thing] = mock.Mock()
 
 autosectionlabel_prefix_document = True
 

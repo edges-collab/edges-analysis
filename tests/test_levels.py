@@ -24,9 +24,9 @@ def test_calibrate_step(cal_step: List[CalibratedData]):
 
     assert (
         len(cal_step[0].lst)
-        == len(cal_step[0]).gha
-        == len(cal_step[0]).raw_time_data
-        == len(cal_step[0]).datetimes
+        == len(cal_step[0].gha)
+        == len(cal_step[0].raw_time_data)
+        == len(cal_step[0].datetimes)
     )
 
 
@@ -58,8 +58,7 @@ def test_combine_step(combo_step: CombinedData):
 
     # just run some plotting methods to make sure they don't error...
     combo_step.plot_daily_residuals(freq_resolution=1.0, gha_max=18, gha_min=6)
-    combo_step.plot_waterfall()
-    combo_step.plot_daily_rms()
+    combo_step.plot_waterfall(day=292)
 
 
 def test_day_step(day_step: DayAveragedData):

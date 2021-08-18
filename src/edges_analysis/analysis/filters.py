@@ -24,7 +24,6 @@ import inspect
 import p_tqdm
 from pathlib import Path
 
-
 logger = logging.getLogger(__name__)
 
 STEP_FILTERS = {}
@@ -650,9 +649,8 @@ class TotalPowerAggregator(FrequencyAggregator):
 
     def get_init_flags(self, gha, metric):
         """Compute the inital flags based on the power in a simulated spectra."""
-        path_simulated_spectra = "/data4/nmahesh/edges/simulated_spectra/"
         fiducial_data = np.load(
-            path_simulated_spectra + "Lowband_30mx30m_Haslam_2p5_20minlst_50_100.npy",
+            DATA_PATH / "Lowband_30mx30m_Haslam_2p5_20minlst_50_100.npy",
             allow_pickle=True,
         )
         band_mask = (fiducial_data[1] >= self.band[0]) & (
@@ -744,16 +742,6 @@ def apply_gha_model_filter(
         flags.append(filt.apply_filter(gha=dd.gha, metric=metric))
 
     return flags
-
-
-def mean_power_model(gha, nu_min, nu_max, beta=-2.5):
-    """A really rough model of expected mean power between two frequencies."""
-    t75 = 1750 * np.cos(np.pi * gha / 12) + 3250  # approximate model based on haslam
-    return (
-        t75
-        / ((beta + 1) * 75.0 ** beta)
-        * (nu_max ** (beta + 1) - nu_min ** (beta + 1))
-    ) / (nu_max - nu_min)
 
 
 def explicit_filter(times, bad, ret_times=False):
