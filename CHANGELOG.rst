@@ -11,6 +11,7 @@ Added
 - Removal of ``FilteredData`` in favour of filtering adding flags to pre-existing level
   data.
 - New ``filter`` CLI command.
+- ``from_cst`` beam function.
 
 Fixed
 ~~~~~
@@ -24,8 +25,10 @@ Changed
 
 Version 2.0.0
 -------------
+
 Added
 ~~~~~
+
 - Ability to pass arbitrary settings on the command line to the "level" command
 
 Changed

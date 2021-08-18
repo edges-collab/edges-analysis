@@ -6,14 +6,28 @@ from edges_analysis.analysis import (
     CombinedData,
     DayAveragedData,
     BinnedData,
-    FilteredData,
     ModelData,
+    read_step,
 )
 import yaml
 from typing import Tuple
 import numpy as np
 from edges_cal.modelling import LinLog
 import datetime as dt
+from edges_analysis.config import config
+from click.testing import CliRunner
+from edges_analysis import cli
+
+runner = CliRunner()
+
+
+def invoke(cmd, args, **kwargs):
+    result = runner.invoke(cmd, args, **kwargs)
+    print(result.output)
+    if result.exit_code > 0:
+        raise result.exc_info[1]
+
+    return result
 
 
 @pytest.fixture(scope="session")
@@ -26,9 +40,22 @@ def integration_test_data(tmp_path_factory) -> Path:
             "clone",
             "https://github.com/edges-collab/edges-analysis-test-data",
             str(tmp_path / "edges-analysis-test-data"),
+            "--depth",
+            "1",
         ]
     )
     return tmp_path / "edges-analysis-test-data"
+
+
+@pytest.fixture(scope="session", autouse=True)
+def edges_config(tmp_path_factory):
+    new_path = tmp_path_factory.mktemp("edges-levels")
+
+    old_paths = config["paths"]
+    new_paths = {**old_paths, **{"field_products": new_path}}
+
+    with config.use(paths=new_paths) as cfg:
+        yield cfg
 
 
 @pytest.fixture(scope="session")
@@ -40,11 +67,8 @@ def settings() -> Path:
 def calibrate_settings(integration_test_data: Path) -> Path:
     settings = {
         "band": "low",
-        "f_low": 50,
-        "f_high": 100,
-        "calfile": str(integration_test_data / "cal_file_Rcv01_2015_09.h5"),
+        "calfile": str(integration_test_data / "calfile_Rcv_2017_05.h5"),
         "s11_path": str(integration_test_data / "s11"),
-        "switch_state_dir": str(integration_test_data / "SwitchingState01"),
         "balun_correction": True,
         "antenna_correction": False,
         "ground_correction": ":",
@@ -62,40 +86,42 @@ def calibrate_settings(integration_test_data: Path) -> Path:
 
 @pytest.fixture(scope="session")
 def cal_step(
-    integration_test_data: Path, calibrate_settings
+    integration_test_data: Path,
+    calibrate_settings: Path,
+    edges_config: dict,
+    settings: Path,
 ) -> Tuple[CalibratedData, CalibratedData]:
-    with open(calibrate_settings) as fl:
-        settings = yaml.load(fl, Loader=yaml.FullLoader)
-
-    cal_1 = CalibratedData.promote(
-        integration_test_data / "2016_292_00_small.acq",
-        filename=integration_test_data / "calibrate/292.h5",
-        **settings,
-    )
-    cal_2 = CalibratedData.promote(
-        integration_test_data / "2016_295_00_small.acq",
-        filename=integration_test_data / "calibrate/295.h5",
-        **settings,
+    invoke(
+        cli.process,
+        [
+            "calibrate",
+            str(calibrate_settings),
+            "-i",
+            str(integration_test_data / "2016_*_00_small.acq"),
+            "-l",
+            "calibrated",
+        ],
     )
 
-    return cal_1, cal_2
-
-
-@pytest.fixture(scope="session")
-def filter_step(cal_step, settings: Path, integration_test_data: Path):
-    with open(settings / "filter.yml") as fl:
-        s = yaml.load(fl, Loader=yaml.FullLoader)
+    invoke(
+        cli.filter,
+        [
+            str(settings / "xrfi.yml"),
+            "-i",
+            str(edges_config["paths"]["field_products"] / "calibrated/*.h5"),
+        ],
+    )
 
     return [
-        FilteredData.promote(
-            obj, filename=integration_test_data / f"filter/{obj.day}.h5", **s
+        read_step(fl)
+        for fl in sorted(
+            (edges_config["paths"]["field_products"] / "calibrated").glob("*.h5")
         )
-        for obj in cal_step
     ]
 
 
 @pytest.fixture(scope="session")
-def model_step(filter_step, settings: Path, integration_test_data: Path):
+def model_step(cal_step, settings: Path, integration_test_data: Path):
     with open(settings / "model.yml") as fl:
         s = yaml.load(fl, Loader=yaml.FullLoader)
 
@@ -103,7 +129,7 @@ def model_step(filter_step, settings: Path, integration_test_data: Path):
         ModelData.promote(
             obj, filename=integration_test_data / f"model/{obj.day}.h5", **s
         )
-        for obj in filter_step
+        for obj in cal_step
     ]
 
 

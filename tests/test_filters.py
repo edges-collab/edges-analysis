@@ -1,5 +1,6 @@
 import numpy as np
 from edges_analysis.analysis import filters
+from edges_cal import modelling as mdl
 
 
 def test_aux_filter():
@@ -29,7 +30,33 @@ def test_aux_filter():
         moon_el_max=50,
         amb_hum_max=100,
         max_receiver_temp=100,
+        adcmax=0.4,
     )
 
     assert np.all(out_flags[:4])
     assert np.all(gha[~out_flags] <= 12)
+
+
+def test_tp_filter(cal_step):
+    out_flags = filters.total_power_filter(
+        data=cal_step,
+        in_place=False,
+        metric_model=mdl.FourierDay(n_terms=3),
+        std_model=mdl.FourierDay(n_terms=3),
+    )
+    assert len(out_flags) == 2
+
+
+def test_rms_filter(cal_step):
+    out_flags = filters.rms_filter(
+        data=cal_step,
+        in_place=False,
+        metric_model=mdl.FourierDay(n_terms=3),
+        std_model=mdl.FourierDay(n_terms=3),
+    )
+    assert len(out_flags) == 2
+
+
+def test_negpower_filter(cal_step):
+    out_flags = filters.negative_power_filter(data=cal_step)
+    assert len(out_flags) == 2
