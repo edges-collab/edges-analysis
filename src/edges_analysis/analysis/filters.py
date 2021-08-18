@@ -724,10 +724,10 @@ def apply_gha_model_filter(
         if write_info:
             if out_file is None:
                 hsh = hash(
-                    "".join(f"{k}:{repr(v)}" for k, v in kwargs)
+                    "".join(f"{k}:{repr(v)}" for k, v in kwargs.items())
                     + ":".join(str(d) for d in data[:n_files])
                 )
-                out_file = Path("GHAModel_" + str(aggregator) + hsh)
+                out_file = Path("GHAModel_" + str(aggregator) + str(hsh))
             else:
                 out_file = Path(out_file)
 
