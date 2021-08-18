@@ -1,3 +1,4 @@
+"""Sub-package specifically for analysis routines to be applied to field data."""
 from . import beams
 from . import coordinates
 from . import filters
@@ -14,6 +15,5 @@ from .levels import (
     BinnedData,
     DayAveragedData,
     read_step,
-    FilteredData,
     ModelData,
 )

@@ -1,4 +1,4 @@
-# This is the GLOBAL configuration for all of edges-analysis.
+"""The global configuration for all of edges-analysis."""
 import os
 import yaml
 import contextlib
@@ -54,8 +54,8 @@ class Config(dict):
                     if alias in selfdict:
                         do_write = True
                         warnings.warn(
-                            f"Your configuration file has old key '{alias}' which has been re-named "
-                            f"'{k}'. Updating..."
+                            f"Your configuration file has old key '{alias}' which has "
+                            f"been re-named '{k}'. Updating..."
                         )
                         selfdict[k] = selfdict[alias]
                         del selfdict[alias]
@@ -101,7 +101,7 @@ class Config(dict):
     def load(cls, file_name):
         """Create a Config object from a config file."""
         cls.file_name = file_name
-        with open(file_name, "r") as fl:
+        with open(file_name) as fl:
             config = yaml.load(fl, Loader=yaml.FullLoader)
         return cls(config)
 

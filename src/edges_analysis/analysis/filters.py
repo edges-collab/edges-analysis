@@ -1,459 +1,747 @@
+"""Functions that identify and flag bad data in various ways."""
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
 from multiprocessing import cpu_count
-from pathlib import Path
-from typing import Tuple, List, Sequence, Dict
-
+from typing import Sequence, Callable, Literal
+from .levels import CalibratedData, read_step, _ReductionStep
+from . import types as tp
+import attr
 import h5py
 import numpy as np
 import yaml
-from multiprocess.pool import Pool
+from edges_cal.modelling import Model, LinLog, FourierDay
+from edges_cal.xrfi import (
+    ModelFilterInfoContainer,
+    model_filter,
+)
+import abc
+import functools
+from .data import DATA_PATH
+from . import tools
+from edges_cal import xrfi as rfi
+import inspect
+import p_tqdm
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-
-@dataclass
-class RMSInfo:
-    gha: np.ndarray
-    model_params: dict
-    meta: dict
-    rms: dict
-    flags: dict
-    model_eval: dict
-    abs_resids: dict
-    model_stds: dict
-    poly_params: dict
-    poly_params_std: dict
-
-    @classmethod
-    def from_file(cls, fname: [str, Path]) -> RMSInfo:
-        fname = Path(fname)
-
-        def get_key(fl, key):
-            return {
-                model: {
-                    (float(band[1:].split(",")[0]), float(band[:-1].split(",")[1])): v[...]
-                    for band, v in model_dct.items()
-                }
-                for model, model_dct in fl[key].items()
-            }
-
-        with h5py.File(fname, "r") as fl:
-            data = {
-                key: get_key(fl, key)
-                for key in [
-                    "rms",
-                    "flags",
-                    "model_eval",
-                    "abs_resids",
-                    "model_stds",
-                    "poly_params",
-                    "poly_params_std",
-                ]
-            }
-
-            model_params = {}
-            for mdl_name, mdl_data in fl["model_params"].items():
-                model_params[mdl_name] = dict(mdl_data.attrs)
-
-            out = cls(
-                gha=fl["gha"][...],
-                meta={k: v for k, v in fl.attrs.items() if not k.startswith("model_")},
-                model_params=model_params,
-                **data,
-            )
-        return out
-
-    def write(self, fname: [str, Path]):
-        with h5py.File(fname, "w") as fl:
-            fl["gha"] = self.gha
-
-            for key in [
-                "rms",
-                "flags",
-                "model_eval",
-                "abs_resids",
-                "model_stds",
-                "poly_params",
-                "poly_params_std",
-            ]:
-                grp = fl.create_group(key)
-
-                for model in self.model_names:
-                    mdl_grp = grp.create_group(model)
-
-                    for band in self.bands[model]:
-                        mdl_grp[str(band)] = getattr(self, key)[model][band]
-
-            for key, val in self.meta.items():
-                fl.attrs[key] = val
-
-            grp = fl.create_group("model_params")
-            for model in self.model_names:
-                mdl_grp = grp.create_group(model)
-
-                for k, v in self.model_params[model].items():
-                    mdl_grp.attrs[k] = v
-
-    @property
-    def model_names(self):
-        """The names of the models used to generate RMS"""
-        return tuple(self.model_eval.keys())
-
-    @property
-    def bands(self) -> Dict[str, List[Tuple[float, float]]]:
-        """The bands."""
-        return {m: list(self.model_eval[m].keys()) for m in self.model_names}
+STEP_FILTERS = {}
 
 
-def get_rms_info(
-    level1: Sequence,
-    models: Dict[str, Dict],
-    n_poly: int = 3,
-    n_sigma: float = 3,
-    n_terms: int = 16,
-    n_std: int = 6,
-    n_threads: int = cpu_count(),
-) -> RMSInfo:
-    """Computation of RMS info on a subset of files.
+def get_step_filter(filt: str) -> Callable:
+    """Obtain a registered step filter function from a string name."""
+    if filt not in STEP_FILTERS:
+        raise KeyError(f"'{filt}' does not exist as a filter.")
+    return STEP_FILTERS[filt]
 
-    This function computes the RMS, and polynomial models of the RMS over GHA. It
-    also computes an estimated model of the standard deviation of the model.
+
+def step_filter(
+    axis: Literal["time", "freq", "both"],
+    multi_data: bool = False,
+    data_type: type[_ReductionStep] | tuple[_ReductionStep] = _ReductionStep,
+):
+    """A decorator to register a filtering function as a potential filter.
+
+    Any function that is wrapped by :func:`step_filter` must implement the following
+    signature::
+
+        def fnc(
+            data: Union[_ReductionStep, List[_ReductionStep]]),
+            flags: Union[np.ndarray, List[np.ndarray]],
+            **kwargs
+        ) -> np.ndarray
+
+    Where the ``data`` is either a single reduction step object, or sequence of such
+    objects. The ``flags`` are an input array of boolean flags on the existing data,
+    the same shape as ``data.spectrum``.
+
+    The returned array should be a 1D or 2D boolean array of flags that may or may
+    not include the input flags. The function itself should *not* modify the input
+    flags. These will be combined with the input flags (if any) and returned.
 
     Parameters
     ----------
-    n_threads
+    axis
+        The axis over which the filter works. If either 'time' or 'freq', the returned
+        array from the wrapped function should be 1D, corresponding to either the
+        time or frequency axis of the data. If 'both', the return should be 2D. In the
+        case of 'time' or 'freq' filters, the flags will be broadcast across the other
+        dimension.
+    multi_data
+        Whether the filter accepts multiple objects at the same time to filter. This
+        is *usually* so as to enable more accurate filtering when comparing different
+        days for instance, rather than just performing a loop over the days and flagging
+        each independently.
+    data_type
+        Types against which the input data will be checked. This is useful to restrict
+        functionality to certain steps (example restricting total power filtering to
+        the calibration or modelling step, where raw integrations still exist).
+    """
 
-    level1
-        A list of :class:`~Level1` objects on which to compute the RMS statistics.
-    models
-        List of models to fit in order to obtain the RMS. Each should be a dictionary,
-        with keys "model", "params", "resolution", and "bands". The "model" should be a
-        string matching an edges-cal model, the "params" should be a dictionary of
-        parameters to pass to this :class:`Model`. The "resolution" should be an int or
-        float specifying the frequency bin size (in no. of channels or bandwidth in MHz).
-        The "bands" should be a list of tuples of frequency ranges (in MHz), or the
-        strings "full", "low" or "high" (corresponding to the full band, lower half,
-        or upper half). These are used to compute the RMS (the model itself is fit over
-        the full range every time).
-    n_poly
-        Number of polynomial terms with which to fit the the RMS as a function of GHA,
-        purely for flagging bad RMS values.
+    def inner(
+        fnc: Callable[
+            [_ReductionStep | list[_ReductionStep], np.ndarray | list[np.ndarray]],
+            np.ndarray,
+        ]
+    ):
+        uses_flags = "flags" in inspect.signature(fnc).parameters
+
+        @functools.wraps(fnc)
+        def wrapper(
+            *,
+            data: Sequence[tp.PathLike | _ReductionStep],
+            flags: Sequence[np.ndarray] | None = None,
+            in_place: bool = False,
+            n_threads: int = 1,
+            **kwargs,
+        ) -> np.ndarray:
+            logger.info(f"Running {fnc.__name__} filter.")
+
+            # Read all the data, in case they haven't been turned into objects yet.
+            # And check that everything is the right type.
+            data = [read_step(d) for d in data]
+            assert all(isinstance(d, data_type) for d in data)
+
+            # Specify initial flags (can either be list or single array)
+            flg = (
+                [d.get_flags() for d in data]
+                if flags is None
+                else [f.copy() for f in flags]
+            )
+
+            pre_flag_n = [np.sum(f) for f in flg]
+
+            if multi_data:
+                if uses_flags:
+                    kwargs.update(flags=flg)
+                this_flag = fnc(data=data, **kwargs)
+            else:
+
+                def fnc_(data, flags):
+                    if uses_flags:
+                        return fnc(data=data, flags=flags, **kwargs)
+                    else:
+                        return fnc(data=data, **kwargs)
+
+                this_flag = list(
+                    p_tqdm.p_map(fnc_, data, flg, unit="files", num_cpus=n_threads)
+                )
+
+            if flags is not None and any(
+                np.any(f0 != f1) for f0, f1 in zip(flg, flags)
+            ):
+                logger.warning(
+                    f"Filter {fnc.__name__} modified input flags in-place. "
+                    "This should not happen!"
+                )
+
+            for n, d, f, this_f in zip(pre_flag_n, data, flg, this_flag):
+                f |= this_f if axis in ("both", "freq") else np.atleast_2d(this_f).T
+
+                if np.all(f):
+                    logger.warning(
+                        f"{d.filename.name} was fully flagged during {fnc.__name__} "
+                        "filter"
+                    )
+                else:
+                    logger.info(
+                        f"'{d.filename.name}': {100 * n / f.size:.2f} → "
+                        f"{100 * np.sum(f) / f.size:.2f}% [red]<+"
+                        f"{100 * (np.sum(f) - n) / f.size:.2f}%>[/] flagged after "
+                        f"'{fnc.__name__}' filter"
+                    )
+
+            if in_place:
+                for d, f in zip(data, flg):
+
+                    with d.open("r+") as fl:
+                        _write_filter_to_file(
+                            fl, flags=f, fnc_name=fnc.__name__, **kwargs
+                        )
+
+                        try:
+                            del d.weights
+                        except AttributeError:
+                            pass
+
+            return flg
+
+        STEP_FILTERS[fnc.__name__] = wrapper
+        return wrapper
+
+    return inner
+
+
+def _write_filter_to_file(fl: h5py.File, flags: np.ndarray, fnc_name, **kwargs):
+    flg_grp = fl.create_group("flags") if "flags" not in fl else fl["flags"]
+
+    if "flags" not in flg_grp:
+        flg_grp.create_dataset(
+            "flags",
+            data=flags,
+            shape=(1,) + flags.shape,
+            maxshape=(None,) + flags.shape,
+        )
+    else:
+        flg_data = fl["flags"]["flags"]
+        flg_data.resize(flg_data.shape[0] + 1, axis=0)
+        flg_data[-1] = flags
+
+    n_filters = len(dict(flg_grp.attrs))
+
+    while fnc_name in flg_grp.attrs:
+        fnc_name += "+"
+
+    flg_grp.attrs[fnc_name] = n_filters
+    try:
+        meta_grp = flg_grp.create_group(fnc_name)
+    except ValueError:
+        logger.debug(f"Trying to create group '{fnc_name}' that already exists.")
+
+    for k, v in kwargs.items():
+        try:
+            if isinstance(v, dict):
+                for kk, vv in v.items():
+                    meta_grp.attrs[k + "_" + kk] = vv
+            elif isinstance(v, Model):
+                meta_grp.attrs[k] = yaml.dump(v)
+            else:
+                meta_grp.attrs[k] = v
+        except TypeError:
+            logger.warning(
+                f"Metadata key '{k}' has value of type '{type(v)}' which can't be saved"
+                " in HDF5. Continuing without writing it."
+            )
+
+
+@attr.s(frozen=True)
+class GHAModelFilter:
+    """A filter that is able to act upon data that has been aggregated along frequency.
+
+    Parameters
+    ----------
+    metric_model
+        A linear model that provides a good guess of the typical aggregated metric as it
+        evolves over GHA.
+    std_model
+        A linear model that provides a good guess of the typical standard deviation of
+        the metric as it evolves over GHA. This may be gotten by fitting a model to the
+        absolute residuals, for example.
+    meta
+        A dictionary holding meta-information about how the models were obtained.
     n_sigma
-        Number of sigma at which to threshold individual RMS values from the model
-        fit over GHA.
-    n_terms
-        The number of polynomial terms to fit to the final model of RMS vs GHA.
-    n_std
-        The number of polynomial terms to fit to the absolute residual of RMS
-        as a function of GHA.
+        The number of sigma to threshold at.
+    """
+
+    metric_model: Model = attr.ib()
+    std_model: Model = attr.ib()
+    meta: dict = attr.ib(factory=dict)
+
+    n_sigma: float = attr.ib(default=3.0)
+
+    def apply_filter(self, gha: np.ndarray, metric: np.ndarray) -> np.ndarray:
+        """Apply the filter to a set of metric data.
+
+        Parameters
+        ----------
+        gha
+            The GHAs at which the data to be filtered was measured (1D array)
+        metric
+            The metric to filter on (eg. RMS or Total Power) as a function of GHA
+            (1D array)
+
+        Returns
+        -------
+        flags
+            Boolean array specifying which data points should be flagged.
+        """
+        resids = metric - self.metric_model(x=gha)
+        return np.abs(resids) > (self.n_sigma * self.std_model(x=gha))
+
+    @classmethod
+    def from_data(
+        cls,
+        info: GHAModelFilterInfo,
+        metric_model: Model,
+        std_model: Model,
+        n_sigma: float = 3.0,
+        meta=None,
+    ):
+        """Create the object from input metric data and models."""
+        flags = np.where(
+            np.isnan(info.metric) | np.isinf(info.metric), True, info.flags
+        )
+
+        mmodel = metric_model.fit(
+            xdata=info.gha, ydata=info.metric, weights=(~flags).astype(float)
+        )
+
+        flags = np.where(np.isnan(info.std) | np.isinf(info.std), True, info.flags)
+        smodel = std_model.fit(
+            xdata=info.gha, ydata=info.std, weights=(~flags).astype(float)
+        )
+
+        return cls(
+            metric_model=mmodel.fit.model,
+            std_model=smodel.fit.model,
+            n_sigma=n_sigma,
+            meta=meta or {},
+        )
+
+    @classmethod
+    def from_file(cls, fname: tp.PathLike) -> GHAModelFilter:
+        """Create the class from a h5 file."""
+        with h5py.File(fname, "r") as fl:
+            metric_model = yaml.load(fl.attrs["metric_model"])
+            std_model = yaml.load(fl.attrs["std_model"])
+
+            n_sigma = fl.attrs["n_sigma"]
+            meta = dict(fl["meta"].attrs)
+
+            return cls(
+                metric_model=metric_model,
+                std_model=std_model,
+                n_sigma=n_sigma,
+                meta=meta,
+            )
+
+    def write(self, fname: tp.PathLike):
+        """Write a h5 file."""
+        with h5py.File(fname, "w") as fl:
+            fl.attrs["metric_model"] = yaml.dump(self.metric_model)
+            fl.attrs["std_model"] = yaml.dump(self.std_model)
+
+            fl.attrs["n_sigma"] = self.n_sigma
+            meta = fl.create_group("meta")
+            for k, v in self.meta.items():
+                try:
+                    meta[k] = v
+                except TypeError:
+                    if isinstance(v, Model):
+                        meta[k] = yaml.dump(v)
+                    else:
+                        logger.warning(f"Key '{k}' was unable to be written.")
+
+
+@attr.s(frozen=True, auto_attribs=True, kw_only=True)
+class GHAModelFilterInfo:
+    """An object containing the data going into creating a :class:`GHAModelFIlter`.
+
+    This is useful for saving the full information to disk, or as an intermediate object
+    used when determining the model information.
+    """
+
+    gha: np.ndarray
+    metric: np.ndarray
+    std: np.ndarray
+    flags: np.ndarray
+    files: list[tp.PathLike | CalibratedData]
+    indx_map: list[np.ndarray]
+
+    def __attrs_post_init__(self):
+        """Run post-init scripts.
+
+        This just runs validation on all of the inputs after they are set on the class.
+        """
+        self._validate_inputs()
+
+    def _validate_inputs(self) -> bool:
+        assert self.gha.shape == self.metric.shape == self.flags.shape == self.std.shape
+        assert self.gha.ndim == 1
+        assert self.gha.dtype == float
+        assert self.metric.dtype == float
+        assert self.std.dtype == float
+        assert self.flags.dtype == bool
+
+    def get_metric_residuals(
+        self, model_filter: GHAModelFilter, params: np.ndarray | None = None
+    ) -> np.ndarray:
+        """Get the residuals of the metric to a smooth model fit over all GHA."""
+        return self.metric - model_filter.metric_model(parameters=params)
+
+    def write(self, fname: tp.PathLike):
+        """Write the object to H5 file."""
+        with h5py.File(fname, "w") as fl:
+            fl["gha"] = self.gha
+            fl["metric"] = self.metric
+            fl["std"] = self.std
+            fl["flags"] = self.flags
+
+            for i, idx in enumerate(self.indx_map):
+                fl[f"idx_map_{i}"] = idx
+
+            fl.attrs["files"] = ":".join(str(f) for f in self.files)
+
+    @classmethod
+    def from_file(cls, fname: tp.PathLike):
+        """Create an object from a file."""
+        with h5py.File(fname, "r") as fl:
+            gha = fl["gha"][...]
+            metric = fl["metric"][...]
+            std = fl["std"][...]
+            flags = fl["flags"][...]
+
+            idx_map = [
+                fl[key][...] for key in sorted(fl.keys()) if key.startswith("idx_map")
+            ]
+
+            files = fl.attrs["files"].split(":")
+
+        return GHAModelFilterInfo(
+            gha=gha, metric=metric, std=std, flags=flags, indx_map=idx_map, files=files
+        )
+
+
+@attr.s(frozen=True)
+class FrequencyAggregator(metaclass=abc.ABCMeta):
+    @abc.abstractmethod
+    def aggregate_file(self, data: CalibratedData) -> np.ndarray:
+        """Actually aggregate over frequency."""
+        raise NotImplementedError
+
+    def get_init_flags(self, gha, metric):
+        """Base function to define some inital set of flags."""
+        return np.zeros(len(gha), dtype=bool)
+
+    def aggregate(
+        self, data: Sequence[tp.PathLike | CalibratedData]
+    ) -> np.ndarray | np.ndarray | list[np.ndarray]:
+        """Aggregate a set of data files over frequency.
+
+        Parameters
+        ----------
+        data
+            A sequence of data files to use to obtain the metric over which to filter.
+
+        Returns
+        -------
+        gha
+            The GHA's at which the aggregated metric is measured. Sorted in ascending
+            order.
+        metric
+            The aggregated metric at each GHA.
+        indx_map
+            A list of integer arrays that give the index of each file's GHAs back to
+            the sorted array.
+        """
+        # Convert the data to actual Step objects
+        data = [read_step(d) for d in data]
+
+        # get the total number of GHAs in all the files
+        n_ghas = [len(d.gha) for d in data]
+        n_gha_total = sum(n_ghas)
+
+        # Put all the GHA's together
+        gha = np.concatenate(tuple(d.gha for d in data))
+
+        # Get the aggregated metrics for all input files.
+        metric = np.empty(n_gha_total)
+        count = 0
+        for n_gha, datafile in zip(n_ghas, data):
+            metric[count : count + n_gha] = self.aggregate_file(datafile)
+            count += n_gha
+
+        # Now, sort the output
+        sortidx = np.argsort(gha)
+        invsortidx = np.argsort(sortidx)
+
+        # Build a dictionary mapping indices in the sorted array to file/gha index in
+        # the files
+        indx_map = []
+        counter = 0
+        for n in n_ghas:
+            indx_map.append(invsortidx[counter : counter + n])
+            counter += n
+
+        return gha[sortidx], metric[sortidx], indx_map
+
+
+def get_gha_model_filter(
+    data: Sequence[tp.PathLike | CalibratedData],
+    aggregator: FrequencyAggregator,
+    metric_model: Model,
+    std_model: Model,
+    detrend_metric_model: Model | None = None,
+    detrend_std_model: Model | None = None,
+    detrend_gha_chunk_size: float = 24.0,
+    n_resid: int = 1,
+    **kwargs,
+) -> tuple[GHAModelFilter, GHAModelFilterInfo]:
+    """Obtain a filtering object from a given set of representative data.
+
+    The algorithm here is to first intrinsically flag the input data, then fit a model
+    to it over GHA, which can be used to flag further files. The initial intrinsice
+    flagging is *by default* done with the same model that will be applied to other
+    data, but it can be done at a more fine-grained level, fitting to small chunks of
+    GHA at a time with a lower-order model.
+
+    Parameters
+    ----------
+    data
+        A sequence of data files to use to obtain the metric over which to filter.
+    aggregator
+        A specialized function that takes a file and some parameters and returns
+        an aggregated metric.
+    metric_model_type
+        A linear model to be fit to the aggregated metric data.
+    std_model_type
+        A linear model to be fit to the absolute residuals of the metric data.
+    metric_model_kwargs
+        Parameters for the linear model (such as ``n_terms``) to fit to the metric.
+    std_model_kwargs
+        Parameters for the linear model (such as ``n_terms``) to fit to the std.
+    detrend_metric_model
+        A model to fit to the data to detrend it in order to determine flags. This is
+        a model *instance*, but it should not have the ``default_x`` set on it. By
+        default, the same as ``metric_model_type`` (with the same parameters).
+    detrend_std_model
+        A model to fit to the residuals of the data in order to determine flags. This is
+        a model *instance*, but it should not have the ``default_x`` set on it. By
+        default, the same as ``std_model_type`` (with the same parameters).
+    detrend_gha_chunk_size
+        The chunk size (in GHA) to use for model-fitting, in order to detrend and find
+        flags in the input data. By default, use the whole data set to find flags.
+    **kwargs
+        All other arguments passed to :func:`edges_cal.xrfi.model_filter`
 
     Returns
     -------
-    rms_info
-        A special data structure representing the RMS calculation.
+    filter
+        An object that can be used to filter other files based on the same aggregation.
+    info
+        An object containing information about the fit itself -- useful for inspection.
 
-    See Also
-    --------
-    rms_filter
-        The output of this function is supposed to be used in ``rms_filter`` to actually
-        filter files (those files may not be the same as went into this function).
     """
-    # Get a tuple representation of the bands.
-    l1 = level1[0]
+    # Aggregate the data for each file along the frequency axis.
+    gha, metric, indx_map = aggregator.aggregate(data)
+    init_flags = aggregator.get_init_flags(gha, metric)
 
-    # Make a big vector of all GHA's in all files.
-    gha = np.hstack([l1.ancillary["gha"] for l1 in level1])
+    if detrend_metric_model is None:
+        detrend_metric_model = metric_model
+    if detrend_std_model is None:
+        detrend_std_model = std_model
 
-    n_threads = min(n_threads, len(level1))
-    if n_threads > 1:
-        pool = Pool(n_threads)
-        m = pool.map
-    else:
-        m = map
+    flags, resid, std, flag_info = chunked_iterative_model_filter(
+        x=gha,
+        data=metric,
+        init_flags=init_flags,
+        flags=np.isnan(metric) | np.isinf(metric),
+        model=detrend_metric_model,
+        resid_model=detrend_std_model,
+        chunk_size=detrend_gha_chunk_size,
+        n_resid=n_resid,
+        **kwargs,
+    )
 
-    bands = {name: [] for name in models}
-    for name, model in models.items():
-        bands_ = model.get("bands", ["full"])
-        if not bands_:
-            raise ValueError("'bands' must be a list of strings/tuples")
-
-        for b in bands_:
-            if b == "full":
-                b = (np.floor(l1.freq.min), np.ceil(l1.freq.max))
-            elif b == "low":
-                b = (np.floor(l1.freq.min), np.floor(l1.freq.center))
-            elif b == "high":
-                b = (np.floor(l1.freq.center), np.ceil(l1.freq.max))
-            elif not isinstance(b, tuple):
-                raise ValueError(f"'bands' must be a list of strings/tuples, got {b}")
-
-            bands[name].append(b)
-
-    out = {name: {b: {} for b in bands} for name, bands in bands.items()}
-    params = {}
-    for name, model in models.items():
-        # Get the RMS values for each of the files, for each of the bands.
-        mdl = model.get("model")
-        prms = model.get("params", {})
-
-        # Put all the RMS values for all files into one long vector.
-        rms = list(
-            m(
-                lambda i: level1[i].get_model_rms(
-                    freq_ranges=list(bands[name]),
-                    model=mdl,
-                    resolution=model.get("resolution", 0.0488),
-                    **prms,
-                ),
-                list(range(len(level1))),
-            )
-        )
-        params[name] = prms.copy()
-        params[name].update(**{k: v for k, v in model.items() if k not in ["params", "bands"]})
-
-        for band in bands[name]:
-            this = out[name][band]
-            this["rms"] = np.hstack([r[band] for r in rms])
-
-            this.update(get_rms_model_over_time(this["rms"], gha, n_poly, n_sigma, n_terms, n_std))
-
-    # Transform the out dict to have the measurements as top-level keys
-    for name, value_ in out.items():
-        for band in value_:
-            keys = value_[band].keys()
-
-    new_out = {}
-    for key in keys:
-        new_out[key] = {}
-        for name, value in out.items():
-            new_out[key][name] = {}
-            for band in value:
-                new_out[key][name][band] = out[name][band][key]
-
-    return RMSInfo(
+    info = GHAModelFilterInfo(
         gha=gha,
-        meta={"n_poly": n_poly, "n_sigma": n_sigma, "n_terms": n_terms, "n_std": n_std},
-        model_params=params,
-        **new_out,
+        metric=metric,
+        std=std,
+        flags=flags,
+        files=[d.filename for d in data],
+        indx_map=indx_map,
+    )
+    return (
+        GHAModelFilter.from_data(
+            info,
+            metric_model,
+            std_model,
+            n_sigma=flag_info.thresholds[-1],
+            meta={
+                **{
+                    "infiles": ":".join(
+                        str(getattr(d, "filename", str(d))) for d in data
+                    ),
+                    "gha_chunk_size": detrend_gha_chunk_size,
+                    "detrend_model": detrend_metric_model,
+                    "detrend_std_model": detrend_std_model,
+                },
+                **kwargs,
+            },
+        ),
+        info,
+        flag_info,
     )
 
 
-def get_rms_model_over_time(
-    rms: np.ndarray, gha: np.ndarray, n_poly: int, n_sigma: float, n_terms: int, n_std: int
-):
-    flags = np.isnan(rms)
+def chunked_iterative_model_filter(
+    *,
+    x: np.ndarray,
+    data: np.ndarray,
+    flags: np.ndarray | None = None,
+    init_flags: np.ndarray | None = None,
+    chunk_size: float = np.inf,
+    **kwargs,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Perform a chunk-wise iterative model filter.
 
-    for i in range(24):  # Go through each hour
-        mask = (gha >= i) & (gha < (i + 1))
-        extern_flg = flags[mask]
-        this_flg = flags[mask].copy()
-
-        n_flg = np.sum(this_flg) - 1
-
-        while np.sum(this_flg) > n_flg and np.sum(~this_flg) > 2 * n_poly:
-            n_flg = np.sum(this_flg)
-            res, std = _get_polyfit_res_std(n_poly, gha[mask], rms[mask], flags=this_flg)
-            this_flg = extern_flg | (np.abs(res) > n_sigma * std)
-
-        extern_flg[:] = this_flg
-
-    par = np.polyfit(gha[~flags], rms[~flags], n_terms - 1)
-    model = np.polyval(par, gha)
-    abs_res = np.abs(rms - model)
-    par_std = np.polyfit(gha[~flags], abs_res[~flags], n_std - 1)
-    model_std = np.polyval(par_std, gha)
-
-    return {
-        "flags": flags,
-        "model_eval": model,
-        "abs_resids": abs_res,
-        "model_stds": model_std,
-        "poly_params": par,
-        "poly_params_std": par_std,
-    }
-
-
-def rms_filter(
-    rms_info: [str, Path, RMSInfo],
-    gha: np.ndarray,
-    rms: Dict[str, Dict[Tuple[float, float], np.ndarray]],
-    n_sigma: float = 3,
-    fl_id=None,
-):
-    """Filter RMS data based on a summary set of data.
+    This breaks the given data into smaller chunks and then calls
+    :func:`edges_cal.xrfi.model_filter` on each chunk, returning the full 1D array of
+    flags after all the chunks have been processed.
 
     Parameters
     ----------
-    rms_info
-        The output of ``get_rms_info``, or a file containing it.
-    gha
-        1D array of the GHA's of the current data.
-    rms
-        The RMS of the current data. Keys are different models (must match those in
-        ``rms_info``, and values are dicts with keys that are the bands.
-    n_sigma
-        The threshold at which individual RMS values are flagged.
+    chunk_size
+        The size of the chunks to process, in units of the input coordinates, ``x``.
+    **kwargs
+        Everything else is passed to :func:`edges_cal.xrfi.model_filter`.
 
     Returns
     -------
     flags
-        1D array of len(gha) specifying which integrations to flag.
+        The 1D array of flags corresponding to the data. Note that input flags are not
+        modified in the course of this function, but the output does already contain
+        those flags.
+    resid
+        Residuals to the model
+    std
+        Estimates of the standard deviation of the data at each data point.
     """
-    if not isinstance(rms_info, RMSInfo):
-        rms_info = RMSInfo.from_file(rms_info)
+    if flags is None:
+        flags = np.zeros(len(x), dtype=bool)
+    if init_flags is None:
+        init_flags = np.zeros(len(x), dtype=bool)
 
-    flags = np.zeros(len(gha), dtype=bool)
-    fl_id = f"{fl_id}: " if fl_id else ""
+    out_flags = flags | np.isnan(data)
+    resids = np.zeros_like(data)
+    std = np.zeros_like(data)
 
-    for model, rms_model in rms.items():
-        for band, rms_band in rms_model.items():
-            pp = rms_info.poly_params[model][band]
-            pstd = rms_info.poly_params_std[model][band]
+    xmin = x.min()
+    infos = ModelFilterInfoContainer()
+    while xmin < x.max():
+        mask = (x >= xmin) & (x < xmin + chunk_size)
 
-            m = np.polyval(pp, gha)
-            ms = np.polyval(pstd, gha)
-            flags |= np.abs(rms_band - m) > n_sigma * ms
+        out_flags[mask], info = model_filter(
+            x=x[mask],
+            data=data[mask],
+            flags=out_flags[mask],
+            init_flags=init_flags[mask],
+            **kwargs,
+        )
+        resids[mask] = info.get_residual()
+        std[mask] = info.stds[-1]
+        infos = infos.append(info)
+        xmin += chunk_size
 
-            logger.info(
-                f"{fl_id}{np.sum(flags)}/{len(flags)} GHA's flagged after RMS filter for model={model}, band={band}."
-            )
-
-    return flags
+    return out_flags, resids, std, infos
 
 
-def total_power_filter(
-    gha: np.ndarray,
-    spectra: np.ndarray,
-    frequencies: np.ndarray,
-    flags: [None, np.ndarray] = None,
-    n_poly: int = 3,
-    n_sigma: float = 3.0,
-    bands: [None, List[Tuple[float, float]]] = None,
-    std_thresholds=None,
-):
-    """
-    Filter on total power.
+@attr.s(frozen=True)
+class RMSAggregator(FrequencyAggregator):
+    """An aggregator that fits a model and yields the RMS over a given freq range."""
 
-    The algorithm of the filter is:
+    model: Model = attr.ib(default=LinLog(n_terms=5))
+    band: tuple[float, float] = attr.ib(default=(0, np.inf))
 
-    Get the sum of each spectrum (for a night/day) in three different bands (low half,
-    upper half, total) (yielding, for each band, a "total power" as a function of GHA).
-    For each band, split the total power into smallish chunks of GHA (nominally 1hr bins),
-    and for each bin, fit a low-order polynomial to the total power.
-    GHA's whose total power is outside some threshold are flagged, and the previous step
-    is repeated, until no new GHAs are flagged. This threshold is itself thresholded:
-    if the RMS of the residuals of the fit are very large, even 1-sigma outliers are
-    flagged. Otherwise, only 3-4-sigma outliers are flagged.
+    def aggregate_file(self, data: CalibratedData) -> np.ndarray:
+        """Compute the RMS over frequency for each integration in a file."""
+        return data.get_model_rms(freq_range=self.band, model=self.model)
 
+
+@attr.s(frozen=True)
+class TotalPowerAggregator(FrequencyAggregator):
+    """An aggregator that fits a model and yields the mean over a given freq range."""
+
+    band: tuple[float, float] = attr.ib(default=(0, np.inf))
+    model: Model = attr.ib(default=FourierDay(n_terms=40))
+    init_threshold: float = attr.ib(default=1.0)
+
+    def get_init_flags(self, gha, metric):
+        """Compute the inital flags based on the power in a simulated spectra."""
+        fiducial_data = np.load(
+            DATA_PATH / "Lowband_30mx30m_Haslam_2p5_20minlst_50_100.npy",
+            allow_pickle=True,
+        )
+        band_mask = (fiducial_data[1] >= self.band[0]) & (
+            fiducial_data[1] <= self.band[1]
+        )
+        fiducial_spectrum = fiducial_data[0][:, band_mask]
+
+        standard_model = (
+            self.model.at(x=fiducial_data[2])
+            .fit(ydata=np.nanmean(fiducial_spectrum, axis=1))
+            .fit
+        )
+        init_flags = (
+            np.abs(standard_model(gha) - metric) / standard_model(gha)
+        ) > self.init_threshold
+        print(np.shape(init_flags), len(np.where(init_flags)))
+        return init_flags
+
+    def aggregate_file(self, data: CalibratedData) -> np.ndarray:
+        """Compute the total power over frequency for each integration in a file."""
+        freq_mask = (data.raw_frequencies >= self.band[0]) & (
+            data.raw_frequencies < self.band[1]
+        )
+
+        weights = np.sum(data.weights[:, freq_mask], axis=1)
+        return np.where(
+            weights > 0,
+            (
+                np.sum(data.spectrum[:, freq_mask] * data.weights[:, freq_mask], axis=1)
+                / weights
+            ),
+            np.nan,
+        )
+
+
+def apply_gha_model_filter(
+    data: Sequence[tp.PathLike | CalibratedData],
+    aggregator: FrequencyAggregator,
+    filt: GHAModelFilter | tp.PathLike | None = None,
+    n_files: int = 0,
+    use_intrinsic_flags: bool = True,
+    out_file: tp.PathLike | None = None,
+    write_info: bool = True,
+    **kwargs,
+) -> list[np.ndarray[bool]]:
+    """Apply a GHA-based model filter to a set of data files.
 
     Parameters
     ----------
-    gha : array_like
-        1D array of galactic hour angles
-    spectra
-        2D array where first dimension is length GHA and corresponds to different
-        integrations, and second dimension corresponds to frequency.
-    frequencies
-        The frequencies at which the spectra are defined.
-    flags
-        Any flagged entries in the spectra (2D array, shape (GHA, freq)).
-    n_poly
-        The number of polynomial terms to fit to each 1-hour GHA bin.
-    n_sigma
-        The number of sigma at which to threshold individual integrations.
-    bands
-        A list of tuples, each with two floats: min and max of a frequency band over
-        which to take the total power. By default, use the whole band only.
-    std_thresholds
-        The absolute threshold for each band in terms of the standard deviation of
-        residuals. If very high, then individual integrations will be flagged at
-        one sigma deviation rather than ``n_sigma``. Must be the same length as ``bands``
-        if given.
+    data
 
     """
-    # Set the relevant frequency bands over which to take the total powers.
-    if bands is None:
-        bands = [(frequencies.min(), frequencies.max())]
+    if n_files == 0:
+        n_files = len(data)
 
-    for i, band in bands:
-        if band is None:
-            bands[i] = (frequencies.min(), frequencies.max())
+    info = None
+    flags = []
+    if filt is None:
+        filt, info, flag_info = get_gha_model_filter(
+            data=data[:n_files], aggregator=aggregator, **kwargs
+        )
 
-    assert spectra.shape == (len(gha), len(frequencies)), "total_power has wrong shape"
+        # If desired, go ahead and just flag the objects themselves.
+        # Can only do this if we just computed the filter.
+        if use_intrinsic_flags:
+            for i in range(n_files):
+                flags.append(info.flags[info.indx_map[i]])
 
-    if flags is None:
-        flags = np.zeros(spectra.shape, dtype=bool)
+        if write_info:
+            if out_file is None:
+                hsh = hash(
+                    "".join(f"{k}:{repr(v)}" for k, v in kwargs.items())
+                    + ":".join(str(d) for d in data[:n_files])
+                )
+                out_file = Path("GHAModel_" + str(aggregator) + str(hsh))
+            else:
+                out_file = Path(out_file)
 
-    # Now sum over the frequency bands.
-    total_power = np.zeros((len(bands), len(gha)))
-    for i, band in enumerate(bands):
-        freq_mask = (frequencies >= band[0]) & (frequencies < band[1])
-        total_power[i] = np.nanmean(np.where((~flags) | freq_mask, spectra, np.nan), axis=1)
+            filt.write(out_file.with_suffix(".filter"))
+            info.write(out_file.with_suffix(".info"))
+            flag_info.write(out_file.with_suffix(".flag_info"))
 
-    if std_thresholds is None:
-        std_thresholds = [None] * len(bands)
+    elif not isinstance(filt, GHAModelFilter):
+        filt = GHAModelFilter.from_file(filt)
 
-    flags_1d = np.prod(flags, axis=1).astype(bool)
+    for i, d in enumerate(data[len(flags) :]):
+        dd = read_step(d)
+        metric = aggregator.aggregate_file(dd)
+        flags.append(filt.apply_filter(gha=dd.gha, metric=metric))
 
-    for j, (tpi, std_threshold) in enumerate(zip(total_power, std_thresholds)):
-        for i in range(24):
-            mask = (gha >= i) & (gha < (i + 1))
-            this_gha = gha[mask]
-            this_extern_flags = flags_1d[mask]
-
-            this_tp = tpi[mask]
-
-            this_intern_flags = this_extern_flags | np.isnan(this_tp)
-
-            # If enough data points available per hour
-            lx = np.sum(~this_intern_flags)
-
-            if lx <= 10:
-                continue
-
-            nflags = -1
-
-            while nflags < np.sum(this_intern_flags):
-                nflags = np.sum(this_intern_flags)
-
-                if (len(this_gha) - nflags) < n_poly:
-                    # If we've flagged too much, just get rid of everything here.
-                    this_intern_flags[:] = True
-                else:
-                    res, std = _get_polyfit_res_std(n_poly, this_gha, this_tp, this_intern_flags)
-
-                    if std_threshold is not None and std > std_threshold:
-                        this_intern_flags = this_extern_flags | (np.abs(res) > std)
-                    else:
-                        this_intern_flags = this_extern_flags | (np.abs(res) > n_sigma * std)
-
-            flags_1d[mask] = this_intern_flags
-
-    return flags_1d
-
-
-def _get_polyfit_res_std(n_poly, gha, data, flags=None):
-    if flags is None:
-        flags = np.zeros(len(gha), dtype=bool)
-
-    if np.sum(~flags) < n_poly:
-        raise np.linalg.LinAlgError("After flagging, too few data points left for n_poly.")
-
-    try:
-        par = np.polyfit(gha[~flags], data[~flags], n_poly - 1)
-    except np.linalg.LinAlgError:
-        logger.error("gha:", gha)
-        logger.error("data: ", data)
-        logger.error("n_poly: ", n_poly)
-        raise
-    model = np.polyval(par, gha)
-    res = data - model
-    std = np.nanstd(res)
-
-    return res, std
+    return flags
 
 
 def explicit_filter(times, bad, ret_times=False):
@@ -486,7 +774,7 @@ def explicit_filter(times, bad, ret_times=False):
         Only if `ret_times=True`. An array of the times that are good.
     """
     if isinstance(bad, str):
-        with open(bad, "r") as fl:
+        with open(bad) as fl:
             bad = yaml.load(fl, Loader=yaml.FullLoader)["bad_days"]
 
     try:
@@ -499,8 +787,8 @@ def explicit_filter(times, bad, ret_times=False):
     except AttributeError:
         nb = 1
 
-    assert nt in (1, 2, 3), "times must be an array of 1,2 or 3-tuples"
-    assert nb in (1, 2, 3), "bad must be an array of 1,2 or 3-tuples"
+    assert nt in {1, 2, 3}, "times must be an array of 1,2 or 3-tuples"
+    assert nb in {1, 2, 3}, "bad must be an array of 1,2 or 3-tuples"
 
     if nt < nb:
         bad = {b[:nt] for b in bad}
@@ -520,86 +808,193 @@ def time_filter_auxiliary(
     moon_el: np.ndarray,
     humidity: np.ndarray,
     receiver_temp: np.ndarray,
-    gha_range: Tuple[float, float] = (0, 24),
+    adcmax: np.ndarray,
+    gha_range: tuple[float, float] = (0, 24),
     sun_el_max: float = 90,
     moon_el_max: float = 90,
     amb_hum_max: float = 200,
     min_receiver_temp: float = 0,
     max_receiver_temp: float = 100,
-    flags: [None, np.ndarray] = None,
+    adcmax_max: float = 0.4,
 ) -> np.ndarray:
-    loc_flgs = np.zeros(len(gha), dtype=bool)
+    """Flag on auxiliary data."""
+    flags = np.zeros(len(gha), dtype=bool)
 
-    def filter(condition, message, loc_flgs):
-        nflags = np.sum(loc_flgs)
+    def filt(condition, message, flags):
+        nflags = np.sum(flags)
 
-        loc_flgs |= condition
-        nnew = np.sum(loc_flgs) - nflags
+        flags |= condition
+        nnew = np.sum(flags) - nflags
         if nnew:
-            logger.debug(f"{nnew}/{len(loc_flgs) - nflags} times flagged due to {message}")
+            logger.debug(f"{nnew}/{len(flags) - nflags} times flagged due to {message}")
 
-    filter((gha < gha_range[0]) | (gha >= gha_range[1]), "GHA range", loc_flgs)
-    filter(sun_el > sun_el_max, "sun position", loc_flgs)
-    filter(moon_el > moon_el_max, "moon position", loc_flgs)
-    filter(humidity > amb_hum_max, "humidity", loc_flgs)
-    filter(
+    filt((gha < gha_range[0]) | (gha >= gha_range[1]), "GHA range", flags)
+    filt(sun_el > sun_el_max, "sun position", flags)
+    filt(moon_el > moon_el_max, "moon position", flags)
+    filt(humidity > amb_hum_max, "humidity", flags)
+    filt(
         (receiver_temp >= max_receiver_temp) | (receiver_temp <= min_receiver_temp),
         "receiver temp",
-        loc_flgs,
+        flags,
     )
-
-    if flags is not None:
-        assert flags.shape[-1] == len(
-            gha
-        ), f"flags must be an array with last axis len(gha). Got {flags.shape}"
-        flags |= loc_flgs
-    else:
-        flags = loc_flgs
+    filt(adcmax > adcmax_max, "adc max level", flags)
 
     return flags
 
 
-def filter_explicit_gha(gha, first_day, last_day):
-    # TODO: this should not be used -- it's arbitrary!
-    if gha in [0, 2, 3, 4, 5, 16, 17, 18, 19, 20, 21, 22]:
-        good_days = np.arange(140, 300, 1)
-    else:
-        good_day_dct = {
-            1: np.concatenate((np.arange(148, 160), np.arange(161, 220))),
-            10: np.concatenate(
-                (
-                    np.arange(148, 168),
-                    np.arange(177, 194),
-                    np.arange(197, 202),
-                    np.arange(205, 216),
-                )
-            ),
-            11: np.arange(187, 202),
-            12: np.arange(147, 150),
-            13: np.array([147, 149, 157, 159]),
-            14: np.arange(148, 183),
-            15: np.concatenate((np.arange(140, 183), np.arange(187, 206), np.arange(210, 300))),
-            23: np.arange(148, 300),
-            6: np.arange(147, 300),
-            7: np.concatenate(
-                (
-                    np.arange(147, 153),
-                    np.arange(160, 168),
-                    np.arange(174, 202),
-                    np.arange(210, 300),
-                )
-            ),
-            8: np.concatenate((np.arange(147, 151), np.arange(160, 168), np.arange(174, 300))),
-            9: np.concatenate(
-                (
-                    np.arange(147, 153),
-                    np.arange(160, 168),
-                    np.arange(174, 194),
-                    np.arange(197, 202),
-                    np.arange(210, 300),
-                )
-            ),
-        }
-        good_days = good_day_dct[gha]
+@step_filter(axis="time", data_type=CalibratedData)
+def aux_filter(
+    *,
+    data: CalibratedData,
+    sun_el_max: float = 90,
+    moon_el_max: float = 90,
+    ambient_humidity_max: float = 40,
+    min_receiver_temp: float = 0,
+    max_receiver_temp: float = 100,
+    adcmax_max: float = 0.4,
+) -> np.ndarray:
+    """
+    Perform an auxiliary filter on the object.
 
-    return good_days[(good_days >= first_day) & (good_days <= last_day)]
+    Parameters
+    ----------
+    sun_el_max
+        Maximum elevation of the sun to keep.
+    moon_el_max
+        Maximum elevation of the moon to keep.
+    ambient_humidity_max
+        Maximum ambient humidity to keep.
+    min_receiver_temp
+        Minimum receiver temperature to keep.
+    max_receiver_temp
+        Maximum receiver temp to keep.
+    adcmax_max
+        Maximum adcmax level to keep.
+
+    Returns
+    -------
+    flags
+        Boolean array giving which entries are bad.
+    """
+    return time_filter_auxiliary(
+        gha=data.ancillary["gha"],
+        sun_el=data.ancillary["sun_el"],
+        moon_el=data.ancillary["moon_el"],
+        humidity=data.ancillary["ambient_hum"],
+        receiver_temp=data.ancillary["receiver_temp"],
+        adcmax=data.ancillary["adcmax"][:, 0],
+        sun_el_max=sun_el_max,
+        moon_el_max=moon_el_max,
+        amb_hum_max=ambient_humidity_max,
+        min_receiver_temp=min_receiver_temp,
+        max_receiver_temp=max_receiver_temp,
+        adcmax_max=adcmax_max,
+    )
+
+
+def _rfi_filter_factory(method: str):
+    def fnc(
+        *,
+        data: _ReductionStep,
+        flags: np.ndarray[bool],
+        n_threads: int = cpu_count(),
+        **kwargs,
+    ) -> np.ndarray:
+
+        return tools.run_xrfi(
+            method=method,
+            spectrum=data.spectrum,
+            freq=data.raw_frequencies,
+            flags=flags,
+            weights=data.weights,
+            n_threads=n_threads,
+            **kwargs,
+        )
+
+    fnc.__name__ = f"rfi_{method}_filter"
+
+    return step_filter(axis="both")(fnc)
+
+
+rfi_model_filter = _rfi_filter_factory("model")
+rfi_model_sweep_filter = _rfi_filter_factory("model_sweep")
+rfi_watershed_filter = _rfi_filter_factory("watershed")
+
+
+@step_filter(axis="freq")
+def rfi_explicit_filter(*, data: _ReductionStep, file: tp.PathLike | None = None):
+    """A filter of explicit channels of RFI."""
+    if file is None:
+        file = DATA_PATH / "known_rfi_channels.yaml"
+
+    return rfi.xrfi_explicit(
+        data.raw_frequencies,
+        rfi_file=file,
+    )
+
+
+@step_filter(axis="time", multi_data=True, data_type=CalibratedData)
+def rms_filter(
+    *,
+    data: Sequence[CalibratedData],
+    bands: Sequence[tuple[float, float]] = ((0, np.inf),),
+    model: Model = LinLog(n_terms=5),
+    **kwargs,
+) -> np.ndarray[bool]:
+    """Perform a filter on the RMS of an integration.
+
+    Parameters
+    ----------
+    band
+        A frequency range in which to fit the model and take the RMS.
+    model_type
+        The type of :class:`~edges_cal.modelling.Model` to fit to each spectrum.
+    model_kwargs
+        Other arguments to the model.
+    **kwargs
+        Other arguments to :func:`apply_gha_model_filter`.
+    """
+    flags = [
+        apply_gha_model_filter(
+            data=data,
+            aggregator=RMSAggregator(band=band, model=model),
+            **kwargs,
+        )
+        for band in bands
+    ]
+    return np.any(flags, axis=0)
+
+
+@step_filter(axis="time", multi_data=True, data_type=CalibratedData)
+def total_power_filter(
+    *,
+    data: Sequence[CalibratedData],
+    bands: Sequence[tuple[float, float]] = ((0, np.inf),),
+    **kwargs,
+):
+    """Perform a filter on the total power of an integration.
+
+    Parameters
+    ----------
+    band
+        A frequency range in which to fit the model and take the RMS.
+    **kwargs
+        Other arguments to :func:`apply_gha_model_filter`.
+    """
+    flags = [
+        apply_gha_model_filter(
+            data=data, aggregator=TotalPowerAggregator(band=band), **kwargs
+        )
+        for band in bands
+    ]
+
+    return [np.any([f[iday] for f in flags], axis=0) for iday in range(len(flags[0]))]
+
+
+@step_filter(axis="time", data_type=CalibratedData)
+def negative_power_filter(*, data: CalibratedData):
+    """Filter out integrations that have *any* negative/zero power.
+
+    These integrations obviously have some weird stuff going on.
+    """
+    return np.array([np.any(spec <= 0) for spec in data.spectrum])

@@ -5,7 +5,6 @@
 *.cfg
 !.isort.cfg
 !setup.cfg
-*.orig
 *.log
 *.pot
 __pycache__/*
@@ -50,3 +49,5 @@ MANIFEST
 
 devel/output/*
 pip-wheel-metadata/
+.vscode/
+.ipynb_checkpoints/

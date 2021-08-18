@@ -1,3 +1,4 @@
+"""Plotting utilities."""
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -5,6 +6,7 @@ from . import data_models as dm
 
 
 def plot_monte_carlo_receiver():
+    """Plot MC receiver."""
     plt.figure(1)
 
     f, r1, r2, t1, t2, t3, t4, m1, m2, m3, m4 = dm.MC_error_propagation()
@@ -84,6 +86,8 @@ def plot_monte_carlo_receiver():
 
 
 def plot_simulation_residuals(f, out, folder_plot, name_flag):
+    """Plot simulation residuals."""
+
     def plot_it(key, ylim_1, yticks_1, div_1, ylim_2=None, yticks_2=None, div_2=None):
         fig, ax = plt.subplots(1, 2, figsize=[13, 11], sharex=True)
 
@@ -106,7 +110,9 @@ def plot_simulation_residuals(f, out, folder_plot, name_flag):
         ax[1].set_ylabel(f"GHA\n [{div_2 or div_1} K per division]")
         ax[1].yaxis.yticks(yticks_2 or yticks_1, np.arange(5, -7, -1))
 
-        plt.savefig(folder_plot + name_flag + f"_simulated_{key}.pdf", bbox_inches="tight")
+        plt.savefig(
+            folder_plot + name_flag + f"_simulated_{key}.pdf", bbox_inches="tight"
+        )
 
     plot_it(
         "residuals",
@@ -117,7 +123,9 @@ def plot_simulation_residuals(f, out, folder_plot, name_flag):
         yticks_2=np.arange(-22, 0.1, 2),
         div_2=2,
     )
-    plot_it("correction", ylim_1=(-0.2, 1.1), yticks_1=np.arange(-0.1, 1.01, 0.1), div_1=0.1)
+    plot_it(
+        "correction", ylim_1=(-0.2, 1.1), yticks_1=np.arange(-0.1, 1.01, 0.1), div_1=0.1
+    )
     plot_it(
         "correction_residuals",
         ylim_1=(-0.06, 0.005),

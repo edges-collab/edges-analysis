@@ -3,10 +3,21 @@ Changelog
 
 Version dev
 -----------
+
 Added
 ~~~~~
 - Ability to fit fiducial models to frequency-binned spectra (residuals still evaluated
   at raw resolution).
+- Removal of ``FilteredData`` in favour of filtering adding flags to pre-existing level
+  data.
+- New ``filter`` CLI command.
+- ``from_cst`` beam function.
+
+Fixed
+~~~~~
+
+- Total power and RMS filters have been completely reworked and work much better now,
+  sharing code for simplicity.
 
 Changed
 ~~~~~~~
@@ -14,8 +25,10 @@ Changed
 
 Version 2.0.0
 -------------
+
 Added
 ~~~~~
+
 - Ability to pass arbitrary settings on the command line to the "level" command
 
 Changed

@@ -1,7 +1,7 @@
+"""Beam models and chromaticity corrections."""
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional, Tuple
 import logging
 import hashlib
 from methodtools import lru_cache
@@ -23,6 +23,7 @@ from ..config import config
 from .. import const
 from edges_cal import FrequencyRange
 from .data import BEAM_PATH
+from . import types as tp
 
 logger = logging.getLogger(__name__)
 
@@ -64,19 +65,21 @@ class Beam:
             Path to the file. Use :meth:`resolve_file` to get the absolute path
             from a a relative path (starting with ':').
         linear
-        theta_min
-        theta_max
+            Whether the beam values are in linear units (or decibels)
+        theta_min, theta_max
+            Min/Max of the zenith angle (degrees)
         theta_resolution
-        phi_min
-        phi_max
+            Resolution of the zenith angle.
+        phi_min, phi_max
+            Min/Max of the azimuth angles (degrees)
         phi_resolution
+            The resolution of the azimuth angle.
 
         Returns
         -------
         beam
             The beam object.
         """
-
         d = np.genfromtxt(path, skip_header=1, delimiter=",")
         theta = np.arange(theta_min, theta_max + theta_resolution, theta_resolution)
         phi = np.arange(phi_min, phi_max + phi_resolution, phi_resolution)
@@ -110,7 +113,8 @@ class Beam:
         )
 
     @classmethod
-    def from_wipld(cls, path: [str, Path], az_antenna_axis: float = 0) -> Beam:
+    def from_wipld(cls, path: tp.PathLike, az_antenna_axis: float = 0) -> Beam:
+        """Read a WIPL-D beam."""
         with open(path) as fn:
             file_length = 0
             number_of_frequencies = 0
@@ -127,7 +131,9 @@ class Beam:
                     number_of_columns = len(line_splitted)
                     flag_columns = True
 
-            rows_per_frequency = (file_length - number_of_frequencies) / number_of_frequencies
+            rows_per_frequency = (
+                file_length - number_of_frequencies
+            ) / number_of_frequencies
 
             output = np.zeros(
                 (
@@ -161,7 +167,9 @@ class Beam:
             out_2D = output[i, :, :]
 
             phi = out_2D[:, 0]
-            theta = 90 - out_2D[:, 1]  # theta is zero at the zenith, and goes to 180 deg
+            theta = (
+                90 - out_2D[:, 1]
+            )  # theta is zero at the zenith, and goes to 180 deg
             gain = out_2D[:, 6]
 
             theta_u = np.unique(theta)
@@ -261,9 +269,87 @@ class Beam:
         )
 
     @classmethod
+    def from_cst(
+        cls,
+        file_name_prefix: tp.PathLike,
+        f_low: int = 40,
+        f_high: int = 100,
+        freq_p: int = 61,
+        theta_p: float = 181,
+        phi_p: float = 361,
+        az_antenna_axis: float = 0,
+    ) -> Beam:
+        """
+        Read a CST beam file.
+
+        Parameters
+        ----------
+        filename
+            The path to the file.
+        az_antenna_axis
+            The azimuth of the primary antenna axis, in degrees.
+        f_low, f_high
+            lower and higher frequency bounds
+        freq_p
+            Number of frequency points in the simulation file.
+        theta_p
+            Number of zenith angle points in the simulation file.
+        phi_p
+            Number of azimuth points in the simulation file.
+
+        Returns
+        -------
+        beam
+            The beam object.
+        """
+        phi_t = np.zeros((freq_p, theta_p * phi_p))
+        frequency = np.linspace(f_low, f_high, freq_p)
+        beam_square = np.zeros((freq_p, theta_p, phi_p))
+        res = (f_high - f_low) / (freq_p - 1)
+
+        for i in range(freq_p):
+            n = int(i * res + f_low)
+            fc_file = open(
+                file_name_prefix + "farfield (f=" + str(n) + ") [1].txt", "rb"
+            )  #
+            for x, line in enumerate(fc_file):
+                if x > 1:
+                    check = 0
+                    for o in range(len(line)):
+
+                        if line[o] != "":
+                            check = check + 1
+                            if check == 3:
+                                phi_t[i][x - 2] = float(line.split()[2])
+
+            fc_file.close()
+        for i in range(freq_p):
+            for x in range(phi_p):
+                beam_square[i, :, x] = phi_t[i, x * theta_p : (x + 1) * theta_p]
+            beam_square[i, :, 0 : int(phi_p / 2)] = beam_square[
+                i, :, int(phi_p / 2) : phi_p - 1
+            ]
+
+        freq = FrequencyRange(np.array(frequency))
+        beam_square[:, 91:, :] = 0
+        beam_maps = np.flip(beam_square[:, :91, :360], axis=1)
+        # Shifting beam relative to true AZ (referenced at due North)
+        # Due to angle of orientation of excited antenna panels relative to due North
+        beam_maps = cls.shift_beam_maps(az_antenna_axis, beam_maps)
+
+        return Beam(
+            frequency=freq.freq,
+            beam=beam_maps,
+            azimuth=np.arange(0, 360),
+            elevation=np.arange(0, 91),
+            simulator="cst",
+            raw_file=file_name_prefix,
+        )
+
+    @classmethod
     def from_feko_raw(
         cls,
-        file_name_prefix: [str, Path],
+        file_name_prefix: tp.PathLike,
         ext: str = "txt",
         f_low: int = 40,
         f_high: int = 100,
@@ -281,18 +367,19 @@ class Beam:
             The path to the file.
         az_antenna_axis
             The azimuth of the primary antenna axis, in degrees.
-        f_low and f_high: lower and higher frequency bounds
-        freq_p: No of frequency points in the file for which the simulation was carried out for
-        theta_p: no.of the theta points the simulation was carried out for
-        phi_p: No of phi points the simulation was carried out for
+        f_low, f_high
+            lower and higher frequency bounds
+        freq_p
+            Number of frequency points in the simulation file.
+        theta_p
+            Number of zenith angle points in the simulation file.
+        phi_p
+            Number of azimuth points in the simulation file.
 
         Returns
         -------
-        beam_maps
-            A ``(Nfreq, Nel, Naz)`` array giving values of the beam. Note that elevation
-            and azimuth are always in 1-degree increments.
-        freq
-            The frequencies at which the beam is defined.
+        beam
+            The beam object.
         """
         beam_square = np.zeros((freq_p, theta_p, phi_p))
         frequency = np.linspace(f_low, f_high, freq_p)
@@ -301,7 +388,9 @@ class Beam:
         f3 = open(file_name_prefix + "_181-270." + ext)
         f4 = open(file_name_prefix + "_271-360." + ext)
 
-        z = 181 * 91 + 10  # ---> change this to no.of theta * no.of phi + No.of header lines
+        z = (
+            181 * 91 + 10
+        )  # ---> change this to no.of theta * no.of phi + No.of header lines
 
         for index, line in enumerate(f1):
             if index % z == 0:
@@ -318,7 +407,9 @@ class Beam:
                 co = 0
             if index % z >= 10:
                 x = list(map(float, line.split()))
-                beam_square[int(index / z), co % 181, int(co / 181) + 91] = 10 ** (x[8] / 10)
+                beam_square[int(index / z), co % 181, int(co / 181) + 91] = 10 ** (
+                    x[8] / 10
+                )
                 co += 1
 
         for index, line in enumerate(f3):
@@ -326,7 +417,9 @@ class Beam:
                 co = 0
             if index % z >= 10:
                 x = list(map(float, line.split()))
-                beam_square[int(index / z), co % 181, int(co / 181) + 181] = 10 ** (x[8] / 10)
+                beam_square[int(index / z), co % 181, int(co / 181) + 181] = 10 ** (
+                    x[8] / 10
+                )
                 co += 1
 
         for index, line in enumerate(f4):
@@ -334,7 +427,9 @@ class Beam:
                 co = 0
             if index % z >= 10:
                 x = list(map(float, line.split()))
-                beam_square[int(index / z), co % 181, int(co / 181) + 271] = 10 ** (x[8] / 10)
+                beam_square[int(index / z), co % 181, int(co / 181) + 271] = 10 ** (
+                    x[8] / 10
+                )
                 co += 1
 
         freq = FrequencyRange(np.array(frequency))
@@ -354,13 +449,14 @@ class Beam:
         )
 
     @classmethod
-    def get_beam_path(cls, band: str, kind: Optional[str] = None) -> Path:
+    def get_beam_path(cls, band: str, kind: str | None = None) -> Path:
+        """Get a standard path to a beam file."""
         pth = BEAM_PATH / band / "default.txt" if not kind else kind + ".txt"
         if not pth.exists():
             raise FileNotFoundError(f"No beam exists for band={band}.")
         return pth
 
-    def at_freq(self, freq: [np.ndarray]) -> Beam:
+    def at_freq(self, freq: np.ndarray) -> Beam:
         """
         Interpolate the beam to a new set of frequencies.
 
@@ -375,7 +471,9 @@ class Beam:
             The Beam object at the new frequencies.
         """
         if len(self.frequency) < 3:
-            raise ValueError("Can't freq-interpolate beam that has fewer than three frequencies.")
+            raise ValueError(
+                "Can't freq-interpolate beam that has fewer than three frequencies."
+            )
 
         freq_obj = FrequencyRange(self.frequency)
 
@@ -388,11 +486,28 @@ class Beam:
                 model = np.polyval(par, freq_obj.normalize(freq))
                 interp_beam[:, j, i] = model
         return Beam(
-            frequency=freq, azimuth=self.azimuth, elevation=self.elevation, beam=interp_beam
+            frequency=freq,
+            azimuth=self.azimuth,
+            elevation=self.elevation,
+            beam=interp_beam,
         )
 
     @staticmethod
-    def shift_beam_maps(az_antenna_axis, beam_maps):
+    def shift_beam_maps(az_antenna_axis: float, beam_maps: np.ndarray):
+        """Rotate beam maps around an axis.
+
+        Parameters
+        ----------
+        az_antenna_axis
+            The aximuth angle of the antenna axis.
+        beam_maps
+            Beam maps as a function of frequency, za and az.
+
+        Returns
+        -------
+        beam maps
+            Array of the same shape as the input, but rotated.
+        """
         if az_antenna_axis < 0:
             index = -az_antenna_axis
             bm1 = beam_maps[:, :, index::]
@@ -409,11 +524,12 @@ class Beam:
     @classmethod
     def resolve_file(
         cls,
-        path: [str, Path],
-        band: [None, str] = None,
+        path: tp.PathLike,
+        band: str | None = None,
         configuration: str = "default",
         simulator: str = "feko",
     ) -> Path:
+        """Resolve a file path to a standard location."""
         if str(path) == ":":
             if band is None:
                 raise ValueError("band must be given if path starts with a colon (:)")
@@ -435,12 +551,13 @@ class Beam:
     @classmethod
     def from_file(
         cls,
-        band: [None, str],
+        band: str | None,
         simulator: str = "feko",
-        beam_file: [str, Path] = ":",
-        configuration: [str] = "default",
+        beam_file: tp.PathLike = ":",
+        configuration: str = "default",
         rotation_from_north: float = 90,
     ) -> Beam:
+        """Read a beam from file."""
         beam_file = cls.resolve_file(beam_file, band, configuration, simulator)
 
         if simulator == "feko":
@@ -473,17 +590,25 @@ class Beam:
             beam = beam[:-1]
 
         spl = spi.RectSphereBivariateSpline(
-            el, self.azimuth * np.pi / 180, beam, pole_values=(None, beam[-1]), pole_exact=True
+            el,
+            self.azimuth * np.pi / 180,
+            beam,
+            pole_values=(None, beam[-1]),
+            pole_exact=True,
         )
-        return lambda az, el: spl(el * np.pi / 180 + np.pi / 2, az * np.pi / 180, grid=False)
+        return lambda az, el: spl(
+            el * np.pi / 180 + np.pi / 2, az * np.pi / 180, grid=False
+        )
 
-    def between_freqs(self, low=0, high=np.inf):
+    def between_freqs(self, low=0, high=np.inf) -> Beam:
+        """Return a new :class:`Beam` object restricted a given frequency range."""
         mask = (self.frequency >= low) & (self.frequency <= high)
         return attr.evolve(self, frequency=self.frequency[mask], beam=self.beam[mask])
 
-    def beam_solid_angle(self):
-        # Theta vector valid for the FEKO beams. In the beam, dimension 1 increases from index 0 to
-        # 90 corresponding to elevation, which is 90-theta
+    def get_beam_solid_angle(self) -> float:
+        """Calculate the integrated beam solid angle."""
+        # Theta vector valid for the FEKO beams. In the beam, dimension 1 increases
+        # from index 0 to 90 corresponding to elevation, which is 90-theta
         theta = self.elevation[::-1]
 
         sin_theta = np.sin(theta * (np.pi / 180))
@@ -543,7 +668,7 @@ def sky_convolution_generator(
     ref_time: apt.Time = REFERENCE_TIME,
 ):
     """
-    Iterate through given LSTs and generate a beam*sky convolution at each frequency and LST.
+    Iterate through given LSTs and generate a beam*sky product at each freq and LST.
 
     This is a generator, so it will yield a single item at a time (to save on memory).
 
@@ -586,15 +711,17 @@ def sky_convolution_generator(
     --------
     Use this function as follows:
 
-    >>> for i, j, mean_temp, conv_temp, sky, beam, time, n_pixels in sky_convolution_generator():
-    >>>     print(mean_conv_temp)
+    >>> for i, j, mean_t, conv_t, sky, bm, time, npix in sky_convolution_generator():
+    >>>     print(conv_t)
     """
     sky_map = sky_model.at_freq(
         beam.frequency,
         index_model=index_model,
     )
 
-    ground_gain = ground_loss(ground_loss_file, band=beam.instrument, freq=beam.frequency)
+    ground_gain = ground_loss(
+        ground_loss_file, band=beam.instrument, freq=beam.frequency
+    )
     galactic_coords = sky_model.get_sky_coords()
 
     # Get the local times corresponding to the given LSTs
@@ -639,7 +766,9 @@ def sky_convolution_generator(
                 solid_angle = np.nansum(beam_above_horizon) / n_pix_tot_no_nan
                 beam_above_horizon *= ground_gain[j] / solid_angle
 
-            antenna_temperature_above_horizon = beam_above_horizon * sky_above_horizon[:, j]
+            antenna_temperature_above_horizon = (
+                beam_above_horizon * sky_above_horizon[:, j]
+            )
 
             yield (
                 i,
@@ -662,8 +791,8 @@ def simulate_spectra(
     sky_model: sky_models.SkyModel = sky_models.Haslam408(),
     index_model: sky_models.IndexModel = sky_models.ConstantIndex(),
     lsts: np.ndarray = None,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Simulate global spectra from sky and beam models.
 
     Parameters
     ----------
@@ -675,17 +804,18 @@ def simulate_spectra(
         A file pointing to a ground-loss model. By default, gets the default ground loss
         model for the given ``band``.
     f_low
-        Minimum frequency to keep in the simulation (frequencies otherwise defined by the
-        beam).
+        Minimum frequency to keep in the simulation (frequencies otherwise defined by
+        the beam).
     f_high
-        Maximum frequency to keep in the simulation (frequencies otherwise defined by the
-        beam).
+        Maximum frequency to keep in the simulation (frequencies otherwise defined by
+        the beam).
     normalize_beam
         Whether to normalize the beam to be maximum unity.
     sky_model
         A sky model to use.
     index_model
-        An :class:`IndexModel` to use to generate different frequencies of the sky model.
+        An :class:`IndexModel` to use to generate different frequencies of the sky
+        model.
     lsts
         The LSTs at which to simulate
 
@@ -735,17 +865,18 @@ def antenna_beam_factor(
         A file pointing to a ground-loss model. By default, gets the default ground loss
         model for the given ``band``.
     f_low
-        Minimum frequency to keep in the simulation (frequencies otherwise defined by the
-        beam).
+        Minimum frequency to keep in the simulation (frequencies otherwise defined by
+        the beam).
     f_high
-        Maximum frequency to keep in the simulation (frequencies otherwise defined by the
-        beam).
+        Maximum frequency to keep in the simulation (frequencies otherwise defined by
+        the beam).
     normalize_beam
         Whether to normalize the beam to be maximum unity.
     sky_model
         A sky model to use.
     index_model
-        An :class:`IndexModel` to use to generate different frequencies of the sky model.
+        An :class:`IndexModel` to use to generate different frequencies of the sky
+        model.
     twenty_min_per_lst
         How many periods of twenty minutes fit into each LST bin.
     save_dir
@@ -824,9 +955,9 @@ def antenna_beam_factor(
 
     if save_fname is None:
         hsh = hashlib.md5(repr(out["meta"]).encode()).hexdigest()
-        save_fname = (
-            save_dir
-            / f"{beam.simulator}_{sky_model.__class__.__name__}_ref{reference_frequency:.2f}_{hsh}.h5"
+        save_fname = save_dir / (
+            f"{beam.simulator}_{sky_model.__class__.__name__}_"
+            f"ref{reference_frequency:.2f}_{hsh}.h5"
         )
 
     logger.info(f"Writing out beam file to {save_fname}")
@@ -847,20 +978,21 @@ class InterpolatedBeamFactor(HDF5Object):
     def from_beam_factor(
         cls,
         beam_factor_file,
-        band: Optional[str] = None,
-        lst_new: Optional[np.ndarray] = None,
-        f_new: Optional[np.ndarray] = None,
+        band: str | None = None,
+        lst_new: np.ndarray | None = None,
+        f_new: np.ndarray | None = None,
     ):
         """
         Interpolate beam factor to a new set of LSTs and frequencies.
 
-        The LST interpolation is done using `griddata`, whilst the frequency interpolation
-        is done using a polynomial fit.
+        The LST interpolation is done using `griddata`, whilst the frequency
+        interpolation is done using a polynomial fit.
 
         Parameters
         ----------
         beam_factor_file : path
-            Path to a file containing beam factors produced by :func:`antenna_beam_factor`.
+            Path to a file containing beam factors produced by
+            :func:`antenna_beam_factor`.
             If just a filename (no path), the `beams/band/beam_factors/` directory will
             be searched (dependent on the configured "beams" directory).
         band : str, optional
@@ -868,12 +1000,16 @@ class InterpolatedBeamFactor(HDF5Object):
         lst_new : array-like, optional
             The LSTs to interpolate to. By default, keep same LSTs as input.
         f_new : array-like, optional
-            The frequencies to interpolate to. By default, keep same frequencies as input.
+            The frequencies to interpolate to. By default, keep same frequencies as
+            input.
         """
         beam_factor_file = Path(beam_factor_file).expanduser()
         if str(beam_factor_file).startswith(":"):
             beam_factor_file = (
-                Path(config["paths"]["beams"]) / band / "beam_factors" / str(beam_factor_file)[1:]
+                Path(config["paths"]["beams"])
+                / band
+                / "beam_factors"
+                / str(beam_factor_file)[1:]
             )
 
         if not beam_factor_file.exists():
@@ -907,7 +1043,9 @@ class InterpolatedBeamFactor(HDF5Object):
         else:
             beam_factor_freq = beam_factor_lst
 
-        return cls.from_data({"beam_factor": beam_factor_freq, "frequency": freq, "lst": lst})
+        return cls.from_data(
+            {"beam_factor": beam_factor_freq, "frequency": freq, "lst": lst}
+        )
 
     def evaluate(self, lst):
         """Fast nearest-neighbour evaluation of the beam factor for a given LST."""

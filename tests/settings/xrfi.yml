@@ -1,0 +1,9 @@
+# How to filter out RFI
+- rfi_model_filter:
+    n_resid: 3
+    threshold: 4
+    max_iter: 20
+    increase_order: false
+    decrement_threshold: 0
+    min_threshold: 3
+    watershed: 4
