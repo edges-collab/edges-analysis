@@ -894,7 +894,7 @@ def aux_filter(
         moon_el=data.ancillary["moon_el"],
         humidity=data.ancillary["ambient_hum"],
         receiver_temp=data.ancillary["receiver_temp"],
-        adcmax=data.ancillary["adcmax"],
+        adcmax=data.ancillary["adcmax"][:, 0],
         sun_el_max=sun_el_max,
         moon_el_max=moon_el_max,
         amb_hum_max=ambient_humidity_max,

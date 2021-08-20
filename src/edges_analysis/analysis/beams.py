@@ -21,7 +21,10 @@ from edges_io.h5 import HDF5Object
 
 from ..config import config
 from .. import const
-from edges_cal import FrequencyRange
+from edges_cal import (
+    FrequencyRange,
+    modelling as mdl,
+)
 from .data import BEAM_PATH
 from . import types as tp
 
@@ -492,6 +495,40 @@ class Beam:
             beam=interp_beam,
         )
 
+    def smoothed(
+        self,
+        model: mdl.Model = mdl.Polynomial(n_terms=12),
+    ) -> Beam:
+        """
+        Smoothes the beam within its same set of frequencies.
+
+        ----------
+
+        Returns
+        -------
+        beam
+            The Beam object smoothed over its same frequencies.
+        """
+        if len(self.frequency) < 3:
+            raise ValueError(
+                "Can't freq-interpolate beam that has fewer than three frequencies."
+            )
+
+        # Frequency smoothing
+        smooth_beam = np.zeros_like(self.beam)
+
+        for i, bm in enumerate(self.beam.T):
+            for j, b in enumerate(bm):
+                cached_model = model.at(x=self.frequency)
+                model_fit = cached_model.fit(ydata=b)
+                smooth_beam[:, j, i] = model_fit.evaluate()
+        return Beam(
+            frequency=self.frequency,
+            azimuth=self.azimuth,
+            elevation=self.elevation,
+            beam=smooth_beam,
+        )
+
     @staticmethod
     def shift_beam_maps(az_antenna_axis: float, beam_maps: np.ndarray):
         """Rotate beam maps around an axis.
@@ -664,7 +701,8 @@ def sky_convolution_generator(
     sky_model: sky_models.SkyModel,
     index_model: sky_models.IndexModel,
     normalize_beam: bool,
-    beam_interpolation: bool,
+    beam_smoothing: bool,
+    smoothing_model: mdl.Model,
     location: apc.EarthLocation = const.edges_location,
     ref_time: apt.Time = REFERENCE_TIME,
 ):
@@ -717,8 +755,8 @@ def sky_convolution_generator(
     >>> for i, j, mean_t, conv_t, sky, bm, time, npix in sky_convolution_generator():
     >>>     print(conv_t)
     """
-    if beam_interpolation:
-        beam = beam.at_freq(beam.frequency)
+    if beam_smoothing:
+        beam = beam.smoothed(smoothing_model)
     sky_map = sky_model.at_freq(
         beam.frequency,
         index_model=index_model,
@@ -796,9 +834,9 @@ def simulate_spectra(
     sky_model: sky_models.SkyModel = sky_models.Haslam408(),
     index_model: sky_models.IndexModel = sky_models.ConstantIndex(),
     lsts: np.ndarray = None,
-    beam_interpolation: bool = True,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-
+    beam_smoothing: bool = True,
+    smoothing_model: mdl.Model = mdl.Polynomial(n_terms=12),
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Simulate global spectra from sky and beam models.
 
@@ -842,7 +880,14 @@ def simulate_spectra(
 
     antenna_temperature_above_horizon = np.zeros((len(lsts), len(beam.frequency)))
     for i, j, temperature, _, _, _, _, _ in sky_convolution_generator(
-        lsts, ground_loss_file, beam, sky_model, index_model, normalize_beam, beam_interpolation
+        lsts,
+        ground_loss_file,
+        beam,
+        sky_model,
+        index_model,
+        normalize_beam,
+        beam_smoothing,
+        smoothing_model,
     ):
         antenna_temperature_above_horizon[i, j] = temperature
 
