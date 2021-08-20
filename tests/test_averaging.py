@@ -37,7 +37,7 @@ def test_get_binned_weights_more_bins():
 
 
 FREQ = np.linspace(50, 100, 500)
-LINLOG = mdl.LinLog(n_terms=5, default_x=FREQ)
+LINLOG = mdl.LinLog(n_terms=5).at(x=FREQ)
 N_GHA = 50
 FID_PARAMS = np.array([2500, 0, 0, 5, 1])
 
@@ -87,7 +87,7 @@ def test_model_bin_gha(params, weights, refit):
     model, data, sigma = make_data(params, weights)
 
     if refit:
-        refit_mdl = mdl.LinLog(n_terms=refit, default_x=FREQ)
+        refit_mdl = LINLOG.with_nterms(refit)
         fits = [
             refit_mdl.fit(d, weights=ww) if np.any(ww > 0) else None
             for d, ww in zip(data, weights)

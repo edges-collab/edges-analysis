@@ -3,35 +3,50 @@ from edges_analysis.analysis import (
     CombinedData,
     DayAveragedData,
     BinnedData,
-    FilteredData,
     ModelData,
 )
 from typing import List
 import dill as pickle
+import numpy as np
 
 
 def test_calibrate_step(cal_step: List[CalibratedData]):
-    assert cal_step[0].raw_frequencies.shape == (8192,)
-    assert cal_step[1].raw_frequencies.shape == (8192,)
+    assert cal_step[0].raw_frequencies.shape == (8193,)
+    assert cal_step[1].raw_frequencies.shape == (8193,)
 
     # Ensure it's pickleable
     pickle.dumps(cal_step[0])
 
+    # ensure plotting functions don't error
+    cal_step[0].plot_waterfalls()
+    cal_step[0].plot_time_averaged_spectrum()
+    cal_step[0].plot_s11()
 
-def test_filter_step(filter_step: List[FilteredData]):
-    assert filter_step[0].raw_frequencies.shape == (8192,)
-    assert filter_step[1].raw_frequencies.shape == (8192,)
+    assert (
+        len(cal_step[0].lst)
+        == len(cal_step[0].gha)
+        == len(cal_step[0].raw_time_data)
+        == len(cal_step[0].datetimes)
+    )
 
-    # Ensure it's pickleable
-    pickle.dumps(filter_step)
+
+def test_filtering(cal_step: CalibratedData):
+    assert cal_step[0].raw_frequencies.shape == (8193,)
+    assert cal_step[1].raw_frequencies.shape == (8193,)
+    assert not np.all(cal_step[0].weights == cal_step[0].raw_weights)
+    assert len(cal_step[0].filters_applied) == 1
+    assert "rfi_model_filter" in cal_step[0].filters_applied
 
 
 def test_model_step(model_step: List[ModelData]):
-    assert model_step[0].raw_frequencies.shape == (8192,)
-    assert model_step[1].raw_frequencies.shape == (8192,)
+    assert model_step[0].raw_frequencies.shape == (8193,)
+    assert model_step[1].raw_frequencies.shape == (8193,)
 
     # Ensure it's pickleable
     pickle.dumps(model_step)
+
+    m = model_step[0]
+    assert m.model_nterms == 5
 
 
 def test_combine_step(combo_step: CombinedData):
@@ -43,6 +58,7 @@ def test_combine_step(combo_step: CombinedData):
 
     # just run some plotting methods to make sure they don't error...
     combo_step.plot_daily_residuals(freq_resolution=1.0, gha_max=18, gha_min=6)
+    combo_step.plot_waterfall(day=292)
 
 
 def test_day_step(day_step: DayAveragedData):
@@ -50,6 +66,11 @@ def test_day_step(day_step: DayAveragedData):
     assert day_step.spectrum.shape == day_step.resids.shape
     # Ensure it's pickleable
     pickle.dumps(day_step)
+
+    f, s, w = day_step.fully_averaged_spectrum()
+    assert len(f) == len(s) == len(w) == len(day_step.raw_frequencies)
+
+    day_step.plot_resids()
 
 
 def test_bin_step(gha_step: BinnedData):
@@ -59,3 +80,5 @@ def test_bin_step(gha_step: BinnedData):
 
     # Ensure it's pickleable
     pickle.dumps(gha_step)
+
+    gha_step.plot_resids()

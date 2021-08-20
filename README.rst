@@ -2,6 +2,15 @@
 edges-analysis
 ==============
 
+.. image:: https://github.com/edges-collab/edges-analysis/actions/workflows/test_suite.yaml/badge.svg
+  :target: https://github.com/edges-collab/edges-analysis/actions/workflows/test_suite.yaml
+.. image:: https://readthedocs.org/projects/edges-analysis/badge/?version=stable
+  :target: https://edges-analysis.readthedocs.io/en/stable/?badge=stable
+.. image:: https://codecov.io/gh/edges-collab/edges-analysis/branch/master/graph/badge.svg
+  :target: https://codecov.io/gh/edges-collab/edges-analysis
+.. image:: https://img.shields.io/badge/code%20style-black-000000.svg"
+  :target: https://github.com/psf/black
+
 **Code for analysing EDGES field data.**
 
 ``edges-analysis`` has methods for averaging, filtering and calibrating EDGES data

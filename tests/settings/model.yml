@@ -1,2 +1,3 @@
-model_nterms: 5
-model_basis: linlog
+model: !Model
+  n_terms: 5
+  model: linlog

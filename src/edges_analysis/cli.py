@@ -342,6 +342,9 @@ def promote(
     settings: dict,
 ) -> List[Path]:
     """Calibrate field data to produce CalibratedData files."""
+    if not input_files:
+        raise ValueError("No input files!")
+
     if step_cls._multi_input:
         data = step_cls.promote(prev_step=input_files, **settings)
         data.write(output_dir / output_fname[0])
@@ -361,13 +364,20 @@ def promote(
             return fname
 
         if len(input_files) == 1:
-            out = [_pro(input_files[0], output_fname[0])]
+            out = [
+                _pro(infile, outfile)
+                for infile, outfile in zip(input_files, output_fname)
+            ]
         else:
-            out = list(
-                p_tqdm.p_umap(
-                    _pro, input_files, output_fname, unit="files", num_cpus=nthreads
-                )
-            )
+            if nthreads > 1:
+
+                def prg(fnc, x, y, **args):
+                    return p_tqdm.p_map(fnc, x, y, num_cpus=nthreads, **args)
+
+            else:
+                prg = p_tqdm.t_map
+
+            out = list(prg(_pro, input_files, output_fname, unit="files"))
         return [o for o in out if o is not None]
 
 
@@ -404,8 +414,16 @@ def promote(
     (but may be applied to different input files).
     """,
 )
-@click.pass_context
-def filter(ctx, settings, path, nthreads, flag_idx, label):  # noqa: A001
+@click.option(
+    "-c/-C",
+    "--clobber/--no-clobber",
+    default=False,
+    help="""Whether to clobber files -- only applies if flag-idx is applied and a label
+    is given, and the label already exists. If False, the program will interactively
+    ask.
+    """,
+)
+def filter(settings, path, nthreads, flag_idx, label, clobber):  # noqa: A001
     """Filter a dataset using SETTINGS.
 
     SETTINGS
@@ -477,7 +495,10 @@ def filter(ctx, settings, path, nthreads, flag_idx, label):  # noqa: A001
             output_dir /= label
 
             if output_dir.exists():
-                if qs.confirm(f"The label '{label}' already exists. Remove?").ask():
+                if (
+                    clobber
+                    or qs.confirm(f"The label '{label}' already exists. Remove?").ask()
+                ):
                     shutil.rmtree(output_dir)
                 else:
                     logger.info("OK. Exiting")
@@ -490,10 +511,13 @@ def filter(ctx, settings, path, nthreads, flag_idx, label):  # noqa: A001
 
             input_files = [output_dir / fl.name for fl in input_files]
             input_data = [levels.read_step(fl) for fl in input_files]
-        elif not qs.confirm(
-            "Using flag_idx without a label removes flagging steps in place. "
-            "Is this really what you want?"
-        ).ask():
+        elif not (
+            clobber
+            or qs.confirm(
+                "Using flag_idx without a label removes flagging steps in place. "
+                "Is this really what you want?"
+            ).ask()
+        ):
             logger.info("OK. Exiting.")
 
         for d in input_data:

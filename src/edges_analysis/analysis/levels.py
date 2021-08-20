@@ -331,6 +331,9 @@ class _ReductionStep(HDF5Object):
 
     def get_weights(self, filt: str | int | None = None) -> np.ndarray[float]:
         """Get the weights of the data after taking account of some flags."""
+        if filt in {"old", "initial"}:
+            return self.raw_weights
+
         return np.where(self.get_flags(filt), 0, self.raw_weights)
 
     @property
@@ -409,6 +412,9 @@ class _ReductionStep(HDF5Object):
         flags
             The array of flags.
         """
+        if filt in {"initial", "old"}:
+            return self.raw_weights == 0
+
         try:
             filt = self._get_filter_index(filt)
             with self.open() as fl:
@@ -662,13 +668,14 @@ class _SingleDayMixin:
 
         if resolution:
             f, s, w = self.bin_in_frequency(resolution=resolution, weights=weights)
+            model = model.at(x=f[0])
         else:
             f, s, w = self.raw_frequencies, self.spectrum, weights
             mask = (f >= freq_range[0]) & (f < freq_range[1])
             f = f[mask]
             s = s[:, mask]
             w = w[:, mask]
-        model = model.at(x=f)
+            model = model.at(x=f)
 
         def get_params(indx, model):
             ss = s[indx]
@@ -692,6 +699,28 @@ class _SingleDayMixin:
 
         params = np.array([get_params(indx, model) for indx in indices])
         return model, params
+
+    def get_model_residuals(
+        self,
+        params: np.ndarray | None = None,
+        indices: list[int] | None = None,
+        **kwargs,
+    ) -> np.ndarray:
+        if params is None:
+            model, params = self.get_model_parameters(resolution=0, **kwargs)
+        else:
+            try:
+                model = kwargs["model"].at(x=self.raw_frequencies)
+            except KeyError:
+                raise KeyError("You must supply 'model' if supplying params.")
+
+        if indices is None:
+            indices = range(len(self.spectrum))
+
+        # Index by indices so they have the same length as 'params'
+        spec = self.spectrum[indices]
+
+        return np.array([s - model(parameters=p) for s, p in zip(spec, params)])
 
     def get_model_rms(
         self,
@@ -729,30 +758,24 @@ class _SingleDayMixin:
         self-consistently with the weights  -- it uses :func:`~tools.bin_array` to do
         the binning, returning non-equi-spaced frequencies.
         """
-        model, params = self.get_model_parameters(
-            weights=weights,
-            indices=indices,
-            freq_range=freq_range,
-            resolution=0,
-            **model_kwargs,
+        resids = self.get_model_residuals(
+            indices=indices, freq_range=freq_range, **model_kwargs
         )
 
         if indices is None:
             indices = range(len(self.spectrum))
+
         if weights is None:
             weights = self.weights[indices]
 
         freq_mask = (self.raw_frequencies >= freq_range[0]) & (
             self.raw_frequencies < freq_range[1]
         )
-        # Index by indices so they have the same length as 'params'
-        spec = self.spectrum[indices][:, freq_mask]
 
         # access the default basis
         def _get_rms(indx):
             mask = weights[indx, freq_mask] > 0
-            resid = spec[indx] - model(parameters=params[indx])
-            return np.sqrt(np.nanmean(resid[mask] ** 2))
+            return np.sqrt(np.nanmean(resids[indx, mask] ** 2))
 
         return np.array([_get_rms(i) for i in range(len(indices))])
 
@@ -851,27 +874,35 @@ class _SingleDayMixin:
 
         return fig, ax
 
+    def bin_gha(
+        self, gha_bins=(0, 24), **model_kwargs
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        model, params = self.get_model_parameters(resolution=0, **model_kwargs)
+        resids = self.get_model_residuals(params=params, model=model.model)
+
+        p, r, w = averaging.bin_gha_unbiased_regular(
+            params=params,
+            resids=resids,
+            weights=self.weights,
+            gha=self.gha,
+            bins=gha_bins,
+        )
+        spec = [model(parameters=pp) + rr for pp, rr in zip(p, r)]
+        return np.squeeze(np.array(spec)), np.squeeze(r), np.squeeze(w)
+
     def plot_time_averaged_spectrum(
-        self,
-        quantity="spectrum",
-        integrator="mean",
-        ax: plt.Axes | None = None,
-        logy=True,
+        self, ax: plt.Axes | None = None, logy=True, gha_bins=(0, 24), **model_kwargs
     ):
         if ax is not None:
             fig = ax.figure
         else:
             fig, ax = plt.subplots(1, 1)
 
-        q, w = self.integrate_over_time(quantity=quantity, integrator=integrator)
+        spec, r, w = self.bin_gha(gha_bins, **model_kwargs)
 
-        unit = "[K]"
-        if quantity == "Q":
-            unit = ""
-
-        ax.plot(self.raw_frequencies, q)
+        ax.plot(self.raw_frequencies, spec)
         ax.set_xlabel("Frequency [MHz]")
-        ax.set_ylabel(f"{quantity} {unit}")
+        ax.set_ylabel("Average Spectrum [K]")
 
         if logy:
             ax.set_yscale("log")
@@ -991,13 +1022,11 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
         xrfi_pipe: dict | None = None,
         s11_file_pattern: str = r"{y}_{jd}_{h}_*_input{input}.s1p",
         ignore_s11_files: list[str] | None = None,
-        switch_state_dir: str | Path | None = None,
         antenna_s11_n_terms: int = 15,
         antenna_correction: str | Path | None = ":",
         balun_correction: str | Path | None = ":",
         ground_correction: str | Path | None | float = ":",
         beam_file=None,
-        switch_state_repeat_num: int | None = None,
     ) -> tuple[np.ndarray, dict, dict, dict]:
         """
         Create the object directly from calibrated data.
@@ -1125,14 +1154,21 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
 
         meta = {**meta, **new_meta}
         meta = {**meta, **cls._get_meta(locals())}
+        meta["s11_files"] = ":".join(str(fl) for fl in s11_files)
+
         data = {
             "spectrum": calspec,
-            "switch_powers": np.array([pp[freq.mask] for pp in p]),
+            "switch_powers": np.array([pp[freq.mask].T for pp in p]),
             "weights": np.ones_like(calspec),
-            "Q": q[freq.mask],
+            "Q": q[freq.mask].T,
         }
 
         return freq.freq, data, time_based_anc, meta
+
+    @property
+    def s11_files(self):
+        """The antenna S11 files used by the calibration."""
+        return self.meta["s11_files"].split(":")
 
     def get_subset(self, integrations=100):
         """Write a subset of the data to a new mock :class:`CalibratedData` file."""
@@ -1501,9 +1537,7 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
         return LabCalibration(
             calobs=self.calibration,
             s11_files=self.s11_files,
-            antenna_s11_n_terms=self.antenna_s11_n_terms,
-            switch_state_dir=self.meta["switch_state_dir"],
-            switch_state_repeat_num=self.meta["switch_state_repeat_num"],
+            antenna_s11_n_terms=self.meta["antenna_s11_n_terms"],
         )
 
     def antenna_s11_model(self, freq) -> Callable[[np.ndarray], np.ndarray]:
@@ -1959,12 +1993,12 @@ class CombinedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
     def plot_daily_residuals(
         self,
         separation: float = 20,
-        ax: [None, plt.Axes] = None,
+        ax: plt.Axes | None = None,
         gha_min: float = 0,
         gha_max: float = 24,
         freq_resolution: float | None = None,
         days: list[int] | None = None,
-        weights: np.ndarray | str | None = None,
+        weights: np.ndarray | str | int | None = None,
     ) -> plt.Axes:
         """
         Make a single plot of residuals for each day in the dataset.
@@ -1995,12 +2029,8 @@ class CombinedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         ax
             The matplotlib Axes on which the plot is made.
         """
-        if weights is None:
-            weights = self.weights
-        elif weights == "old":
-            weights = self.raw_weights
-        elif isinstance(weights, str):
-            weights = np.where(self.get_flags(weights), 0, self.raw_weights)
+        if not isinstance(weights, np.ndarray):
+            weights = self.get_weights(weights)
 
         gha = (self.ancillary["gha_edges"][1:] + self.ancillary["gha_edges"][:-1]) / 2
 
@@ -2051,12 +2081,11 @@ class CombinedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         self,
         day: int | None = None,
         indx: int | None = None,
-        flagged: bool = True,
         quantity: str = "spectrum",
         cmap: str | None = None,
         vmin: float | None = None,
         vmax: float | None = None,
-        weights: np.ndarray | str | None = None,
+        filt: str | int | None = None,
         ax: plt.Axes | None = None,
         cbar: bool = True,
         xlab: bool = True,
@@ -2073,8 +2102,6 @@ class CombinedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
             The calendar day to plot (eg. 237). Must exist in the dataset
         indx
             The index representing the day to plot. Can be passed instead of `day`.
-        flagged
-            Whether to render pixels that are flagged as NaN.
         quantity
             The quantity to plot -- must exist as an attribute and have the same shape
             as spectrum/resids/weights.
@@ -2086,10 +2113,6 @@ class CombinedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
             data symmetrically if plotting residuals (so that zeros are in the middle).
         vmax
             Same as vmin but the max.
-        weights
-            The weights to use for flagging. By default, use the weights of the object.
-            If 'old' is given, use the pre-filter weights. Otherwise, must be an array
-            the same size as the spectrum/resids.
 
         Other Parameters
         ----------------
@@ -2111,17 +2134,8 @@ class CombinedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         q = getattr(self, quantity)[indx]
         assert q.shape == self.resids[indx].shape
 
-        if flagged:
-            if weights is None:
-                weights = self.weights[indx]
-            elif weights == "old":
-                weights = self.raw_weights[indx]
-            elif isinstance(weights, str):
-                weights = np.where(
-                    self.get_flags(weights)[indx], 0, self.raw_weights[indx]
-                )
-
-            q = np.where(weights, q, np.nan)
+        flags = self.get_flags(filt)[indx]
+        q = np.where(flags, np.nan, q)
 
         if quantity == "resids":
             cmap = cmap or "coolwarm"
@@ -2177,25 +2191,6 @@ class CombinedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         """
         return self.days.tolist().index(day)
 
-    def plot_daily_rms(self):
-        """Plot all RMS diagnostic plots for all days."""
-        sqrtn = int(np.ceil(np.sqrt(len(self.days))))
-        fig, ax = plt.subplots(
-            sqrtn,
-            sqrtn,
-            sharey=True,
-            sharex=True,
-            figsize=(2 * sqrtn, 2 * sqrtn),
-            gridspec_kw={"hspace": 0.05, "wspace": 0.05},
-        )
-
-        for i, day in enumerate(self.days):
-            plt.sca(ax.flatten()[i])
-            obj = self.get_day(day).filter_step
-            obj.plot_rms_diagnosis(flagged=False)
-
-        return fig
-
 
 @add_structure
 class DayAveragedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
@@ -2250,7 +2245,6 @@ class DayAveragedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         """
         # Compute the residuals
         days = prev_step.days
-        freq = prev_step.freq
 
         if day_range is None:
             day_range = (days.min(), days.max())
@@ -2295,8 +2289,8 @@ class DayAveragedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         self,
         gha_min: float | None = None,
         gha_max: float | None = None,
-        weights: np.ndarray | str | None = None,
-        freq_resolution: [int, float] = 0,
+        weights: np.ndarray | str | int | None = None,
+        freq_resolution: int | float = 0,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Get a single fully averaged spectrum at a given frequency resolution.
@@ -2340,7 +2334,7 @@ class DayAveragedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         gha_min: float | None = None,
         gha_max: float | None = None,
         gha_bin_size: float = 1.0,
-        weights: np.ndarray | str | None = None,
+        weights: np.ndarray | str | int | None = None,
     ):
         """Bin the data in GHA bins."""
         if gha_min is None:
@@ -2356,19 +2350,17 @@ class DayAveragedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         ):
             gha_edges = np.concatenate((gha_edges, [gha_edges.max() + gha_bin_size]))
 
-        if weights is None:
-            weights = self.weights
-        elif weights == "old":
-            weights = self.raw_weights
-        elif isinstance(weights, str):
-            weights = np.where(self.get_flags(weights), 0, self.raw_weights)
+        if not isinstance(weights, np.ndarray):
+            weights = self.get_weights(weights)
 
         params, resids, weights = averaging.bin_gha_unbiased_regular(
             self.model_params, self.resids, weights, self.gha_centres, gha_edges
         )
         return params, resids, weights, gha_edges
 
-    def plot_waterfall(self, quantity="resids", flagged=True, weights=None, **kwargs):
+    def plot_waterfall(
+        self, quantity="resids", filt: str | int | None = None, **kwargs
+    ):
         """Plot a simple waterfall plot of time vs. frequency."""
         extent = (
             self.freq.min,
@@ -2377,16 +2369,10 @@ class DayAveragedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
             self.gha_edges.max(),
         )
 
-        if weights is None:
-            weights = self.weights
-        elif weights == "old":
-            weights = self.raw_weights
-        elif isinstance(weights, str):
-            weights = np.where(self.get_flags(weights), 0, self.raw_weights)
+        flags = self.get_flags(filt)
 
         q = getattr(self, quantity)
-        if flagged:
-            q = np.where(weights > 0, q, np.nan)
+        q = np.where(flags, np.nan, q)
 
         if quantity == "resids":
             cmap = kwargs.get("cmap", "coolwarm")
@@ -2402,7 +2388,7 @@ class DayAveragedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         self,
         gha_min: float | None = None,
         gha_max: float | None = None,
-        weights: np.ndarray | str | None = None,
+        weights: np.ndarray | str | int | None = None,
         gha_bin_size: float = 1.0,
         ax: plt.Axes = None,
         freq_resolution=0,
@@ -2597,7 +2583,7 @@ class BinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
 
     def plot_resids(
         self,
-        weights=None,
+        weights: np.ndarray | int | str | None = None,
         freq_resolution=0,
         separation=10,
         refit_model: mdl.Model | None = None,
@@ -2610,12 +2596,8 @@ class BinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         if ax is None:
             fig, ax = plt.subplots(1, 1, figsize=(7, 12))
 
-        if weights is None:
-            weights = self.weights
-        elif weights == "old":
-            weights = self.raw_weights
-        elif isinstance(weights, str):
-            weights = np.where(self.get_flags(weights), 0, self.raw_weights)
+        if not isinstance(weights, np.ndarray):
+            weights = self.get_weights(weights)
 
         for ix, (rr, ww) in enumerate(zip(self.resids, weights)):
             if np.sum(ww) == 0:
