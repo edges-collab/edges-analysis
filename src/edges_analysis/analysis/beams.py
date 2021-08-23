@@ -459,7 +459,11 @@ class Beam:
             raise FileNotFoundError(f"No beam exists for band={band}.")
         return pth
 
-    def at_freq(self, freq: np.ndarray) -> Beam:
+    def at_freq(
+        self,
+        freq: np.ndarray,
+        model: mdl.Model = mdl.Polynomial(n_terms=13),
+    ) -> Beam:
         """
         Interpolate the beam to a new set of frequencies.
 
@@ -478,16 +482,14 @@ class Beam:
                 "Can't freq-interpolate beam that has fewer than three frequencies."
             )
 
-        freq_obj = FrequencyRange(self.frequency)
-
         # Frequency interpolation
         interp_beam = np.zeros((len(freq), len(self.elevation), len(self.azimuth)))
-
+        cached_model = model.at(x=self.frequency)
         for i, bm in enumerate(self.beam.T):
             for j, b in enumerate(bm):
-                par = np.polyfit(freq_obj.freq_recentred, b, 13)
-                model = np.polyval(par, freq_obj.normalize(freq))
-                interp_beam[:, j, i] = model
+                model_fit = cached_model.fit(ydata=b)
+                interp_beam[i:, j, i] = model_fit.evaluate(freq)
+
         return Beam(
             frequency=freq,
             azimuth=self.azimuth,
@@ -516,10 +518,9 @@ class Beam:
 
         # Frequency smoothing
         smooth_beam = np.zeros_like(self.beam)
-
+        cached_model = model.at(x=self.frequency)
         for i, bm in enumerate(self.beam.T):
             for j, b in enumerate(bm):
-                cached_model = model.at(x=self.frequency)
                 model_fit = cached_model.fit(ydata=b)
                 smooth_beam[:, j, i] = model_fit.evaluate()
         return Beam(
