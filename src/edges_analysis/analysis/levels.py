@@ -704,23 +704,30 @@ class _SingleDayMixin:
         self,
         params: np.ndarray | None = None,
         indices: list[int] | None = None,
+        freq_range: tuple[float, float] = (0, np.inf),
         **kwargs,
     ) -> np.ndarray:
+        freq_mask = (self.raw_frequencies >= freq_range[0]) & (
+            self.raw_frequencies < freq_range[1]
+        )
         if params is None:
-            model, params = self.get_model_parameters(resolution=0, **kwargs)
+            model, params = self.get_model_parameters(
+                resolution=0, freq_range=freq_range, **kwargs
+            )
         else:
             try:
-                model = kwargs["model"].at(x=self.raw_frequencies)
+                f = self.raw_frequencies[freq_mask]
+                model = kwargs["model"].at(x=f)
             except KeyError:
                 raise KeyError("You must supply 'model' if supplying params.")
 
         if indices is None:
             indices = range(len(self.spectrum))
-
         # Index by indices so they have the same length as 'params'
         spec = self.spectrum[indices]
-
-        return np.array([s - model(parameters=p) for s, p in zip(spec, params)])
+        return np.array(
+            [s[freq_mask] - model(parameters=p) for s, p in zip(spec, params)]
+        )
 
     def get_model_rms(
         self,
