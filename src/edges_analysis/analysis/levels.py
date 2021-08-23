@@ -473,7 +473,7 @@ def read_step(
 
 def get_step_type(
     fname: tp.PathLike | _ReductionStep | io.HDF5RawSpectrum,
-) -> _ReductionStep | io.HDF5RawSpectrum:
+) -> type[_ReductionStep] | type[io.HDF5RawSpectrum]:
     """Read a filename as a processing reduction step.
 
     The function is idempotent, so calling it on a step object just returns the object.
@@ -2218,15 +2218,10 @@ class CombinedBinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
     """
     Object representing gha binned data after observed days are combined.
 
-    Given a sequence of :class:`ModelData` objects, this class combines them into one
-    file, aligning them in (ideally small) bins in GHA/LST.
-
     See :class:`_ReductionStep` for documentation about the various datasets within this
     class instance. Note that you can always check which data is inside each group by
     checking its ``.keys()``.
 
-    See :meth:`CombinedData.promote` for detailed information about the processes
-    involved in creating this data from :class:`Level1` objects.
     """
 
     _possible_parents = (CombinedData,)
