@@ -266,6 +266,7 @@ def process(ctx, step, settings, path, label, message, clobber, output, nthreads
     if step != "calibrate" and len({p.parent for p in input_files}) != 1:
         raise ValueError("Your input files do not come from a single processing.")
 
+    input_file_type = levels.get_step_type(input_files[0])
     # Get unique output directory
     if step == "calibrate":
         output_dir = Path(config["paths"]["field_products"]) / label
@@ -292,6 +293,9 @@ def process(ctx, step, settings, path, label, message, clobber, output, nthreads
         output = [p.name for p in input_files]
     else:
         output = None
+
+    if step == "bin" and input_file_type == levels.CombinedData:
+        step_cls = levels.CombinedBinnedData
 
     if output:
         for pth in output:

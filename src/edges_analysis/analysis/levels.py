@@ -468,7 +468,21 @@ def read_step(
     if fname.suffix == ".acq":
         return io.FieldSpectrum(fname).data
     else:
-        return _ReductionStep._get_object_class(fname)(fname)
+        return get_step_type(fname)(fname)
+
+
+def get_step_type(
+    fname: tp.PathLike | _ReductionStep | io.HDF5RawSpectrum,
+) -> _ReductionStep | io.HDF5RawSpectrum:
+    """Read a filename as a processing reduction step.
+
+    The function is idempotent, so calling it on a step object just returns the object.
+    """
+    fname = Path(fname)
+    if fname.suffix == ".acq":
+        return io.HDF5RawSpectrum
+    else:
+        return _ReductionStep._get_object_class(fname)
 
 
 class _ModelMixin:
@@ -1993,6 +2007,352 @@ class CombinedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
 
             params[i], resids[i], weights[i] = averaging.bin_gha_unbiased_regular(
                 model_params[i], model_resids[i], l1_weights, gha, gha_edges
+            )
+
+        return params, resids, weights, gha_edges
+
+    def plot_daily_residuals(
+        self,
+        separation: float = 20,
+        ax: plt.Axes | None = None,
+        gha_min: float = 0,
+        gha_max: float = 24,
+        freq_resolution: float | None = None,
+        days: list[int] | None = None,
+        weights: np.ndarray | str | int | None = None,
+    ) -> plt.Axes:
+        """
+        Make a single plot of residuals for each day in the dataset.
+
+        Parameters
+        ----------
+        separation
+            The separation between residuals in K (on the plot).
+        ax
+            An optional axis on which to plot.
+        gha_min
+            A minimum GHA to include in the averaged residuals.
+        gha_max
+            A maximum GHA to include in the averaged residuals.
+        freq_resolution
+            The frequency resolution to bin the spectra into for the plot. In same
+            units as the instance frequencies.
+        days
+            The integer day numbers to include in the plot. Default is to include
+            all days in the dataset.
+        weights
+            The weights to use for flagging. By default, use the weights of the object.
+            If 'old' is given, use the pre-filter weights. Otherwise, must be an array
+            the same size as the spectrum/resids.
+
+        Returns
+        -------
+        ax
+            The matplotlib Axes on which the plot is made.
+        """
+        if not isinstance(weights, np.ndarray):
+            weights = self.get_weights(weights)
+
+        gha = (self.ancillary["gha_edges"][1:] + self.ancillary["gha_edges"][:-1]) / 2
+
+        if ax is None:
+            fig, ax = plt.subplots(1, 1, figsize=(7, 12))
+
+        mask = (gha > gha_min) & (gha < gha_max)
+
+        for ix, (param, resid, weight, day) in enumerate(
+            zip(self.model_params, self.resids, weights, self.days)
+        ):
+            if np.sum(weight[mask]) == 0:
+                continue
+
+            # skip days not explicitly requested.
+            if days and day not in days:
+                continue
+
+            mean_p, mean_r, mean_w = averaging.bin_gha_unbiased_regular(
+                params=param[mask],
+                resids=resid[mask],
+                weights=weight[mask],
+                gha=gha[mask],
+                bins=np.array([gha_min, gha_max]),
+            )
+
+            if freq_resolution:
+                f, mean_r, mean_w = averaging.bin_freq_unbiased_irregular(
+                    mean_r, self.freq.freq, mean_w, resolution=freq_resolution
+                )
+                f = f[0]
+            else:
+                f = self.freq.freq
+
+            ax.plot(f, mean_r[0] - ix * separation)
+            rms = np.sqrt(
+                averaging.weighted_mean(data=mean_r[0] ** 2, weights=mean_w[0])[0]
+            )
+            ax.text(
+                self.freq.max + 5,
+                -ix * separation,
+                f"{day} RMS={rms:.2f}",
+            )
+
+        return ax
+
+    def plot_waterfall(
+        self,
+        day: int | None = None,
+        indx: int | None = None,
+        quantity: str = "spectrum",
+        cmap: str | None = None,
+        vmin: float | None = None,
+        vmax: float | None = None,
+        filt: str | int | None = None,
+        ax: plt.Axes | None = None,
+        cbar: bool = True,
+        xlab: bool = True,
+        ylab: bool = True,
+        title: bool = True,
+        **imshow_kwargs,
+    ):
+        """
+        Make a single waterfall plot of any 2D quantity (weights, spectrum, resids).
+
+        Parameters
+        ----------
+        day
+            The calendar day to plot (eg. 237). Must exist in the dataset
+        indx
+            The index representing the day to plot. Can be passed instead of `day`.
+        quantity
+            The quantity to plot -- must exist as an attribute and have the same shape
+            as spectrum/resids/weights.
+        cmap
+            The colormap to use. Default is to use 'coolwarm' for residuals (since it
+            is diverging) and 'magma' for spectra.
+        vmin
+            The minimum colorbar value to use. Auto-set to encompass the range of the
+            data symmetrically if plotting residuals (so that zeros are in the middle).
+        vmax
+            Same as vmin but the max.
+
+        Other Parameters
+        ----------------
+        Other parameters are passed through to ``plt.imshow``.
+        """
+        if day is not None:
+            indx = self.day_index(day)
+
+        if indx is None:
+            raise ValueError("Must either supply 'day' or 'indx'")
+
+        extent = (
+            self.freq.min,
+            self.freq.max,
+            self.ancillary["gha_edges"].min(),
+            self.ancillary["gha_edges"].max(),
+        )
+
+        q = getattr(self, quantity)[indx]
+        assert q.shape == self.resids[indx].shape
+
+        flags = self.get_flags(filt)[indx]
+        q = np.where(flags, np.nan, q)
+
+        if quantity == "resids":
+            cmap = cmap or "coolwarm"
+
+            if vmin is None:
+                vmin = -np.nanmax(np.abs(q))
+                vmax = -vmin
+        else:
+            cmap = cmap or "magma"
+
+        if ax:
+            plt.sca(ax)
+
+        plt.imshow(
+            q,
+            origin="lower",
+            aspect="auto",
+            extent=extent,
+            cmap=cmap,
+            vmin=vmin,
+            vmax=vmax,
+            interpolation=imshow_kwargs.pop("interpolation", "none"),
+            **imshow_kwargs,
+        )
+
+        if xlab:
+            plt.xlabel("Frequency [MHz]")
+        if ylab:
+            plt.ylabel("GHA (hours)")
+        if title:
+            plt.title(f"{self.dates[indx][0]}-{self.dates[indx][1]}")
+
+        if cbar:
+            plt.colorbar()
+
+    def day_index(self, day: int) -> int:
+        """
+        Get the index corresponding to the given day in the dataset.
+
+        Parameters
+        ----------
+        day
+            The day to find the index for.
+        unflagged
+            Whether the index should be that of the unflagged data (i.e. the index
+            to pass to ``.spectrum``) or for the full list of input files (i.e. that
+            to pass to ``previous_level``).
+
+        Returns
+        -------
+        indx
+            The index in appropriate lists of that day's data.
+        """
+        return self.days.tolist().index(day)
+
+
+@add_structure
+class CombinedBinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
+    """
+    Object representing gha binned data after observed days are combined.
+
+    Given a sequence of :class:`ModelData` objects, this class combines them into one
+    file, aligning them in (ideally small) bins in GHA/LST.
+
+    See :class:`_ReductionStep` for documentation about the various datasets within this
+    class instance. Note that you can always check which data is inside each group by
+    checking its ``.keys()``.
+
+    See :meth:`CombinedData.promote` for detailed information about the processes
+    involved in creating this data from :class:`Level1` objects.
+    """
+
+    _possible_parents = (CombinedData,)
+    _multi_input = False
+    _spec_dim = 3
+
+    _ancillary = {
+        "years": is_array("int", 1),
+        "days": is_array("int", 1),
+        "hours": is_array("int", 1),
+    }
+
+    _meta = {
+        "n_files": lambda x: isinstance(x, (int, np.int, np.int64)) and x > 0,
+    }
+
+    @classmethod
+    def _promote(
+        cls,
+        prev_step: CombinedData,
+        gha_bin_size: float = 0.1,
+    ):
+        """
+        Bins the 3D spectrum along time axis for the :class:`CombinedData` object.
+
+        Each day in the 3D spectrum is binned in the same regular grid of GHA.
+        The final residuals/spectra have shape ``(Ndays, Ngha, Nfreq)``,
+        where each file essentially describes a day/night. This binning is de-biased
+        by using the models from the previous step to "in-paint" filtered gaps.
+
+        Parameters
+        ----------
+        prev_step
+            The 3d spectrum from combined data.
+        gha_bin_size
+            The bin size of the regular GHA grid.
+
+        Returns
+        -------
+        data
+            The combined binned data.
+        """
+        if gha_bin_size < 0 or gha_bin_size > 24:
+            raise ValueError(
+                f"gha_bin_size must be non zero or smaller than 24 hours \
+                , got {gha_bin_size}"
+            )
+
+        model_params = prev_step.ancillary["model_params"]
+        model_resids = prev_step.resids
+        flags = prev_step.get_flags()
+
+        # Bin in GHA using the models and residuals
+        params, resids, weights, gha_edges = cls.bin_gha(
+            prev_step,
+            model_params,
+            model_resids,
+            gha_bin_size,
+            flags=flags,
+        )
+
+        data = {"weights": weights, "resids": resids}
+
+        ancillary = {
+            "years": prev_step.ancillary["years"],
+            "days": prev_step.ancillary["days"],
+            "hours": prev_step.ancillary["hours"],
+            "gha_edges": gha_edges,
+            "model_params": params,
+        }
+
+        return prev_step.raw_frequencies, data, ancillary, cls._get_meta(locals())
+
+    @classmethod
+    def _extra_meta(cls, kwargs):
+        return {
+            "n_files": kwargs["prev_step"].meta["n_files"],
+        }
+
+    @cached_property
+    def dates(self) -> list[tuple[int, int, int]]:
+        """All the dates that went into this object."""
+        return [
+            (y, d, h)
+            for y, d, h in zip(
+                self.ancillary["years"], self.ancillary["days"], self.ancillary["hours"]
+            )
+        ]
+
+    @classmethod
+    def bin_gha(
+        cls,
+        combined_obj: CombinedData,
+        gha_bin_size: float,
+        flags=None,
+    ):
+        """Bin a list of files into small aligning bins of GHA."""
+        gha_edges = np.arange(
+            combined_obj.gha_edges.min(), combined_obj.gha_edges.max(), gha_bin_size
+        )
+        if np.isclose(combined_obj.gha_edges.max(), gha_edges.max() + gha_bin_size):
+            gha_edges = np.concatenate((gha_edges, [gha_edges.max() + gha_bin_size]))
+
+        # Averaging data within GHA bins
+        weights = np.zeros(
+            (len(combined_obj.resids), len(gha_edges) - 1, combined_obj.freq.n)
+        )
+        resids = np.zeros(
+            (len(combined_obj.resids), len(gha_edges) - 1, combined_obj.freq.n)
+        )
+        params = np.zeros(
+            (
+                len(combined_obj.resids),
+                len(gha_edges) - 1,
+                combined_obj.model_params.shape[-1],
+            )
+        )
+
+        gha = combined_obj.gha_centres
+
+        for i, (p, r, w) in enumerate(
+            zip(combined_obj.model_params, combined_obj.resids, combined_obj.weights)
+        ):
+
+            params[i], resids[i], weights[i] = averaging.bin_gha_unbiased_regular(
+                p, r, w, gha, gha_edges
             )
 
         return params, resids, weights, gha_edges
