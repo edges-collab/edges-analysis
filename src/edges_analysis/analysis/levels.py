@@ -2277,8 +2277,6 @@ class CombinedBinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         # Bin in GHA using the models and residuals
         params, resids, weights, gha_edges = cls.bin_gha(
             prev_step,
-            model_params,
-            model_resids,
             gha_bin_size,
             flags=flags,
         )
