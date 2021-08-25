@@ -386,10 +386,10 @@ class Beam:
         """
         beam_square = np.zeros((freq_p, theta_p, phi_p))
         frequency = np.linspace(f_low, f_high, freq_p)
-        f1 = open(file_name_prefix + "_0-90." + ext)
-        f2 = open(file_name_prefix + "_91-180." + ext)
-        f3 = open(file_name_prefix + "_181-270." + ext)
-        f4 = open(file_name_prefix + "_271-360." + ext)
+        f1 = open(str(file_name_prefix) + "_0-90." + ext)
+        f2 = open(str(file_name_prefix) + "_91-180." + ext)
+        f3 = open(str(file_name_prefix) + "_181-270." + ext)
+        f4 = open(str(file_name_prefix) + "_271-360." + ext)
 
         z = (
             181 * 91 + 10

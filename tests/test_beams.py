@@ -29,13 +29,13 @@ def test_beam_from_raw_feko(beam_settings: Path):
     )
 
     assert beam.frequency.min() == 40.0
-    assert beam.frequency.max() == 100.0
+    assert beam.frequency.max() == 48.0
 
     assert beam.beam.max() > 0
 
     beam2 = beam.smoothed()
     assert len(beam2.frequency) == 5
-    assert beam2.frequency == beam.frequency
+    assert beam2.frequency.all() == beam.frequency.all()
 
 
 def test_feko_interp():
