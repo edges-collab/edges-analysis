@@ -488,7 +488,7 @@ class Beam:
         for i, bm in enumerate(self.beam.T):
             for j, b in enumerate(bm):
                 model_fit = cached_model.fit(ydata=b)
-                interp_beam[i:, j, i] = model_fit.evaluate(freq)
+                interp_beam[:, j, i] = model_fit.evaluate(freq)
 
         return Beam(
             frequency=freq,
@@ -907,6 +907,8 @@ def antenna_beam_factor(
     save_dir: [None, str, Path] = None,
     save_fname: [None, str, Path, bool] = None,
     reference_frequency: [None, float] = None,
+    beam_smoothing: bool = True,
+    smoothing_model: mdl.Model = mdl.Polynomial(n_terms=12),
 ):
     """
     Calculate the antenna beam factor.
@@ -975,6 +977,8 @@ def antenna_beam_factor(
         sky_model=sky_model,
         index_model=index_model,
         normalize_beam=normalize_beam,
+        beam_smoothing=beam_smoothing,
+        smoothing_model=smoothing_model,
         ground_loss_file=ground_loss_file,
     ):
         antenna_temperature_above_horizon[i, j] = temperature
