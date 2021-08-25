@@ -16,6 +16,21 @@ def test_beam_from_feko():
     assert beam2.frequency.max() <= 70
 
 
+def test_beam_from_raw_feko():
+    beam = beams.Beam.from_feko_raw(
+        "/data/lowband_dielectric1-new-90orient_simple", "txt", 40, 48, 5, 181, 361
+    )
+
+    assert beam.frequency.min() == 40.0
+    assert beam.frequency.max() == 100.0
+
+    assert beam.beam.max() > 0
+
+    beam2 = beam.smoothed()
+    assert len(beam2.frequency) == 5
+    assert beam2.frequency == beam.frequency
+
+
 def test_feko_interp():
     beam = beams.Beam.from_file("low")
 
