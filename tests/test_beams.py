@@ -1,3 +1,4 @@
+from tests.conftest import beam_settings
 from edges_analysis.analysis import beams
 from edges_analysis.analysis.sky_models import Haslam408
 import numpy as np
@@ -18,7 +19,13 @@ def test_beam_from_feko():
 
 def test_beam_from_raw_feko():
     beam = beams.Beam.from_feko_raw(
-        "/data/lowband_dielectric1-new-90orient_simple", "txt", 40, 48, 5, 181, 361
+        beam_settings / "lowband_dielectric1-new-90orient_simple",
+        "txt",
+        40,
+        48,
+        5,
+        181,
+        361,
     )
 
     assert beam.frequency.min() == 40.0
