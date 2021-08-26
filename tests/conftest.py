@@ -64,6 +64,11 @@ def settings() -> Path:
 
 
 @pytest.fixture(scope="session")
+def beam_settings() -> Path:
+    return Path(__file__).parent / "data"
+
+
+@pytest.fixture(scope="session")
 def calibrate_settings(integration_test_data: Path) -> Path:
     settings = {
         "band": "low",

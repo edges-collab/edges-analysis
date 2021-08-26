@@ -14,11 +14,14 @@ Added
 - ``from_cst`` beam function.
 - New class for binning after combinedData, called CombinedBinnedData
 - CLI steps to handle this new processing steps with the same "bin" command
+- Added an option of smoothing the beam over frequency
+
 Fixed
 ~~~~~
 
 - Total power and RMS filters have been completely reworked and work much better now,
   sharing code for simplicity.
+- Fixed the at_freq function to use any model specified by the user
 
 Changed
 ~~~~~~~
