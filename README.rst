@@ -8,7 +8,7 @@ edges-analysis
   :target: https://edges-analysis.readthedocs.io/en/stable/?badge=stable
 .. image:: https://codecov.io/gh/edges-collab/edges-analysis/branch/master/graph/badge.svg
   :target: https://codecov.io/gh/edges-collab/edges-analysis
-.. image:: https://img.shields.io/badge/code%20style-black-000000.svg"
+.. image:: https://img.shields.io/badge/code%20style-black-000000.svg
   :target: https://github.com/psf/black
 
 **Code for analysing EDGES field data.**
