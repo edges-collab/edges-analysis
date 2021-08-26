@@ -21,7 +21,10 @@ from edges_io.h5 import HDF5Object
 
 from ..config import config
 from .. import const
-from edges_cal import FrequencyRange
+from edges_cal import (
+    FrequencyRange,
+    modelling as mdl,
+)
 from .data import BEAM_PATH
 from . import types as tp
 
@@ -383,10 +386,10 @@ class Beam:
         """
         beam_square = np.zeros((freq_p, theta_p, phi_p))
         frequency = np.linspace(f_low, f_high, freq_p)
-        f1 = open(file_name_prefix + "_0-90." + ext)
-        f2 = open(file_name_prefix + "_91-180." + ext)
-        f3 = open(file_name_prefix + "_181-270." + ext)
-        f4 = open(file_name_prefix + "_271-360." + ext)
+        f1 = open(str(file_name_prefix) + "_0-90." + ext)
+        f2 = open(str(file_name_prefix) + "_91-180." + ext)
+        f3 = open(str(file_name_prefix) + "_181-270." + ext)
+        f4 = open(str(file_name_prefix) + "_271-360." + ext)
 
         z = (
             181 * 91 + 10
@@ -456,7 +459,11 @@ class Beam:
             raise FileNotFoundError(f"No beam exists for band={band}.")
         return pth
 
-    def at_freq(self, freq: np.ndarray) -> Beam:
+    def at_freq(
+        self,
+        freq: np.ndarray,
+        model: mdl.Model = mdl.Polynomial(n_terms=13),
+    ) -> Beam:
         """
         Interpolate the beam to a new set of frequencies.
 
@@ -475,21 +482,52 @@ class Beam:
                 "Can't freq-interpolate beam that has fewer than three frequencies."
             )
 
-        freq_obj = FrequencyRange(self.frequency)
-
         # Frequency interpolation
         interp_beam = np.zeros((len(freq), len(self.elevation), len(self.azimuth)))
-
+        cached_model = model.at(x=self.frequency)
         for i, bm in enumerate(self.beam.T):
             for j, b in enumerate(bm):
-                par = np.polyfit(freq_obj.freq_recentred, b, 13)
-                model = np.polyval(par, freq_obj.normalize(freq))
-                interp_beam[:, j, i] = model
+                model_fit = cached_model.fit(ydata=b)
+                interp_beam[:, j, i] = model_fit.evaluate(freq)
+
         return Beam(
             frequency=freq,
             azimuth=self.azimuth,
             elevation=self.elevation,
             beam=interp_beam,
+        )
+
+    def smoothed(
+        self,
+        model: mdl.Model = mdl.Polynomial(n_terms=12),
+    ) -> Beam:
+        """
+        Smoothes the beam within its same set of frequencies.
+
+        ----------
+
+        Returns
+        -------
+        beam
+            The Beam object smoothed over its same frequencies.
+        """
+        if len(self.frequency) < 3:
+            raise ValueError(
+                "Can't freq-interpolate beam that has fewer than three frequencies."
+            )
+
+        # Frequency smoothing
+        smooth_beam = np.zeros_like(self.beam)
+        cached_model = model.at(x=self.frequency)
+        for i, bm in enumerate(self.beam.T):
+            for j, b in enumerate(bm):
+                model_fit = cached_model.fit(ydata=b)
+                smooth_beam[:, j, i] = model_fit.evaluate()
+        return Beam(
+            frequency=self.frequency,
+            azimuth=self.azimuth,
+            elevation=self.elevation,
+            beam=smooth_beam,
         )
 
     @staticmethod
@@ -664,6 +702,8 @@ def sky_convolution_generator(
     sky_model: sky_models.SkyModel,
     index_model: sky_models.IndexModel,
     normalize_beam: bool,
+    beam_smoothing: bool,
+    smoothing_model: mdl.Model,
     location: apc.EarthLocation = const.edges_location,
     ref_time: apt.Time = REFERENCE_TIME,
 ):
@@ -686,6 +726,8 @@ def sky_convolution_generator(
         The spectral index model of the sky model.
     normalize_beam
         Whether to ensure the beam is properly normalised.
+    beam_interpolation
+        Whether to smooth over freq axis
 
     Yields
     ------
@@ -714,6 +756,8 @@ def sky_convolution_generator(
     >>> for i, j, mean_t, conv_t, sky, bm, time, npix in sky_convolution_generator():
     >>>     print(conv_t)
     """
+    if beam_smoothing:
+        beam = beam.smoothed(smoothing_model)
     sky_map = sky_model.at_freq(
         beam.frequency,
         index_model=index_model,
@@ -791,8 +835,11 @@ def simulate_spectra(
     sky_model: sky_models.SkyModel = sky_models.Haslam408(),
     index_model: sky_models.IndexModel = sky_models.ConstantIndex(),
     lsts: np.ndarray = None,
+    beam_smoothing: bool = True,
+    smoothing_model: mdl.Model = mdl.Polynomial(n_terms=12),
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Simulate global spectra from sky and beam models.
+    """
+    Simulate global spectra from sky and beam models.
 
     Parameters
     ----------
@@ -834,7 +881,14 @@ def simulate_spectra(
 
     antenna_temperature_above_horizon = np.zeros((len(lsts), len(beam.frequency)))
     for i, j, temperature, _, _, _, _, _ in sky_convolution_generator(
-        lsts, ground_loss_file, beam, sky_model, index_model, normalize_beam
+        lsts,
+        ground_loss_file,
+        beam,
+        sky_model,
+        index_model,
+        normalize_beam,
+        beam_smoothing,
+        smoothing_model,
     ):
         antenna_temperature_above_horizon[i, j] = temperature
 
@@ -853,6 +907,8 @@ def antenna_beam_factor(
     save_dir: [None, str, Path] = None,
     save_fname: [None, str, Path, bool] = None,
     reference_frequency: [None, float] = None,
+    beam_smoothing: bool = True,
+    smoothing_model: mdl.Model = mdl.Polynomial(n_terms=12),
 ):
     """
     Calculate the antenna beam factor.
@@ -921,6 +977,8 @@ def antenna_beam_factor(
         sky_model=sky_model,
         index_model=index_model,
         normalize_beam=normalize_beam,
+        beam_smoothing=beam_smoothing,
+        smoothing_model=smoothing_model,
         ground_loss_file=ground_loss_file,
     ):
         antenna_temperature_above_horizon[i, j] = temperature
