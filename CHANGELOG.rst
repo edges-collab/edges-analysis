@@ -12,12 +12,14 @@ Added
   data.
 - New ``filter`` CLI command.
 - ``from_cst`` beam function.
+- Added an option of smoothing the beam over frequency
 
 Fixed
 ~~~~~
 
 - Total power and RMS filters have been completely reworked and work much better now,
   sharing code for simplicity.
+- Fixed the at_freq function to use any model specified by the user
 
 Changed
 ~~~~~~~
