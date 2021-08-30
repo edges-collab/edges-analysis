@@ -130,7 +130,13 @@ class LabCalibration:
         else:
             ant_s11 = self.antenna_s11_model(freq)
 
-        return self.calobs.calibrate_Q(freq, q, ant_s11)
+        c = (
+            self.calobs
+            if isinstance(self.calobs, Calibration)
+            else self.calobs.to_calfile()
+        )
+
+        return c.calibrate_Q(freq, q, ant_s11)
 
     def calibrate_temp(
         self, temp: np.ndarray, freq: Optional[np.ndarray] = None
