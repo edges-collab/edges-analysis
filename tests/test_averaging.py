@@ -2,7 +2,7 @@ import numpy as np
 from edges_cal import modelling as mdl
 import pytest
 from pytest_cases import fixture_ref as fxref
-from pytest_cases import parametrize_plus
+from pytest_cases import parametrize
 
 from edges_analysis.analysis import averaging
 
@@ -77,10 +77,8 @@ def bitsy_flags():
     return np.random.binomial(1, 0.6, size=(N_GHA, len(FREQ)))
 
 
-@parametrize_plus("params", [fxref(fid_params), fxref(evolving_params)])
-@parametrize_plus(
-    "weights", [fxref(ideal_weights), fxref(row_flags), fxref(bitsy_flags)]
-)
+@parametrize("params", [fxref(fid_params), fxref(evolving_params)])
+@parametrize("weights", [fxref(ideal_weights), fxref(row_flags), fxref(bitsy_flags)])
 @pytest.mark.parametrize("refit", [5, 3, False])
 def test_model_bin_gha(params, weights, refit):
 

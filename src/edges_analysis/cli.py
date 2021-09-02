@@ -150,7 +150,7 @@ def expand_colon(pth: str, band: str = "", raw=True) -> Path:
 @click.argument(
     "step",
     type=click.Choice(
-        ["calibrate", "model", "combine", "day", "bin"], case_sensitive=False
+        ["raw", "calibrate", "model", "combine", "day", "bin"], case_sensitive=False
     ),
 )
 @click.argument("settings", type=click.Path(dir_okay=False, exists=True))
@@ -209,7 +209,7 @@ def process(ctx, step, settings, path, label, message, clobber, output, nthreads
         in the respective documentation for the classes "promote" method.
 
     Each STEP should take one or more ``--input`` files that are the output of a
-    previous step. The first step (``calibrate``) should take raw ``.acq`` or ``.h5``
+    previous step. The first step (``raw``) should take raw ``.acq`` or ``.h5``
     spectrum files.
 
     The output files are placed in a directory inside the input file directory, with a
@@ -224,6 +224,7 @@ def process(ctx, step, settings, path, label, message, clobber, output, nthreads
     console.print(Rule("Setting Up"))
 
     step_cls = {
+        "raw": levels.RawData,
         "calibrate": levels.CalibratedData,
         "model": levels.ModelData,
         "combine": levels.CombinedData,
@@ -238,7 +239,7 @@ def process(ctx, step, settings, path, label, message, clobber, output, nthreads
     if not label:
         label = qs.text("Provide a short label to identify this run:").ask()
 
-    if step == "calibrate":
+    if step == "raw":
 
         def file_filter(pth: Path):
             return pth.suffix[1:] in io.Spectrum.supported_formats
@@ -249,7 +250,7 @@ def process(ctx, step, settings, path, label, message, clobber, output, nthreads
     # Get input file(s). If doing initial calibration, get them from raw_field_data
     # otherwise they should be in field_products.
     path = [
-        expand_colon(p, band=settings.get("band"), raw=step == "calibrate").expanduser()
+        expand_colon(p, band=settings.get("band"), raw=step == "raw").expanduser()
         for p in path
     ]
     input_files = sum((_get_files(p, filt=file_filter) for p in path), [])
@@ -263,11 +264,11 @@ def process(ctx, step, settings, path, label, message, clobber, output, nthreads
             console.print(f"   {fl}")
         console.print()
     # Check that input files are all homogeneously processed
-    if step != "calibrate" and len({p.parent for p in input_files}) != 1:
+    if step != "raw" and len({p.parent for p in input_files}) != 1:
         raise ValueError("Your input files do not come from a single processing.")
 
     # Get unique output directory
-    if step == "calibrate":
+    if step == "raw":
         output_dir = Path(config["paths"]["field_products"]) / label
     else:
         output_dir = get_output_dir(input_files[0].parent, label, settings)
@@ -288,7 +289,7 @@ def process(ctx, step, settings, path, label, message, clobber, output, nthreads
             ]
         else:
             output = [Path(output).with_suffix(".h5")]
-    elif step != "calibrate":
+    elif step != "raw":
         output = [p.name for p in input_files]
     else:
         output = None
@@ -323,7 +324,7 @@ def process(ctx, step, settings, path, label, message, clobber, output, nthreads
     console.print()
     if step == "combine":
         console.print(f"[bold]Output File: [blue]{out_paths[0]}")
-    elif step == "calibrate":
+    elif step in ("raw", "calibrate", "model"):
         console.print(
             f"[bold]All files written to: [dim]{output_dir}",
         )
@@ -430,9 +431,7 @@ def filter(settings, path, nthreads, flag_idx, label, clobber):  # noqa: A001
         is a YAML settings file. The available settings for each step can be seen
         in the respective documentation for the classes "promote" method.
 
-    Takes one or more ``--input`` files that are the output of a
-    previous step. The first step (``calibrate``) should take raw ``.acq`` or ``.h5``
-    spectrum files.
+    Takes one or more ``--input`` files that are the output of a process.
 
     The output is written within the given input files, inside a special "flags"
     hDF5 group.

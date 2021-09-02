@@ -4,10 +4,29 @@ from edges_analysis.analysis import (
     DayAveragedData,
     BinnedData,
     ModelData,
+    RawData,
 )
-from typing import List
+from typing import List, Tuple
 import dill as pickle
 import numpy as np
+
+
+def test_raw_step(raw_step: Tuple[RawData, RawData]):
+    assert raw_step[0].raw_frequencies.shape == (32768,)
+    assert raw_step[1].raw_frequencies.shape == (32768,)
+
+    # Ensure it's pickleable
+    pickle.dumps(raw_step[0])
+
+    # ensure plotting functions don't error
+    raw_step[0].plot_waterfalls()
+
+    assert (
+        len(raw_step[0].lst)
+        == len(raw_step[0].gha)
+        == len(raw_step[0].raw_time_data)
+        == len(raw_step[0].datetimes)
+    )
 
 
 def test_calibrate_step(cal_step: List[CalibratedData]):
@@ -18,7 +37,7 @@ def test_calibrate_step(cal_step: List[CalibratedData]):
     pickle.dumps(cal_step[0])
 
     # ensure plotting functions don't error
-    cal_step[0].plot_waterfalls()
+    cal_step[0].plot_waterfall()
     cal_step[0].plot_time_averaged_spectrum()
     cal_step[0].plot_s11()
 

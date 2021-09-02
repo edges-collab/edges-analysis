@@ -16,4 +16,5 @@ from .levels import (
     DayAveragedData,
     read_step,
     ModelData,
+    RawData,
 )

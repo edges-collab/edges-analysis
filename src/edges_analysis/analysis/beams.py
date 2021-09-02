@@ -992,8 +992,8 @@ def antenna_beam_factor(
     beam_factor = (convolution_ref.T / convolution_ref[:, indx_ref_freq]).T
 
     out = {
-        "frequency": beam.frequency.astype(np.float),
-        "lst": np.array(lsts).astype("float"),
+        "frequency": beam.frequency.astype(float),
+        "lst": np.array(lsts).astype(float),
         "antenna_temp_above_horizon": antenna_temperature_above_horizon,
         "loss_fraction": loss_fraction,
         "beam_factor": beam_factor,
