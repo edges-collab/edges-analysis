@@ -392,7 +392,7 @@ class Beam:
         f4 = open(str(file_name_prefix) + "_271-360." + ext)
 
         z = (
-            181 * 91 + 10
+            theta_p * 91 + 10
         )  # ---> change this to no.of theta * no.of phi + No.of header lines
 
         for index, line in enumerate(f1):
@@ -400,19 +400,21 @@ class Beam:
                 co = 0
             if index % z >= 10:
                 x = list(map(float, line.split()))
-                beam_square[int(index / z), co % 181, int(co / 181)] = 10 ** (x[8] / 10)
+                beam_square[int(index / z), co % theta_p, int(co / theta_p)] = 10 ** (
+                    x[8] / 10
+                )
                 co += 1
 
-        z = 181 * 90 + 10  #
+        z = theta_p * 90 + 10  #
 
         for index, line in enumerate(f2):
             if index % z == 0:
                 co = 0
             if index % z >= 10:
                 x = list(map(float, line.split()))
-                beam_square[int(index / z), co % 181, int(co / 181) + 91] = 10 ** (
-                    x[8] / 10
-                )
+                beam_square[
+                    int(index / z), co % theta_p, int(co / theta_p) + 91
+                ] = 10 ** (x[8] / 10)
                 co += 1
 
         for index, line in enumerate(f3):
@@ -420,9 +422,9 @@ class Beam:
                 co = 0
             if index % z >= 10:
                 x = list(map(float, line.split()))
-                beam_square[int(index / z), co % 181, int(co / 181) + 181] = 10 ** (
-                    x[8] / 10
-                )
+                beam_square[
+                    int(index / z), co % theta_p, int(co / theta_p) + 181
+                ] = 10 ** (x[8] / 10)
                 co += 1
 
         for index, line in enumerate(f4):
@@ -430,9 +432,9 @@ class Beam:
                 co = 0
             if index % z >= 10:
                 x = list(map(float, line.split()))
-                beam_square[int(index / z), co % 181, int(co / 181) + 271] = 10 ** (
-                    x[8] / 10
-                )
+                beam_square[
+                    int(index / z), co % theta_p, int(co / theta_p) + 271
+                ] = 10 ** (x[8] / 10)
                 co += 1
 
         freq = FrequencyRange(np.array(frequency))

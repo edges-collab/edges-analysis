@@ -14,6 +14,7 @@ from .levels import (
     CombinedData,
     BinnedData,
     DayAveragedData,
+    CombinedBinnedData,
     read_step,
     ModelData,
 )

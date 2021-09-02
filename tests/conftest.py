@@ -4,6 +4,7 @@ from subprocess import run
 from edges_analysis.analysis import (
     CalibratedData,
     CombinedData,
+    CombinedBinnedData,
     DayAveragedData,
     BinnedData,
     ModelData,
@@ -145,6 +146,16 @@ def combo_step(model_step, settings: Path, integration_test_data: Path):
 
     return CombinedData.promote(
         model_step, filename=integration_test_data / "combined.h5", **s
+    )
+
+
+@pytest.fixture(scope="session")
+def combo_bin_step(combo_step, settings: Path, integration_test_data: Path):
+    with open(settings / "combine_bin.yml") as fl:
+        s = yaml.load(fl, Loader=yaml.FullLoader)
+
+    return CombinedBinnedData.promote(
+        combo_step, filename=integration_test_data / "combinedbinned.h5", **s
     )
 
 

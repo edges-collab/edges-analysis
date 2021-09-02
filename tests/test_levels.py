@@ -1,6 +1,7 @@
 from edges_analysis.analysis import (
     CalibratedData,
     CombinedData,
+    CombinedBinnedData,
     DayAveragedData,
     BinnedData,
     ModelData,
@@ -59,6 +60,18 @@ def test_combine_step(combo_step: CombinedData):
     # just run some plotting methods to make sure they don't error...
     combo_step.plot_daily_residuals(freq_resolution=1.0, gha_max=18, gha_min=6)
     combo_step.plot_waterfall(day=292)
+
+
+def test_bin_aftercombine_step(combo_bin_step: CombinedBinnedData):
+    assert combo_bin_step.resids.shape[-1] == len(combo_bin_step.raw_frequencies)
+    assert combo_bin_step.spectrum.shape == combo_bin_step.resids.shape
+
+    # Ensure it's pickleable
+    pickle.dumps(combo_bin_step)
+
+    # just run some plotting methods to make sure they don't error...
+    combo_bin_step.plot_daily_residuals(freq_resolution=1.0, gha_max=18, gha_min=6)
+    combo_bin_step.plot_waterfall(day=292)
 
 
 def test_day_step(day_step: DayAveragedData):
