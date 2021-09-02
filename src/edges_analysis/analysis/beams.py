@@ -462,7 +462,9 @@ class Beam:
     def at_freq(
         self,
         freq: np.ndarray,
-        model: mdl.Model = mdl.Polynomial(n_terms=13),
+        model: mdl.Model = mdl.Polynomial(
+            n_terms=13, transform=mdl.ScaleTransform(scale=75.0)
+        ),
     ) -> Beam:
         """
         Interpolate the beam to a new set of frequencies.
