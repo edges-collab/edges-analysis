@@ -17,4 +17,5 @@ from .levels import (
     CombinedBinnedData,
     read_step,
     ModelData,
+    RawData,
 )

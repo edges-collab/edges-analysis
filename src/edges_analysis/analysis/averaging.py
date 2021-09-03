@@ -326,7 +326,7 @@ def bin_gha_unbiased_regular(
     weights: np.ndarray,
     gha: np.ndarray,
     bins: np.ndarray,
-) -> [np.ndarray, np.ndarray, np.ndarray]:
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Bin data in an unbiased way using a model fit.
 

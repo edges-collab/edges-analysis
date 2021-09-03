@@ -1,4 +1,4 @@
-exclude: '^docs/conf.py|^tests/data/*'
+exclude: '^docs/conf.py|^tests/data/'
 
 repos:
 - repo: git://github.com/pre-commit/pre-commit-hooks

@@ -9,6 +9,7 @@ import os
 import re
 import sys
 import time
+import copy
 import warnings
 from copy import deepcopy
 from datetime import datetime
@@ -32,7 +33,7 @@ from edges_io.auxiliary import auxiliary_data
 from edges_io.h5 import HDF5Object
 
 from . import averaging
-from . import loss, beams, tools, coordinates
+from . import loss, beams, coordinates
 from .coordinates import get_jd, dt_from_jd
 from .. import __version__
 from .. import const
@@ -160,7 +161,7 @@ class _ReductionStep(HDF5Object):
         def _get(c):
             if c.__class__ == kind:
                 return c
-            elif c.__class__ == CalibratedData:
+            elif c.__class__ == RawData:
                 raise AttributeError(
                     f"This object has no parent of kind {kind.__class__.__name__}"
                 )
@@ -174,6 +175,10 @@ class _ReductionStep(HDF5Object):
     @cached_property
     def calibration_step(self):
         return self._get_parent_of_kind(CalibratedData)
+
+    @cached_property
+    def raw_data(self):
+        return self._get_parent_of_kind(RawData)
 
     @cached_property
     def model_step(self):
@@ -221,8 +226,7 @@ class _ReductionStep(HDF5Object):
             _ReductionStep
             | list[_ReductionStep | str | Path]
             | io.Spectrum
-            | str
-            | Path
+            | tp.PathLike
         ),
         filename: tp.PathLike | None = None,
         clobber: bool = False,
@@ -558,23 +562,23 @@ class _ModelMixin:
 class _SingleDayMixin:
     @property
     def day(self):
-        return self.calibration_step.meta["day"]
+        return self.raw_data.meta["day"]
 
     @property
     def year(self):
-        return self.calibration_step.meta["year"]
+        return self.raw_data.meta["year"]
 
     @property
     def hour(self):
-        return self.calibration_step.meta["hour"]
+        return self.raw_data.meta["hour"]
 
     @property
     def gha(self):
-        return self.calibration_step.ancillary["gha"]
+        return self.raw_data.ancillary["gha"]
 
     @property
     def lst(self):
-        return self.calibration_step.ancillary["lst"]
+        return self.raw_data.ancillary["lst"]
 
     @property
     def datestring(self):
@@ -584,7 +588,7 @@ class _SingleDayMixin:
     @property
     def raw_time_data(self):
         """Raw string times at which the spectra were taken."""
-        return self.calibration_step.ancillary["times"]
+        return self.raw_data.ancillary["times"]
 
     @cached_property
     def datetimes(self):
@@ -812,9 +816,9 @@ class _SingleDayMixin:
         **imshow_kwargs,
     ):
         if quantity in {"p0", "p1", "p2"}:
-            q = self.calibration_step.spectra["switch_powers"][int(quantity[-1])]
+            q = self.raw_data.spectra["switch_powers"][int(quantity[-1])]
         elif quantity == "Q":
-            q = self.calibration_step.spectra["Q"]
+            q = self.raw_data.spectrum
         else:
             q = getattr(self, quantity)
 
@@ -828,7 +832,7 @@ class _SingleDayMixin:
         else:
             cmap = imshow_kwargs.pop("cmap", "magma")
 
-        sec = self.calibration_step.ancillary["seconds"]
+        sec = self.raw_data.ancillary["seconds"]
 
         if quantity == "spectrum":
             vmax = imshow_kwargs.pop("vmax", 13000)
@@ -919,6 +923,11 @@ class _SingleDayMixin:
         else:
             fig, ax = plt.subplots(1, 1)
 
+        if self.__class__.__name__ == "RawData" and "model" not in model_kwargs:
+            model_kwargs["model"] = mdl.Polynomial(
+                n_terms=8, transform=mdl.UnitTransform()
+            )
+
         spec, r, w = self.bin_gha(gha_bins, **model_kwargs)
 
         ax.plot(self.raw_frequencies, spec)
@@ -967,28 +976,18 @@ class _SingleDayMixin:
 
 
 @add_structure
-class CalibratedData(_ReductionStep, _SingleDayMixin):
-    """Object representing the level-1 stage of processing.
-
-    This object essentially represents a Calibrated spectrum.
+class RawData(_ReductionStep, _SingleDayMixin):
+    """Object representing raw input data and matched auxiliary data.
 
     See :class:`_ReductionStep` for documentation about the various datasets within this
     class instance. Note that you can always check which data is inside each group by
     checking its ``.keys()``.
 
     Create the class either directly from a level-1 file (via normal instantiation), or
-    by calling :meth:`from_acq` on a raw ACQ file (this does the calibration).
-
-    The data at this level have (in this order):
-
-    * Calibration applied from existing calibration solutions
-    * Collected associated weather and thermal auxiliary data (not used at this level,
-      just collected)
-    * Potential xRFI applied to the raw switch powers individually.
+    by calling :meth:`from_acq` on a raw ACQ file.
     """
 
     _spectra_structure = {
-        "Q": float_array_ndim(2),
         "switch_powers": float_array_ndim(3),
     }
 
@@ -1017,9 +1016,6 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
         "day": lambda x: isinstance(x, (int, np.int64)),
         "year": lambda x: isinstance(x, (int, np.int64)),
         "hour": lambda x: isinstance(x, (int, np.int64)),
-        "calobs_path": None,
-        "cterms": lambda x: isinstance(x, (int, np.int64)),
-        "wterms": lambda x: isinstance(x, (int, np.int64)),
         "freq_max": lambda x: isinstance(x, (float, np.float32)),
         "freq_min": lambda x: isinstance(x, (float, np.float32)),
         "freq_res": lambda x: isinstance(x, (float, np.float32)),
@@ -1027,8 +1023,10 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
         "nblk": lambda x: isinstance(x, (int, np.int64)),
         "nfreq": lambda x: isinstance(x, (int, np.int64)),
         "resolution": None,
-        "s11_files": None,
         "temperature": None,
+        "band": lambda x: isinstance(x, str),
+        "thermlog_file": None,
+        "weather_file": None,
     }
 
     @classmethod
@@ -1036,18 +1034,8 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
         cls,
         prev_step: io.HDF5RawSpectrum,
         band: str,
-        calfile: str | Path,
-        s11_path: str | Path,
         weather_file: str | Path | None = None,
         thermlog_file: str | Path | None = None,
-        xrfi_pipe: dict | None = None,
-        s11_file_pattern: str = r"{y}_{jd}_{h}_*_input{input}.s1p",
-        ignore_s11_files: list[str] | None = None,
-        antenna_s11_n_terms: int = 15,
-        antenna_correction: str | Path | None = ":",
-        balun_correction: str | Path | None = ":",
-        ground_correction: str | Path | None | float = ":",
-        beam_file=None,
     ) -> tuple[np.ndarray, dict, dict, dict]:
         """
         Create the object directly from calibrated data.
@@ -1058,43 +1046,12 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
             The filename of the ACQ file to read.
         band
             Defines the instrument that took the data (mid, low, high).
-        calfile
-            A file containing the output of
-            :meth:`edges_cal.CalibrationObservation.write` -- i.e. all the information
-            required to calibrate the raw data. Determination of calibration parameters
-            occurs externally and saved to this file.
-        s11_path
-            Path to the receiver S11 information relevant to this observation.
         weather_file
             A weather file to use in order to capture that information (may find the
             default weather file automatically).
         thermlog_file
             A thermlog file to use in order to capture that information (may find the
             default thermlog file automatically).
-        leave_progress
-            Whether to leave the progress bar on the screen at the end.
-        xrfi_pipe
-            A dictionary in which keys specify xrfi method names (see
-            :mod:`edges_cal.xrfi`) and values are dictionaries which specify the
-            parameters to be passed to those methods (not requiring the spectrum/weights
-            arguments).
-        s11_file_pattern
-            A format string defining the naming pattern of S11 files at ``s11_path``.
-            This is used to automatically find the S11 file closest in time to the
-            observation, if the ``s11_path`` is not explicit (i.e. it is a directory).
-        ignore_s11_files
-            A list of paths to ignore when attempting to find the S11 file closest to
-            the observation (perhaps they are known to be bad).
-
-        Other Parameters
-        ----------------
-        All other parameters are passed to :meth:`_calibrate` -- see its documentation
-        for details.
-
-        Returns
-        -------
-        data
-            An instantiated :class:`CalibratedData` object.
         """
         t = time.time()
         q = prev_step["spectra"]["Q"]
@@ -1103,6 +1060,8 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
             prev_step["spectra"]["p1"],
             prev_step["spectra"]["p2"],
         ]
+        freq = prev_step["freq_ancillary"]["frequencies"]
+
         ancillary = prev_step["time_ancillary"]
 
         logger.info(f"Time for reading: {time.time() - t:.2f} sec.")
@@ -1134,244 +1093,22 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
 
         logger.info(f"... finished in {time.time() - t:.2f} sec.")
 
-        s11_files = cls.get_s11_paths(
-            s11_path, band, times[0], s11_file_pattern, ignore_files=ignore_s11_files
-        )
-
-        labcal = LabCalibration(
-            calobs=Calibration(Path(calfile).expanduser()),
-            s11_files=s11_files,
-            antenna_s11_n_terms=antenna_s11_n_terms,
-        )
-
-        logger.info("Calibrating data ...")
-        t = time.time()
-        calspec, freq, new_meta = cls.calibrate(
-            q=q,
-            freq=prev_step["freq_ancillary"]["frequencies"],
-            band=band,
-            labcal=labcal,
-            ambient_temp=time_based_anc["ambient_temp"],
-            lst=time_based_anc["lst"],
-            configuration="",
-            antenna_correction=antenna_correction,
-            balun_correction=balun_correction,
-            ground_correction=ground_correction,
-            beam_file=beam_file,
-            f_low=labcal.calobs.freq.min,
-            f_high=labcal.calobs.freq.max,
-        )
-        logger.info(f"... finished in {time.time() - t:.2f} sec.")
-
-        # RFI cleaning.
-        # We need to do any rfi cleaning desired on the raw powers right here, as in
-        # future levels they are not stored.
-        if xrfi_pipe:
-            logger.info("Running xRFI...")
-            t = time.time()
-            for pspec in p:
-                tools.run_xrfi_pipe(spectrum=pspec, freq=freq.freq, xrfi_pipe=xrfi_pipe)
-            logger.info(f"... finished in {time.time() - t:.2f} sec.")
-
-        meta = {**meta, **new_meta}
-        meta = {**meta, **cls._get_meta(locals())}
-        meta["s11_files"] = ":".join(str(fl) for fl in s11_files)
-
         data = {
-            "spectrum": calspec,
-            "switch_powers": np.array([pp[freq.mask].T for pp in p]),
-            "weights": np.ones_like(calspec),
-            "Q": q[freq.mask].T,
+            "switch_powers": np.array([pp.T for pp in p]),
+            "weights": np.ones_like(q.T),
+            "spectrum": q.T,
         }
 
-        return freq.freq, data, time_based_anc, meta
-
-    @property
-    def s11_files(self):
-        """The antenna S11 files used by the calibration."""
-        return self.meta["s11_files"].split(":")
-
-    def get_subset(self, integrations=100):
-        """Write a subset of the data to a new mock :class:`CalibratedData` file."""
-        freq = self.raw_frequencies
-        spectra = {k: self.spectra[k] for k in self.spectra.keys()}
-        ancillary = self.ancillary
-        meta = self.meta
-
-        spectra = {k: s[:integrations] for k, s in spectra.items()}
-        ancillary = ancillary[:integrations]
-
-        return self.from_data(
-            {
-                "frequency": freq,
-                "spectra": spectra,
-                "ancillary": ancillary,
-                "meta": meta,
-            }
-        )
-
-    @classmethod
-    def default_s11_directory(cls, band: str) -> Path:
-        """Get the default S11 directory for this observation."""
-        return Path(config["paths"]["raw_field_data"]) / "mro" / band / "s11"
-
-    @classmethod
-    def _get_closest_s11_time(
-        cls,
-        s11_dir: Path,
-        time: datetime,
-        s11_file_pattern: str = "{y}_{jd}_{h}_*_input{input}.s1p",
-        ignore_files=None,
-    ):
-        """From a given filename pattern, within a directory, find file closest to time.
-
-        Parameters
-        ----------
-        s11_dir : Path
-            The directory in which to search for S11 files.
-        time : datetime
-            The time to find the closest match to.
-        s11_file_pattern : str
-            A pattern that matches files in the directory. A few tags are available:
-            {input}: tags the input number (should be 1-4)
-            {y}: year (four digit number)
-            {m}: month (two-digit number)
-            {d}: day of month (two-digit number)
-            {jd}: day of year (three-digit number)
-            {h}: hour of day (observation start) (two digit number)
-        ignore_files : list, optional
-            A list of file patterns to ignore. They need only partially match
-            the actual filenames. So for example, you could specify
-            ``ignore_files=['2020_076']`` and it will ignore the file
-            ``/home/user/data/2020_076_01_02_input1.s1p``. Full regex can be used.
-        """
-        # Replace the suffix dot with a literal dot for regex
-        s11_file_pattern = s11_file_pattern.replace(".", r"\.")
-
-        # Replace any glob-style asterisks with non-greedy regex version
-        s11_file_pattern = s11_file_pattern.replace("*", r".*?")
-
-        # First, we need to build a regex pattern out of the s11_file_pattern
-        dct = {
-            "input": r"(?P<input>\d)",
-            "y": r"(?P<year>\d\d\d\d)",
-            "m": r"(?P<month>\d\d)",
-            "d": r"(?P<day>\d\d)",
-            "jd": r"(?P<jd>\d\d\d)",
-            "h": r"(?P<hour>\d\d)",
-        }
-        dct = {d: v for d, v in dct.items() if "{%s}" % d in s11_file_pattern}
-
-        if "d" not in dct and "jd" not in dct:
-            raise ValueError("s11_file_pattern must contain a tag {d} or {jd}.")
-        if "d" in dct and "jd" in dct:
-            raise ValueError("s11_file_pattern must not contain both {d} and {jd}.")
-
-        p = re.compile(s11_file_pattern.format(**dct))
-
-        ignore = [re.compile(ign) for ign in (ignore_files or [])]
-
-        files = list(s11_dir.glob("*"))
-
-        s11_times = []
-        indx = []
-        for i, fl in enumerate(files):
-            match = p.match(str(fl.name))
-
-            # Ignore files that don't match the pattern
-            if not match:
-                continue
-            if any(ign.match(str(fl.name)) for ign in ignore):
-                continue
-
-            d = match.groupdict()
-
-            indx.append(i)
-
-            # Different time constructor for Day of year vs Day of month
-            if "jd" in d:
-                dt = coords.dt_from_jd(
-                    int(d.get("year", time.year)),
-                    int(d.get("jd")),
-                    int(d.get("hour", 0)),
-                )
-            else:
-                dt = datetime(
-                    int(d.get("year", time.year)),
-                    int(d.get("month", time.month)),
-                    int(d.get("day")),
-                    int(d.get("hour", 0)),
-                )
-            s11_times.append(dt)
-
-        if not len(s11_times):
-            raise FileNotFoundError(
-                f"No files found matching the input pattern. Available files: "
-                f"{[fl.name for fl in files]}. Regex pattern: {p.pattern}. "
-            )
-
-        files = [fl for i, fl in enumerate(files) if i in indx]
-        time_diffs = np.array([abs((time - t).total_seconds()) for t in s11_times])
-        indx = np.where(time_diffs == time_diffs.min())[0]
-
-        # Gets a representative closest time file
-        closest = [fl for i, fl in enumerate(files) if i in indx]
-
-        assert (
-            len(closest) == 4
-        ), f"There need to be four input S1P files of the same time, got {closest}."
-        return sorted(closest)
-
-    @classmethod
-    def get_s11_paths(
-        cls,
-        s11_path: str | Path | tuple | list,
-        band: str,
-        begin_time: datetime,
-        s11_file_pattern: str,
-        ignore_files: list[str] | None = None,
-    ):
-        """Given an s11_path, return list of paths for each of the inputs."""
-        # If we get four files, make sure they exist and pass them back
-        if isinstance(s11_path, (tuple, list)):
-            if len(s11_path) != 4:
-                raise ValueError(
-                    "If passing explicit paths to S11 inputs, length must be 4."
-                )
-
-            fls = []
-            for pth in s11_path:
-                p = Path(pth).expanduser().absolute()
-                assert p.exists()
-                fls.append(p)
-
-            return fls
-
-        # Otherwise it must be a path.
-        s11_path = Path(s11_path).expanduser()
-
-        if str(s11_path).startswith(":"):
-            s11_path = cls.default_s11_directory(band) / str(s11_path)[1:]
-
-        if s11_path.is_dir():
-            # Get closest measurement
-            return cls._get_closest_s11_time(
-                s11_path, begin_time, s11_file_pattern, ignore_files=ignore_files
-            )
-        # The path *must* have an {input} tag in it which we can search on
-        fls = glob.glob(str(s11_path).format(input="?"))
-        assert (
-            len(fls) == 4
-        ), f"There are not exactly four files matching {s11_path}. Found: {fls}."
-        return sorted(Path(fl) for fl in fls)
+        meta = {**meta, **cls._get_meta(locals())}
+        return freq, data, time_based_anc, meta
 
     @classmethod
     def _get_weather_thermlog(
         cls,
         band: str,
         times: list[datetime],
-        weather_file: [None, Path, str] = None,
-        thermlog_file: [None, Path, str] = None,
+        weather_file: None | tp.PathLike = None,
+        thermlog_file: None | tp.PathLike = None,
     ):
         """
         Read the appropriate weather and thermlog file, returning their contents.
@@ -1552,6 +1289,308 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
 
         return out
 
+
+@add_structure
+class CalibratedData(_ReductionStep, _SingleDayMixin):
+    """Object representing calibrated data.
+
+    This object essentially represents a Calibrated spectrum.
+
+    See :class:`_ReductionStep` for documentation about the various datasets within this
+    class instance. Note that you can always check which data is inside each group by
+    checking its ``.keys()``.
+
+    The data at this level have (in this order):
+
+    * Calibration applied from existing calibration solutions
+    * Collected associated weather and thermal auxiliary data (not used at this level,
+      just collected)
+    * Potential xRFI applied to the raw switch powers individually.
+    """
+
+    _ancillary = copy.copy(RawData._ancillary)
+
+    _meta = {
+        **RawData._meta,
+        **{
+            "calobs_path": None,
+            "cterms": lambda x: isinstance(x, (int, np.int64)),
+            "wterms": lambda x: isinstance(x, (int, np.int64)),
+            "s11_files": None,
+        },
+    }
+
+    @classmethod
+    def _promote(
+        cls,
+        prev_step: RawData,
+        calfile: str | Path,
+        s11_path: str | Path,
+        s11_file_pattern: str = r"{y}_{jd}_{h}_*_input{input}.s1p",
+        ignore_s11_files: list[str] | None = None,
+        antenna_s11_n_terms: int = 15,
+        antenna_correction: str | Path | None = ":",
+        balun_correction: str | Path | None = ":",
+        ground_correction: str | Path | None | float = ":",
+        beam_file=None,
+    ) -> tuple[np.ndarray, dict, dict, dict]:
+        """
+        Create the object directly from calibrated data.
+
+        Parameters
+        ----------
+        prev_step
+            The filename of the RawData file to read.
+        calfile
+            A file containing the output of
+            :meth:`edges_cal.CalibrationObservation.write` -- i.e. all the information
+            required to calibrate the raw data. Determination of calibration parameters
+            occurs externally and saved to this file.
+        s11_path
+            Path to the receiver S11 information relevant to this observation.
+        s11_file_pattern
+            A format string defining the naming pattern of S11 files at ``s11_path``.
+            This is used to automatically find the S11 file closest in time to the
+            observation, if the ``s11_path`` is not explicit (i.e. it is a directory).
+        ignore_s11_files
+            A list of paths to ignore when attempting to find the S11 file closest to
+            the observation (perhaps they are known to be bad).
+
+        Other Parameters
+        ----------------
+        All other parameters are passed to :meth:`_calibrate` -- see its documentation
+        for details.
+
+        Returns
+        -------
+        data
+            An instantiated :class:`CalibratedData` object.
+        """
+        prev_step = read_step(prev_step)
+
+        s11_files = cls.get_s11_paths(
+            s11_path,
+            prev_step.meta["band"],
+            prev_step.datetimes[0],
+            s11_file_pattern,
+            ignore_files=ignore_s11_files,
+        )
+
+        labcal = LabCalibration(
+            calobs=Calibration(Path(calfile).expanduser()),
+            s11_files=s11_files,
+            antenna_s11_n_terms=antenna_s11_n_terms,
+        )
+
+        logger.info("Calibrating data ...")
+        t = time.time()
+        calspec, freq, new_meta = cls.calibrate(
+            q=prev_step.spectrum,
+            freq=prev_step.raw_frequencies,
+            band=prev_step.meta["band"],
+            labcal=labcal,
+            ambient_temp=prev_step.ancillary["ambient_temp"],
+            lst=prev_step.ancillary["lst"],
+            configuration="",
+            antenna_correction=antenna_correction,
+            balun_correction=balun_correction,
+            ground_correction=ground_correction,
+            beam_file=beam_file,
+            f_low=labcal.calobs.freq.min,
+            f_high=labcal.calobs.freq.max,
+        )
+        logger.info(f"... finished in {time.time() - t:.2f} sec.")
+
+        meta = {**prev_step.meta, **new_meta}
+        meta = {**meta, **cls._get_meta(locals())}
+        meta["s11_files"] = ":".join(str(fl) for fl in s11_files)
+
+        data = {
+            "spectrum": calspec,
+            "weights": np.ones_like(calspec),
+        }
+
+        return freq.freq, data, {k: v for k, v in prev_step.ancillary.items()}, meta
+
+    @property
+    def s11_files(self):
+        """The antenna S11 files used by the calibration."""
+        return self.meta["s11_files"].split(":")
+
+    def get_subset(self, integrations=100):
+        """Write a subset of the data to a new mock :class:`CalibratedData` file."""
+        freq = self.raw_frequencies
+        spectra = {k: self.spectra[k] for k in self.spectra.keys()}
+        ancillary = self.ancillary
+        meta = self.meta
+
+        spectra = {k: s[:integrations] for k, s in spectra.items()}
+        ancillary = ancillary[:integrations]
+
+        return self.from_data(
+            {
+                "frequency": freq,
+                "spectra": spectra,
+                "ancillary": ancillary,
+                "meta": meta,
+            }
+        )
+
+    @classmethod
+    def default_s11_directory(cls, band: str) -> Path:
+        """Get the default S11 directory for this observation."""
+        return Path(config["paths"]["raw_field_data"]) / "mro" / band / "s11"
+
+    @classmethod
+    def _get_closest_s11_time(
+        cls,
+        s11_dir: Path,
+        time: datetime,
+        s11_file_pattern: str = "{y}_{jd}_{h}_*_input{input}.s1p",
+        ignore_files=None,
+    ):
+        """From a given filename pattern, within a directory, find file closest to time.
+
+        Parameters
+        ----------
+        s11_dir : Path
+            The directory in which to search for S11 files.
+        time : datetime
+            The time to find the closest match to.
+        s11_file_pattern : str
+            A pattern that matches files in the directory. A few tags are available:
+            {input}: tags the input number (should be 1-4)
+            {y}: year (four digit number)
+            {m}: month (two-digit number)
+            {d}: day of month (two-digit number)
+            {jd}: day of year (three-digit number)
+            {h}: hour of day (observation start) (two digit number)
+        ignore_files : list, optional
+            A list of file patterns to ignore. They need only partially match
+            the actual filenames. So for example, you could specify
+            ``ignore_files=['2020_076']`` and it will ignore the file
+            ``/home/user/data/2020_076_01_02_input1.s1p``. Full regex can be used.
+        """
+        # Replace the suffix dot with a literal dot for regex
+        s11_file_pattern = s11_file_pattern.replace(".", r"\.")
+
+        # Replace any glob-style asterisks with non-greedy regex version
+        s11_file_pattern = s11_file_pattern.replace("*", r".*?")
+
+        # First, we need to build a regex pattern out of the s11_file_pattern
+        dct = {
+            "input": r"(?P<input>\d)",
+            "y": r"(?P<year>\d\d\d\d)",
+            "m": r"(?P<month>\d\d)",
+            "d": r"(?P<day>\d\d)",
+            "jd": r"(?P<jd>\d\d\d)",
+            "h": r"(?P<hour>\d\d)",
+        }
+        dct = {d: v for d, v in dct.items() if "{%s}" % d in s11_file_pattern}
+
+        if "d" not in dct and "jd" not in dct:
+            raise ValueError("s11_file_pattern must contain a tag {d} or {jd}.")
+        if "d" in dct and "jd" in dct:
+            raise ValueError("s11_file_pattern must not contain both {d} and {jd}.")
+
+        p = re.compile(s11_file_pattern.format(**dct))
+
+        ignore = [re.compile(ign) for ign in (ignore_files or [])]
+
+        files = list(s11_dir.glob("*"))
+
+        s11_times = []
+        indx = []
+        for i, fl in enumerate(files):
+            match = p.match(str(fl.name))
+
+            # Ignore files that don't match the pattern
+            if not match:
+                continue
+            if any(ign.match(str(fl.name)) for ign in ignore):
+                continue
+
+            d = match.groupdict()
+
+            indx.append(i)
+
+            # Different time constructor for Day of year vs Day of month
+            if "jd" in d:
+                dt = coords.dt_from_jd(
+                    int(d.get("year", time.year)),
+                    int(d.get("jd")),
+                    int(d.get("hour", 0)),
+                )
+            else:
+                dt = datetime(
+                    int(d.get("year", time.year)),
+                    int(d.get("month", time.month)),
+                    int(d.get("day")),
+                    int(d.get("hour", 0)),
+                )
+            s11_times.append(dt)
+
+        if not len(s11_times):
+            raise FileNotFoundError(
+                f"No files found matching the input pattern. Available files: "
+                f"{[fl.name for fl in files]}. Regex pattern: {p.pattern}. "
+            )
+
+        files = [fl for i, fl in enumerate(files) if i in indx]
+        time_diffs = np.array([abs((time - t).total_seconds()) for t in s11_times])
+        indx = np.where(time_diffs == time_diffs.min())[0]
+
+        # Gets a representative closest time file
+        closest = [fl for i, fl in enumerate(files) if i in indx]
+
+        assert (
+            len(closest) == 4
+        ), f"There need to be four input S1P files of the same time, got {closest}."
+        return sorted(closest)
+
+    @classmethod
+    def get_s11_paths(
+        cls,
+        s11_path: str | Path | tuple | list,
+        band: str,
+        begin_time: datetime,
+        s11_file_pattern: str,
+        ignore_files: list[str] | None = None,
+    ):
+        """Given an s11_path, return list of paths for each of the inputs."""
+        # If we get four files, make sure they exist and pass them back
+        if isinstance(s11_path, (tuple, list)):
+            if len(s11_path) != 4:
+                raise ValueError(
+                    "If passing explicit paths to S11 inputs, length must be 4."
+                )
+
+            fls = []
+            for pth in s11_path:
+                p = Path(pth).expanduser().absolute()
+                assert p.exists()
+                fls.append(p)
+
+            return fls
+
+        # Otherwise it must be a path.
+        s11_path = Path(s11_path).expanduser()
+
+        if str(s11_path).startswith(":"):
+            s11_path = cls.default_s11_directory(band) / str(s11_path)[1:]
+
+        if s11_path.is_dir():
+            # Get closest measurement
+            return cls._get_closest_s11_time(
+                s11_path, begin_time, s11_file_pattern, ignore_files=ignore_files
+            )
+        # The path *must* have an {input} tag in it which we can search on
+        fls = glob.glob(str(s11_path).format(input="?"))
+        assert (
+            len(fls) == 4
+        ), f"There are not exactly four files matching {s11_path}. Found: {fls}."
+        return sorted(Path(fl) for fl in fls)
+
     @cached_property
     def lab_calibrator(self) -> LabCalibration:
         """Object that performs lab-based calibration on the data."""
@@ -1591,7 +1630,7 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
     ) -> np.ndarray:
         """Perform lab calibration on given three-position switch ratio data."""
         # Cut the frequency range
-        q = q.T[:, freq.mask]
+        q = q[:, freq.mask]
         return labcal.calibrate_q(q)
 
     @classmethod
