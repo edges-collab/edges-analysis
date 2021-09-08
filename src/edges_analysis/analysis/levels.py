@@ -1054,22 +1054,15 @@ class RawData(_ReductionStep, _SingleDayMixin):
             default thermlog file automatically).
         """
         t = time.time()
-        freq_f = prev_step["freq_ancillary"]["frequencies"]
-        f_mask = np.where(freq_f.freq >= 40)[0]
-        freq = freq_f[f_mask:]
-        q = prev_step["spectra"]["Q"][
-            f_mask:,
-        ]
+        freq_rng = FrequencyRange(
+            prev_step["freq_ancillary"]["frequencies"], f_low=40.0
+        )
+        freq = freq_rng.freq
+        q = prev_step["spectra"]["Q"][freq_rng.mask]
         p = [
-            prev_step["spectra"]["p0"][
-                f_mask:,
-            ],
-            prev_step["spectra"]["p1"][
-                f_mask:,
-            ],
-            prev_step["spectra"]["p2"][
-                f_mask:,
-            ],
+            prev_step["spectra"]["p0"][freq_rng.mask],
+            prev_step["spectra"]["p1"][freq_rng.mask],
+            prev_step["spectra"]["p2"][freq_rng.mask],
         ]
 
         ancillary = prev_step["time_ancillary"]

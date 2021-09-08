@@ -13,9 +13,9 @@ import numpy as np
 
 
 def test_raw_step(raw_step: Tuple[RawData, RawData]):
-    assert raw_step[0].raw_frequencies.shape == (32768,)
-    assert raw_step[1].raw_frequencies.shape == (32768,)
-
+    assert raw_step[0].raw_frequencies.shape == (26214,)
+    assert raw_step[1].raw_frequencies.shape == (26214,)
+    assert np.min(raw_step[0].freq.freq) >= 40
     # Ensure it's pickleable
     pickle.dumps(raw_step[0])
 
