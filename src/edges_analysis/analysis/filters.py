@@ -991,7 +991,7 @@ def total_power_filter(
     return [np.any([f[iday] for f in flags], axis=0) for iday in range(len(flags[0]))]
 
 
-@step_filter(axis="time", data_type=CalibratedData)
+@step_filter(axis="time", data_type=(RawData, CalibratedData))
 def negative_power_filter(*, data: CalibratedData):
     """Filter out integrations that have *any* negative/zero power.
 
