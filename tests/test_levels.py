@@ -1,13 +1,33 @@
 from edges_analysis.analysis import (
     CalibratedData,
     CombinedData,
+    CombinedBinnedData,
     DayAveragedData,
     BinnedData,
     ModelData,
+    RawData,
 )
-from typing import List
+from typing import List, Tuple
 import dill as pickle
 import numpy as np
+
+
+def test_raw_step(raw_step: Tuple[RawData, RawData]):
+    assert raw_step[0].raw_frequencies.shape == (26214,)
+    assert raw_step[1].raw_frequencies.shape == (26214,)
+    assert np.min(raw_step[0].freq.freq) >= 40
+    # Ensure it's pickleable
+    pickle.dumps(raw_step[0])
+
+    # ensure plotting functions don't error
+    raw_step[0].plot_waterfalls()
+
+    assert (
+        len(raw_step[0].lst)
+        == len(raw_step[0].gha)
+        == len(raw_step[0].raw_time_data)
+        == len(raw_step[0].datetimes)
+    )
 
 
 def test_calibrate_step(cal_step: List[CalibratedData]):
@@ -18,7 +38,7 @@ def test_calibrate_step(cal_step: List[CalibratedData]):
     pickle.dumps(cal_step[0])
 
     # ensure plotting functions don't error
-    cal_step[0].plot_waterfalls()
+    cal_step[0].plot_waterfall()
     cal_step[0].plot_time_averaged_spectrum()
     cal_step[0].plot_s11()
 
@@ -59,6 +79,18 @@ def test_combine_step(combo_step: CombinedData):
     # just run some plotting methods to make sure they don't error...
     combo_step.plot_daily_residuals(freq_resolution=1.0, gha_max=18, gha_min=6)
     combo_step.plot_waterfall(day=292)
+
+
+def test_bin_aftercombine_step(combo_bin_step: CombinedBinnedData):
+    assert combo_bin_step.resids.shape[-1] == len(combo_bin_step.raw_frequencies)
+    assert combo_bin_step.spectrum.shape == combo_bin_step.resids.shape
+
+    # Ensure it's pickleable
+    pickle.dumps(combo_bin_step)
+
+    # just run some plotting methods to make sure they don't error...
+    combo_bin_step.plot_daily_residuals(freq_resolution=1.0, gha_max=18, gha_min=6)
+    combo_bin_step.plot_waterfall(day=292)
 
 
 def test_day_step(day_step: DayAveragedData):

@@ -92,10 +92,7 @@ class LabCalibration:
         if freq is None:
             freq = self.calobs.freq.freq
 
-        try:
-            lna = self.calobs.lna_s11(freq)  # from Calibration
-        except TypeError:
-            lna = self.calobs.lna_s11  # from CalibrationObservation
+        lna = self.lna_s11(freq)
 
         if ant_s11 is None:
             ant_s11 = self.antenna_s11_model(freq)
@@ -174,3 +171,11 @@ class LabCalibration:
             return (out - self.calobs.t_load) / self.calobs.t_load_ns
         else:
             return out
+
+    @property
+    def lna_s11(self):
+        """A callable model of LNA S11 as a function of frequency."""
+        if isinstance(self.calobs, Calibration):
+            return self.calobs.lna_s11
+        else:
+            return self.calobs.lna.s11_model

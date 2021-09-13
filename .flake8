@@ -8,7 +8,7 @@ ignore =
   D101    # Missing docstring in public class -- my docstrings are in the __init__ which seems to fail this ?
   RST210  # because **kwargs is allowed.
 max-line-length = 88
-max-complexity = 20
+max-complexity = 25
 inline-quotes = double
 docstring-convention=numpy
 rst-roles =
