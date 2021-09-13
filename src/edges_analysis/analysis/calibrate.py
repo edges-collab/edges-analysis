@@ -7,6 +7,7 @@ from typing import Callable, Union, Tuple, Sequence, Optional, Type
 import numpy as np
 from pathlib import Path
 from edges_cal import receiver_calibration_func as rcf
+from edges_cal import modelling as mdl
 
 
 def optional(tp: Type) -> Callable:
@@ -20,7 +21,9 @@ class LabCalibration:
 
     calobs: Union[Calibration, CalibrationObservation] = attr.ib()
     s11_files: Sequence[Union[str, Path]] = attr.ib()
-    antenna_s11_n_terms: int = attr.ib(default=15)
+    ant_s11_model: mdl.Model = attr.ib(
+        default=mdl.Polynomial(n_terms=10, transform=mdl.UnitTransform())
+    )
 
     @property
     def internal_switch_s11(self) -> Callable:
@@ -58,6 +61,7 @@ class LabCalibration:
             internal_switch_s11=self.internal_switch_s11,
             internal_switch_s12=self.internal_switch_s12,
             internal_switch_s22=self.internal_switch_s22,
+            model=self.ant_s11_model,
         )
 
         return model, raw, raw_freq
