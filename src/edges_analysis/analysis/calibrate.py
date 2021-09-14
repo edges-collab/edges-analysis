@@ -1,16 +1,17 @@
 """Module providing routines for calibration of field data."""
+from __future__ import annotations
 import attr
 from edges_cal import Calibration, CalibrationObservation
 from . import s11 as s11m
 from cached_property import cached_property
-from typing import Callable, Union, Tuple, Sequence, Optional, Type
+from typing import Callable, Sequence
 import numpy as np
 from pathlib import Path
 from edges_cal import receiver_calibration_func as rcf
 from edges_cal import modelling as mdl
 
 
-def optional(tp: Type) -> Callable:
+def optional(tp: type) -> Callable:
     """Define a function that checks if a value is optionally a cetain type."""
     return lambda x: None if x is None else tp(x)
 
@@ -19,11 +20,12 @@ def optional(tp: Type) -> Callable:
 class LabCalibration:
     """Lab calibration of field data."""
 
-    calobs: Union[Calibration, CalibrationObservation] = attr.ib()
-    s11_files: Sequence[Union[str, Path]] = attr.ib()
+    calobs: Calibration | CalibrationObservation = attr.ib()
+    s11_files: Sequence[str | Path] = attr.ib()
     ant_s11_model: mdl.Model = attr.ib(
         default=mdl.Polynomial(n_terms=10, transform=mdl.UnitTransform())
     )
+    _ant_s11_function: Callable[[np.ndarray], np.ndarray] | None = attr.ib(default=None)
 
     @property
     def internal_switch_s11(self) -> Callable:
@@ -52,7 +54,7 @@ class LabCalibration:
     @cached_property
     def _antenna_s11(
         self,
-    ) -> Tuple[Callable[[np.ndarray], np.ndarray], np.ndarray, np.ndarray]:
+    ) -> tuple[Callable[[np.ndarray], np.ndarray], np.ndarray, np.ndarray]:
         model, raw, raw_freq = s11m.antenna_s11_remove_delay(
             self.s11_files,
             f_low=self.calobs.freq.min,
@@ -68,7 +70,10 @@ class LabCalibration:
 
     def antenna_s11_model(self, freq: np.ndarray) -> Callable[[np.ndarray], np.ndarray]:
         """Callable S11 model as a function of frequency."""
-        return self._antenna_s11[0](freq)
+        if self._ant_s11_function is None:
+            return self._antenna_s11[0](freq)
+        else:
+            return self._ant_s11_function(freq)
 
     @cached_property
     def antenna_s11(self) -> np.ndarray:
@@ -86,7 +91,7 @@ class LabCalibration:
         return self._antenna_s11[2]
 
     def get_gamma_coeffs(
-        self, freq: Optional[np.ndarray] = None, ant_s11: Optional[np.ndarray] = None
+        self, freq: np.ndarray | None = None, ant_s11: np.ndarray | None = None
     ):
         """Get the K-vector for calibration that is dependent on LNA and Antenna S11."""
         if freq is None:
@@ -99,8 +104,8 @@ class LabCalibration:
         return rcf.get_K(lna, ant_s11)
 
     def get_linear_coefficients(
-        self, freq: Optional[np.ndarray] = None, ant_s11: Optional[np.ndarray] = None
-    ) -> Tuple[np.ndarray, np.ndarray]:
+        self, freq: np.ndarray | None = None, ant_s11: np.ndarray | None = None
+    ) -> tuple[np.ndarray, np.ndarray]:
         """Get the linear coeffs that transform uncalibrated to calibrated temp."""
         if freq is None:
             freq = self.calobs.freq.freq
@@ -121,9 +126,7 @@ class LabCalibration:
         """Create a new instance based off this one."""
         return attr.evolve(self, **kwargs)
 
-    def calibrate_q(
-        self, q: np.ndarray, freq: Optional[np.ndarray] = None
-    ) -> np.ndarray:
+    def calibrate_q(self, q: np.ndarray, freq: np.ndarray | None = None) -> np.ndarray:
         """Convert three-position switch ratio to fully calibrated temperature."""
         if freq is None:
             freq = self.calobs.freq.freq
@@ -140,7 +143,7 @@ class LabCalibration:
         return c.calibrate_Q(freq, q, ant_s11)
 
     def calibrate_temp(
-        self, temp: np.ndarray, freq: Optional[np.ndarray] = None
+        self, temp: np.ndarray, freq: np.ndarray | None = None
     ) -> np.ndarray:
         """Convert semi-calibrated temperature to fully calibrated temperature."""
         if freq is None:
@@ -151,7 +154,7 @@ class LabCalibration:
         return self.calobs.calibrate_temp(freq, temp, ant_s11)
 
     def decalibrate_temp(
-        self, temp: np.ndarray, freq: Optional[np.ndarray] = None, to_q=False
+        self, temp: np.ndarray, freq: np.ndarray | None = None, to_q=False
     ) -> np.ndarray:
         """Convert fully-calibrated temp to semi-calibrated temp."""
         if not isinstance(self.calobs, Calibration):
@@ -179,3 +182,9 @@ class LabCalibration:
             return self.calobs.lna_s11
         else:
             return self.calobs.lna.s11_model
+
+    def with_ant_s11(
+        self, ant_s11: Callable[[np.ndarray], np.ndarray]
+    ) -> LabCalibration:
+        """Clone the instance and add a specific antenna S11 model."""
+        return attr.evolve(self, ant_s11_function=ant_s11)
