@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 from multiprocessing import cpu_count
 from typing import Sequence, Callable, Literal
-from .levels import CalibratedData, read_step, _ReductionStep
+from .levels import CalibratedData, read_step, _ReductionStep, RawData
 from . import types as tp
 import attr
 import h5py
@@ -842,7 +842,7 @@ def time_filter_auxiliary(
     return flags
 
 
-@step_filter(axis="time", data_type=CalibratedData)
+@step_filter(axis="time", data_type=(RawData, CalibratedData))
 def aux_filter(
     *,
     data: CalibratedData,
@@ -991,7 +991,7 @@ def total_power_filter(
     return [np.any([f[iday] for f in flags], axis=0) for iday in range(len(flags[0]))]
 
 
-@step_filter(axis="time", data_type=CalibratedData)
+@step_filter(axis="time", data_type=(RawData, CalibratedData))
 def negative_power_filter(*, data: CalibratedData):
     """Filter out integrations that have *any* negative/zero power.
 

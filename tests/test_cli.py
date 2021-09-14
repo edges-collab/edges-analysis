@@ -29,9 +29,7 @@ def test_flag_idx_filter(edges_config: dict, cal_step, settings: Path):
     print(result.output)
 
     filtered_files = sorted(
-        (
-            edges_config["paths"]["field_products"] / "calibrated" / "should-be-same"
-        ).glob("*.h5")
+        (cal_step[0].filename.parent / "should-be-same").glob("*.h5")
     )
     assert len(filtered_files) == 2
 
@@ -60,9 +58,7 @@ def test_flag_idx_filter(edges_config: dict, cal_step, settings: Path):
     print(result.output)
 
     filtered_files2 = sorted(
-        (
-            edges_config["paths"]["field_products"] / "calibrated" / "should-be-same"
-        ).glob("*.h5")
+        (cal_step[0].filename.parent / "should-be-same").glob("*.h5")
     )
     assert len(filtered_files2) == 2
 
