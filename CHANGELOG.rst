@@ -12,6 +12,8 @@ Added
   data.
 - New ``filter`` CLI command.
 - ``from_cst`` beam function.
+- New class for binning after combinedData, called CombinedBinnedData
+- CLI steps to handle this new processing steps with the same "bin" command
 - Added an option of smoothing the beam over frequency
 
 Fixed
