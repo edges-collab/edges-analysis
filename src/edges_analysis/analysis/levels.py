@@ -1379,10 +1379,14 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
             ignore_files=ignore_s11_files,
         )
 
+        calobs = Calibration(Path(calfile).expanduser())
         labcal = LabCalibration(
-            calobs=Calibration(Path(calfile).expanduser()),
+            calobs=calobs,
             s11_files=s11_files,
-            antenna_s11_n_terms=antenna_s11_n_terms,
+            ant_s11_model=mdl.Polynomial(
+                n_terms=antenna_s11_n_terms,
+                transform=mdl.UnitTransform(range=(calobs.freq.min, calobs.freq.max)),
+            ),
         )
 
         logger.info("Calibrating data ...")
@@ -1600,7 +1604,12 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
         return LabCalibration(
             calobs=self.calibration,
             s11_files=self.s11_files,
-            antenna_s11_n_terms=self.meta["antenna_s11_n_terms"],
+            ant_s11_model=mdl.Polynomial(
+                n_terms=self.meta["antenna_s11_n_terms"],
+                transform=mdl.UnitTransform(
+                    range=(self.calibration.freq.min, self.calibration.freq.max)
+                ),
+            ),
         )
 
     def antenna_s11_model(self, freq) -> Callable[[np.ndarray], np.ndarray]:
