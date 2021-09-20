@@ -22,10 +22,17 @@ class LabCalibration:
 
     calobs: Calibration | CalibrationObservation = attr.ib()
     s11_files: Sequence[str | Path] = attr.ib()
-    ant_s11_model: mdl.Model = attr.ib(
-        default=mdl.Polynomial(n_terms=10, transform=mdl.UnitTransform())
-    )
+    ant_s11_model: mdl.Model = attr.ib()
     _ant_s11_function: Callable[[np.ndarray], np.ndarray] | None = attr.ib(default=None)
+
+    @ant_s11_model.default
+    def _asm_default(self):
+        return mdl.Polynomial(
+            n_terms=10,
+            transform=mdl.UnitTransform(
+                range=(self.calobs.freq.min, self.calobs.freq.max)
+            ),
+        )
 
     @property
     def internal_switch_s11(self) -> Callable:

@@ -60,7 +60,7 @@ def antenna_s11_remove_delay(
     internal_switch_s11: Optional[Callable] = None,
     internal_switch_s12: Optional[Callable] = None,
     internal_switch_s22: Optional[Callable] = None,
-    model: mdl.Model = mdl.Polynomial(n_terms=10, transform=mdl.UnitTransform()),
+    model: mdl.Model = None,
 ):
     """
     Remove delay from antenna S11.
@@ -97,6 +97,11 @@ def antenna_s11_remove_delay(
     # Removing delay from S11
     delay = delay_0 * f_orig
     gamma *= np.exp(delay * 1j)
+
+    if model is None:
+        model = mdl.Polynomial(
+            n_terms=10, transform=mdl.UnitTransform(range=(f_orig.min(), f_orig.max()))
+        )
 
     model = mdl.ComplexRealImagModel(real=model, imag=model)
     fit = model.fit(xdata=f_orig, ydata=gamma)
