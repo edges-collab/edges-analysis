@@ -1413,7 +1413,7 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
         meta["s11_files"] = ":".join(str(fl) for fl in s11_files)
 
         freq_mask = (prev_step.raw_frequencies >= labcal.calobs.freq.min) & (
-            prev_step.raw_frequencies < labcal.calobs.freq.max
+            prev_step.raw_frequencies <= labcal.calobs.freq.max
         )
         data = {
             "spectrum": calspec,
