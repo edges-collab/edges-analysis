@@ -416,15 +416,12 @@ class _ReductionStep(HDF5Object):
         flags
             The array of flags.
         """
-        if filt in {"initial", "old"}:
+        if filt in {"initial", "old"} or not self.filters_applied:
             return self.raw_weights == 0
 
-        try:
-            filt = self._get_filter_index(filt)
-            with self.open() as fl:
-                flags = fl["flags"]["flags"][filt, ...]
-        except OSError:
-            flags = np.zeros(self.spectrum.shape, dtype=bool)
+        filt = self._get_filter_index(filt)
+        with self.open() as fl:
+            flags = fl["flags"]["flags"][filt, ...]
 
         return flags
 
