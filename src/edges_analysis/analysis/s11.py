@@ -5,6 +5,7 @@ from edges_cal.s11_correction import InternalSwitch
 from typing import Sequence, Union, Callable, Optional
 from pathlib import Path
 from edges_cal import reflection_coefficient as rc
+from edges_cal import modelling as mdl
 
 
 def get_corrected_s11(
@@ -55,11 +56,11 @@ def antenna_s11_remove_delay(
     f_low: float = -np.inf,
     f_high: float = np.inf,
     delay_0: float = 0.17,
-    n_fit: int = 10,
     internal_switch: Optional[InternalSwitch] = None,
     internal_switch_s11: Optional[Callable] = None,
     internal_switch_s12: Optional[Callable] = None,
     internal_switch_s22: Optional[Callable] = None,
+    model: mdl.Model = None,
 ):
     """
     Remove delay from antenna S11.
@@ -72,9 +73,9 @@ def antenna_s11_remove_delay(
         The min/max frequencies for which to perform the fit.
     delay_0
         Delay of the antenna (at 1 MHz?)
-    n_fit
-        Number of terms in polynomial fit to the S11, in order to recast at new
-        frequencies.
+    model
+        The model to fit to the real and imaginary parts of the antenna S11
+        (separately).
 
     Returns
     -------
@@ -97,10 +98,15 @@ def antenna_s11_remove_delay(
     delay = delay_0 * f_orig
     gamma *= np.exp(delay * 1j)
 
-    re = np.polyfit(f_orig, np.real(gamma), n_fit - 1)
-    im = np.polyfit(f_orig, np.imag(gamma), n_fit - 1)
+    if model is None:
+        model = mdl.Polynomial(
+            n_terms=10, transform=mdl.UnitTransform(range=(f_orig.min(), f_orig.max()))
+        )
+
+    model = mdl.ComplexRealImagModel(real=model, imag=model)
+    fit = model.fit(xdata=f_orig, ydata=gamma)
 
     def model(f):
-        return (np.polyval(re, f) + 1j * np.polyval(im, f)) * np.exp(-1j * delay_0 * f)
+        return fit(x=f) * np.exp(-1j * delay_0 * f)
 
     return model, gamma * np.exp(-1j * delay_0 * f_orig), f_orig
