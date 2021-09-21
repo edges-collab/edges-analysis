@@ -1412,9 +1412,12 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
         meta = {**meta, **cls._get_meta(locals())}
         meta["s11_files"] = ":".join(str(fl) for fl in s11_files)
 
+        freq_mask = (prev_step.raw_frequencies >= labcal.calobs.freq.min) & (
+            prev_step.raw_frequencies < labcal.calobs.freq.max
+        )
         data = {
             "spectrum": calspec,
-            "weights": prev_step.weights,
+            "weights": prev_step.weights[:, freq_mask],
         }
 
         return freq.freq, data, {k: v for k, v in prev_step.ancillary.items()}, meta
