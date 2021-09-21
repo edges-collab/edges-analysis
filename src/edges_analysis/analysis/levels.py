@@ -1414,7 +1414,7 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
 
         data = {
             "spectrum": calspec,
-            "weights": np.ones_like(calspec),
+            "weights": prev_step.weights,
         }
 
         return freq.freq, data, {k: v for k, v in prev_step.ancillary.items()}, meta

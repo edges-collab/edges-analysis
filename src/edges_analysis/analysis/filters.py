@@ -483,9 +483,9 @@ def get_gha_model_filter(
     aggregator
         A specialized function that takes a file and some parameters and returns
         an aggregated metric.
-    metric_model_type
+    metric_model
         A linear model to be fit to the aggregated metric data.
-    std_model_type
+    std_model
         A linear model to be fit to the absolute residuals of the metric data.
     metric_model_kwargs
         Parameters for the linear model (such as ``n_terms``) to fit to the metric.
