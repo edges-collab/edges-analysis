@@ -249,7 +249,7 @@ def _get_loss(fname, freq, n_terms):
 def ground_loss(
     filename: [str, Path, bool],
     freq: [np.ndarray],
-    beam: np.ndarray,
+    beam: np.ndarray = None,
     deg_step: float = 1.0,
     band: [None, str] = None,
     configuration: [str] = "",
