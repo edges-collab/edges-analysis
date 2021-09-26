@@ -3,6 +3,7 @@ from pathlib import Path
 import numpy as np
 from edges_cal import reflection_coefficient as rc
 from ..config import config
+from scipy import integrate
 
 
 def balun_and_connector_loss(
@@ -248,6 +249,8 @@ def _get_loss(fname, freq, n_terms):
 def ground_loss(
     filename: [str, Path, bool],
     freq: [np.ndarray],
+    beam: np.ndarray,
+    deg_step: float = 1.0,
     band: [None, str] = None,
     configuration: [str] = "",
 ):
@@ -269,7 +272,25 @@ def ground_loss(
         the orientation or other configuration parameters of the instrument, which may
         affect the ground loss.
     """
-    if str(filename).startswith(":"):
+    if beam is not None:
+        p_in = np.zeros_like(beam)
+        gain_t = np.zeros((np.shape(beam)[0], np.shape(beam)[1]))
+
+        gain = np.zeros(np.shape(beam)[0])
+
+        for k in range(np.shape(beam)[0]):
+            for i in range(np.shape(beam)[1]):
+
+                p_in[k, i, :] = (
+                    np.sin((90 - i) * deg_step * np.pi / 180) * beam[k, i, :]
+                )
+
+                gain_t[k, i] = integrate.trapz(p_in[k, i, :], dx=deg_step * np.pi / 180)
+
+            gain[k] = integrate.trapz(gain_t[k, :], dx=deg_step * np.pi / 180)
+            gain[k] = gain[k] / (4 * np.pi)
+
+    elif str(filename).startswith(":"):
         if str(filename) == ":":
             # Use the built-in loss files
             fl = "ground"
@@ -283,10 +304,11 @@ def ground_loss(
             filename = (
                 Path(config["paths"]["antenna"]) / band / "loss" / str(filename)[1:]
             )
+        gain = _get_loss(str(filename), freq, 8)
     else:
         filename = Path(filename)
-
-    return _get_loss(str(filename), freq, 8)
+        gain = _get_loss(str(filename), freq, 8)
+    return gain
 
 
 def antenna_loss(
