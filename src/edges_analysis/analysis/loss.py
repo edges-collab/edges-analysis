@@ -4,6 +4,7 @@ import numpy as np
 from edges_cal import reflection_coefficient as rc
 from ..config import config
 from scipy import integrate
+import analysis
 
 
 def balun_and_connector_loss(
@@ -246,10 +247,40 @@ def _get_loss(fname, freq, n_terms):
     return 1 - model
 
 
+def ground_loss_from_beam(beam, deg_step):
+    """
+    Calculate ground loss from a given beam instance.
+
+    Parameters
+    ----------
+    beam : instance
+
+    deg_step : float
+        Frequency in MHz. For mid-band (low-band), between 50 and 150 (120) MHz.
+
+    Returns
+    -------
+    gain: array of the gain values
+    """
+    p_in = np.zeros_like(beam.beam)
+    gain_t = np.zeros((np.shape(beam.beam)[0], np.shape(beam.beam)[1]))
+
+    gain = np.zeros(np.shape(beam.beam)[0])
+
+    for k in range(np.shape(beam.frequency)):
+        p_in[k] = np.sin((90 - beam.elevation) * deg_step * np.pi / 180) * beam.beam[k]
+
+        gain_t[k] = integrate.trapz(p_in[k], dx=deg_step * np.pi / 180, axis=0)
+
+        gain[k] = integrate.trapz(gain_t[k], dx=deg_step * np.pi / 180, axis=0)
+        gain[k] = gain[k] / (4 * np.pi)
+    return gain
+
+
 def ground_loss(
     filename: [str, Path, bool],
     freq: [np.ndarray],
-    beam: np.ndarray = None,
+    beam: analysis.beams.Beam = None,
     deg_step: float = 1.0,
     band: [None, str] = None,
     configuration: [str] = "",
@@ -273,22 +304,7 @@ def ground_loss(
         affect the ground loss.
     """
     if beam is not None:
-        p_in = np.zeros_like(beam)
-        gain_t = np.zeros((np.shape(beam)[0], np.shape(beam)[1]))
-
-        gain = np.zeros(np.shape(beam)[0])
-
-        for k in range(np.shape(beam)[0]):
-            for i in range(np.shape(beam)[1]):
-
-                p_in[k, i, :] = (
-                    np.sin((90 - i) * deg_step * np.pi / 180) * beam[k, i, :]
-                )
-
-                gain_t[k, i] = integrate.trapz(p_in[k, i, :], dx=deg_step * np.pi / 180)
-
-            gain[k] = integrate.trapz(gain_t[k, :], dx=deg_step * np.pi / 180)
-            gain[k] = gain[k] / (4 * np.pi)
+        gain = ground_loss_from_beam(beam, deg_step)
 
     elif str(filename).startswith(":"):
         if str(filename) == ":":
