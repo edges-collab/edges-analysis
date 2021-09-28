@@ -195,6 +195,16 @@ def combo_bin_step(combo_step, settings: Path, integration_test_data: Path):
 
 
 @pytest.fixture(scope="session")
+def combo_bin2_step(combo_bin_step, settings: Path, integration_test_data: Path):
+    with open(settings / "combine_bin2.yml") as fl:
+        s = yaml.load(fl, Loader=yaml.FullLoader)
+
+    return CombinedBinnedData.promote(
+        combo_bin_step, filename=integration_test_data / "combinedbinned2.h5", **s
+    )
+
+
+@pytest.fixture(scope="session")
 def day_step(combo_step: CombinedData, settings: Path, integration_test_data: Path):
     with open(settings / "day_average.yml") as fl:
         s = yaml.load(fl, Loader=yaml.FullLoader)

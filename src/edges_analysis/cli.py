@@ -295,7 +295,10 @@ def process(ctx, step, settings, path, label, message, clobber, output, nthreads
     else:
         output = None
 
-    if step == "bin" and input_file_type == levels.CombinedData:
+    if step == "bin" and input_file_type in (
+        levels.CombinedData,
+        levels.CombinedBinnedData,
+    ):
         step_cls = levels.CombinedBinnedData
 
     if output:
