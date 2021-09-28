@@ -4,7 +4,7 @@ import numpy as np
 from edges_cal import reflection_coefficient as rc
 from ..config import config
 from scipy import integrate
-import analysis
+from . import beams
 
 
 def balun_and_connector_loss(
@@ -280,7 +280,7 @@ def ground_loss_from_beam(beam, deg_step):
 def ground_loss(
     filename: [str, Path, bool],
     freq: [np.ndarray],
-    beam: analysis.beams.Beam = None,
+    beam: beams.Beam = None,
     deg_step: float = 1.0,
     band: [None, str] = None,
     configuration: [str] = "",
