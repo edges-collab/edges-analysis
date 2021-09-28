@@ -4,7 +4,6 @@ import numpy as np
 from edges_cal import reflection_coefficient as rc
 from ..config import config
 from scipy import integrate
-from . import beams
 
 
 def balun_and_connector_loss(
@@ -278,12 +277,12 @@ def ground_loss_from_beam(beam, deg_step):
 
 
 def ground_loss(
-    filename: [str, Path, bool],
-    freq: [np.ndarray],
-    beam: beams.Beam = None,
+    filename: str | Path | bool,
+    freq: np.ndarray,
+    beam=None,
     deg_step: float = 1.0,
-    band: [None, str] = None,
-    configuration: [str] = "",
+    band: str | None = None,
+    configuration: str = "",
 ):
     """
     Calculate ground loss of a particular antenna at given frequencies.
@@ -294,6 +293,10 @@ def ground_loss(
         File in which value of the ground loss for this instrument are tabulated.
     freq : array-like
         Frequency in MHz. For mid-band (low-band), between 50 and 150 (120) MHz.
+    beam
+        A :class:`Beam` instance with which the ground loss may be computed.
+    deg_step
+        The steps (in degrees) of the azimuth angle in the beam (if given).
     band : str, optional
         The instrument to find the ground loss for. Only required if `filename`
         doesn't exist and isn't an absolute path (in which case the standard directory
@@ -304,7 +307,7 @@ def ground_loss(
         affect the ground loss.
     """
     if beam is not None:
-        gain = ground_loss_from_beam(beam, deg_step)
+        return ground_loss_from_beam(beam, deg_step)
 
     elif str(filename).startswith(":"):
         if str(filename) == ":":
@@ -320,11 +323,10 @@ def ground_loss(
             filename = (
                 Path(config["paths"]["antenna"]) / band / "loss" / str(filename)[1:]
             )
-        gain = _get_loss(str(filename), freq, 8)
+        return _get_loss(str(filename), freq, 8)
     else:
         filename = Path(filename)
-        gain = _get_loss(str(filename), freq, 8)
-    return gain
+        return _get_loss(str(filename), freq, 8)
 
 
 def antenna_loss(
