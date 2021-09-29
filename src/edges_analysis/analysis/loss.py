@@ -264,12 +264,16 @@ def ground_loss_from_beam(beam, deg_step):
     gain: array of the gain values
     """
     p_in = np.zeros_like(beam.beam)
-    gain_t = np.zeros((np.shape(beam.beam)[0], np.shape(beam.beam)[1]))
+    gain_t = np.zeros((np.shape(beam.beam)[0], np.shape(beam.beam)[2]))
 
     gain = np.zeros(np.shape(beam.beam)[0])
 
-    for k in range(np.shape(beam.frequency)):
-        p_in[k] = np.sin((90 - beam.elevation) * deg_step * np.pi / 180) * beam.beam[k]
+    for k in range(np.shape(beam.frequency)[0]):
+
+        p_in[k] = (
+            np.sin((90 - np.transpose([beam.elevation] * 360)) * deg_step * np.pi / 180)
+            * beam.beam[k]
+        )
 
         gain_t[k] = integrate.trapz(p_in[k], dx=deg_step * np.pi / 180, axis=0)
 
