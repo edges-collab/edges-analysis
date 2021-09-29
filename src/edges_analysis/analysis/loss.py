@@ -1,8 +1,11 @@
 """Functions defining expected losses from the instruments."""
+from __future__ import annotations
+
 from pathlib import Path
 import numpy as np
 from edges_cal import reflection_coefficient as rc
 from ..config import config
+from scipy import integrate
 
 
 def balun_and_connector_loss(
@@ -245,11 +248,47 @@ def _get_loss(fname, freq, n_terms):
     return 1 - model
 
 
+def ground_loss_from_beam(beam, deg_step):
+    """
+    Calculate ground loss from a given beam instance.
+
+    Parameters
+    ----------
+    beam : instance
+
+    deg_step : float
+        Frequency in MHz. For mid-band (low-band), between 50 and 150 (120) MHz.
+
+    Returns
+    -------
+    gain: array of the gain values
+    """
+    p_in = np.zeros_like(beam.beam)
+    gain_t = np.zeros((np.shape(beam.beam)[0], np.shape(beam.beam)[2]))
+
+    gain = np.zeros(np.shape(beam.beam)[0])
+
+    for k in range(np.shape(beam.frequency)[0]):
+
+        p_in[k] = (
+            np.sin((90 - np.transpose([beam.elevation] * 360)) * deg_step * np.pi / 180)
+            * beam.beam[k]
+        )
+
+        gain_t[k] = integrate.trapz(p_in[k], dx=deg_step * np.pi / 180, axis=0)
+
+        gain[k] = integrate.trapz(gain_t[k], dx=deg_step * np.pi / 180, axis=0)
+        gain[k] = gain[k] / (4 * np.pi)
+    return gain
+
+
 def ground_loss(
-    filename: [str, Path, bool],
-    freq: [np.ndarray],
-    band: [None, str] = None,
-    configuration: [str] = "",
+    filename: str | Path | bool,
+    freq: np.ndarray,
+    beam=None,
+    deg_step: float = 1.0,
+    band: str | None = None,
+    configuration: str = "",
 ):
     """
     Calculate ground loss of a particular antenna at given frequencies.
@@ -260,6 +299,10 @@ def ground_loss(
         File in which value of the ground loss for this instrument are tabulated.
     freq : array-like
         Frequency in MHz. For mid-band (low-band), between 50 and 150 (120) MHz.
+    beam
+        A :class:`Beam` instance with which the ground loss may be computed.
+    deg_step
+        The steps (in degrees) of the azimuth angle in the beam (if given).
     band : str, optional
         The instrument to find the ground loss for. Only required if `filename`
         doesn't exist and isn't an absolute path (in which case the standard directory
@@ -269,7 +312,10 @@ def ground_loss(
         the orientation or other configuration parameters of the instrument, which may
         affect the ground loss.
     """
-    if str(filename).startswith(":"):
+    if beam is not None:
+        return ground_loss_from_beam(beam, deg_step)
+
+    elif str(filename).startswith(":"):
         if str(filename) == ":":
             # Use the built-in loss files
             fl = "ground"
@@ -283,10 +329,10 @@ def ground_loss(
             filename = (
                 Path(config["paths"]["antenna"]) / band / "loss" / str(filename)[1:]
             )
+        return _get_loss(str(filename), freq, 8)
     else:
         filename = Path(filename)
-
-    return _get_loss(str(filename), freq, 8)
+        return _get_loss(str(filename), freq, 8)
 
 
 def antenna_loss(
