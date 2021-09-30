@@ -998,3 +998,17 @@ def negative_power_filter(*, data: CalibratedData):
     These integrations obviously have some weird stuff going on.
     """
     return np.array([np.any(spec <= 0) for spec in data.spectrum])
+
+
+@step_filter(axis="time", data_type=(RawData))
+def filter_150mhz(*, data: RawData, d150: int):
+    """The time stamps where d <= d150 only is included."""
+    freq_mask = (RawData.raw_frequencies - 153.5) <= 1.5
+    rms = np.sqrt(np.mean(RawData.spectrum[:, freq_mask] ** 2))
+
+    freq_mask2 = (RawData.raw_frequencies - 157.0) <= 1.5
+    av = np.mean(RawData.spectrum[:, freq_mask2])
+    d = 200.0 * np.sqrt(rms) / av
+
+    flags = d >= d150
+    return flags
