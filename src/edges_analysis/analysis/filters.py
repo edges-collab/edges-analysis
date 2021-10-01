@@ -998,3 +998,30 @@ def negative_power_filter(*, data: CalibratedData):
     These integrations obviously have some weird stuff going on.
     """
     return np.array([np.any(spec <= 0) for spec in data.spectrum])
+
+
+@step_filter(axis="time", data_type=(RawData, CalibratedData))
+def pkpwr_filter(*, data: RawData, pkpwrm: int = 40):
+    """
+    Filters out integrations that have high power > 80 MHz.
+
+    and high power due to Orbcom around 137.5 MHz.
+    """
+    mask_pkwr = RawData.raw_frequencies > 80
+    pkpwr = RawData.spectrum[:, mask_pkwr].max()
+    mask_orbpwr = abs(RawData.raw_frequencies - 137.5) < 1.0
+    orbpwr = RawData.spectrum[:, mask_orbpwr].max()
+
+    data_80 = RawData.spectrum[:, mask_pkwr]
+    peak_pwr_filter = np.where(data_80 > 0 & data_80 < pkpwr / 10.0)
+
+    temp = np.mean(data_80[peak_pwr_filter])
+
+    pkpwr = 10.0 * np.log10(pkpwr / temp)
+    orbpwr = 10.0 * np.log10(orbpwr / temp)
+    if orbpwr > pkpwr:
+        pkpwr = orbpwr
+
+    flags = pkpwr > pkpwrm
+
+    return flags
