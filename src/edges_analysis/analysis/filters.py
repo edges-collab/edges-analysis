@@ -125,9 +125,12 @@ def step_filter(
                     else:
                         return fnc(data=data, **kwargs)
 
-                this_flag = list(
-                    p_tqdm.p_map(fnc_, data, flg, unit="files", num_cpus=n_threads)
-                )
+                if n_threads > 1:
+                    this_flag = list(
+                        p_tqdm.p_map(fnc_, data, flg, unit="files", num_cpus=n_threads)
+                    )
+                else:
+                    this_flag = list(p_tqdm.t_map(fnc_, data, flg, unit="files"))
 
             if flags is not None and any(
                 np.any(f0 != f1) for f0, f1 in zip(flg, flags)
