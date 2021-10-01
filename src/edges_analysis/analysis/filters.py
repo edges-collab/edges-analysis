@@ -23,6 +23,7 @@ from edges_cal import xrfi as rfi
 import inspect
 import p_tqdm
 from pathlib import Path
+from .averaging import weighted_mean
 
 logger = logging.getLogger(__name__)
 
@@ -1000,28 +1001,107 @@ def negative_power_filter(*, data: CalibratedData):
     return np.array([np.any(spec <= 0) for spec in data.spectrum])
 
 
+def _peak_power_filter(
+    *,
+    data: RawData | CalibratedData,
+    threshold: float = 40.0,
+    peak_freq_range: tuple[float, float] = (80, 200),
+    mean_freq_range: tuple[float, float] | None = None,
+):
+    """
+    Filters out whole integrations that have high power > 80 MHz.
+
+    Parameters
+    ----------
+    threshold
+        This is the threshold beyond which the peak power causes the integration to be
+        flagged. The units of the threhsold are 10*log10(peak_power / mean), where the
+        mean is the mean power of spectrum in the same frequency range (omitting
+        power spikes > peak_power/10)
+    peak_freq_range
+        The range of frequencies over which to search for the peak.
+    mean_freq_range
+        The range of frequencies over which to take a mean to compare to the peak.
+        By default, the same as the ``peak_freq_range``.
+    """
+    mask = (data.raw_frequencies > peak_freq_range[0]) & (
+        data.raw_frequencies <= peak_freq_range[1]
+    )
+    spec = data.spectrum[:, mask]
+    peak_power = spec.max(axis=1)
+
+    if mean_freq_range is not None:
+        mask = (data.raw_frequencies > mean_freq_range[0]) & (
+            data.raw_frequencies <= mean_freq_range[1]
+        )
+        spec = data.spectrum[:, mask]
+
+    mean, _ = weighted_mean(
+        spec,
+        weights=((spec > 0) & ((spec.T < peak_power / 10).T)).astype(float),
+        axis=1,
+    )
+    peak_power = 10 * np.log10(peak_power / mean)
+    print(peak_power.shape)
+    return peak_power > threshold
+
+
 @step_filter(axis="time", data_type=(RawData, CalibratedData))
-def pkpwr_filter(*, data: RawData, pkpwrm: int = 40):
+def peak_power_filter(
+    *,
+    data: RawData | CalibratedData,
+    threshold: float = 40.0,
+    peak_freq_range: tuple[float, float] = (80, 200),
+    mean_freq_range: tuple[float, float] | None = None,
+):
     """
-    Filters out integrations that have high power > 80 MHz.
+    Filters out whole integrations that have high power > 80 MHz.
 
-    and high power due to Orbcom around 137.5 MHz.
+    Parameters
+    ----------
+    threshold
+        This is the threshold beyond which the peak power causes the integration to be
+        flagged. The units of the threhsold are 10*log10(peak_power / mean), where the
+        mean is the mean power of spectrum in the same frequency range (omitting
+        power spikes > peak_power/10)
+    peak_freq_range
+        The range of frequencies over which to search for the peak.
+    mean_freq_range
+        The range of frequencies over which to take a mean to compare to the peak.
+        By default, the same as the ``peak_freq_range``.
     """
-    mask_pkwr = RawData.raw_frequencies > 80
-    pkpwr = RawData.spectrum[:, mask_pkwr].max()
-    mask_orbpwr = abs(RawData.raw_frequencies - 137.5) < 1.0
-    orbpwr = RawData.spectrum[:, mask_orbpwr].max()
+    return _peak_power_filter(
+        data=data,
+        threshold=threshold,
+        peak_freq_range=peak_freq_range,
+        mean_freq_range=mean_freq_range,
+    )
 
-    data_80 = RawData.spectrum[:, mask_pkwr]
-    peak_pwr_filter = np.where(data_80 > 0 & data_80 < pkpwr / 10.0)
 
-    temp = np.mean(data_80[peak_pwr_filter])
+@step_filter(axis="time", data_type=(RawData, CalibratedData))
+def peak_orbcomm_filter(
+    *,
+    data: RawData | CalibratedData,
+    threshold: float = 40.0,
+    mean_freq_range: tuple[float, float] | None = None,
+):
+    """
+    Filters out whole integrations that have high power between (137, 138) MHz.
 
-    pkpwr = 10.0 * np.log10(pkpwr / temp)
-    orbpwr = 10.0 * np.log10(orbpwr / temp)
-    if orbpwr > pkpwr:
-        pkpwr = orbpwr
-
-    flags = pkpwr > pkpwrm
-
-    return flags
+    Parameters
+    ----------
+    threshold
+        This is the threshold beyond which the peak power causes the integration to be
+        flagged. The units of the threhsold are 10*log10(peak_power / mean), where the
+        mean is the mean power of spectrum in the ``mean_freq_range`` (omitting
+        power spikes > peak_power/10)
+    mean_freq_range
+        The range of frequencies over which to take a mean to compare to the peak.
+        By default, the same as the ``peak_freq_range``.
+    """
+    return _peak_power_filter(
+        data=data,
+        threshold=threshold,
+        peak_freq_range=(137.0, 138.0),
+        mean_freq_range=mean_freq_range,
+    )

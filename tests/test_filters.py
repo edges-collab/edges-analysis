@@ -60,3 +60,15 @@ def test_rms_filter(cal_step):
 def test_negpower_filter(cal_step):
     out_flags = filters.negative_power_filter(data=cal_step)
     assert len(out_flags) == 2
+
+
+def test_peak_power_filter(cal_step):
+    out_flags = filters.peak_power_filter(data=cal_step)
+    assert len(out_flags) == 2
+    assert out_flags[0].shape == cal_step[0].spectrum.shape
+
+
+def test_peak_orbcomm_filter(cal_step):
+    out_flags = filters.peak_orbcomm_filter(data=cal_step)
+    assert len(out_flags) == 2
+    assert out_flags[0].shape == cal_step[0].spectrum.shape
