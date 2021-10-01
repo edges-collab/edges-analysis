@@ -1103,7 +1103,7 @@ def peak_orbcomm_filter(
     *,
     data: RawData | CalibratedData,
     threshold: float = 40.0,
-    mean_freq_range: tuple[float, float] | None = None,
+    mean_freq_range: tuple[float, float] | None = (80, 200),
 ):
     """
     Filters out whole integrations that have high power between (137, 138) MHz.
