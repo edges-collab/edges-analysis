@@ -1000,15 +1000,24 @@ def negative_power_filter(*, data: CalibratedData):
     return np.array([np.any(spec <= 0) for spec in data.spectrum])
 
 
-@step_filter(axis="time", data_type=(RawData))
-def filter_150mhz(*, data: RawData, d150: int):
-    """The time stamps where d <= d150 only is included."""
-    freq_mask = (RawData.raw_frequencies - 153.5) <= 1.5
-    rms = np.sqrt(np.mean(RawData.spectrum[:, freq_mask] ** 2))
+@step_filter(axis="time", data_type=(RawData, CalibratedData))
+def filter_150mhz(*, data: RawData | CalibratedData, threshold: float):
+    """Filter based on power around 150 MHz.
 
-    freq_mask2 = (RawData.raw_frequencies - 157.0) <= 1.5
-    av = np.mean(RawData.spectrum[:, freq_mask2])
+    This takes the RMS of the power around 153.5 MHz (in a 1.5 MHz bin), after
+    subtracting the mean, then compares this to the mean power of a 1.5 MHz bin around
+    157 MHz (which is expected to be cleaner). If this ratio (RMS to mean) is greater
+    than 200 times the threshold given, the integration will be flagged.
+    """
+    if data.freq.max < 157:
+        return np.zeros(len(data.spectrum), dtype=bool)
+
+    freq_mask = (data.raw_frequencies >= 152.75) & (data.raw_frequencies <= 154.25)
+    mean = np.mean(data.spectrum[:, freq_mask], axis=1)
+    rms = np.sqrt(np.mean((data.spectrum[:, freq_mask] - mean) ** 2))
+
+    freq_mask2 = (data.raw_frequencies >= 156.25) & (data.raw_frequencies <= 157.75)
+    av = np.mean(data.spectrum[:, freq_mask2], axis=1)
     d = 200.0 * np.sqrt(rms) / av
 
-    flags = d >= d150
-    return flags
+    return d > threshold
