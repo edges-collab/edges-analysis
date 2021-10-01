@@ -1029,7 +1029,7 @@ def _peak_power_filter(
             f"The frequency range of the peak must be non-zero, got {peak_freq_range}"
         )
 
-    if mean_freq_range[0] >= mean_freq_range[1]:
+    if mean_freq_range is not None and mean_freq_range[0] >= mean_freq_range[1]:
         raise ValueError(
             f"The frequency range of the peak must be non-zero, got {peak_freq_range}"
         )
