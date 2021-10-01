@@ -1,4 +1,4 @@
-from edges_analysis.analysis import beams
+from edges_analysis.analysis import beams, loss
 from edges_analysis.analysis.sky_models import Haslam408
 import numpy as np
 from pathlib import Path
@@ -100,3 +100,18 @@ def test_antenna_beam_factor():
         sky_model=Haslam408(max_res=3),
     )
     assert isinstance(abf, beams.BeamFactor)
+
+
+def test_ground_loss_from_beam(beam_settings: Path):
+    beam = beams.Beam.from_feko_raw(
+        beam_settings / "lowband_dielectric1-new-90orient_simple",
+        "txt",
+        40,
+        48,
+        5,
+        181,
+        361,
+    )
+
+    loss_fraction = 1 - loss.ground_loss(filename=None, beam=beam, freq=beam.frequency)
+    assert loss_fraction.max() < 1
