@@ -1930,7 +1930,6 @@ class CombinedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         gha_min: float | None = None,
         gha_max: float | None = None,
         gha_bin_size: float = 0.1,
-        n_threads: int = cpu_count(),
     ):
         """
         Convert a list of :class:`ModelData` objects into a combined object.
