@@ -1024,9 +1024,23 @@ def _peak_power_filter(
         The range of frequencies over which to take a mean to compare to the peak.
         By default, the same as the ``peak_freq_range``.
     """
+    if peak_freq_range[0] <= peak_freq_range[1]:
+        raise ValueError(
+            f"The frequency range of the peak must be non-zero, got {peak_freq_range}"
+        )
+
+    if mean_freq_range[0] <= mean_freq_range[1]:
+        raise ValueError(
+            f"The frequency range of the peak must be non-zero, got {peak_freq_range}"
+        )
+
     mask = (data.raw_frequencies > peak_freq_range[0]) & (
         data.raw_frequencies <= peak_freq_range[1]
     )
+
+    if not np.any(mask):
+        return np.zeros(len(data.spectrum), dtype=bool)
+
     spec = data.spectrum[:, mask]
     peak_power = spec.max(axis=1)
 
@@ -1034,6 +1048,9 @@ def _peak_power_filter(
         mask = (data.raw_frequencies > mean_freq_range[0]) & (
             data.raw_frequencies <= mean_freq_range[1]
         )
+        if not np.any(mask):
+            return np.zeros(len(data.spectrum), dtype=bool)
+
         spec = data.spectrum[:, mask]
 
     mean, _ = weighted_mean(
