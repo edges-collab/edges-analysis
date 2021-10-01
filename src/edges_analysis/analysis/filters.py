@@ -1024,12 +1024,12 @@ def _peak_power_filter(
         The range of frequencies over which to take a mean to compare to the peak.
         By default, the same as the ``peak_freq_range``.
     """
-    if peak_freq_range[0] <= peak_freq_range[1]:
+    if peak_freq_range[0] >= peak_freq_range[1]:
         raise ValueError(
             f"The frequency range of the peak must be non-zero, got {peak_freq_range}"
         )
 
-    if mean_freq_range[0] <= mean_freq_range[1]:
+    if mean_freq_range[0] >= mean_freq_range[1]:
         raise ValueError(
             f"The frequency range of the peak must be non-zero, got {peak_freq_range}"
         )
