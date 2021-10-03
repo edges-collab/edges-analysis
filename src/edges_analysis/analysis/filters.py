@@ -998,3 +998,51 @@ def negative_power_filter(*, data: CalibratedData):
     These integrations obviously have some weird stuff going on.
     """
     return np.array([np.any(spec <= 0) for spec in data.spectrum])
+
+
+@step_filter(axis="time", data_type=(RawData, CalibratedData))
+def maxfm_filter(*, data: CalibratedData, threshold: float = 200):
+    """Max FM power filter.
+
+    This takes power of the spectrum between 80 MHz and 120 MHz(the fm range).
+    In that range, it checks each frequency bin to the estimated values..
+    using the mean from the side bins.
+    And then takes the max of all the all values that exceeded its expected..
+    value (from mean).
+    Compares the max exceeded power with the threshold and if it is greater
+    than the threshold given, the integration will be flagged.
+    """
+    fm_freq = (data.raw_frequencies >= 88) & (data.raw_frequencies <= 120)
+    # freq mask between 80 and 120 MHz for the FM range
+
+    if not np.any(fm_freq):
+        return np.zeros(len(data.spectrum), dtype=bool)
+
+    fm_power = data.spectrum[:, fm_freq]
+    maxfm = np.zeros_like(fm_power)
+
+    for i in range(len(data.spectrum)):
+        # for each time intgration,
+        # we get the difference between data
+        # and mean power for each frequency bin
+        # the max deviation will be compared with the threshold
+        fm_deviation_power = calculate_mid_bin(fm_power[i])
+        maxfm[i] = np.max(fm_deviation_power)
+    return maxfm > threshold
+
+
+def calculate_mid_bin(data):
+    """
+    Calculate power deviation.
+
+    Function: calculates the power at the mid frequency bin using..
+    the adjacent bins and subtractes the calculated power from
+    the actual power in that bin.
+    The deviation of the mid frequency bin is returned.
+    """
+    deviation = np.zeros_like(data)
+    for i in range(len(data)):
+        mid = 0.5 * (data[i + 1] + data[i - 1])
+        deviation[i] = data[i] - mid
+
+    return deviation
