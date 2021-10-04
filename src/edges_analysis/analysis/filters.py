@@ -1019,11 +1019,11 @@ def maxfm_filter(*, data: CalibratedData, threshold: float = 200):
         return np.zeros(len(data.spectrum), dtype=bool)
 
     fm_power = data.spectrum[:, fm_freq]
-    
-    avg = (fm_power[:,2:] + fm_power[:,:-2])/2
-    fm_deviation_power = np.abs(fm_power[:,1:-1] - avg)
-    maxfm = np.max(fm_deviation_power,axis=1)
-   
+
+    avg = (fm_power[:, 2:] + fm_power[:, :-2]) / 2
+    fm_deviation_power = np.abs(fm_power[:, 1:-1] - avg)
+    maxfm = np.max(fm_deviation_power, axis=1)
+
     return maxfm > threshold
 
 
