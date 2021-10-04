@@ -998,3 +998,27 @@ def negative_power_filter(*, data: CalibratedData):
     These integrations obviously have some weird stuff going on.
     """
     return np.array([np.any(spec <= 0) for spec in data.spectrum])
+
+@step_filter(axis="time", data_type=(RawData, CalibratedData))
+def rmsf_filter(*,data:CalibratedData | RawData, threshold: float = 200, freq_range: tuple[float,float] = (60,80)):
+    """
+    rmsf filter - filters out based on rms calculated between 60 and 80 MHz
+
+    An initial powerlaw model is calculated using the normalized frequency range.
+    Data between the freq_range is clipped. 
+    A standard deviation is calculated using the data and the init_model.
+    Then rms is calculated from the mean that is eatimated using the standard deviation times initmodel.
+    """
+    init_model = (data.raw_frequencies/data.raw_frequencies.max())**-2.5
+
+    freq_mask = (data.raw_frequencies >= freq_range[0]) & (data.raw_frequencies<=freq_range[1])
+    
+    if not np.any(freq_mask):
+        return np.zeros(len(data.spectrum),dtype=bool)
+    
+    x = np.sum(init_model[freq_mask]*data.spectrum[:,freq_mask], axis=1)/np.sum(init_model[freq_mask]**2)
+    # should it be init_model[None, freq_mask]?
+    rms = np.sqrt(np.mean((data.spectrum[:,freq_mask] - x*init_model[freq_mask])**2),axis=1)
+    ## again here x is 2d, so init[None, freq_mask]
+ 
+    return rms > threshold
