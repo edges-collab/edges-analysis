@@ -1930,7 +1930,6 @@ class CombinedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         gha_min: float | None = None,
         gha_max: float | None = None,
         gha_bin_size: float = 0.1,
-        n_threads: int = cpu_count(),
     ):
         """
         Convert a list of :class:`ModelData` objects into a combined object.
@@ -1961,7 +1960,7 @@ class CombinedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         if gha_min is None:
             gha_min = np.floor(min(p.ancillary["gha"].min() for p in prev_step))
         if gha_max is None:
-            gha_max = np.ceil(min(p.ancillary["gha"].max() for p in prev_step))
+            gha_max = np.ceil(max(p.ancillary["gha"].max() for p in prev_step))
 
         if gha_min < 0 or gha_min > 24 or gha_min >= gha_max:
             raise ValueError("gha_min must be between 0 and 24")
