@@ -1126,6 +1126,7 @@ def peak_orbcomm_filter(
         mean_freq_range=mean_freq_range,
     )
 
+
 @step_filter(axis="time", data_type=(RawData, CalibratedData))
 def filter_150mhz(*, data: RawData | CalibratedData, threshold: float):
     """Filter based on power around 150 MHz.
@@ -1147,4 +1148,3 @@ def filter_150mhz(*, data: RawData | CalibratedData, threshold: float):
     d = 200.0 * np.sqrt(rms) / av
 
     return d > threshold
-
