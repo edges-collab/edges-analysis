@@ -1047,6 +1047,7 @@ def calculate_mid_bin(data):
 
     return deviation
 
+
 def filter_150mhz(*, data: RawData | CalibratedData, threshold: float):
     """Filter based on power around 150 MHz.
 
