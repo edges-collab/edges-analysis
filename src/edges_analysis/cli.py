@@ -491,7 +491,7 @@ def filter(settings, path, nthreads, flag_idx, label, clobber):  # noqa: A001
     if len({p.parent for p in input_files}) != 1:
         raise ValueError("Your input files do not come from a single processing.")
 
-    input_data = [levels.read_step(fl) for fl in input_files]
+    input_data = [levels.read_step(fl, validate=False) for fl in input_files]
 
     # Save the settings file
     output_dir = input_files[0].parent
@@ -516,7 +516,7 @@ def filter(settings, path, nthreads, flag_idx, label, clobber):  # noqa: A001
                 shutil.copy(fl, output_dir / fl.name)
 
             input_files = [output_dir / fl.name for fl in input_files]
-            input_data = [levels.read_step(fl) for fl in input_files]
+            input_data = [levels.read_step(fl, validate=False) for fl in input_files]
         elif not (
             clobber
             or qs.confirm(

@@ -457,6 +457,7 @@ class _ReductionStep(HDF5Object):
 
 def read_step(
     fname: tp.PathLike | _ReductionStep | io.HDF5RawSpectrum,
+    validate: bool = True,
 ) -> _ReductionStep | io.HDF5RawSpectrum:
     """Read a filename as a processing reduction step.
 
@@ -469,7 +470,7 @@ def read_step(
     if fname.suffix == ".acq":
         return io.FieldSpectrum(fname).data
     else:
-        return get_step_type(fname)(fname)
+        return get_step_type(fname)(fname, validate=validate)
 
 
 def get_step_type(
