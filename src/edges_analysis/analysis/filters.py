@@ -1154,6 +1154,7 @@ def maxfm_filter(*, data: CalibratedData, threshold: float = 200):
     return maxfm > threshold
 
 
+@step_filter(axis="time", data_type=(RawData, CalibratedData))
 def filter_150mhz(*, data: RawData | CalibratedData, threshold: float):
     """Filter based on power around 150 MHz.
 
