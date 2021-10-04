@@ -1019,33 +1019,12 @@ def maxfm_filter(*, data: CalibratedData, threshold: float = 200):
         return np.zeros(len(data.spectrum), dtype=bool)
 
     fm_power = data.spectrum[:, fm_freq]
-    maxfm = np.zeros_like(fm_power)
-
-    for i in range(len(data.spectrum)):
-        # for each time intgration,
-        # we get the difference between data
-        # and mean power for each frequency bin
-        # the max deviation will be compared with the threshold
-        fm_deviation_power = calculate_mid_bin(fm_power[i])
-        maxfm[i] = np.max(fm_deviation_power)
+    
+    avg = (fm_power[:,2:] + fm_power[:,:-2])/2
+    fm_deviation_power = np.abs(fm_power[:,1:-1] - avg)
+    maxfm = np.max(fm_deviation_power,axis=1)
+   
     return maxfm > threshold
-
-
-def calculate_mid_bin(data):
-    """
-    Calculate power deviation.
-
-    Function: calculates the power at the mid frequency bin using..
-    the adjacent bins and subtractes the calculated power from
-    the actual power in that bin.
-    The deviation of the mid frequency bin is returned.
-    """
-    deviation = np.zeros_like(data)
-    for i in range(len(data)):
-        mid = 0.5 * (data[i + 1] + data[i - 1])
-        deviation[i] = data[i] - mid
-
-    return deviation
 
 
 def filter_150mhz(*, data: RawData | CalibratedData, threshold: float):
