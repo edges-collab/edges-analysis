@@ -1125,3 +1125,26 @@ def peak_orbcomm_filter(
         peak_freq_range=(137.0, 138.0),
         mean_freq_range=mean_freq_range,
     )
+
+@step_filter(axis="time", data_type=(RawData, CalibratedData))
+def filter_150mhz(*, data: RawData | CalibratedData, threshold: float):
+    """Filter based on power around 150 MHz.
+
+    This takes the RMS of the power around 153.5 MHz (in a 1.5 MHz bin), after
+    subtracting the mean, then compares this to the mean power of a 1.5 MHz bin around
+    157 MHz (which is expected to be cleaner). If this ratio (RMS to mean) is greater
+    than 200 times the threshold given, the integration will be flagged.
+    """
+    if data.freq.max < 157:
+        return np.zeros(len(data.spectrum), dtype=bool)
+
+    freq_mask = (data.raw_frequencies >= 152.75) & (data.raw_frequencies <= 154.25)
+    mean = np.mean(data.spectrum[:, freq_mask], axis=1)
+    rms = np.sqrt(np.mean((data.spectrum[:, freq_mask] - mean) ** 2))
+
+    freq_mask2 = (data.raw_frequencies >= 156.25) & (data.raw_frequencies <= 157.75)
+    av = np.mean(data.spectrum[:, freq_mask2], axis=1)
+    d = 200.0 * np.sqrt(rms) / av
+
+    return d > threshold
+
