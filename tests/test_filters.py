@@ -1,6 +1,7 @@
 import numpy as np
 from edges_analysis.analysis import filters
 from edges_cal import modelling as mdl
+import pytest
 
 
 def test_aux_filter():
@@ -60,6 +61,24 @@ def test_rms_filter(cal_step):
 def test_negpower_filter(cal_step):
     out_flags = filters.negative_power_filter(data=cal_step)
     assert len(out_flags) == 2
+
+
+def test_peak_power_filter(cal_step):
+    out_flags = filters.peak_power_filter(data=cal_step)
+    assert len(out_flags) == 2
+    assert out_flags[0].shape == cal_step[0].spectrum.shape
+
+    with pytest.raises(ValueError):
+        filters.peak_power_filter(data=cal_step, peak_freq_range=(60, 60))
+
+    with pytest.raises(ValueError):
+        filters.peak_power_filter(data=cal_step, mean_freq_range=(61, 60))
+
+
+def test_peak_orbcomm_filter(cal_step):
+    out_flags = filters.peak_orbcomm_filter(data=cal_step)
+    assert len(out_flags) == 2
+    assert out_flags[0].shape == cal_step[0].spectrum.shape
 
 
 def test_150mhz_filter(cal_step):

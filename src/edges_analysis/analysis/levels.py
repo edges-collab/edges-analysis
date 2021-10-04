@@ -457,6 +457,7 @@ class _ReductionStep(HDF5Object):
 
 def read_step(
     fname: tp.PathLike | _ReductionStep | io.HDF5RawSpectrum,
+    validate: bool = True,
 ) -> _ReductionStep | io.HDF5RawSpectrum:
     """Read a filename as a processing reduction step.
 
@@ -469,7 +470,7 @@ def read_step(
     if fname.suffix == ".acq":
         return io.FieldSpectrum(fname).data
     else:
-        return get_step_type(fname)(fname)
+        return get_step_type(fname)(fname, validate=validate)
 
 
 def get_step_type(
@@ -1930,7 +1931,6 @@ class CombinedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         gha_min: float | None = None,
         gha_max: float | None = None,
         gha_bin_size: float = 0.1,
-        n_threads: int = cpu_count(),
     ):
         """
         Convert a list of :class:`ModelData` objects into a combined object.
@@ -1961,7 +1961,7 @@ class CombinedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         if gha_min is None:
             gha_min = np.floor(min(p.ancillary["gha"].min() for p in prev_step))
         if gha_max is None:
-            gha_max = np.ceil(min(p.ancillary["gha"].max() for p in prev_step))
+            gha_max = np.ceil(max(p.ancillary["gha"].max() for p in prev_step))
 
         if gha_min < 0 or gha_min > 24 or gha_min >= gha_max:
             raise ValueError("gha_min must be between 0 and 24")
