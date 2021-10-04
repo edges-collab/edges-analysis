@@ -60,3 +60,8 @@ def test_rms_filter(cal_step):
 def test_negpower_filter(cal_step):
     out_flags = filters.negative_power_filter(data=cal_step)
     assert len(out_flags) == 2
+
+
+def test_150mhz_filter(cal_step):
+    out_flags = filters.filter_150mhz(data=cal_step, threshold=1)
+    assert len(out_flags) == 2
