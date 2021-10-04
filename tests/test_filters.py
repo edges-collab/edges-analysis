@@ -1,6 +1,7 @@
 import numpy as np
 from edges_analysis.analysis import filters
 from edges_cal import modelling as mdl
+import pytest
 
 
 def test_aux_filter():
@@ -65,3 +66,11 @@ def test_negpower_filter(cal_step):
 def test_150mhz_filter(cal_step):
     out_flags = filters.filter_150mhz(data=cal_step, threshold=1)
     assert len(out_flags) == 2
+
+
+def test_rmsf(cal_step):
+    out_flags = filters.rmsf_filter(data=cal_step, threshold=200)
+    assert len(out_flags) == 2
+
+    with pytest.raises(ValueError):
+        filters.rmsf_filter(data=cal_step, freq_range=(50, 59))
