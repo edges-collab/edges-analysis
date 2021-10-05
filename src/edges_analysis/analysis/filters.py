@@ -1155,6 +1155,46 @@ def maxfm_filter(*, data: CalibratedData, threshold: float = 200):
 
 
 @step_filter(axis="time", data_type=(RawData, CalibratedData))
+def rmsf_filter(
+    *,
+    data: CalibratedData | RawData,
+    threshold: float = 200,
+    freq_range: tuple[float, float] = (60, 80),
+):
+    """
+    Rmsf filter - filters out based on rms calculated between 60 and 80 MHz.
+
+    An initial powerlaw model is calculated using the normalized frequency range.
+    Data between the freq_range is clipped.
+    A standard deviation is calculated using the data and the init_model.
+    Then rms is calculated from the mean that is eatimated
+    using the standard deviation times initmodel.
+    """
+    freq_mask = (data.raw_frequencies >= freq_range[0]) & (
+        data.raw_frequencies <= freq_range[1]
+    )
+
+    if not np.any(freq_mask):
+        return np.zeros(len(data.spectrum), dtype=bool)
+
+    freq = data.raw_frequencies[freq_mask]
+    init_model = (freq / 75.0) ** -2.5
+
+    T75 = np.sum(init_model * data.spectrum[:, freq_mask], axis=1) / np.sum(
+        init_model ** 2
+    )
+
+    rms = np.sqrt(
+        np.mean(
+            (data.spectrum[:, freq_mask] - np.outer(T75, init_model)) ** 2,
+            axis=1,
+        )
+    )
+
+    return rms > threshold
+
+
+@step_filter(axis="time", data_type=(RawData, CalibratedData))
 def filter_150mhz(*, data: RawData | CalibratedData, threshold: float):
     """Filter based on power around 150 MHz.
 
