@@ -1128,6 +1128,33 @@ def peak_orbcomm_filter(
 
 
 @step_filter(axis="time", data_type=(RawData, CalibratedData))
+def maxfm_filter(*, data: CalibratedData, threshold: float = 200):
+    """Max FM power filter.
+
+    This takes power of the spectrum between 80 MHz and 120 MHz(the fm range).
+    In that range, it checks each frequency bin to the estimated values..
+    using the mean from the side bins.
+    And then takes the max of all the all values that exceeded its expected..
+    value (from mean).
+    Compares the max exceeded power with the threshold and if it is greater
+    than the threshold given, the integration will be flagged.
+    """
+    fm_freq = (data.raw_frequencies >= 88) & (data.raw_frequencies <= 120)
+    # freq mask between 80 and 120 MHz for the FM range
+
+    if not np.any(fm_freq):
+        return np.zeros(len(data.spectrum), dtype=bool)
+
+    fm_power = data.spectrum[:, fm_freq]
+
+    avg = (fm_power[:, 2:] + fm_power[:, :-2]) / 2
+    fm_deviation_power = np.abs(fm_power[:, 1:-1] - avg)
+    maxfm = np.max(fm_deviation_power, axis=1)
+
+    return maxfm > threshold
+
+
+@step_filter(axis="time", data_type=(RawData, CalibratedData))
 def filter_150mhz(*, data: RawData | CalibratedData, threshold: float):
     """Filter based on power around 150 MHz.
 

@@ -84,3 +84,8 @@ def test_peak_orbcomm_filter(cal_step):
 def test_150mhz_filter(cal_step):
     out_flags = filters.filter_150mhz(data=cal_step, threshold=1)
     assert len(out_flags) == 2
+
+
+def test_max_fm_filter(cal_step):
+    out_flags = filters.maxfm_filter(data=cal_step, threshold=200)
+    assert len(out_flags) == 2
