@@ -1185,8 +1185,10 @@ def rmsf_filter(
     )
 
     rms = np.sqrt(
-        np.mean((data.spectrum[:, freq_mask] - T75 * init_model) ** 2),
-        axis=1,
+        np.mean(
+            (data.spectrum[:, freq_mask] - np.outer(T75, init_model)) ** 2,
+            axis=1,
+        )
     )
 
     return rms > threshold
