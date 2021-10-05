@@ -103,4 +103,4 @@ def test_percent_power_filter(raw_step):
 
 def test_rfi_filter(raw_step):
     out_flags = filters.rfi_model_filter(data=raw_step, freq_range=(40, 100))
-    assert len(out_flags) == len(raw_step[0])
+    assert len(out_flags) == 2

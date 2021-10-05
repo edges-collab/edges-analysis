@@ -910,7 +910,7 @@ def _rfi_filter_factory(method: str):
             data.raw_frequencies <= freq_range[1]
         )
 
-        return tools.run_xrfi(
+        out_flags = tools.run_xrfi(
             method=method,
             spectrum=data.spectrum[:, mask],
             freq=data.raw_frequencies[mask],
@@ -919,6 +919,10 @@ def _rfi_filter_factory(method: str):
             n_threads=n_threads,
             **kwargs,
         )
+
+        out = np.zeros_like(flags)
+        out[:, mask] = out_flags
+        return out
 
     fnc.__name__ = f"rfi_{method}_filter"
 
