@@ -1191,6 +1191,7 @@ def rmsf_filter(
     return rms > threshold
 
 
+@step_filter(axis="time", data_type=(RawData, CalibratedData))
 def filter_150mhz(*, data: RawData | CalibratedData, threshold: float):
     """Filter based on power around 150 MHz.
 
