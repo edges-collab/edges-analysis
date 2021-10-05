@@ -1173,18 +1173,19 @@ def rmsf_filter(
     freq_mask = (data.raw_frequencies >= freq_range[0]) & (
         data.raw_frequencies <= freq_range[1]
     )
-    freq = data.raw_frequencies[freq_mask]
-    init_model = (freq / 75.0) ** -2.5
 
     if not np.any(freq_mask):
         return np.zeros(len(data.spectrum), dtype=bool)
 
-    T75 = np.sum(init_model[freq_mask] * data.spectrum[:, freq_mask], axis=1) / np.sum(
-        init_model[freq_mask] ** 2
+    freq = data.raw_frequencies[freq_mask]
+    init_model = (freq / 75.0) ** -2.5
+
+    T75 = np.sum(init_model * data.spectrum[:, freq_mask], axis=1) / np.sum(
+        init_model ** 2
     )
 
     rms = np.sqrt(
-        np.mean((data.spectrum[:, freq_mask] - T75 * init_model[freq_mask]) ** 2),
+        np.mean((data.spectrum[:, freq_mask] - T75 * init_model) ** 2),
         axis=1,
     )
 
