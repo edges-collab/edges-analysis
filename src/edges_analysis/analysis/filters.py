@@ -912,10 +912,10 @@ def _rfi_filter_factory(method: str):
 
         return tools.run_xrfi(
             method=method,
-            spectrum=data.spectrum[:mask],
+            spectrum=data.spectrum[:, mask],
             freq=data.raw_frequencies[mask],
-            flags=flags,
-            weights=data.weights,
+            flags=flags[:, mask],
+            weights=data.weights[:, mask],
             n_threads=n_threads,
             **kwargs,
         )
