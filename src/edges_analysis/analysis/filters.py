@@ -902,13 +902,18 @@ def _rfi_filter_factory(method: str):
         data: _ReductionStep,
         flags: np.ndarray[bool],
         n_threads: int = cpu_count(),
+        freq_range: tuple[float, float] = (40, 200),
         **kwargs,
     ) -> np.ndarray:
+
+        mask = (data.raw_frequencies >= freq_range[0]) & (
+            data.raw_frequencies <= freq_range[1]
+        )
 
         return tools.run_xrfi(
             method=method,
             spectrum=data.spectrum,
-            freq=data.raw_frequencies,
+            freq=data.raw_frequencies[mask],
             flags=flags,
             weights=data.weights,
             n_threads=n_threads,
