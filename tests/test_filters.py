@@ -93,7 +93,7 @@ def test_rmsf(cal_step):
     with pytest.raises(ValueError):
         filters.rmsf_filter(data=cal_step, freq_range=(50, 59))
 
-        
+
 def test_max_fm_filter(cal_step):
     out_flags = filters.maxfm_filter(data=cal_step, threshold=200)
     assert len(out_flags) == 2
