@@ -1217,10 +1217,10 @@ def filter_150mhz(*, data: RawData | CalibratedData, threshold: float):
     return d > threshold
 
 
-@step_filter(axis="time", data_type=(RawData, CalibratedData))
+@step_filter(axis="time", data_type=(RawData,))
 def power_percent_filter(
     *,
-    data: RawData | CalibratedData,
+    data: RawData,
     freq_range: tuple[float, float] = (100, 200),
     min_threshold: float = -0.7,
     max_threshold: float = 3,
