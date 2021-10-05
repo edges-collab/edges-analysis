@@ -1215,3 +1215,30 @@ def filter_150mhz(*, data: RawData | CalibratedData, threshold: float):
     d = 200.0 * np.sqrt(rms) / av
 
     return d > threshold
+
+
+@step_filter(axis="time", data_type=(RawData,))
+def power_percent_filter(
+    *,
+    data: RawData,
+    freq_range: tuple[float, float] = (100, 200),
+    min_threshold: float = -0.7,
+    max_threshold: float = 3,
+):
+    """Filter for the power above 100 MHz seen in swpos 0.
+
+    Calculates the percentage of power between 100 and 200 MHz
+    & when the switch is in position 0.
+    And flags integrations if the percentage is above or below the given threshold.
+    """
+    p0 = data.spectra["switch_powers"][0]
+
+    mask = (data.raw_frequencies > freq_range[0]) & (
+        data.raw_frequencies <= freq_range[1]
+    )
+
+    if not np.any(mask):
+        return np.zeros(len(data.spectrum), dtype=bool)
+
+    ppercent = 100 * np.sum(p0[:, mask], axis=1) / np.sum(p0, axis=1)
+    return (ppercent < min_threshold) | (ppercent > max_threshold)
