@@ -69,12 +69,19 @@ def test_model_step(model_step: List[ModelData]):
     assert m.model_nterms == 5
 
 
-def test_combine_step(combo_step: CombinedData):
+def test_combine_step(combo_step: CombinedData, model_step: List[ModelData]):
     assert combo_step.resids.shape[-1] == len(combo_step.raw_frequencies)
     assert combo_step.spectrum.shape == combo_step.resids.shape
 
     # Ensure it's pickleable
     pickle.dumps(combo_step)
+
+    assert combo_step.gha_edges.max() >= max(
+        model_step[0].gha.max(), model_step[1].gha.max()
+    )
+    assert combo_step.gha_edges.min() <= min(
+        model_step[0].gha.min(), model_step[1].gha.min()
+    )
 
     # just run some plotting methods to make sure they don't error...
     combo_step.plot_daily_residuals(freq_resolution=1.0, gha_max=18, gha_min=6)

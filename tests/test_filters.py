@@ -63,6 +63,24 @@ def test_negpower_filter(cal_step):
     assert len(out_flags) == 2
 
 
+def test_peak_power_filter(cal_step):
+    out_flags = filters.peak_power_filter(data=cal_step)
+    assert len(out_flags) == 2
+    assert out_flags[0].shape == cal_step[0].spectrum.shape
+
+    with pytest.raises(ValueError):
+        filters.peak_power_filter(data=cal_step, peak_freq_range=(60, 60))
+
+    with pytest.raises(ValueError):
+        filters.peak_power_filter(data=cal_step, mean_freq_range=(61, 60))
+
+
+def test_peak_orbcomm_filter(cal_step):
+    out_flags = filters.peak_orbcomm_filter(data=cal_step)
+    assert len(out_flags) == 2
+    assert out_flags[0].shape == cal_step[0].spectrum.shape
+
+
 def test_150mhz_filter(cal_step):
     out_flags = filters.filter_150mhz(data=cal_step, threshold=1)
     assert len(out_flags) == 2
@@ -74,3 +92,8 @@ def test_rmsf(cal_step):
 
     with pytest.raises(ValueError):
         filters.rmsf_filter(data=cal_step, freq_range=(50, 59))
+
+        
+def test_max_fm_filter(cal_step):
+    out_flags = filters.maxfm_filter(data=cal_step, threshold=200)
+    assert len(out_flags) == 2
