@@ -1169,6 +1169,8 @@ def rmsf_filter(
     data: CalibratedData | RawData,
     threshold: float = 200,
     freq_range: tuple[float, float] = (60, 80),
+    tload: float = 1000,
+    tcal: float = 300,
 ):
     """
     Rmsf filter - filters out based on rms calculated between 60 and 80 MHz.
@@ -1186,16 +1188,17 @@ def rmsf_filter(
     if not np.any(freq_mask):
         return np.zeros(len(data.spectrum), dtype=bool)
 
+    semi_calibrated_data = (data.spectrum * tload) + tcal
     freq = data.raw_frequencies[freq_mask]
     init_model = (freq / 75.0) ** -2.5
 
-    T75 = np.sum(init_model * data.spectrum[:, freq_mask], axis=1) / np.sum(
+    T75 = np.sum(init_model * semi_calibrated_data[:, freq_mask], axis=1) / np.sum(
         init_model ** 2
     )
 
     rms = np.sqrt(
         np.mean(
-            (data.spectrum[:, freq_mask] - np.outer(T75, init_model)) ** 2,
+            (semi_calibrated_data[:, freq_mask] - np.outer(T75, init_model)) ** 2,
             axis=1,
         )
     )
