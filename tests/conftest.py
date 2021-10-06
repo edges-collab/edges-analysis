@@ -76,6 +76,7 @@ def raw_settings(integration_test_data: Path) -> Path:
         "band": "low",
         "thermlog_file": str(integration_test_data / "thermlog_low.txt"),
         "weather_file": str(integration_test_data / "weather.txt"),
+        "f_low": 40.0,
     }
 
     out = integration_test_data / "raw.yaml"
