@@ -1034,6 +1034,7 @@ class RawData(_ReductionStep, _SingleDayMixin):
         band: str,
         weather_file: str | Path | None = None,
         thermlog_file: str | Path | None = None,
+        f_low: float = 0.0,
     ) -> tuple[np.ndarray, dict, dict, dict]:
         """
         Create the object directly from calibrated data.
@@ -1053,7 +1054,7 @@ class RawData(_ReductionStep, _SingleDayMixin):
         """
         t = time.time()
         freq_rng = FrequencyRange(
-            prev_step["freq_ancillary"]["frequencies"], f_low=40.0
+            prev_step["freq_ancillary"]["frequencies"], f_low=f_low
         )
         freq = freq_rng.freq
         q = prev_step["spectra"]["Q"][freq_rng.mask]
