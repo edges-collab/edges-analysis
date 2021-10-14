@@ -912,30 +912,16 @@ def _rfi_filter_factory(method: str):
         if data.spectrum.ndim == 2:
             out_flags = tools.run_xrfi(
                 method=method,
-                spectrum=data.spectrum[:, mask],
+                spectrum=data.spectrum[..., mask],
                 freq=data.raw_frequencies[mask],
-                flags=flags[:, mask],
-                weights=data.weights[:, mask],
+                flags=flags[..., mask],
+                weights=data.weights[..., mask],
                 n_threads=n_threads,
                 **kwargs,
             )
 
             out = np.zeros_like(flags)
-            out[:, mask] = out_flags
-
-        elif data.spectrum.ndim == 3:
-            out_flags = tools.run_xrfi(
-                method=method,
-                spectrum=data.spectrum[:, :, mask],
-                freq=data.raw_frequencies[mask],
-                flags=flags[:, :, mask],
-                weights=data.weights[:, :, mask],
-                n_threads=n_threads,
-                **kwargs,
-            )
-
-            out = np.zeros_like(flags)
-            out[:, :, mask] = out_flags
+            out[..., mask] = out_flags
 
         return out
 
