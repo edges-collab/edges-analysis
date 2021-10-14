@@ -368,7 +368,7 @@ def bin_gha_unbiased_regular(
         if bin_low < 0 and bin_high <= 0:
             mask = (gha >= 24 + bin_low) & (gha < 24 + bin_high)
         elif bin_low < 0 and bin_high > 0:
-            mask = (gha >= 24 + bin_low) & (gha < 24) | (gha >= 0) & (gha < bin_high)
+            mask = (gha >= 24 + bin_low) & (gha <= 24) | (gha >= 0) & (gha < bin_high)
         else:
             mask = (gha >= bin_low) & (gha < bin_high)
         if np.sum(mask) == 0:

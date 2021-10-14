@@ -113,8 +113,8 @@ def test_model_bin_gha(params, weights, refit):
         params=fit_params,
         resids=resids,
         weights=weights,
-        gha=np.linspace(0, 1, N_GHA),
-        bins=[0, 1.1],
+        gha=np.linspace(0, 24, N_GHA),
+        bins=[-12, 12.1],
     )
 
     # output should have one GHA bin
