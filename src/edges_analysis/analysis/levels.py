@@ -2929,9 +2929,15 @@ class BinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         if gha_bin_size is None:
             gha_bin_size = gha_max - gha_min
 
-        gha_edges = np.arange(
-            gha_min, gha_max + gha_bin_size / 10, gha_bin_size, dtype=float
-        )
+        if gha_min > gha_max:
+            gha_edges = np.arange(
+                gha_min - 24, gha_max + gha_bin_size / 10, gha_bin_size, dtype=float
+            )
+
+        else:
+            gha_edges = np.arange(
+                gha_min, gha_max + gha_bin_size / 10, gha_bin_size, dtype=float
+            )
 
         logger.info(f"Averaging into {len(gha_edges) - 1} GHA bins.")
         params, resid, wght = averaging.bin_gha_unbiased_regular(

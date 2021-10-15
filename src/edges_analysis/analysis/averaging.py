@@ -365,8 +365,12 @@ def bin_gha_unbiased_regular(
 
     for i, bin_low in enumerate(bins[:-1]):
         bin_high = bins[i + 1]
-
-        mask = (gha >= bin_low) & (gha < bin_high)
+        if bin_low < 0 and bin_high <= 0:
+            mask = (gha >= 24 + bin_low) & (gha < 24 + bin_high)
+        elif bin_low < 0 and bin_high > 0:
+            mask = (gha >= 24 + bin_low) & (gha <= 24) | (gha >= 0) & (gha < bin_high)
+        else:
+            mask = (gha >= bin_low) & (gha < bin_high)
         if np.sum(mask) == 0:
             # Skip this bin if nothing's in it
             continue
