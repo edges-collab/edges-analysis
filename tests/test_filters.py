@@ -104,3 +104,9 @@ def test_percent_power_filter(raw_step):
 def test_rfi_filter(raw_step):
     out_flags = filters.rfi_model_filter(data=raw_step, freq_range=(40, 100))
     assert len(out_flags) == 2
+
+
+def test_day_filter(combo_step):
+    out_flags = filters.day_filter(data=[combo_step], dates=[(2016, 292)])
+    assert out_flags[0].ndim == 3
+    assert np.all(out_flags[0][0])

@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 from multiprocessing import cpu_count
 from typing import Sequence, Callable, Literal
-from .levels import CalibratedData, read_step, _ReductionStep, RawData
+from .levels import CalibratedData, read_step, _ReductionStep, RawData, CombinedData
 from . import types as tp
 import attr
 import h5py
@@ -24,6 +24,7 @@ import inspect
 import p_tqdm
 from pathlib import Path
 from .averaging import weighted_mean
+import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +39,7 @@ def get_step_filter(filt: str) -> Callable:
 
 
 def step_filter(
-    axis: Literal["time", "freq", "both"],
+    axis: Literal["time", "freq", "day", "all"],
     multi_data: bool = False,
     data_type: type[_ReductionStep] | tuple[_ReductionStep] = _ReductionStep,
 ):
@@ -98,9 +99,12 @@ def step_filter(
             **kwargs,
         ) -> np.ndarray:
             logger.info(f"Running {fnc.__name__} filter.")
+            print(fnc.__name__, axis)
 
             # Read all the data, in case they haven't been turned into objects yet.
             # And check that everything is the right type.
+            if not hasattr(data, "__len__"):
+                data = [data]
             data = [read_step(d) for d in data]
             assert all(isinstance(d, data_type) for d in data)
 
@@ -141,7 +145,13 @@ def step_filter(
                 )
 
             for n, d, f, this_f in zip(pre_flag_n, data, flg, this_flag):
-                f |= this_f if axis in ("both", "freq") else np.atleast_2d(this_f).T
+                print("SHAPES: ", f.shape, this_f.shape)
+                if axis in ("all", "freq"):
+                    f |= this_f
+                elif axis == "day":
+                    f[this_f] = True
+                elif axis == "time":
+                    f[..., this_f, :] = True
 
                 if np.all(f):
                     logger.warning(
@@ -926,7 +936,7 @@ def _rfi_filter_factory(method: str):
 
     fnc.__name__ = f"rfi_{method}_filter"
 
-    return step_filter(axis="both")(fnc)
+    return step_filter(axis="all")(fnc)
 
 
 rfi_model_filter = _rfi_filter_factory("model")
@@ -1254,3 +1264,23 @@ def power_percent_filter(
 
     ppercent = 100 * np.sum(p0[:, mask], axis=1) / np.sum(p0, axis=1)
     return (ppercent < min_threshold) | (ppercent > max_threshold)
+
+
+@step_filter(axis="day", data_type=(CombinedData,))
+def day_filter(
+    *, data: CombinedData, dates: Sequence[datetime.datetime | tuple[int, int]]
+):
+    """Filter out specific days."""
+    filter_dates = []
+    for date in dates:
+        if isinstance(date, datetime.date):
+            date = (date.year, date.day)
+            filter_dates.append(date)
+        elif len(date) == 3:
+            filter_dates.append(tuple(date)[:2])
+        elif len(date) == 2:
+            filter_dates.append(tuple(date))
+        else:
+            raise ValueError(f"date '{date}' cannot be parsed as a date.")
+
+    return np.array([date[:2] in filter_dates for date in data.dates])
