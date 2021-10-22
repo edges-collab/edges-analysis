@@ -909,7 +909,7 @@ def _rfi_filter_factory(method: str):
         mask = (data.raw_frequencies >= freq_range[0]) & (
             data.raw_frequencies <= freq_range[1]
         )
-        
+
         out_flags = tools.run_xrfi(
             method=method,
             spectrum=data.spectrum[..., mask],
