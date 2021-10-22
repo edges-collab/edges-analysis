@@ -99,7 +99,6 @@ def step_filter(
             **kwargs,
         ) -> np.ndarray:
             logger.info(f"Running {fnc.__name__} filter.")
-            print(fnc.__name__, axis)
 
             # Read all the data, in case they haven't been turned into objects yet.
             # And check that everything is the right type.
@@ -145,7 +144,6 @@ def step_filter(
                 )
 
             for n, d, f, this_f in zip(pre_flag_n, data, flg, this_flag):
-                print("SHAPES: ", f.shape, this_f.shape)
                 if axis in ("all", "freq"):
                     f |= this_f
                 elif axis == "day":
@@ -677,11 +675,9 @@ class TotalPowerAggregator(FrequencyAggregator):
             .fit(ydata=np.nanmean(fiducial_spectrum, axis=1))
             .fit
         )
-        init_flags = (
+        return (
             np.abs(standard_model(gha) - metric) / standard_model(gha)
         ) > self.init_threshold
-        print(np.shape(init_flags), len(np.where(init_flags)))
-        return init_flags
 
     def aggregate_file(self, data: CalibratedData) -> np.ndarray:
         """Compute the total power over frequency for each integration in a file."""
@@ -1081,7 +1077,6 @@ def _peak_power_filter(
         axis=1,
     )
     peak_power = 10 * np.log10(peak_power / mean)
-    print(peak_power.shape)
     return peak_power > threshold
 
 
