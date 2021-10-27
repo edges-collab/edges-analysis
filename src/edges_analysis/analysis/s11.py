@@ -51,6 +51,14 @@ def get_corrected_s11(
     )
 
 
+def get_s11_from_file(s11_file_name):
+    """Function to read the csv file that has the corrected S11."""
+    f_orig, gamm_real, gamma_imag = np.loadtxt(
+        s11_file_name, skiprows=1, delimiter=",", unpack=True
+    )
+    return gamm_real + 1j * gamma_imag, f_orig / 10 ** 6
+
+
 def antenna_s11_remove_delay(
     s11_files: Sequence[Union[str, Path]],
     f_low: float = -np.inf,
@@ -61,6 +69,7 @@ def antenna_s11_remove_delay(
     internal_switch_s12: Optional[Callable] = None,
     internal_switch_s22: Optional[Callable] = None,
     model: mdl.Model = None,
+    s11_cal_file: str = None,
 ):
     """
     Remove delay from antenna S11.
@@ -82,13 +91,16 @@ def antenna_s11_remove_delay(
     array-like :
         An array of the same shape as `f`, containing the S11 with delay removed.
     """
-    gamma, f_orig = get_corrected_s11(
-        s11_files,
-        internal_switch,
-        internal_switch_s11,
-        internal_switch_s12,
-        internal_switch_s22,
-    )
+    if s11_cal_file is None:
+        gamma, f_orig = get_corrected_s11(
+            s11_files,
+            internal_switch,
+            internal_switch_s11,
+            internal_switch_s12,
+            internal_switch_s22,
+        )
+    else:
+        gamma, f_orig = get_s11_from_file(s11_cal_file)
 
     mask = (f_orig >= f_low) & (f_orig <= f_high)
     gamma = gamma[mask]

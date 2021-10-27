@@ -1335,6 +1335,7 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
         balun_correction: str | Path | None = ":",
         ground_correction: str | Path | None | float = ":",
         beam_file=None,
+        s11_cal_file: str = None,
     ) -> tuple[np.ndarray, dict, dict, dict]:
         """
         Create the object directly from calibrated data.
@@ -1386,6 +1387,7 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
                 n_terms=antenna_s11_n_terms,
                 transform=mdl.UnitTransform(range=(calobs.freq.min, calobs.freq.max)),
             ),
+            s11_cal_file=s11_cal_file,
         )
 
         logger.info("Calibrating data ...")
