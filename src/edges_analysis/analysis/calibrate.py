@@ -24,7 +24,6 @@ class LabCalibration:
     s11_files: Sequence[str | Path] = attr.ib()
     ant_s11_model: mdl.Model = attr.ib()
     _ant_s11_function: Callable[[np.ndarray], np.ndarray] | None = attr.ib(default=None)
-    s11_cal_file: str | None = attr.ib()
 
     @ant_s11_model.default
     def _asm_default(self):
@@ -61,18 +60,17 @@ class LabCalibration:
 
     @cached_property
     def _antenna_s11(
-        self, s11_cal_file
+        self,
     ) -> tuple[Callable[[np.ndarray], np.ndarray], np.ndarray, np.ndarray]:
         model, raw, raw_freq = s11m.antenna_s11_remove_delay(
             self.s11_files,
             f_low=self.calobs.freq.min,
             f_high=self.calobs.freq.max,
-            delay_0=0.0,
+            delay_0=0.17,
             internal_switch_s11=self.internal_switch_s11,
             internal_switch_s12=self.internal_switch_s12,
             internal_switch_s22=self.internal_switch_s22,
             model=self.ant_s11_model,
-            s11_cal_file=s11_cal_file,
         )
 
         return model, raw, raw_freq
