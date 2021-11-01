@@ -21,7 +21,7 @@ repos:
   - id: mixed-line-ending
     args: ['--fix=no']
 - repo: https://github.com/PyCQA/flake8
-  rev: 3.9.2
+  rev: 4.0.1
   hooks:
   - id: flake8
     additional_dependencies:
@@ -43,7 +43,7 @@ repos:
 #   - id: isort
 
 - repo: https://github.com/psf/black
-  rev: 21.9b0
+  rev: 21.10b0
   hooks:
   - id: black
 - repo: https://github.com/pre-commit/pygrep-hooks
@@ -58,7 +58,7 @@ repos:
   -   id: pyupgrade
       args: [--py36-plus]
 - repo: https://github.com/commitizen-tools/commitizen
-  rev: v2.19.0
+  rev: v2.20.0
   hooks:
     - id: commitizen
       stages: [commit-msg]
