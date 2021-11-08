@@ -49,7 +49,7 @@ def get_corrected_s11(
             f,
         )
     elif len(files) == 1:
-        return get_s11_from_file(files)
+        return get_s11_from_file(files[0])
 
 
 def get_s11_from_file(s11_file_name):
