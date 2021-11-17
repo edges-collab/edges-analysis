@@ -2295,6 +2295,8 @@ class CombinedBinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         cls,
         prev_step: CombinedData,
         gha_bin_size: float = 0.1,
+        gha_min: float = 0.0,
+        gha_max: float = 24.0,
     ):
         """
         Bins the 3D spectrum along time axis for the :class:`CombinedData` object.
@@ -2330,6 +2332,8 @@ class CombinedBinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         params, resids, weights, gha_edges = cls.bin_gha(
             prev_step,
             gha_bin_size,
+            gha_min,
+            gha_max,
             flags=flags,
         )
 
@@ -2366,15 +2370,23 @@ class CombinedBinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         cls,
         combined_obj: CombinedData,
         gha_bin_size: float,
+        gha_min: float | None,
+        gha_max: float | None,
         flags=None,
     ):
         """Bin a list of files into small aligning bins of GHA."""
-        gha_edges = np.arange(
-            combined_obj.gha_edges.min(), combined_obj.gha_edges.max(), gha_bin_size
-        )
-        if np.isclose(combined_obj.gha_edges.max(), gha_edges.max() + gha_bin_size):
-            gha_edges = np.concatenate((gha_edges, [gha_edges.max() + gha_bin_size]))
-
+        if gha_min is None and gha_max is None:
+            gha_edges = np.arange(
+                combined_obj.gha_edges.min(), combined_obj.gha_edges.max(), gha_bin_size
+            )
+            if np.isclose(combined_obj.gha_edges.max(), gha_edges.max() + gha_bin_size):
+                gha_edges = np.concatenate(
+                    (gha_edges, [gha_edges.max() + gha_bin_size])
+                )
+        else:
+            gha_edges = np.arange(
+                gha_min, gha_max + gha_bin_size / 10, gha_bin_size, dtype=float
+            )
         # Averaging data within GHA bins
         weights = np.zeros(
             (len(combined_obj.resids), len(gha_edges) - 1, combined_obj.freq.n)
