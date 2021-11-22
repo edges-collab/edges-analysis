@@ -25,6 +25,7 @@ import p_tqdm
 from pathlib import Path
 from .averaging import weighted_mean
 import datetime
+from edges_io.utils import ymd_to_jd
 
 logger = logging.getLogger(__name__)
 
@@ -1270,7 +1271,7 @@ def day_filter(
     filter_dates = []
     for date in dates:
         if isinstance(date, datetime.date):
-            date = (date.year, date.day)
+            date = (date.year, ymd_to_jd(date.year, date.month, date.day))
             filter_dates.append(date)
         elif len(date) == 3:
             filter_dates.append(tuple(date)[:2])
