@@ -3,7 +3,7 @@ from pkg_resources import DistributionNotFound, get_distribution
 
 try:
     __version__ = get_distribution(__name__).version
-except DistributionNotFound:
+except DistributionNotFound:  # pragma: no cover
     __version__ = "unknown"
 finally:
     del get_distribution, DistributionNotFound
