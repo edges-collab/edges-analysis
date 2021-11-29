@@ -1,6 +1,7 @@
+import pytest
+
 import numpy as np
 from edges_cal import modelling as mdl
-import pytest
 from pytest_cases import fixture_ref as fxref
 from pytest_cases import parametrize
 

@@ -1,6 +1,5 @@
 """Plotting utilities."""
 import datetime as dt
-
 import healpy as hp
 import matplotlib.pyplot as plt
 import numpy as np
@@ -9,9 +8,8 @@ from astropy import time as apt
 from astropy import units as apu
 from scipy import interpolate as interp
 
-from . import beams
-from . import sky_models
 from .. import const
+from . import beams, sky_models
 
 
 def plot_sky_model():

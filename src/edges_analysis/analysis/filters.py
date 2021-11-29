@@ -1,31 +1,29 @@
 """Functions that identify and flag bad data in various ways."""
 from __future__ import annotations
 
-import logging
-from multiprocessing import cpu_count
-from typing import Sequence, Callable, Literal
-from .levels import CalibratedData, read_step, _ReductionStep, RawData, CombinedData
-from . import types as tp
-import attr
-import h5py
-import numpy as np
-import yaml
-from edges_cal.modelling import Model, LinLog, FourierDay
-from edges_cal.xrfi import (
-    ModelFilterInfoContainer,
-    model_filter,
-)
 import abc
-import functools
-from .data import DATA_PATH
-from . import tools
-from edges_cal import xrfi as rfi
-import inspect
-import p_tqdm
-from pathlib import Path
-from .averaging import weighted_mean
+import attr
 import datetime
+import functools
+import h5py
+import inspect
+import logging
+import numpy as np
+import p_tqdm
+import yaml
+from edges_cal import xrfi as rfi
+from edges_cal.modelling import FourierDay, LinLog, Model
+from edges_cal.xrfi import ModelFilterInfoContainer, model_filter
 from edges_io.utils import ymd_to_jd
+from multiprocessing import cpu_count
+from pathlib import Path
+from typing import Callable, Literal, Sequence
+
+from . import tools
+from . import types as tp
+from .averaging import weighted_mean
+from .data import DATA_PATH
+from .levels import CalibratedData, CombinedData, RawData, _ReductionStep, read_step
 
 logger = logging.getLogger(__name__)
 

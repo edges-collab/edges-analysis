@@ -1,46 +1,42 @@
 """Module defining discrete processing levels for EDGES field data."""
 from __future__ import annotations
 
+import attr
+import copy
+import edges_io as io
 import glob
+import h5py
 import inspect
 import json
 import logging
+import matplotlib.pyplot as plt
+import numpy as np
 import os
 import re
 import sys
 import time
-import copy
+import tqdm
 import warnings
+from cached_property import cached_property
 from copy import deepcopy
 from datetime import datetime
-from multiprocessing import cpu_count
-from pathlib import Path
-from typing import Sequence, Callable, Any
-
-import attr
-import edges_io as io
-import h5py
-import matplotlib.pyplot as plt
-import numpy as np
-import tqdm
-from cached_property import cached_property
-from edges_cal import (
-    FrequencyRange,
-    modelling as mdl,
-    Calibration,
-)
+from edges_cal import Calibration, FrequencyRange
+from edges_cal import modelling as mdl
 from edges_io.auxiliary import auxiliary_data
 from edges_io.h5 import HDF5Object
+from multiprocessing import cpu_count
+from pathlib import Path
+from typing import Any, Callable, Sequence
 
-from . import averaging
-from . import loss, beams, coordinates
-from .coordinates import get_jd, dt_from_jd
-from .. import __version__
-from .. import const
+from .. import __version__, const
 from ..config import config
-from .calibrate import LabCalibration
-from . import types as tp
+from . import averaging, beams
+from . import coordinates
 from . import coordinates as coords
+from . import loss
+from . import types as tp
+from .calibrate import LabCalibration
+from .coordinates import dt_from_jd, get_jd
 
 logger = logging.getLogger(__name__)
 

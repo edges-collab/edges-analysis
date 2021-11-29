@@ -1,24 +1,24 @@
 """CLI routines for edges-analysis."""
-import glob
-import logging
-import sys
-from pathlib import Path
-from typing import List, Type, Optional
-import shutil
-
 import click
+import glob
 import h5py
+import logging
 import p_tqdm
 import questionary as qs
+import shutil
+import sys
 import yaml
 from edges_io import io
+from pathlib import Path
 from rich import box
 from rich.console import Console
 from rich.logging import RichHandler
 from rich.panel import Panel
 from rich.rule import Rule
 from rich.table import Table
-from .analysis import levels, filters
+from typing import List, Optional, Type
+
+from .analysis import filters, levels
 from .config import config
 
 console = Console()

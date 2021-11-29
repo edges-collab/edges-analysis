@@ -1,24 +1,26 @@
 import pytest
+
+import datetime as dt
+import numpy as np
+import yaml
+from click.testing import CliRunner
+from edges_cal.modelling import LinLog
 from pathlib import Path
 from subprocess import run
+from typing import Tuple
+
+from edges_analysis import cli
 from edges_analysis.analysis import (
-    CalibratedData,
-    RawData,
-    CombinedData,
-    CombinedBinnedData,
-    DayAveragedData,
     BinnedData,
+    CalibratedData,
+    CombinedBinnedData,
+    CombinedData,
+    DayAveragedData,
     ModelData,
+    RawData,
     read_step,
 )
-import yaml
-from typing import Tuple
-import numpy as np
-from edges_cal.modelling import LinLog
-import datetime as dt
 from edges_analysis.config import config
-from click.testing import CliRunner
-from edges_analysis import cli
 
 runner = CliRunner()
 

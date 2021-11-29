@@ -1,15 +1,16 @@
+import dill as pickle
+import numpy as np
+from typing import List, Tuple
+
 from edges_analysis.analysis import (
-    CalibratedData,
-    CombinedData,
-    CombinedBinnedData,
-    DayAveragedData,
     BinnedData,
+    CalibratedData,
+    CombinedBinnedData,
+    CombinedData,
+    DayAveragedData,
     ModelData,
     RawData,
 )
-from typing import List, Tuple
-import dill as pickle
-import numpy as np
 
 
 def test_raw_step(raw_step: Tuple[RawData, RawData]):

@@ -1,11 +1,11 @@
 """Corrections for S11 measurements."""
 import numpy as np
-from edges_io import io
-from edges_cal.s11_correction import InternalSwitch
-from typing import Sequence, Union, Callable, Optional
-from pathlib import Path
-from edges_cal import reflection_coefficient as rc
 from edges_cal import modelling as mdl
+from edges_cal import reflection_coefficient as rc
+from edges_cal.s11_correction import InternalSwitch
+from edges_io import io
+from pathlib import Path
+from typing import Callable, Optional, Sequence, Union
 
 
 def get_corrected_s11(

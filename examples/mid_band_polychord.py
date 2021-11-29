@@ -7,17 +7,16 @@ How to run::
     python mid_band_polychord.py 0 5
 """
 
+import numpy as np
+import PyPolyChord
 import sys
 from os import makedirs
 from os.path import exists
-
-import numpy as np
-import PyPolyChord
 from PyPolyChord.settings import PolyChordSettings
 
+from edges_analysis.config import config
 from edges_analysis.estimate.tools import dumper
 from edges_analysis.simulation import data_models as dm
-from edges_analysis.config import config
 
 
 def prior_list(N21, n_fg, model_type_signal, model_type_foreground):

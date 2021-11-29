@@ -1,8 +1,12 @@
 """Functions for working with earth/sky coordinates."""
 from __future__ import annotations
+
 import datetime as dt
 import numpy as np
-from astropy import time as apt, coordinates as apc, units as apu
+from astropy import coordinates as apc
+from astropy import time as apt
+from astropy import units as apu
+
 from .. import const
 
 

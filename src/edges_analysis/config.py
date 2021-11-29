@@ -1,8 +1,8 @@
 """The global configuration for all of edges-analysis."""
-import os
-import yaml
 import contextlib
+import os
 import warnings
+import yaml
 
 
 class ConfigurationError(Exception):

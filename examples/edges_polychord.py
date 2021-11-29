@@ -1,9 +1,10 @@
 """An example of running polychord for EDGES data."""
-import PyPolyChord
 import numpy as np
-from PyPolyChord.settings import PolyChordSettings
-from edges_analysis.estimation.models import model
+import PyPolyChord
 import scipy as sp
+from PyPolyChord.settings import PolyChordSettings
+
+from edges_analysis.estimation.models import model
 
 
 def simulated_data(theta, v, v0):

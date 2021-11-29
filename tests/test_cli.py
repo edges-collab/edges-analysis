@@ -1,8 +1,9 @@
+import numpy as np
 from click.testing import CliRunner
 from pathlib import Path
+
 from edges_analysis import cli
 from edges_analysis.analysis import read_step
-import numpy as np
 
 runner = CliRunner()
 

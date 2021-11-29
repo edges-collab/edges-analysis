@@ -5,10 +5,9 @@ done in different ways. There are ultimately three axes over which we might bin 
 nights, LST/GHA and frequency. Each of these in fact requires slightly different methods
 for averaging, in order to make the average unbiased (given flags).
 """
-from typing import Optional, Union, Tuple
-
 import numpy as np
 from edges_cal import modelling as mdl
+from typing import Optional, Tuple, Union
 
 
 def get_binned_weights(

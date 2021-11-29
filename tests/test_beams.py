@@ -1,7 +1,8 @@
-from edges_analysis.analysis import beams, loss
-from edges_analysis.analysis.sky_models import Haslam408
 import numpy as np
 from pathlib import Path
+
+from edges_analysis.analysis import beams, loss
+from edges_analysis.analysis.sky_models import Haslam408
 
 
 def test_beam_from_feko():
