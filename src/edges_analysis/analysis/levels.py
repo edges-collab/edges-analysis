@@ -572,6 +572,10 @@ class _SingleDayMixin:
         return self.raw_data.meta["hour"]
 
     @property
+    def minute(self):
+        return self.raw_data.meta["minute"]
+
+    @property
     def gha(self):
         return self.raw_data.ancillary["gha"]
 
@@ -582,7 +586,7 @@ class _SingleDayMixin:
     @property
     def datestring(self):
         """The date this observation was started, as a string."""
-        return f"{self.year:04}-{self.day:03}-{self.hour:02}"
+        return f"{self.year:04}-{self.day:03}-{self.hour:02}-{self.minute:02}"
 
     @property
     def raw_time_data(self):
@@ -1092,6 +1096,7 @@ class RawData(_ReductionStep, _SingleDayMixin):
             "year": times[0].year,
             "day": get_jd(times[0]),
             "hour": times[0].hour,
+            "minute": times[0].minute,
             **prev_step["meta"],
         }
 
