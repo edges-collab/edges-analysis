@@ -1,12 +1,27 @@
 """The global configuration for all of edges-analysis."""
+from __future__ import annotations
+
 import contextlib
-import os
 import warnings
 import yaml
+from pathlib import Path
+from typing import Any
 
 
 class ConfigurationError(Exception):
     pass
+
+
+def _path_constructor(_loader, node):
+    return Path(node.value).expanduser()
+
+
+def _path_representer(dumper, data):
+    return dumper.represent_scalar("!path", str(data))
+
+
+yaml.add_constructor("!path", _path_constructor)
+yaml.add_multi_representer(Path, _path_representer)
 
 
 class Config(dict):
@@ -16,11 +31,11 @@ class Config(dict):
         "paths": {
             "raw_field_data": "",
             "raw_lab_data": "",
-            "lab_products": os.path.expanduser("~/edges-calibrations"),
-            "field_products": os.path.expanduser("~/edges-field-levels"),
-            "beams": os.path.expanduser("~/edges-beams"),
-            "antenna": os.path.expanduser("~/edges-antenna-meta"),
-            "sky_models": os.path.expanduser("~/edges-sky-models"),
+            "lab_products": Path("~/edges-calibrations").expanduser(),
+            "field_products": Path("~/edges-field-levels").expanduser(),
+            "beams": Path("~/edges-beams").expanduser(),
+            "antenna": Path("~/edges-antenna-meta").expanduser(),
+            "sky_models": Path("~/edges-sky-models").expanduser(),
         }
     }
 
@@ -29,50 +44,47 @@ class Config(dict):
     _aliases = {}
 
     def __init__(self, *args, **kwargs):
-
         super().__init__(*args, **kwargs)
-
         self._migrate()
 
-    def _migrate(self):
-        # Ensure the keys that got read in are the right keys for the current version
+    @classmethod
+    def _check_key(cls, key: str, val: Any, selfdict: Config) -> bool:
+        do_write = False
 
-        def check(k, v, selfdict):
-            do_write = False
+        if key in selfdict and isinstance(val, dict):
+            for kk, vv in val.items():
+                do_write |= cls._check_key(kk, vv, selfdict[key])
+        elif key not in cls._aliases:
+            warnings.warn("Your configuration file is out of date. Updating...")
+            do_write = True
+            selfdict[key] = val
 
-            if k in selfdict:
-                if isinstance(v, dict):
-                    for kk, vv in v.items():
-                        do_write |= check(kk, vv, selfdict[k])
-            elif k not in self._aliases:
-                warnings.warn("Your configuration file is out of date. Updating...")
-                do_write = True
-                selfdict[k] = v
-
-            else:
-                for alias in self._aliases[k]:
-                    if alias in selfdict:
-                        do_write = True
-                        warnings.warn(
-                            f"Your configuration file has old key '{alias}' which has "
-                            f"been re-named '{k}'. Updating..."
-                        )
-                        selfdict[k] = selfdict[alias]
-                        del selfdict[alias]
-
-                        if isinstance(v, dict):
-                            for kk, vv in v.items():
-                                do_write |= check(kk, vv, selfdict[kk])
-
-                if not do_write:
-                    raise ConfigurationError(
-                        f"The configuration file has key '{alias}' which is not known."
+        else:
+            for alias in cls._aliases[key]:
+                if alias in selfdict:
+                    do_write = True
+                    warnings.warn(
+                        f"Your configuration file has old key '{alias}' which has "
+                        f"been re-named '{key}'. Updating..."
                     )
-            return do_write
+                    selfdict[key] = selfdict[alias]
+                    del selfdict[alias]
 
+                    if isinstance(val, dict):
+                        for kk, vv in val.items():
+                            do_write |= cls._check_key(kk, vv, selfdict[kk])
+
+            if not do_write:
+                raise ConfigurationError(
+                    f"The configuration file has key '{key}' which is not known."
+                )
+        return do_write
+
+    def _migrate(self) -> None:
+        # Ensure the keys that got read in are the right keys for the current version
         do_write = False
         for k, v in self._defaults.items():
-            do_write |= check(k, v, self)
+            do_write |= self._check_key(k, v, self)
 
         if do_write:
             self.write()
@@ -105,8 +117,21 @@ class Config(dict):
             config = yaml.load(fl, Loader=yaml.FullLoader)
         return cls(config)
 
+    def __eq__(self, other) -> bool:
+        """Test equality."""
+        if not isinstance(other, Config):
+            return False
+        for k, v in self.items():
+            if not isinstance(v, dict) and other[k] != v:
+                return False
+            elif isinstance(v, dict):
+                if not all(vv == other[k][kk] for kk, vv in self[k].items()):
+                    return False
 
-config_filename = os.path.expanduser(os.path.join("~", ".edges.yml"))
+        return True
+
+
+config_filename = Path("~/.edges.yml").expanduser()
 
 try:
     config = Config.load(config_filename)
