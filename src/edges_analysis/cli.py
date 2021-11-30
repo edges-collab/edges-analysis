@@ -1,9 +1,9 @@
 """CLI routines for edges-analysis."""
+from __future__ import annotations
 import glob
 import logging
 import sys
 from pathlib import Path
-from typing import List, Type, Optional
 import shutil
 import time
 import os
@@ -90,7 +90,7 @@ def _ctx_to_dct(args):
     return dct
 
 
-def _get_files(pth: Path, filt=h5py.is_hdf5) -> List[Path]:
+def _get_files(pth: Path, filt=h5py.is_hdf5) -> list[Path]:
     if pth.is_dir():
         return [fl for fl in pth.glob("*") if filt(fl)]
     else:
@@ -356,14 +356,14 @@ def process(
 
 
 def promote(
-    input_files: List[Path],
+    input_files: list[Path],
     nthreads: int,
     output_dir: Path,
-    output_fname: Optional[List[Path | None]],
-    step_cls: Type[levels._ReductionStep],
+    output_fname: list[Path | None] | None,
+    step_cls: type[levels._ReductionStep],
     settings: dict,
     clobber: bool,
-) -> List[Path]:
+) -> list[Path]:
     """Calibrate field data to produce CalibratedData files."""
     if not input_files:
         raise ValueError("No input files!")
