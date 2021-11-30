@@ -30,7 +30,7 @@ from edges_cal import (
     Calibration,
 )
 from edges_io.auxiliary import auxiliary_data
-from edges_io.h5 import HDF5Object
+from edges_io.h5 import HDF5Object, HDF5RawSpectrum
 
 from . import averaging
 from . import loss, beams, coordinates
@@ -41,6 +41,7 @@ from ..config import config
 from .calibrate import LabCalibration
 from . import types as tp
 from . import coordinates as coords
+import psutil
 
 logger = logging.getLogger(__name__)
 
@@ -242,7 +243,7 @@ class _ReductionStep(HDF5Object):
             decorator on each subclass.
         """
 
-        def _validate_obj(obj):
+        def _validate_obj(obj) -> _ReductionStep | HDF5RawSpectrum:
             # Either convert str/path to the proper object, return the object, or raise.
             if isinstance(obj, (str, Path)):
                 with warnings.catch_warnings():
@@ -470,7 +471,7 @@ def read_step(
     if fname.suffix == ".acq":
         return io.FieldSpectrum(fname).data
     else:
-        return get_step_type(fname)(fname, validate=validate)
+        return get_step_type(fname)(filename=fname, validate=validate)
 
 
 def get_step_type(
@@ -1052,6 +1053,12 @@ class RawData(_ReductionStep, _SingleDayMixin):
             A thermlog file to use in order to capture that information (may find the
             default thermlog file automatically).
         """
+        pr = psutil.Process()
+
+        logger.debug(
+            f"Memory at start of RawData promote: {pr.memory_info().rss / 1024**2}"
+        )
+
         t = time.time()
         freq_rng = FrequencyRange(
             prev_step["freq_ancillary"]["frequencies"], f_low=f_low
@@ -1064,6 +1071,10 @@ class RawData(_ReductionStep, _SingleDayMixin):
             prev_step["spectra"]["p2"][freq_rng.mask],
         ]
 
+        logger.debug(
+            f"Memory after loading prev_step: {pr.memory_info().rss / 1024**2}"
+        )
+
         ancillary = prev_step["time_ancillary"]
 
         logger.info(f"Time for reading: {time.time() - t:.2f} sec.")
@@ -1072,6 +1083,10 @@ class RawData(_ReductionStep, _SingleDayMixin):
         t = time.time()
         times = cls.get_datetimes(ancillary["times"])
         logger.info(f"...  finished in {time.time() - t:.2f} sec.")
+
+        logger.debug(
+            f"Memory after getting Datetimes: {pr.memory_info().rss / 1024**2}"
+        )
 
         meta = {
             "year": times[0].year,
@@ -1089,11 +1104,17 @@ class RawData(_ReductionStep, _SingleDayMixin):
         )
         meta = {**meta, **new_meta}
 
+        logger.debug(
+            f"Memory fter getting weather data: {pr.memory_info().rss / 1024**2}"
+        )
+
         new_anc = {k: new_anc[k] for k in new_anc.dtype.names}
         time_based_anc = {**time_based_anc, **new_anc}
         time_based_anc = {**time_based_anc, **cls.get_ancillary_coords(times)}
 
         logger.info(f"... finished in {time.time() - t:.2f} sec.")
+
+        logger.debug(f"Memory after ancillary:{pr.memory_info().rss / 1024**2}")
 
         data = {
             "switch_powers": np.array([pp.T for pp in p]),
@@ -1259,7 +1280,7 @@ class RawData(_ReductionStep, _SingleDayMixin):
         return time_based_anc, meta
 
     @classmethod
-    def get_ancillary_coords(cls, times: np.ndarray) -> dict[str, np.ndarray]:
+    def get_ancillary_coords(cls, times: list[datetime]) -> dict[str, np.ndarray]:
         """
         Obtain a dictionary of ancillary co-ordinates based on a list of times.
 
