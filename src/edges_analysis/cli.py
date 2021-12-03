@@ -570,6 +570,15 @@ def filter(settings, path, nthreads, flag_idx, label, clobber):  # noqa: A001
 
         for d in input_data:
             with d.open("r+") as flobj:
+                if "flags" not in flobj:
+                    if flag_idx > 0:
+                        raise ValueError(
+                            f"{d.filename} has no flag array, but you want to keep "
+                            f"{flag_idx} filters."
+                        )
+                    else:
+                        continue
+
                 dset = flobj["flags"]["flags"]
                 dset.resize(flag_idx, axis=0)
 
