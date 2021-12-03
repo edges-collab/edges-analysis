@@ -94,11 +94,11 @@ def step_filter(
         def wrapper(
             *,
             data: Sequence[tp.PathLike | _ReductionStep],
-            flags: Sequence[np.ndarray] | None = None,
+            flags: Sequence[np.ndarray] | None | list[None] = None,
             in_place: bool = False,
             n_threads: int = 1,
             **kwargs,
-        ) -> np.ndarray:
+        ) -> list[np.ndarray]:
             logger.info(f"Running {fnc.__name__} filter.")
 
             # Read all the data, in case they haven't been turned into objects yet.
@@ -108,75 +108,96 @@ def step_filter(
             data = [read_step(d) for d in data]
             assert all(isinstance(d, data_type) for d in data)
 
-            # Specify initial flags (can either be list or single array)
-            flg = (
-                [d.get_flags() for d in data]
-                if flags is None
-                else [f.copy() for f in flags]
-            )
-
-            pre_flag_n = [np.sum(f) for f in flg]
-
-            if multi_data:
-                if uses_flags:
-                    kwargs.update(flags=flg)
-                this_flag = fnc(data=data, **kwargs)
-            else:
-
-                def fnc_(data, flags):
-                    if uses_flags:
-                        return fnc(data=data, flags=flags, **kwargs)
-                    else:
-                        return fnc(data=data, **kwargs)
-
-                if n_threads > 1:
-                    this_flag = list(
-                        p_tqdm.p_map(fnc_, data, flg, unit="files", num_cpus=n_threads)
-                    )
-                else:
-                    this_flag = list(p_tqdm.t_map(fnc_, data, flg, unit="files"))
-
-            if flags is not None and any(
-                np.any(f0 != f1) for f0, f1 in zip(flg, flags)
-            ):
-                logger.warning(
-                    f"Filter {fnc.__name__} modified input flags in-place. "
-                    "This should not happen!"
-                )
-
-            for n, d, f, this_f in zip(pre_flag_n, data, flg, this_flag):
-                if axis in ("all", "freq"):
-                    f |= this_f
-                elif axis == "day":
-                    f[this_f] = True
-                elif axis == "time":
-                    f[..., this_f, :] = True
-
-                if np.all(f):
+            def per_file_processing(data, init_flags, input_flags, out_flags):
+                # This function does all the processing of the output flags
+                # for a particular file.
+                if input_flags is not None and np.any(init_flags != input_flags):
                     logger.warning(
-                        f"{d.filename.name} was fully flagged during {fnc.__name__} "
+                        f"Filter {fnc.__name__} modified input flags in-place. "
+                        "This should not happen!"
+                    )
+
+                n = np.sum(init_flags)
+
+                if axis in ("all", "freq"):
+                    init_flags |= out_flags
+                elif axis == "day":
+                    init_flags[out_flags] = True
+                elif axis == "time":
+                    init_flags[..., out_flags, :] = True
+
+                if np.all(init_flags):
+                    logger.warning(
+                        f"{data.filename.name} was fully flagged during {fnc.__name__} "
                         "filter"
                     )
                 else:
                     logger.info(
-                        f"'{d.filename.name}': {100 * n / f.size:.2f} → "
-                        f"{100 * np.sum(f) / f.size:.2f}% [red]<+"
-                        f"{100 * (np.sum(f) - n) / f.size:.2f}%>[/] flagged after "
-                        f"'{fnc.__name__}' filter"
+                        f"'{data.filename.name}': {100 * n / init_flags.size:.2f} → "
+                        f"{100 * np.sum(init_flags) / init_flags.size:.2f}% [red]<+"
+                        f"{100 * (np.sum(init_flags) - n) / init_flags.size:.2f}%>[/] "
+                        f"flagged after '{fnc.__name__}' filter"
                     )
 
-            if in_place:
-                for d, f in zip(data, flg):
-
-                    with d.open("r+") as fl:
+                if in_place:
+                    with data.open("r+") as fl:
                         _write_filter_to_file(
-                            fl, flags=f, fnc_name=fnc.__name__, **kwargs
+                            fl, flags=init_flags, fnc_name=fnc.__name__, **kwargs
                         )
 
                         try:
-                            del d.weights
+                            del data.weights
                         except AttributeError:
                             pass
+
+                    data.clear()
+
+                    return None
+                else:
+                    return init_flags
+
+            if multi_data:
+                flg = (
+                    [d.get_flags() for d in data]
+                    if flags is None
+                    else [f.copy() for f in flags]
+                )
+
+                if flags is None:
+                    flags = [None] * len(data)
+
+                if uses_flags:
+                    this_flag = fnc(data=data, flags=flg, **kwargs)
+                else:
+                    this_flag = fnc(data=data, **kwargs)
+
+                for d, init_flg, inp_flg, out_flg in zip(data, flg, flags, this_flag):
+                    per_file_processing(d, init_flg, inp_flg, out_flg)
+
+            else:
+                if flags is None:
+                    flags = [None] * len(data)
+
+                def fnc_(data, input_flags):
+                    init_flags = (
+                        data.get_flags() if input_flags is None else input_flags.copy()
+                    )
+
+                    if uses_flags:
+                        out = fnc(data=data, flags=init_flags, **kwargs)
+                    else:
+                        out = fnc(data=data, **kwargs)
+
+                    return per_file_processing(data, init_flags, input_flags, out)
+
+                if n_threads > 1:
+                    flg = list(
+                        p_tqdm.p_map(
+                            fnc_, data, flags, unit="files", num_cpus=n_threads
+                        )
+                    )
+                else:
+                    flg = list(p_tqdm.t_map(fnc_, data, flags, unit="files"))
 
             return flg
 

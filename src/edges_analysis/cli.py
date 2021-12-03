@@ -600,6 +600,7 @@ def filter(settings, path, nthreads, flag_idx, label, clobber):  # noqa: A001
         cfg = item[filt] or {}
         fnc = filters.get_step_filter(filt)
         fnc(data=input_data, in_place=True, n_threads=nthreads, **cfg)
+
     console.print(Rule("Done Filtering"))
 
     console.print()
