@@ -1,10 +1,12 @@
 """CLI routines for edges-analysis."""
+from __future__ import annotations
 import glob
 import logging
 import sys
 from pathlib import Path
-from typing import List, Type, Optional
 import shutil
+import time
+import os
 
 import click
 import h5py
@@ -20,6 +22,7 @@ from rich.rule import Rule
 from rich.table import Table
 from .analysis import levels, filters
 from .config import config
+import psutil
 
 console = Console()
 
@@ -87,7 +90,7 @@ def _ctx_to_dct(args):
     return dct
 
 
-def _get_files(pth: Path, filt=h5py.is_hdf5) -> List[Path]:
+def _get_files(pth: Path, filt=h5py.is_hdf5) -> list[Path]:
     if pth.is_dir():
         return [fl for fl in pth.glob("*") if filt(fl)]
     else:
@@ -196,9 +199,14 @@ def expand_colon(pth: str, band: str = "", raw=True) -> Path:
     default="",
     help="Name of an output file. Only required for the 'combine' step.",
 )
+@click.option(
+    "-v", "--verbosity", default="info", help="level of verbosity of the logging"
+)
 @click.option("-j", "--nthreads", default=1, help="How many threads to use.")
 @click.pass_context
-def process(ctx, step, settings, path, label, message, clobber, output, nthreads):
+def process(
+    ctx, step, settings, path, label, message, clobber, output, nthreads, verbosity
+):
     """Process a dataset to the STEP level of averaging/filtering using SETTINGS.
 
     STEP
@@ -215,6 +223,10 @@ def process(ctx, step, settings, path, label, message, clobber, output, nthreads
     The output files are placed in a directory inside the input file directory, with a
     name determined by the ``--label``.
     """
+    logging.getLogger("edges_analysis").setLevel(verbosity.upper())
+    logging.getLogger("edges_io").setLevel(verbosity.upper())
+    logging.getLogger("edges_cal").setLevel(verbosity.upper())
+
     console.print(
         Panel(f"edges-analysis [blue]{step}[/]", box=box.DOUBLE_EDGE),
         style="bold",
@@ -291,7 +303,7 @@ def process(ctx, step, settings, path, label, message, clobber, output, nthreads
         else:
             output = [Path(output).with_suffix(".h5")]
     elif step != "raw":
-        output = [p.name for p in input_files]
+        output = [Path(p.name) for p in input_files]
     else:
         output = None
 
@@ -321,7 +333,9 @@ def process(ctx, step, settings, path, label, message, clobber, output, nthreads
     # Actually call the relevant function
     console.print()
     console.print(Rule("Beginning Processing"))
-    out_paths = promote(input_files, nthreads, output_dir, output, step_cls, settings)
+    out_paths = promote(
+        input_files, nthreads, output_dir, output, step_cls, settings, clobber
+    )
     console.print(Rule("Done Processing"))
 
     for pth in out_paths:
@@ -342,13 +356,14 @@ def process(ctx, step, settings, path, label, message, clobber, output, nthreads
 
 
 def promote(
-    input_files: List[Path],
+    input_files: list[Path],
     nthreads: int,
     output_dir: Path,
-    output_fname: Optional[List[Path]],
-    step_cls: Type[levels._ReductionStep],
+    output_fname: list[Path | None] | None,
+    step_cls: type[levels._ReductionStep],
     settings: dict,
-) -> List[Path]:
+    clobber: bool,
+) -> list[Path]:
     """Calibrate field data to produce CalibratedData files."""
     if not input_files:
         raise ValueError("No input files!")
@@ -361,14 +376,41 @@ def promote(
         output_fname = output_fname or [None] * len(input_files)
 
         def _pro(fl, fname):
+            pr = psutil.Process()
+
+            paused = False
+            if psutil.virtual_memory().available < 4 * 1024 ** 3:
+                logger.warning(
+                    "Available Memory < 4GB, waiting for resources on "
+                    f"pid={os.getpid()}. Cancel and restart with fewer threads if this"
+                    "thread appears to be frozen"
+                )
+                paused = True
+
+            while psutil.virtual_memory().available < 4 * 1024 ** 3:
+                time.sleep(2)
+
+            if paused:
+                logger.warning(f"Resuming processing on pid={os.getpid()}")
+
+            logger.debug(f"Initial memory: {pr.memory_info().rss / 1024**2} MB")
             try:
                 data = step_cls.promote(prev_step=fl, **settings)
+                data._parent.clear()
             except (levels.FullyFlaggedError, levels.WeatherError) as e:
                 logger.warning(str(e))
                 return
+
             fname = fname or f"{data.datestring}.h5"
             fname = output_dir / fname
-            data.write(fname)
+            data.write(fname, clobber=clobber)
+
+            logger.debug(f"Memory After Writing: {pr.memory_info().rss / 1024**2} MB")
+
+            data.clear()
+
+            logger.debug(f"Memory After Clearing: {pr.memory_info().rss / 1024**2} MB")
+
             return fname
 
         if len(input_files) == 1:
@@ -528,6 +570,15 @@ def filter(settings, path, nthreads, flag_idx, label, clobber):  # noqa: A001
 
         for d in input_data:
             with d.open("r+") as flobj:
+                if "flags" not in flobj:
+                    if flag_idx > 0:
+                        raise ValueError(
+                            f"{d.filename} has no flag array, but you want to keep "
+                            f"{flag_idx} filters."
+                        )
+                    else:
+                        continue
+
                 dset = flobj["flags"]["flags"]
                 dset.resize(flag_idx, axis=0)
 
@@ -549,6 +600,7 @@ def filter(settings, path, nthreads, flag_idx, label, clobber):  # noqa: A001
         cfg = item[filt] or {}
         fnc = filters.get_step_filter(filt)
         fnc(data=input_data, in_place=True, n_threads=nthreads, **cfg)
+
     console.print(Rule("Done Filtering"))
 
     console.print()
