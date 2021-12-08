@@ -105,6 +105,26 @@ def calibrate_settings(integration_test_data: Path) -> Path:
 
 
 @pytest.fixture(scope="session")
+def calibrate_settings2(integration_test_data: Path) -> Path:
+    settings = {
+        "calfile": str(integration_test_data / "calfile_Rcv_2017_05.h5"),
+        "s11_path": str(
+            integration_test_data / "S11_blade_low_band_2015_342_03_14.txt.csv "
+        ),
+        "balun_correction": True,
+        "antenna_correction": False,
+        "ground_correction": ":",
+        "beam_file": "",
+    }
+
+    out = integration_test_data / "calibrate1.yaml"
+    with open(out, "w") as fl:
+        yaml.dump(settings, fl)
+
+    return out
+
+
+@pytest.fixture(scope="session")
 def raw_step(
     integration_test_data: Path,
     raw_settings: Path,
