@@ -100,6 +100,11 @@ def test_bin_aftercombine_step(combo_bin_step: CombinedBinnedData):
     combo_bin_step.plot_waterfall(day=292)
 
 
+def test_bin_after_combine2(combo_bin2_step: CombinedBinnedData):
+    assert combo_bin2_step.resids.shape[-1] == len(combo_bin2_step.raw_frequencies)
+    assert combo_bin2_step.spectrum.shape == combo_bin2_step.resids.shape
+
+
 def test_day_step(day_step: DayAveragedData):
     assert day_step.resids.shape[-1] == len(day_step.raw_frequencies)
     assert day_step.spectrum.shape == day_step.resids.shape
