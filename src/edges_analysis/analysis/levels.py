@@ -2307,6 +2307,7 @@ class CombinedBinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
     _possible_parents = (CombinedData,)
     _multi_input = False
     _spec_dim = 3
+    _self_parent = True
 
     _ancillary = {
         "years": is_array("int", 1),
