@@ -50,6 +50,26 @@ def test_calibrate_step(cal_step: List[CalibratedData]):
     )
 
 
+def test_calibrate_step2(cal_step2: List[CalibratedData]):
+    assert cal_step2[0].raw_frequencies.shape == (8193,)
+    assert cal_step2[1].raw_frequencies.shape == (8193,)
+
+    # Ensure it's pickleable
+    pickle.dumps(cal_step2[0])
+
+    # ensure plotting functions don't error
+    cal_step2[0].plot_waterfall()
+    cal_step2[0].plot_time_averaged_spectrum()
+    cal_step2[0].plot_s11()
+
+    assert (
+        len(cal_step2[0].lst)
+        == len(cal_step2[0].gha)
+        == len(cal_step2[0].raw_time_data)
+        == len(cal_step2[0].datetimes)
+    )
+
+
 def test_filtering(cal_step: CalibratedData):
     assert cal_step[0].raw_frequencies.shape == (8193,)
     assert cal_step[1].raw_frequencies.shape == (8193,)

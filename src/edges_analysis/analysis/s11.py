@@ -16,39 +16,48 @@ def get_corrected_s11(
     internal_switch_s22: Optional[Callable] = None,
 ):
     """Correct a measured S11 with the internal switch."""
-    assert len(files) == 4
+    if len(files) == 4:
+        if internal_switch is None:
+            assert internal_switch_s11 is not None
+            assert internal_switch_s12 is not None
+            assert internal_switch_s22 is not None
+        else:
+            assert isinstance(internal_switch, InternalSwitch)
+            internal_switch_s11 = internal_switch.s11_model
+            internal_switch_s12 = internal_switch.s12_model
+            internal_switch_s22 = internal_switch.s22_model
 
-    if internal_switch is None:
-        assert internal_switch_s11 is not None
-        assert internal_switch_s12 is not None
-        assert internal_switch_s22 is not None
-    else:
-        assert isinstance(internal_switch, InternalSwitch)
-        internal_switch_s11 = internal_switch.s11_model
-        internal_switch_s12 = internal_switch.s12_model
-        internal_switch_s22 = internal_switch.s22_model
+        standards = [io.S1P.read(fl)[0] for fl in sorted(files)]
+        f = io.S1P.read(files[0])[1]
 
-    standards = [io.S1P.read(fl)[0] for fl in sorted(files)]
-    f = io.S1P.read(files[0])[1]
+        sw = {
+            "o": 1 * np.ones(len(f)),
+            "s": -1 * np.ones(len(f)),
+            "l": 0 * np.ones(len(f)),
+        }
 
-    sw = {
-        "o": 1 * np.ones(len(f)),
-        "s": -1 * np.ones(len(f)),
-        "l": 0 * np.ones(len(f)),
-    }
+        # Correction at switch
+        a_sw_c = rc.de_embed(sw["o"], sw["s"], sw["l"], *standards)[0]
 
-    # Correction at switch
-    a_sw_c = rc.de_embed(sw["o"], sw["s"], sw["l"], *standards)[0]
+        return (
+            rc.gamma_de_embed(
+                internal_switch_s11(f),
+                internal_switch_s12(f),
+                internal_switch_s22(f),
+                a_sw_c,
+            ),
+            f,
+        )
+    elif len(files) == 1:
+        return get_s11_from_file(files[0])
 
-    return (
-        rc.gamma_de_embed(
-            internal_switch_s11(f),
-            internal_switch_s12(f),
-            internal_switch_s22(f),
-            a_sw_c,
-        ),
-        f,
+
+def get_s11_from_file(s11_file_name):
+    """Function to read the csv file that has the corrected S11."""
+    f_orig, gamm_real, gamma_imag = np.loadtxt(
+        s11_file_name, skiprows=1, delimiter=",", unpack=True
     )
+    return gamm_real + 1j * gamma_imag, f_orig / 10 ** 6
 
 
 def antenna_s11_remove_delay(
