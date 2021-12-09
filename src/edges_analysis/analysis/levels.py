@@ -2324,8 +2324,8 @@ class CombinedBinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         cls,
         prev_step: CombinedData,
         gha_bin_size: float = 0.1,
-        gha_min: float = 0.0,
-        gha_max: float = 24.0,
+        gha_min: None = None,
+        gha_max: None = None,
     ):
         """
         Bins the 3D spectrum along time axis for the :class:`CombinedData` object.
