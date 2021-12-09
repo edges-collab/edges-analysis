@@ -2350,8 +2350,6 @@ class CombinedBinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
                 , got {gha_bin_size}"
             )
 
-        model_params = prev_step.ancillary["model_params"]
-        model_resids = prev_step.resids
         flags = prev_step.get_flags()
 
         # Bin in GHA using the models and residuals
@@ -2652,7 +2650,7 @@ class DayAveragedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
     checking its ``.keys()``.
     """
 
-    _possible_parents = (CombinedData,)
+    _possible_parents = (CombinedData, CombinedBinnedData)
     _ancillary = {
         "years": is_array("int", 1),
         "days": is_array("int", 1),
@@ -2667,7 +2665,7 @@ class DayAveragedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         prev_step: CombinedData,
         day_range: tuple[int, int] | None = None,
         ignore_days: Sequence[int] | None = None,
-        gha_filter_file: [None, str, Path] = None,
+        gha_filter_file: None | tp.PathLike = None,
         n_threads: int = cpu_count(),
     ):
         """
@@ -2897,15 +2895,14 @@ class BinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
     @classmethod
     def _promote(
         cls,
-        prev_step: [DayAveragedData, BinnedData],
+        prev_step: DayAveragedData | BinnedData,
         f_low: float | None = None,
         f_high: float | None = None,
         ignore_freq_ranges: Sequence[tuple[float, float]] | None = None,
         freq_resolution: float | None = None,
         gha_min: float = 0,
         gha_max: float = 24,
-        gha_bin_size: [None, float] = None,
-        n_threads: int = cpu_count(),
+        gha_bin_size: float | None = None,
     ):
         """
         Average over GHA and Frequency.
