@@ -1607,7 +1607,8 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
                 fls.append(p)
 
             return fls
-
+        if s11_path.endswith("csv"):
+            return [s11_path]
         # Otherwise it must be a path.
         s11_path = Path(s11_path).expanduser()
 
@@ -1624,6 +1625,7 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
         assert (
             len(fls) == 4
         ), f"There are not exactly four files matching {s11_path}. Found: {fls}."
+
         return sorted(Path(fl) for fl in fls)
 
     @cached_property
