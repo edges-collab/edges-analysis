@@ -2307,6 +2307,7 @@ class CombinedBinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
     _possible_parents = (CombinedData,)
     _multi_input = False
     _spec_dim = 3
+    _self_parent = True
 
     _ancillary = {
         "years": is_array("int", 1),
@@ -2323,6 +2324,8 @@ class CombinedBinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         cls,
         prev_step: CombinedData,
         gha_bin_size: float = 0.1,
+        gha_min: None = None,
+        gha_max: None = None,
     ):
         """
         Bins the 3D spectrum along time axis for the :class:`CombinedData` object.
@@ -2350,14 +2353,14 @@ class CombinedBinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
                 , got {gha_bin_size}"
             )
 
-        model_params = prev_step.ancillary["model_params"]
-        model_resids = prev_step.resids
         flags = prev_step.get_flags()
 
         # Bin in GHA using the models and residuals
         params, resids, weights, gha_edges = cls.bin_gha(
             prev_step,
             gha_bin_size,
+            gha_min,
+            gha_max,
             flags=flags,
         )
 
@@ -2394,15 +2397,23 @@ class CombinedBinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         cls,
         combined_obj: CombinedData,
         gha_bin_size: float,
+        gha_min: float | None,
+        gha_max: float | None,
         flags=None,
     ):
         """Bin a list of files into small aligning bins of GHA."""
-        gha_edges = np.arange(
-            combined_obj.gha_edges.min(), combined_obj.gha_edges.max(), gha_bin_size
-        )
-        if np.isclose(combined_obj.gha_edges.max(), gha_edges.max() + gha_bin_size):
-            gha_edges = np.concatenate((gha_edges, [gha_edges.max() + gha_bin_size]))
-
+        if gha_min is None and gha_max is None:
+            gha_edges = np.arange(
+                combined_obj.gha_edges.min(), combined_obj.gha_edges.max(), gha_bin_size
+            )
+            if np.isclose(combined_obj.gha_edges.max(), gha_edges.max() + gha_bin_size):
+                gha_edges = np.concatenate(
+                    (gha_edges, [gha_edges.max() + gha_bin_size])
+                )
+        else:
+            gha_edges = np.arange(
+                gha_min, gha_max + gha_bin_size / 10, gha_bin_size, dtype=float
+            )
         # Averaging data within GHA bins
         weights = np.zeros(
             (len(combined_obj.resids), len(gha_edges) - 1, combined_obj.freq.n)
@@ -2642,7 +2653,7 @@ class DayAveragedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
     checking its ``.keys()``.
     """
 
-    _possible_parents = (CombinedData,)
+    _possible_parents = (CombinedData, CombinedBinnedData)
     _ancillary = {
         "years": is_array("int", 1),
         "days": is_array("int", 1),
@@ -2657,7 +2668,7 @@ class DayAveragedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         prev_step: CombinedData,
         day_range: tuple[int, int] | None = None,
         ignore_days: Sequence[int] | None = None,
-        gha_filter_file: [None, str, Path] = None,
+        gha_filter_file: None | tp.PathLike = None,
         n_threads: int = cpu_count(),
     ):
         """
@@ -2887,15 +2898,14 @@ class BinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
     @classmethod
     def _promote(
         cls,
-        prev_step: [DayAveragedData, BinnedData],
+        prev_step: DayAveragedData | BinnedData,
         f_low: float | None = None,
         f_high: float | None = None,
         ignore_freq_ranges: Sequence[tuple[float, float]] | None = None,
         freq_resolution: float | None = None,
         gha_min: float = 0,
         gha_max: float = 24,
-        gha_bin_size: [None, float] = None,
-        n_threads: int = cpu_count(),
+        gha_bin_size: float | None = None,
     ):
         """
         Average over GHA and Frequency.
