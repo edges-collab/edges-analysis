@@ -4,7 +4,14 @@ from __future__ import annotations
 import logging
 from multiprocessing import cpu_count
 from typing import Sequence, Callable, Literal
-from .levels import CalibratedData, read_step, _ReductionStep, RawData, CombinedData
+from .levels import (
+    CalibratedData,
+    CombinedBinnedData,
+    read_step,
+    _ReductionStep,
+    RawData,
+    CombinedData,
+)
 from . import types as tp
 import attr
 import h5py
@@ -19,11 +26,11 @@ import abc
 import functools
 from .data import DATA_PATH
 from . import tools
+from . import averaging
 from edges_cal import xrfi as rfi
 import inspect
 import p_tqdm
 from pathlib import Path
-from .averaging import weighted_mean
 import datetime
 from edges_io.utils import ymd_to_jd
 
@@ -1094,7 +1101,7 @@ def _peak_power_filter(
 
         spec = data.spectrum[:, mask]
 
-    mean, _ = weighted_mean(
+    mean, _ = averaging.weighted_mean(
         spec,
         weights=((spec > 0) & ((spec.T < peak_power / 10).T)).astype(float),
         axis=1,
@@ -1302,3 +1309,43 @@ def day_filter(
             raise ValueError(f"date '{date}' cannot be parsed as a date.")
 
     return np.array([date[:2] in filter_dates for date in data.dates])
+
+
+@step_filter(axis="day", data_type=(CombinedData, CombinedBinnedData))
+def day_rms_filter(
+    *,
+    data: CombinedData | CombinedBinnedData,
+    gha_min: float = 0,
+    gha_max: float = 24,
+    rms_threshold: float,
+    weighted: bool = False,
+):
+    """Filter out days based on the rms of the residuals."""
+    gha = (data.ancillary["gha_edges"][1:] + data.ancillary["gha_edges"][:-1]) / 2
+    filter_dates = []
+    mask = (gha > gha_min) & (gha < gha_max)
+
+    for param, resid, weight, day in zip(
+        data.model_params, data.resids, data.weights, data.dates
+    ):
+        if np.sum(weight[mask]) == 0:
+            continue
+
+        mean_p, mean_r, mean_w = averaging.bin_gha_unbiased_regular(
+            params=param[mask],
+            resids=resid[mask],
+            weights=weight[mask],
+            gha=gha[mask],
+            bins=np.array([gha_min, gha_max]),
+        )
+        if weighted:
+            rms = np.sqrt(
+                averaging.weighted_mean(data=mean_r[0] ** 2, weights=mean_w[0])[0]
+            )
+        else:
+            rms = np.sqrt(np.mean(mean_r[0] ** 2))
+
+        if rms > rms_threshold:
+            filter_dates.append(day)
+        print(filter_dates)
+    return np.array([date in filter_dates for date in data.dates])
