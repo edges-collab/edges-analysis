@@ -120,3 +120,14 @@ def test_day_filter(combo_step):
 
     with pytest.raises(ValueError):
         filters.day_filter(data=[combo_step], dates=["heythere"])
+
+
+def test_day_rms_filter(combo_step):
+    out_flags = filters.day_rms_filter(
+        data=[combo_step], rms_threshold=2.00, weighted=True
+    )
+    assert out_flags[0].ndim == 3
+    assert np.all(out_flags[0][0])
+
+    out_flags2 = filters.day_rms_filter(data=[combo_step], rms_threshold=2.00)
+    np.testing.assert_equal(out_flags, out_flags2)

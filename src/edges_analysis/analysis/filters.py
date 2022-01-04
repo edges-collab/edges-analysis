@@ -31,7 +31,6 @@ from edges_cal import xrfi as rfi
 import inspect
 import p_tqdm
 from pathlib import Path
-from .averaging import weighted_mean
 import datetime
 from edges_io.utils import ymd_to_jd
 
@@ -1102,7 +1101,7 @@ def _peak_power_filter(
 
         spec = data.spectrum[:, mask]
 
-    mean, _ = weighted_mean(
+    mean, _ = averaging.weighted_mean(
         spec,
         weights=((spec > 0) & ((spec.T < peak_power / 10).T)).astype(float),
         axis=1,
@@ -1319,13 +1318,15 @@ def day_rms_filter(
     gha_min: float = 0,
     gha_max: float = 24,
     rms_threshold: float,
+    weighted: bool = False,
 ):
     """Filter out days based on the rms of the residuals."""
     gha = (data.ancillary["gha_edges"][1:] + data.ancillary["gha_edges"][:-1]) / 2
     filter_dates = []
     mask = (gha > gha_min) & (gha < gha_max)
-    for i, (param, resid, weight, day) in enumerate(
-        zip(data.model_params, data.resids, data.weights, data.days)
+
+    for param, resid, weight, day in zip(
+        data.model_params, data.resids, data.weights, data.dates
     ):
         if np.sum(weight[mask]) == 0:
             continue
@@ -1337,10 +1338,14 @@ def day_rms_filter(
             gha=gha[mask],
             bins=np.array([gha_min, gha_max]),
         )
-        rms = np.sqrt(
-            averaging.weighted_mean(data=mean_r[0] ** 2, weights=mean_w[0])[0]
-        )
+        if weighted:
+            rms = np.sqrt(
+                averaging.weighted_mean(data=mean_r[0] ** 2, weights=mean_w[0])[0]
+            )
+        else:
+            rms = np.sqrt(np.mean(mean_r[0] ** 2))
+
         if rms > rms_threshold:
             filter_dates.append(day)
-
-    return np.array([date[:2] in filter_dates for date in data.dates])
+        print(filter_dates)
+    return np.array([date in filter_dates for date in data.dates])
