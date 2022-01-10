@@ -249,3 +249,21 @@ class Guzman45(SkyModel):
         sky_map[lat > 68] = np.mean(sky_map[(lat > 60) & (lat < 68)])
 
         return sky_map
+
+class WhamHAlpha(SkyModel):
+    url = "https://lambda.gsfc.nasa.gov/data/foregrounds/wham/lambda_WHAM_1_256.fits"
+    frequency = 457108000
+    header_hdu = 1
+    data_name = "UNKNOWN1"
+
+class PlanckCO(SkyModel):
+    url = "https://irsa.ipac.caltech.edu/data/Planck/release_2/all-sky-maps/maps/component-maps/foregrounds/COM_CompMap_CO-commander_0256_R2.00.fits"
+    frequency = 115270
+    header_hdu = 1
+    data_name = "I_MEAN" 
+
+class HI4PI(SkyModel):
+    url = "https://lambda.gsfc.nasa.gov/data/foregrounds/ebv_2017/mom0_-90_90_1024.hpx.fits"
+    frequency = 1420.40575177
+    header_hdu = 1
+    data_name = "NHI" 
