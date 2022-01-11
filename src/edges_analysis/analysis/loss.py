@@ -317,7 +317,9 @@ def ground_loss(
 
     elif str(filename).startswith(":"):
         if band is None:
-            raise ValueError(f"For non-absolute path {filename}, you must provide 'band'.")
+            raise ValueError(
+                f"For non-absolute path {filename}, you must provide 'band'."
+            )
         if str(filename) == ":":
             # Use the built-in loss files
             fl = "ground"
