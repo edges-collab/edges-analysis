@@ -1607,7 +1607,7 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
                 fls.append(p)
 
             return fls
-        if not s11_path.endswith("s1p"):
+        if (os.path.isfile(s11_path)) and (not s11_path.endswith("s1p")):
             return [s11_path]
         # Otherwise it must be a path.
         s11_path = Path(s11_path).expanduser()
