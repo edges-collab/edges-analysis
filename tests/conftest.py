@@ -125,6 +125,24 @@ def calibrate_settings2(integration_test_data: Path) -> Path:
 
 
 @pytest.fixture(scope="session")
+def calibrate_settings3(integration_test_data: Path) -> Path:
+    settings = {
+        "calfile": str(integration_test_data / "calfile_Rcv_2017_05.h5"),
+        "s11_path": str(integration_test_data / "average_2015_342_03_14.txt"),
+        "balun_correction": True,
+        "antenna_correction": False,
+        "ground_correction": ":",
+        "beam_file": "",
+    }
+
+    out = integration_test_data / "calibrate2.yaml"
+    with open(out, "w") as fl:
+        yaml.dump(settings, fl)
+
+    return out
+
+
+@pytest.fixture(scope="session")
 def raw_step(
     integration_test_data: Path,
     raw_settings: Path,
@@ -204,6 +222,31 @@ def cal_step2(
     return tuple(
         read_step(fl)
         for fl in sorted((raw_step[0].filename.parent / "calibrated2").glob("*.h5"))
+    )
+
+
+@pytest.fixture(scope="session")
+def cal_step3(
+    raw_step: Tuple[RawData, RawData],
+    calibrate_settings3: Path,
+    edges_config: dict,
+    settings: Path,
+) -> Tuple[CalibratedData, CalibratedData]:
+    invoke(
+        cli.process,
+        [
+            "calibrate",
+            str(calibrate_settings3),
+            "-i",
+            str(raw_step[0].filename.parent / "*.h5"),
+            "-l",
+            "calibrated3",
+        ],
+    )
+
+    return tuple(
+        read_step(fl)
+        for fl in sorted((raw_step[0].filename.parent / "calibrated3").glob("*.h5"))
     )
 
 

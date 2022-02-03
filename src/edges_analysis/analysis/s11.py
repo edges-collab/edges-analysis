@@ -54,9 +54,14 @@ def get_corrected_s11(
 
 def get_s11_from_file(s11_file_name):
     """Function to read the csv file that has the corrected S11."""
+    if s11_file_name.endswith(".csv"):
+        delimiter = ","
+    else:
+        delimiter = " "
     f_orig, gamm_real, gamma_imag = np.loadtxt(
-        s11_file_name, skiprows=1, delimiter=",", unpack=True
+        s11_file_name, skiprows=1, delimiter=delimiter, unpack=True
     )
+
     return gamm_real + 1j * gamma_imag, f_orig / 10 ** 6
 
 
