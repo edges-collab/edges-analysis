@@ -9,6 +9,7 @@ import numpy as np
 from pathlib import Path
 from edges_cal import receiver_calibration_func as rcf
 from edges_cal import modelling as mdl
+from scipy.interpolate import InterpolatedUnivariateSpline as Spline
 
 
 def optional(tp: type) -> Callable:
@@ -188,7 +189,11 @@ class LabCalibration:
         if isinstance(self.calobs, Calibration):
             return self.calobs.lna_s11
         else:
-            return self.calobs.lna.s11_model
+            # We need to propagate the injected LNA S11 if it exists
+            re = Spline(self.calobs.freq.freq, np.real(self.calobs.lna_s11))
+            im = Spline(self.calobs.freq.freq, np.imag(self.calobs.lna_s11))
+
+            return lambda f: re(f) + im(f) * 1j
 
     def with_ant_s11(
         self, ant_s11: Callable[[np.ndarray], np.ndarray]
