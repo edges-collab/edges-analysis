@@ -2324,6 +2324,9 @@ class CombinedBinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         cls,
         prev_step: CombinedData,
         gha_bin_size: float = 0.1,
+        f_low: float = 50.0,
+        f_high: float = 100.0,
+        freq_resolution=None,
         gha_min: None = None,
         gha_max: None = None,
     ):
@@ -2364,7 +2367,35 @@ class CombinedBinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
             flags=flags,
         )
 
-        data = {"weights": weights, "resids": resids}
+        freq = FrequencyRange(prev_step.raw_frequencies, f_low=f_low, f_high=f_high)
+
+        resid = resids[..., freq.mask]
+        wght = weights[..., freq.mask]
+
+        new_resid = []
+        new_wght = []
+
+        if freq_resolution:
+            logger.info("Averaging in frequency bins...")
+
+            for i, (p, r, w) in enumerate(zip(params, resid, wght)):
+
+                f, w_b, _, r_b, params[i] = averaging.bin_freq_unbiased_regular(
+                    model=prev_step._model,
+                    params=p,
+                    freq=freq.freq,
+                    resids=r,
+                    weights=w,
+                    resolution=freq_resolution,
+                )
+                new_resid.append(r_b)
+                new_wght.append(w_b)
+            logger.info(f".... produced {len(f)} frequency bins.")
+        else:
+            f = freq.freq
+            params = prev_step.model_params
+
+        data = {"weights": new_wght, "resids": new_resid}
 
         ancillary = {
             "years": prev_step.ancillary["years"],
@@ -2374,7 +2405,7 @@ class CombinedBinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
             "model_params": params,
         }
 
-        return prev_step.raw_frequencies, data, ancillary, cls._get_meta(locals())
+        return f, data, ancillary, cls._get_meta(locals())
 
     @classmethod
     def _extra_meta(cls, kwargs):
@@ -2497,7 +2528,7 @@ class CombinedBinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
                 continue
 
             # skip days not explicitly requested.
-            if days and day not in days:
+            if days is not None and day not in days:
                 continue
 
             mean_p, mean_r, mean_w = averaging.bin_gha_unbiased_regular(
