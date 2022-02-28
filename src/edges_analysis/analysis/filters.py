@@ -1317,6 +1317,8 @@ def day_rms_filter(
     data: CombinedData | CombinedBinnedData,
     gha_min: float = 0,
     gha_max: float = 24,
+    f_low: float = 0.0,
+    f_high: float = np.inf,
     rms_threshold: float,
     weighted: bool = False,
 ):
@@ -1324,7 +1326,6 @@ def day_rms_filter(
     gha = (data.ancillary["gha_edges"][1:] + data.ancillary["gha_edges"][:-1]) / 2
     filter_dates = []
     mask = (gha > gha_min) & (gha < gha_max)
-
     for param, resid, weight, day in zip(
         data.model_params, data.resids, data.weights, data.dates
     ):
@@ -1338,14 +1339,17 @@ def day_rms_filter(
             gha=gha[mask],
             bins=np.array([gha_min, gha_max]),
         )
+        freq_mask = (data.raw_frequencies >= f_low) & (data.raw_frequencies <= f_high)
         if weighted:
             rms = np.sqrt(
-                averaging.weighted_mean(data=mean_r[0] ** 2, weights=mean_w[0])[0]
+                averaging.weighted_mean(
+                    data=mean_r[0, freq_mask] ** 2, weights=mean_w[0, freq_mask]
+                )[0]
             )
         else:
-            rms = np.sqrt(np.mean(mean_r[0] ** 2))
-
+            rms = np.sqrt(np.mean(mean_r[0, freq_mask] ** 2))
+        print(rms)
         if rms > rms_threshold:
             filter_dates.append(day)
-        print(filter_dates)
+    print(filter_dates)
     return np.array([date in filter_dates for date in data.dates])
