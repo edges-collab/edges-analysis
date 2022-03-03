@@ -1,4 +1,4 @@
-r"""
+"""
 A module defining various sky models that can be used to generate beam corrections.
 
 The models here are preferably *not* interpolated over frequency, as that gives more
@@ -6,7 +6,10 @@ control to us to interpolate how we wish.
 """
 from __future__ import annotations
 
+
 import healpy as hp
+from astropy import units as u
+from astropy_healpix import interpolate_bilinear_lonlat
 import numpy as np
 from astropy import coordinates as apc
 from astropy.io import fits
@@ -96,6 +99,53 @@ class ConstantIndex(IndexModel):
     ) -> np.ndarray:
         """Generate the spectral index at a given sky location."""
         return np.ones_like(lat) * self.index
+
+
+@attr.s
+class SkymapIndex(IndexModel):
+    """Spectral index model calculated using two sky maps."""
+
+    sky_model1: SkyModel = attr.ib()
+    sky_model2: SkyModel = attr.ib()
+
+    def get_index(
+        self,
+        lat: [None, np.ndarray] = None,
+        lon: [None, np.ndarray] = None,
+        sky_model: [None, SkyModel] = None,
+    ) -> np.ndarray:
+        """Generate the spectral index at a given sky location."""
+        return interpolate_bilinear_lonlat(
+            lon * u.deg, lat * u.deg, self.index_at_hpres, order="nested"
+        )
+
+    @property
+    def index_at_hpres(
+        self,
+    ):
+        """Generate the spectral index given the two maps."""
+        if len(self.sky_model1.sky_map) > len(self.sky_model2.sky_map):
+            temp_map = hp.ud_grade(
+                self.sky_model1.sky_map,
+                nside_out=hp.npix2nside(len(self.sky_model2.sky_map)),
+                order_in="nested",
+                order_out="nested",
+            )
+            index = np.log(temp_map / self.sky_model2.sky_map) / np.log(
+                self.sky_model1.frequency / self.sky_model2.frequency
+            )
+
+        else:
+            temp_map = hp.ud_grade(
+                self.sky_model2.sky_map,
+                nside_out=hp.npix2nside(len(self.sky_model1.sky_map)),
+                order_in="nested",
+                order_out="nested",
+            )
+            index = np.log(self.sky_model1.sky_map / temp_map) / np.log(
+                self.sky_model1.frequency / self.sky_model2.frequency
+            )
+        return -index
 
 
 class SkyModel:
@@ -204,7 +254,7 @@ class SkyModel:
             The healpix sky maps at the new frequencies, shape (Nsky, Nfreq).
         """
         lon, lat = self.lonlat
-        index = index_model.get_index(lon, lat, self)
+        index = index_model.get_index(lat, lon, self)
         f = freq / self.frequency
         Tcmb = 2.725
         scale = np.power.outer(f, -index)
