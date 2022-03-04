@@ -1,7 +1,7 @@
 """Corrections for S11 measurements."""
 import numpy as np
 from edges_io import io
-from edges_cal.s11_correction import InternalSwitch
+from edges_cal.s11 import InternalSwitch
 from typing import Sequence, Union, Callable, Optional
 from pathlib import Path
 from edges_cal import reflection_coefficient as rc
@@ -46,7 +46,7 @@ def get_corrected_s11(
                 internal_switch_s22(f),
                 a_sw_c,
             ),
-            f,
+            f.to_value("MHz"),
         )
     elif len(files) == 1:
         return get_s11_from_file(files[0])

@@ -30,7 +30,10 @@ class LabCalibration:
         return mdl.Polynomial(
             n_terms=10,
             transform=mdl.UnitTransform(
-                range=(self.calobs.freq.min, self.calobs.freq.max)
+                range=(
+                    self.calobs.freq.min.to_value("MHz"),
+                    self.calobs.freq.max.to_value("MHz"),
+                )
             ),
         )
 
@@ -64,8 +67,8 @@ class LabCalibration:
     ) -> tuple[Callable[[np.ndarray], np.ndarray], np.ndarray, np.ndarray]:
         model, raw, raw_freq = s11m.antenna_s11_remove_delay(
             self.s11_files,
-            f_low=self.calobs.freq.min,
-            f_high=self.calobs.freq.max,
+            f_low=self.calobs.freq.min.to_value("MHz"),
+            f_high=self.calobs.freq.max.to_value("MHz"),
             delay_0=0.17,
             internal_switch_s11=self.internal_switch_s11,
             internal_switch_s12=self.internal_switch_s12,
@@ -85,7 +88,7 @@ class LabCalibration:
     @cached_property
     def antenna_s11(self) -> np.ndarray:
         """The antenna S11 at the default frequencies."""
-        return self.antenna_s11_model(self.calobs.freq.freq)
+        return self.antenna_s11_model(self.calobs.freq.freq.to_value("MHz"))
 
     @property
     def raw_antenna_s11(self) -> np.ndarray:
@@ -102,7 +105,7 @@ class LabCalibration:
     ):
         """Get the K-vector for calibration that is dependent on LNA and Antenna S11."""
         if freq is None:
-            freq = self.calobs.freq.freq
+            freq = self.calobs.freq.freq.to_value("MHz")
 
         lna = self.lna_s11(freq)
 
@@ -115,7 +118,7 @@ class LabCalibration:
     ) -> tuple[np.ndarray, np.ndarray]:
         """Get the linear coeffs that transform uncalibrated to calibrated temp."""
         if freq is None:
-            freq = self.calobs.freq.freq
+            freq = self.calobs.freq.freq.to_value("MHz")
 
         coeffs = self.get_gamma_coeffs(freq, ant_s11=ant_s11)
         a, b = rcf.get_linear_coefficients_from_K(
@@ -154,7 +157,7 @@ class LabCalibration:
     ) -> np.ndarray:
         """Convert semi-calibrated temperature to fully calibrated temperature."""
         if freq is None:
-            freq = self.calobs.freq.freq
+            freq = self.calobs.freq.freq.to_value("MHz")
             ant_s11 = self.antenna_s11
         else:
             ant_s11 = self.antenna_s11_model(freq)
@@ -170,7 +173,7 @@ class LabCalibration:
             calobs = self.calobs
 
         if freq is None:
-            freq = self.calobs.freq.freq
+            freq = self.calobs.freq.freq.to_value("MHz")
             ant_s11 = self.antenna_s11
         else:
             ant_s11 = self.antenna_s11_model(freq)
