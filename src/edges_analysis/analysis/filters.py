@@ -1228,7 +1228,7 @@ def rmsf_filter(
     init_model = (freq / 75.0) ** -2.5
 
     T75 = np.sum(init_model * semi_calibrated_data[:, freq_mask], axis=1) / np.sum(
-        init_model ** 2
+        init_model**2
     )
 
     rms = np.sqrt(

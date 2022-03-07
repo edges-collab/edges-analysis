@@ -528,4 +528,4 @@ def weighted_sorted_metric(data, weights=None, metric="median", **kwargs):
 
 def weighted_standard_deviation(av, data, std, axis=0):
     """Calcualte a careful weighted standard deviation."""
-    return np.sqrt(weighted_mean((data - av) ** 2, 1 / std ** 2, axis=axis)[0])
+    return np.sqrt(weighted_mean((data - av) ** 2, 1 / std**2, axis=axis)[0])

@@ -10,7 +10,7 @@ def simulated_data(theta, v, v0):
     """Simulate some data."""
     std_dev_vec = 0.03 * (v / v0) ** (-2.5)
 
-    sigma = np.diag(std_dev_vec ** 2)  # uncertainty covariance matrix
+    sigma = np.diag(std_dev_vec**2)  # uncertainty covariance matrix
     inv_sigma = sp.linalg.inv(sigma)
     det_sigma = np.linalg.det(sigma)
 

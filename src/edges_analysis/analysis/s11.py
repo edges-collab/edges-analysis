@@ -62,7 +62,7 @@ def get_s11_from_file(s11_file_name):
         s11_file_name, skiprows=1, delimiter=delimiter, unpack=True
     )
 
-    return gamm_real + 1j * gamma_imag, f_orig / 10 ** 6
+    return gamm_real + 1j * gamma_imag, f_orig / 10**6
 
 
 def antenna_s11_remove_delay(
