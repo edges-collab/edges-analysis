@@ -28,7 +28,7 @@ def get_corrected_s11(
             internal_switch_s22 = internal_switch.s22_model
 
         standards = [io.S1P.read(fl)[0] for fl in sorted(files)]
-        f = io.S1P.read(files[0])[1]
+        f = io.S1P.read(files[0])[1].to_value("MHz")
 
         sw = {
             "o": 1 * np.ones(len(f)),
@@ -46,7 +46,7 @@ def get_corrected_s11(
                 internal_switch_s22(f),
                 a_sw_c,
             ),
-            f.to_value("MHz"),
+            f,
         )
     elif len(files) == 1:
         return get_s11_from_file(files[0])
