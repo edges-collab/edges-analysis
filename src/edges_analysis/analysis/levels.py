@@ -27,7 +27,7 @@ from cached_property import cached_property
 from edges_cal import (
     FrequencyRange,
     modelling as mdl,
-    Calibration,
+    Calibrator,
 )
 from edges_io.auxiliary import auxiliary_data
 from edges_io.h5 import HDF5Object, HDF5RawSpectrum
@@ -1404,19 +1404,11 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
             ignore_files=ignore_s11_files,
         )
 
-        calobs = Calibration(Path(calfile).expanduser())
-        labcal = LabCalibration(
+        calobs = Calibrator.from_old_calfile(Path(calfile).expanduser())
+        labcal = LabCalibration.from_s11_files(
             calobs=calobs,
             s11_files=s11_files,
-            ant_s11_model=mdl.Polynomial(
-                n_terms=antenna_s11_n_terms,
-                transform=mdl.UnitTransform(
-                    range=(
-                        calobs.freq.min.to_value("MHz"),
-                        calobs.freq.max.to_value("MHz"),
-                    )
-                ),
-            ),
+            n_terms=antenna_s11_n_terms,
         )
 
         logger.info("Calibrating data ...")
@@ -1636,21 +1628,13 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
     @cached_property
     def lab_calibrator(self) -> LabCalibration:
         """Object that performs lab-based calibration on the data."""
-        return LabCalibration(
+        return LabCalibration.from_s11_files(
             calobs=self.calibration,
             s11_files=self.s11_files,
-            ant_s11_model=mdl.Polynomial(
-                n_terms=self.meta["antenna_s11_n_terms"],
-                transform=mdl.UnitTransform(
-                    range=(
-                        self.calibration.freq.min.to_value("MHz"),
-                        self.calibration.freq.max.to_value("MHz"),
-                    )
-                ),
-            ),
+            n_terms=self.meta["antenna_s11_n_terms"],
         )
 
-    def antenna_s11_model(self, freq) -> Callable[[np.ndarray], np.ndarray]:
+    def antenna_s11_model(self, freq: tp.FreqType) -> np.ndarray:
         """The antennas S11 model, evaluated at ``freq``."""
         return self.lab_calibrator.antenna_s11_model(freq)
 
@@ -1662,17 +1646,29 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
     @property
     def raw_antenna_s11(self) -> np.ndarray:
         """The raw antenna S11 (i.e. directly from file, before calibration)."""
-        return self.lab_calibrator.raw_antenna_s11
+        try:
+            return self.lab_calibrator._antenna_s11_model.raw_s11
+        except AttributeError:
+            raise RuntimeError(
+                "Lab calibration created with direct callable, "
+                "so raw s11 not available."
+            )
 
     @property
     def raw_antenna_s11_freq(self) -> np.ndarray:
         """The frequencies of the raw antenna S11."""
-        return self.lab_calibrator.raw_antenna_s11_freq
+        try:
+            return self.lab_calibrator._antenna_s11_model.freq.freq
+        except AttributeError:
+            raise RuntimeError(
+                "Lab calibration created with direct callable, "
+                "so raw freqs not available."
+            )
 
     @cached_property
     def calibration(self):
         """The Calibration object used to calibrate this observation."""
-        return Calibration(self.meta["calfile"])
+        return Calibrator.from_old_calfile(self.meta["calfile"])
 
     @classmethod
     def labcal(
@@ -1855,10 +1851,8 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
             "beam_file": str(Path(beam_file).absolute())
             if beam_file is not None
             else "",
-            "s11_files": ":".join(str(f) for f in labcal.s11_files),
             "wterms": labcal.calobs.wterms,
             "cterms": labcal.calobs.cterms,
-            "calfile": str(labcal.calobs.calfile),
         }
 
         meta.update(labcal.calobs.metadata)
