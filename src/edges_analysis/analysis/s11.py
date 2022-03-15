@@ -37,9 +37,14 @@ class AntennaS11(LoadS11):
         files = sorted(files)
         assert len(files) == 4
         standards = StandardsReadings(
-            *[VNAReading.from_s1p(fl, f_low=f_low, f_high=f_high) for fl in files[:3]]
+            *[
+                VNAReading.from_s1p(fl, f_low=f_low, f_high=f_high, check=False)
+                for fl in files[:3]
+            ]
         )
-        external = VNAReading.from_s1p(files[-1], f_low=f_low, f_high=f_high)
+        external = VNAReading.from_s1p(
+            files[-1], f_low=f_low, f_high=f_high, check=False
+        )
 
         # Note that here the
         load_s11 = (
