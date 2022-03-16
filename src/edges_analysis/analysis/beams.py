@@ -7,6 +7,7 @@ import hashlib
 from methodtools import lru_cache
 import astropy.coordinates as apc
 import astropy.time as apt
+from astropy import units as u
 import h5py
 import numpy as np
 import scipy.interpolate as spi
@@ -25,8 +26,9 @@ from edges_cal import (
     FrequencyRange,
     modelling as mdl,
 )
+from edges_cal.tools import vld_unit
 from .data import BEAM_PATH
-from . import types as tp
+from edges_cal import types as tp
 
 logger = logging.getLogger(__name__)
 
@@ -36,10 +38,10 @@ logger = logging.getLogger(__name__)
 REFERENCE_TIME = apt.Time("2014-01-01T09:39:42", location=const.edges_location)
 
 
-@attr.s
+@attr.s(kw_only=True)
 class Beam:
-    beam = attr.ib()
-    frequency = attr.ib()
+    beam: np.ndarray = attr.ib()
+    frequency: tp.FreqType = attr.ib(validator=vld_unit("frequency"))
     elevation = attr.ib()
     azimuth = attr.ib()
     simulator = attr.ib(default=None, converter=str)
@@ -49,8 +51,8 @@ class Beam:
     @classmethod
     def from_hfss(
         cls,
-        path: [str, Path],
-        frequency: float,
+        path: tp.PathLike,
+        frequency: tp.FreqType,
         linear: bool = True,
         theta_min: float = 0,
         theta_max: float = 180,
@@ -214,7 +216,7 @@ class Beam:
         az = np.arange(0, 360, delta_az)
         el = np.arange(0, 90 + 0.1 * delta_el, delta_el)
         return Beam(
-            frequency=freq,
+            frequency=freq * u.MHz,
             azimuth=az,
             elevation=el,
             beam=np.ones((len(freq), len(el), len(az))),
@@ -222,7 +224,7 @@ class Beam:
         )
 
     @classmethod
-    def from_feko(cls, path: [str, Path], az_antenna_axis: float = 0) -> Beam:
+    def from_feko(cls, path: str | Path, az_antenna_axis: float = 0) -> Beam:
         """
         Read a FEKO beam file.
 
@@ -251,7 +253,7 @@ class Beam:
                     line = line.split(" ")
                     indx = line.index("MHz")
                     frequency.append(float(line[indx - 1]))
-        freq = FrequencyRange(np.array(frequency))
+        freq = FrequencyRange(np.array(frequency) * u.MHz)
 
         # Loading data and convert to linear representation
         beam_maps = np.zeros((len(frequency), 91, 360))
@@ -333,7 +335,7 @@ class Beam:
                 i, :, int(phi_p / 2) : phi_p - 1
             ]
 
-        freq = FrequencyRange(np.array(frequency))
+        freq = FrequencyRange(np.array(frequency) * u.MHz)
         beam_square[:, 91:, :] = 0
         beam_maps = np.flip(beam_square[:, :91, :360], axis=1)
         # Shifting beam relative to true AZ (referenced at due North)
@@ -437,7 +439,7 @@ class Beam:
                 ] = 10 ** (x[8] / 10)
                 co += 1
 
-        freq = FrequencyRange(np.array(frequency))
+        freq = FrequencyRange(np.array(frequency) * u.MHz)
         beam_square[:, 90:, :] = 0
         beam_maps = np.flip(beam_square[:, :91, :360], axis=1)
         # Shifting beam relative to true AZ (referenced at due North)
@@ -463,7 +465,7 @@ class Beam:
 
     def at_freq(
         self,
-        freq: np.ndarray,
+        freq: tp.FreqType,
         model: mdl.Model = mdl.Polynomial(
             n_terms=13, transform=mdl.ScaleTransform(scale=75.0)
         ),
@@ -488,11 +490,11 @@ class Beam:
 
         # Frequency interpolation
         interp_beam = np.zeros((len(freq), len(self.elevation), len(self.azimuth)))
-        cached_model = model.at(x=self.frequency)
+        cached_model = model.at(x=self.frequency.to_value("MHz"))
         for i, bm in enumerate(self.beam.T):
             for j, b in enumerate(bm):
                 model_fit = cached_model.fit(ydata=b)
-                interp_beam[:, j, i] = model_fit.evaluate(freq)
+                interp_beam[:, j, i] = model_fit.evaluate(freq.to_value("MHz"))
 
         return Beam(
             frequency=freq,
@@ -522,7 +524,7 @@ class Beam:
 
         # Frequency smoothing
         smooth_beam = np.zeros_like(self.beam)
-        cached_model = model.at(x=self.frequency)
+        cached_model = model.at(x=self.frequency.to_value("MHz"))
         for i, bm in enumerate(self.beam.T):
             for j, b in enumerate(bm):
                 model_fit = cached_model.fit(ydata=b)
@@ -642,7 +644,9 @@ class Beam:
             el * np.pi / 180 + np.pi / 2, az * np.pi / 180, grid=False
         )
 
-    def between_freqs(self, low=0, high=np.inf) -> Beam:
+    def between_freqs(
+        self, low: tp.FreqType = 0 * u.MHz, high: tp.Freqtype = np.inf * u.MHz
+    ) -> Beam:
         """Return a new :class:`Beam` object restricted a given frequency range."""
         mask = (self.frequency >= low) & (self.frequency <= high)
         return attr.evolve(self, frequency=self.frequency[mask], beam=self.beam[mask])
@@ -763,12 +767,12 @@ def sky_convolution_generator(
     if beam_smoothing:
         beam = beam.smoothed(smoothing_model)
     sky_map = sky_model.at_freq(
-        beam.frequency,
+        beam.frequency.to_value("MHz"),
         index_model=index_model,
     )
 
     ground_gain = ground_loss(
-        ground_loss_file, band=beam.instrument, freq=beam.frequency
+        ground_loss_file, band=beam.instrument, freq=beam.frequency.to_value("MHz")
     )
     galactic_coords = sky_model.get_sky_coords()
 
@@ -901,16 +905,16 @@ def simulate_spectra(
 
 def antenna_beam_factor(
     beam: Beam,
-    ground_loss_file: [str, Path] = ":",
-    f_low: float = 0,
-    f_high: float = np.inf,
+    ground_loss_file: tp.PathLike = ":",
+    f_low: tp.FreqType = 0 * u.MHz,
+    f_high: tp.Freqtype = np.inf * u.MHz,
     normalize_beam: bool = True,
     sky_model: sky_models.SkyModel = sky_models.Haslam408(),
     index_model: sky_models.IndexModel = sky_models.GaussianIndex(),
-    lsts: [None, np.ndarray] = None,
-    save_dir: [None, str, Path] = None,
-    save_fname: [None, str, Path, bool] = None,
-    reference_frequency: [None, float] = None,
+    lsts: np.ndarray | None = None,
+    save_dir: tp.PathLike | None = None,
+    save_fname: tp.PathLike | bool | None = None,
+    reference_frequency: tp.FreqType | None = None,
     beam_smoothing: bool = True,
     smoothing_model: mdl.Model = mdl.Polynomial(n_terms=12),
 ):
@@ -996,7 +1000,7 @@ def antenna_beam_factor(
     beam_factor = (convolution_ref.T / convolution_ref[:, indx_ref_freq]).T
 
     out = {
-        "frequency": beam.frequency.astype(float),
+        "frequency": beam.frequency.to_value("MHz").astype(float),
         "lst": np.array(lsts).astype(float),
         "antenna_temp_above_horizon": antenna_temperature_above_horizon,
         "loss_fraction": loss_fraction,
@@ -1004,12 +1008,12 @@ def antenna_beam_factor(
         "meta": {
             "beam_file": str(beam.raw_file),
             "simulator": beam.simulator,
-            "f_low": float(f_low),
-            "f_high": float(f_high),
+            "f_low": f_low.to_value("MHz"),
+            "f_high": f_high.to_value("MHz"),
             "normalize_beam": bool(normalize_beam),
             "sky_model": str(sky_model),
             "index_model": str(index_model),
-            "reference_frequency": float(reference_frequency),
+            "reference_frequency": reference_frequency.to_value("MHz"),
             "rotation_from_north": float(90),
             "max_nside": int(sky_model.max_res or 0),
         },

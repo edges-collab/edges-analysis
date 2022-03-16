@@ -10,12 +10,13 @@ from edges_analysis.analysis import (
 from typing import List, Tuple
 import dill as pickle
 import numpy as np
+from astropy import units as u
 
 
 def test_raw_step(raw_step: Tuple[RawData, RawData]):
     assert raw_step[0].raw_frequencies.shape == (26214,)
     assert raw_step[1].raw_frequencies.shape == (26214,)
-    assert np.min(raw_step[0].freq.freq) >= 40
+    assert np.min(raw_step[0].freq.freq) >= 40 * u.MHz
     # Ensure it's pickleable
     pickle.dumps(raw_step[0])
 
@@ -73,7 +74,7 @@ def test_calibrate_step2(cal_step2: List[CalibratedData]):
 def test_calibrate_step3(cal_step3: List[CalibratedData]):
     assert cal_step3[0].raw_frequencies.shape == (8193,)
     assert cal_step3[1].raw_frequencies.shape == (8193,)
-    assert cal_step3[0].freq.freq[0] == 50.0
+    assert cal_step3[0].freq.freq[0] == 50.0 * u.MHz
     # Ensure it's pickleable
     pickle.dumps(cal_step3[0])
 

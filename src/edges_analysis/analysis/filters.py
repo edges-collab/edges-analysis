@@ -12,7 +12,7 @@ from .levels import (
     RawData,
     CombinedData,
 )
-from . import types as tp
+from edges_cal import types as tp
 import attr
 import h5py
 import numpy as np
@@ -22,6 +22,7 @@ from edges_cal.xrfi import (
     ModelFilterInfoContainer,
     model_filter,
 )
+from astropy import units as u
 import abc
 import functools
 from .data import DATA_PATH
@@ -1250,7 +1251,7 @@ def filter_150mhz(*, data: RawData | CalibratedData, threshold: float):
     157 MHz (which is expected to be cleaner). If this ratio (RMS to mean) is greater
     than 200 times the threshold given, the integration will be flagged.
     """
-    if data.freq.max < 157:
+    if data.freq.max < 157 * u.MHz:
         return np.zeros(len(data.spectrum), dtype=bool)
 
     freq_mask = (data.raw_frequencies >= 152.75) & (data.raw_frequencies <= 154.25)
