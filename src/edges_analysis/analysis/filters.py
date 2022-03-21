@@ -1348,8 +1348,8 @@ def day_rms_filter(
             )
         else:
             rms = np.sqrt(np.mean(mean_r[0, freq_mask] ** 2))
-        print(rms)
+
         if rms > rms_threshold:
             filter_dates.append(day)
-    print(filter_dates)
+
     return np.array([date in filter_dates for date in data.dates])
