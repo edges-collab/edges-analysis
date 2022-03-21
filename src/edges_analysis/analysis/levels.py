@@ -2401,7 +2401,7 @@ class CombinedBinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
             f = freq.freq
             params = prev_step.model_params
 
-        data = {"weights": new_wght, "resids": new_resid}
+        data = {"weights": np.array(new_wght), "resids": np.array(new_resid)}
 
         ancillary = {
             "years": prev_step.ancillary["years"],
