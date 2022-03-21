@@ -2371,7 +2371,9 @@ class CombinedBinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
             flags=flags,
         )
 
-        freq = FrequencyRange(prev_step.raw_frequencies, f_low=f_low, f_high=f_high)
+        freq = FrequencyRange(
+            prev_step.raw_frequencies * u.MHz, f_low=f_low, f_high=f_high
+        )
 
         resid = resids[..., freq.mask]
         wght = weights[..., freq.mask]
