@@ -16,7 +16,7 @@ from datetime import datetime
 from multiprocessing import cpu_count
 from pathlib import Path
 from typing import Sequence, Callable, Any
-
+from astropy import units as u
 import attr
 import edges_io as io
 import h5py
@@ -27,7 +27,7 @@ from cached_property import cached_property
 from edges_cal import (
     FrequencyRange,
     modelling as mdl,
-    Calibration,
+    Calibrator,
 )
 from edges_io.auxiliary import auxiliary_data
 from edges_io.h5 import HDF5Object, HDF5RawSpectrum
@@ -39,7 +39,7 @@ from .. import __version__
 from .. import const
 from ..config import config
 from .calibrate import LabCalibration
-from . import types as tp
+from edges_cal import types as tp
 from . import coordinates as coords
 import psutil
 
@@ -314,7 +314,7 @@ class _ReductionStep(HDF5Object):
 
     @property
     def freq(self):
-        return FrequencyRange(self.raw_frequencies)
+        return FrequencyRange(self.raw_frequencies * u.MHz)
 
     @property
     def ancillary(self):
@@ -1065,7 +1065,7 @@ class RawData(_ReductionStep, _SingleDayMixin):
 
         t = time.time()
         freq_rng = FrequencyRange(
-            prev_step["freq_ancillary"]["frequencies"], f_low=f_low
+            prev_step["freq_ancillary"]["frequencies"] * u.MHz, f_low=f_low * u.MHz
         )
         freq = freq_rng.freq
         q = prev_step["spectra"]["Q"][freq_rng.mask]
@@ -1341,7 +1341,7 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
     _meta = {
         **RawData._meta,
         **{
-            "calobs_path": None,
+            "calobs_path": "optional",
             "cterms": lambda x: isinstance(x, (int, np.int64)),
             "wterms": lambda x: isinstance(x, (int, np.int64)),
             "s11_files": None,
@@ -1404,21 +1404,18 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
             ignore_files=ignore_s11_files,
         )
 
-        calobs = Calibration(Path(calfile).expanduser())
-        labcal = LabCalibration(
+        calobs = Calibrator.from_old_calfile(Path(calfile).expanduser())
+        labcal = LabCalibration.from_s11_files(
             calobs=calobs,
             s11_files=s11_files,
-            ant_s11_model=mdl.Polynomial(
-                n_terms=antenna_s11_n_terms,
-                transform=mdl.UnitTransform(range=(calobs.freq.min, calobs.freq.max)),
-            ),
+            n_terms=antenna_s11_n_terms,
         )
 
         logger.info("Calibrating data ...")
         t = time.time()
         calspec, freq, new_meta = cls.calibrate(
             q=prev_step.spectrum,
-            freq=prev_step.raw_frequencies,
+            freq=prev_step.raw_frequencies * u.MHz,
             band=prev_step.meta["band"],
             labcal=labcal,
             ambient_temp=prev_step.ancillary["ambient_temp"],
@@ -1437,9 +1434,9 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
         meta = {**meta, **cls._get_meta(locals())}
         meta["s11_files"] = ":".join(str(fl) for fl in s11_files)
 
-        freq_mask = (prev_step.raw_frequencies >= labcal.calobs.freq.min) & (
-            prev_step.raw_frequencies <= labcal.calobs.freq.max
-        )
+        freq_mask = (
+            prev_step.raw_frequencies >= labcal.calobs.freq.min.to_value("MHz")
+        ) & (prev_step.raw_frequencies <= labcal.calobs.freq.max.to_value("MHz"))
         data = {
             "spectrum": calspec,
             "weights": prev_step.weights[:, freq_mask],
@@ -1631,18 +1628,13 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
     @cached_property
     def lab_calibrator(self) -> LabCalibration:
         """Object that performs lab-based calibration on the data."""
-        return LabCalibration(
+        return LabCalibration.from_s11_files(
             calobs=self.calibration,
             s11_files=self.s11_files,
-            ant_s11_model=mdl.Polynomial(
-                n_terms=self.meta["antenna_s11_n_terms"],
-                transform=mdl.UnitTransform(
-                    range=(self.calibration.freq.min, self.calibration.freq.max)
-                ),
-            ),
+            n_terms=self.meta["antenna_s11_n_terms"],
         )
 
-    def antenna_s11_model(self, freq) -> Callable[[np.ndarray], np.ndarray]:
+    def antenna_s11_model(self, freq: tp.FreqType) -> np.ndarray:
         """The antennas S11 model, evaluated at ``freq``."""
         return self.lab_calibrator.antenna_s11_model(freq)
 
@@ -1654,17 +1646,29 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
     @property
     def raw_antenna_s11(self) -> np.ndarray:
         """The raw antenna S11 (i.e. directly from file, before calibration)."""
-        return self.lab_calibrator.raw_antenna_s11
+        try:
+            return self.lab_calibrator._antenna_s11_model.raw_s11
+        except AttributeError:
+            raise RuntimeError(
+                "Lab calibration created with direct callable, "
+                "so raw s11 not available."
+            )
 
     @property
     def raw_antenna_s11_freq(self) -> np.ndarray:
         """The frequencies of the raw antenna S11."""
-        return self.lab_calibrator.raw_antenna_s11_freq
+        try:
+            return self.lab_calibrator._antenna_s11_model.freq.freq
+        except AttributeError:
+            raise RuntimeError(
+                "Lab calibration created with direct callable, "
+                "so raw freqs not available."
+            )
 
     @cached_property
     def calibration(self):
         """The Calibration object used to calibrate this observation."""
-        return Calibration(self.meta["calfile"])
+        return Calibrator.from_old_calfile(self.meta["calfile"])
 
     @classmethod
     def labcal(
@@ -1691,23 +1695,22 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
     ) -> np.ndarray:
         """Correct a spectrum for losses."""
         # Antenna Loss (interface between panels and balun)
-        gain = np.ones_like(freq.freq)
+        f = freq.freq.to_value("MHz")
+        gain = np.ones_like(f)
         if antenna_correction:
             gain *= loss.antenna_loss(
-                antenna_correction, freq.freq, band=band, configuration=configuration
+                antenna_correction, f, band=band, configuration=configuration
             )
 
         # Balun+Connector Loss
         if balun_correction:
-            balun_gain, connector_gain = loss.balun_and_connector_loss(
-                band, freq.freq, s11_ant
-            )
+            balun_gain, connector_gain = loss.balun_and_connector_loss(band, f, s11_ant)
             gain *= balun_gain * connector_gain
 
         # Ground Loss
         if isinstance(ground_correction, (str, Path)):
             gain *= loss.ground_loss(
-                ground_correction, freq.freq, band=band, configuration=configuration
+                ground_correction, f, band=band, configuration=configuration
             )
         elif isinstance(ground_correction, float):
             gain *= ground_correction
@@ -1749,7 +1752,7 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
         cls,
         *,
         q: np.ndarray,
-        freq: np.ndarray,
+        freq: u.Quantity,
         labcal: LabCalibration,
         band: str | None = None,
         ambient_temp: np.ndarray,
@@ -1759,8 +1762,8 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
         ground_correction: tp.PathLike | None | float = ":",
         beam_file=None,
         lst: np.ndarray | None = None,
-        f_low: float = 50,
-        f_high: float = 150.0,
+        f_low: u.Quantity = 50 * u.MHz,
+        f_high: u.Quantity = 150.0 * u.MHz,
     ) -> tuple[np.ndarray, FrequencyRange, dict]:
         """
         Calibrate data.
@@ -1848,13 +1851,11 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
             "beam_file": str(Path(beam_file).absolute())
             if beam_file is not None
             else "",
-            "s11_files": ":".join(str(f) for f in labcal.s11_files),
             "wterms": labcal.calobs.wterms,
             "cterms": labcal.calobs.cterms,
-            "calfile": str(labcal.calobs.calfile),
-            "calobs_path": str(labcal.calobs.calobs_path),
         }
 
+        meta.update(labcal.calobs.metadata)
         return calibrated_temp, freq, meta
 
 
@@ -2160,18 +2161,21 @@ class CombinedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
 
             if freq_resolution:
                 f, mean_r, mean_w = averaging.bin_freq_unbiased_irregular(
-                    mean_r, self.freq.freq, mean_w, resolution=freq_resolution
+                    mean_r,
+                    self.freq.freq.to_value("MHz"),
+                    mean_w,
+                    resolution=freq_resolution,
                 )
                 f = f[0]
             else:
-                f = self.freq.freq
+                f = self.freq.freq.to_value("MHz")
 
             ax.plot(f, mean_r[0] - ix * separation)
             rms = np.sqrt(
                 averaging.weighted_mean(data=mean_r[0] ** 2, weights=mean_w[0])[0]
             )
             ax.text(
-                self.freq.max + 5,
+                self.freq.max + 5 * u.MHz,
                 -ix * separation,
                 f"{day} RMS={rms:.2f}",
             )
@@ -2226,8 +2230,8 @@ class CombinedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
             raise ValueError("Must either supply 'day' or 'indx'")
 
         extent = (
-            self.freq.min,
-            self.freq.max,
+            self.freq.min.to_value("MHz"),
+            self.freq.max.to_value("MHz"),
             self.ancillary["gha_edges"].min(),
             self.ancillary["gha_edges"].max(),
         )
@@ -2541,18 +2545,21 @@ class CombinedBinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
 
             if freq_resolution:
                 f, mean_r, mean_w = averaging.bin_freq_unbiased_irregular(
-                    mean_r, self.freq.freq, mean_w, resolution=freq_resolution
+                    mean_r,
+                    self.freq.freq.to_value("MHz"),
+                    mean_w,
+                    resolution=freq_resolution,
                 )
                 f = f[0]
             else:
-                f = self.freq.freq
+                f = self.freq.freq.to_value("MHz")
 
             ax.plot(f, mean_r[0] - ix * separation)
             rms = np.sqrt(
                 averaging.weighted_mean(data=mean_r[0] ** 2, weights=mean_w[0])[0]
             )
             ax.text(
-                self.freq.max + 5,
+                self.freq.max + 5 * u.MHz,
                 -ix * separation,
                 f"{day} RMS={rms:.2f}",
             )
@@ -2607,8 +2614,8 @@ class CombinedBinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
             raise ValueError("Must either supply 'day' or 'indx'")
 
         extent = (
-            self.freq.min,
-            self.freq.max,
+            self.freq.min.to_value("MHz"),
+            self.freq.max.to_value("MHz"),
             self.ancillary["gha_edges"].min(),
             self.ancillary["gha_edges"].max(),
         )
@@ -2845,8 +2852,8 @@ class DayAveragedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
     ):
         """Plot a simple waterfall plot of time vs. frequency."""
         extent = (
-            self.freq.min,
-            self.freq.max,
+            self.freq.min.to_value("MHz"),
+            self.freq.max.to_value("MHz"),
             self.gha_edges.min(),
             self.gha_edges.max(),
         )
@@ -2899,7 +2906,7 @@ class DayAveragedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
 
             ax.plot(f, rr - ix * separation)
             ax.text(
-                self.freq.max + 5,
+                self.freq.max + 5 * u.MHz,
                 -ix * separation,
                 f"GHA={gha_edges[ix]:.2f} RMS="
                 f"{np.sqrt(averaging.weighted_mean(data=rr ** 2, weights=ww)[0]):.2f}",
@@ -2971,7 +2978,11 @@ class BinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         level4
             A :class:`Level4` object.
         """
-        freq = FrequencyRange(prev_step.raw_frequencies, f_low=f_low, f_high=f_high)
+        freq = FrequencyRange(
+            prev_step.raw_frequencies * u.MHz,
+            f_low=f_low * u.MHz,
+            f_high=f_high * u.MHz,
+        )
 
         resid = prev_step.resids[:, freq.mask]
         wght = prev_step.weights[:, freq.mask]
@@ -2985,7 +2996,7 @@ class BinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
             f, wght, spec, resid, params = averaging.bin_freq_unbiased_regular(
                 model=prev_step._model,
                 params=prev_step.model_params,
-                freq=freq.freq,
+                freq=freq.freq.to_value("MHz"),
                 resids=resid,
                 weights=wght,
                 resolution=freq_resolution,
@@ -3109,7 +3120,7 @@ class BinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
             if labels:
                 rms = np.sqrt(averaging.weighted_mean(data=rr ** 2, weights=ww)[0])
                 ax.text(
-                    self.freq.max + 5,
+                    self.freq.max + 5 * u.MHz,
                     -ix * separation,
                     f"GHA={self.gha_edges[ix]:.2f} RMS={rms:.2f}",
                 )

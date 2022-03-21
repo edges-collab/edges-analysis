@@ -12,7 +12,7 @@ from .levels import (
     RawData,
     CombinedData,
 )
-from . import types as tp
+from edges_cal import types as tp
 import attr
 import h5py
 import numpy as np
@@ -22,6 +22,7 @@ from edges_cal.xrfi import (
     ModelFilterInfoContainer,
     model_filter,
 )
+from astropy import units as u
 import abc
 import functools
 from .data import DATA_PATH
@@ -1250,7 +1251,7 @@ def filter_150mhz(*, data: RawData | CalibratedData, threshold: float):
     157 MHz (which is expected to be cleaner). If this ratio (RMS to mean) is greater
     than 200 times the threshold given, the integration will be flagged.
     """
-    if data.freq.max < 157:
+    if data.freq.max < 157 * u.MHz:
         return np.zeros(len(data.spectrum), dtype=bool)
 
     freq_mask = (data.raw_frequencies >= 152.75) & (data.raw_frequencies <= 154.25)
@@ -1317,6 +1318,8 @@ def day_rms_filter(
     data: CombinedData | CombinedBinnedData,
     gha_min: float = 0,
     gha_max: float = 24,
+    f_low: float = 0.0,
+    f_high: float = np.inf,
     rms_threshold: float,
     weighted: bool = False,
 ):
@@ -1324,7 +1327,6 @@ def day_rms_filter(
     gha = (data.ancillary["gha_edges"][1:] + data.ancillary["gha_edges"][:-1]) / 2
     filter_dates = []
     mask = (gha > gha_min) & (gha < gha_max)
-
     for param, resid, weight, day in zip(
         data.model_params, data.resids, data.weights, data.dates
     ):
@@ -1338,14 +1340,17 @@ def day_rms_filter(
             gha=gha[mask],
             bins=np.array([gha_min, gha_max]),
         )
+        freq_mask = (data.raw_frequencies >= f_low) & (data.raw_frequencies <= f_high)
         if weighted:
             rms = np.sqrt(
-                averaging.weighted_mean(data=mean_r[0] ** 2, weights=mean_w[0])[0]
+                averaging.weighted_mean(
+                    data=mean_r[0, freq_mask] ** 2, weights=mean_w[0, freq_mask]
+                )[0]
             )
         else:
-            rms = np.sqrt(np.mean(mean_r[0] ** 2))
+            rms = np.sqrt(np.mean(mean_r[0, freq_mask] ** 2))
 
         if rms > rms_threshold:
             filter_dates.append(day)
-        print(filter_dates)
+
     return np.array([date in filter_dates for date in data.dates])

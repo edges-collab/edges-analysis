@@ -5,14 +5,14 @@ done in different ways. There are ultimately three axes over which we might bin 
 nights, LST/GHA and frequency. Each of these in fact requires slightly different methods
 for averaging, in order to make the average unbiased (given flags).
 """
-from typing import Optional, Union, Tuple
+from __future__ import annotations
 
 import numpy as np
 from edges_cal import modelling as mdl
 
 
 def get_binned_weights(
-    x: np.ndarray, bins: np.ndarray, weights: [None, np.ndarray] = None
+    x: np.ndarray, bins: np.ndarray, weights: np.ndarray | None = None
 ) -> np.ndarray:
     """
     Get the total weight in each bin for a given vector.
@@ -44,7 +44,7 @@ def get_binned_weights(
 
 def get_bin_edges(
     coords: np.ndarray,
-    bins: Optional[Union[np.ndarray, int, float]] = None,
+    bins: np.ndarray | int | float | None = None,
 ) -> np.ndarray:
     """Get bin edges given input coordinates and a simple description of the binning.
 
@@ -76,11 +76,11 @@ def get_bin_edges(
 
 def bin_array_unbiased_irregular(
     data: np.ndarray,
-    weights: Optional[np.ndarray] = None,
-    coords: Optional[np.ndarray] = None,
+    weights: np.ndarray | None = None,
+    coords: np.ndarray | None = None,
     axis: int = -1,
-    bins: Optional[Union[np.ndarray, int, float]] = None,
-) -> [np.ndarray, np.ndarray, np.ndarray]:
+    bins: np.ndarray | int | float | None = None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Bin arbitrary-dimension data carefully along an axis.
 
     There are multiple ways to "bin" data along an axis when provided with weights.
@@ -174,11 +174,11 @@ def bin_array_unbiased_irregular(
 
 
 def bin_freq_unbiased_irregular(
-    spectrum: [list, np.ndarray],
-    freq: [list, np.ndarray, None] = None,
-    weights: [list, np.ndarray, None] = None,
-    resolution: [float, None, int] = None,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    spectrum: list | np.ndarray,
+    freq: list | np.ndarray | None = None,
+    weights: list | np.ndarray | None = None,
+    resolution: float | int | None = None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Average a spectrum, with weights, in frequency.
 
     The average is optionally taken within bins along the frequency axis.
@@ -248,8 +248,8 @@ def bin_freq_unbiased_regular(
     freq: np.ndarray,
     resids: np.ndarray,
     weights: np.ndarray,
-    resolution: [float, int, None] = None,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    resolution: float | int | None = None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Bin an array along the frequency axis into *regular* bins.
 
@@ -326,7 +326,7 @@ def bin_gha_unbiased_regular(
     weights: np.ndarray,
     gha: np.ndarray,
     bins: np.ndarray,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Bin data in an unbiased way using a model fit.
 
@@ -400,8 +400,8 @@ def bin_spectrum_unbiased_regular(
     gha_bins: np.ndarray,
     model: mdl.Model,
     freq: np.ndarray,
-    resolution: [float, int, None] = None,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    resolution: float | int | None = None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Bin a spectrum in GHA and frequency in an unbiased and regular manner."""
     p, r, w = bin_gha_unbiased_regular(
         params=params, resids=resids, weights=weights, gha=gha, bins=gha_bins

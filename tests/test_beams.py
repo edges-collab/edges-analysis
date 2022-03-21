@@ -2,49 +2,50 @@ from edges_analysis.analysis import beams, loss
 from edges_analysis.analysis.sky_models import Haslam408
 import numpy as np
 from pathlib import Path
+from astropy import units as u
 
 
 def test_beam_from_feko():
     beam = beams.Beam.from_file("low")
 
-    assert beam.frequency.min() == 40.0
-    assert beam.frequency.max() == 100.0
+    assert beam.frequency.min() == 40.0 * u.MHz
+    assert beam.frequency.max() == 100.0 * u.MHz
 
     assert beam.beam.max() > 0
 
-    beam2 = beam.between_freqs(50, 70)
-    assert beam2.frequency.min() >= 50
-    assert beam2.frequency.max() <= 70
+    beam2 = beam.between_freqs(50 * u.MHz, 70 * u.MHz)
+    assert beam2.frequency.min() >= 50 * u.MHz
+    assert beam2.frequency.max() <= 70 * u.MHz
 
 
 def test_beam_from_raw_feko(beam_settings: Path):
     beam = beams.Beam.from_feko_raw(
         beam_settings / "lowband_dielectric1-new-90orient_simple",
-        "txt",
-        40,
-        48,
-        5,
-        181,
-        361,
+        ext="txt",
+        f_low=40 * u.MHz,
+        f_high=48 * u.MHz,
+        freq_p=5,
+        theta_p=181,
+        phi_p=361,
     )
 
-    assert beam.frequency.min() == 40.0
-    assert beam.frequency.max() == 48.0
+    assert beam.frequency.min() == 40.0 * u.MHz
+    assert beam.frequency.max() == 48.0 * u.MHz
 
     assert beam.beam.max() > 0
 
     beam2 = beam.smoothed()
     assert len(beam2.frequency) == 5
-    assert beam2.frequency.all() == beam.frequency.all()
+    assert (beam2.frequency == beam.frequency).all()
 
 
 def test_feko_interp():
     beam = beams.Beam.from_file("low")
 
-    beam2 = beam.at_freq(np.linspace(50, 60, 5))
-    assert (beam2.frequency == np.linspace(50, 60, 5)).all()
+    beam2 = beam.at_freq(np.linspace(50, 60, 5) * u.MHz)
+    assert (beam2.frequency == np.linspace(50, 60, 5) * u.MHz).all()
 
-    indx_50 = list(beam.frequency).index(50.0)
+    indx_50 = list(beam.frequency).index(50.0 * u.MHz)
     az, el = np.meshgrid(beam.azimuth, beam.elevation[:-1])
     interp = beam2.angular_interpolator(0)(az.flatten(), el.flatten())
 
@@ -73,8 +74,8 @@ def test_simulate_spectra():
     # Do a really small simulation
     sky_map, freq, lst = beams.simulate_spectra(
         beam,
-        f_low=50,
-        f_high=55,
+        f_low=50 * u.MHz,
+        f_high=55 * u.MHz,
         lsts=np.arange(0, 24, 12),
         sky_model=Haslam408(max_res=3),
     )
@@ -94,8 +95,8 @@ def test_antenna_beam_factor():
     beam = beams.Beam.from_file("low")
     abf = beams.antenna_beam_factor(
         beam=beam,
-        f_low=50,
-        f_high=56,
+        f_low=50 * u.MHz,
+        f_high=56 * u.MHz,
         lsts=np.arange(0, 24, 12),
         sky_model=Haslam408(max_res=3),
     )
