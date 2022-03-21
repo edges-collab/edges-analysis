@@ -2411,7 +2411,7 @@ class CombinedBinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
             "model_params": params,
         }
 
-        return f, data, ancillary, cls._get_meta(locals())
+        return f.to_value("MHz"), data, ancillary, cls._get_meta(locals())
 
     @classmethod
     def _extra_meta(cls, kwargs):
