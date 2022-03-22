@@ -2939,8 +2939,8 @@ class BinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
     def _promote(
         cls,
         prev_step: DayAveragedData | BinnedData,
-        f_low: float | None = None,
-        f_high: float | None = None,
+        f_low: float = 0.0,
+        f_high: float = np.inf,
         ignore_freq_ranges: Sequence[tuple[float, float]] | None = None,
         freq_resolution: float | None = None,
         gha_min: float = 0,
