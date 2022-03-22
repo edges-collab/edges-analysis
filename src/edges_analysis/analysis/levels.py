@@ -2328,8 +2328,8 @@ class CombinedBinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         cls,
         prev_step: CombinedData,
         gha_bin_size: float = 0.1,
-        f_low: u.Quantity = 50.0 * u.MHz,
-        f_high: u.Quantity = 100.0 * u.MHz,
+        f_low: u.Quantity = 0 * u.MHz,
+        f_high: u.Quantity = np.inf * u.MHz,
         freq_resolution=None,
         gha_min: None = None,
         gha_max: None = None,
@@ -2360,15 +2360,12 @@ class CombinedBinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
                 , got {gha_bin_size}"
             )
 
-        flags = prev_step.get_flags()
-
         # Bin in GHA using the models and residuals
         params, resids, weights, gha_edges = cls.bin_gha(
             prev_step,
             gha_bin_size,
             gha_min,
             gha_max,
-            flags=flags,
         )
 
         freq = FrequencyRange(
@@ -2399,7 +2396,9 @@ class CombinedBinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
             logger.info(f".... produced {len(f)} frequency bins.")
         else:
             f = freq.freq
-            params = prev_step.model_params
+            params = np.array(params)
+            new_wght = np.array(wght)
+            new_resid = np.array(resid)
 
         data = {"weights": np.array(new_wght), "resids": np.array(new_resid)}
 
@@ -2436,7 +2435,6 @@ class CombinedBinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         gha_bin_size: float,
         gha_min: float | None,
         gha_max: float | None,
-        flags=None,
     ):
         """Bin a list of files into small aligning bins of GHA."""
         if gha_min is None and gha_max is None:
@@ -2471,7 +2469,6 @@ class CombinedBinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         for i, (p, r, w) in enumerate(
             zip(combined_obj.model_params, combined_obj.resids, combined_obj.weights)
         ):
-
             params[i], resids[i], weights[i] = averaging.bin_gha_unbiased_regular(
                 p, r, w, gha, gha_edges
             )

@@ -63,14 +63,13 @@ def get_bin_edges(
     elif hasattr(bins, "__len__"):
         bins = np.array(bins)
     else:
+        last_edge = coords[-1] + 0.1 * getattr(coords, "unit", 1)
         try:
             # works if its an integer
-            bins = np.concatenate((coords[::bins], [coords[-1] + 0.1]))
+            bins = np.concatenate((coords[::bins], [last_edge]))
         except TypeError:
             # works if its a float
-            bins = np.concatenate(
-                (np.arange(coords[0], coords[-1], bins), [coords[-1] + 0.1])
-            )
+            bins = np.concatenate((np.arange(coords[0], coords[-1], bins), [last_edge]))
     return bins
 
 
