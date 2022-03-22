@@ -51,3 +51,5 @@ devel/output/*
 pip-wheel-metadata/
 .vscode/
 .ipynb_checkpoints/
+
+/GHAModel_*
