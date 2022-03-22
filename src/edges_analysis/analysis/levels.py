@@ -2400,6 +2400,8 @@ class CombinedBinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         else:
             f = freq.freq
             params = prev_step.model_params
+            new_wght = wght
+            new_resid = resid
 
         data = {"weights": np.array(new_wght), "resids": np.array(new_resid)}
 
