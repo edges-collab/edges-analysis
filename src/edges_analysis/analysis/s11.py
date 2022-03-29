@@ -70,7 +70,11 @@ class AntennaS11(LoadS11):
             delimiter = " "
 
         f_orig, gamma_real, gamma_imag = np.loadtxt(
-            path, skiprows=1, delimiter=delimiter, unpack=True, comments=['BEGIN', 'END', '#']
+            path,
+            skiprows=1,
+            delimiter=delimiter,
+            unpack=True,
+            comments=["BEGIN", "END", "#"],
         )
 
         return cls(
