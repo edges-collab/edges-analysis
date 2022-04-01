@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import numpy as np
 from edges_cal import modelling as mdl
+import astropy
 
 
 def get_binned_weights(
@@ -60,16 +61,32 @@ def get_bin_edges(
     """
     if bins is None:
         bins = np.array([coords[0], coords[-1] + 0.1])
-    elif hasattr(bins, "__len__"):
+    elif not isinstance(bins, astropy.units.Quantity) and hasattr(bins, "__len__"):
         bins = np.array(bins)
+    elif isinstance(bins, astropy.units.Quantity) and not bins.isscalar:
+        return bins
     else:
         last_edge = coords[-1] + 0.1 * getattr(coords, "unit", 1)
+        print("last_Edge", last_edge)
         try:
             # works if its an integer
             bins = np.concatenate((coords[::bins], [last_edge]))
         except TypeError:
             # works if its a float
-            bins = np.concatenate((np.arange(coords[0], coords[-1], bins), [last_edge]))
+            if isinstance(bins, astropy.units.Quantity):
+                print(coords.to_value(bins.unit))
+                coords = coords.to_value(bins.unit)
+                last_edge = last_edge.to_value(bins.unit)
+                bins = (
+                    np.concatenate(
+                        (np.arange(coords[0], coords[-1], bins.value), [last_edge])
+                    )
+                    * bins.unit
+                )
+            else:
+                bins = np.concatenate(
+                    (np.arange(coords[0], coords[-1], bins), [last_edge])
+                )
     return bins
 
 

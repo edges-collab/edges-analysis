@@ -23,6 +23,7 @@ from rich.table import Table
 from .analysis import levels, filters
 from .config import config
 import psutil
+import astropy
 
 console = Console()
 
@@ -50,7 +51,7 @@ logger = logging.getLogger(__name__)
 
 def _get_settings(settings, **cli_settings):
     with open(settings) as fl:
-        settings = yaml.load(fl, Loader=yaml.FullLoader)
+        settings = yaml.load(fl, Loader=astropy.io.misc.yaml.AstropyLoader)
 
     settings.update(cli_settings)
 
