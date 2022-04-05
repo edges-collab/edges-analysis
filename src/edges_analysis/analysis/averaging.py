@@ -67,14 +67,14 @@ def get_bin_edges(
         return bins
     else:
         last_edge = coords[-1] + 0.1 * getattr(coords, "unit", 1)
-        print("last_Edge", last_edge)
+
         try:
             # works if its an integer
             bins = np.concatenate((coords[::bins], [last_edge]))
         except TypeError:
             # works if its a float
             if isinstance(bins, astropy.units.Quantity):
-                print(coords.to_value(bins.unit))
+
                 coords = coords.to_value(bins.unit)
                 last_edge = last_edge.to_value(bins.unit)
                 bins = (
