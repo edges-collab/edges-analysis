@@ -36,7 +36,6 @@ repos:
       - flake8-rst
 #      - darglint
       - flake8-copyright
-      - flake8-ownership
 # - repo: https://github.com/timothycrosley/isort
 #   rev: 5.8.0
 #   hooks:
