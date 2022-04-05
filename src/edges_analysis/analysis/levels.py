@@ -2995,7 +2995,7 @@ class BinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
             f, wght, spec, resid, params = averaging.bin_freq_unbiased_regular(
                 model=prev_step._model,
                 params=prev_step.model_params,
-                freq=freq.freq.to_value("MHz"),
+                freq=freq.freq,
                 resids=resid,
                 weights=wght,
                 resolution=freq_resolution,

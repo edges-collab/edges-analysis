@@ -1352,5 +1352,5 @@ def day_rms_filter(
 
         if rms > rms_threshold:
             filter_dates.append(day)
-
+    print(filter_dates)
     return np.array([date in filter_dates for date in data.dates])
