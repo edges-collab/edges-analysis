@@ -379,7 +379,7 @@ def promote(
             pr = psutil.Process()
 
             paused = False
-            if psutil.virtual_memory().available < 4 * 1024 ** 3:
+            if psutil.virtual_memory().available < 4 * 1024**3:
                 logger.warning(
                     "Available Memory < 4GB, waiting for resources on "
                     f"pid={os.getpid()}. Cancel and restart with fewer threads if this"
@@ -387,7 +387,7 @@ def promote(
                 )
                 paused = True
 
-            while psutil.virtual_memory().available < 4 * 1024 ** 3:
+            while psutil.virtual_memory().available < 4 * 1024**3:
                 time.sleep(2)
 
             if paused:

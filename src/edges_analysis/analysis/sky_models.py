@@ -170,8 +170,8 @@ class SkyModel:
             temp_map = hp.reorder(temp_map, r2n=True)
 
         # Downgrade the data quality to max_res to improve performance, if desired.
-        if max_res and hp.get_nside(temp_map) > 2 ** max_res:
-            hp.ud_grade(temp_map, nside_out=2 ** max_res)
+        if max_res and hp.get_nside(temp_map) > 2**max_res:
+            hp.ud_grade(temp_map, nside_out=2**max_res)
 
         return temp_map
 
