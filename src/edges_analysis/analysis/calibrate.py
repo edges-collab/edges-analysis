@@ -32,7 +32,7 @@ class LabCalibration:
         cls,
         calobs: Calibrator | CalibrationObservation,
         s11_files: tp.PathLike | Sequence[tp.PathLike],
-        **kwargs
+        **kwargs,
     ):
         """Generate LabCalibration object from files.
 
@@ -59,7 +59,7 @@ class LabCalibration:
                 internal_switch=calobs.internal_switch,
                 f_low=calobs.freq.min,
                 f_high=calobs.freq.max,
-                **kwargs
+                **kwargs,
             )
         else:
             if not isinstance(s11_files, (str, Path)):
@@ -70,7 +70,7 @@ class LabCalibration:
                 f_low=calobs.freq.min,
                 f_high=calobs.freq.max,
                 internal_switch=calobs.internal_switch,
-                **kwargs
+                **kwargs,
             )
 
         return cls(

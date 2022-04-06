@@ -3117,7 +3117,7 @@ class BinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
 
             ax.plot(f, rr - ix * separation)
             if labels:
-                rms = np.sqrt(averaging.weighted_mean(data=rr ** 2, weights=ww)[0])
+                rms = np.sqrt(averaging.weighted_mean(data=rr**2, weights=ww)[0])
                 ax.text(
                     self.freq.max + 5 * u.MHz,
                     -ix * separation,

@@ -33,6 +33,7 @@ jobs:
         run: python -m build
       - name: Publish distribution 📦 to Test PyPI
         uses: pypa/gh-action-pypi-publish@master
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         with:
           password: ${{ secrets.test_pypi_password }}
           repository_url: https://test.pypi.org/legacy/
