@@ -31,7 +31,7 @@ class AntennaS11(LoadS11):
         internal_switch: InternalSwitch,
         f_low: float = 0 * u.MHz,
         f_high: float = np.inf * u.MHz,
-        **kwargs
+        **kwargs,
     ) -> AntennaS11:
         """Generate from a list of four S1P files."""
         files = sorted(files)
@@ -61,7 +61,7 @@ class AntennaS11(LoadS11):
         internal_switch: InternalSwitch,
         f_low: float = 0 * u.MHz,
         f_high: float = np.inf * u.MHz,
-        **kwargs
+        **kwargs,
     ):
         """Generate from a single pre-calibrated file."""
         if path.endswith(".csv"):
@@ -81,5 +81,5 @@ class AntennaS11(LoadS11):
             raw_s11=gamma_real + 1j * gamma_imag,
             freq=FrequencyRange(f_orig * u.Hz, f_low=f_low, f_high=f_high),
             internal_switch=internal_switch,
-            **kwargs
+            **kwargs,
         )

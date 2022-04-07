@@ -8,6 +8,7 @@ from . import plots
 from . import s11
 from . import sky_models
 from . import tools
+import edges_cal
 
 from .levels import (
     CalibratedData,

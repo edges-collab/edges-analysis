@@ -51,7 +51,7 @@ def balun_and_connector_loss(
 
     # Conductivity of copper
     # Pozar 3rd edition. Alan uses a different number. What
-    sigma_copper0 = 5.96 * 10 ** 7
+    sigma_copper0 = 5.96 * 10**7
 
     # Metal conductivity
     sigma_copper = 1 * sigma_copper0
@@ -69,7 +69,7 @@ def balun_and_connector_loss(
 
     # Permittivity
     c = 299792458  # speed of light
-    e0 = 1 / (u0 * c ** 2)  # permittivity of free space
+    e0 = 1 / (u0 * c**2)  # permittivity of free space
 
     parameters = {
         "low": {
