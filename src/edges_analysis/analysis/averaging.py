@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import numpy as np
 from edges_cal import modelling as mdl
+import astropy
 
 
 def get_binned_weights(
@@ -58,19 +59,33 @@ def get_bin_edges(
         equi-spaced bin edges, starting from the start of coords, and ending past the
         end of coords. If not provided, assume a single bin encompassing all the data.
     """
+    unit = getattr(coords, "unit", 1)
+    coords = getattr(coords, "value", coords)
+
     if bins is None:
-        bins = np.array([coords[0], coords[-1] + 0.1])
-    elif hasattr(bins, "__len__"):
-        bins = np.array(bins)
+        return np.array([coords[0], coords[-1] + 0.1]) * unit
+    elif not isinstance(bins, astropy.units.Quantity) and hasattr(bins, "__len__"):
+        return np.array(bins)
+    elif isinstance(bins, astropy.units.Quantity) and not bins.isscalar:
+        return bins
     else:
-        last_edge = coords[-1] + 0.1 * getattr(coords, "unit", 1)
-        try:
+
+        last_edge = coords[-1] + 0.1
+
+        if isinstance(bins, int):
             # works if its an integer
-            bins = np.concatenate((coords[::bins], [last_edge]))
-        except TypeError:
-            # works if its a float
-            bins = np.concatenate((np.arange(coords[0], coords[-1], bins), [last_edge]))
-    return bins
+            return np.concatenate((coords[::bins], [last_edge])) * unit
+        else:
+            if hasattr(coords, "unit"):
+                try:
+                    bins = bins.to_value(unit)
+                except AttributeError:
+                    pass  # assume it's in the right units.
+
+            return (
+                np.concatenate((np.arange(coords[0], coords[-1], bins), [last_edge]))
+                * unit
+            )
 
 
 def bin_array_unbiased_irregular(

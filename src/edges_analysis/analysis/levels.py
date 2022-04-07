@@ -314,7 +314,10 @@ class _ReductionStep(HDF5Object):
 
     @property
     def freq(self):
-        return FrequencyRange(self.raw_frequencies * u.MHz)
+        if hasattr(self.raw_frequencies, "unit"):
+            return FrequencyRange(self.raw_frequencies)
+        else:
+            return FrequencyRange(self.raw_frequencies * u.MHz)
 
     @property
     def ancillary(self):
@@ -3005,7 +3008,7 @@ class BinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
             f, wght, spec, resid, params = averaging.bin_freq_unbiased_regular(
                 model=prev_step._model,
                 params=prev_step.model_params,
-                freq=freq.freq.to_value("MHz"),
+                freq=freq.freq,
                 resids=resid,
                 weights=wght,
                 resolution=freq_resolution,
