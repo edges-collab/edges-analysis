@@ -314,7 +314,10 @@ class _ReductionStep(HDF5Object):
 
     @property
     def freq(self):
-        return FrequencyRange(self.raw_frequencies * u.MHz)
+        if hasattr(self.raw_frequencies, "unit"):
+            return FrequencyRange(self.raw_frequencies)
+        else:
+            return FrequencyRange(self.raw_frequencies * u.MHz)
 
     @property
     def ancillary(self):
