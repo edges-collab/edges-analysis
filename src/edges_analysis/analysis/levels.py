@@ -3052,6 +3052,7 @@ class BinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         gha_edges = np.arange(
             gha_min, gha_max + gha_bin_size / 10, gha_bin_size, dtype=float
         )
+
         avg_p, avg_r, avg_w = averaging.bin_gha_unbiased_regular(
             self.model_params,
             self.resids,
