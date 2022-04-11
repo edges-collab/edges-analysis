@@ -314,7 +314,10 @@ class _ReductionStep(HDF5Object):
 
     @property
     def freq(self):
-        return FrequencyRange(self.raw_frequencies * u.MHz)
+        if hasattr(self.raw_frequencies, "unit"):
+            return FrequencyRange(self.raw_frequencies)
+        else:
+            return FrequencyRange(self.raw_frequencies * u.MHz)
 
     @property
     def ancillary(self):
@@ -576,6 +579,11 @@ class _SingleDayMixin:
         return self.raw_data.meta["minute"]
 
     @property
+    def time_swpos(self):
+        """The swpos at which the times of the spectra are defined."""
+        return self.raw_data.meta.get("time_swpos", 2)
+
+    @property
     def gha(self):
         return self.raw_data.ancillary["gha"]
 
@@ -596,11 +604,14 @@ class _SingleDayMixin:
     @cached_property
     def datetimes(self):
         """List of python datetimes at which the spectra were taken."""
-        return self.get_datetimes(self.raw_time_data)
+        if self.raw_time_data.ndim == 2:
+            return self.get_datetimes(self.raw_time_data[:, self.time_swpos])
+        else:
+            return self.get_datetimes(self.raw_time_data)
 
     @classmethod
     def get_datetimes(cls, times):
-        return [datetime.strptime(d, "%Y:%j:%H:%M:%S") for d in times.astype(str)]
+        return HDF5RawSpectrum.convert_times(times)
 
     def bin_in_frequency(
         self,
@@ -1030,6 +1041,7 @@ class RawData(_ReductionStep, _SingleDayMixin):
         "band": lambda x: isinstance(x, str),
         "thermlog_file": None,
         "weather_file": None,
+        "time_swpos": None,
     }
 
     @classmethod
@@ -1040,6 +1052,7 @@ class RawData(_ReductionStep, _SingleDayMixin):
         weather_file: str | Path | None = None,
         thermlog_file: str | Path | None = None,
         f_low: float = 0.0,
+        time_swpos: int = 2,
     ) -> tuple[np.ndarray, dict, dict, dict]:
         """
         Create the object directly from calibrated data.
@@ -1085,7 +1098,7 @@ class RawData(_ReductionStep, _SingleDayMixin):
 
         logger.info("Converting time strings to datetimes...")
         t = time.time()
-        times = cls.get_datetimes(ancillary["times"])
+        times = prev_step.get_times(swpos=time_swpos)
         logger.info(f"...  finished in {time.time() - t:.2f} sec.")
 
         logger.debug(
