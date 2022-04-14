@@ -380,8 +380,7 @@ def bin_gha_unbiased_regular(
     params_out = np.nan * np.ones((len(bins) - 1, params.shape[-1]))
     resids_out = np.nan * np.ones((len(bins) - 1, resids.shape[-1]))
     weights_out = np.zeros_like(resids_out)
-    if gha < 0:
-        gha = 24 + gha
+    gha %= 24
 
     for i, bin_low in enumerate(bins[:-1]):
 
