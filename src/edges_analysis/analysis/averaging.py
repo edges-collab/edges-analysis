@@ -76,7 +76,7 @@ def get_bin_edges(
             # works if its an integer
             return np.concatenate((coords[::bins], [last_edge])) * unit
         else:
-            if hasattr(coords, "unit"):
+            if unit != 1:
                 try:
                     bins = bins.to_value(unit)
                 except AttributeError:
@@ -376,14 +376,17 @@ def bin_gha_unbiased_regular(
     params_out = np.nan * np.ones((len(bins) - 1, params.shape[-1]))
     resids_out = np.nan * np.ones((len(bins) - 1, resids.shape[-1]))
     weights_out = np.zeros_like(resids_out)
+    gha %= 24
 
     for i, bin_low in enumerate(bins[:-1]):
+
         bin_high = bins[i + 1]
 
         if bin_low < 0 and bin_high <= 0:
             mask = (gha >= 24 + bin_low) & (gha < 24 + bin_high)
         elif bin_low < 0 and bin_high > 0:
             mask = (gha >= 24 + bin_low) & (gha <= 24) | (gha >= 0) & (gha < bin_high)
+
         else:
             mask = (gha >= bin_low) & (gha < bin_high)
 
