@@ -1417,7 +1417,18 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
             ignore_files=ignore_s11_files,
         )
 
-        calobs = Calibrator.from_old_calfile(Path(calfile).expanduser())
+        pth = Path(calfile).expanduser()
+        with h5py.File(pth, "r") as fl:
+            if "internal_switch" in fl:
+                use_old = False
+            else:
+                use_old = True
+
+        if use_old:
+            calobs = Calibrator.from_old_calfile(pth)
+        else:
+            calobs = Calibrator.from_calfile(pth)
+
         labcal = LabCalibration.from_s11_files(
             calobs=calobs,
             s11_files=s11_files,
@@ -3065,7 +3076,6 @@ class BinnedData(_ModelMixin, _ReductionStep, _CombinedFileMixin):
         gha_edges = np.arange(
             gha_min, gha_max + gha_bin_size / 10, gha_bin_size, dtype=float
         )
-
         avg_p, avg_r, avg_w = averaging.bin_gha_unbiased_regular(
             self.model_params,
             self.resids,
