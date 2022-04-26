@@ -1880,6 +1880,7 @@ class CalibratedData(_ReductionStep, _SingleDayMixin):
         }
 
         meta.update(labcal.calobs.metadata)
+        del meta["io"]
         return calibrated_temp, freq, meta
 
 
