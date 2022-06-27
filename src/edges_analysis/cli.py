@@ -430,7 +430,11 @@ def promote(
             else:
                 prg = tqdm.tqdm
 
-            out = list(prg(_pro, input_files, output_fname, unit="files"))
+            out = list(
+                prg(_pro, input_files, output_fname),
+                unit="files",
+                total=len(input_files),
+            )
         return [o for o in out if o is not None]
 
 
