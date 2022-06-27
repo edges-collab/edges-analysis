@@ -30,10 +30,11 @@ from . import tools
 from . import averaging
 from edges_cal import xrfi as rfi
 import inspect
-import p_tqdm
+import tqdm
 from pathlib import Path
 import datetime
 from edges_io.utils import ymd_to_jd
+from pathos.multiprocessing import ProcessPool as Pool
 
 logger = logging.getLogger(__name__)
 
@@ -199,13 +200,22 @@ def step_filter(
                     return per_file_processing(data, init_flags, input_flags, out)
 
                 if n_threads > 1:
+                    pool = Pool(n_threads)
                     flg = list(
-                        p_tqdm.p_map(
-                            fnc_, data, flags, unit="files", num_cpus=n_threads
+                        tqdm.tqdm(
+                            pool.map(
+                                fnc_,
+                                data,
+                                flags,
+                            ),
+                            unit="files",
+                            total=len(data),
                         )
                     )
                 else:
-                    flg = list(p_tqdm.t_map(fnc_, data, flags, unit="files"))
+                    flg = list(
+                        tqdm.tqdm(map(fnc_, data, flags), unit="files", total=len(data))
+                    )
 
             return flg
 

@@ -27,7 +27,7 @@ dependencies:
     - requests
     - tqdm
     - methodtools
-    - p_tqdm
+    - tqdm
     - rich
     - attrs
     - questionary
