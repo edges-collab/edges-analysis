@@ -428,12 +428,17 @@ def promote(
                     return tqdm.tqdm(pool.map(fnc, x, y), total=len(x), **args)
 
             else:
-                prg = tqdm.tqdm
+
+                def prg(fnc, x, y, **args):
+                    return tqdm.tqdm(map(fnc, x, y), total=len(x), **args)
 
             out = list(
-                prg(_pro, input_files, output_fname),
-                unit="files",
-                total=len(input_files),
+                prg(
+                    _pro,
+                    input_files,
+                    output_fname,
+                    unit="files",
+                )
             )
         return [o for o in out if o is not None]
 
