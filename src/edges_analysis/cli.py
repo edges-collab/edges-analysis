@@ -10,7 +10,6 @@ import os
 
 import click
 import h5py
-import p_tqdm
 import questionary as qs
 import yaml
 from edges_io import io
@@ -24,6 +23,8 @@ from .analysis import levels, filters
 from .config import config
 import psutil
 import astropy
+from pathos.multiprocessing import ProcessPool as Pool
+import tqdm
 
 console = Console()
 
@@ -421,14 +422,24 @@ def promote(
             ]
         else:
             if nthreads > 1:
+                pool = Pool(nthreads)
 
                 def prg(fnc, x, y, **args):
-                    return p_tqdm.p_map(fnc, x, y, num_cpus=nthreads, **args)
+                    return tqdm.tqdm(pool.map(fnc, x, y), total=len(x), **args)
 
             else:
-                prg = p_tqdm.t_map
 
-            out = list(prg(_pro, input_files, output_fname, unit="files"))
+                def prg(fnc, x, y, **args):
+                    return tqdm.tqdm(map(fnc, x, y), total=len(x), **args)
+
+            out = list(
+                prg(
+                    _pro,
+                    input_files,
+                    output_fname,
+                    unit="files",
+                )
+            )
         return [o for o in out if o is not None]
 
 
