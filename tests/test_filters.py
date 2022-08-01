@@ -1,6 +1,6 @@
 from datetime import datetime
 import numpy as np
-from edges_analysis.analysis import filters
+from edges_analysis.filters import filters
 from edges_cal import modelling as mdl
 import pytest
 

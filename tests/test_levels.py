@@ -1,4 +1,4 @@
-from edges_analysis.analysis import (
+from edges_analysis.averaging import (
     CalibratedData,
     CombinedData,
     CombinedBinnedData,

@@ -86,10 +86,11 @@ class LabCalibration:
     @property
     def antenna_s11_model(self) -> Callable[[np.ndarray], np.ndarray]:
         """Callable S11 model as a function of frequency."""
-        if not isinstance(self._antenna_s11_model, AntennaS11):
-            return self._antenna_s11_model
-        else:
-            return self._antenna_s11_model.s11_model
+        return (
+            self._antenna_s11_model.s11_model 
+            if isinstance(self._antenna_s11_model, AntennaS11) 
+            else self._antenna_s11_model
+        )
 
     @cached_property
     def antenna_s11(self) -> np.ndarray:
@@ -165,10 +166,7 @@ class LabCalibration:
 
         out = self.calobs.decalibrate_temp(freq, temp, ant_s11)
 
-        if to_q:
-            return (out - self.calobs.t_load) / self.calobs.t_load_ns
-        else:
-            return out
+        return (out - self.calobs.t_load) / self.calobs.t_load_ns if to_q else out
 
     def with_ant_s11(
         self, ant_s11: Callable[[np.ndarray], np.ndarray]

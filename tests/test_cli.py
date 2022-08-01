@@ -1,7 +1,7 @@
 from click.testing import CliRunner
 from pathlib import Path
 from edges_analysis import cli
-from edges_analysis.analysis import read_step
+from edges_analysis.averaging import read_step
 import numpy as np
 
 runner = CliRunner()

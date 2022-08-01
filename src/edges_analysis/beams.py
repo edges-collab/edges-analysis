@@ -15,13 +15,13 @@ from tqdm import tqdm
 import attr
 
 from . import coordinates as coords
-from .loss import ground_loss
+from .calibration.loss import ground_loss
 from . import sky_models
 
 from edges_io.h5 import HDF5Object
 
-from ..config import config
-from .. import const
+from .config import config
+from . import const
 from edges_cal import (
     FrequencyRange,
     modelling as mdl,

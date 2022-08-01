@@ -1,8 +1,10 @@
-from edges_analysis.analysis import beams, loss
-from edges_analysis.analysis.sky_models import Haslam408
+from edges_analysis import beams
+from edges_analysis.sky_models import Haslam408
 import numpy as np
 from pathlib import Path
 from astropy import units as u
+
+from edges_analysis.calibration import loss
 
 
 def test_beam_from_feko():

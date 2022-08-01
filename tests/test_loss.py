@@ -1,6 +1,6 @@
 import pytest
 
-from edges_analysis.analysis import loss
+from edges_analysis.calibration import loss
 import numpy as np
 
 

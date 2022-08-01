@@ -8,23 +8,7 @@ except DistributionNotFound:
 finally:
     del get_distribution, DistributionNotFound
 
-from . import analysis
-from . import simulation
+from . import averaging, beams, coordinates, sky_models, tools
 from .config import config as cfg
-
-from .analysis import (
-    tools,
-    levels,
-    s11,
-    beams,
-    filters,
-    sky_models,
-    coordinates,
-    loss,
-    CalibratedData,
-    CombinedData,
-    ModelData,
-    DayAveragedData,
-    BinnedData,
-    read_step,
-)
+from .calibration import loss, s11
+from .filters import filters

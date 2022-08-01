@@ -5,8 +5,10 @@ done in different ways. There are ultimately three axes over which we might bin 
 nights, LST/GHA and frequency. Each of these in fact requires slightly different methods
 for averaging, in order to make the average unbiased (given flags).
 """
+
 from __future__ import annotations
 
+import contextlib
 import numpy as np
 from edges_cal import modelling as mdl
 import astropy
@@ -75,17 +77,108 @@ def get_bin_edges(
         if isinstance(bins, int):
             # works if its an integer
             return np.concatenate((coords[::bins], [last_edge])) * unit
-        else:
-            if unit != 1:
-                try:
-                    bins = bins.to_value(unit)
-                except AttributeError:
-                    pass  # assume it's in the right units.
+        if unit != 1:
+            with contextlib.suppress(AttributeError):
+                bins = bins.to_value(unit)
+        return (
+            np.concatenate((np.arange(coords[0], coords[-1], bins), [last_edge]))
+            * unit
+        )
 
-            return (
-                np.concatenate((np.arange(coords[0], coords[-1], bins), [last_edge]))
-                * unit
+def bin_array_biased_regular(
+    data: np.ndarray,
+    weights: np.ndarray | None = None,
+    coords: np.ndarray | None = None,
+    axis: int = -1,
+    bins: np.ndarray | int | float | None = None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Bin arbitrary-dimension data carefully along an axis.
+
+    There are multiple ways to "bin" data along an axis when provided with weights.
+    It is not typically accurate to return equi-spaced bins where data is averaged
+    simply via summing with the weights (and the bin coords represent the centre of each
+    bin). This results in some bias when the weights are not uniform.
+
+    One way around this is to assume some underlying model and "fill in" the
+    lower-weight bins. This would allow equi-spaced estimates.
+
+    However, this function does something simpler -- it returns non-equi-spaced bins.
+    This can be a little annoying if multiple data are to be binned, because one needs
+    to keep track of the coordinates of each data separately. However, it is simple
+    and accurate.
+
+    Parameters
+    ----------
+    data
+        The data to be binned. May be of arbitrary dimension.
+    weights
+        The weights of the data. Must be the same shape as ``data``. If not provided,
+        assume all weights are unity.
+    coords
+        The coordinates of the data along the axis to be averaged. If not provided,
+        is taken to be the indices over the axis.
+    axis
+        The axis over which to bin.
+    bins
+        The bin *edges* (lower inclusive, upper not inclusive). If an ``int``, simply
+        use ``bins`` samples per bin, starting from the first bin. If a float, use
+        equi-spaced bin edges, starting from the start of coords, and ending past the
+        end of coords. If not provided, assume a single bin encompassing all the data.
+
+    Returns
+    -------
+    coords
+        The weighted average of the coordinates in each bin. If there is no weight
+        in a bin
+    """
+    axis %= data.ndim
+
+    if weights is None:
+        weights = np.ones(data.shape, dtype=float)
+
+    if data.shape != weights.shape:
+        raise ValueError("data and weights must have same shape")
+
+    if coords is None:
+        coords = np.arange(data.shape[axis])
+
+    if len(coords) != data.shape[axis]:
+        raise ValueError("coords must be same length as the data along the given axis.")
+
+    bins = get_bin_edges(coords, bins)
+
+    # Get a list of tuples of bin edges
+    bins = [(b, bins[i + 1]) for i, b in enumerate(bins[:-1])]
+
+    # Generate the shape of the outputs by contracting one axis.
+    out_shape = tuple(d if i != axis else len(bins) for i, d in enumerate(data.shape))
+
+    out_data = np.ones(out_shape) * np.nan
+    out_wght = np.zeros(out_shape)
+    init_shape = tuple(
+        data.shape[-1] if i == axis else d for i, d in enumerate(data.shape[:-1])
+    )
+
+    for i, (lower, upper) in enumerate(bins):
+        mask = np.where((coords >= lower) & (coords < upper))[0]
+        if len(mask) > 0:
+            this_data = data.take(mask, axis=axis)
+            this_wght = weights.take(mask, axis=axis)
+
+            this_crd = np.swapaxes(
+                np.broadcast_to(coords[mask], init_shape + (len(coords[mask]),)),
+                axis,
+                -1,
             )
+
+            this_slice = tuple(
+                slice(None) if ax != axis else i for ax in range(data.ndim)
+            )
+            out_data[this_slice], out_wght[this_slice] = weighted_mean(
+                this_data, this_wght, axis=axis
+            )
+
+    return np.array([np.mean(b) for b in bins]), out_data, out_wght
 
 
 def bin_array_unbiased_irregular(

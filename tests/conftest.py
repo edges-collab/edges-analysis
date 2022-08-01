@@ -1,7 +1,7 @@
 import pytest
 from pathlib import Path
 from subprocess import run
-from edges_analysis.analysis import (
+from edges_analysis.averaging import (
     CalibratedData,
     RawData,
     CombinedData,
