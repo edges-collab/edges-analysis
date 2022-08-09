@@ -57,7 +57,7 @@ repos:
 #   -   id: pyupgrade
 #       args: [--py36-plus]
 - repo: https://github.com/commitizen-tools/commitizen
-  rev: v2.28.0
+  rev: v2.29.5
   hooks:
     - id: commitizen
       stages: [commit-msg]
