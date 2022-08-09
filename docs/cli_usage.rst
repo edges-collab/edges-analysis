@@ -107,13 +107,13 @@ Note that ``--help`` can be used at any time on the command line for any command
    :nested: full
 
 .. click:: edges_analysis.cli:avail
-   :prog: process
+   :prog: avail
    :nested: full
 
 Example Workflow File
 ~~~~~~~~~~~~~~~~~~~~~
 Here is a sample "real-world" workflow file:
 
-.. literalinclude:: <workflow.yaml>
+.. literalinclude:: workflow.yaml
    :language: yaml
    :caption: An example workflow YAML.
