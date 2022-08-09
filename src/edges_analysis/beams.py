@@ -1,34 +1,31 @@
 """Beam models and chromaticity corrections."""
 from __future__ import annotations
 
-from pathlib import Path
-import logging
 import hashlib
-from methodtools import lru_cache
+import logging
+from pathlib import Path
+
 import astropy.coordinates as apc
 import astropy.time as apt
-from astropy import units as u
+import attr
 import h5py
 import numpy as np
 import scipy.interpolate as spi
-from tqdm import tqdm
-import attr
-
-from . import coordinates as coords
-from .calibration.loss import ground_loss
-from . import sky_models
-
-from edges_io.h5 import HDF5Object
-
-from .config import config
-from . import const
-from edges_cal import (
-    FrequencyRange,
-    modelling as mdl,
-)
-from edges_cal.tools import vld_unit
-from .data import BEAM_PATH
+from astropy import units as u
+from edges_cal import FrequencyRange
+from edges_cal import modelling as mdl
 from edges_cal import types as tp
+from edges_cal.tools import vld_unit
+from edges_io.h5 import HDF5Object
+from methodtools import lru_cache
+from tqdm import tqdm
+
+from . import const
+from . import coordinates as coords
+from . import sky_models
+from .calibration.loss import ground_loss
+from .config import config
+from .data import BEAM_PATH
 
 logger = logging.getLogger(__name__)
 

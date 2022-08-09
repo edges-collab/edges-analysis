@@ -1,7 +1,9 @@
 """Plotting utilities."""
 from __future__ import annotations
+
 import datetime as dt
 
+import edges_cal.modelling as mdl
 import healpy as hp
 import matplotlib.pyplot as plt
 import numpy as np
@@ -9,14 +11,11 @@ from astropy import coordinates as apc
 from astropy import time as apt
 from astropy import units as apu
 from scipy import interpolate as interp
-import edges_cal.modelling as mdl
 
-from . import beams
-from . import sky_models
-from . import const
-from .gsdata import GSData
-from .averaging.lstbin import lst_bin
+from . import beams, const, sky_models
 from .averaging import averaging
+from .averaging.lstbin import lst_bin
+from .gsdata import GSData
 
 
 def plot_sky_model():

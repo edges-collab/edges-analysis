@@ -1,13 +1,13 @@
 """Various utility functions."""
-from typing import Optional
-from multiprocess import Pool, current_process, cpu_count
+import logging
+import warnings
+from collections import defaultdict
 from multiprocessing.sharedctypes import RawArray
+from typing import Optional
 
 import numpy as np
 from edges_cal import xrfi
-import warnings
-import logging
-from collections import defaultdict
+from multiprocess import Pool, cpu_count, current_process
 
 logger = logging.getLogger(__name__)
 

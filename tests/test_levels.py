@@ -1,16 +1,18 @@
-from edges_analysis.averaging import (
-    CalibratedData,
-    CombinedData,
-    CombinedBinnedData,
-    DayAveragedData,
-    BinnedData,
-    ModelData,
-    RawData,
-)
 from typing import List, Tuple
+
 import dill as pickle
 import numpy as np
 from astropy import units as u
+
+from edges_analysis.averaging import (
+    BinnedData,
+    CalibratedData,
+    CombinedBinnedData,
+    CombinedData,
+    DayAveragedData,
+    ModelData,
+    RawData,
+)
 
 
 def test_raw_step(raw_step: Tuple[RawData, RawData]):

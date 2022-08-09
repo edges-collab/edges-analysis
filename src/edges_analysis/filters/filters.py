@@ -1,24 +1,23 @@
 """Functions that identify and flag bad data in various ways."""
 from __future__ import annotations
 
+import functools
 import logging
-from typing import Sequence, Callable, Literal
-from edges_cal import types as tp
+from pathlib import Path
+from typing import Callable, Literal, Sequence
+
 import numpy as np
 import yaml
-from edges_cal.xrfi import (
-    ModelFilterInfoContainer,
-    model_filter,
-)
 from astropy import units as u
-import functools
-from ..data import DATA_PATH
+from attrs import define
+from edges_cal import types as tp
+from edges_cal import xrfi as rfi
+from edges_cal.xrfi import ModelFilterInfoContainer, model_filter
+
 from .. import tools
 from ..averaging import averaging, lstbin
-from edges_cal import xrfi as rfi
-from pathlib import Path
+from ..data import DATA_PATH
 from ..gsdata import GSData, gsregister
-from attrs import define
 
 logger = logging.getLogger(__name__)
 

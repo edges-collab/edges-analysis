@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 from pathlib import Path
+
 import numpy as np
 from edges_cal import reflection_coefficient as rc
-from ..config import config
 from scipy import integrate
+
+from ..config import config
 
 
 def balun_and_connector_loss(

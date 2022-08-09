@@ -6,28 +6,32 @@ antenna, adding self-consistent metadata along with the data itself, and providi
 key methods for data selection, I/O, and analysis.
 """
 from __future__ import annotations
-from attrs import define, field, cmp_using, validators as vld, evolve, asdict
-from attrs import converters as cnv
-import numpy as np
-from astropy.coordinates import EarthLocation, Longitude
-from typing import Literal, Callable, Iterable
-import astropy.units as un
-from astropy.time import Time
-from functools import partial
-from . import coordinates as crd
-from functools import cached_property
-from pathlib import Path
-import edges_cal.modelling as mdl
-import functools
+
 import datetime
-import astropy
-import read_acq
-import edges_cal
-import edges_io
-from . import __version__
-import yaml
-import h5py
+import functools
 import logging
+from functools import cached_property, partial
+from pathlib import Path
+from typing import Callable, Iterable, Literal
+
+import astropy
+import astropy.units as un
+import edges_cal
+import edges_cal.modelling as mdl
+import edges_io
+import h5py
+import numpy as np
+import read_acq
+import yaml
+from astropy.coordinates import EarthLocation, Longitude
+from astropy.time import Time
+from attrs import asdict, cmp_using
+from attrs import converters as cnv
+from attrs import define, evolve, field
+from attrs import validators as vld
+
+from . import __version__
+from . import coordinates as crd
 
 logger = logging.getLogger(__name__)
 

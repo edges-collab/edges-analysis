@@ -1,14 +1,17 @@
 """Module for dealing with auxiliary data for EDGES observations."""
 from __future__ import annotations
-from .gsdata import GSData, gsregister
-import edges_cal.types as tp
-from pathlib import Path
-from .config import config
-from edges_io.auxiliary import read_thermlog_file, read_weather_file
-from .coordinates import get_jd, dt_from_jd
+
 import logging
 import time
+from pathlib import Path
+
+import edges_cal.types as tp
 import numpy as np
+from edges_io.auxiliary import read_thermlog_file, read_weather_file
+
+from .config import config
+from .coordinates import dt_from_jd, get_jd
+from .gsdata import GSData, gsregister
 
 logger = logging.getLogger(__name__)
 

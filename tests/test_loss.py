@@ -1,7 +1,7 @@
+import numpy as np
 import pytest
 
 from edges_analysis.calibration import loss
-import numpy as np
 
 
 def test_no_band():

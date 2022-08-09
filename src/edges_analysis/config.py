@@ -1,6 +1,7 @@
 """Global configuration options."""
-from edges_io.config import config, default_config
 import os
+
+from edges_io.config import config, default_config
 
 _new_defaults = {
     "paths": {
