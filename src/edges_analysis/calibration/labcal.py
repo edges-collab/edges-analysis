@@ -87,8 +87,8 @@ class LabCalibration:
     def antenna_s11_model(self) -> Callable[[np.ndarray], np.ndarray]:
         """Callable S11 model as a function of frequency."""
         return (
-            self._antenna_s11_model.s11_model 
-            if isinstance(self._antenna_s11_model, AntennaS11) 
+            self._antenna_s11_model.s11_model
+            if isinstance(self._antenna_s11_model, AntennaS11)
             else self._antenna_s11_model
         )
 
