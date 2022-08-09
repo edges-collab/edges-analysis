@@ -31,3 +31,4 @@ dependencies:
     - rich
     - attrs
     - questionary
+    - pathos

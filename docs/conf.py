@@ -11,10 +11,10 @@
 import os
 import sys
 from pathlib import Path
-import mock
 
 sys.path.insert(0, str(Path(__file__).absolute().parent.parent / "src"))
-
+print(sys.path)
+import edges_analysis
 # -- General configuration -----------------------------------------------------
 
 # If your documentation needs a minimal Sphinx version, state it here.

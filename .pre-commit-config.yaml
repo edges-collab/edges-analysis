@@ -36,15 +36,17 @@ repos:
       - flake8-rst
 #      - darglint
       - flake8-copyright
-# - repo: https://github.com/timothycrosley/isort
-#   rev: 5.8.0
-#   hooks:
-#   - id: isort
+
+- repo: https://github.com/timothycrosley/isort
+  rev: 5.8.0
+  hooks:
+  - id: isort
 
 - repo: https://github.com/psf/black
   rev: 22.6.0
   hooks:
   - id: black
+
 - repo: https://github.com/pre-commit/pygrep-hooks
   rev: v1.9.0
   hooks:

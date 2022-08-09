@@ -1,0 +1,66 @@
+steps:
+  - function: convert
+    params:
+      telescope_name: "EDGES-low2"
+
+  - function: select_freqs
+    params:
+      range: [40, 100]
+
+  - function: add_weather_data
+    params:
+      weather_file: {{ weather_file }}
+
+  - function: add_thermlog_data
+    params:
+      thermlog_file: {{ thermlog_file }}
+    write: "{prev_stem}.gsh5"
+
+  # CALIBRATION BLOCK
+  - function: dicke_calibration
+  - function: apply_noise_wave_calibration
+    params:
+      calobs: "{{ calfile }}"
+      band: low
+      s11_path: "{{ s11_path }}"
+  - function: apply_loss_correction
+    params:
+      band: low
+      antenna_correction: false
+      balun_correction: true
+      ground_correction: ':'
+      calobs: "{{ calfile }}"
+      s11_path: "{{ s11_path }}"
+  - function: apply_beam_correction
+    params:
+      band: low
+      beam_file: "{{ beam_file }}"
+    write: cal/{prev_stem}.gsh5
+
+  - function: add_model
+    name: linlog
+    params:
+      model: !Model
+        model: linlog
+        beta: -2.5
+        f_center: 75.0
+        n_terms: 5
+        with_cmb: false
+    write: "{prev_dir}/{prev_stem}.linlog.gsh5"
+
+  - function: lst_bin
+    name: lst-bin-15min
+    params:
+      binsize: 0.25
+    write: "{prev_dir}/{prev_stem}.L15min.gsh5"
+  - function: lst_average
+    write: "{prev_dir}/lst-avg/lst_average.gsh5"
+  - function: lst_bin
+    name: lst-bin-24hr
+    params:
+      binsize: 24.0
+    write: "{prev_dir}/lstbin24hr.gsh5"
+  - function: freq_bin
+    params:
+      resolution: 8
+    write: "{prev_dir}/{prev_stem}.400kHz.gsh5"
