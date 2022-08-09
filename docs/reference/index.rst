@@ -1,46 +1,95 @@
 API Reference
 =============
 
-analysis
---------
-
-High Level Interface
-~~~~~~~~~~~~~~~~~~~~
+The GSData Interface
+--------------------
 .. autosummary::
     :toctree: _autosummary
     :template: module.rst
 
-    edges_analysis.analysis.levels
+    edges_analysis.gsdata
+
+
+High Level Methods
+------------------
+The following modules predominantly provide high-level Python interfaces to update
+and visualise GSData objects.
+
+Averaging
+~~~~~~~~~
+.. autosummary::
+    :toctree: _autosummary
+    :template: module.rst
+
+    edges_analysis.averaging.combiners
+    edges_analysis.averaging.freqbin
+    edges_analysis.averaging.lstbin
+
+Calibration
+~~~~~~~~~~~
+.. autosummary::
+    :toctree: _autosummary
+    :template: module.rst
+
+    edges_analysis.calibration.calibrate
+
+Filters
+~~~~~~~
+.. autosummary::
+    :toctree: _autosummary
+    :template: module.rst
+
+    edges_analysis.filters.filters
+    edges_analysis.filters.lst_model
+
+Auxiliary Data
+~~~~~~~~~~~~~~
+.. autosummary::
+    :toctree: _autosummary
+    :template: module.rst
+
+    edges_analysis.aux_data
+
+Visualization
+~~~~~~~~~~~~~
+.. autosummary::
+    :toctree: _autosummary
+    :template: module.rst
+
+    edges_analysis.plots
+
 
 Lower Level Methods
-~~~~~~~~~~~~~~~~~~~
+-------------------
+The following modules provide lower-level methods that typically underlie the high-level
+interface.
+
 .. autosummary::
     :toctree: _autosummary
     :template: module.rst
 
-    edges_analysis.analysis.beams
-    edges_analysis.analysis.sky_models
-    edges_analysis.analysis.filters
-    edges_analysis.analysis.loss
-    edges_analysis.analysis.s11
-    edges_analysis.analysis.coordinates
-    edges_analysis.analysis.tools
-    edges_analysis.analysis.plots
+    edges_analysis.averaging.averaging
+    edges_analysis.calibration.labcal
+    edges_analysis.calibration.loss
+    edges_analysis.calibration.s11
 
-simulation
-----------
+Sky and Beam Modelling
+----------------------
 .. autosummary::
     :toctree: _autosummary
     :template: module.rst
 
-    edges_analysis.simulation.data_models
-    edges_analysis.simulation.plots
+    edges_analysis.sky_models
+    edges_analysis.beams
 
-Package Config
---------------
+
+Package Config and Utilities
+----------------------------
 .. autosummary::
     :toctree: _autosummary
     :template: module.rst
 
     edges_analysis.const
     edges_analysis.config
+    edges_analysis.tools
+    edges_analysis.coordinates

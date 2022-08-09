@@ -281,13 +281,13 @@ latex_documents = [
 # -- External mapping ------------------------------------------------------------
 python_version = ".".join(map(str, sys.version_info[0:2]))
 intersphinx_mapping = {
-    "sphinx": ("https://www.sphinx-doc.org/en/master", None),
+    "sphinx": ("https://www.sphinx-doc.org/en/master/", None),
     "python": ("https://docs.python.org/" + python_version, None),
-    "matplotlib": ("https://matplotlib.org", None),
+    "matplotlib": ("https://matplotlib.org/stable/", None),
     "numpy": ("https://numpy.org/doc/stable/", None),
-    "sklearn": ("https://scikit-learn.org/stable", None),
-    "pandas": ("https://pandas.pydata.org/pandas-docs/stable", None),
-    "scipy": ("https://docs.scipy.org/doc/scipy/reference", None),
-    "edges-io": ("https://edges-io.readthedocs.io/en/latest"),
-    "edges-cal": ("https://edges-cal.readthedocs.io/en/latest"),
+    "sklearn": ("https://scikit-learn.org/stable/", None),
+    "pandas": ("https://pandas.pydata.org/pandas-docs/stable/", None),
+    "scipy": (" https://docs.scipy.org/doc/scipy/", None),
+    "edges-io": ("https://edges-io.readthedocs.io/en/latest/"),
+    "edges-cal": ("https://edges-cal.readthedocs.io/en/latest/"),
 }

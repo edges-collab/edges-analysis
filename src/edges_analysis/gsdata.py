@@ -6,7 +6,7 @@ antenna, adding self-consistent metadata along with the data itself, and providi
 key methods for data selection, I/O, and analysis.
 """
 from __future__ import annotations
-from attrs import define, field, cmp_using, validators as vld, evolve
+from attrs import define, field, cmp_using, validators as vld, evolve, asdict
 from attrs import converters as cnv
 import numpy as np
 from astropy.coordinates import EarthLocation, Longitude
@@ -40,26 +40,16 @@ class _Register:
         self.kind = kind
         functools.update_wrapper(self, func, updated=())
 
-    def __call__(self, *args, **kw) -> GSData:
+    def __call__(self, *args, message: str = "", **kw) -> GSData:
         newdata = self.func(*args, **kw)
 
-        newdata.update(
+        return newdata.update(
             history={
-                "timestamp": datetime.datetime.now(),
-                "message": "",
+                "message": message,
                 "function": self.func.__name__,
                 "parameters": kw,
-                "versions": {
-                    "edges-analysis": __version__,
-                    "edges-cal": edges_cal.__version__,
-                    "read_acq": read_acq.__version__,
-                    "edges_io": edges_io.__version__,
-                    "numpy": np.__version__,
-                    "astropy": astropy.__version__,
-                },
             }
         )
-        return newdata
 
 
 GSDATA_PROCESSORS = {}
@@ -74,6 +64,156 @@ class gsregister:  # noqa: N801
         out = _Register(func, self.kind)
         GSDATA_PROCESSORS[func.__name__] = out
         return out
+
+
+@define(frozen=True)
+class Stamp:
+    """Class representing a historical record of a process applying to an object.
+
+    Parameters
+    ----------
+    message
+        A message describing the process. Optional -- either this or the function
+        must be defined.
+    function
+        The name of the function that was applied. Optional -- either this or the
+        message must be defined.
+    parameter(s)
+        The parameters passed to the function. Optional -- if ``function`` is defined,
+        this should be specified.
+    versions
+        A dictionary of the versions of the software used to perform the process.
+        Created by default when the History is created.
+    timestamp
+        A datetime object corresponding to the time the process was performed.
+        By default, this is set to the time that the Stamp object is created.
+    """
+
+    message: str = field(default="")
+    function: str = field(default="")
+    parameters: dict = field(factory=dict)
+    versions: dict = field()
+    timestamp: datetime.datetime = field(factory=datetime.datetime.now)
+
+    @function.validator
+    def _function_vld(self, _, value):
+        if not value and not self.message:
+            raise ValueError("History record must have a message or a function")
+
+    @versions.default
+    def _versions_default(self):
+        return {
+            "edges-analysis": __version__,
+            "edges-cal": edges_cal.__version__,
+            "read_acq": read_acq.__version__,
+            "edges-io": edges_io.__version__,
+            "numpy": np.__version__,
+            "astropy": astropy.__version__,
+        }
+
+    def __getstate__(self):
+        """Return a dictionary representing the history record."""
+        dct = asdict(self)
+        dct["timestamp"] = dct["timestamp"].isoformat()
+        return dct
+
+    def __repr__(self):
+        """Technical representation of the history record."""
+        return yaml.dump(self.__getstate__())
+
+    def __str__(self):
+        """Human-readable representation of the history record."""
+        pstring = "        ".join(f"{k}: {v}" for k, v in self.parameters.items())
+        vstring = " | ".join(f"{k} ({v})" for k, v in self.versions.items())
+
+        return f"""{self.timestamp.isoformat()}
+    function: {self.function}
+    message : {self.message}
+    parameters:
+        {pstring}
+    versions: {vstring}
+        """
+
+    def pretty(self):
+        """Return a rich-compatible string representation of the history record."""
+        pstring = "        ".join(
+            f"[green]{k}[/]: [dim]{v}[/]" for k, v in self.parameters.items()
+        )
+        vstring = " | ".join(f"{k} ([blue]{v}[/])" for k, v in self.versions.items())
+
+        return f"""[bold underline blue]{self.timestamp.isoformat()}[/]
+    [bold green]function[/]  : {self.function}
+    [bold green]message [/]  : {self.message}
+    [bold green]parameters[/]:
+        {pstring}
+    [bold green]versions[/]  : {vstring}
+        """
+
+    @classmethod
+    def from_repr(cls, repr_string: str):
+        """Create a Stamp object from a string representation."""
+        dct = yaml.load(repr_string)
+        dct["timestamp"] = datetime.datetime.strptime(
+            dct["timestamp"], "%Y-%m-%dT%H:%M:%S.%f"
+        )
+        return cls(**dct)
+
+
+@define
+class History:
+    """A collection of Stamp objects defining the history."""
+
+    stamps: tuple[Stamp] = field(factory=tuple)
+
+    def __attrs_post_init__(self):
+        """Define the timestamps as keys."""
+        self._keysdates = tuple(stamp.timestamp for stamp in self.stamps)
+        self._keystring = tuple(stamp.timestamp.isoformat() for stamp in self.stamps)
+
+    def __getstate__(self):
+        """Return a dictionary representing the history."""
+        return tuple(s.__getstate__() for s in self.stamps)
+
+    def __repr__(self):
+        """Technical representation of the history."""
+        return yaml.dump(self.__getstate__())
+
+    def __str__(self):
+        """Human-readable representation of the history."""
+        return "\n\n".join(str(s) for s in self.stamps)
+
+    def pretty(self):
+        """Return a rich-compatible string representation of the history."""
+        return "\n\n".join(s.pretty() for s in self.stamps)
+
+    def __getitem__(self, key):
+        """Return the Stamp object corresponding to the given key."""
+        if isinstance(key, int):
+            return self.stamps[key]
+        elif isinstance(key, str):
+            if key not in self._keystring:
+                raise KeyError(
+                    f"{key} not in history. Make sure the key is in ISO format."
+                )
+            return self.stamps[self._keystring.index(key)]
+        elif isinstance(key, datetime.datetime):
+            if key not in self._keysdates:
+                raise KeyError(f"{key} not in history")
+            return self.stamps[self._keysdates.index(key)]
+        else:
+            raise KeyError(
+                f"{key} not a valid key. Must be int, ISO date string, or datetime."
+            )
+
+    @classmethod
+    def from_repr(cls, repr_string: str):
+        """Create a History object from a string representation."""
+        d = yaml.load(repr_string)
+        return cls(stamps=[Stamp.from_repr(s) for s in d])
+
+    def add(self, stamp: Stamp):
+        """Add a stamp to the history."""
+        return evolve(self, stamps=self.stamps + (stamp,))
 
 
 @define(slots=False)
@@ -147,7 +287,7 @@ class GSData:
     effective_integration_time: un.Quantity[un.s] = field(default=1 * un.s)
     flags: dict[str, np.ndarray] = npfield(factory=dict)
 
-    history: tuple[dict] = field(factory=tuple)
+    history: History = field(factory=History)
     telescope_name: str = field(default="unknown")
     data_model: GSDataModel | None = field(default=None)
     data_unit: Literal[
@@ -273,29 +413,6 @@ class GSData:
                     "auxiliary_measurements values must have the size ntimes "
                     f"({self.ntimes}), but for {key} got shape {val.shape}"
                 )
-
-    @history.validator
-    def _history_validator(self, attribute, value):
-        if not isinstance(value, tuple):
-            raise TypeError("history must be a tuple")
-
-        if not all(isinstance(x, dict) for x in value):
-            raise TypeError("history must be a tuple of dictionaries")
-
-        if any("timestamp" not in x for x in value):
-            raise ValueError("history dictionaries must contain a timestamp")
-
-        if any("message" not in x for x in value):
-            raise ValueError("history dictionaries must contain a message")
-
-        if any("function" not in x for x in value):
-            raise ValueError("history dictionaries must contain the function name")
-
-        if any("parameters" not in x for x in value):
-            raise ValueError("history dictionaries must contain parameters")
-
-        if any("versions" not in x for x in value):
-            raise ValueError("history dictionaries must contain versions")
 
     @data_unit.validator
     def _data_unit_validator(self, attribute, value):
@@ -428,20 +545,7 @@ class GSData:
 
             filename = filename
 
-            hgroup = fl["history"]
-            keys = sorted(int(k) for k in hgroup.keys())
-            history = []
-            for k in keys:
-                d = hgroup[str(k)]
-                history.append(
-                    {
-                        "timestamp": d.attrs["timestamp"],
-                        "message": d.attrs["message"],
-                        "function": d.attrs["function"],
-                        "parameters": yaml.load(d.attrs["parameters"]),
-                        "versions": yaml.load(d.attrs["versions"]),
-                    }
-                )
+            history = History.from_repr(fl.attrs["history"])
 
             if "data_model" in fl:
                 data_model = GSDataModel.from_h5(fl["data_model"])
@@ -498,14 +602,7 @@ class GSData:
             fl.attrs["data_unit"] = self.data_unit
 
             # Now history
-            history_group = fl.create_group("history")
-            for i, h in enumerate(self.history):
-                grp = history_group.create_group(str(i))
-                grp.attrs["message"] = h["message"]
-                grp.attrs["function"] = h["function"]
-                grp.attrs["parameters"] = yaml.dumps(h["parameters"])
-                grp.attrs["versions"] = yaml.dumps(h["versions"])
-                grp.attrs["timestamp"] = h["timestamp"]
+            fl.attrs["history"] = repr(self.history)
 
             # Data model
             if self.data_model is not None:
@@ -523,12 +620,12 @@ class GSData:
         # If the user passes a single dictionary as history, append it.
         # Otherwise raise an error, unless it's not passed at all.
         history = kwargs.pop("history", None)
-        if isinstance(history, dict):
-            history = self.history + (history,)
+        if isinstance(history, Stamp):
+            history = self.history.add(history)
+        elif isinstance(history, dict):
+            history = self.history.add(Stamp(**history))
         elif history is not None:
-            raise ValueError(
-                "History must be a dictionary, which is appended to the tuple"
-            )
+            raise ValueError("History must be a Stamp object or dictionary")
         else:
             history = self.history
 
@@ -599,6 +696,7 @@ class GSData:
             flags={k: v[:, :, mask] for k, v in self.flags.items()},
         )
 
+    @gsregister("reduce")
     def select(
         self,
         freq_range: tuple[Time | Longitude, Time | Longitude] | None,
@@ -742,6 +840,8 @@ class GSData:
         """Returns accumulated flags."""
         if which_flags is None:
             which_flags = self.flags.keys()
+        elif not which_flags or not self.flags:
+            return np.zeros(self.data.shape, dtype=bool)
 
         which_flags = tuple(s for s in which_flags if s not in ignore_flags)
 
@@ -793,6 +893,7 @@ class GSData:
 
         return out
 
+    @gsregister("supplement")
     def add_model(self, *, model: mdl.Model, append_to_file: bool | None = None):
         """Return a new GSData instance which contains a data model."""
         new = self.update(data_model=GSDataModel.from_gsdata(model, self))
@@ -890,12 +991,6 @@ class GSData:
         """Returns an iterator over the frequency axis of data-shape arrays."""
         for i in range(self.nfreqs):
             yield (slice(None), slice(None), slice(None), i)
-
-
-@gsregister("supplement")
-def add_model(data: GSData, model: mdl.Model, append_to_file: bool | None = None):
-    """Return a new GSData instance which contains a data model."""
-    return data.add_model(model=model, append_to_file=append_to_file)
 
 
 @define

@@ -1,4 +1,5 @@
 """Plotting utilities."""
+from __future__ import annotations
 import datetime as dt
 
 import healpy as hp
@@ -9,14 +10,14 @@ from astropy import time as apt
 from astropy import units as apu
 from scipy import interpolate as interp
 import edges_cal.modelling as mdl
-from typing import Sequence
 
 from . import beams
 from . import sky_models
 from . import const
 from .gsdata import GSData
-from .averaging.lstbin import lst_bin_with_models, lst_bin_direct, lst_bin
+from .averaging.lstbin import lst_bin
 from .averaging import averaging
+
 
 def plot_sky_model():
     """Plot a Haslam sky model."""
@@ -110,16 +111,50 @@ def plot_waterfall(
     which_flags: tuple[str] = None,
     ignore_flags: tuple[str] = (),
     ax: plt.Axes | None = None,
-    cbar: bool=True,
-    xlab: bool=True,
-    ylab: bool=True,
-    title: bool | str=True,
-    attribute: str = 'spectra',
+    cbar: bool = True,
+    xlab: bool = True,
+    ylab: bool = True,
+    title: bool | str = True,
+    attribute: str = "spectra",
     **imshow_kwargs,
 ):
+    """Plot a waterfall from a GSData object.
+
+    Parameters
+    ----------
+    data
+        The GSData object to plot.
+    load
+        The index of the load to plot (only one load is plotted).
+    pol
+        The polarization to plot (only one polarization is plotted).
+    which_flags
+        A tuple of flag names to use in order to mask the data. If None, all flags are
+        used. Send an empty tuple to ignore all flags.
+    ignore_flags
+        A tuple of flag names to ignore.
+    ax
+        The axis to plot on. If None, a new axis is created.
+    cbar
+        Whether to plot a colorbar.
+    xlab
+        Whether to plot an x-axis label.
+    ylab
+        Whether to plot a y-axis label.
+    title
+        Whether to plot a title. If True, the title is the year-day representation
+        of the dataset. If a string, use that as the title.
+    attribute
+        The attribute to actually plot. Can be any attribute of the data object that has
+        the same array shape as the primary data array. This includes "data", "spectra",
+        "resids", "complete_flags", "nsamples".
+    """
     q = getattr(data, attribute)
     if q.shape != data.data.shape:
-        raise ValueError(f"Cannot use attribute '{attribute}' as it doesn't have the same shape as data.")
+        raise ValueError(
+            f"Cannot use attribute '{attribute}' as it doesn't have "
+            "the same shape as data."
+        )
 
     q = np.where(data.get_flagged_nsamples(which_flags, ignore_flags) == 0, np.nan, q)
     q = q[load, :, :, pol]
@@ -127,18 +162,13 @@ def plot_waterfall(
     if ax is None:
         ax = plt.subplots(1, 1)[1]
 
-    # If given model parameters, assume we want to plot residuals.
-    if model is not None:
-        model = model.at(x=data.freq_array)
-        for i, p in model_params:
-            q[i] -= model(parameters=p)
-
+    if attribute == "resids":
         cmap = imshow_kwargs.pop("cmap", "coolwarm")
     else:
         cmap = imshow_kwargs.pop("cmap", "magma")
 
     times = data.time_array
-    
+
     img = ax.imshow(
         q,
         origin="lower",
@@ -158,7 +188,6 @@ def plot_waterfall(
         ax.set_xlabel("Frequency [MHz]")
     if ylab:
         ax.set_ylabel("Hours into Observation")
-    
 
     if title and not isinstance(title, str):
         if not data.in_lst:
@@ -170,17 +199,45 @@ def plot_waterfall(
 
     return ax
 
+
 def plot_time_average(
     data: GSData,
-    ax: plt.Axes | None = None, 
-    logy=None, 
+    ax: plt.Axes | None = None,
+    logy=None,
     lst_min: float = 0,
-    lst_max: float = 24, 
-    load: int= 0,
+    lst_max: float = 24,
+    load: int = 0,
     pol: int = 0,
-    attribute: str = 'spectra',
-    offset: float = 0.0
+    attribute: str = "spectra",
+    offset: float = 0.0,
 ):
+    """Make a 1D plot of the time-averaged data.
+
+    Parameters
+    ----------
+    data
+        The GSData object to plot.
+    ax
+        The axis to plot on. If None, a new axis is created.
+    logy
+        Whether to plot a logarithmic y-axis. If None, the y-axis is logarithmic if all
+        the plotted data is positive.
+    lst_min
+        The minimum LST to average together.
+    lst_max
+        The maximum LST to average together.
+    load
+        The index of the load to plot (only one load is plotted).
+    pol
+        The polarization to plot (only one polarization is plotted).
+    attribute
+        The attribute to actually plot. Can be any attribute of the data object that has
+        the same array shape as the primary data array. This includes "data", "spectra",
+        "resids", "complete_flags", "nsamples".
+    offset
+        The offset to add to the data before plotting. Useful if plotting multiple
+        averages on the same axis.
+    """
     if ax is not None:
         fig = ax.figure
     else:
@@ -193,7 +250,10 @@ def plot_time_average(
 
     q = getattr(data, attribute)
     if q.shape != data.data.shape:
-        raise ValueError(f"Cannot use attribute '{attribute}' as it doesn't have the same shape as data.")
+        raise ValueError(
+            f"Cannot use attribute '{attribute}' as it doesn't "
+            "have the same shape as data."
+        )
 
     ax.plot(data.freq_array, q[load, pol, 0] - offset)
     ax.set_xlabel("Frequency [MHz]")
@@ -207,38 +267,29 @@ def plot_time_average(
 
     return ax, data
 
+
 def plot_daily_residuals(
     objs: list[GSData],
-    model: mdl.Model | None, 
+    model: mdl.Model | None,
     separation: float = 20.0,
     ax: plt.Axes | None = None,
-    load: int= 0,
-    pol: int=0,
-    **kw
+    load: int = 0,
+    pol: int = 0,
+    **kw,
 ) -> plt.Axes:
     """
-    Make a single plot of residuals for each day in the dataset.
+    Make a single plot of residuals for each object.
 
     Parameters
     ----------
+    objs
+        A list of objects to plot.
     separation
         The separation between residuals in K (on the plot).
-    ax
-        An optional axis on which to plot.
-    gha_min
-        A minimum GHA to include in the averaged residuals.
-    gha_max
-        A maximum GHA to include in the averaged residuals.
-    freq_resolution
-        The frequency resolution to bin the spectra into for the plot. In same
-        units as the instance frequencies.
-    days
-        The integer day numbers to include in the plot. Default is to include
-        all days in the dataset.
-    weights
-        The weights to use for flagging. By default, use the weights of the object.
-        If 'old' is given, use the pre-filter weights. Otherwise, must be an array
-        the same size as the spectrum/resids.
+
+    Other Parameters
+    ----------------
+    All other parameters are passed through to :func:`plot_time_average`.
 
     Returns
     -------
@@ -256,18 +307,16 @@ def plot_daily_residuals(
             data = data.add_model(model)
 
         ax, data = plot_time_average(
-            data,
-            attribute='resids',
-            offset=separation*i,
-            ax = ax,
-            **kw
+            data, attribute="resids", offset=separation * i, ax=ax, **kw
         )
 
         rms = np.sqrt(
-            averaging.weighted_mean(data=data.resids[load, pol] ** 2, weights=data.nsamples[load, pol])[0]
+            averaging.weighted_mean(
+                data=data.resids[load, pol] ** 2, weights=data.nsamples[load, pol]
+            )[0]
         )
         ax.text(
-            data.freq_array.max() + 5 * u.MHz,
+            data.freq_array.max() + 5 * apu.MHz,
             -i * separation,
             f"{data.get_initial_yearday()} RMS={rms:.2f}",
         )

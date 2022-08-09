@@ -9,10 +9,11 @@ Contents
    License <license>
    Authors <authors>
    Changelog <changelog>
+   Usage Overview <usage_overview>
    Library Usage <library_usage>
-   cli_usage
-   tutorials
-   reference/index
+   CLI Usage <cli_usage>
+   Tutorials <tutorials>
+   API Reference <reference/index>
 
 
 Indices and tables
