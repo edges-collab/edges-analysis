@@ -1,5 +1,6 @@
 """Module defining calibration routines for field data in EDGES."""
-from ..gsdata import GSData, register_gsprocess
+from __future__ import annotations
+from ..gsdata import GSData, gsregister
 import numpy as np
 from .labcal import LabCalibration
 from edges_cal.cal_coefficients import Calibrator
@@ -12,23 +13,35 @@ from ..config import config
 import re
 from . import loss
 from edges_cal import types as tp
-from astropy import constants as const
+from .. import const
 from .. import beams
+from astropy.time import Time
 
-@register_gsprocess
+
+@gsregister("calibrate")
 def dicke_calibration(data: GSData) -> GSData:
     """Calibrate field data using the Dicke switch data."""
-    iant = data.loads.index('ant')
-    iload = data.loads.index('internal_load')
+    iant = data.loads.index("ant")
+    iload = data.loads.index("internal_load")
     ilns = data.loads.index("internal_load_plus_noise_source")
 
     q = (data.data[iant] - data.data[iload]) / (data.data[ilns] - data.data[iload])
 
-    return data.update(data=q[np.newaxis], data_unit='uncalibrated')
+    return data.update(
+        data=q[np.newaxis],
+        data_unit="uncalibrated",
+        time_array=data.time_array[:, [iant]],
+        loads=("ant",),
+        nsamples=data.nsamples[[iant]],
+        flags={"init": np.any(data.complete_flags, axis=0)[np.newaxis]},
+        data_model=None,
+    )
+
 
 def get_default_s11_directory(band: str) -> Path:
     """Get the default S11 directory for this observation."""
     return Path(config["paths"]["raw_field_data"]) / "mro" / band / "s11"
+
 
 def _get_closest_s11_time(
     s11_dir: Path,
@@ -58,6 +71,8 @@ def _get_closest_s11_time(
         ``ignore_files=['2020_076']`` and it will ignore the file
         ``/home/user/data/2020_076_01_02_input1.s1p``. Full regex can be used.
     """
+    if isinstance(time, Time):
+        time = time.to_datetime()
     # Replace the suffix dot with a literal dot for regex
     s11_file_pattern = s11_file_pattern.replace(".", r"\.")
 
@@ -135,6 +150,7 @@ def _get_closest_s11_time(
     ), f"There need to be four input S1P files of the same time, got {closest}."
     return sorted(closest)
 
+
 def get_s11_paths(
     s11_path: str | Path | tuple | list,
     band: str,
@@ -178,56 +194,161 @@ def get_s11_paths(
 
     return sorted(Path(fl) for fl in fls)
 
-@register_gsprocess
-def apply_noise_wave_calibration(
-    data: GSData, 
-    calobs: Calibrator | Path, 
-    band: str, 
-    s11_path: str | Path,
-    s11_file_pattern: str = r"{y}_{jd}_{h}_*_input{input}.s1p",
+
+def get_labcal(
+    calobs: Calibrator,
+    s11_path: str | Path | tuple | list,
+    band: str,
+    begin_time: datetime,
+    s11_file_pattern: str,
     ignore_s11_files: list[str] | None = None,
     antenna_s11_n_terms: int = 15,
-) -> GSData:
-    if data.data_unit != 'uncalibrated':
-        raise ValueError("Data must be uncalibrated to apply calibration!")
-
-    if data.Nloads != 1:
-        raise ValueError("Can only apply noise-wave calibration to single load data!")
+):
+    """Given an s11_path, return list of paths for each of the inputs."""
+    # If we get four files, make sure they exist and pass them back
 
     s11_files = get_s11_paths(
         s11_path,
         band,
-        data.time_array.min(),
+        begin_time,
         s11_file_pattern,
         ignore_files=ignore_s11_files,
     )
 
     if not isinstance(calobs, Calibrator):
         calobs = Calibrator.from_calfile(calobs)
-    
-    
-    labcal = LabCalibration.from_s11_files(
+
+    return LabCalibration.from_s11_files(
         calobs=calobs,
         s11_files=s11_files,
         n_terms=antenna_s11_n_terms,
     )
 
-    new_data = labcal.calibrate_q(data.data)
-    return data.update(data=new_data, data_unit='temperature')
 
-@register_gsprocess
-def apply_loss_correction(
-    data: GSData, 
+@gsregister("calibrate")
+def apply_noise_wave_calibration(
+    data: GSData,
+    calobs: Calibrator | Path,
     band: str,
-    ambient_temp: np.ndarray,
+    s11_path: str | Path,
+    s11_file_pattern: str = r"{y}_{jd}_{h}_*_input{input}.s1p",
+    ignore_s11_files: list[str] | None = None,
+    antenna_s11_n_terms: int = 15,
+) -> GSData:
+    """Apply noise-wave calibration to data.
+
+    This function requires a :class:`edges_cal.cal_coefficients.Calibrator` object
+    (or a path to a file containing such an object) which must be created beforehand.
+    The antenna S11 used is found automatically by searching for the file that has
+    the closest match to the time of the data. This can be constrained by passing
+    options that match the regex pattern for the S11 files.
+
+    Parameters
+    ----------
+    data
+        Data to be calibrated.
+    calobs
+        Calibrator object or path to file containing calibrator object.
+    band
+        The band that the data is in (eg. low, mid, high). Used for auto-finding
+        S11 files.
+    s11_path
+        Path to directory containing Antenna S11 files.
+    s11_file_pattern
+        The format-pattern used to search for the S11 files in ``s11_path``.
+        This can be used to limit the search to a specific time.
+    ignore_s11_files
+        A list of S11 files to ignore in the search.
+    antenna_s11_n_terms
+        The number of terms to use in the antenna S11 model.
+    """
+    if data.data_unit != "uncalibrated":
+        raise ValueError("Data must be uncalibrated to apply calibration!")
+
+    if data.nloads != 1:
+        raise ValueError("Can only apply noise-wave calibration to single load data!")
+
+    labcal = get_labcal(
+        calobs=calobs,
+        s11_path=s11_path,
+        band=band,
+        begin_time=data.time_array.min(),
+        s11_file_pattern=s11_file_pattern,
+        ignore_s11_files=ignore_s11_files,
+        antenna_s11_n_terms=antenna_s11_n_terms,
+    )
+
+    new_data = labcal.calibrate_q(data.data, freq=data.freq_array)
+    return data.update(data=new_data, data_unit="temperature", data_model=None)
+
+
+@gsregister("calibrate")
+def apply_loss_correction(
+    data: GSData,
+    band: str,
+    ambient_temp: np.ndarray | float | str = None,
     antenna_correction: tp.PathLike | None = ":",
     configuration="",
     balun_correction: tp.PathLike | None = ":",
     ground_correction: tp.PathLike | None | float = ":",
-    s11_ant: np.ndarray | None = None,    
+    s11_path: str | Path = None,
+    calobs: Calibrator | Path = None,
+    s11_file_pattern: str = r"{y}_{jd}_{h}_*_input{input}.s1p",
+    ignore_s11_files: list[str] | None = None,
+    antenna_s11_n_terms: int = 15,
 ) -> GSData:
-    if data.data_unit != 'temperature':
+    """Apply antenna, balun and ground loss corrections.
+
+    Parameters
+    ----------
+    data
+        Data to be calibrated.
+    band
+        The band that the data is in (eg. low, mid, high). Used for auto-finding loss
+        model files.
+    ambient_temp
+        The ambient temperature of the data. If not provided, the temperature is looked
+        for in the data's ``auxiliary_measurements`` attribute, under the
+        ``ambient_temp`` key. You can specify this as a different key, or simply provide
+        a float or array (with the same length as the time dimension of the data).
+    antenna_correction
+        Path to file containing antenna loss correction coefficients. A file will be
+        located automatically if set to ``":"``.
+    configuration
+        The configuration of the antenna (eg. "45" for low-45).
+    balun_correction
+        Path to file containing balun loss correction coefficients. A file will be
+        located automatically if set to ``":"``.
+    ground_correction
+        Path to file containing ground loss correction coefficients. A file will be
+        located automatically if set to ``":"``.
+    s11_path
+        Path to directory containing Antenna S11 files.
+    s11_file_pattern
+        The format-pattern used to search for the S11 files in ``s11_path``.
+        This can be used to limit the search to a specific time.
+    ignore_s11_files
+        A list of S11 files to ignore in the search.
+    antenna_s11_n_terms
+        The number of terms to use in the antenna S11 model.
+    calobs
+        Calibrator object or path to file containing calibrator object.
+    """
+    if data.data_unit != "temperature":
         raise ValueError("Data must be temperature to apply antenna loss correction!")
+
+    if ambient_temp is None:
+        ambient_temp = "ambient_temp"
+
+    if isinstance(ambient_temp, str):
+        ambient_temp = data.auxiliary_measurements.get(ambient_temp)
+
+    if ambient_temp is None:
+        raise ValueError("Ambient temperature must be provided or stored in data!")
+
+    if not hasattr(ambient_temp, "__len__"):
+        ambient_temp = ambient_temp * np.ones(len(data.time_array))
+
     f = data.freq_array.to_value("MHz")
     gain = np.ones_like(f)
 
@@ -238,7 +359,18 @@ def apply_loss_correction(
 
     # Balun+Connector Loss
     if balun_correction:
-        balun_gain, connector_gain = loss.balun_and_connector_loss(band, f, s11_ant)
+        labcal = get_labcal(
+            calobs=calobs,
+            s11_path=s11_path,
+            band=band,
+            begin_time=data.time_array.min(),
+            s11_file_pattern=s11_file_pattern,
+            ignore_s11_files=ignore_s11_files,
+            antenna_s11_n_terms=antenna_s11_n_terms,
+        )
+        balun_gain, connector_gain = loss.balun_and_connector_loss(
+            band, f, labcal.antenna_s11_model(data.freq_array)
+        )
         gain *= balun_gain * connector_gain
 
     # Ground Loss
@@ -249,25 +381,34 @@ def apply_loss_correction(
     elif isinstance(ground_correction, float):
         gain *= ground_correction
 
-    a = (
-        ambient_temp + const.absolute_zero
-        if ambient_temp[0] < 200
-        else ambient_temp
-    )
+    a = ambient_temp + const.absolute_zero if ambient_temp[0] < 200 else ambient_temp
 
     spec = (data.data - np.outer(a, (1 - gain))) / gain
-    
-    return data.update(data=spec, data_unit='temperature')
 
-@register_gsprocess
+    return data.update(data=spec, data_unit="temperature", data_model=None)
+
+
+@gsregister("calibrate")
 def apply_beam_correction(
     data: GSData,
     band: str | None = None,
     beam_file: tp.PathLike | None = ":",
 ) -> GSData:
+    """Apply beam correction to the data.
+
+    Parameters
+    ----------
+    data
+        Data to be calibrated.
+    band
+        The band that the data is in (eg. low, mid, high). Used for auto-finding beam
+        file (if one exists in the standard location).
+    beam_file
+        Path to file containing beam correction coefficients. If there is an existing
+        beam file in the standard location, this can be set to ``":"``.
+    """
     beam_fac = beams.InterpolatedBeamFactor.from_beam_factor(
         beam_file, band=band, f_new=data.freq_array
     )
-    bf = beam_fac.evaluate(data.lst_array)
-    return data.update(data = data.data / bf)
-
+    bf = beam_fac.evaluate(data.lst_array.hour)
+    return data.update(data=data.data / bf, data_model=None)

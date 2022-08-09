@@ -40,15 +40,18 @@ def utc2lst(utc_time_array, longitude):
 
     return t.sidereal_time("apparent", str(longitude) + "d", model="IAU2006A").value
 
+
 def moon_azel(times: apt.Time, obs_location: apc.EarthLocation) -> np.ndarray:
     """Get local coordinates of the Sun using Astropy."""
     moon = apc.get_moon(times).transform_to(apc.AltAz(location=obs_location))
-    return moon.az.rad, moon.alt.rad
+    return moon.az.deg, moon.alt.deg
+
 
 def sun_azel(times: apt.Time, obs_location: apc.EarthLocation) -> np.ndarray:
     """Get local coordinates of the Sun using Astropy."""
     sun = apc.get_moon(times).transform_to(apc.AltAz(location=obs_location))
-    return sun.az.rad, sun.alt.rad
+    return sun.az.deg, sun.alt.deg
+
 
 def sun_moon_azel(lat, lon, utc_array):
     """Get local coordinates of the Sun using Astropy."""

@@ -18,13 +18,16 @@ from rich.rule import Rule
 from rich.table import Table
 
 import psutil
-import astropy
 from pathos.multiprocessing import ProcessPool as Pool
 import tqdm
 from .gsdata import GSData, GSDATA_PROCESSORS
 from functools import partial
 from .aux_data import WeatherError
 import inspect
+from . import const
+from collections import defaultdict
+from jinja2 import Template
+from typing import Callable
 
 console = Console()
 
@@ -52,9 +55,10 @@ logger = logging.getLogger(__name__)
 
 def _get_files(pth: Path, filt=h5py.is_hdf5) -> list[Path]:
     if pth.is_dir():
-        return sorted([fl for fl in pth.glob("*") if filt(fl)])
+        return sorted(fl for fl in pth.glob("*") if filt(fl))
     else:
-        return sorted([Path(fl) for fl in glob.glob(str(pth)) if filt(Path(fl))])
+        return sorted(Path(fl) for fl in glob.glob(str(pth)) if filt(Path(fl)))
+
 
 @main.command()
 @click.argument("workflow", type=click.Path(dir_okay=False, exists=True))
@@ -87,14 +91,13 @@ def _get_files(pth: Path, filt=h5py.is_hdf5) -> list[Path]:
 @click.option(
     "-v", "--verbosity", default="info", help="level of verbosity of the logging"
 )
+@click.option("-s", "--start", default=None, help="Starting step of the workflow")
 @click.option("-j", "--nthreads", default=1, help="How many threads to use.")
-def process(
-    workflow, path, outdir, clobber, verbosity
-):
+def process(workflow, path, outdir, clobber, verbosity, start, nthreads):
     """Process a dataset to the STEP level of averaging/filtering using SETTINGS.
 
     WORKFLOW
-        is a YAML file. Containing a "steps" parameter which should be a list of 
+        is a YAML file. Containing a "steps" parameter which should be a list of
         steps to execute.
     """
     logging.getLogger("edges_analysis").setLevel(verbosity.upper())
@@ -102,7 +105,7 @@ def process(
     logging.getLogger("edges_cal").setLevel(verbosity.upper())
 
     console.print(
-        Panel(f"edges-analysis [blue]processing[/]", box=box.DOUBLE_EDGE),
+        Panel("edges-analysis [blue]processing[/]", box=box.DOUBLE_EDGE),
         style="bold",
         justify="center",
     )
@@ -110,15 +113,38 @@ def process(
     console.print(Rule("Setting Up"))
 
     with open(workflow) as fl:
-        workflow = yaml.load(fl, Loader=astropy.io.misc.yaml.AstropyLoader)
+        workflowd = yaml.load(fl, Loader=yaml.FullLoader)
+
+    global_params = workflowd.pop("globals", {})
+
+    with open(workflow) as fl:
+        txt = Template(fl.read())
+        txt = txt.render(globals=global_params)
+        workflow = yaml.load(txt, Loader=yaml.FullLoader)
 
     steps = workflow.pop("steps")
 
-    console.print(Rule("Running Workflow"))
+    all_names = [step.get("name", step["function"]).lower() for step in steps]
+    for name in all_names:
+        if all_names.count(name) > 1:
+            raise ValueError(
+                f"Duplicate step name {name}. "
+                "Please give one of the steps an explicit 'name'."
+            )
 
-    if steps[0]['function'] == "convert":
+    if start:
+        if start.lower() not in all_names:
+            logger.error(f"Step {start} not found in workflow")
+            return
+        start_step = all_names.index(start.lower())
+        steps = steps[start_step:]
+        all_names = all_names[start_step:]
+
+    if steps[0]["function"] == "convert":
+
         def file_filter(pth: Path):
             return pth.suffix[1:] in io.Spectrum.supported_formats
+
     else:
         file_filter = h5py.is_hdf5
 
@@ -129,7 +155,7 @@ def process(
     if not input_files:
         logger.error("No input files found!")
         return
-    
+
     console.print("[bold]Input Files:")
     for fl in input_files:
         console.print(f"   {fl}")
@@ -137,22 +163,28 @@ def process(
 
     # First run either convert or read function
     # TODO: this is bad memory-wise (reads everything in up-front, should be chunked)
-    if steps[0]['function'] == "convert":
+    if steps[0]["function"] == "convert":
         step0 = steps.pop(0)
-        data = [GSData.from_file(f, **step0.get('params', {})) for f in input_files]
+        params = step0.get("params", {})
+        params.update({"telescope_location": const.edges_location})
+        data = [GSData.from_file(f, **params) for f in input_files]
     else:
         data = [GSData.from_file(f) for f in input_files]
 
-    for istep, step in enumerate(steps):
-        fncname = step['function']
-        params = step.get('params', {})
+    console.print(Rule("Running Workflow"))
+
+    for istep, (step, stepname) in enumerate(zip(steps, all_names)):
+        fncname = step["function"]
+        params = step.get("params", {})
 
         fnc = GSDATA_PROCESSORS.get(fncname.lower(), None)
 
         if fnc is None:
-            raise ValueError(f"Unknown function: {fncname}. Available: {GSDATA_PROCESSORS.keys()}")
+            raise ValueError(
+                f"Unknown function: {fncname}. Available: {GSDATA_PROCESSORS.keys()}"
+            )
 
-        console.print(f"[bold] {istep:>02}. {fncname} [/]")
+        console.print(f"[bold underline] {istep:>02}. {fncname.upper()} [/]")
         if params:
             console.print()
             tab = Table(title="Settings", show_header=False)
@@ -163,9 +195,22 @@ def process(
             console.print(tab)
             console.print()
 
-        data = perform_step_on_object(data, fnc, params, clobber, step, outdir)
+        data = perform_step_on_object(
+            data, fnc, params, clobber, step, nthreads, outdir, name=stepname
+        )
+        console.print()
 
-def perform_step_on_object(data: GSData, fnc: Callable, params: dict, clobber: bool, step: dict, nthreads: int, outdir: str) -> GSData:
+
+def perform_step_on_object(
+    data: GSData,
+    fnc: Callable,
+    params: dict,
+    clobber: bool,
+    step: dict,
+    nthreads: int,
+    outdir: str,
+    name: str,
+) -> GSData:
     """Perform a workflow step on a GSData object.
 
     Parameters
@@ -175,23 +220,28 @@ def perform_step_on_object(data: GSData, fnc: Callable, params: dict, clobber: b
     step : dict
         The step to perform.
     """
-    def write_data(data: GSData, step: dict):
-        if 'write' not in step:
-            return
 
-        fname = step['write']
+    def write_data(data: GSData, step: dict):
+        if "write" not in step:
+            return data
+
+        fname = step["write"]
 
         # Now, use templating to create the actual filename
         fname = fname.format(
-            yearday = data.get_initial_yearday(),
-            prev_stem = data.filename.stem,
-            prev_dir = data.filename.parent,
-            fncname = fnc.__name__, 
+            prev_stem=data.filename.stem,
+            prev_dir=data.filename.parent,
+            fncname=fnc.__name__,
             **params,
         )
 
+        fname = Path(fname)
+
         if not fname.is_absolute():
             fname = Path(outdir) / fname
+
+        if not fname.parent.exists():
+            fname.parent.mkdir(parents=True)
 
         if fname.exists():
             if clobber:
@@ -201,15 +251,33 @@ def perform_step_on_object(data: GSData, fnc: Callable, params: dict, clobber: b
                     f"File {fname} exists. Use --clobber to overwrite!"
                 )
 
-        data.write(fname)
+        logger.info(f"Writing {fname}")
+        return data.write_gsh5(fname)
 
-    if fnc.gatherer:
-        data = fnc(data, **params)
-    else:
-        this_fnc  = partial(fnc, **params)
-        
-        
-    def run_process_with_memory_checks(data):
+    if fnc.kind == "gather":
+        data = fnc(*data, **params)
+        write_data(data, step)
+        return [data]
+
+    if fnc.kind == "filter":
+        params = {**params, "flag_id": name}
+
+    this_fnc = partial(fnc, **params)
+
+    def run_process_with_memory_checks(data: GSData):
+        if data.complete_flags.all():
+            return
+
+        if fnc.kind == "filter" and name in data.flags:
+            if clobber:
+                logger.warning(f"Overwriting existing flags for filter '{name}'")
+                data = data.remove_flags(name)
+            else:
+                raise ValueError(
+                    f"Flags for filter '{name}' already exist. "
+                    "Use --clobber to overwrite!"
+                )
+
         pr = psutil.Process()
 
         paused = False
@@ -235,34 +303,49 @@ def perform_step_on_object(data: GSData, fnc: Callable, params: dict, clobber: b
             return
 
         if data.complete_flags.all():
-            logger.warning(f"All data flagged for {data.filename}")
             return
 
-        return data
+        return write_data(data, step)
 
     mp = Pool(nthreads).map if nthreads > 1 else map
-    data = list(
+    newdata = list(
         tqdm.tqdm(
-            mp(run_process_with_memory_checks, data), total=len(data), unit='files'
+            mp(run_process_with_memory_checks, data), total=len(data), unit="files"
         )
     )
 
     # Some of the data is now potentially None, because it was all flagged or something
-    return [d for d in data if d is not None]  
-
+    return [d for d in newdata if d is not None]
 
 
 @main.command()
-def avail():
+@click.option(
+    "-k", "--kinds", default=None, help="Kinds of data to process", multiple=True
+)
+def avail(kinds):
     """List all available GSData processing commands."""
+    bykind = defaultdict(dict)
+
     for command, fnc in GSDATA_PROCESSORS.items():
-        console.print(f"[bold]{command}[/]")
-        
-        args = inspect.signature(fnc)
-        for pname, p in args.parameters.items():
-            if p.annotation == GSData or pname=='data':
-                continue
-            if p.annotation:
-                console.print(f'    {pname}: [dim]{p.annotation}[/]')
-            else:
-                console.print(f'    {pname}')
+        bykind[fnc.kind][command] = fnc
+
+    for kind, commands in bykind.items():
+        if kinds and kind not in kinds:
+            continue
+
+        console.print(f"[bold underline]{kind.upper()}[/]")
+        for command, fnc in commands.items():
+            console.print(f"[bold]{command}[/]")
+
+            args = inspect.signature(fnc)
+
+            for pname, p in args.parameters.items():
+                if p.annotation == GSData or pname == "data" or pname == "self":
+                    continue
+
+                if p.annotation and p.annotation is not inspect._empty:
+                    console.print(f"    {pname}: [dim]{p.annotation}[/]")
+                else:
+                    console.print(f"    {pname}")
+
+        console.print()

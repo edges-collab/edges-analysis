@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import logging
-from multiprocessing import cpu_count
 from typing import Sequence, Callable, Literal
 from edges_cal import types as tp
 import numpy as np
@@ -15,29 +14,99 @@ from astropy import units as u
 import functools
 from ..data import DATA_PATH
 from .. import tools
-from ..averaging import averaging
+from ..averaging import averaging, lstbin
 from edges_cal import xrfi as rfi
-import tqdm
-from pathos.multiprocessing import ProcessPool as Pool
-
-from ..gsdata import GSData, register_gsprocess
+from pathlib import Path
+from ..gsdata import GSData, gsregister
+from attrs import define
 
 logger = logging.getLogger(__name__)
 
-FILTERS = {}
+
+class _GSDataFilter:
+    def __init__(
+        self,
+        func: Callable,
+        axis: Literal["time", "freq", "day", "all", "object"],
+        multi_data: bool = False,
+    ):
+        self.func = func
+        self.axis = axis
+        self.multi_data = multi_data
+        functools.update_wrapper(self, func, updated=())
+
+    def __call__(
+        self,
+        data: Sequence[tp.PathLike | GSData],
+        *,
+        write: bool = None,
+        flag_id: str = None,
+        **kwargs,
+    ) -> GSData | Sequence[GSData]:
+        # Read all the data, in case they haven't been turned into objects yet.
+        # And check that everything is the right type.
+        if isinstance(data, (Path, str)):
+            data = GSData.from_file(data)
+
+        if self.multi_data and isinstance(data, (GSData, Path, str)):
+            data = [data if isinstance(data, GSData) else GSData.from_file(data)]
+        elif not self.multi_data and not isinstance(data, GSData):
+            raise TypeError(
+                f"'{self.func.__name__}' only accepts single GSData objects as data."
+            )
+
+        def per_file_processing(data: GSData, flags: np.ndarray):
+            old = np.sum(data.complete_flags)
+
+            outflags = np.zeros_like(data.complete_flags)
+
+            # Broadcast the computed flags to the correct shape.
+            if self.axis == "freq":
+                outflags |= flags
+            elif self.axis == "time":
+                outflags[..., flags, :] = True
+            elif self.axis == "all":
+                outflags[flags] = True
+            elif self.axis == "object":
+                outflags |= flags
+
+            data = data.add_flags(
+                flag_id or self.func.__name__, outflags, append_to_file=write
+            )
+
+            if np.all(flags):
+                logger.warning(
+                    f"{data.get_initial_yearday(hours=True)} was fully flagged "
+                    "during {self.func.__name__} filter"
+                )
+            else:
+                sz = outflags.size / 100
+                new = np.sum(outflags)
+                tot = np.sum(data.complete_flags)
+
+                logger.info(
+                    f"'{data.get_initial_yearday(hours=True)}': "
+                    f"{old / sz:.2f} + {new / sz:.2f} → "
+                    f"{tot / sz:.2f}% [bold]<+{(tot - old) / sz:.2f}%>[/] "
+                    f"flagged after [blue]{self.func.__name__}[/]"
+                )
+
+            return data
+
+        this_flag = self.func(data=data, **kwargs)
+
+        if self.multi_data:
+            data = [
+                per_file_processing(d, out_flg) for d, out_flg in zip(data, this_flag)
+            ]
+        else:
+            data = per_file_processing(data, this_flag)
+
+        return data
 
 
-def get_filter(filt: str) -> Callable:
-    """Obtain a registered step filter function from a string name."""
-    if filt not in FILTERS:
-        raise KeyError(f"'{filt}' does not exist as a filter.")
-    return FILTERS[filt]
-
-
-def gsdata_filter(
-    axis: Literal["time", "freq", "day", "all"],
-    multi_data: bool = False,
-):
+@define
+class gsdata_filter:  # noqa: N801
     """A decorator to register a filtering function as a potential filter.
 
     Any function that is wrapped by :func:`gsdata_filter` must implement the following
@@ -50,10 +119,10 @@ def gsdata_filter(
         ) -> np.ndarray
 
     Where the ``data`` is either a single GSData object, or sequence of such
-    objects. 
+    objects.
 
     The returned array should be a 1D or 2D boolean array of flags that may or may
-    not include the input flags. 
+    not include the input flags.
 
     Parameters
     ----------
@@ -70,96 +139,12 @@ def gsdata_filter(
         each independently.
     """
 
-    def inner(
-        fnc: Callable[
-            [GSData | Sequence[GSData], bool],
-            np.ndarray,
-        ]
-    ):
+    axis: Literal["time", "freq", "day", "all"]
+    multi_data: bool = False
 
-        @functools.wraps(fnc)
-        def wrapper(
-            *,
-            data: Sequence[tp.PathLike | GSData],
-            flags: Sequence[np.ndarray] | None | list[None] = None,
-            in_place: bool = False,
-            n_threads: int = 1,
-            **kwargs,
-        ) -> list[np.ndarray]:
-            logger.info(f"Running {fnc.__name__} filter.")
-
-            # Read all the data, in case they haven't been turned into objects yet.
-            # And check that everything is the right type.
-            if not hasattr(data, "__len__"):
-                data = [data]
-            data = [GSData.from_file(d) if not isinstance(d, GSData) else d for d in data]
-            
-            def per_file_processing(data: GSData, flags: np.ndarray):
-                
-                n = np.sum(data.complete_flags)
-
-                outflags = np.zeros_like(data.complete_flags)
-
-                # Broadcast the computed flags to the correct shape.
-                if axis == 'freq':
-                    outflags[..., :] = flags
-                elif axis == 'time':
-                    outflags[..., flags, :] = True
-                elif axis == "all":
-                    outflags[flags] = True
-
-                if np.all(flags):
-                    logger.warning(
-                        f"{data.get_initial_yearday()} was fully flagged during {fnc.__name__} "
-                        "filter"
-                    )
-                else:
-                    logger.info(
-                        f"'{data.get_initial_yearday()}': {100 * n / outflags.size:.2f} → "
-                        f"{100 * np.sum(outflags) / outflags.size:.2f}% [red]<+"
-                        f"{100 * (np.sum(outflags) - n) / outflags.size:.2f}%>[/] "
-                        f"flagged after '{fnc.__name__}' filter"
-                    )
-
-                data = data.add_flags(outflags, append_to_file=in_place)
-                return data
-
-            if multi_data:
-                this_flag = fnc(data=data, **kwargs)
-
-                # TODO: this is probably wrong
-                for d, out_flg in zip(data, this_flag):
-                    per_file_processing(d, out_flg)
-
-            else:
-                def fnc_(data):
-                    out = fnc(data=data, **kwargs)
-                    return per_file_processing(data, out)
-
-                if n_threads > 1:
-                    pool = Pool(n_threads)
-                    flg = list(
-                        tqdm.tqdm(
-                            pool.map(
-                                fnc_,
-                                data,
-                            ),
-                            unit="files",
-                            total=len(data),
-                        )
-                    )
-                else:
-                    flg = list(
-                        tqdm.tqdm(map(fnc_, data), unit="files", total=len(data))
-                    )
-
-            return flg
-
-        FILTERS[fnc.__name__] = wrapper
-        return wrapper
-
-    return inner
-
+    def __call__(self, func: Callable) -> Callable:
+        """Wrap the function in a GSDataFilter instance."""
+        return _GSDataFilter(func, self.axis, self.multi_data)
 
 
 def chunked_iterative_model_filter(
@@ -278,7 +263,8 @@ def explicit_filter(times, bad, ret_times=False):
 
     return (keep, times[keep]) if ret_times else keep
 
-@register_gsprocess
+
+@gsregister("filter")
 @gsdata_filter(axis="time")
 def aux_filter(
     *,
@@ -291,7 +277,7 @@ def aux_filter(
 
     Parameters
     ----------
-    minima 
+    minima
         Dictionary mapping auxiliary data keys to minimum allowed values.
     maxima
         Dictionary mapping auxiliary data keys to maximum allowed values.
@@ -301,14 +287,22 @@ def aux_filter(
     flags
         Boolean array giving which entries are bad.
     """
-    flags = np.zeros(len(gha), dtype=bool)
+    minima = minima or {}
+    maxima = maxima or {}
+
+    flags = np.zeros(len(data.time_array), dtype=bool)
 
     def filt(condition, message, flags):
         nflags = np.sum(flags)
 
+        # Sometimes, the auxiliary data will be shape (Ntimes, Nloads)
+        # In this case, if any load is bad, all should be flagged.
+        if condition.ndim == 2:
+            condition = np.any(condition, axis=1)
+
         flags |= condition
         if nnew := np.sum(flags) - nflags:
-            logger.debug(f"{nnew}/{len(flags) - nflags} times flagged due to {message}")
+            logger.info(f"{nnew}/{len(flags) - nflags} times flagged due to {message}")
 
     for k, v in minima.items():
         if k not in data.auxiliary_measurements:
@@ -329,29 +323,76 @@ def aux_filter(
     return flags
 
 
-def _rfi_filter_factory(method: str):
-    def fnc(
-        *,
+@gsregister("filter")
+@gsdata_filter(axis="time")
+def sun_filter(
+    *,
+    data: GSData,
+    elevation_range: tuple[float, float],
+) -> np.ndarray:
+    """
+    Perform a filter based on sun position.
+
+    Parameters
+    ----------
+    elevation_range
+        The minimum and maximum allowed sun elevation in degrees
+    """
+    _, el = data.get_sun_azel()
+    return (el < elevation_range[0]) | (el > elevation_range[1])
+
+
+@gsregister("filter")
+@gsdata_filter(axis="time")
+def moon_filter(
+    *,
+    data: GSData,
+    elevation_range: tuple[float, float],
+) -> np.ndarray:
+    """
+    Perform a filter based on sun position.
+
+    Parameters
+    ----------
+    elevation_range
+        The minimum and maximum allowed sun elevation.
+    """
+    _, el = data.get_moon_azel()
+    return (el < elevation_range[0]) | (el > elevation_range[1])
+
+
+@define
+class _RFIFilterFactory:
+    method: str
+
+    @property
+    def __name__(self):
+        return f"rfi_{self.method}_filter"
+
+    @property
+    def __docstring__(self):
+        return getattr(rfi, self.method).__doc__
+
+    def __call__(
+        self,
         data: GSData,
-        # flags: np.ndarray[bool],
-        n_threads: int = cpu_count(),
+        *,
+        n_threads: int = 1,
         freq_range: tuple[float, float] = (40, 200),
         **kwargs,
-    ) -> np.ndarray:
-
-        mask = (
-            (data.freq_array >= freq_range[0]) & 
-            (data.freq_array <= freq_range[1])
+    ):
+        mask = (data.freq_array.to_value("MHz") >= freq_range[0]) & (
+            data.freq_array.to_value("MHz") <= freq_range[1]
         )
 
         flags = data.complete_flags
 
         out_flags = tools.run_xrfi(
-            method=method,
-            spectrum=data.spectrum[..., mask],
-            freq=data.freq_array[mask],
+            method=self.method,
+            spectrum=data.spectra[..., mask],
+            freq=data.freq_array[mask].to_value("MHz"),
             flags=flags[..., mask],
-            weights=data.weights[..., mask],
+            weights=data.nsamples[..., mask],
             n_threads=n_threads,
             **kwargs,
         )
@@ -361,16 +402,19 @@ def _rfi_filter_factory(method: str):
 
         return out
 
-    fnc.__name__ = f"rfi_{method}_filter"
 
-    return register_gsprocess(gsdata_filter(axis="all")(fnc))
+rfi_model_filter = gsregister("filter")(
+    gsdata_filter(axis="all")(_RFIFilterFactory("model"))
+)
+rfi_model_sweep_filter = gsregister("filter")(
+    gsdata_filter(axis="all")(_RFIFilterFactory("model_sweep"))
+)
+rfi_watershed_filter = gsregister("filter")(
+    gsdata_filter(axis="all")(_RFIFilterFactory("watershed"))
+)
 
 
-rfi_model_filter = _rfi_filter_factory("model")
-rfi_model_sweep_filter = _rfi_filter_factory("model_sweep")
-rfi_watershed_filter = _rfi_filter_factory("watershed")
-
-@register_gsprocess
+@gsregister("filter")
 @gsdata_filter(axis="freq")
 def rfi_explicit_filter(*, data: GSData, file: tp.PathLike | None = None):
     """A filter of explicit channels of RFI."""
@@ -383,15 +427,14 @@ def rfi_explicit_filter(*, data: GSData, file: tp.PathLike | None = None):
     )
 
 
-
-@register_gsprocess
+@gsregister("filter")
 @gsdata_filter(axis="time")
 def negative_power_filter(*, data: GSData):
     """Filter out integrations that have *any* negative/zero power.
 
     These integrations obviously have some weird stuff going on.
     """
-    return np.array([np.any(spec <= 0) for spec in data.spectra])
+    return np.array([np.any(data.spectra[slc] <= 0) for slc in data.time_iter()])
 
 
 def _peak_power_filter(
@@ -427,9 +470,8 @@ def _peak_power_filter(
             f"The frequency range of the peak must be non-zero, got {peak_freq_range}"
         )
 
-    mask = (
-        (data.freq_array > peak_freq_range[0]) & 
-        (data.freq_array <= peak_freq_range[1])
+    mask = (data.freq_array > peak_freq_range[0]) & (
+        data.freq_array <= peak_freq_range[1]
     )
 
     if not np.any(mask):
@@ -439,9 +481,8 @@ def _peak_power_filter(
     peak_power = spec.max(axis=-1)
 
     if mean_freq_range is not None:
-        mask = (
-            (data.freq_array > mean_freq_range[0]) & 
-            (data.freq_array <= mean_freq_range[1])
+        mask = (data.freq_array > mean_freq_range[0]) & (
+            data.freq_array <= mean_freq_range[1]
         )
         if not np.any(mask):
             return np.zeros(data.ntimes, dtype=bool)
@@ -450,13 +491,17 @@ def _peak_power_filter(
 
     mean, _ = averaging.weighted_mean(
         spec,
-        weights=((spec > 0) & ((spec.transpose(0, 1, 3, 2) < peak_power / 10).transpose(0, 1, 3, 2))).astype(float),
+        weights=(
+            (spec > 0)
+            & ((spec.transpose(0, 1, 3, 2) < peak_power / 10).transpose(0, 1, 3, 2))
+        ).astype(float),
         axis=-1,
     )
     peak_power = 10 * np.log10(peak_power / mean)
     return peak_power > threshold
 
-@register_gsprocess
+
+@gsregister("filter")
 @gsdata_filter(axis="time")
 def peak_power_filter(
     *,
@@ -488,7 +533,8 @@ def peak_power_filter(
         mean_freq_range=mean_freq_range,
     )
 
-@register_gsprocess
+
+@gsregister("filter")
 @gsdata_filter(axis="time")
 def peak_orbcomm_filter(
     *,
@@ -517,7 +563,8 @@ def peak_orbcomm_filter(
         mean_freq_range=mean_freq_range,
     )
 
-@register_gsprocess
+
+@gsregister("filter")
 @gsdata_filter(axis="time")
 def maxfm_filter(*, data: GSData, threshold: float = 200):
     """Max FM power filter.
@@ -544,7 +591,8 @@ def maxfm_filter(*, data: GSData, threshold: float = 200):
 
     return maxfm > threshold
 
-@register_gsprocess
+
+@gsregister("filter")
 @gsdata_filter(axis="time")
 def rmsf_filter(
     *,
@@ -563,9 +611,7 @@ def rmsf_filter(
     Then rms is calculated from the mean that is eatimated
     using the standard deviation times initmodel.
     """
-    freq_mask = (data.freq_array >= freq_range[0]) & (
-        data.freq_array <= freq_range[1]
-    )
+    freq_mask = (data.freq_array >= freq_range[0]) & (data.freq_array <= freq_range[1])
 
     if not np.any(freq_mask):
         return np.zeros(data.ntimes, dtype=bool)
@@ -587,7 +633,8 @@ def rmsf_filter(
 
     return rms > threshold
 
-@register_gsprocess
+
+@gsregister("filter")
 @gsdata_filter(axis="time")
 def filter_150mhz(*, data: GSData, threshold: float):
     """Filter based on power around 150 MHz.
@@ -610,7 +657,8 @@ def filter_150mhz(*, data: GSData, threshold: float):
 
     return d > threshold
 
-@register_gsprocess
+
+@gsregister("filter")
 @gsdata_filter(axis="time")
 def power_percent_filter(
     *,
@@ -625,15 +673,12 @@ def power_percent_filter(
     & when the switch is in position 0.
     And flags integrations if the percentage is above or below the given threshold.
     """
-    if data.data_unit != "power" or data.nloads != 3 or 'ant' not in data.loads:
+    if data.data_unit != "power" or data.nloads != 3 or "ant" not in data.loads:
         raise ValueError("Cannot perform power percent filter on non-power data!")
 
-    p0 = data.spectra[data.loads.index('ant')]
+    p0 = data.spectra[data.loads.index("ant")]
 
-    mask = (
-        (data.freq_array > freq_range[0]) & 
-        (data.freq_array <= freq_range[1])
-    )
+    mask = (data.freq_array > freq_range[0]) & (data.freq_array <= freq_range[1])
 
     if not np.any(mask):
         return np.zeros(data.ntimes, dtype=bool)
@@ -642,64 +687,26 @@ def power_percent_filter(
     return (ppercent < min_threshold) | (ppercent > max_threshold)
 
 
-# @gsdata_filter(axis="day", data_type=GSData)
-# def day_filter(
-#     *, data: CombinedData, dates: Sequence[datetime.datetime | tuple[int, int]]
-# ):
-#     """Filter out specific days."""
-#     filter_dates = []
-#     for date in dates:
-#         if isinstance(date, datetime.date):
-#             date = (date.year, ymd_to_jd(date.year, date.month, date.day))
-#             filter_dates.append(date)
-#         elif len(date) == 3:
-#             filter_dates.append(tuple(date)[:2])
-#         elif len(date) == 2:
-#             filter_dates.append(tuple(date))
-#         else:
-#             raise ValueError(f"date '{date}' cannot be parsed as a date.")
+@gsdata_filter(axis="object")
+def object_rms_filter(
+    data: GSData,
+    rms_threshold: float,
+    gha_min: float = 0,
+    gha_max: float = 24,
+    f_low: float = 0.0,
+    f_high: float = np.inf,
+    weighted: bool = False,
+) -> bool:
+    """Filter out an entire object based on the rms of the residuals."""
+    if data.ntimes > 1:
+        data = lstbin.lst_bin(data, first_edge=gha_min, binsize=gha_max - gha_min)
+    data = data.select_freqs(range=(f_low * u.MHz, f_high * u.MHz))
 
-#     return np.array([date[:2] in filter_dates for date in data.dates])
+    if weighted:
+        rms = np.sqrt(
+            averaging.weighted_mean(data=data.resids**2, weights=data.nsamples)[0]
+        )
+    else:
+        rms = np.sqrt(np.mean(data.resids**2))
 
-
-# @gsdata_filter(axis="day", data_type=(CombinedData, CombinedBinnedData))
-# def day_rms_filter(
-#     *,
-#     data: CombinedData | CombinedBinnedData,
-#     gha_min: float = 0,
-#     gha_max: float = 24,
-#     f_low: float = 0.0,
-#     f_high: float = np.inf,
-#     rms_threshold: float,
-#     weighted: bool = False,
-# ):
-#     """Filter out days based on the rms of the residuals."""
-#     gha = (data.ancillary["gha_edges"][1:] + data.ancillary["gha_edges"][:-1]) / 2
-#     filter_dates = []
-#     mask = (gha > gha_min) & (gha < gha_max)
-#     for param, resid, weight, day in zip(
-#         data.model_params, data.resids, data.weights, data.dates
-#     ):
-#         if np.sum(weight[mask]) == 0:
-#             continue
-
-#         mean_p, mean_r, mean_w = averaging.bin_gha_unbiased_regular(
-#             params=param[mask],
-#             resids=resid[mask],
-#             weights=weight[mask],
-#             gha=gha[mask],
-#             bins=np.array([gha_min, gha_max]),
-#         )
-#         freq_mask = (data.raw_frequencies >= f_low) & (data.raw_frequencies <= f_high)
-#         if weighted:
-#             rms = np.sqrt(
-#                 averaging.weighted_mean(
-#                     data=mean_r[0, freq_mask] ** 2, weights=mean_w[0, freq_mask]
-#                 )[0]
-#             )
-#         else:
-#             rms = np.sqrt(np.mean(mean_r[0, freq_mask] ** 2))
-
-#         if rms > rms_threshold:
-#             filter_dates.append(day)
-#     return np.array([date in filter_dates for date in data.dates])
+    return rms > rms_threshold

@@ -1,4 +1,3 @@
-
 """Support for filters that compress multiple files along the LST axis."""
 
 from __future__ import annotations
@@ -6,18 +5,19 @@ from __future__ import annotations
 import numpy as np
 from attrs import define, field
 from edges_cal.modelling import Model, FourierDay, LinLog
-import h5py 
+import h5py
 import yaml
 from edges_cal import types as tp
 import logging
 from typing import Sequence
-from ..gsdata import GSData, register_gsprocess
+from ..gsdata import GSData, gsregister
 from .filters import chunked_iterative_model_filter, gsdata_filter
 import abc
 from ..data import DATA_PATH
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
 
 @define(frozen=True)
 class GHAModelFilter:
@@ -347,22 +347,21 @@ def get_gha_model_filter(
         indx_map=indx_map,
     )
     model_filter = GHAModelFilter.from_data(
-        info, 
-        metric_model, 
-        std_model, 
-        n_sigma=flag_info.thresholds[-1], 
+        info,
+        metric_model,
+        std_model,
+        n_sigma=flag_info.thresholds[-1],
         meta={
             **{
-                "infiles": ":".join(getattr(d, "filename", str(d)) for d in data), 
-                "gha_chunk_size": detrend_gha_chunk_size, 
-                "detrend_model": detrend_metric_model, 
-                "detrend_std_model": detrend_std_model
-            }, 
-            **kwargs
-        }
+                "infiles": ":".join(getattr(d, "filename", str(d)) for d in data),
+                "gha_chunk_size": detrend_gha_chunk_size,
+                "detrend_model": detrend_metric_model,
+                "detrend_std_model": detrend_std_model,
+            },
+            **kwargs,
+        },
     )
     return model_filter, info, flag_info
-
 
 
 @define(frozen=True)
@@ -412,15 +411,16 @@ class TotalPowerAggregator(FrequencyAggregator):
 
     def aggregate_file(self, data: GSData) -> np.ndarray:
         """Compute the total power over frequency for each integration in a file."""
-        freq_mask = (data.freq_array >= self.band[0]) & (
-            data.freq_array < self.band[1]
-        )
+        freq_mask = (data.freq_array >= self.band[0]) & (data.freq_array < self.band[1])
 
         weights = np.sum(data.nsamples[..., freq_mask], axis=-1)
         return np.where(
             weights > 0,
             (
-                np.sum(data.spectra[..., freq_mask] * data.nsamples[..., freq_mask], axis=-1)
+                np.sum(
+                    data.spectra[..., freq_mask] * data.nsamples[..., freq_mask],
+                    axis=-1,
+                )
                 / weights
             ),
             np.nan,
@@ -483,7 +483,8 @@ def apply_gha_model_filter(
 
     return flags
 
-@register_gsprocess
+
+@gsregister("filter")
 @gsdata_filter(axis="time", multi_data=True)
 def rms_filter(
     *,
@@ -515,7 +516,8 @@ def rms_filter(
     ]
     return np.any(flags, axis=0)
 
-@register_gsprocess
+
+@gsregister("filter")
 @gsdata_filter(axis="time", multi_data=True)
 def total_power_filter(
     *,

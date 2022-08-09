@@ -76,14 +76,14 @@ def get_bin_edges(
 
         if isinstance(bins, int):
             # works if its an integer
-            return np.concatenate((coords[::bins], [last_edge])) * unit
+            return coords[::bins] * unit  # don't want to add extra bits at the end.
         if unit != 1:
             with contextlib.suppress(AttributeError):
                 bins = bins.to_value(unit)
         return (
-            np.concatenate((np.arange(coords[0], coords[-1], bins), [last_edge]))
-            * unit
+            np.concatenate((np.arange(coords[0], coords[-1], bins), [last_edge])) * unit
         )
+
 
 def bin_array_biased_regular(
     data: np.ndarray,
@@ -155,21 +155,12 @@ def bin_array_biased_regular(
 
     out_data = np.ones(out_shape) * np.nan
     out_wght = np.zeros(out_shape)
-    init_shape = tuple(
-        data.shape[-1] if i == axis else d for i, d in enumerate(data.shape[:-1])
-    )
 
     for i, (lower, upper) in enumerate(bins):
         mask = np.where((coords >= lower) & (coords < upper))[0]
         if len(mask) > 0:
             this_data = data.take(mask, axis=axis)
             this_wght = weights.take(mask, axis=axis)
-
-            this_crd = np.swapaxes(
-                np.broadcast_to(coords[mask], init_shape + (len(coords[mask]),)),
-                axis,
-                -1,
-            )
 
             this_slice = tuple(
                 slice(None) if ax != axis else i for ax in range(data.ndim)

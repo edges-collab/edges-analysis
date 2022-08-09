@@ -1,5 +1,6 @@
 """Module for dealing with auxiliary data for EDGES observations."""
-from .gsdata import GSData, register_gsprocess
+from __future__ import annotations
+from .gsdata import GSData, gsregister
 import edges_cal.types as tp
 from pathlib import Path
 from .config import config
@@ -11,20 +12,20 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
+
 class WeatherError(ValueError):
     pass
 
 
 def _interpolate_times(thing, times):
-    seconds = np.array([(t - times[0]).total_seconds() for t in times])
+    seconds = (times - times[0]).to_value("s")
     interpolated = {}
 
+    t0 = times[0].to_datetime()
     thing_seconds = [
         (
-            dt_from_jd(
-                x["year"], int(x["day"]), x["hour"], x["minute"], x["second"]
-            )
-            - times[0]
+            dt_from_jd(x["year"], int(x["day"]), x["hour"], x["minute"], x["second"])
+            - t0
         ).total_seconds()
         for x in thing
     ]
@@ -41,8 +42,9 @@ def _interpolate_times(thing, times):
 
     return interpolated
 
-@register_gsprocess
-def add_weather_data(data: GSData, weather_file: tp.PathLike) -> GSData:
+
+@gsregister("supplement")
+def add_weather_data(data: GSData, weather_file: tp.PathLike | None = None) -> GSData:
     """Add weather data to a :class`GSData` object.
 
     This adds data specifically from a file maintained by EDGES.
@@ -58,10 +60,9 @@ def add_weather_data(data: GSData, weather_file: tp.PathLike) -> GSData:
         the current directory and the `raw_field_data` directory for the given
         file (if not an absolute path).
     """
-    times = data.time_array
-
-    start = min(times)
-    end = max(times)
+    times = data.time_array[..., data.loads.index("ant")]
+    start = min(times).to_datetime()
+    end = max(times).to_datetime()
 
     pth = Path(config["paths"]["raw_field_data"])
     if weather_file is not None:
@@ -90,26 +91,22 @@ def add_weather_data(data: GSData, weather_file: tp.PathLike) -> GSData:
             f"and {end.strftime('%Y/%m/%d')}."
         )
 
-
     logger.info("Setting up arrays...")
 
     t = time.time()
-    # Get the seconds since obs start for the data (not the auxiliary).
-
-    logger.info(f".... took {time.time() - t} sec.")
-
-    t = time.time()
     # Interpolate weather
-
     interpolated = _interpolate_times(weather, times)
 
-    logger.info(f"Took {time.time() - t} sec to interpolate auxiliary data.")
+    logger.info(f"Took {time.time() - t} sec to interpolate weather data.")
+    return data.update(
+        auxiliary_measurements={**data.auxiliary_measurements, **interpolated}
+    )
 
-    return data.update(auxiliary_measurements={**data.auxiliary_measurements, **interpolated})
 
-
-@register_gsprocess
-def add_thermlog_data(data: GSData, band: str, thermlog_file: tp.PathLike) -> GSData:
+@gsregister("supplement")
+def add_thermlog_data(
+    data: GSData, band: str, thermlog_file: tp.PathLike | None = None
+) -> GSData:
     """Add thermlog data to a :class`GSData` object.
 
     This adds data specifically from a file maintained by EDGES.
@@ -125,10 +122,9 @@ def add_thermlog_data(data: GSData, band: str, thermlog_file: tp.PathLike) -> GS
         the current directory and the `raw_field_data` directory for the given
         file (if not an absolute path).
     """
-    times = data.time_array
-
-    start = min(times)
-    end = max(times)
+    times = data.time_array[..., data.loads.index("ant")]
+    start = min(times).to_datetime()
+    end = max(times).to_datetime()
 
     pth = Path(config["paths"]["raw_field_data"])
     if thermlog_file is not None:
@@ -140,7 +136,7 @@ def add_thermlog_data(data: GSData, band: str, thermlog_file: tp.PathLike) -> GS
 
     # Get all aux data covering our times, up to the next minute (so we have some
     # overlap).
-    weather, thermlog = read_thermlog_file(
+    thermlog = read_thermlog_file(
         thermlog_file,
         year=start.year,
         day=get_jd(start),
@@ -160,6 +156,8 @@ def add_thermlog_data(data: GSData, band: str, thermlog_file: tp.PathLike) -> GS
     t = time.time()
     interpolated = _interpolate_times(thermlog, times)
 
-    logger.info(f"Took {time.time() - t} sec to interpolate auxiliary data.")
+    logger.info(f"Took {time.time() - t} sec to interpolate thermlog data.")
 
-    return data.update(auxiliary_measurements={**data.auxiliary_measurements, **interpolated})
+    return data.update(
+        auxiliary_measurements={**data.auxiliary_measurements, **interpolated}
+    )
