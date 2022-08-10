@@ -1,11 +1,13 @@
 """Functions for doing LST binning on GSData objects."""
 from __future__ import annotations
-from ..gsdata import GSData, gsregister
-from .averaging import bin_array_biased_regular, bin_gha_unbiased_regular
-import numpy as np
+
 import edges_cal.modelling as mdl
+import numpy as np
 from astropy import units as un
 from astropy.coordinates import Longitude
+
+from ..gsdata import GSData, gsregister
+from .averaging import bin_array_biased_regular, bin_gha_unbiased_regular
 
 
 def get_lst_bins(binsize: float, first_edge: float = 0) -> np.ndarray:

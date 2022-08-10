@@ -2,19 +2,21 @@
 
 from __future__ import annotations
 
-import numpy as np
-from attrs import define, field
-from edges_cal.modelling import Model, FourierDay, LinLog
-import h5py
-import yaml
-from edges_cal import types as tp
+import abc
 import logging
+from pathlib import Path
 from typing import Sequence
+
+import h5py
+import numpy as np
+import yaml
+from attrs import define, field
+from edges_cal import types as tp
+from edges_cal.modelling import FourierDay, LinLog, Model
+
+from ..data import DATA_PATH
 from ..gsdata import GSData, gsregister
 from .filters import chunked_iterative_model_filter, gsdata_filter
-import abc
-from ..data import DATA_PATH
-from pathlib import Path
 
 logger = logging.getLogger(__name__)
 

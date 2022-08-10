@@ -1,21 +1,23 @@
 """Module defining calibration routines for field data in EDGES."""
 from __future__ import annotations
-from ..gsdata import GSData, gsregister
-import numpy as np
-from .labcal import LabCalibration
-from edges_cal.cal_coefficients import Calibrator
-from pathlib import Path
-import os
+
 import glob
+import os
+import re
 from datetime import datetime
+from pathlib import Path
+
+import numpy as np
+from astropy.time import Time
+from edges_cal import types as tp
+from edges_cal.cal_coefficients import Calibrator
+
+from .. import beams, const
 from .. import coordinates as coords
 from ..config import config
-import re
+from ..gsdata import GSData, gsregister
 from . import loss
-from edges_cal import types as tp
-from .. import const
-from .. import beams
-from astropy.time import Time
+from .labcal import LabCalibration
 
 
 @gsregister("calibrate")

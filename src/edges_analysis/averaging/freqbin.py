@@ -1,9 +1,11 @@
 """Functions for binning GSData objects in frequency."""
 from __future__ import annotations
-from ..gsdata import GSData, gsregister
-from .averaging import bin_array_biased_regular, bin_freq_unbiased_regular
+
 import edges_cal.modelling as mdl
 from astropy import units as un
+
+from ..gsdata import GSData, gsregister
+from .averaging import bin_array_biased_regular, bin_freq_unbiased_regular
 
 
 def freq_bin_direct(data: GSData, resolution: int | float) -> GSData:

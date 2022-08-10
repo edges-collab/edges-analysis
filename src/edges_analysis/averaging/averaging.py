@@ -9,9 +9,10 @@ for averaging, in order to make the average unbiased (given flags).
 from __future__ import annotations
 
 import contextlib
+
+import astropy
 import numpy as np
 from edges_cal import modelling as mdl
-import astropy
 
 
 def get_binned_weights(

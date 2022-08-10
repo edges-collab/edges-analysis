@@ -1,7 +1,9 @@
 """Functions for combining multiple GSData files/objects."""
 from __future__ import annotations
-from ..gsdata import GSData, gsregister
+
 import numpy as np
+
+from ..gsdata import GSData, gsregister
 
 
 @gsregister("gather")
