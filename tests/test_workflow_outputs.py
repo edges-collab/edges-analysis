@@ -1,19 +1,11 @@
-from edges_analysis.averaging import (
-    CalibratedData,
-    CombinedData,
-    CombinedBinnedData,
-    DayAveragedData,
-    BinnedData,
-    ModelData,
-    RawData,
-)
+from edges_analysis.gsdata import GSData
 from typing import List, Tuple
 import dill as pickle
 import numpy as np
 from astropy import units as u
 
 
-def test_raw_step(raw_step: Tuple[RawData, RawData]):
+def test_raw_step(raw_step: Tuple[GSData, GSData]):
     assert raw_step[0].raw_frequencies.shape == (26214,)
     assert raw_step[1].raw_frequencies.shape == (26214,)
     assert np.min(raw_step[0].freq.freq) >= 40 * u.MHz
