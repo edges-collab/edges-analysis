@@ -1,8 +1,10 @@
-from edges_analysis.gsdata import GSData
 from typing import List, Tuple
+
 import dill as pickle
 import numpy as np
 from astropy import units as u
+
+from edges_analysis.gsdata import GSData
 
 
 def test_raw_step(raw_step: Tuple[GSData, GSData]):

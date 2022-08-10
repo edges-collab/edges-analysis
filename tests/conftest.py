@@ -1,15 +1,17 @@
-import pytest
+import datetime as dt
 from pathlib import Path
 from subprocess import run
-import yaml
 from typing import Tuple
+
 import numpy as np
-from edges_cal.modelling import LinLog
-import datetime as dt
-from edges_analysis.config import config
+import pytest
+import yaml
 from click.testing import CliRunner
-from edges_analysis import cli
+from edges_cal.modelling import LinLog
 from jinja2 import Template
+
+from edges_analysis import cli
+from edges_analysis.config import config
 from edges_analysis.gsdata import GSData
 
 runner = CliRunner()
@@ -61,7 +63,8 @@ def settings() -> Path:
 def beam_settings() -> Path:
     return Path(__file__).parent / "data"
 
-@pytest.fixture(scope='session')
+
+@pytest.fixture(scope="session")
 def workflow(integration_test_data: Path, settings: Path, tmp_path_factory) -> Path:
     with open(settings / "integration_workflow.yaml") as fl:
         workflow = Template(fl.read())
@@ -69,152 +72,181 @@ def workflow(integration_test_data: Path, settings: Path, tmp_path_factory) -> P
     tmp_path = tmp_path_factory.mktemp("integration-workflow")
 
     with open(tmp_path / "integration_workflow.yaml", "w") as fl:
-        fl.write(workflow.render(
-            weather_file = str(integration_test_data / "weather.txt"),
-            thermlog_file = str(integration_test_data / "thermlog_low.txt"),
-            calfile = str(integration_test_data / "calfile_Rcv_2017_05.h5"),
-            s11_path = str(integration_test_data / "s11"),
-            beam_file = str(integration_test_data / "feko_Haslam408_ref70.00.h5"),
-        ))
-    return tmp_path / 'integration_workflow.yaml'
+        fl.write(
+            workflow.render(
+                weather_file=str(integration_test_data / "weather.txt"),
+                thermlog_file=str(integration_test_data / "thermlog_low.txt"),
+                calfile=str(integration_test_data / "calfile_Rcv_2017_05.h5"),
+                s11_path=str(integration_test_data / "s11"),
+                beam_file=str(integration_test_data / "feko_Haslam408_ref70.00.h5"),
+            )
+        )
+    return tmp_path / "integration_workflow.yaml"
 
-@pytest.fixture(scope='session')
-def cal_workflow_nobeam(integration_test_data: Path, settings: Path, tmp_path_factory) -> Path:
+
+@pytest.fixture(scope="session")
+def cal_workflow_nobeam(
+    integration_test_data: Path, settings: Path, tmp_path_factory
+) -> Path:
     with open(settings / "integration_workflow.yaml") as fl:
         workflow = Template(fl.read())
 
     tmp_path = tmp_path_factory.mktemp("integration-workflow")
 
     with open(tmp_path / "cal_workflow_nobeam.yaml", "w") as fl:
-        fl.write(workflow.render(
-            weather_file = str(integration_test_data / "weather.txt"),
-            thermlog_file = str(integration_test_data / "thermlog_low.txt"),
-            calfile = str(integration_test_data / "calfile_Rcv_2017_05.h5"),
-            s11_path = str(
-                integration_test_data / "S11_blade_low_band_2015_342_03_14.txt.csv"
-            ),
-            beam_file = '',
-        ))
-    return tmp_path / 'cal_workflow_nobeam.yaml'
+        fl.write(
+            workflow.render(
+                weather_file=str(integration_test_data / "weather.txt"),
+                thermlog_file=str(integration_test_data / "thermlog_low.txt"),
+                calfile=str(integration_test_data / "calfile_Rcv_2017_05.h5"),
+                s11_path=str(
+                    integration_test_data / "S11_blade_low_band_2015_342_03_14.txt.csv"
+                ),
+                beam_file="",
+            )
+        )
+    return tmp_path / "cal_workflow_nobeam.yaml"
 
 
-@pytest.fixture(scope='session')
-def cal_workflow_s11format(integration_test_data: Path, settings: Path, tmp_path_factory) -> Path:
+@pytest.fixture(scope="session")
+def cal_workflow_s11format(
+    integration_test_data: Path, settings: Path, tmp_path_factory
+) -> Path:
     with open(settings / "integration_workflow.yaml") as fl:
         workflow = Template(fl.read())
 
     tmp_path = tmp_path_factory.mktemp("integration-workflow")
 
     with open(tmp_path / "cal_workflow_s11format.yaml", "w") as fl:
-        fl.write(workflow.render(
-            weather_file = str(integration_test_data / "weather.txt"),
-            thermlog_file = str(integration_test_data / "thermlog_low.txt"),
-            calfile = str(integration_test_data / "calfile_Rcv_2017_05.h5"),
-            s11_path = str(integration_test_data / "average_2015_342_03_14.txt"),
-            beam_file = '',
-        ))
-    return tmp_path / 'cal_workflow_s11format.yaml'
+        fl.write(
+            workflow.render(
+                weather_file=str(integration_test_data / "weather.txt"),
+                thermlog_file=str(integration_test_data / "thermlog_low.txt"),
+                calfile=str(integration_test_data / "calfile_Rcv_2017_05.h5"),
+                s11_path=str(integration_test_data / "average_2015_342_03_14.txt"),
+                beam_file="",
+            )
+        )
+    return tmp_path / "cal_workflow_s11format.yaml"
 
 
-@pytest.fixture(scope='session', autouse=True)
-def run_workflow(workflow: Path,) -> Path:
+@pytest.fixture(scope="session", autouse=True)
+def run_workflow(
+    workflow: Path,
+) -> Path:
     invoke(
         cli.process,
         [
             str(workflow),
             "-i",
             str(integration_test_data / "2016_*_00_small.acq"),
-            '-o', str(workflow.parent / "main"),
+            "-o",
+            str(workflow.parent / "main"),
         ],
     )
 
     return workflow.parent / "main"
 
-@pytest.fixture(scope='session', autouse=True)
-def run_workflow_nobeam(cal_workflow_nobeam: Path,) -> Path:
+
+@pytest.fixture(scope="session", autouse=True)
+def run_workflow_nobeam(
+    cal_workflow_nobeam: Path,
+) -> Path:
     invoke(
         cli.process,
         [
             str(cal_workflow_nobeam),
             "-i",
             str(integration_test_data / "2016_*_00_small.acq"),
-            '-o', str(cal_workflow_nobeam.parent / "main"),
+            "-o",
+            str(cal_workflow_nobeam.parent / "main"),
         ],
     )
 
     return cal_workflow_nobeam.parent / "main"
 
-@pytest.fixture(scope='session', autouse=True)
-def run_workflow_s11format(cal_workflow_s11format: Path,) -> Path:
+
+@pytest.fixture(scope="session", autouse=True)
+def run_workflow_s11format(
+    cal_workflow_s11format: Path,
+) -> Path:
     invoke(
         cli.process,
         [
             str(cal_workflow_s11format),
             "-i",
             str(integration_test_data / "2016_*_00_small.acq"),
-            '-o', str(cal_workflow_s11format.parent / "main"),
+            "-o",
+            str(cal_workflow_s11format.parent / "main"),
         ],
     )
 
     return cal_workflow_s11format.parent / "main"
 
 
-
 @pytest.fixture(scope="session")
-def raw_step(run_workflow: Path)-> Tuple[GSData, GSData]:
-   globs = sorted(list(run_workflow.glob("*.gsh5")))
-   return tuple(
-        GSData.from_file(fl for fl in globs)
-   )
+def raw_step(run_workflow: Path) -> Tuple[GSData, GSData]:
+    globs = sorted(list(run_workflow.glob("*.gsh5")))
+    return tuple(GSData.from_file(fl for fl in globs))
 
 
 @pytest.fixture(scope="session")
 def cal_step(run_workflow: Path) -> Tuple[GSData, GSData]:
-    globs = sorted(x for x in (run_workflow/'cal').glob("*.gsh5") if  x.name.count(".") == 1)
-    return tuple(
-        GSData.from_file(fl for fl in globs)
-   )
+    globs = sorted(
+        x for x in (run_workflow / "cal").glob("*.gsh5") if x.name.count(".") == 1
+    )
+    return tuple(GSData.from_file(fl for fl in globs))
+
 
 @pytest.fixture(scope="session")
 def cal_step_nobeam(run_workflow_nobeam: Path) -> Tuple[GSData, GSData]:
-    globs = sorted(x for x in (run_workflow_nobeam/'cal').glob("*.gsh5") if  x.name.count(".") == 1)
-    return tuple(
-        GSData.from_file(fl for fl in globs)
-   )
+    globs = sorted(
+        x
+        for x in (run_workflow_nobeam / "cal").glob("*.gsh5")
+        if x.name.count(".") == 1
+    )
+    return tuple(GSData.from_file(fl for fl in globs))
+
 
 @pytest.fixture(scope="session")
 def cal_step_s11format(run_workflow_s11format: Path) -> Tuple[GSData, GSData]:
-    globs = sorted(x for x in (run_workflow_s11format/'cal').glob("*.gsh5") if  x.name.count(".") == 1)
-    return tuple(
-        GSData.from_file(fl for fl in globs)
-   )
+    globs = sorted(
+        x
+        for x in (run_workflow_s11format / "cal").glob("*.gsh5")
+        if x.name.count(".") == 1
+    )
+    return tuple(GSData.from_file(fl for fl in globs))
 
 
 @pytest.fixture(scope="session")
 def model_step(run_workflow: Path) -> Tuple[GSData, GSData]:
-    globs = sorted(x for x in (run_workflow/'cal').glob("*.gsh5") if '.linlog.' in x.name)
-    return tuple(
-        GSData.from_file(fl for fl in globs)
-   )
+    globs = sorted(
+        x for x in (run_workflow / "cal").glob("*.gsh5") if ".linlog." in x.name
+    )
+    return tuple(GSData.from_file(fl for fl in globs))
+
 
 @pytest.fixture(scope="session")
 def lstbin_step(run_workflow: Path) -> Tuple[GSData, GSData]:
-    globs = sorted(x for x in (run_workflow/'cal').glob("*.gsh5") if '.L15min.' in x.name)
-    return tuple(
-        GSData.from_file(fl for fl in globs)
-   )
+    globs = sorted(
+        x for x in (run_workflow / "cal").glob("*.gsh5") if ".L15min." in x.name
+    )
+    return tuple(GSData.from_file(fl for fl in globs))
+
 
 @pytest.fixture(scope="session")
 def lstavg_step(run_workflow: Path) -> GSData:
-    GSData.from_file(run_workflow/'cal/lst-avg/lst_average.gsh5')
+    GSData.from_file(run_workflow / "cal/lst-avg/lst_average.gsh5")
+
 
 @pytest.fixture(scope="session")
 def lstbin24_step(run_workflow: Path) -> GSData:
-    GSData.from_file(run_workflow/'cal/lst-avg/lstbin24hr.gsh5')
+    GSData.from_file(run_workflow / "cal/lst-avg/lstbin24hr.gsh5")
+
 
 @pytest.fixture(scope="session")
 def final_step(run_workflow: Path) -> GSData:
-    GSData.from_file(run_workflow/'cal/lst-avg/lst_average.400kHz.gsh5')
+    GSData.from_file(run_workflow / "cal/lst-avg/lst_average.400kHz.gsh5")
 
 
 # @pytest.fixture(scope="session")

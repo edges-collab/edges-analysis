@@ -1,8 +1,10 @@
 from datetime import datetime
+
 import numpy as np
-from edges_analysis.filters import filters
-from edges_cal import modelling as mdl
 import pytest
+from edges_cal import modelling as mdl
+
+from edges_analysis.filters import filters
 
 
 def test_aux_filter():
