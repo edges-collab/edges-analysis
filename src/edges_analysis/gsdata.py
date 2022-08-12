@@ -163,12 +163,13 @@ class Stamp:
         return cls(**dct)
 
     @classmethod
-    def from_yaml_dict(cls, d: dict) -> 'Stamp':
+    def from_yaml_dict(cls, d: dict) -> "Stamp":
         """Create a Stamp object from a dictionary representing a history record."""
         d["timestamp"] = datetime.datetime.strptime(
             d["timestamp"], "%Y-%m-%dT%H:%M:%S.%f"
         )
         return cls(**d)
+
 
 @define(slots=False)
 class History:
@@ -183,7 +184,7 @@ class History:
 
     def __getstate__(self):
         """Return a dictionary representing the history."""
-        return tuple(s.__getstate__() for s in self.stamps)
+        return {"stamps": tuple(s.__getstate__() for s in self.stamps)}
 
     def __repr__(self):
         """Technical representation of the history."""
@@ -220,7 +221,7 @@ class History:
     def from_repr(cls, repr_string: str):
         """Create a History object from a string representation."""
         d = yaml.load(repr_string, Loader=yaml.FullLoader)
-        return cls(stamps=[Stamp.from_yaml_dict(s) for s in d])
+        return cls(stamps=[Stamp.from_yaml_dict(s) for s in d["stamps"]])
 
     def add(self, stamp: Stamp):
         """Add a stamp to the history."""
