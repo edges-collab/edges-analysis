@@ -156,18 +156,25 @@ class Stamp:
     @classmethod
     def from_repr(cls, repr_string: str):
         """Create a Stamp object from a string representation."""
-        dct = yaml.load(repr_string)
+        dct = yaml.load(repr_string, Loader=yaml.FullLoader)
         dct["timestamp"] = datetime.datetime.strptime(
             dct["timestamp"], "%Y-%m-%dT%H:%M:%S.%f"
         )
         return cls(**dct)
 
+    @classmethod
+    def from_yaml_dict(cls, d: dict) -> 'Stamp':
+        """Create a Stamp object from a dictionary representing a history record."""
+        d["timestamp"] = datetime.datetime.strptime(
+            d["timestamp"], "%Y-%m-%dT%H:%M:%S.%f"
+        )
+        return cls(**d)
 
-@define
+@define(slots=False)
 class History:
     """A collection of Stamp objects defining the history."""
 
-    stamps: tuple[Stamp] = field(factory=tuple)
+    stamps: tuple[Stamp] = field(factory=tuple, converter=tuple)
 
     def __attrs_post_init__(self):
         """Define the timestamps as keys."""
@@ -212,8 +219,8 @@ class History:
     @classmethod
     def from_repr(cls, repr_string: str):
         """Create a History object from a string representation."""
-        d = yaml.load(repr_string)
-        return cls(stamps=[Stamp.from_repr(s) for s in d])
+        d = yaml.load(repr_string, Loader=yaml.FullLoader)
+        return cls(stamps=[Stamp.from_yaml_dict(s) for s in d])
 
     def add(self, stamp: Stamp):
         """Add a stamp to the history."""
@@ -291,7 +298,7 @@ class GSData:
     effective_integration_time: un.Quantity[un.s] = field(default=1 * un.s)
     flags: dict[str, np.ndarray] = npfield(factory=dict)
 
-    history: History = field(factory=History)
+    history: History = field(factory=History, validator=vld.instance_of(History))
     telescope_name: str = field(default="unknown")
     data_model: GSDataModel | None = field(default=None)
     data_unit: Literal[
@@ -566,7 +573,7 @@ class GSData:
             filename=filename,
             nsamples=nsamples,
             flags=flags,
-            history=tuple(history),
+            history=history,
             data_model=data_model,
             telescope_location=telescope_location,
         )
@@ -1042,7 +1049,7 @@ class GSDataModel:
             )
 
         d = gsdata.data.reshape((-1, gsdata.nfreqs))
-        p = self.parameters.reshape((-1, gsdata.nparams))
+        p = self.parameters.reshape((-1, gsdata.data_model.nparams))
 
         model = self.model.at(x=gsdata.freq_array.to_value("MHz"))
 

@@ -94,7 +94,8 @@ def _get_files(pth: Path, filt=h5py.is_hdf5) -> list[Path]:
 )
 @click.option("-s", "--start", default=None, help="Starting step of the workflow")
 @click.option("-j", "--nthreads", default=1, help="How many threads to use.")
-def process(workflow, path, outdir, clobber, verbosity, start, nthreads):
+@click.option("--mem-check/--no-mem-check", default=True, help="Whether to perform a memory check")
+def process(workflow, path, outdir, clobber, verbosity, start, nthreads, mem_check):
     """Process a dataset to the STEP level of averaging/filtering using SETTINGS.
 
     WORKFLOW
@@ -197,7 +198,7 @@ def process(workflow, path, outdir, clobber, verbosity, start, nthreads):
             console.print()
 
         data = perform_step_on_object(
-            data, fnc, params, clobber, step, nthreads, outdir, name=stepname
+            data, fnc, params, clobber, step, nthreads, outdir, name=stepname, mem_check=mem_check
         )
         console.print()
 
@@ -211,6 +212,7 @@ def perform_step_on_object(
     nthreads: int,
     outdir: str,
     name: str,
+    mem_check: bool,
 ) -> GSData:
     """Perform a workflow step on a GSData object.
 
@@ -281,20 +283,22 @@ def perform_step_on_object(
 
         pr = psutil.Process()
 
-        paused = False
-        if psutil.virtual_memory().available < 4 * 1024**3:
-            logger.warning(
-                "Available Memory < 4GB, waiting for resources on "
-                f"pid={os.getpid()}. Cancel and restart with fewer threads if this"
-                "thread appears to be frozen"
-            )
-            paused = True
+        print("MEM_CHECK: ", mem_check)
+        if mem_check:
+            paused = False
+            if psutil.virtual_memory().available < 4 * 1024**3:
+                logger.warning(
+                    "Available Memory < 4GB, waiting for resources on "
+                    f"pid={os.getpid()}. Cancel and restart with fewer threads if this"
+                    "thread appears to be frozen"
+                )
+                paused = True
 
-        while psutil.virtual_memory().available < 4 * 1024**3:
-            time.sleep(2)
+            while psutil.virtual_memory().available < 4 * 1024**3:
+                time.sleep(2)
 
-        if paused:
-            logger.warning(f"Resuming processing on pid={os.getpid()}")
+            if paused:
+                logger.warning(f"Resuming processing on pid={os.getpid()}")
 
         logger.debug(f"Initial memory: {pr.memory_info().rss / 1024**2} MB")
         try:

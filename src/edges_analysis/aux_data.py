@@ -108,7 +108,7 @@ def add_weather_data(data: GSData, weather_file: tp.PathLike | None = None) -> G
 
 @gsregister("supplement")
 def add_thermlog_data(
-    data: GSData, band: str, thermlog_file: tp.PathLike | None = None
+    data: GSData, band: str | None = None, thermlog_file: tp.PathLike | None = None
 ) -> GSData:
     """Add thermlog data to a :class`GSData` object.
 
@@ -118,7 +118,10 @@ def add_thermlog_data(
     ----------
     data
         Object into which to add the weather data.
-    weather_file
+    band
+        The instrument taking the data. Only provide to automatically find the
+        correct data.
+    thermlog_file
         Path to a weather file from which to read the weather data. Must be
         formatted appropriately. By default, will choose an appropriate file from
         the configured `raw_field_data` directory. If provided, will search in
