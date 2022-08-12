@@ -176,7 +176,9 @@ class History:
     """A collection of Stamp objects defining the history."""
 
     stamps: tuple[Stamp] = field(
-        factory=tuple, converter=tuple, validator=vld.deep_iterable(Stamp)
+        factory=tuple,
+        converter=tuple,
+        validator=vld.deep_iterable(vld.instance_of(Stamp), vld.instance_of(tuple)),
     )
 
     def __attrs_post_init__(self):
