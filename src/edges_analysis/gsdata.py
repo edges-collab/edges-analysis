@@ -175,7 +175,9 @@ class Stamp:
 class History:
     """A collection of Stamp objects defining the history."""
 
-    stamps: tuple[Stamp] = field(factory=tuple, converter=tuple)
+    stamps: tuple[Stamp] = field(
+        factory=tuple, converter=tuple, validator=vld.deep_iterable(Stamp)
+    )
 
     def __attrs_post_init__(self):
         """Define the timestamps as keys."""
@@ -223,8 +225,11 @@ class History:
         d = yaml.load(repr_string, Loader=yaml.FullLoader)
         return cls(stamps=[Stamp.from_yaml_dict(s) for s in d["stamps"]])
 
-    def add(self, stamp: Stamp):
+    def add(self, stamp: Stamp | dict):
         """Add a stamp to the history."""
+        if isinstance(stamp, dict):
+            stamp = Stamp(**stamp)
+
         return evolve(self, stamps=self.stamps + (stamp,))
 
 
