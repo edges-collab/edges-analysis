@@ -115,15 +115,14 @@ class Stamp:
             "astropy": astropy.__version__,
         }
 
-    def __getstate__(self):
-        """Return a dictionary representing the history record."""
+    def _to_yaml_dict(self):
         dct = asdict(self)
         dct["timestamp"] = dct["timestamp"].isoformat()
         return dct
 
     def __repr__(self):
         """Technical representation of the history record."""
-        return yaml.dump(self.__getstate__())
+        return yaml.dump(self._to_yaml_dict())
 
     def __str__(self):
         """Human-readable representation of the history record."""
@@ -186,14 +185,10 @@ class History:
         self._keysdates = tuple(stamp.timestamp for stamp in self.stamps)
         self._keystring = tuple(stamp.timestamp.isoformat() for stamp in self.stamps)
 
-    def __getstate__(self):
-        """Return a dictionary representing the history."""
-        print("TYPES: ", [type(s) for s in self.stamps])
-        return {"stamps": tuple(s.__getstate__() for s in self.stamps)}
-
     def __repr__(self):
         """Technical representation of the history."""
-        return yaml.dump(self.__getstate__())
+        out = tuple(s._to_yaml_dict() for s in self.stamps)
+        return yaml.dump(out)
 
     def __str__(self):
         """Human-readable representation of the history."""
@@ -226,7 +221,7 @@ class History:
     def from_repr(cls, repr_string: str):
         """Create a History object from a string representation."""
         d = yaml.load(repr_string, Loader=yaml.FullLoader)
-        return cls(stamps=[Stamp.from_yaml_dict(s) for s in d["stamps"]])
+        return cls(stamps=[Stamp.from_yaml_dict(s) for s in d])
 
     def add(self, stamp: Stamp | dict):
         """Add a stamp to the history."""
