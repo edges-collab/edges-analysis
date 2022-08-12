@@ -94,7 +94,9 @@ def _get_files(pth: Path, filt=h5py.is_hdf5) -> list[Path]:
 )
 @click.option("-s", "--start", default=None, help="Starting step of the workflow")
 @click.option("-j", "--nthreads", default=1, help="How many threads to use.")
-@click.option("--mem-check/--no-mem-check", default=True, help="Whether to perform a memory check")
+@click.option(
+    "--mem-check/--no-mem-check", default=True, help="Whether to perform a memory check"
+)
 def process(workflow, path, outdir, clobber, verbosity, start, nthreads, mem_check):
     """Process a dataset to the STEP level of averaging/filtering using SETTINGS.
 
@@ -198,7 +200,15 @@ def process(workflow, path, outdir, clobber, verbosity, start, nthreads, mem_che
             console.print()
 
         data = perform_step_on_object(
-            data, fnc, params, clobber, step, nthreads, outdir, name=stepname, mem_check=mem_check
+            data,
+            fnc,
+            params,
+            clobber,
+            step,
+            nthreads,
+            outdir,
+            name=stepname,
+            mem_check=mem_check,
         )
         console.print()
 
