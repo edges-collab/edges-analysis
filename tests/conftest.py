@@ -64,13 +64,13 @@ def beam_settings() -> Path:
     return Path(__file__).parent / "data"
 
 
-
-def get_workflow(name: str, settings, tmp_path_factory, integration_test_data, beam_file, s11_path):
+def get_workflow(
+    name: str, settings, tmp_path_factory, integration_test_data, beam_file, s11_path
+):
     with open(settings / "integration_workflow.yaml") as fl:
         workflow = Template(fl.read())
 
     tmp_path = tmp_path_factory.mktemp("integration-workflow")
-
 
     txt = workflow.render(
         weather_file=str(integration_test_data / "weather.txt"),
@@ -83,7 +83,9 @@ def get_workflow(name: str, settings, tmp_path_factory, integration_test_data, b
     wf = yaml.load(txt, Loader=yaml.FullLoader)
 
     if not beam_file:
-        wf['steps'] = tuple(x for x in wf['steps'] if x['function'] != 'apply_beam_correction')
+        wf["steps"] = tuple(
+            x for x in wf["steps"] if x["function"] != "apply_beam_correction"
+        )
 
     txt = yaml.dump(wf)
 
@@ -97,12 +99,13 @@ def get_workflow(name: str, settings, tmp_path_factory, integration_test_data, b
 def workflow(integration_test_data: Path, settings: Path, tmp_path_factory) -> Path:
     return get_workflow(
         "main",
-        settings, 
-        tmp_path_factory, 
+        settings,
+        tmp_path_factory,
         integration_test_data,
         str(integration_test_data / "feko_Haslam408_ref70.00.h5"),
-        str(integration_test_data / "s11")
+        str(integration_test_data / "s11"),
     )
+
 
 @pytest.fixture(scope="session")
 def cal_workflow_nobeam(
@@ -110,15 +113,12 @@ def cal_workflow_nobeam(
 ) -> Path:
     return get_workflow(
         "nobeam",
-        settings, 
-        tmp_path_factory, 
+        settings,
+        tmp_path_factory,
         integration_test_data,
         "",
-        str(
-            integration_test_data / "S11_blade_low_band_2015_342_03_14.txt.csv"
-        )
+        str(integration_test_data / "S11_blade_low_band_2015_342_03_14.txt.csv"),
     )
-
 
 
 @pytest.fixture(scope="session")
@@ -127,11 +127,11 @@ def cal_workflow_s11format(
 ) -> Path:
     return get_workflow(
         "s11format",
-        settings, 
+        settings,
         tmp_path_factory,
-        integration_test_data, 
+        integration_test_data,
         "",
-        str(integration_test_data / "average_2015_342_03_14.txt")
+        str(integration_test_data / "average_2015_342_03_14.txt"),
     )
 
 
@@ -148,7 +148,7 @@ def run_workflow(
             str(integration_test_data / "2016_*_00_small.acq"),
             "-o",
             str(workflow.parent / "main"),
-            '--no-mem-check'
+            "--no-mem-check",
         ],
     )
 
@@ -166,12 +166,12 @@ def run_workflow_nobeam(
         [
             str(cal_workflow_nobeam),
             "-i",
-            str(run_workflow / '*.gsh5'),
+            str(run_workflow / "*.gsh5"),
             "-o",
             str(out),
-            '--start',
-            'dicke_calibration',
-            '--no-mem-check'
+            "--start",
+            "dicke_calibration",
+            "--no-mem-check",
         ],
     )
 
@@ -189,11 +189,11 @@ def run_workflow_s11format(
         [
             str(cal_workflow_s11format),
             "-i",
-            str(run_workflow / '*.gsh5'),
+            str(run_workflow / "*.gsh5"),
             "-o",
             str(out),
-            '--start',
-            'dicke_calibration',
+            "--start",
+            "dicke_calibration",
         ],
     )
 
@@ -214,45 +214,57 @@ def cal_step(run_workflow: Path) -> Tuple[GSData, GSData]:
 
 @pytest.fixture(scope="session")
 def cal_step_nobeam(run_workflow_nobeam: Path) -> Tuple[GSData, GSData]:
-    globs = sorted(x for x in (run_workflow_nobeam / "cal").glob("*.gsh5") if x.name.count(".") == 1)
+    globs = sorted(
+        x
+        for x in (run_workflow_nobeam / "cal").glob("*.gsh5")
+        if x.name.count(".") == 1
+    )
 
     return tuple(GSData.from_file(fl) for fl in globs)
 
 
 @pytest.fixture(scope="session")
 def cal_step_s11format(run_workflow_s11format: Path) -> Tuple[GSData, GSData]:
-    globs = sorted(x for x in (run_workflow_s11format / "cal").glob("*.gsh5") if x.name.count(".") == 1)
+    globs = sorted(
+        x
+        for x in (run_workflow_s11format / "cal").glob("*.gsh5")
+        if x.name.count(".") == 1
+    )
 
     return tuple(GSData.from_file(fl) for fl in globs)
 
 
 @pytest.fixture(scope="session")
 def model_step(run_workflow: Path) -> Tuple[GSData, GSData]:
-    globs = sorted(x for x in (run_workflow / "cal").glob("*.gsh5") if ".linlog." in x.name)
+    globs = sorted(
+        x for x in (run_workflow / "cal").glob("*.gsh5") if ".linlog." in x.name
+    )
 
     return tuple(GSData.from_file(fl) for fl in globs)
 
 
 @pytest.fixture(scope="session")
 def lstbin_step(run_workflow: Path) -> Tuple[GSData, GSData]:
-    globs = sorted(x for x in (run_workflow / "cal").glob("*.gsh5") if ".L15min." in x.name)
+    globs = sorted(
+        x for x in (run_workflow / "cal").glob("*.gsh5") if ".L15min." in x.name
+    )
 
     return tuple(GSData.from_file(fl) for fl in globs)
 
 
 @pytest.fixture(scope="session")
 def lstavg_step(run_workflow: Path) -> tuple[GSData]:
-    return GSData.from_file(run_workflow / "cal/lst-avg/lst_average.gsh5"),
+    return (GSData.from_file(run_workflow / "cal/lst-avg/lst_average.gsh5"),)
 
 
 @pytest.fixture(scope="session")
 def lstbin24_step(run_workflow: Path) -> tuple[GSData]:
-    return GSData.from_file(run_workflow / "cal/lst-avg/lstbin24hr.gsh5"),
+    return (GSData.from_file(run_workflow / "cal/lst-avg/lstbin24hr.gsh5"),)
 
 
 @pytest.fixture(scope="session")
 def final_step(run_workflow: Path) -> tuple[GSData]:
-    return GSData.from_file(run_workflow / "cal/lst-avg/lst_average.400kHz.gsh5"), 
+    return (GSData.from_file(run_workflow / "cal/lst-avg/lst_average.400kHz.gsh5"),)
 
 
 # @pytest.fixture(scope="session")

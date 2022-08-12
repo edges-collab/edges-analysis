@@ -163,12 +163,13 @@ class Stamp:
         return cls(**dct)
 
     @classmethod
-    def from_yaml_dict(cls, d: dict) -> 'Stamp':
+    def from_yaml_dict(cls, d: dict) -> "Stamp":
         """Create a Stamp object from a dictionary representing a history record."""
         d["timestamp"] = datetime.datetime.strptime(
             d["timestamp"], "%Y-%m-%dT%H:%M:%S.%f"
         )
         return cls(**d)
+
 
 @define(slots=False)
 class History:
