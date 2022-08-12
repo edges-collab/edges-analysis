@@ -186,6 +186,7 @@ class History:
 
     def __getstate__(self):
         """Return a dictionary representing the history."""
+        print("TYPES: ", [type(s) for s in self.stamps])
         return {"stamps": tuple(s.__getstate__() for s in self.stamps)}
 
     def __repr__(self):

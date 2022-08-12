@@ -61,6 +61,46 @@ def _get_files(pth: Path, filt=h5py.is_hdf5) -> list[Path]:
         return sorted(Path(fl) for fl in glob.glob(str(pth)) if filt(Path(fl)))
 
 
+def read_progress(fl: Path) -> list[dict]:
+    """Read the .progress file."""
+    with open(fl, "r") as openfile:
+        progress = yaml.load(openfile, Loader=yaml.FullLoader)
+
+    return progress
+
+
+def check_workflow_compatibility(
+    steps: tuple[dict], progressfile: Path, error: bool = True
+) -> str:
+    """Check the compatibility of the current steps with the progressfile."""
+    # progress should be a list very similar to "steps" except with a few extra
+    # keys (like "completed")
+    progress = read_progress(progressfile)
+
+    # where are we up to?
+    for p in progress:
+        if not p["completed"]:
+            first_incomplete = p
+
+    # We need to ensure that all steps before the first incomplete step are the same.
+    # Otherwise, we need to backtrack to that step.
+    for (s, p) in zip(steps, progress):
+        name = s.get("name", s.get("function"))
+
+        if p == first_incomplete:
+            return name
+
+        ps = {k: v for k, v in p.items() if k not in ["completed", "files"]}
+
+        if ps != s:
+            msg = (
+                f"Found inconsistency at step {name} betweeen workflow and progress "
+                "file.\n"
+            )
+            logger.warning(msg)
+            return name
+
+
 @main.command()
 @click.argument("workflow", type=click.Path(dir_okay=False, exists=True))
 @click.option(
