@@ -2,15 +2,14 @@
 from __future__ import annotations
 
 import glob
+import numpy as np
 import os
 import re
-from datetime import datetime
-from pathlib import Path
-
-import numpy as np
 from astropy.time import Time
+from datetime import datetime
 from edges_cal import types as tp
 from edges_cal.cal_coefficients import Calibrator
+from pathlib import Path
 
 from .. import beams, const
 from .. import coordinates as coords

@@ -1,13 +1,12 @@
 """Module for dealing with auxiliary data for EDGES observations."""
 from __future__ import annotations
 
-import logging
-import time
-from pathlib import Path
-
 import edges_cal.types as tp
+import logging
 import numpy as np
+import time
 from edges_io.auxiliary import read_thermlog_file, read_weather_file
+from pathlib import Path
 
 from .config import config
 from .coordinates import dt_from_jd, get_jd

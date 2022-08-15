@@ -1,6 +1,5 @@
-from pathlib import Path
-
 import requests
+from pathlib import Path
 
 from .config import config
 

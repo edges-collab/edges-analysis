@@ -6,17 +6,16 @@ control to us to interpolate how we wish.
 """
 from __future__ import annotations
 
-import logging
-from abc import ABC, abstractmethod
-from contextlib import contextmanager
-
 import attr
 import healpy as hp
+import logging
 import numpy as np
+from abc import ABC, abstractmethod
 from astropy import coordinates as apc
 from astropy.io import fits
 from astropy.utils.data import download_file
 from cached_property import cached_property
+from contextlib import contextmanager
 
 logger = logging.getLogger(__name__)
 

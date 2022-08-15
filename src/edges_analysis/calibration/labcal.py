@@ -1,9 +1,6 @@
 """Module providing routines for calibration of field data."""
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Callable, Sequence
-
 import attr
 import numpy as np
 from cached_property import cached_property
@@ -11,6 +8,8 @@ from edges_cal import CalibrationObservation, Calibrator
 from edges_cal import receiver_calibration_func as rcf
 from edges_cal import s11
 from edges_cal import types as tp
+from pathlib import Path
+from typing import Callable, Sequence
 
 from .s11 import AntennaS11
 
