@@ -8,9 +8,8 @@ for averaging, in order to make the average unbiased (given flags).
 
 from __future__ import annotations
 
-import contextlib
-
 import astropy
+import contextlib
 import numpy as np
 from edges_cal import modelling as mdl
 
@@ -77,7 +76,14 @@ def get_bin_edges(
 
         if isinstance(bins, int):
             # works if its an integer
-            return coords[::bins] * unit  # don't want to add extra bits at the end.
+            if len(coords) % bins == 0:
+                edges = coords[::bins]
+                return (
+                    np.concatenate((edges, [edges[-1] + (edges[-1] - edges[-2])]))
+                    * unit
+                )
+            else:
+                return coords[::bins]
         if unit != 1:
             with contextlib.suppress(AttributeError):
                 bins = bins.to_value(unit)

@@ -7,19 +7,15 @@ key methods for data selection, I/O, and analysis.
 """
 from __future__ import annotations
 
-import datetime
-import functools
-import logging
-from functools import cached_property, partial
-from pathlib import Path
-from typing import Callable, Iterable, Literal
-
 import astropy
 import astropy.units as un
+import datetime
 import edges_cal
 import edges_cal.modelling as mdl
 import edges_io
+import functools
 import h5py
+import logging
 import numpy as np
 import read_acq
 import yaml
@@ -29,6 +25,9 @@ from attrs import asdict, cmp_using
 from attrs import converters as cnv
 from attrs import define, evolve, field
 from attrs import validators as vld
+from functools import cached_property, partial
+from pathlib import Path
+from typing import Callable, Iterable, Literal
 
 from . import __version__
 from . import coordinates as crd
@@ -44,16 +43,30 @@ class _Register:
         self.kind = kind
         functools.update_wrapper(self, func, updated=())
 
-    def __call__(self, *args, message: str = "", **kw) -> GSData:
+    def __call__(self, *args, message: str = "", **kw) -> GSData | list[GSData]:
         newdata = self.func(*args, **kw)
 
-        return newdata.update(
-            history={
-                "message": message,
-                "function": self.func.__name__,
-                "parameters": kw,
-            }
-        )
+        if isinstance(newdata, GSData):
+            return newdata.update(
+                history={
+                    "message": message,
+                    "function": self.func.__name__,
+                    "parameters": kw,
+                }
+            )
+        elif all(isinstance(d, GSData) for d in newdata):
+            return [
+                nd.update(
+                    history={
+                        "message": message,
+                        "function": self.func.__name__,
+                        "parameters": kw,
+                    }
+                )
+                for nd in newdata
+            ]
+        else:
+            raise ValueError(f"{self.func.__name__} returned {newdata}")
 
 
 GSDATA_PROCESSORS = {}
@@ -801,7 +814,7 @@ class GSData:
     @cached_property
     def gha(self) -> np.ndarray:
         """The GHA's of the observations."""
-        return crd.lst2gha(self.lst_array)
+        return crd.lst2gha(self.lst_array.hour)
 
     def get_moon_azel(self) -> tuple[np.ndarray, np.ndarray]:
         """Get the Moon's azimuth and elevation for each time in deg."""
@@ -907,31 +920,6 @@ class GSData:
             out = ":".join(out.split(":")[:-1])
 
         return out
-
-    @gsregister("supplement")
-    def add_model(self, *, model: mdl.Model, append_to_file: bool | None = None):
-        """Return a new GSData instance which contains a data model."""
-        new = self.update(data_model=GSDataModel.from_gsdata(model, self))
-
-        if append_to_file is None:
-            append_to_file = new.filename is not None
-
-        if append_to_file and new.filename is None:
-            raise ValueError(
-                "Cannot append to file without a filename specified on the object!"
-            )
-
-        if append_to_file:
-            with h5py.File(new.filename, "a") as fl:
-                if "data_model" in fl.keys():
-                    logger.warning(
-                        f"Data model already exists in {new.filename}, not overwriting."
-                    )
-
-                else:
-                    new.data_model.write(fl, "data_model")
-
-        return new
 
     def add_flags(
         self, filt: str, flags: np.ndarray, append_to_file: bool | None = None
@@ -1113,23 +1101,40 @@ class GSDataModel:
 
     def write(self, fl: h5py.File | h5py.Group, path: str = ""):
         """Write the object to an HDF5 file, potentially to a particular path."""
-        if path:
-            grp = fl.create_group(path)
-        else:
-            grp = fl
-
+        grp = fl.create_group(path) if path else fl
         grp.attrs["model"] = yaml.dump(self.model)
         grp.create_dataset("parameters", data=self.parameters)
 
     @classmethod
     def from_h5(cls, fl: h5py.File | h5py.Group, path: str = "") -> GSDataModel:
         """Read the object from an HDF5 file, potentially from a particular path."""
-        if path:
-            grp = fl[path]
-        else:
-            grp = fl
-
+        grp = fl[path] if path else fl
         model = yaml.load(grp.attrs["model"], Loader=yaml.FullLoader)
-        params = grp["parameters"][...]
-
+        params = grp["parameters"][Ellipsis]
         return cls(model=model, parameters=params)
+
+
+@gsregister("supplement")
+def add_model(data: GSData, *, model: mdl.Model, append_to_file: bool | None = None):
+    """Return a new GSData instance which contains a data model."""
+    new = data.update(data_model=GSDataModel.from_gsdata(model, data))
+
+    if append_to_file is None:
+        append_to_file = new.filename is not None
+
+    if append_to_file and new.filename is None:
+        raise ValueError(
+            "Cannot append to file without a filename specified on the object!"
+        )
+
+    if append_to_file:
+        with h5py.File(new.filename, "a") as fl:
+            if "data_model" in fl.keys():
+                logger.warning(
+                    f"Data model already exists in {new.filename}, not overwriting."
+                )
+
+            else:
+                new.data_model.write(fl, "data_model")
+
+    return new
