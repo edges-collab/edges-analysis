@@ -580,7 +580,7 @@ def maxfm_filter(*, data: GSData, threshold: float = 200):
 
     if not np.any(fm_freq):
         return np.zeros(data.ntimes, dtype=bool)
-    
+
     fm_power = data.spectra[..., fm_freq]
 
     avg = (fm_power[..., 2:] + fm_power[..., :-2]) / 2
