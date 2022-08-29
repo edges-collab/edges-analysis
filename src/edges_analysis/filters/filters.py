@@ -75,7 +75,7 @@ class _GSDataFilter:
             if np.all(flags):
                 logger.warning(
                     f"{data.get_initial_yearday(hours=True)} was fully flagged "
-                    "during {self.func.__name__} filter"
+                    f"during {self.func.__name__} filter"
                 )
             else:
                 sz = outflags.size / 100

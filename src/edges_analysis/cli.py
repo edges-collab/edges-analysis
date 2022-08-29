@@ -76,14 +76,14 @@ def write_progressfile(outdir: Path, steps: tuple[dict], complete: dict | None =
 
     for step in steps:
         if step["name"] in complete:
-            progress.append(**{**step, **{"files": complete[step["name"]]}})
+            progress.append({**step, **{"files": complete[step["name"]]}})
         elif "files" in step:
             progress.append(step)
         else:
-            progress.append(**{**step, **{"files": None}})
+            progress.append({**step, **{"files": []}})
 
     with open(outdir / "progressfile.yaml", "w") as fl:
-        yaml.dump(progress, fp=fl)
+        yaml.dump(progress, fl)
 
 
 def update_progressfile(outdir: Path, name: str, files: list[Path]):
@@ -109,14 +109,23 @@ def check_workflow_compatibility(
 ) -> str:
     """Check the compatibility of the current steps with the progressfile."""
     # progress should be a list very similar to "steps" except with a few extra
-    # keys (like "completed")
+    # keys (like "files")
     progress = read_progress(progressfile)
-
     # where are we up to?
     first_incomplete = None
+    look_for_it = True
     for p in progress:
-        if not p["files"]:
+        if not p["files"] and look_for_it:
             first_incomplete = p
+            look_for_it = False
+        elif p["files"]:
+            all_exist = all(Path(fl).exists() for fl in p["files"])
+            if look_for_it and not all_exist:
+                first_incomplete = p
+                look_for_it = False
+            elif all_exist:
+                look_for_it = True
+                first_incomplete = None
 
     # We need to ensure that all steps before the first incomplete step are the same.
     # Otherwise, we need to backtrack to that step.
@@ -145,9 +154,10 @@ def check_workflow_compatibility(
 
             return name
 
+        fls = [Path(fl) for fl in p["files"]]
         non_existent = [
-            str(fl.relative_to(progressfile.parent))
-            for fl in p["files"]
+            str(fl.relative_to(progressfile.absolute().parent))
+            for fl in fls
             if not fl.exists()
         ]
         if non_existent:
@@ -282,6 +292,8 @@ def process(
     if start is None:
         console.print("[green bold] Your workflow is already finished![/]")
         return
+    else:
+        console.print(f"Starting at '{start}'.")
 
     # Now, we need to update the existing progressfile
     progress = read_progress(outdir / "progressfile.yaml")
@@ -309,10 +321,10 @@ def process(
 
     else:
         for p in progress:
-            if p["files"]:
-                path = [Path(pp) for pp in p["files"]]
-            else:
+            if p["name"] == start:
                 break
+
+            path = [Path(pp) for pp in p["files"]]
 
         file_filter = h5py.is_hdf5
 
@@ -341,7 +353,12 @@ def process(
 
     console.print(Rule("Running Workflow"))
 
-    for istep, (step, stepname) in enumerate(zip(steps, all_names)):
+    # Remove all steps before the one we care about.
+    for i, step in enumerate(steps):
+        if step["name"] == start:
+            break
+
+    for istep, (step, stepname) in enumerate(zip(steps[i:], all_names[i:]), start=i):
         fncname = step["function"]
         params = step.get("params", {})
 
@@ -397,7 +414,9 @@ def process(
 )
 def fork(workflow, forked, outdir, symlink):
     """Fork the workflow."""
-    outdir = Path(outdir)
+    outdir = Path(outdir).absolute()
+    forked = Path(forked).absolute()
+    workflow = Path(workflow).absolute()
     steps = get_steps_from_workflow(workflow)
     first = check_workflow_compatibility(steps, forked, error=False)
 
@@ -415,10 +434,25 @@ def fork(workflow, forked, outdir, symlink):
         fls = [Path(fl) for fl in prg["files"]]
 
         for fl in fls:
+            outfile = outdir / fl.relative_to(forked.parent)
+
+            if not outfile.parent.exists():
+                outfile.parent.mkdir(parents=True)
+
             if symlink:
-                fl.relative_to(outdir).symlink_to(fl)
+                outfile.symlink_to(fl)
             else:
-                shutil.copy(fl, fl.relative_to(outdir))
+                shutil.copy(fl, outfile)
+
+    # Now copy over the progressfile, but update the locations.
+    shutil.copy(forked, outdir / "progressfile.yaml")
+    with open(outdir / "progressfile.yaml", "r") as fl:
+        txt = fl.read()
+
+    txt = txt.replace(str(forked.parent), str(outdir))
+
+    with open(outdir / "progressfile.yaml", "w") as fl:
+        fl.write(txt)
 
     console.print("Done. Please run the rest of the processing as normal.")
 
@@ -541,7 +575,7 @@ def perform_step_on_object(
     if "write" in step:
         # Update the progress file
         update_progressfile(
-            outdir, step["name"], [d.filename.absolute() for d in newdata]
+            outdir, step["name"], [str(d.filename.absolute()) for d in newdata]
         )
 
     # Some of the data is now potentially None, because it was all flagged or something
