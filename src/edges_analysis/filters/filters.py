@@ -469,8 +469,8 @@ def _peak_power_filter(
             f"The frequency range of the peak must be non-zero, got {peak_freq_range}"
         )
 
-    mask = (data.freq_array > peak_freq_range[0]) & (
-        data.freq_array <= peak_freq_range[1]
+    mask = (data.freq_array.value > peak_freq_range[0]) & (
+        data.freq_array.value <= peak_freq_range[1]
     )
 
     if not np.any(mask):
@@ -480,8 +480,8 @@ def _peak_power_filter(
     peak_power = spec.max(axis=-1)
 
     if mean_freq_range is not None:
-        mask = (data.freq_array > mean_freq_range[0]) & (
-            data.freq_array <= mean_freq_range[1]
+        mask = (data.freq_array.value > mean_freq_range[0]) & (
+            data.freq_array.value <= mean_freq_range[1]
         )
         if not np.any(mask):
             return np.zeros(data.ntimes, dtype=bool)
@@ -576,18 +576,17 @@ def maxfm_filter(*, data: GSData, threshold: float = 200):
     Compares the max exceeded power with the threshold and if it is greater
     than the threshold given, the integration will be flagged.
     """
-    fm_freq = (data.freq_array >= 88) & (data.freq_array <= 120)
+    fm_freq = (data.freq_array.value >= 88) & (data.freq_array.value <= 120)
     # freq mask between 80 and 120 MHz for the FM range
 
     if not np.any(fm_freq):
         return np.zeros(data.ntimes, dtype=bool)
-
+    
     fm_power = data.spectra[..., fm_freq]
-
     avg = (fm_power[:, 2:] + fm_power[:, :-2]) / 2
     fm_deviation_power = np.abs(fm_power[:, 1:-1] - avg)
-    maxfm = np.max(fm_deviation_power, axis=1)
-
+    
+    maxfm = np.max(fm_deviation_power, axis=-1)
     return maxfm > threshold
 
 
@@ -610,13 +609,13 @@ def rmsf_filter(
     Then rms is calculated from the mean that is eatimated
     using the standard deviation times initmodel.
     """
-    freq_mask = (data.freq_array >= freq_range[0]) & (data.freq_array <= freq_range[1])
+    freq_mask = (data.freq_array.value >= freq_range[0]) & (data.freq_array.value <= freq_range[1])
 
     if not np.any(freq_mask):
         return np.zeros(data.ntimes, dtype=bool)
 
     semi_calibrated_data = (data.spectra * tload) + tcal
-    freq = data.freq_array[freq_mask]
+    freq = data.freq_array.value[freq_mask]
     init_model = (freq / 75.0) ** -2.5
 
     T75 = np.sum(init_model * semi_calibrated_data[..., freq_mask], axis=-1) / np.sum(
@@ -643,14 +642,14 @@ def filter_150mhz(*, data: GSData, threshold: float):
     157 MHz (which is expected to be cleaner). If this ratio (RMS to mean) is greater
     than 200 times the threshold given, the integration will be flagged.
     """
-    if data.freq_array.max() < 157 * u.MHz:
+    if data.freq_array.value.max() < 157 * u.MHz:
         return np.zeros(data.ntimes, dtype=bool)
 
-    freq_mask = (data.freq_array >= 152.75) & (data.freq_array <= 154.25)
+    freq_mask = (data.freq_array.value >= 152.75) & (data.freq_array.value <= 154.25)
     mean = np.mean(data.spectra[..., freq_mask], axis=-1)
     rms = np.sqrt(np.mean((data.spectra[..., freq_mask] - mean) ** 2))
 
-    freq_mask2 = (data.freq_array >= 156.25) & (data.freq_array <= 157.75)
+    freq_mask2 = (data.freq_array.value >= 156.25) & (data.freq_array.value <= 157.75)
     av = np.mean(data.spectrum[..., freq_mask2], axis=-1)
     d = 200.0 * np.sqrt(rms) / av
 
@@ -677,7 +676,7 @@ def power_percent_filter(
 
     p0 = data.spectra[data.loads.index("ant")]
 
-    mask = (data.freq_array > freq_range[0]) & (data.freq_array <= freq_range[1])
+    mask = (data.freq_array.value > freq_range[0]) & (data.freq_array.value <= freq_range[1])
 
     if not np.any(mask):
         return np.zeros(data.ntimes, dtype=bool)
