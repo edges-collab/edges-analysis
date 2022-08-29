@@ -1,23 +1,22 @@
 """CLI routines for edges-analysis."""
 from __future__ import annotations
 
+import click
 import glob
+import h5py
 import inspect
 import logging
 import os
-import time
-from collections import defaultdict
-from functools import partial
-from pathlib import Path
-from typing import Callable
-
-import click
-import h5py
 import psutil
+import shutil
+import time
 import tqdm
 import yaml
+from collections import defaultdict
 from edges_io import io
+from functools import partial
 from jinja2 import Template
+from pathlib import Path
 from pathos.multiprocessing import ProcessPool as Pool
 from rich import box
 from rich.console import Console
@@ -25,6 +24,7 @@ from rich.logging import RichHandler
 from rich.panel import Panel
 from rich.rule import Rule
 from rich.table import Table
+from typing import Callable
 
 from . import const
 from .aux_data import WeatherError
@@ -69,6 +69,41 @@ def read_progress(fl: Path) -> list[dict]:
     return progress
 
 
+def write_progressfile(outdir: Path, steps: tuple[dict], complete: dict | None = None):
+    """Write out the progress file."""
+    complete = complete or {}
+    progress = []
+
+    for step in steps:
+        if step["name"] in complete:
+            progress.append(**{**step, **{"files": complete[step["name"]]}})
+        elif "files" in step:
+            progress.append(step)
+        else:
+            progress.append(**{**step, **{"files": None}})
+
+    with open(outdir / "progressfile.yaml", "w") as fl:
+        yaml.dump(progress, fp=fl)
+
+
+def update_progressfile(outdir: Path, name: str, files: list[Path]):
+    """Update the progress file."""
+    prg = read_progress(outdir / "progressfile.yaml")
+
+    names = [p["name"] for p in prg]
+
+    if name not in names:
+        raise ValueError(f"Progress file has no step called '{name}'")
+
+    write_progressfile(outdir, prg, {name: files})
+
+
+class WorkflowProgressError(RuntimeError):
+    """Exception raised when the workflow and progress files are discrepant."""
+
+    pass
+
+
 def check_workflow_compatibility(
     steps: tuple[dict], progressfile: Path, error: bool = True
 ) -> str:
@@ -78,8 +113,9 @@ def check_workflow_compatibility(
     progress = read_progress(progressfile)
 
     # where are we up to?
+    first_incomplete = None
     for p in progress:
-        if not p["completed"]:
+        if not p["files"]:
             first_incomplete = p
 
     # We need to ensure that all steps before the first incomplete step are the same.
@@ -87,18 +123,65 @@ def check_workflow_compatibility(
     for (s, p) in zip(steps, progress):
         name = s.get("name", s.get("function"))
 
+        # If everything is consistent up to the first incomplete step, we're good to
+        # go from there.
         if p == first_incomplete:
             return name
 
-        ps = {k: v for k, v in p.items() if k not in ["completed", "files"]}
+        ps = {k: v for k, v in p.items() if k not in ["files"]}
 
+        # Otherwise, if there's an inconsistency, we have to go back to the step that
+        # is inconsistent -- if it has changed, then we have to re-run it.
         if ps != s:
             msg = (
                 f"Found inconsistency at step {name} betweeen workflow and progress "
-                "file.\n"
+                f"file.\nStep Definition:\n{yaml.dump(s)}\n"
+                f"Progress Definition:\n{yaml.dump(ps)}"
             )
-            logger.warning(msg)
+            if error:
+                raise WorkflowProgressError(msg)
+            else:
+                logger.warning(msg)
+
             return name
+
+        non_existent = [
+            str(fl.relative_to(progressfile.parent))
+            for fl in p["files"]
+            if not fl.exists()
+        ]
+        if non_existent:
+            fls = "\n\t".join(non_existent)
+            msg = f"Non-existent output files for step '{name}':\n\t{fls}"
+            if error:
+                raise WorkflowProgressError(msg)
+            else:
+                logger.warning(msg)
+
+            return name
+    else:
+        return None
+
+
+def get_steps_from_workflow(workflow: Path) -> tuple[dict]:
+    """Read the steps from a workflow."""
+    with open(workflow) as fl:
+        workflowd = yaml.load(fl, Loader=yaml.FullLoader)
+
+    global_params = workflowd.pop("globals", {})
+
+    with open(workflow) as fl:
+        txt = Template(fl.read())
+        txt = txt.render(globals=global_params)
+        workflow = yaml.load(txt, Loader=yaml.FullLoader)
+
+    steps = workflow.pop("steps")
+
+    for step in steps:
+        if "name" not in step:
+            step["name"] = step["function"]
+
+    return steps
 
 
 @main.command()
@@ -137,7 +220,26 @@ def check_workflow_compatibility(
 @click.option(
     "--mem-check/--no-mem-check", default=True, help="Whether to perform a memory check"
 )
-def process(workflow, path, outdir, clobber, verbosity, start, nthreads, mem_check):
+@click.option(
+    "-e/-E",
+    "--exit-on-inconsistent/--ignore-inconsistent",
+    default=False,
+    help=(
+        "Whether to immediately exit if any *complete* step is inconsistent with the "
+        "progressfile."
+    ),
+)
+def process(
+    workflow,
+    path,
+    outdir,
+    clobber,
+    verbosity,
+    start,
+    nthreads,
+    mem_check,
+    exit_on_inconsistent,
+):
     """Process a dataset to the STEP level of averaging/filtering using SETTINGS.
 
     WORKFLOW
@@ -156,19 +258,8 @@ def process(workflow, path, outdir, clobber, verbosity, start, nthreads, mem_che
 
     console.print(Rule("Setting Up"))
 
-    with open(workflow) as fl:
-        workflowd = yaml.load(fl, Loader=yaml.FullLoader)
-
-    global_params = workflowd.pop("globals", {})
-
-    with open(workflow) as fl:
-        txt = Template(fl.read())
-        txt = txt.render(globals=global_params)
-        workflow = yaml.load(txt, Loader=yaml.FullLoader)
-
-    steps = workflow.pop("steps")
-
-    all_names = [step.get("name", step["function"]).lower() for step in steps]
+    steps = get_steps_from_workflow(workflow)
+    all_names = [step["name"].lower() for step in steps]
     for name in all_names:
         if all_names.count(name) > 1:
             raise ValueError(
@@ -176,38 +267,71 @@ def process(workflow, path, outdir, clobber, verbosity, start, nthreads, mem_che
                 "Please give one of the steps an explicit 'name'."
             )
 
-    if start:
-        if start.lower() not in all_names:
-            logger.error(f"Step {start} not found in workflow")
-            return
-        start_step = all_names.index(start.lower())
-        steps = steps[start_step:]
-        all_names = all_names[start_step:]
+    # First, write out a progress file if it doesn't exist.
+    outdir = Path(outdir)
 
-    if steps[0]["function"] == "convert":
+    if not (outdir / "progressfile.yaml").exists():
+        write_progressfile(outdir, steps)
+
+    # Check for inconsistencies between progressfile and workflow. Also get the first
+    # step that is incomplete/inconsistent.
+    start = check_workflow_compatibility(
+        steps, outdir / "progressfile.yaml", error=exit_on_inconsistent
+    )
+
+    if start is None:
+        console.print("[green bold] Your workflow is already finished![/]")
+        return
+
+    # Now, we need to update the existing progressfile
+    progress = read_progress(outdir / "progressfile.yaml")
+    completed = {}
+    for s in progress:
+        if s["name"] == start:
+            break
+        completed[s["name"]] = s["files"]
+
+    write_progressfile(outdir, steps, complete=completed)
+    progress = read_progress(outdir / "progressfile.yaml")
+
+    # Get the starting step (not just name)
+    for start_step in steps:
+        if start_step["name"] == start:
+            break
+
+    if start == "convert":
+        # Using convert means we're getting the files raw from somewhere else.
+        # Otherwise, we're referencing files inside the working directory.
+        path = [Path(p) for p in path]
 
         def file_filter(pth: Path):
             return pth.suffix[1:] in io.Spectrum.supported_formats
 
     else:
+        for p in progress:
+            if p["files"]:
+                path = [Path(pp) for pp in p["files"]]
+            else:
+                break
+
         file_filter = h5py.is_hdf5
 
     # Get input files
-    path = [Path(p) for p in path]
     input_files = sum((_get_files(p, filt=file_filter) for p in path), [])
 
     if not input_files:
         logger.error("No input files found!")
         return
 
-    console.print("[bold]Input Files:")
-    for fl in input_files:
-        console.print(f"   {fl}")
-    console.print()
+    if start == "convert":
+        console.print("[bold]Input Files:")
+        for fl in input_files:
+            console.print(f"   {fl}")
+        console.print()
 
     # First run either convert or read function
     # TODO: this is bad memory-wise (reads everything in up-front, should be chunked)
-    if steps[0]["function"] == "convert":
+    if start == "convert":
         step0 = steps.pop(0)
         params = step0.get("params", {})
         params.update({"telescope_location": const.edges_location})
@@ -251,6 +375,52 @@ def process(workflow, path, outdir, clobber, verbosity, start, nthreads, mem_che
             mem_check=mem_check,
         )
         console.print()
+
+
+@main.command()
+@click.argument("workflow", type=click.Path(dir_okay=False, exists=True))
+@click.argument("forked", type=click.Path(dir_okay=False, exists=True))
+@click.option(
+    "-o",
+    "--outdir",
+    default=".",
+    type=click.Path(dir_okay=True, file_okay=False),
+    help="""The directory into which to save the outputs. Relative paths in the workflow
+    are deemed relative to this directory.
+    """,
+)
+@click.option(
+    "-s/-c",
+    "--symlink/--copy",
+    help="Whether to symlink the already-computed files.",
+    default=True,
+)
+def fork(workflow, forked, outdir, symlink):
+    """Fork the workflow."""
+    outdir = Path(outdir)
+    steps = get_steps_from_workflow(workflow)
+    first = check_workflow_compatibility(steps, forked, error=False)
+
+    console.print(
+        f"Forking workflow at {forked.parent} to new workflow {workflow.name}."
+    )
+    console.print(f"First deviating or unperformed step: {first}")
+
+    # Now, for all the files in steps up to the first, copy them over:
+    progress = read_progress(forked)
+    for prg in progress:
+        if prg["name"] == first:
+            break
+
+        fls = [Path(fl) for fl in prg["files"]]
+
+        for fl in fls:
+            if symlink:
+                fl.relative_to(outdir).symlink_to(fl)
+            else:
+                shutil.copy(fl, fl.relative_to(outdir))
+
+    console.print("Done. Please run the rest of the processing as normal.")
 
 
 def perform_step_on_object(
@@ -309,11 +479,11 @@ def perform_step_on_object(
 
     if fnc.kind == "gather":
         data = fnc(*data, **params)
-        write_data(data, step)
+        data = write_data(data, step)
         return [data]
 
     if fnc.kind == "filter":
-        params = {**params, "flag_id": name}
+        params = {**params, "flag_id": name, "write": True}
 
     this_fnc = partial(fnc, **params)
 
@@ -333,7 +503,6 @@ def perform_step_on_object(
 
         pr = psutil.Process()
 
-        print("MEM_CHECK: ", mem_check)
         if mem_check:
             paused = False
             if psutil.virtual_memory().available < 4 * 1024**3:
@@ -368,6 +537,12 @@ def perform_step_on_object(
             mp(run_process_with_memory_checks, data), total=len(data), unit="files"
         )
     )
+
+    if "write" in step:
+        # Update the progress file
+        update_progressfile(
+            outdir, step["name"], [d.filename.absolute() for d in newdata]
+        )
 
     # Some of the data is now potentially None, because it was all flagged or something
     return [d for d in newdata if d is not None]
