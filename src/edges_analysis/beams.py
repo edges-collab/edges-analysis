@@ -1,14 +1,12 @@
 """Beam models and chromaticity corrections."""
 from __future__ import annotations
 
-import hashlib
-import logging
-from pathlib import Path
-
 import astropy.coordinates as apc
 import astropy.time as apt
 import attr
 import h5py
+import hashlib
+import logging
 import numpy as np
 import scipy.interpolate as spi
 from astropy import units as u
@@ -18,6 +16,7 @@ from edges_cal import types as tp
 from edges_cal.tools import vld_unit
 from edges_io.h5 import HDF5Object
 from methodtools import lru_cache
+from pathlib import Path
 from tqdm import tqdm
 
 from . import const

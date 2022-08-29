@@ -3,19 +3,18 @@
 from __future__ import annotations
 
 import abc
-import logging
-from pathlib import Path
-from typing import Sequence
-
 import h5py
+import logging
 import numpy as np
 import yaml
 from attrs import define, field
 from edges_cal import types as tp
 from edges_cal.modelling import FourierDay, LinLog, Model
+from pathlib import Path
+from typing import Sequence
 
 from ..data import DATA_PATH
-from ..gsdata import GSData, gsregister
+from ..gsdata import GSData, add_model, gsregister
 from .filters import chunked_iterative_model_filter, gsdata_filter
 
 logger = logging.getLogger(__name__)
@@ -153,7 +152,9 @@ class GHAModelFilterInfo:
         self._validate_inputs()
 
     def _validate_inputs(self) -> bool:
-        assert self.gha.shape == self.metric.shape == self.flags.shape == self.std.shape
+        assert self.gha.shape == self.metric.shape
+        assert self.gha.shape == self.flags.shape
+        assert self.gha.shape == self.std.shape
         assert self.gha.ndim == 1
         assert self.gha.dtype == float
         assert self.metric.dtype == float
@@ -239,7 +240,7 @@ class FrequencyAggregator(metaclass=abc.ABCMeta):
         n_gha_total = sum(n_ghas)
 
         # Put all the GHA's together
-        gha = np.concatenate(tuple(d.gha for d in data))
+        gha = np.concatenate(tuple(d.gha[:, 0] for d in data))
 
         # Get the aggregated metrics for all input files.
         metric = np.empty(n_gha_total)
@@ -355,7 +356,7 @@ def get_gha_model_filter(
         n_sigma=flag_info.thresholds[-1],
         meta={
             **{
-                "infiles": ":".join(getattr(d, "filename", str(d)) for d in data),
+                "infiles": ":".join(str(getattr(d, "filename", str(d))) for d in data),
                 "gha_chunk_size": detrend_gha_chunk_size,
                 "detrend_model": detrend_metric_model,
                 "detrend_std_model": detrend_std_model,
@@ -375,12 +376,15 @@ class RMSAggregator(FrequencyAggregator):
 
     def aggregate_file(self, data: GSData) -> np.ndarray:
         """Compute the RMS over frequency for each integration in a file."""
-        data = data.add_model(self.model)
+        if data.data_unit not in ("temperature", "model_residuals"):
+            raise ValueError("Can only run total power aggregator on temperature data.")
 
-        mask = data.nsamples > 0
-        return np.sqrt(np.nanmean(data.resids[mask] ** 2, axis=-1))
+        data = add_model(data, model=self.model)
 
-        return data.get_model_rms(freq_range=self.band, model=self.model)
+        mask = data.nsamples[0, 0] > 0
+        r = data.resids[0, 0].copy()
+        r = np.where(mask, r, np.nan)
+        return np.sqrt(np.nanmean(r**2, axis=-1))
 
 
 @define(frozen=True)
@@ -413,14 +417,19 @@ class TotalPowerAggregator(FrequencyAggregator):
 
     def aggregate_file(self, data: GSData) -> np.ndarray:
         """Compute the total power over frequency for each integration in a file."""
-        freq_mask = (data.freq_array >= self.band[0]) & (data.freq_array < self.band[1])
+        if data.data_unit not in ("temperature", "model_residuals"):
+            raise ValueError("Can only run total power aggregator on temperature data.")
 
-        weights = np.sum(data.nsamples[..., freq_mask], axis=-1)
+        freqs = data.freq_array.to_value("MHz")
+        freq_mask = (freqs >= self.band[0]) & (freqs < self.band[1])
+
+        weights = np.sum(data.nsamples[0, 0, :, freq_mask].T, axis=-1)
         return np.where(
             weights > 0,
             (
                 np.sum(
-                    data.spectra[..., freq_mask] * data.nsamples[..., freq_mask],
+                    data.spectra[0, 0, :, freq_mask].T
+                    * data.nsamples[0, 0, :, freq_mask].T,
                     axis=-1,
                 )
                 / weights

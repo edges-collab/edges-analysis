@@ -1,10 +1,9 @@
 """Functions defining expected losses from the instruments."""
 from __future__ import annotations
 
-from pathlib import Path
-
 import numpy as np
 from edges_cal import reflection_coefficient as rc
+from pathlib import Path
 from scipy import integrate
 
 from ..config import config

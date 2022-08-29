@@ -1,7 +1,6 @@
-from pathlib import Path
-
 import numpy as np
 from astropy import units as u
+from pathlib import Path
 
 from edges_analysis import beams
 from edges_analysis.calibration import loss

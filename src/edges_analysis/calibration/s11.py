@@ -1,8 +1,6 @@
 """Corrections for S11 measurements."""
 from __future__ import annotations
 
-from typing import Sequence
-
 import attr
 import numpy as np
 from astropy import units as u
@@ -16,6 +14,7 @@ from edges_cal.s11 import (
     VNAReading,
 )
 from edges_cal.tools import FrequencyRange
+from typing import Sequence
 
 
 @attr.s

@@ -1,23 +1,21 @@
 """CLI routines for edges-analysis."""
 from __future__ import annotations
 
+import click
 import glob
+import h5py
 import inspect
 import logging
 import os
-import time
-from collections import defaultdict
-from functools import partial
-from pathlib import Path
-from typing import Callable
-
-import click
-import h5py
 import psutil
+import time
 import tqdm
 import yaml
+from collections import defaultdict
 from edges_io import io
+from functools import partial
 from jinja2 import Template
+from pathlib import Path
 from pathos.multiprocessing import ProcessPool as Pool
 from rich import box
 from rich.console import Console
@@ -25,6 +23,7 @@ from rich.logging import RichHandler
 from rich.panel import Panel
 from rich.rule import Rule
 from rich.table import Table
+from typing import Callable
 
 from . import const
 from .aux_data import WeatherError

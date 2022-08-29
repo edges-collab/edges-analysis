@@ -10,3 +10,4 @@ finally:
 
 from . import averaging, beams, calibration, coordinates, filters, sky_models, tools
 from .config import config as cfg
+from .gsdata import GSData, gsregister

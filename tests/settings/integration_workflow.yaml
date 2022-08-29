@@ -5,7 +5,7 @@ steps:
 
   - function: select_freqs
     params:
-      range: [40, 100]
+      range: [40, 200]
 
   - function: add_weather_data
     params:
@@ -17,6 +17,10 @@ steps:
     write: "{prev_stem}.gsh5"
 
   # CALIBRATION BLOCK
+  - function: select_freqs
+    name: crop_50mhz
+    params:
+      range: [50, 100]
   - function: dicke_calibration
   - function: apply_noise_wave_calibration
     params:

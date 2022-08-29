@@ -1,5 +1,6 @@
-import numpy as np
 import pytest
+
+import numpy as np
 from edges_cal import modelling as mdl
 from pytest_cases import fixture_ref as fxref
 from pytest_cases import parametrize
@@ -167,7 +168,7 @@ class TestBinArray:
         outc, mean, wght = averaging.bin_array_unbiased_irregular(
             corrupt, coords=coords, axis=-1, bins=11
         )
-        assert mean.shape == outc.shape == wght.shape == (50, 46)
+        assert mean.shape == outc.shape == wght.shape == (50, 45)
 
         outc, mean, wght = averaging.bin_array_unbiased_irregular(
             corrupt, coords=coords, axis=-1, bins=1.0
