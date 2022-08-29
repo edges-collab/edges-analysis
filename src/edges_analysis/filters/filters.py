@@ -616,7 +616,7 @@ def rmsf_filter(
         return np.zeros(data.ntimes, dtype=bool)
 
     semi_calibrated_data = (data.spectra * tload) + tcal
-    freq = data.freq_array[freq_mask]
+    freq = data.freq_array.value[freq_mask]
     init_model = (freq / 75.0) ** -2.5
 
     T75 = np.sum(init_model * semi_calibrated_data[..., freq_mask], axis=-1) / np.sum(
@@ -643,7 +643,7 @@ def filter_150mhz(*, data: GSData, threshold: float):
     157 MHz (which is expected to be cleaner). If this ratio (RMS to mean) is greater
     than 200 times the threshold given, the integration will be flagged.
     """
-    if data.freq_array.max() < 157 * u.MHz:
+    if data.freq_array.value.max() < 157 * u.MHz:
         return np.zeros(data.ntimes, dtype=bool)
 
     freq_mask = (data.freq_array >= 152.75 * u.MHz) & (

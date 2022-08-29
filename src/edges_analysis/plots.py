@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import datetime as dt
-
 import edges_cal.modelling as mdl
 import healpy as hp
 import matplotlib.pyplot as plt
