@@ -126,7 +126,6 @@ def check_workflow_compatibility(
             elif all_exist:
                 look_for_it = True
                 first_incomplete = None
-  
 
     # We need to ensure that all steps before the first incomplete step are the same.
     # Otherwise, we need to backtrack to that step.
@@ -359,7 +358,7 @@ def process(
     for i, step in enumerate(steps):
         if step["name"] == start:
             break
-    
+
     for istep, (step, stepname) in enumerate(zip(steps[i:], all_names[i:]), start=i):
         fncname = step["function"]
         params = step.get("params", {})

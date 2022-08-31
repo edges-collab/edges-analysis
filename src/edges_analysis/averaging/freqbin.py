@@ -6,8 +6,10 @@ from astropy import units as un
 
 <<<<<<< Updated upstream
 from ..gsdata import GSData, add_model, gsregister
+
 =======
-from ..gsdata import GSData, gsregister, add_model
+from ..gsdata import GSData, add_model, gsregister
+
 >>>>>>> Stashed changes
 from .averaging import bin_array_biased_regular, bin_freq_unbiased_regular
 
