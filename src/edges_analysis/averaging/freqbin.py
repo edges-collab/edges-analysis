@@ -4,7 +4,11 @@ from __future__ import annotations
 import edges_cal.modelling as mdl
 from astropy import units as un
 
+<<<<<<< Updated upstream
 from ..gsdata import GSData, add_model, gsregister
+=======
+from ..gsdata import GSData, gsregister, add_model
+>>>>>>> Stashed changes
 from .averaging import bin_array_biased_regular, bin_freq_unbiased_regular
 
 
@@ -57,7 +61,11 @@ def freq_bin_with_models(
         raise ValueError("Cannot bin with models without a model in the data!")
 
     if data.data_model is None:
+<<<<<<< Updated upstream
         data = add_model(data, model=model, append_to_file=False)
+=======
+        data = add_model(data,model=model, append_to_file=False)
+>>>>>>> Stashed changes
 
     # Averaging data within GHA bins
     f, weights, _, resids, params = bin_freq_unbiased_regular(

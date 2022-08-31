@@ -126,6 +126,7 @@ def check_workflow_compatibility(
             elif all_exist:
                 look_for_it = True
                 first_incomplete = None
+  
 
     # We need to ensure that all steps before the first incomplete step are the same.
     # Otherwise, we need to backtrack to that step.
@@ -348,6 +349,7 @@ def process(
         params = step0.get("params", {})
         params.update({"telescope_location": const.edges_location})
         data = [GSData.from_file(f, **params) for f in input_files]
+        start = steps[0]["name"]
     else:
         data = [GSData.from_file(f) for f in input_files]
 
@@ -357,7 +359,7 @@ def process(
     for i, step in enumerate(steps):
         if step["name"] == start:
             break
-
+    
     for istep, (step, stepname) in enumerate(zip(steps[i:], all_names[i:]), start=i):
         fncname = step["function"]
         params = step.get("params", {})
