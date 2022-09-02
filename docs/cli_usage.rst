@@ -74,7 +74,7 @@ checkpoints).
 The typical envisaged usage of the ``process`` command, given a workflow file called
 ``workflow.yaml``, is::
 
-   $ edges-analysis process workflow.yaml \
+    $ edges-analysis process workflow.yaml \
          -i "/path/to/raw/data/2015_*.acq" \
          --outdir ./my_workflow \
          --nthreads 16
@@ -85,16 +85,41 @@ multiple ``-i`` options can be given. If you start with ``.acq`` files, be sure 
 write the output data files. All filenames given in the workflow are relative to this.
 It is the current directory by default.
 
-If you only want to run from a particular step, you can use the ``--start`` option::
+If you only want to run a portion of the workflow, you can specify ``--stop <NAME>``,
+where the name is the name of the step (or its function name) which is the last one you
+want to run.
 
-   $ edges-analysis process workflow.yaml \
-         -i "/path/to/last/write/*.gsh5" \
+You can *resume* the workflow by simply pointing to the same output directory without
+giving any inputs::
+
+    $ edges-analysis process workflow.yaml --outdir ./my_workflow
+
+Every time the workflow is run, a "progressfile.yaml" is written to the output
+directory, containing the full specification of the run, plus some extra metadata
+required to know what has already been run. You can add new input files to the workflow
+by adding new ``-i`` entries::
+
+    $ edges-analysis process workflow.yaml \
+         -i "/path/to/raw/data/2016_*.acq" \
          --outdir ./my_workflow \
-         --nthreads 16 \
-         --start the-first-invocation-of-foobar
+         --nthreads 16
 
-The value to ``--start`` must be the unique name of the step (remember this is just
-the function name by default).
+This will run all the 2016 files, and then combine them with the 2015 files as necessary.
+The 2015 files will not be reprocesed unless required (eg. when LST-averaging).
+
+If you'd prefer to completely restart the process with the new files, just use the
+``--restart`` option.
+
+The ``fork`` command
+~~~~~~~~~~~~~~~~~~~~
+
+If you want to change your workflow but *keep* the existing processing, you can "fork"
+the current working directory and start the new workflow from wherever it diverges from
+the original. To do this, use::
+
+    $ edges-analysis fork new-workflow.yaml ./my_workflow --output ./new_workflow
+
+Then, run the ``process`` command as normal with ``--output ./new_workflow``.
 
 Commands
 ~~~~~~~~

@@ -61,41 +61,67 @@ def _get_files(pth: Path, filt=h5py.is_hdf5) -> list[Path]:
         return sorted(Path(fl) for fl in glob.glob(str(pth)) if filt(Path(fl)))
 
 
-def read_progress(fl: Path) -> list[dict]:
+def read_progressfile(fl: Path) -> dict[str, dict]:
     """Read the .progress file."""
     with open(fl, "r") as openfile:
         progress = yaml.load(openfile, Loader=yaml.FullLoader)
 
+    progress = {p.pop("name"): p for p in progress}
     return progress
 
 
-def write_progressfile(outdir: Path, steps: tuple[dict], complete: dict | None = None):
-    """Write out the progress file."""
-    complete = complete or {}
-    progress = []
+def write_progressfile(progressfile: Path, progress: dict[str, dict]):
+    """Write the progress file."""
+    assert progressfile.name == "progressfile.yaml"
 
-    for step in steps:
-        if step["name"] in complete:
-            progress.append({**step, **{"files": complete[step["name"]]}})
-        elif "files" in step:
-            progress.append(step)
-        else:
-            progress.append({**step, **{"files": []}})
-
-    with open(outdir / "progressfile.yaml", "w") as fl:
+    progress = [{**{"name": k}, **v} for k, v in progress.items()]
+    with open(progressfile, "w") as fl:
         yaml.dump(progress, fl)
 
 
-def update_progressfile(outdir: Path, name: str, files: list[Path]):
+def create_progressfile(
+    progressfile: Path,
+    steps: dict[str, dict],
+    inputs: list[Path] = None,
+):
+    """Write out the progress file."""
+    progress = {name: {**p, **{"inout": []}} for name, p in steps.items()}
+    progress["convert"]["inout"] = [([], [str(p) for p in inputs])]
+
+    write_progressfile(progressfile, progress)
+
+
+def update_progressfile(
+    progressfile: Path, name: str, inout: list[tuple[list[Path], list[Path]]]
+):
     """Update the progress file."""
-    prg = read_progress(outdir / "progressfile.yaml")
+    prg = read_progressfile(progressfile)
 
-    names = [p["name"] for p in prg]
-
-    if name not in names:
+    if name not in prg:
         raise ValueError(f"Progress file has no step called '{name}'")
 
-    write_progressfile(outdir, prg, {name: files})
+    prg[name]["inout"] += [
+        ([str(p) for p in pair[0]], [str(p) for p in pair[1]]) for pair in inout
+    ]
+
+    if name == "convert":
+        # We also need to remove files that are gotten by combining datafile, because
+        # if we're adding new inputs, these files will end up changing.
+        blastoff = False
+        for k, v in prg.items():
+            if k == "convert":
+                continue
+
+            if GSDATA_PROCESSORS[v["function"].lower()].kind == "gather":
+                blastoff = True
+
+            if blastoff:
+                for fl in get_all_outputs(v["inout"]):
+                    if Path(fl).exists():
+                        Path(fl).unlink()
+                v["inout"] = []
+
+    write_progressfile(progressfile, prg)
 
 
 class WorkflowProgressError(RuntimeError):
@@ -104,73 +130,78 @@ class WorkflowProgressError(RuntimeError):
     pass
 
 
-def check_workflow_compatibility(
+def harmonize_workflow_with_steps(
     steps: tuple[dict], progressfile: Path, error: bool = True
-) -> str:
+):
     """Check the compatibility of the current steps with the progressfile."""
     # progress should be a list very similar to "steps" except with a few extra
     # keys (like "files")
-    progress = read_progress(progressfile)
-    # where are we up to?
-    first_incomplete = None
-    look_for_it = True
-    for p in progress:
-        if not p["files"] and look_for_it:
-            first_incomplete = p
-            look_for_it = False
-        elif p["files"]:
-            all_exist = all(Path(fl).exists() for fl in p["files"])
-            if look_for_it and not all_exist:
-                first_incomplete = p
-                look_for_it = False
-            elif all_exist:
-                look_for_it = True
-                first_incomplete = None
+    progress = read_progressfile(progressfile)
+    progressdicts = list(progress.values())
 
-    # We need to ensure that all steps before the first incomplete step are the same.
-    # Otherwise, we need to backtrack to that step.
-    for (s, p) in zip(steps, progress):
-        name = s.get("name", s.get("function"))
+    new_progress = {}
+    start_changing = False
+    for i, (sname, s) in enumerate(steps.items()):
+        if i >= len(progress):
+            # This is the case when new steps are added to the workflow since last run.
+            new_progress[sname] = {**s, **{"inout": []}}
+        else:
+            ps = {k: v for k, v in progressdicts[i].items() if k != "inout"}
+            if ps != s:
+                print("GOT A CONFLICT", ps, s)
+                start_changing = True
+                if error:
+                    raise WorkflowProgressError(
+                        "The workflow is in conflict with the progressfile at step "
+                        f"'{sname}'. To remove conflicting outputs and adopt new "
+                        "workflow, run with --ignore-conflicting. To keep the existing "
+                        "outputs and branch off with the new workflow, run the 'fork' "
+                        "command."
+                    )
 
-        # If everything is consistent up to the first incomplete step, we're good to
-        # go from there.
-        if p == first_incomplete:
-            return name
-
-        ps = {k: v for k, v in p.items() if k not in ["files"]}
-
-        # Otherwise, if there's an inconsistency, we have to go back to the step that
-        # is inconsistent -- if it has changed, then we have to re-run it.
-        if ps != s:
-            msg = (
-                f"Found inconsistency at step {name} betweeen workflow and progress "
-                f"file.\nStep Definition:\n{yaml.dump(s)}\n"
-                f"Progress Definition:\n{yaml.dump(ps)}"
-            )
-            if error:
-                raise WorkflowProgressError(msg)
+            if start_changing:
+                outputs = get_all_outputs(progressdicts[i]["inout"])
+                for fl in outputs:
+                    if str(progressfile.parent) in str(fl):  # ensure file is in outdir
+                        Path(fl).unlink(missing_ok=True)
+                new_progress[sname] = {**s, **{"inout": []}}
             else:
-                logger.warning(msg)
+                new_progress[sname] = progressdicts[i]
 
-            return name
+    write_progressfile(progressfile, new_progress)
 
-        fls = [Path(fl) for fl in p["files"]]
-        non_existent = [
-            str(fl.relative_to(progressfile.absolute().parent))
-            for fl in fls
-            if not fl.exists()
-        ]
-        if non_existent:
-            fls = "\n\t".join(non_existent)
-            msg = f"Non-existent output files for step '{name}':\n\t{fls}"
-            if error:
-                raise WorkflowProgressError(msg)
-            else:
-                logger.warning(msg)
 
-            return name
-    else:
-        return None
+def get_all_outputs(inout) -> list[str]:
+    """Get a list of output files from a step."""
+    return sum((p[1] for p in inout), []) if inout else []
+
+
+def get_all_inputs(inout) -> list[str]:
+    """Get a list of input files from a step."""
+    return sum((p[0] for p in inout), []) if inout else []
+
+
+def get_files_for_step(stepname: str, progress: dict[str, dict]) -> list[str]:
+    """Get all the files we need to read for a given step."""
+    # First, get most recent outputs.
+    names = list(progress.keys())
+    current_index = names.index(stepname)
+
+    potential_files = get_all_outputs(progress[stepname]["inout"])
+    final_files = []
+
+    def _check_fl(fl):
+        for p in list(progress.values())[current_index + 1 :]:
+            for inout in p["inout"]:
+                if fl in inout[0] and all(Path(x).exists for x in inout[1]):
+                    return False
+        return True
+
+    for fl in potential_files:
+        if _check_fl(fl):
+            final_files.append(fl)
+
+    return final_files
 
 
 def get_steps_from_workflow(workflow: Path) -> tuple[dict]:
@@ -191,7 +222,30 @@ def get_steps_from_workflow(workflow: Path) -> tuple[dict]:
         if "name" not in step:
             step["name"] = step["function"]
 
+    all_names = [step["name"].lower() for step in steps]
+    for name in all_names:
+        if all_names.count(name) > 1:
+            raise ValueError(
+                f"Duplicate step name {name}. "
+                "Please give one of the steps an explicit 'name'."
+            )
+
+    all_funcs = {step["function"].lower() for step in steps}
+    wrong_funcs = [
+        fnc for fnc in all_funcs if fnc not in GSDATA_PROCESSORS and fnc != "convert"
+    ]
+    if wrong_funcs:
+        raise ValueError(
+            f"Unknown functions in workflow: {wrong_funcs}.\n"
+            f"Available: {GSDATA_PROCESSORS.keys()}"
+        )
+
+    steps = {step.pop("name"): step for step in steps}
     return steps
+
+
+def _file_filter(pth: Path):
+    return pth.suffix[1:] in io.Spectrum.supported_formats
 
 
 @main.command()
@@ -218,14 +272,8 @@ def get_steps_from_workflow(workflow: Path) -> tuple[dict]:
     """,
 )
 @click.option(
-    "-c/-C",
-    "--clobber/--no-clobber",
-    help="Whether to overwrite any existing data at the output location",
-)
-@click.option(
     "-v", "--verbosity", default="info", help="level of verbosity of the logging"
 )
-@click.option("-s", "--start", default=None, help="Starting step of the workflow")
 @click.option("-j", "--nthreads", default=1, help="How many threads to use.")
 @click.option(
     "--mem-check/--no-mem-check", default=True, help="Whether to perform a memory check"
@@ -239,16 +287,31 @@ def get_steps_from_workflow(workflow: Path) -> tuple[dict]:
         "progressfile."
     ),
 )
+@click.option(
+    "-r/-a",
+    "--restart/--append",
+    default=False,
+    help=(
+        "whether any new input paths should be appended, or if everything should be "
+        "restarted with just those files."
+    ),
+)
+@click.option(
+    "--stop",
+    default=None,
+    type=str,
+    help="The name of the step at which to stop the workflow.",
+)
 def process(
     workflow,
     path,
     outdir,
-    clobber,
     verbosity,
-    start,
     nthreads,
     mem_check,
     exit_on_inconsistent,
+    restart,
+    stop,
 ):
     """Process a dataset to the STEP level of averaging/filtering using SETTINGS.
 
@@ -269,135 +332,96 @@ def process(
     console.print(Rule("Setting Up"))
 
     steps = get_steps_from_workflow(workflow)
-    all_names = [step["name"].lower() for step in steps]
-    for name in all_names:
-        if all_names.count(name) > 1:
-            raise ValueError(
-                f"Duplicate step name {name}. "
-                "Please give one of the steps an explicit 'name'."
-            )
+    outdir = Path(outdir)
+    if not outdir.exists():
+        outdir.mkdir(parents=True)
+
+    progressfile = outdir / "progressfile.yaml"
+
+    # Get input files (if any)
+    path = [Path(p) for p in path]
+    input_files = sum((_get_files(p, filt=_file_filter) for p in path), [])
 
     # First, write out a progress file if it doesn't exist.
-    outdir = Path(outdir)
+    if not progressfile.exists() or restart:
+        if not input_files:
+            raise ValueError(
+                "The first time a workflow is run, you need to provide "
+                "input files via -i or --path"
+            )
+        create_progressfile(progressfile, steps, input_files)
+    elif input_files:
+        # Here we're appending the input files.
+        update_progressfile(progressfile, "convert", [([], [x]) for x in input_files])
 
-    if not (outdir / "progressfile.yaml").exists():
-        write_progressfile(outdir, steps)
+    harmonize_workflow_with_steps(steps, progressfile, exit_on_inconsistent)
+    progress = read_progressfile(progressfile)
 
-    # Check for inconsistencies between progressfile and workflow. Also get the first
-    # step that is incomplete/inconsistent.
-    start = check_workflow_compatibility(
-        steps, outdir / "progressfile.yaml", error=exit_on_inconsistent
-    )
+    if stop and stop not in steps:
+        raise ValueError(
+            f"Your stopping step '{stop}' does not exist! "
+            f"Available: {list(steps.keys())}"
+        )
 
-    if start is None:
-        console.print("[green bold] Your workflow is already finished![/]")
-        return
-    else:
-        console.print(f"Starting at '{start}'.")
+    console.print("[bold]Input Files:")
+    input_files = get_all_outputs(progress["convert"]["inout"])
+    for fl in input_files:
+        console.print(f"   {fl}")
+    console.print()
 
-    # Now, we need to update the existing progressfile
-    progress = read_progress(outdir / "progressfile.yaml")
-    completed = {}
-    for s in progress:
-        if s["name"] == start:
-            break
-        completed[s["name"]] = s["files"]
-
-    write_progressfile(outdir, steps, complete=completed)
-    progress = read_progress(outdir / "progressfile.yaml")
-
-    # Get the starting step (not just name)
-    for start_step in steps:
-        if start_step["name"] == start:
-            break
-
-    if start == "convert":
-        # Using convert means we're getting the files raw from somewhere else.
-        # Otherwise, we're referencing files inside the working directory.
-        path = [Path(p) for p in path]
-
-        def file_filter(pth: Path):
-            return pth.suffix[1:] in io.Spectrum.supported_formats
-
-    else:
-        for p in progress:
-            if p["name"] == start:
-                break
-
-            path = [Path(pp) for pp in p["files"]]
-
-        file_filter = h5py.is_hdf5
-
-    # Get input files
-    input_files = sum((_get_files(p, filt=file_filter) for p in path), [])
-
-    if not input_files:
-        logger.error("No input files found!")
-        return
-
-    if start == "convert":
-        console.print("[bold]Input Files:")
-        for fl in input_files:
-            console.print(f"   {fl}")
-        console.print()
-
-    # First run either convert or read function
-    # TODO: this is bad memory-wise (reads everything in up-front, should be chunked)
-    if start == "convert":
-        step0 = steps.pop(0)
-        params = step0.get("params", {})
-        params.update({"telescope_location": const.edges_location})
-        data = [GSData.from_file(f, **params) for f in input_files]
-        start = steps[0]["name"]
-    else:
-        data = [GSData.from_file(f) for f in input_files]
-
-    console.print(Rule("Running Workflow"))
-
-    # Remove all steps before the one we care about.
-    for i, step in enumerate(steps):
-        if step["name"] == start:
-            break
-
-    for istep, (step, stepname) in enumerate(zip(steps[i:], all_names[i:]), start=i):
+    data: list[GSData] = []
+    for istep, (stepname, step) in enumerate(steps.items()):
         fncname = step["function"]
         params = step.get("params", {})
-
-        fnc = GSDATA_PROCESSORS.get(fncname.lower(), None)
-
-        if fnc is None:
-            raise ValueError(
-                f"Unknown function: {fncname}. Available: {GSDATA_PROCESSORS.keys()}"
-            )
-
-        console.print(f"[bold underline] {istep:>02}. {fncname.upper()} [/]")
-        if params:
-            console.print()
-            tab = Table(title="Settings", show_header=False)
-            tab.add_column()
-            tab.add_column()
-            for k, v in params.items():
-                tab.add_row(k, str(v))
-            console.print(tab)
-            console.print()
-
-        data = perform_step_on_object(
-            data,
-            fnc,
-            params,
-            clobber,
-            step,
-            nthreads,
-            outdir,
-            name=stepname,
-            mem_check=mem_check,
+        console.print(
+            f"[bold underline] {istep:>02}. {fncname.upper()} ({stepname})[/]"
         )
+
+        files = get_files_for_step(stepname, progress)
+
+        if data:
+
+            fnc = GSDATA_PROCESSORS[fncname.lower()]
+            if params:
+                console.print()
+                tab = Table(title="Settings", show_header=False)
+                tab.add_column()
+                tab.add_column()
+                for k, v in params.items():
+                    tab.add_row(k, str(v))
+                console.print(tab)
+                console.print()
+
+            data = perform_step_on_object(
+                data,
+                fnc,
+                params,
+                step,
+                nthreads,
+                outdir,
+                name=stepname,
+                mem_check=mem_check,
+            )
+        else:
+            if stepname == "convert":
+                params.update({"telescope_location": const.edges_location})
+                data = [GSData.from_file(f, **params) for f in files]
+                continue
+
+            console.print(f"{stepname} does not need to run on any files.")
+
+        # Add any files that were output by previous runs that need to be loaded now.
+        data += [GSData.from_file(f) for f in files]
+
         console.print()
+
+        if stepname == stop:
+            break
 
 
 @main.command()
 @click.argument("workflow", type=click.Path(dir_okay=False, exists=True))
-@click.argument("forked", type=click.Path(dir_okay=False, exists=True))
+@click.argument("forked", type=click.Path(dir_okay=True, file_okay=False, exists=True))
 @click.option(
     "-o",
     "--outdir",
@@ -407,53 +431,23 @@ def process(
     are deemed relative to this directory.
     """,
 )
-@click.option(
-    "-s/-c",
-    "--symlink/--copy",
-    help="Whether to symlink the already-computed files.",
-    default=True,
-)
-def fork(workflow, forked, outdir, symlink):
+def fork(workflow, forked, outdir):
     """Fork the workflow."""
     outdir = Path(outdir).absolute()
-    forked = Path(forked).absolute()
+    forked = Path(forked).absolute() / "progressfile.yaml"
+
+    # We copy the whole file structure. It's tempting to use symlinks to save space
+    # and time, BUT it's possible the new workflow will do filters different to the
+    # previous pipeline, which would update files in-place, and therefore follow the
+    # symlinks, changing the original files in the other working directory. This would
+    # be a mess.
+    # TODO: it may be useful in the future to catch this case in the add_filter function
+    # i.e. just check if the file is a symlink, and make a new file if so.
+    shutil.copytree(forked.parent, outdir)
+    newprogress = outdir / "progressfile.yaml"
     workflow = Path(workflow).absolute()
     steps = get_steps_from_workflow(workflow)
-    first = check_workflow_compatibility(steps, forked, error=False)
-
-    console.print(
-        f"Forking workflow at {forked.parent} to new workflow {workflow.name}."
-    )
-    console.print(f"First deviating or unperformed step: {first}")
-
-    # Now, for all the files in steps up to the first, copy them over:
-    progress = read_progress(forked)
-    for prg in progress:
-        if prg["name"] == first:
-            break
-
-        fls = [Path(fl) for fl in prg["files"]]
-
-        for fl in fls:
-            outfile = outdir / fl.relative_to(forked.parent)
-
-            if not outfile.parent.exists():
-                outfile.parent.mkdir(parents=True)
-
-            if symlink:
-                outfile.symlink_to(fl)
-            else:
-                shutil.copy(fl, outfile)
-
-    # Now copy over the progressfile, but update the locations.
-    shutil.copy(forked, outdir / "progressfile.yaml")
-    with open(outdir / "progressfile.yaml", "r") as fl:
-        txt = fl.read()
-
-    txt = txt.replace(str(forked.parent), str(outdir))
-
-    with open(outdir / "progressfile.yaml", "w") as fl:
-        fl.write(txt)
+    harmonize_workflow_with_steps(steps, newprogress, error=False)
 
     console.print("Done. Please run the rest of the processing as normal.")
 
@@ -462,7 +456,6 @@ def perform_step_on_object(
     data: GSData,
     fnc: Callable,
     params: dict,
-    clobber: bool,
     step: dict,
     nthreads: int,
     outdir: str,
@@ -478,6 +471,8 @@ def perform_step_on_object(
     step : dict
         The step to perform.
     """
+    oldfiles = [str(d.filename.absolute()) for d in data]
+    progressfile = outdir / "progressfile.yaml"
 
     def write_data(data: GSData, step: dict):
         if "write" not in step:
@@ -502,12 +497,7 @@ def perform_step_on_object(
             fname.parent.mkdir(parents=True)
 
         if fname.exists():
-            if clobber:
-                fname.unlink()
-            else:
-                raise FileExistsError(
-                    f"File {fname} exists. Use --clobber to overwrite!"
-                )
+            fname.unlink()
 
         logger.info(f"Writing {fname}")
         return data.write_gsh5(fname)
@@ -515,6 +505,10 @@ def perform_step_on_object(
     if fnc.kind == "gather":
         data = fnc(*data, **params)
         data = write_data(data, step)
+        if "write" in step:
+            update_progressfile(
+                progressfile, name, [(oldfiles, [str(data.filename.absolute())])]
+            )
         return [data]
 
     if fnc.kind == "filter":
@@ -527,14 +521,8 @@ def perform_step_on_object(
             return
 
         if fnc.kind == "filter" and name in data.flags:
-            if clobber:
-                logger.warning(f"Overwriting existing flags for filter '{name}'")
-                data = data.remove_flags(name)
-            else:
-                raise ValueError(
-                    f"Flags for filter '{name}' already exist. "
-                    "Use --clobber to overwrite!"
-                )
+            logger.warning(f"Overwriting existing flags for filter '{name}'")
+            data = data.remove_flags(name)
 
         pr = psutil.Process()
 
@@ -567,6 +555,7 @@ def perform_step_on_object(
         return write_data(data, step)
 
     mp = Pool(nthreads).map if nthreads > 1 else map
+
     newdata = list(
         tqdm.tqdm(
             mp(run_process_with_memory_checks, data), total=len(data), unit="files"
@@ -574,9 +563,14 @@ def perform_step_on_object(
     )
 
     if "write" in step:
-        # Update the progress file
+        # Update the progress file. Each input file gets one output file.
         update_progressfile(
-            outdir, step["name"], [str(d.filename.absolute()) for d in newdata]
+            progressfile,
+            name,
+            [
+                ([x], [str(d.filename.absolute())] if d else [])
+                for x, d in zip(oldfiles, newdata)
+            ],
         )
 
     # Some of the data is now potentially None, because it was all flagged or something

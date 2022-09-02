@@ -642,7 +642,7 @@ def filter_150mhz(*, data: GSData, threshold: float):
     157 MHz (which is expected to be cleaner). If this ratio (RMS to mean) is greater
     than 200 times the threshold given, the integration will be flagged.
     """
-    if data.freq_array.value.max() < 157 * u.MHz:
+    if data.freq_array.max() < 157 * u.MHz:
         return np.zeros(data.ntimes, dtype=bool)
 
     freq_mask = (data.freq_array >= 152.75 * u.MHz) & (

@@ -24,20 +24,26 @@ def invoke(cmd, args, **kwargs):
 
 
 @pytest.fixture(scope="session")
-def integration_test_data(tmp_path_factory) -> Path:
-    tmp_path = tmp_path_factory.mktemp("integration-data")
+def integration_test_data() -> Path:
+    tmp_path = Path(
+        "/tmp/edges-analysis-pytest"
+    )  # tmp_path_factory.mktemp("integration-data", numbered=False)
+    repo = tmp_path / "edges-analysis-test-data"
 
-    run(
-        [
-            "git",
-            "clone",
-            "https://github.com/edges-collab/edges-analysis-test-data",
-            str(tmp_path / "edges-analysis-test-data"),
-            "--depth",
-            "1",
-        ]
-    )
-    return tmp_path / "edges-analysis-test-data"
+    if repo.exists():
+        run(["git", "-C", str(repo), "pull"])
+    else:
+        run(
+            [
+                "git",
+                "clone",
+                "https://github.com/edges-collab/edges-analysis-test-data",
+                str(repo),
+                "--depth",
+                "1",
+            ]
+        )
+    return repo
 
 
 @pytest.fixture(scope="session")
@@ -161,12 +167,12 @@ def run_workflow_nobeam(
     run_workflow: Path,
 ) -> Path:
     out = cal_workflow_nobeam.parent / "nobeam"
+    invoke(cli.fork, [str(cal_workflow_nobeam), str(run_workflow), "-o", str(out)])
+
     invoke(
         cli.process,
         [
             str(cal_workflow_nobeam),
-            "-i",
-            str(run_workflow / "*.gsh5"),
             "-o",
             str(out),
             "--no-mem-check",
@@ -182,13 +188,12 @@ def run_workflow_s11format(
     run_workflow: Path,
 ) -> Path:
     out = cal_workflow_s11format.parent / "s11format"
-    print("OUTPUT FOLDER: ", out)
+    invoke(cli.fork, [str(cal_workflow_s11format), str(run_workflow), "-o", str(out)])
+
     invoke(
         cli.process,
         [
             str(cal_workflow_s11format),
-            "-i",
-            str(run_workflow / "*.gsh5"),
             "-o",
             str(out),
             "--no-mem-check",

@@ -1,0 +1,114 @@
+from click.testing import CliRunner
+
+from edges_analysis import cli
+
+runner = CliRunner()
+
+
+def invoke(cmd, args, **kwargs):
+    result = runner.invoke(cmd, args, **kwargs)
+    print(result.output)
+    if result.exit_code > 0:
+        raise result.exc_info[1]
+
+    return result
+
+
+def test_add_file(workflow, integration_test_data):
+    res = invoke(
+        cli.process,
+        [
+            str(workflow),
+            "-i",
+            str(integration_test_data / "2016_292_00_small.acq"),
+            "-o",
+            str(workflow.parent / "here"),
+            "--no-mem-check",
+        ],
+    )
+
+    # Now run a second time. We should have both files there now.
+    res2 = invoke(
+        cli.process,
+        [
+            str(workflow),
+            "-i",
+            str(integration_test_data / "2016_295_00_small.acq"),
+            "-o",
+            str(workflow.parent / "here"),
+            "--no-mem-check",
+        ],
+    )
+
+    assert "2016_295" not in res.output
+    assert "2016_295" in res2.output
+    assert "2016_292" in res2.output
+
+    # Now restart the workflow.
+    invoke(
+        cli.process,
+        [
+            str(workflow),
+            "-i",
+            str(integration_test_data / "2016_295_00_small.acq"),
+            "-o",
+            str(workflow.parent / "here"),
+            "--no-mem-check",
+            "--restart",
+        ],
+    )
+
+    assert any(
+        fl.name.startswith("2016_295") for fl in (workflow.parent / "here").glob("*")
+    )
+
+
+def test_stop(workflow, integration_test_data):
+    workdir = workflow.parent / "stop"
+    res = invoke(
+        cli.process,
+        [
+            str(workflow),
+            "-i",
+            str(integration_test_data / "2016_292_00_small.acq"),
+            "-o",
+            str(workdir),
+            "--no-mem-check",
+            "--stop",
+            "linlog",
+        ],
+    )
+
+    assert (workdir / "cal/linlog/2016_292_00_small.gsh5").exists()
+    assert not (workdir / "cal/linlog/L15min/2016_292_00_small.gsh5").exists()
+
+    res = invoke(
+        cli.process,
+        [
+            str(workflow),
+            "-o",
+            str(workdir),
+            "--no-mem-check",
+        ],
+    )
+
+    assert "linlog does not need to run on any files" in res.output
+    assert (workdir / "cal/linlog/L15min/2016_292_00_small.gsh5").exists()
+
+    # Now remove the last file...
+    (workdir / "cal/linlog/L15min/lst-avg/lstbin24hr.400kHz.gsh5").unlink()
+
+    # Run again, but this time add extra file
+    res = invoke(
+        cli.process,
+        [
+            str(workflow),
+            "-i",
+            str(integration_test_data / "2016_295_00_small.acq"),
+            "-o",
+            str(workdir),
+            "--no-mem-check",
+        ],
+    )
+    assert "does not need to run any files" not in res.output
+    assert (workdir / "cal/linlog/L15min/lst-avg/lstbin24hr.400kHz.gsh5").exists()
