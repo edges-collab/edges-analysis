@@ -562,7 +562,7 @@ def perform_step_on_object(
         )
     )
 
-    if "write" in step:
+    if "write" in step or fnc.kind == "filter":
         # Update the progress file. Each input file gets one output file.
         update_progressfile(
             progressfile,

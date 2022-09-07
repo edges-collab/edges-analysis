@@ -16,6 +16,8 @@ steps:
       thermlog_file: {{ thermlog_file }}
     write: "{prev_stem}.gsh5"
 
+  - function: negative_power_filter
+
   # CALIBRATION BLOCK
   - function: select_freqs
     name: crop_50mhz
