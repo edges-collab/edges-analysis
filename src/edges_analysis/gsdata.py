@@ -948,7 +948,6 @@ class GSData:
         if append_to_file:
             with h5py.File(new.filename, "a") as fl:
                 flg_grp = fl["flags"]
-                flg_grp.attrs["names"] = tuple(new.flags.keys())
 
                 if "values" not in flg_grp:
                     flg_grp.create_dataset(
@@ -970,6 +969,8 @@ class GSData:
                     else:
                         v.resize(v.shape[0] + 1, axis=0)
                         v[-1] = flags
+
+                flg_grp.attrs["names"] = tuple(new.flags.keys())
 
         return new
 
