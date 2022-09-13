@@ -34,7 +34,9 @@ def dicke_calibration(data: GSData) -> GSData:
         time_array=data.time_array[:, [iant]],
         loads=("ant",),
         nsamples=data.nsamples[[iant]],
-        flags={"init": np.any(data.complete_flags, axis=0)[np.newaxis]},
+        flags={
+            name: np.any(flag, axis=0)[np.newaxis] for name, flag in data.flags.items()
+        },
         data_model=None,
     )
 
