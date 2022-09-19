@@ -10,7 +10,9 @@ from ..gsdata import GSData, gsregister
 from .averaging import bin_array_biased_regular, bin_gha_unbiased_regular
 
 
-def get_lst_bins(binsize: float, first_edge: float = 0) -> np.ndarray:
+def get_lst_bins(
+    binsize: float, first_edge: float = 0, max_edge: float = 24
+) -> np.ndarray:
     """Get the LST bins.
 
     Parameters
@@ -26,25 +28,30 @@ def get_lst_bins(binsize: float, first_edge: float = 0) -> np.ndarray:
         The LST bin edges.
     """
     if binsize > 24:
-        raise ValueError("Binsize must be less than 24 hours")
+        raise ValueError("Binsize must be <= 24 hours")
     if binsize <= 0:
         raise ValueError("Binsize must be greater than 0 hours")
 
-    if first_edge < -12:
-        first_edge += 24
+    first_edge %= 24
 
-    if first_edge > 12:
-        first_edge -= 24
+    while max_edge < first_edge:
+        max_edge += 24
 
-    bins = np.arange(first_edge, first_edge + 24, binsize)
-    if np.isclose(bins.max() + binsize, first_edge + 24):
-        bins = np.append(bins, first_edge + 24)
+    bins = np.arange(first_edge, max_edge, binsize)
+    if np.isclose(bins.max() + binsize, max_edge):
+        bins = np.append(bins, max_edge)
 
     return bins
 
 
 @gsregister("reduce")
-def lst_bin_direct(data: GSData, binsize: float, first_edge: float = 0) -> GSData:
+def lst_bin_direct(
+    data: GSData,
+    binsize: float,
+    first_edge: float = 0,
+    max_edge: float = 24.0,
+    in_gha: bool = False,
+) -> GSData:
     """Bin the data in the LST axis.
 
     This function does a direct weighted averaged within each LST bin. This is biased
@@ -65,13 +72,17 @@ def lst_bin_direct(data: GSData, binsize: float, first_edge: float = 0) -> GSDat
     GSData
         A new :class:`GSData` object with the binned data.
     """
-    bins = get_lst_bins(binsize, first_edge)
+    bins = get_lst_bins(binsize, first_edge, max_edge=max_edge)
 
     if not data.in_lst:
         data = data.to_lsts()
 
-    lsts = data.lst_array.copy().hour
-    lsts[lsts < first_edge] += 24
+    if in_gha:
+        lsts = data.gha.copy().hour
+    else:
+        lsts = data.lst_array.copy().hour
+
+    lsts[lsts < bins[0]] += 24
 
     weights = data.nsamples * (~data.complete_flags).astype(int)
 
@@ -94,6 +105,8 @@ def lst_bin_with_models(
     binsize: float = 24.0,
     first_edge: float = 0.0,
     model: mdl.Model | None = None,
+    max_edge: float = 24.0,
+    in_gha: bool = False,
 ):
     """LST-bin by using model information to de-bias the mean.
 
@@ -108,6 +121,8 @@ def lst_bin_with_models(
     model
         A :class:`edges_cal.modelling.Model` object to use for de-biasing the mean.
         If ``data`` already has a ``data_model`` defined, this argument is ignored.
+    in_gha
+        Whether to bin in GHA or LST (default).
 
     Returns
     -------
@@ -128,13 +143,15 @@ def lst_bin_with_models(
     if data.data_model is None:
         data = data.add_model(model)
 
-    bins = get_lst_bins(binsize, first_edge)
+    bins = get_lst_bins(binsize, first_edge, ma_edge=max_edge)
 
     if not data.in_lst:
         data = data.to_lsts()
 
-    lsts = data.lst_array[:, 0].copy().hour
-    lsts[lsts < first_edge] += 24
+    if in_gha:
+        lsts = data.gha.copy().hour
+    else:
+        lsts = data.lst_array.copy().hour
 
     # Averaging data within GHA bins
     params, resids, weights = bin_gha_unbiased_regular(
@@ -162,6 +179,8 @@ def lst_bin(
     gsdata: GSData,
     binsize: float = 24.0,
     first_edge: float = 0.0,
+    max_edge: float = 24.0,
+    in_gha: bool = False,
 ) -> GSData:
     """LST-bin the data, auto-choosing the best method available.
 
@@ -176,6 +195,8 @@ def lst_bin(
         The size of the LST bins in hours.
     first_edge
         The first edge of the first bin in hours.
+    max_edge
+        Return no bins larger than max_edge.
 
     Returns
     -------
@@ -183,6 +204,10 @@ def lst_bin(
         A new :class:`GSData` object with the binned data.
     """
     if gsdata.data_model is not None:
-        return lst_bin_with_models(gsdata, binsize, first_edge=first_edge)
+        return lst_bin_with_models(
+            gsdata, binsize, first_edge=first_edge, max_edge=max_edge, in_gha=in_gha
+        )
     else:
-        return lst_bin_direct(gsdata, binsize, first_edge)
+        return lst_bin_direct(
+            gsdata, binsize, first_edge=first_edge, max_edge=max_edge, in_gha=in_gha
+        )
