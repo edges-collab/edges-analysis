@@ -149,7 +149,7 @@ def lst_bin_with_models(
         data = data.to_lsts()
 
     if in_gha:
-        lsts = data.gha.copy().hour
+        lsts = data.gha.copy()
     else:
         lsts = data.lst_array.copy().hour
 
