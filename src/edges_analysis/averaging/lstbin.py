@@ -143,7 +143,7 @@ def lst_bin_with_models(
     if data.data_model is None:
         data = data.add_model(model)
 
-    bins = get_lst_bins(binsize, first_edge, ma_edge=max_edge)
+    bins = get_lst_bins(binsize, first_edge, max_edge=max_edge)
 
     if not data.in_lst:
         data = data.to_lsts()
