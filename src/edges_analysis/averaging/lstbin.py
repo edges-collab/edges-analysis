@@ -168,7 +168,7 @@ def lst_bin_with_models(
         data=resids[np.newaxis, np.newaxis],
         nsamples=weights[np.newaxis, np.newaxis],
         flags={},
-        time_array=times[:, np.newaxis],
+        time_array=times[:, np.newaxis][0], #weird. but this [0] ensures (ntimes, 1) longitude
         data_unit="model_residuals",
         data_model=data.data_model.update(parameters=params[np.newaxis, np.newaxis]),
     )
