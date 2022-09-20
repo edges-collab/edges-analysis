@@ -484,9 +484,11 @@ def bin_gha_unbiased_regular(
             # Skip this bin if nothing's in it
             continue
 
-        these_params = params[mask]
-        these_resids = resids[mask]
-        these_weights = weights[mask]
+        
+
+        these_params = params[mask[:,0]]
+        these_resids = resids[mask[:,0]]
+        these_weights = weights[mask[:,0]]
 
         # Take the nanmean, because some entire integrations/GHA's might have been
         # flagged and therefore have no applicable model. Then the params should be NaN.
