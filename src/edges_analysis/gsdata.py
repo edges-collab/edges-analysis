@@ -463,7 +463,7 @@ class GSData:
         the data. Otherwise, it is the models + data.
         """
         if self.data_unit == "model_residuals":
-            return self.data_model.get_spectra(self.data)
+            return self.data_model.get_spectra(self)
         else:
             return self.data
 
@@ -1063,7 +1063,7 @@ class GSDataModel:
             )
 
         d = gsdata.data.reshape((-1, gsdata.nfreqs))
-        p = self.parameters.reshape((-1, gsdata.nparams))
+        p = self.parameters.reshape((-1, self.nparams))
 
         model = self.model.at(x=gsdata.freq_array.to_value("MHz"))
 
