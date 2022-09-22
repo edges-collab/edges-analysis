@@ -8,6 +8,8 @@ from astropy.coordinates import Longitude
 
 from ..gsdata import GSData, gsregister
 from .averaging import bin_array_biased_regular, bin_gha_unbiased_regular
+from .. import coordinates as crd
+
 
 
 def get_lst_bins(
@@ -72,15 +74,16 @@ def lst_bin_direct(
     GSData
         A new :class:`GSData` object with the binned data.
     """
+    if in_gha:
+        first_edge = crd.gha2lst(first_edge)
+        max_edge = crd.gha2lst(max_edge)
+
     bins = get_lst_bins(binsize, first_edge, max_edge=max_edge)
 
     if not data.in_lst:
         data = data.to_lsts()
 
-    if in_gha:
-        lsts = data.gha.copy()
-    else:
-        lsts = data.lst_array.copy().hour
+    lsts = data.lst_array.copy().hour
 
     lsts[lsts < bins[0]] += 24
 
@@ -143,15 +146,16 @@ def lst_bin_with_models(
     if data.data_model is None:
         data = data.add_model(model)
 
+    if in_gha:
+        first_edge = crd.gha2lst(first_edge)
+        max_edge = crd.gha2lst(max_edge)
     bins = get_lst_bins(binsize, first_edge, max_edge=max_edge)
 
     if not data.in_lst:
         data = data.to_lsts()
 
-    if in_gha:
-        lsts = data.gha.copy()
-    else:
-        lsts = data.lst_array.copy().hour
+  
+    lsts = data.lst_array.copy().hour
 
     # Averaging data within GHA bins
     params, resids, weights = bin_gha_unbiased_regular(

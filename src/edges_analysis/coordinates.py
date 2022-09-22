@@ -107,13 +107,19 @@ def z2f(z: float | np.ndarray) -> float | np.ndarray:
 def lst2gha(lst: float | np.ndarray) -> float | np.ndarray:
     """Convert LST to GHA."""
     gha = lst - const.galactic_centre_lst
-    gha[gha < 0] += 24
+    if isinstance(gha, np.ndarray):
+        gha[gha < 0] += 24
+    elif gha > 0:
+            lst +=24
     return gha
 
 def gha2lst(gha: float | np.ndarray) -> float | np.ndarray:
     """Convert GHA to LST."""
     lst = gha + const.galactic_centre_lst
-    lst[lst > 0] -= 24
+    if isinstance(lst, np.ndarray):
+        lst[lst > 0] -= 24
+    elif lst < 0:
+            lst -=24
     return lst
 
 def get_jd(d: dt.datetime) -> int:
