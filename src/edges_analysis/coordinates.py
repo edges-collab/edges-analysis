@@ -110,6 +110,11 @@ def lst2gha(lst: float | np.ndarray) -> float | np.ndarray:
     gha[gha < 0] += 24
     return gha
 
+def gha2lst(gha: float | np.ndarray) -> float | np.ndarray:
+    """Convert GHA to LST."""
+    lst = gha + const.galactic_centre_lst
+    lst[lst > 0] -= 24
+    return lst
 
 def get_jd(d: dt.datetime) -> int:
     """Get the day of the year from a datetime object."""
