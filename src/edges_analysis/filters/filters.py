@@ -484,7 +484,7 @@ def _peak_power_filter(
         if not np.any(mask):
             return np.zeros(data.ntimes, dtype=bool)
 
-        spec = data.spectrum[:, mask]
+        spec = data.spectra[..., mask]
 
     mean, _ = averaging.weighted_mean(
         spec,
