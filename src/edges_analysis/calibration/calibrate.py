@@ -218,9 +218,11 @@ def get_labcal(
         ignore_files=ignore_s11_files,
     )
 
-    print(calobs)
     if not isinstance(calobs, Calibrator):
-        calobs = Calibrator.from_calfile(calobs)
+        try:
+            calobs = Calibrator.from_calfile(calobs)
+        except Exception:
+            calobs = Calibrator.from_old_calfile(calobs)
 
     return LabCalibration.from_s11_files(
         calobs=calobs,
