@@ -195,3 +195,35 @@ def test_delete_file(workflow, integration_test_data):
 
     assert (workdir / "cal/linlog/L15min/2016_292_00_small.gsh5").exists()
     assert (workdir / "cal/linlog/L15min/2016_295_00_small.gsh5").exists()
+
+
+def test_start(workflow, integration_test_data):
+    workdir = workflow.parent / "delete-file"
+    res = invoke(
+        cli.process,
+        [
+            str(workflow),
+            "-i",
+            str(integration_test_data / "2016_29*_00_small.acq"),
+            "-o",
+            str(workdir),
+            "--no-mem-check",
+        ],
+    )
+
+    res = invoke(
+        cli.process,
+        [
+            str(workflow),
+            "-o",
+            str(workdir),
+            "--no-mem-check",
+            "--start",
+            "negative_power_filter",
+        ],
+    )
+
+    assert "negative_power_filter does not need to run on any files" not in res.output
+
+    assert (workdir / "cal/linlog/L15min/2016_292_00_small.gsh5").exists()
+    assert (workdir / "cal/linlog/L15min/2016_295_00_small.gsh5").exists()

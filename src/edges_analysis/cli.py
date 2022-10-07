@@ -131,7 +131,10 @@ class WorkflowProgressError(RuntimeError):
 
 
 def harmonize_workflow_with_steps(
-    steps: tuple[dict], progressfile: Path, error: bool = True
+    steps: tuple[dict],
+    progressfile: Path,
+    error: bool = True,
+    start: str = None,
 ):
     """Check the compatibility of the current steps with the progressfile."""
     # progress should be a list very similar to "steps" except with a few extra
@@ -157,6 +160,8 @@ def harmonize_workflow_with_steps(
                         "outputs and branch off with the new workflow, run the 'fork' "
                         "command."
                     )
+            if sname == start:
+                start_changing = True
 
             if start_changing:
                 outputs = get_all_outputs(progressdicts[i]["inout"])
@@ -303,6 +308,12 @@ def _file_filter(pth: Path):
     type=str,
     help="The name of the step at which to stop the workflow.",
 )
+@click.option(
+    "--start",
+    default=None,
+    type=str,
+    help="The name of the step at which to start the workflow.",
+)
 def process(
     workflow,
     path,
@@ -313,6 +324,7 @@ def process(
     exit_on_inconsistent,
     restart,
     stop,
+    start,
 ):
     """Process a dataset to the STEP level of averaging/filtering using SETTINGS.
 
@@ -333,6 +345,9 @@ def process(
     console.print(Rule("Setting Up"))
 
     steps = get_steps_from_workflow(workflow)
+    if start and start not in steps:
+        raise ValueError(f"The --start option needs to exist! Got {start}")
+
     outdir = Path(outdir)
     if not outdir.exists():
         outdir.mkdir(parents=True)
@@ -355,7 +370,7 @@ def process(
         # Here we're appending the input files.
         update_progressfile(progressfile, "convert", [([], [x]) for x in input_files])
 
-    harmonize_workflow_with_steps(steps, progressfile, exit_on_inconsistent)
+    harmonize_workflow_with_steps(steps, progressfile, exit_on_inconsistent, start)
     progress = read_progressfile(progressfile)
 
     if stop and stop not in steps:
