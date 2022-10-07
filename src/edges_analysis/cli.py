@@ -148,7 +148,6 @@ def harmonize_workflow_with_steps(
         else:
             ps = {k: v for k, v in progressdicts[i].items() if k != "inout"}
             if ps != s:
-                print("GOT A CONFLICT", ps, s)
                 start_changing = True
                 if error:
                     raise WorkflowProgressError(
@@ -191,9 +190,11 @@ def get_files_for_step(stepname: str, progress: dict[str, dict]) -> list[str]:
     final_files = []
 
     def _check_fl(fl):
+        # Check if an output file (fl) for the current step appears as an input file
+        # for a later step, and whether all the output files from that step exist.
         for p in list(progress.values())[current_index + 1 :]:
             for inout in p["inout"]:
-                if fl in inout[0] and all(Path(x).exists for x in inout[1]):
+                if fl in inout[0] and all(Path(x).exists() for x in inout[1]):
                     return False
         return True
 
@@ -406,6 +407,8 @@ def process(
             if stepname == "convert":
                 params.update({"telescope_location": const.edges_location})
                 data = [GSData.from_file(f, **params) for f in files]
+                if not data:
+                    console.print(f"{stepname} does not need to run on any files.")
                 continue
 
             console.print(f"{stepname} does not need to run on any files.")

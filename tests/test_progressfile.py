@@ -150,3 +150,48 @@ def test_stop_at_filter(workflow, integration_test_data):
 
     assert "negative_power_filter does not need to run on any files" in res.output
     assert (workdir / "cal/linlog/L15min/2016_292_00_small.gsh5").exists()
+
+
+def test_delete_file(workflow, integration_test_data):
+    workdir = workflow.parent / "delete-file"
+    res = invoke(
+        cli.process,
+        [
+            str(workflow),
+            "-i",
+            str(integration_test_data / "2016_29*_00_small.acq"),
+            "-o",
+            str(workdir),
+            "--no-mem-check",
+        ],
+    )
+
+    assert (workdir / "2016_292_00_small.gsh5").exists()
+    assert (workdir / "2016_295_00_small.gsh5").exists()
+
+    data = GSData.from_file(workdir / "2016_292_00_small.gsh5")
+
+    assert "negative_power_filter" in data.flags
+
+    # Remove the calibration files
+    (workdir / "cal/2016_292_00_small.gsh5").unlink()
+    (workdir / "cal/2016_295_00_small.gsh5").unlink()
+
+    if (workdir / "cal/2016_295_00_small.gsh5").exists():
+        assert False
+
+    res = invoke(
+        cli.process,
+        [
+            str(workflow),
+            "-o",
+            str(workdir),
+            "--no-mem-check",
+        ],
+    )
+
+    assert "crop_50mhz does not need to run on any files" not in res.output
+    assert "negative_power_filter does not need to run on any files" in res.output
+
+    assert (workdir / "cal/linlog/L15min/2016_292_00_small.gsh5").exists()
+    assert (workdir / "cal/linlog/L15min/2016_295_00_small.gsh5").exists()
