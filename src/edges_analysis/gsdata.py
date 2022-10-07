@@ -623,7 +623,10 @@ class GSData:
             if self.flags:
                 flg_grp.attrs["names"] = tuple(self.flags.keys())
                 flg_grp.create_dataset(
-                    "values", data=np.array(list(self.flags.values())), maxshape=(None,) +self.data.shape, chunks=True
+                    "values",
+                    data=np.array(list(self.flags.values())),
+                    maxshape=(None,) + self.data.shape,
+                    chunks=True,
                 )
 
             fl.attrs["telescope_name"] = self.telescope_name
@@ -953,20 +956,22 @@ class GSData:
                     flg_grp.create_dataset(
                         "values",
                         data=flags[np.newaxis],
-                        maxshape=(None,) + new.data.shape, chunks=True
+                        maxshape=(None,) + new.data.shape,
+                        chunks=True,
                     )
                 else:
                     v = flg_grp["values"]
-                    
+
                     if v.shape[0] < len(self.flags):
-                        
+
                         # The file is inconsistent with the object, so we need to
                         # delete it.
                         del flg_grp["values"]
                         flg_grp.create_dataset(
                             "values",
                             data=np.array(list(new.flags.values())),
-                            maxshape=(None,) + new.data.shape, chunks=True
+                            maxshape=(None,) + new.data.shape,
+                            chunks=True,
                         )
                     else:
                         v.resize(v.shape[0] + 1, axis=0)
@@ -1081,7 +1086,7 @@ class GSDataModel:
             raise ValueError("Cannot compute model on data that is already residuals!")
 
         d = gsdata.data.reshape((-1, gsdata.nfreqs))
-        w = gsdata.nsamples.reshape((-1, gsdata.nfreqs))
+        w = gsdata.flagged_nsamples.reshape((-1, gsdata.nfreqs))
 
         xmodel = model.at(x=gsdata.freq_array.to_value("MHz"))
 
