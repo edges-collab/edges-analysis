@@ -194,7 +194,7 @@ def plot_waterfall(
     new_yticks = [
         (
             data.time_array[0]
-            + timedelta(hours=float(y)).sidereal_time(
+            + timedelta(hours=float(y.text)).sidereal_time(
                 "apparent", data.telescope_location
             )
         ).to_value("hour")
