@@ -187,22 +187,7 @@ def plot_waterfall(
         ax.set_xlabel("Frequency [MHz]")
     if ylab:
         ax.set_ylabel("Hours into Observation")
-
-    axy = ax.twinx()
-    yticks = axy.get_yticklabels()
-
-    new_yticks = [
-        (
-            data.time_array[0]
-            + timedelta(hours=float(y.get_text())).sidereal_time(
-                "apparent", data.telescope_location
-            )
-        ).to_value("hour")
-        for y in yticks
-    ]
-    axy.set_yticklabels(new_yticks)
-    axy.set_ylabel("LST [hours]")
-
+    
     if title and not isinstance(title, str):
         if not data.in_lst:
             ax.set_title(
@@ -271,7 +256,7 @@ def plot_time_average(
             "have the same shape as data."
         )
 
-    ax.plot(data.freq_array, q[load, pol, 0] - offset)
+    ax.plot(data.freq_array.to_value("MHz"), q[load, pol, 0] - offset)
     ax.set_xlabel("Frequency [MHz]")
     ax.set_ylabel("Average Spectrum")
 
@@ -328,7 +313,7 @@ def plot_daily_residuals(
 
         rms = np.sqrt(
             averaging.weighted_mean(
-                data=d.resids[load, pol] ** 2, weights=d.nsamples[load, pol]
+                data=d.resids[load, pol,0] ** 2, weights=d.nsamples[load, pol,0]
             )[0]
         )
         ax.text(
