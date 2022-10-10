@@ -155,7 +155,7 @@ def plot_waterfall(
         )
 
     q = np.where(data.get_flagged_nsamples(which_flags, ignore_flags) == 0, np.nan, q)
-    q = q[load, :, :, pol]
+    q = q[load, pol,:, :]
 
     if ax is None:
         ax = plt.subplots(1, 1)[1]
@@ -171,10 +171,10 @@ def plot_waterfall(
         q,
         origin="lower",
         extent=(
-            data.freq_array.min(),
-            data.freq_array.max(),
-            times.min(),
-            times.max(),
+            data.freq_array.value.min(),
+            data.freq_array.value.max(),
+            times.value.min(),
+            times.value.max(),
         ),
         cmap=cmap,
         aspect="auto",
@@ -189,7 +189,7 @@ def plot_waterfall(
 
     if title and not isinstance(title, str):
         if not data.in_lst:
-            ax.set_title(f"{data.get_initial_yearday()}. LST0={data.lst_array[0]:.2f}")
+            ax.set_title(f"{data.get_initial_yearday()}. LST0={data.lst_array[0][0]:.2f}")
 
     if cbar:
         cb = plt.colorbar(img, ax=ax)
