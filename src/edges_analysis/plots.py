@@ -9,6 +9,7 @@ import numpy as np
 from astropy import coordinates as apc
 from astropy import time as apt
 from astropy import units as apu
+from datetime import timedelta
 from scipy import interpolate as interp
 
 from . import beams, const, sky_models
@@ -171,10 +172,10 @@ def plot_waterfall(
         q,
         origin="lower",
         extent=(
-            data.freq_array.min(),
-            data.freq_array.max(),
-            times.min(),
-            times.max(),
+            data.freq_array.min().to_value("MHz"),
+            data.freq_array.max().to_value("MHz"),
+            0,
+            (times.max() - times.min()).to_value("hour"),
         ),
         cmap=cmap,
         aspect="auto",
@@ -186,6 +187,21 @@ def plot_waterfall(
         ax.set_xlabel("Frequency [MHz]")
     if ylab:
         ax.set_ylabel("Hours into Observation")
+
+    axy = ax.twinx()
+    yticks = axy.get_yticklabels()
+
+    new_yticks = [
+        (
+            data.time_array[0]
+            + timedelta(hours=float(y)).sidereal_time(
+                "apparent", data.telescope_location
+            )
+        ).to_value("hour")
+        for y in yticks
+    ]
+    axy.set_yticklabels(new_yticks)
+    axy.set_ylabel("LST [hours]")
 
     if title and not isinstance(title, str):
         if not data.in_lst:
