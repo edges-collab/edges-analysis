@@ -304,13 +304,13 @@ def plot_daily_residuals(
         if data.data_model is None:
             data = data.add_model(model)
 
-        ax, data = plot_time_average(
+        ax, d = plot_time_average(
             data, attribute="resids", offset=separation * i, ax=ax, **kw
         )
 
         rms = np.sqrt(
             averaging.weighted_mean(
-                data=data.resids[load, pol] ** 2, weights=data.nsamples[load, pol]
+                data=d.resids[load, pol] ** 2, weights=d.nsamples[load, pol]
             )[0]
         )
         ax.text(
