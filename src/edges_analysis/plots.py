@@ -6,6 +6,7 @@ import edges_cal.modelling as mdl
 import healpy as hp
 import matplotlib.pyplot as plt
 import numpy as np
+
 from astropy import coordinates as apc
 from astropy import time as apt
 from astropy import units as apu
@@ -15,7 +16,7 @@ from scipy import interpolate as interp
 from . import beams, const, sky_models
 from .averaging import averaging
 from .averaging.lstbin import lst_bin
-from .gsdata import GSData
+from .gsdata import GSData, add_model
 
 
 def plot_sky_model():
@@ -271,7 +272,7 @@ def plot_time_average(
 
 def plot_daily_residuals(
     objs: list[GSData],
-    model: mdl.Model | None,
+    model: mdl.Model | None = None,
     separation: float = 20.0,
     ax: plt.Axes | None = None,
     load: int = 0,
@@ -305,7 +306,7 @@ def plot_daily_residuals(
             raise ValueError("If data has no model, must provide one!")
 
         if data.data_model is None:
-            data = data.add_model(model)
+            data = add_model(data,model=model, append_to_file=False)
 
         ax, d = plot_time_average(
             data, attribute="resids", offset=separation * i, ax=ax, **kw
@@ -317,7 +318,7 @@ def plot_daily_residuals(
             )[0]
         )
         ax.text(
-            data.freq_array.max() + 5 * apu.MHz,
+            data.freq_array.max().to_value("MHz") + 5,
             -i * separation,
             f"{data.get_initial_yearday()} RMS={rms:.2f}",
         )
