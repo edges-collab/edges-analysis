@@ -21,7 +21,7 @@ repos:
   - id: mixed-line-ending
     args: ['--fix=no']
 - repo: https://github.com/PyCQA/flake8
-  rev: 4.0.1
+  rev: 5.0.4
   hooks:
   - id: flake8
     additional_dependencies:
@@ -43,7 +43,7 @@ repos:
   - id: isort
 
 - repo: https://github.com/psf/black
-  rev: 22.6.0
+  rev: 22.8.0
   hooks:
   - id: black
 
@@ -53,13 +53,13 @@ repos:
     - id: rst-backticks
     - id: rst-directive-colons
     - id: rst-inline-touching-normal
-# - repo: https://github.com/asottile/pyupgrade
-#   rev: v2.34.0
-#   hooks:
-#   -   id: pyupgrade
-#       args: [--py36-plus]
+- repo: https://github.com/asottile/pyupgrade
+  rev: v2.37.3
+  hooks:
+  -   id: pyupgrade
+      args: [--py36-plus]
 - repo: https://github.com/commitizen-tools/commitizen
-  rev: v2.29.5
+  rev: v2.32.2
   hooks:
     - id: commitizen
       stages: [commit-msg]
