@@ -88,17 +88,19 @@ def lst_bin_direct(
     lsts[lsts < bins[0]] += 24
 
     weights = data.nsamples * (~data.complete_flags).astype(int)
-
-    _, spec, wght = bin_array_biased_regular(
-        data=data.data,
-        weights=weights,
-        coords=data.lst_array,
-        axis=1,
-        bins=bins,
-    )
-
+    specs = np.zeros((data.data.shape[0],data.data.shape[1],len(bins)-1,data.data.shape[3]))
+    wghts = np.zeros_like(specs)
+    for i,(d,w) in enumerate(zip(data.data,weights)): 
+        _,specs[i], wghts[i] = bin_array_biased_regular(
+            data=d,
+            weights=w,
+            coords=lsts[:,i],
+            axis=1,
+            bins=bins,
+        )
+    times = Longitude((bins[1:] + bins[:-1]) / 2 * un.hour)
     return data.update(
-        time_array=Longitude(bins * un.hour), data=spec, nsamples=wght, flags={}
+        time_array=np.repeat(times,data.data.shape[0]).reshape((len(times),data.data.shape[0])), data=specs, nsamples=wghts, flags={}
     )
 
 
