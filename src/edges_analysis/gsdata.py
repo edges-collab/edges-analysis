@@ -175,7 +175,7 @@ class Stamp:
         return cls(**dct)
 
     @classmethod
-    def from_yaml_dict(cls, d: dict) -> "Stamp":
+    def from_yaml_dict(cls, d: dict) -> Stamp:
         """Create a Stamp object from a dictionary representing a history record."""
         d["timestamp"] = datetime.datetime.strptime(
             d["timestamp"], "%Y-%m-%dT%H:%M:%S.%f"
@@ -330,7 +330,9 @@ class GSData:
             raise TypeError("data must be a numpy array")
 
         if value.ndim != 4:
-            raise ValueError(f"data must be a 4D array: (Nload, Npol, Ntime, Nfreq). Got {value.shape}")
+            raise ValueError(
+                f"data must be a 4D array: (Nload, Npol, Ntime, Nfreq). Got {value.shape}"
+            )
 
         if np.iscomplex(value).any():
             raise ValueError("data must be real")

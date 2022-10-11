@@ -6,10 +6,9 @@ import numpy as np
 from astropy import units as un
 from astropy.coordinates import Longitude
 
+from .. import coordinates as crd
 from ..gsdata import GSData, gsregister
 from .averaging import bin_array_biased_regular, bin_gha_unbiased_regular
-from .. import coordinates as crd
-
 
 
 def get_lst_bins(
@@ -88,19 +87,26 @@ def lst_bin_direct(
     lsts[lsts < bins[0]] += 24
 
     weights = data.nsamples * (~data.complete_flags).astype(int)
-    specs = np.zeros((data.data.shape[0],data.data.shape[1],len(bins)-1,data.data.shape[3]))
+    specs = np.zeros(
+        (data.data.shape[0], data.data.shape[1], len(bins) - 1, data.data.shape[3])
+    )
     wghts = np.zeros_like(specs)
-    for i,(d,w) in enumerate(zip(data.data,weights)): 
-        _,specs[i], wghts[i] = bin_array_biased_regular(
+    for i, (d, w) in enumerate(zip(data.data, weights)):
+        _, specs[i], wghts[i] = bin_array_biased_regular(
             data=d,
             weights=w,
-            coords=lsts[:,i],
+            coords=lsts[:, i],
             axis=1,
             bins=bins,
         )
     times = Longitude((bins[1:] + bins[:-1]) / 2 * un.hour)
     return data.update(
-        time_array=np.repeat(times,data.data.shape[0]).reshape((len(times),data.data.shape[0])), data=specs, nsamples=wghts, flags={}
+        time_array=np.repeat(times, data.data.shape[0]).reshape(
+            (len(times), data.data.shape[0])
+        ),
+        data=specs,
+        nsamples=wghts,
+        flags={},
     )
 
 
@@ -156,7 +162,6 @@ def lst_bin_with_models(
     if not data.in_lst:
         data = data.to_lsts()
 
-  
     lsts = data.lst_array.copy().hour
 
     # Averaging data within GHA bins
@@ -169,13 +174,12 @@ def lst_bin_with_models(
     )
 
     times = Longitude((bins[1:] + bins[:-1]) / 2 * un.hour)
-    
 
     return data.update(
         data=resids[np.newaxis, np.newaxis],
         nsamples=weights[np.newaxis, np.newaxis],
         flags={},
-        time_array=times[:, np.newaxis], 
+        time_array=times[:, np.newaxis],
         data_unit="model_residuals",
         data_model=data.data_model.update(parameters=params[np.newaxis, np.newaxis]),
     )

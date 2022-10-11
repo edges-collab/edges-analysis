@@ -63,7 +63,7 @@ def _get_files(pth: Path, filt=h5py.is_hdf5) -> list[Path]:
 
 def read_progressfile(fl: Path) -> dict[str, dict]:
     """Read the .progress file."""
-    with open(fl, "r") as openfile:
+    with open(fl) as openfile:
         progress = yaml.load(openfile, Loader=yaml.FullLoader)
 
     progress = {p.pop("name"): p for p in progress}

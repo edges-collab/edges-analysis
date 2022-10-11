@@ -110,8 +110,9 @@ def lst2gha(lst: float | np.ndarray) -> float | np.ndarray:
     if isinstance(gha, np.ndarray):
         gha[gha < 0] += 24
     elif gha > 0:
-            lst +=24
+        lst += 24
     return gha
+
 
 def gha2lst(gha: float | np.ndarray) -> float | np.ndarray:
     """Convert GHA to LST."""
@@ -119,8 +120,9 @@ def gha2lst(gha: float | np.ndarray) -> float | np.ndarray:
     if isinstance(lst, np.ndarray):
         lst[lst > 0] -= 24
     elif lst < 0:
-            lst -=24
+        lst -= 24
     return lst
+
 
 def get_jd(d: dt.datetime) -> int:
     """Get the day of the year from a datetime object."""

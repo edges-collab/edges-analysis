@@ -6,7 +6,6 @@ import edges_cal.modelling as mdl
 import healpy as hp
 import matplotlib.pyplot as plt
 import numpy as np
-
 from astropy import coordinates as apc
 from astropy import time as apt
 from astropy import units as apu
@@ -188,7 +187,7 @@ def plot_waterfall(
         ax.set_xlabel("Frequency [MHz]")
     if ylab:
         ax.set_ylabel("Hours into Observation")
-    
+
     if title and not isinstance(title, str):
         if not data.in_lst:
             ax.set_title(
@@ -306,7 +305,7 @@ def plot_daily_residuals(
             raise ValueError("If data has no model, must provide one!")
 
         if data.data_model is None:
-            data = add_model(data,model=model, append_to_file=False)
+            data = add_model(data, model=model, append_to_file=False)
 
         ax, d = plot_time_average(
             data, attribute="resids", offset=separation * i, ax=ax, **kw
@@ -314,7 +313,7 @@ def plot_daily_residuals(
 
         rms = np.sqrt(
             averaging.weighted_mean(
-                data=d.resids[load, pol,0] ** 2, weights=d.nsamples[load, pol,0]
+                data=d.resids[load, pol, 0] ** 2, weights=d.nsamples[load, pol, 0]
             )[0]
         )
         ax.text(
