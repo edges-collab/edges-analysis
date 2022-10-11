@@ -28,10 +28,6 @@ def lst_average(*objs) -> GSData:
             "One or more of the input objects is not in LST-mode. Can't LST-average."
         )
 
-    for i, obj in enumerate(objs):
-        if not np.allclose(obj.time_array, objs[0].time_array):
-            print(i, obj.time_array - objs[0].time_array)
-
     if any(not np.allclose(obj.time_array, objs[0].time_array) for obj in objs[1:]):
         raise ValueError("All objects must have the same LST array to average them.")
 
