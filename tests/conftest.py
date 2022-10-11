@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import pytest
 
 import yaml
@@ -5,7 +7,6 @@ from click.testing import CliRunner
 from jinja2 import Template
 from pathlib import Path
 from subprocess import run
-from typing import Tuple
 
 from edges_analysis import cli
 from edges_analysis.config import config
@@ -204,38 +205,38 @@ def run_workflow_s11format(
 
 
 @pytest.fixture(scope="session")
-def raw_step(run_workflow: Path) -> Tuple[GSData, GSData]:
+def raw_step(run_workflow: Path) -> tuple[GSData, GSData]:
     globs = sorted(run_workflow.glob("*.gsh5"))
     return tuple(GSData.from_file(fl) for fl in globs)
 
 
 @pytest.fixture(scope="session")
-def cal_step(run_workflow: Path) -> Tuple[GSData, GSData]:
+def cal_step(run_workflow: Path) -> tuple[GSData, GSData]:
     globs = sorted((run_workflow / "cal").glob("*.gsh5"))
     return tuple(GSData.from_file(fl) for fl in globs)
 
 
 @pytest.fixture(scope="session")
-def cal_step_nobeam(run_workflow_nobeam: Path) -> Tuple[GSData, GSData]:
+def cal_step_nobeam(run_workflow_nobeam: Path) -> tuple[GSData, GSData]:
     globs = sorted((run_workflow_nobeam / "cal").glob("*.gsh5"))
     return tuple(GSData.from_file(fl) for fl in globs)
 
 
 @pytest.fixture(scope="session")
-def cal_step_s11format(run_workflow_s11format: Path) -> Tuple[GSData, GSData]:
+def cal_step_s11format(run_workflow_s11format: Path) -> tuple[GSData, GSData]:
     globs = sorted((run_workflow_s11format / "cal").glob("*.gsh5"))
     return tuple(GSData.from_file(fl) for fl in globs)
 
 
 @pytest.fixture(scope="session")
-def model_step(run_workflow: Path) -> Tuple[GSData, GSData]:
+def model_step(run_workflow: Path) -> tuple[GSData, GSData]:
     globs = sorted((run_workflow / "cal/linlog").glob("*.gsh5"))
 
     return tuple(GSData.from_file(fl) for fl in globs)
 
 
 @pytest.fixture(scope="session")
-def lstbin_step(run_workflow: Path) -> Tuple[GSData, GSData]:
+def lstbin_step(run_workflow: Path) -> tuple[GSData, GSData]:
     globs = sorted((run_workflow / "cal/linlog/L15min/").glob("*.gsh5"))
 
     return tuple(GSData.from_file(fl) for fl in globs)
