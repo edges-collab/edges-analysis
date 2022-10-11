@@ -330,7 +330,7 @@ class GSData:
             raise TypeError("data must be a numpy array")
 
         if value.ndim != 4:
-            raise ValueError("data must be a 4D array: (Nload, Npol, Ntime, Nfreq)")
+            raise ValueError(f"data must be a 4D array: (Nload, Npol, Ntime, Nfreq). Got {value.shape}")
 
         if np.iscomplex(value).any():
             raise ValueError("data must be real")
@@ -388,7 +388,7 @@ class GSData:
 
         if value.shape != (self.ntimes, self.nloads):
             raise ValueError(
-                f"time_array must have the size (nloads, ntimes), got {value.shape} "
+                f"time_array must have the size (ntimes, nloads), got {value.shape} "
                 f"instead of {(self.ntimes, self.nloads)}"
             )
 
