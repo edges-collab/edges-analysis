@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import pytest
 
 import numpy as np
@@ -49,10 +51,6 @@ def test_rms_filter(cal_step):
         metric_model=mdl.FourierDay(n_terms=3),
         std_model=mdl.FourierDay(n_terms=3),
     )
-
-
-def test_negpower_filter(raw_step):
-    run_filter_check(raw_step[0], filters.negative_power_filter)
 
 
 def test_peak_power_filter(cal_step):

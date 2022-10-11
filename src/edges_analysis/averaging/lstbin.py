@@ -7,7 +7,7 @@ from astropy import units as un
 from astropy.coordinates import Longitude
 
 from .. import coordinates as crd
-from ..gsdata import GSData, gsregister
+from ..gsdata import GSData, add_model, gsregister
 from .averaging import bin_array_biased_regular, bin_gha_unbiased_regular
 
 
@@ -140,19 +140,11 @@ def lst_bin_with_models(
     GSData
         A new :class:`GSData` object with the binned data.
     """
-    if data.data_unit == "power":
-        raise ValueError("Can't do LST-binning on power data")
-
     if data.data_model is None and model is None:
         raise ValueError("Cannot bin with models without a model in the data!")
 
-    if data.npols > 1 or data.nloads > 1:
-        raise NotImplementedError(
-            "Can't do model-based LST binning on multi-pol/source data yet."
-        )
-
     if data.data_model is None:
-        data = data.add_model(model)
+        data = add_model(data, model=model)
 
     if in_gha:
         first_edge = crd.gha2lst(first_edge)
@@ -164,24 +156,34 @@ def lst_bin_with_models(
 
     lsts = data.lst_array.copy().hour
 
-    # Averaging data within GHA bins
-    params, resids, weights = bin_gha_unbiased_regular(
-        np.squeeze(data.data_model.parameters),
-        np.squeeze(data.resids),
-        np.squeeze(data.flagged_nsamples),
-        lsts,
-        bins,
-    )
+    params = np.zeros((data.nloads, data.npols, len(bins) - 1, data.data_model.nparams))
+    resids = np.zeros((data.nloads, data.npols, len(bins) - 1, data.nfreqs))
+    nsmpls = np.zeros_like(resids)
 
-    times = Longitude((bins[1:] + bins[:-1]) / 2 * un.hour)
+    for iload in range(data.nloads):
+        for ipol in range(data.npols):
+            # Averaging data within GHA bins
+            (
+                params[iload, ipol],
+                resids[iload, ipol],
+                nsmpls[iload, ipol],
+            ) = bin_gha_unbiased_regular(
+                data.data_model.parameters[iload, ipol],
+                data.resids[iload, ipol],
+                data.flagged_nsamples[iload, ipol],
+                lsts[:, iload],
+                bins,
+            )
+    times = (bins[1:] + bins[:-1]) / 2
+    times = Longitude(np.tile(times, (data.nloads, 1)).T * un.hour)
 
     return data.update(
-        data=resids[np.newaxis, np.newaxis],
-        nsamples=weights[np.newaxis, np.newaxis],
+        data=resids,
+        nsamples=nsmpls,
         flags={},
-        time_array=times[:, np.newaxis],
+        time_array=times,
         data_unit="model_residuals",
-        data_model=data.data_model.update(parameters=params[np.newaxis, np.newaxis]),
+        data_model=data.data_model.update(parameters=params),
     )
 
 

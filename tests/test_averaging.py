@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import pytest
 
 import numpy as np
@@ -115,7 +117,7 @@ def test_model_bin_gha(params, weights, refit):
         resids=resids,
         weights=weights,
         gha=np.linspace(0, 24, N_GHA),
-        bins=[-12, 12.1],
+        bins=[0, 24],
     )
 
     # output should have one GHA bin

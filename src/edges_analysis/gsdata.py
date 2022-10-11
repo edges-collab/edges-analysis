@@ -331,7 +331,8 @@ class GSData:
 
         if value.ndim != 4:
             raise ValueError(
-                f"data must be a 4D array: (Nload, Npol, Ntime, Nfreq). Got {value.shape}"
+                "data must be a 4D array: (Nload, Npol, Ntime, Nfreq). "
+                f"Got {value.shape}"
             )
 
         if np.iscomplex(value).any():

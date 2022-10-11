@@ -1,9 +1,10 @@
+from __future__ import annotations
+
 import pytest
 
 import dill as pickle
 import numpy as np
 from astropy import units as u
-from typing import List, Tuple
 
 from edges_analysis.gsdata import GSData
 
@@ -22,7 +23,7 @@ from edges_analysis.gsdata import GSData
         ("final_step", 1024),
     ],
 )
-def test_step_basic(request, steps: Tuple[GSData, GSData], nfreqs: int):
+def test_step_basic(request, steps: tuple[GSData, GSData], nfreqs: int):
     steps = request.getfixturevalue(steps)
     for step in steps:
         assert step.freq_array.shape == (nfreqs,)
@@ -32,7 +33,7 @@ def test_step_basic(request, steps: Tuple[GSData, GSData], nfreqs: int):
         pickle.dumps(step)
 
 
-def test_model_step(model_step: List[GSData]):
+def test_model_step(model_step: list[GSData]):
     m = model_step[0]
     assert m.data_model.nparams == 5
 
