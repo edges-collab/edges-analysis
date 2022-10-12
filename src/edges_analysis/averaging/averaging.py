@@ -83,7 +83,7 @@ def get_bin_edges(
                     * unit
                 )
             else:
-                return coords[::bins]
+                return coords[::bins] * unit
         if unit != 1:
             with contextlib.suppress(AttributeError):
                 bins = bins.to_value(unit)
@@ -176,7 +176,13 @@ def bin_array_biased_regular(
                 this_data, this_wght, axis=axis
             )
 
-    return np.array([np.mean(b) for b in bins]), out_data, out_wght
+    centres = [(b[0] + b[1]) / 2 for b in bins]
+    if hasattr(centres[0], "unit"):
+        centres = np.array([c.value for c in centres]) * centres[0].unit
+    else:
+        centres = np.array(centres)
+
+    return centres, out_data, out_wght
 
 
 def bin_array_unbiased_irregular(

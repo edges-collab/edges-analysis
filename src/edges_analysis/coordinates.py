@@ -57,31 +57,6 @@ def sun_azel(times: apt.Time, obs_location: apc.EarthLocation) -> np.ndarray:
     return sun.az.deg, sun.alt.deg
 
 
-def sun_moon_azel(lat, lon, utc_array):
-    """Get local coordinates of the Sun using Astropy."""
-    obs_location = apc.EarthLocation(lat=lat, lon=lon)
-
-    # Compute local coordinates of Sun and Moon
-    utc_array = utc_array
-    sun = np.zeros((len(utc_array), 2))
-    moon = np.zeros((len(utc_array), 2))
-
-    utc_array = [
-        utc if isinstance(utc, dt.datetime) else dt.datetime(*utc) for utc in utc_array
-    ]
-    times = apt.Time(utc_array, format="datetime")
-
-    Sun = apc.get_sun(times).transform_to(apc.AltAz(location=obs_location))
-    Moon = apc.get_moon(times).transform_to(apc.AltAz(location=obs_location))
-
-    sun[:, 0] = Sun.az.deg
-    sun[:, 1] = Sun.alt.deg
-    moon[:, 0] = Moon.az.deg
-    moon[:, 1] = Moon.alt.deg
-
-    return sun, moon
-
-
 def f2z(fe: float | np.ndarray) -> float | np.ndarray:
     """Convert observed 21cm frequency to redshift."""
     # Constants and definitions
@@ -107,21 +82,13 @@ def z2f(z: float | np.ndarray) -> float | np.ndarray:
 def lst2gha(lst: float | np.ndarray) -> float | np.ndarray:
     """Convert LST to GHA."""
     gha = lst - const.galactic_centre_lst
-    if isinstance(gha, np.ndarray):
-        gha[gha < 0] += 24
-    elif gha > 0:
-        lst += 24
-    return gha
+    return gha % 24
 
 
 def gha2lst(gha: float | np.ndarray) -> float | np.ndarray:
     """Convert GHA to LST."""
     lst = gha + const.galactic_centre_lst
-    if isinstance(lst, np.ndarray):
-        lst[lst > 0] -= 24
-    elif lst < 0:
-        lst -= 24
-    return lst
+    return lst % 24
 
 
 def get_jd(d: dt.datetime) -> int:

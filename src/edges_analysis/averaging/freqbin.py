@@ -22,17 +22,15 @@ def freq_bin_direct(data: GSData, resolution: int | float) -> GSData:
     resolution
         The resolution of the binning in MHz or number of existing channels (if int).
     """
-    weights = data.nsamples * (~data.complete_flags).astype(int)
-
     new_freqs, spec, wght = bin_array_biased_regular(
         data=data.data,
-        weights=weights,
+        weights=data.flagged_nsamples,
         coords=data.freq_array,
-        axis=2,
+        axis=-1,
         bins=resolution,
     )
-
-    return data.update(freq_array=new_freqs, data=spec, nsamples=wght, flags=())
+    print("HERE>>>", new_freqs[0], spec.shape, wght.shape)
+    return data.update(freq_array=new_freqs, data=spec, nsamples=wght, flags={})
 
 
 @gsregister("reduce")
