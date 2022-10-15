@@ -18,6 +18,7 @@ import h5py
 import logging
 import numpy as np
 import read_acq
+import warnings
 import yaml
 from astropy.coordinates import EarthLocation, Longitude
 from astropy.time import Time
@@ -54,19 +55,23 @@ class _Register:
                     "parameters": kw,
                 }
             )
-        elif all(isinstance(d, GSData) for d in newdata):
-            return [
-                nd.update(
-                    history={
-                        "message": message,
-                        "function": self.func.__name__,
-                        "parameters": kw,
-                    }
-                )
-                for nd in newdata
-            ]
         else:
-            raise ValueError(f"{self.func.__name__} returned {newdata}")
+            try:
+                return [
+                    nd.update(
+                        history={
+                            "message": message,
+                            "function": self.func.__name__,
+                            "parameters": kw,
+                        }
+                    )
+                    for nd in newdata
+                ]
+            except Exception as e:
+                raise TypeError(
+                    f"{self.func.__name__} returned {type(newdata)} "
+                    f"instead of GSData or list thereof."
+                ) from e
 
 
 GSDATA_PROCESSORS = {}
@@ -169,10 +174,7 @@ class Stamp:
     def from_repr(cls, repr_string: str):
         """Create a Stamp object from a string representation."""
         dct = yaml.load(repr_string, Loader=yaml.FullLoader)
-        dct["timestamp"] = datetime.datetime.strptime(
-            dct["timestamp"], "%Y-%m-%dT%H:%M:%S.%f"
-        )
-        return cls(**dct)
+        return cls.from_yaml_dict(dct)
 
     @classmethod
     def from_yaml_dict(cls, d: dict) -> Stamp:
@@ -242,6 +244,10 @@ class History:
             stamp = Stamp(**stamp)
 
         return evolve(self, stamps=self.stamps + (stamp,))
+
+    def __len__(self):
+        """Returns the number of stamps."""
+        return len(self.stamps)
 
 
 @define(slots=False)
@@ -315,7 +321,9 @@ class GSData:
     effective_integration_time: un.Quantity[un.s] = field(default=1 * un.s)
     flags: dict[str, np.ndarray] = npfield(factory=dict)
 
-    history: History = field(factory=History, validator=vld.instance_of(History))
+    history: History = field(
+        factory=History, validator=vld.instance_of(History), eq=False
+    )
     telescope_name: str = field(default="unknown")
     data_model: GSDataModel | None = field(default=None)
     data_unit: Literal[
@@ -357,7 +365,7 @@ class GSData:
 
         for key, flag in value.items():
             if not isinstance(flag, np.ndarray):
-                raise TypeError("flags must be a tuple of numpy arrays")
+                raise TypeError("flags values must be numpy arrays")
 
             if flag.shape != self.data.shape:
                 raise ValueError("flags must have the same shape as the data")
@@ -366,7 +374,7 @@ class GSData:
                 raise ValueError("flags must be boolean")
 
             if not isinstance(key, str):
-                raise ValueError("flag keys must be strings")
+                raise ValueError("flags keys must be strings")
 
     @freq_array.validator
     def _freq_array_validator(self, attribute, value):
@@ -374,7 +382,7 @@ class GSData:
             raise TypeError("freq_array must be a Quantity")
 
         if not value.unit.is_equivalent("Hz"):
-            raise ValueError("freq_array must be have frequency units")
+            raise ValueError("freq_array must have frequency units")
 
         if value.shape != (self.nfreqs,):
             raise ValueError(
@@ -456,6 +464,20 @@ class GSData:
         if value == "model_residuals" and self.data_model is None:
             raise ValueError(
                 'data_unit cannot be "model_residuals" if data_model is None'
+            )
+
+    @data_model.validator
+    def _data_model_validator(self, att, val):
+        if val is None:
+            return
+
+        if not isinstance(val, GSDataModel):
+            raise TypeError("data_model must be a GSDataModel")
+
+        if val.parameters.shape[:3] != self.data.shape[:3]:
+            raise ValueError(
+                f"data_model parameters shape mismatch: {val.parameters.shape[:3]} "
+                f"vs. {self.data.shape[:3]}"
             )
 
     @cached_property
@@ -665,34 +687,14 @@ class GSData:
 
         return evolve(self, history=history, **kwargs)
 
-    @gsregister("reduce")
     def select_freqs(
         self,
         range: tuple[un.Quantity[un.MHz], un.Quantity[un.MHz]] | None = None,
         indx: np.ndarray | None = None,
     ) -> GSData:
         """Selects a subset of the frequency channels."""
-        if range is not None:
-            if not isinstance(range[0], un.Quantity):
-                logger.warning("frequency range given without units, assuming MHz.")
-                range = (range[0] * un.MHz, range[1] * un.MHz)
+        return select_freqs(self, range=range, indx=indx)
 
-            mask = (self.freq_array < range[0]) | (self.freq_array > range[1])
-        else:
-            mask = np.ones((len(self.freq_array),), dtype=bool)
-
-        if indx:
-            mask[indx] = True
-
-        mask = ~mask
-        return self.update(
-            data=self.data[..., mask],
-            freq_array=self.freq_array[mask],
-            nsamples=self.nsamples[..., mask],
-            flags={k: v[..., mask] for k, v in self.flags.items()},
-        )
-
-    @gsregister("reduce")
     def select_times(
         self,
         range: tuple[Time | Longitude, Time | Longitude] | None = None,
@@ -700,47 +702,29 @@ class GSData:
         indx: np.ndarray | None = None,
     ) -> GSData:
         """Selects a subset of the times."""
-        if self.in_lst:
-            fmt = "lst"
-        if range is not None:
-            if fmt == "lst" and not isinstance(range[0], Longitude):
-                range = (range[0] * un.hourangle, range[1] * un.hourangle)
-            elif fmt != "lst" and not isinstance(range[0], Time):
-                range = (Time(range[0], format=fmt), Time(range[1], format=fmt))
+        return select_times(self, range=range, fmt=fmt, indx=indx)
 
-            if fmt == "lst":
-                mask = (self.lst_array < range[0]) | (self.lst_array > range[1])
-            else:
-                mask = (self.time_array < range[0]) | (self.time_array > range[1])
-        else:
-            mask = np.ones((len(self.time_array),), dtype=bool)
+    def select_lsts(
+        self,
+        range: tuple[Time | Longitude, Time | Longitude] | None = None,
+        indx: np.ndarray | None = None,
+    ) -> GSData:
+        """Selects a subset of the times."""
+        return select_lsts(self, range=range, indx=indx)
 
-        if indx:
-            mask[indx] = True
-
-        mask = ~mask
-
-        return self.update(
-            data=self.data[:, :, mask],
-            time_array=self.time_array[mask],
-            auxiliary_measurements={
-                k: v[mask] for k, v in self.auxiliary_measurements.items()
-            },
-            nsamples=self.nsamples[:, :, mask],
-            flags={k: v[:, :, mask] for k, v in self.flags.items()},
-        )
-
-    @gsregister("reduce")
     def select(
         self,
-        freq_range: tuple[Time | Longitude, Time | Longitude] | None,
-        freq_indx: np.ndarray | None,
-        time_range: tuple[Time | Longitude, Time | Longitude] | None,
-        time_indx: np.ndarray | None,
+        freq_range: tuple[Time | Longitude, Time | Longitude] | None = None,
+        freq_indx: np.ndarray | None = None,
+        time_range: tuple[Time | Longitude, Time | Longitude] | None = None,
+        time_indx: np.ndarray | None = None,
+        lst_range: tuple[Time | Longitude, Time | Longitude] | None = None,
     ) -> GSData:
         """Selects a subset of the data."""
-        return self.select_freqs(freq_range, freq_indx).select_times(
-            time_range, time_indx
+        return (
+            self.select_freqs(freq_range, freq_indx)
+            .select_times(time_range, time_indx)
+            .select_lsts(lst_range)
         )
 
     def __add__(self, other: GSData) -> GSData:
@@ -757,40 +741,85 @@ class GSData:
 
         if not np.all(self.time_array == other.time_array):
             # concatenate over time axis
-            data = np.concatenate((self.data, other.data), axis=1)
+            data = np.concatenate((self.data, other.data), axis=2)
             aux = {
                 k: np.concatenate(
                     (self.auxiliary_measurements[k], other.auxiliary_measurements[k])
                 )
                 for k in self.auxiliary_measurements
             }
-            nsamples = np.concatenate((self.nsamples, other.nsamples), axis=1)
+            nsamples = np.concatenate((self.nsamples, other.nsamples), axis=2)
             if all(k in other.flags for k in self.flags):
                 flags = {
-                    k: np.concatenate((self.flags[k], other.flags[k]), axis=1)
+                    k: np.concatenate((self.flags[k], other.flags[k]), axis=2)
                     for k in self.flags
                 }
             else:
                 # Can only use "complete flags"
                 flags = {
                     "complete": np.concatenate(
-                        (self.complete_flags, other.complete_flags), axis=1
+                        (self.complete_flags, other.complete_flags), axis=2
                     )
                 }
+
+            if getattr(self.data_model, "model", 1) != getattr(
+                other.data_model, "model", 2
+            ):
+                warnings.warn(
+                    "data models for two objects are different. "
+                    "Result will have no data model."
+                )
+                data_model = None
+            else:
+                data_model = self.data_model.update(
+                    parameters=np.concatenate(
+                        (self.data_model.parameters, other.data_model.parameters),
+                        axis=2,
+                    )
+                )
+
+            if self.in_lst:
+                time_array = np.concatenate((self.time_array, other.time_array), axis=0)
+            else:
+                time_array = Time(
+                    np.concatenate((self.time_array.jd, other.time_array.jd), axis=0),
+                    format="jd",
+                )
 
             return self.update(
                 data=data,
                 auxiliary_measurements=aux,
                 nsamples=nsamples,
                 flags=flags,
-                time_array=np.concatenate((self.time_array, other.time_array)),
+                time_array=time_array,
+                data_model=data_model,
             )
 
         if not np.all(self.freq_array == other.freq_array):
+            if self.data_model is not None:
+                warnings.warn(
+                    "Cannot concatenate existing data_models over frequency axis."
+                )
+
+            if all(k in other.flags for k in self.flags):
+                flags = {
+                    k: np.concatenate((self.flags[k], other.flags[k]), axis=3)
+                    for k in self.flags
+                }
+            else:
+                # Can only use "complete flags"
+                flags = {
+                    "complete": np.concatenate(
+                        (self.complete_flags, other.complete_flags), axis=3
+                    )
+                }
             # concatenate over frequency axis
             return self.update(
-                data=np.concatenate((self.data, other.data), axis=2),
+                data=np.concatenate((self.data, other.data), axis=3),
+                nsamples=np.concatenate((self.nsamples, other.nsamples), axis=3),
                 freq_array=np.concatenate((self.freq_array, other.freq_array)),
+                data_model=None,
+                flags=flags,
             )
 
         # If non of the above, then we have two GSData objects at the same times and
@@ -803,11 +832,19 @@ class GSData:
             self.flagged_nsamples * self.data + other.flagged_nsamples * other.data
         ) / nsamples
 
-        return self.update(data=mean, nsamples=nsamples)
-
-    def __mul__(self, other: np.typing.ArrayLike) -> GSData:
-        """Multiplies the data by a scalar."""
-        return self.update(data=self.data * other)
+        if getattr(self.data_model, "model", 1) != getattr(
+            other.data_model, "model", 2
+        ):
+            warnings.warn(
+                "data models for two objects are different. "
+                "Result will have no data model."
+            )
+            data_model = None
+        else:
+            data_model = self.data_model.update(
+                parameters=self.data_model.parameters + other.data_model.parameters
+            )
+        return self.update(data=mean, nsamples=nsamples, data_model=data_model)
 
     @cached_property
     def lst_array(self) -> Longitude:
@@ -837,7 +874,7 @@ class GSData:
         """Get the Sun's azimuth and elevation for each time in deg."""
         if self.in_lst:
             raise ValueError(
-                "Cannot compute Moon positions when time array is not a Time object"
+                "Cannot compute Sun positions when time array is not a Time object"
             )
 
         return crd.sun_azel(
@@ -851,10 +888,8 @@ class GSData:
         Warning: this is an irreversible operation. You cannot go back to UTC after
         doing this. Furthermore, the auxiliary measurements will be lost.
         """
-        if not isinstance(self.time_array, Time):
-            raise ValueError(
-                "Cannot convert time array to LST when time array is not a Time object"
-            )
+        if self.in_lst:
+            return self
 
         return self.update(time_array=self.lst_array, auxiliary_measurements={})
 
@@ -879,7 +914,7 @@ class GSData:
 
         which_flags = tuple(s for s in which_flags if s not in ignore_flags)
 
-        if len(which_flags) == len(self.flags):
+        if len(which_flags) == self.nflagging_ops:
             return self.complete_flags
         else:
             return np.any(tuple(self.flags[k] for k in which_flags), axis=0)
@@ -1017,11 +1052,17 @@ class GSDataModel:
     @parameters.validator
     def _params_vld(self, att, val):
         if not isinstance(val, np.ndarray):
-            raise (" TypeError: parameters must be a numpy array")
+            raise TypeError("parameters must be a numpy array")
 
         if val.ndim != 4:
             raise ValueError(
-                "parameters must have 4 dimensions (Nloads, Npol, Ntimes, Nparams"
+                "parameters must have 4 dimensions (Nloads, Npol, Ntimes, Nparams)"
+            )
+
+        if val.shape[-1] != self.model.n_terms:
+            raise ValueError(
+                f"parameters array has {val.shape[-1]} parameters, "
+                f"but model has {self.model.n_terms}"
             )
 
     @property
@@ -1030,7 +1071,7 @@ class GSDataModel:
         return self.parameters.shape[0]
 
     @property
-    def npol(self) -> int:
+    def npols(self) -> int:
         """Number of polarisations in the model."""
         return self.parameters.shape[1]
 
@@ -1046,12 +1087,7 @@ class GSDataModel:
 
     def get_residuals(self, gsdata: GSData) -> np.ndarray:
         """Calculates the residuals of the model given the input GSData object."""
-        if gsdata.data_unit == "model_residuals":
-            raise ValueError(
-                "Cannot compute model residuals on data that is already residuals!"
-            )
-
-        d = gsdata.data.reshape((-1, gsdata.nfreqs))
+        d = gsdata.spectra.reshape((-1, gsdata.nfreqs))
         p = self.parameters.reshape((-1, gsdata.data_model.nparams))
 
         model = self.model.at(x=gsdata.freq_array.to_value("MHz"))
@@ -1065,12 +1101,7 @@ class GSDataModel:
 
     def get_spectra(self, gsdata: GSData) -> np.ndarray:
         """Calculates the data spectra given the input GSData object."""
-        if gsdata.data_unit != "model_residuals":
-            raise ValueError(
-                "Cannot compute model spectra on data that aren't residuals!"
-            )
-
-        d = gsdata.data.reshape((-1, gsdata.nfreqs))
+        d = gsdata.spectra.reshape((-1, gsdata.nfreqs))
         p = self.parameters.reshape((-1, self.nparams))
 
         model = self.model.at(x=gsdata.freq_array.to_value("MHz"))
@@ -1085,10 +1116,7 @@ class GSDataModel:
     @classmethod
     def from_gsdata(cls, model: mdl.Model, gsdata: GSData) -> GSDataModel:
         """Creates a GSDataModel from a GSData object."""
-        if gsdata.data_unit == "model_residuals":
-            raise ValueError("Cannot compute model on data that is already residuals!")
-
-        d = gsdata.data.reshape((-1, gsdata.nfreqs))
+        d = gsdata.spectra.reshape((-1, gsdata.nfreqs))
         w = gsdata.flagged_nsamples.reshape((-1, gsdata.nfreqs))
 
         xmodel = model.at(x=gsdata.freq_array.to_value("MHz"))
@@ -1149,3 +1177,124 @@ def add_model(data: GSData, *, model: mdl.Model, append_to_file: bool | None = N
                 new.data_model.write(fl, "data_model")
 
     return new
+
+
+@gsregister("reduce")
+def select_freqs(
+    data: GSData,
+    *,
+    range: tuple[un.Quantity[un.MHz], un.Quantity[un.MHz]] | None = None,
+    indx: np.ndarray | None = None,
+) -> GSData:
+    """Selects a subset of the frequency channels."""
+    mask = None
+    if range is not None:
+        if not isinstance(range[0], un.Quantity):
+            logger.warning("frequency range given without units, assuming MHz.")
+            range = (range[0] * un.MHz, range[1] * un.MHz)
+
+        mask = (data.freq_array >= range[0]) & (data.freq_array <= range[1])
+
+    if indx is not None:
+        if mask is None:
+            mask = np.zeros(len(data.freq_array), dtype=bool)
+        mask[indx] = True
+
+    if mask is None:
+        return data
+
+    return data.update(
+        data=data.data[..., mask],
+        freq_array=data.freq_array[mask],
+        nsamples=data.nsamples[..., mask],
+        flags={k: v[..., mask] for k, v in data.flags.items()},
+    )
+
+
+def _mask_times(data: GSData, mask: np.ndarray) -> GSData:
+    if mask is None:
+        return data
+
+    return data.update(
+        data=data.data[:, :, mask],
+        time_array=data.time_array[mask],
+        auxiliary_measurements={
+            k: v[mask] for k, v in data.auxiliary_measurements.items()
+        },
+        nsamples=data.nsamples[:, :, mask],
+        flags={k: v[:, :, mask] for k, v in data.flags.items()},
+        data_model=data.data_model.update(
+            parameters=data.data_model.parameters[:, :, mask]
+        )
+        if data.data_model is not None
+        else None,
+    )
+
+
+@gsregister("reduce")
+def select_times(
+    data: GSData,
+    *,
+    range: tuple[Time | float, Time | float] | None = None,
+    fmt: str = "jd",
+    indx: np.ndarray | None = None,
+    load: int | str = "ant",
+) -> GSData:
+    """Selects a subset of the times."""
+    if data.in_lst:
+        raise ValueError("LST-binned data cannot be selected on times.")
+
+    if isinstance(load, str):
+        load = data.loads.index(load)
+
+    mask = None
+    if range is not None:
+        if len(range) != 2:
+            raise ValueError("range must be a length-2 tuple")
+
+        if not isinstance(range[0], Time):
+            range = (Time(range[0], format=fmt), Time(range[1], format=fmt))
+
+            t = data.time_array[:, load]
+            mask = (t >= range[0]) & (t <= range[1])
+
+    if indx is not None:
+        if mask is None:
+            mask = np.zeros((len(data.time_array),), dtype=bool)
+        mask[indx] = True
+
+    return _mask_times(data, mask)
+
+
+@gsregister("reduce")
+def select_lsts(
+    data: GSData,
+    *,
+    range: tuple[Longitude | float, Longitude | float] | None = None,
+    indx: np.ndarray | None = None,
+    load: int | str = "ant",
+) -> GSData:
+    """Selects a subset of the times."""
+    if isinstance(load, str):
+        load = data.loads.index(load)
+
+    mask = None
+    if range is not None:
+        if len(range) != 2:
+            raise ValueError("range must be a length-2 tuple")
+
+        if not isinstance(range[0], Longitude):
+            range = (range[0] % 24 * un.hourangle, range[1] % 24 * un.hourangle)
+
+        t = data.lst_array[:, load]
+        if range[0] > range[1]:
+            mask = (t >= range[1]) & (t <= range[0])
+        else:
+            mask = (t >= range[0]) & (t <= range[1])
+
+    if indx is not None:
+        if mask is None:
+            mask = np.zeros((len(data.time_array),), dtype=bool)
+        mask[indx] = True
+
+    return _mask_times(data, mask)

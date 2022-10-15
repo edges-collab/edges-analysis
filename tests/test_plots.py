@@ -20,8 +20,20 @@ from edges_analysis.gsdata import GSData
 )
 def test_plot_waterfall(step, request):
     """Test that plotting a waterfall doesn't crash."""
-    step = request.getfixturevalue(step)
-    plots.plot_waterfall(step[0])
+    astep = request.getfixturevalue(step)
+    plots.plot_waterfall(
+        astep[0], attribute="resids" if step == "model_step" else "spectra"
+    )
+
+
+def test_plot_waterfall_bad_attribute(cal_step):
+    with pytest.raises(ValueError, match="Cannot use attribute"):
+        plots.plot_waterfall(cal_step[0], attribute="flags")
+
+
+def test_plot_time_average_bad_attribute(cal_step):
+    with pytest.raises(ValueError, match="Cannot use attribute"):
+        plots.plot_time_average(cal_step[0], attribute="flags")
 
 
 @pytest.mark.parametrize(
@@ -39,7 +51,7 @@ def test_plot_waterfall(step, request):
 def test_plot_time_average(step, request):
     """Test that plotting a time average doesn't crash."""
     step = request.getfixturevalue(step)
-    plots.plot_time_average(step[0])
+    plots.plot_time_average(step[0], lst_min=6.0, lst_max=18.0)
 
 
 @pytest.mark.parametrize("step", ["raw_step", "cal_step", "model_step", "lstbin_step"])

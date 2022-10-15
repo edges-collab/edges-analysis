@@ -57,7 +57,7 @@ def plot_waterfall(
         "resids", "complete_flags", "nsamples".
     """
     q = getattr(data, attribute)
-    if q.shape != data.data.shape:
+    if not hasattr(q, "shape") or q.shape != data.data.shape:
         raise ValueError(
             f"Cannot use attribute '{attribute}' as it doesn't have "
             "the same shape as data."
@@ -160,12 +160,12 @@ def plot_time_average(
         fig, ax = plt.subplots(1, 1)
 
     if lst_min > 0 or lst_max < 24:
-        data = data.select_times(range=(lst_min, lst_max))
+        data = data.select_lsts(range=(lst_min, lst_max))
 
     data = lst_bin(data, binsize=24.0)
 
     q = getattr(data, attribute)
-    if q.shape != data.data.shape:
+    if not hasattr(q, "shape") or q.shape != data.data.shape:
         raise ValueError(
             f"Cannot use attribute '{attribute}' as it doesn't "
             "have the same shape as data."
