@@ -1101,7 +1101,7 @@ class GSDataModel:
 
     def get_spectra(self, gsdata: GSData) -> np.ndarray:
         """Calculates the data spectra given the input GSData object."""
-        d = gsdata.spectra.reshape((-1, gsdata.nfreqs))
+        d = gsdata.resids.reshape((-1, gsdata.nfreqs))
         p = self.parameters.reshape((-1, self.nparams))
 
         model = self.model.at(x=gsdata.freq_array.to_value("MHz"))
