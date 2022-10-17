@@ -94,7 +94,9 @@ def gauss_smooth(data: GSData, size: int, decimate_at: int | None = None) -> np.
     y = np.arange(-size * 4, size * 4 + 1) * 2 / size
     window = np.exp(-(y**2) * 0.69)
 
-    sums = convolve1d(data.data, window, mode="nearest")[..., decimate_at::size]
+    sums = convolve1d(data.flagged_nsamples * data.data, window, mode="nearest")[
+        ..., decimate_at::size
+    ]
     nsamples = convolve1d(data.flagged_nsamples, window, mode="nearest")[
         ..., decimate_at::size
     ]
