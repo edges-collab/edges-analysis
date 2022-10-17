@@ -460,10 +460,16 @@ class GSData:
 
     @data_unit.validator
     def _data_unit_validator(self, attribute, value):
-        if value not in ("power", "temperature", "uncalibrated", "model_residuals"):
+        if value not in (
+            "power",
+            "temperature",
+            "uncalibrated",
+            "model_residuals",
+            "uncalibrated_temp",
+        ):
             raise ValueError(
                 'data_unit must be one of "power", "temperature", "uncalibrated",'
-                '"model_residuals"'
+                '"model_residuals", "uncalibrated_temp'
             )
 
         if value == "model_residuals" and self.data_model is None:

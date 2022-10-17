@@ -615,7 +615,15 @@ def rmsf_filter(
     if not np.any(freq_mask):
         return np.zeros(data.ntimes, dtype=bool)
 
-    semi_calibrated_data = (data.spectra * tload) + tcal
+    if data.data_unit == "uncalibrated":
+        semi_calibrated_data = (data.spectra * tload) + tcal
+    elif data.data_unit == "uncalibrated_temp":
+        semi_calibrated_data = data.spectra
+    else:
+        raise ValueError(
+            "Unsupported data_type for rmsf_filter. "
+            "Need uncalibrated or uncalibrated_temp"
+        )
     freq = data.freq_array.value[freq_mask]
     init_model = (freq / 75.0) ** -2.5
 
