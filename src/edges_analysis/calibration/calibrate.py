@@ -41,6 +41,24 @@ def dicke_calibration(data: GSData) -> GSData:
     )
 
 
+@gsregister("calibrate")
+def approximate_temperature(data: GSData, *, tload: float, tns: float):
+    """Convert an uncalibrated object to an uncalibrated_temp object.
+
+    This uses a guess for T0 and T1 that provides an approximate temperature spectrum.
+    One does not need this step to perform actual calibration, and if actual calibration
+    is done following applying this function, you will need to provide the same tload
+    and tns as used here.
+    """
+    if data.data_unit != "uncalibrated":
+        raise ValueError(
+            "data_unit must be 'uncalibrated' to calculate approximate temperature"
+        )
+    return data.update(
+        data=data.data * tns + tload, data_unit="uncalibrated_temp", data_model=None
+    )
+
+
 def get_default_s11_directory(band: str) -> Path:
     """Get the default S11 directory for this observation."""
     return Path(config["paths"]["raw_field_data"]) / "mro" / band / "s11"
@@ -240,6 +258,8 @@ def apply_noise_wave_calibration(
     s11_file_pattern: str = r"{y}_{jd}_{h}_*_input{input}.s1p",
     ignore_s11_files: list[str] | None = None,
     antenna_s11_n_terms: int = 15,
+    tload: float | None = None,
+    tns: float | None = None,
 ) -> GSData:
     """Apply noise-wave calibration to data.
 
@@ -268,8 +288,13 @@ def apply_noise_wave_calibration(
     antenna_s11_n_terms
         The number of terms to use in the antenna S11 model.
     """
-    if data.data_unit != "uncalibrated":
+    if data.data_unit not in ("uncalibrated", "uncalibrated_temp"):
         raise ValueError("Data must be uncalibrated to apply calibration!")
+
+    if data.data_unit == "uncalibrated_temp" and (tload is None or tns is None):
+        raise ValueError(
+            "You need to supply tload and tns if data_unit is uncalibrated_temp"
+        )
 
     if data.nloads != 1:
         raise ValueError("Can only apply noise-wave calibration to single load data!")
@@ -284,7 +309,11 @@ def apply_noise_wave_calibration(
         antenna_s11_n_terms=antenna_s11_n_terms,
     )
 
-    new_data = labcal.calibrate_q(data.data, freq=data.freq_array)
+    if data.data_unit == "uncalibrated_temp":
+        q = (data.data - tload) / tns
+    else:
+        q = data.data
+    new_data = labcal.calibrate_q(q, freq=data.freq_array)
     return data.update(data=new_data, data_unit="temperature", data_model=None)
 
 

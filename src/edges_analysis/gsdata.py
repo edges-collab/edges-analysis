@@ -332,7 +332,7 @@ class GSData:
     telescope_name: str = field(default="unknown")
     data_model: GSDataModel | None = field(default=None)
     data_unit: Literal[
-        "power", "temperature", "uncalibrated", "model_residuals"
+        "power", "temperature", "uncalibrated", "uncalibrated_temp", "model_residuals"
     ] = field(default="power")
     auxiliary_measurements: dict = field(factory=dict)
     filename: Path | None = field(default=None, converter=cnv.optional(Path))
