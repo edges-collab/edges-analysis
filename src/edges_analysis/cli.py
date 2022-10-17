@@ -56,9 +56,9 @@ logger = logging.getLogger(__name__)
 
 def _get_files(pth: Path, filt=h5py.is_hdf5) -> list[Path]:
     if pth.is_dir():
-        return sorted(fl for fl in pth.glob("*") if filt(fl))
+        return sorted({fl for fl in pth.glob("*") if filt(fl)})
     else:
-        return sorted(Path(fl) for fl in glob.glob(str(pth)) if filt(Path(fl)))
+        return sorted({Path(fl) for fl in glob.glob(str(pth)) if filt(Path(fl))})
 
 
 def read_progressfile(fl: Path) -> dict[str, dict]:
@@ -356,7 +356,7 @@ def process(
 
     # Get input files (if any)
     path = [Path(p) for p in path]
-    input_files = sum((_get_files(p, filt=_file_filter) for p in path), [])
+    input_files = sorted(set(sum((_get_files(p, filt=_file_filter) for p in path), [])))
 
     # First, write out a progress file if it doesn't exist.
     if not progressfile.exists() or restart:

@@ -1273,6 +1273,7 @@ def select_lsts(
     range: tuple[Longitude | float, Longitude | float] | None = None,
     indx: np.ndarray | None = None,
     load: int | str = "ant",
+    gha: bool = False,
 ) -> GSData:
     """Selects a subset of the times."""
     if isinstance(load, str):
@@ -1286,7 +1287,10 @@ def select_lsts(
         if not isinstance(range[0], Longitude):
             range = (range[0] % 24 * un.hourangle, range[1] % 24 * un.hourangle)
 
-        t = data.lst_array[:, load]
+        if gha:
+            t = data.gha[:, load]
+        else:
+            t = data.lst_array[:, load]
         if range[0] > range[1]:
             mask = (t >= range[1]) & (t <= range[0])
         else:
