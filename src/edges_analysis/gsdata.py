@@ -47,7 +47,7 @@ class _Register:
     def __call__(
         self, data: GSData, *args, message: str = "", **kw
     ) -> GSData | list[GSData]:
-        now = datetime.now()
+        now = datetime.datetime.now()
         newdata = self.func(data, *args, **kw)
 
         # Unless the function itself has given a new filename, we want to strip out
