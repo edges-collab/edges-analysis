@@ -857,7 +857,7 @@ class GSData:
     @cached_property
     def gha(self) -> np.ndarray:
         """The GHA's of the observations."""
-        return crd.lst2gha(self.lst_array.hour)
+        return crd.lst2gha(self.lst_array.hour) * un.hourangle
 
     def get_moon_azel(self) -> tuple[np.ndarray, np.ndarray]:
         """Get the Moon's azimuth and elevation for each time in deg."""
@@ -1287,10 +1287,7 @@ def select_lsts(
         if not isinstance(range[0], Longitude):
             range = (range[0] % 24 * un.hourangle, range[1] % 24 * un.hourangle)
 
-        if gha:
-            t = data.gha[:, load]
-        else:
-            t = data.lst_array[:, load]
+        t = data.gha[:, load] if gha else data.lst_array[:, load]
         if range[0] > range[1]:
             mask = (t >= range[1]) & (t <= range[0])
         else:
