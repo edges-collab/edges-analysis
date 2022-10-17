@@ -50,10 +50,6 @@ class _Register:
         now = datetime.datetime.now()
         newdata = self.func(data, *args, **kw)
 
-        # Unless the function itself has given a new filename, we want to strip out
-        # the filename if the data shape has changed, because new flags applied will
-        # not be compatible with the old data (and they can be written to file
-        # automatically).
         if isinstance(newdata, GSData):
             return newdata.update(
                 history={
@@ -62,9 +58,6 @@ class _Register:
                     "parameters": kw,
                     "timestamp": now,
                 },
-                filename=newdata.filename
-                if newdata.filename != data.filename
-                else (data.filename if newdata.data.shape != data.data.shape else None),
             )
         else:
             try:
@@ -76,11 +69,6 @@ class _Register:
                             "parameters": kw,
                             "timestamp": now,
                         },
-                        filename=nd.filename
-                        if nd.filename != data.filename
-                        else (
-                            data.filename if nd.data.shape != data.data.shape else None
-                        ),
                     )
                     for nd in newdata
                 ]
@@ -1005,6 +993,10 @@ class GSData:
 
         if append_to_file:
             with h5py.File(new.filename, "a") as fl:
+                if fl["data"].shape != flags.shape:
+                    # Can't append to file because it would be inconsistent.
+                    return new
+
                 flg_grp = fl["flags"]
 
                 if "values" not in flg_grp:
@@ -1189,7 +1181,10 @@ def add_model(data: GSData, *, model: mdl.Model, append_to_file: bool | None = N
                 logger.warning(
                     f"Data model already exists in {new.filename}, not overwriting."
                 )
-
+            elif fl["data"].shape[:3] != new.data_model.parameters.shape[:3]:
+                logger.warning(
+                    "File on disk is incompatible with the data model. Write new file."
+                )
             else:
                 new.data_model.write(fl, "data_model")
 
