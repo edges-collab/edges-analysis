@@ -82,8 +82,15 @@ class _GSDataFilter:
                 new = np.sum(outflags)
                 tot = np.sum(data.complete_flags)
 
+                if not data.in_lst:
+                    rep = data.get_initial_yearday(hours=True)
+                elif data.filename:
+                    rep = data.filename
+                else:
+                    rep = "unknown"
+
                 logger.info(
-                    f"'{data.get_initial_yearday(hours=True)}': "
+                    f"'{rep}': "
                     f"{old / sz:.2f} + {new / sz:.2f} → "
                     f"{tot / sz:.2f}% [bold]<+{(tot - old) / sz:.2f}%>[/] "
                     f"flagged after [blue]{self.func.__name__}[/]"
