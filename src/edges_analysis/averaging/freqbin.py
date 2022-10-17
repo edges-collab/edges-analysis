@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import edges_cal.modelling as mdl
+import numpy as np
 from astropy import units as un
+from scipy.ndimage import convolve1d
 
 from ..gsdata import GSData, add_model, gsregister
 from .averaging import bin_array_biased_regular, bin_freq_unbiased_regular
@@ -74,6 +76,35 @@ def freq_bin_with_models(
         flags={},
         freq_array=f * un.MHz,
         data_model=data.data_model.update(parameters=params),
+    )
+
+
+@gsregister("reduce")
+def gauss_smooth(data: GSData, size: int, decimate_at: int | None = None) -> np.ndarray:
+    """Smooth x with a Gaussian function, and reduces the size of the array."""
+    assert isinstance(size, int)
+
+    if decimate_at is None:
+        decimate_at = size // 2
+
+    assert isinstance(decimate_at, int)
+    assert decimate_at < size
+
+    # This choice of size scaling corresponds to Alan's C code.
+    y = np.arange(-size * 4, size * 4 + 1) * 2 / size
+    window = np.exp(-(y**2) * 0.69)
+
+    sums = convolve1d(data.data, window, mode="nearest")[..., decimate_at::size]
+    nsamples = convolve1d(data.flagged_nsamples, window, mode="nearest")[
+        ..., decimate_at::size
+    ]
+
+    return data.update(
+        data=sums / nsamples,
+        nsamples=nsamples,
+        flags={},
+        freq_array=data.freq_array[decimate_at::size],
+        data_model=None,
     )
 
 
