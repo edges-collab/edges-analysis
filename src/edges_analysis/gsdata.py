@@ -44,16 +44,27 @@ class _Register:
         self.kind = kind
         functools.update_wrapper(self, func, updated=())
 
-    def __call__(self, *args, message: str = "", **kw) -> GSData | list[GSData]:
-        newdata = self.func(*args, **kw)
+    def __call__(
+        self, data: GSData, *args, message: str = "", **kw
+    ) -> GSData | list[GSData]:
+        now = datetime.now()
+        newdata = self.func(data, *args, **kw)
 
+        # Unless the function itself has given a new filename, we want to strip out
+        # the filename if the data shape has changed, because new flags applied will
+        # not be compatible with the old data (and they can be written to file
+        # automatically).
         if isinstance(newdata, GSData):
             return newdata.update(
                 history={
                     "message": message,
                     "function": self.func.__name__,
                     "parameters": kw,
-                }
+                    "timestamp": now,
+                },
+                filename=newdata.filename
+                if newdata.filename != data.filename
+                else (data.filename if newdata.data.shape != data.data.shape else None),
             )
         else:
             try:
@@ -63,7 +74,13 @@ class _Register:
                             "message": message,
                             "function": self.func.__name__,
                             "parameters": kw,
-                        }
+                            "timestamp": now,
+                        },
+                        filename=nd.filename
+                        if nd.filename != data.filename
+                        else (
+                            data.filename if nd.data.shape != data.data.shape else None
+                        ),
                     )
                     for nd in newdata
                 ]
