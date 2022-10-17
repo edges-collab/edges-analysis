@@ -1,9 +1,13 @@
 """Functions for working with earth/sky coordinates."""
 from __future__ import annotations
+
 import datetime as dt
 import numpy as np
-from astropy import time as apt, coordinates as apc, units as apu
-from .. import const
+from astropy import coordinates as apc
+from astropy import time as apt
+from astropy import units as apu
+
+from . import const
 
 
 def utc2lst(utc_time_array, longitude):
@@ -41,29 +45,16 @@ def utc2lst(utc_time_array, longitude):
     return t.sidereal_time("apparent", str(longitude) + "d", model="IAU2006A").value
 
 
-def sun_moon_azel(lat, lon, utc_array):
+def moon_azel(times: apt.Time, obs_location: apc.EarthLocation) -> np.ndarray:
     """Get local coordinates of the Sun using Astropy."""
-    obs_location = apc.EarthLocation(lat=lat, lon=lon)
+    moon = apc.get_moon(times).transform_to(apc.AltAz(location=obs_location))
+    return moon.az.deg, moon.alt.deg
 
-    # Compute local coordinates of Sun and Moon
-    utc_array = utc_array
-    sun = np.zeros((len(utc_array), 2))
-    moon = np.zeros((len(utc_array), 2))
 
-    utc_array = [
-        utc if isinstance(utc, dt.datetime) else dt.datetime(*utc) for utc in utc_array
-    ]
-    times = apt.Time(utc_array, format="datetime")
-
-    Sun = apc.get_sun(times).transform_to(apc.AltAz(location=obs_location))
-    Moon = apc.get_moon(times).transform_to(apc.AltAz(location=obs_location))
-
-    sun[:, 0] = Sun.az.deg
-    sun[:, 1] = Sun.alt.deg
-    moon[:, 0] = Moon.az.deg
-    moon[:, 1] = Moon.alt.deg
-
-    return sun, moon
+def sun_azel(times: apt.Time, obs_location: apc.EarthLocation) -> np.ndarray:
+    """Get local coordinates of the Sun using Astropy."""
+    sun = apc.get_moon(times).transform_to(apc.AltAz(location=obs_location))
+    return sun.az.deg, sun.alt.deg
 
 
 def f2z(fe: float | np.ndarray) -> float | np.ndarray:
@@ -91,8 +82,13 @@ def z2f(z: float | np.ndarray) -> float | np.ndarray:
 def lst2gha(lst: float | np.ndarray) -> float | np.ndarray:
     """Convert LST to GHA."""
     gha = lst - const.galactic_centre_lst
-    gha[gha < 0] += 24
-    return gha
+    return gha % 24
+
+
+def gha2lst(gha: float | np.ndarray) -> float | np.ndarray:
+    """Convert GHA to LST."""
+    lst = gha + const.galactic_centre_lst
+    return lst % 24
 
 
 def get_jd(d: dt.datetime) -> int:

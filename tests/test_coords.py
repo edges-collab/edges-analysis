@@ -1,7 +1,7 @@
 import numpy as np
-from edges_analysis.analysis.coordinates import lsts_to_times
-
 from astropy import time as apt
+
+from edges_analysis.coordinates import lsts_to_times
 
 
 def test_lsts_to_times():

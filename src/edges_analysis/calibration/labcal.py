@@ -1,14 +1,17 @@
 """Module providing routines for calibration of field data."""
 from __future__ import annotations
+
 import attr
-from edges_cal import Calibrator, CalibrationObservation, s11
-from .s11 import AntennaS11
-from cached_property import cached_property
-from typing import Callable, Sequence
 import numpy as np
-from pathlib import Path
+from cached_property import cached_property
+from edges_cal import CalibrationObservation, Calibrator
 from edges_cal import receiver_calibration_func as rcf
+from edges_cal import s11
 from edges_cal import types as tp
+from pathlib import Path
+from typing import Callable, Sequence
+
+from .s11 import AntennaS11
 
 
 def optional(tp: type) -> Callable:
@@ -86,10 +89,11 @@ class LabCalibration:
     @property
     def antenna_s11_model(self) -> Callable[[np.ndarray], np.ndarray]:
         """Callable S11 model as a function of frequency."""
-        if not isinstance(self._antenna_s11_model, AntennaS11):
-            return self._antenna_s11_model
-        else:
-            return self._antenna_s11_model.s11_model
+        return (
+            self._antenna_s11_model.s11_model
+            if isinstance(self._antenna_s11_model, AntennaS11)
+            else self._antenna_s11_model
+        )
 
     @cached_property
     def antenna_s11(self) -> np.ndarray:
@@ -165,10 +169,7 @@ class LabCalibration:
 
         out = self.calobs.decalibrate_temp(freq, temp, ant_s11)
 
-        if to_q:
-            return (out - self.calobs.t_load) / self.calobs.t_load_ns
-        else:
-            return out
+        return (out - self.calobs.t_load) / self.calobs.t_load_ns if to_q else out
 
     def with_ant_s11(
         self, ant_s11: Callable[[np.ndarray], np.ndarray]

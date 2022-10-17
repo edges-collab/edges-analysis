@@ -26,8 +26,8 @@ Features
 
 ``edges-analysis`` includes the following features:
 
-* Well-defined objects describing the data at various stages of analysis, backed by
-  structured HDF5 files.
+* A well-defined class-based interface to generic single-dish data for global-signal
+  measurements.
 * Full tracking of input metadata across all analysis steps.
 * Compact command-line interface for running each step.
 * Beam models

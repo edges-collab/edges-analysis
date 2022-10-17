@@ -33,6 +33,7 @@ exclude =
     examples/*
 per-file-ignores =
     tests/*:D
-    src/edges_analysis/__init__.py:F401
-    src/edges_analysis/analysis/__init__.py:F401
-    src/edges_analysis/analysis/loss.py:N803
+    src/edges_analysis/gsdata.py:A002,A001
+    */*/__init__.py:F401
+    */*/*/__init__.py:F401
+    src/edges_analysis/calibration/loss.py:N803

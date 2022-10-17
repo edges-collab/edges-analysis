@@ -1,10 +1,13 @@
+from __future__ import annotations
+
+import pytest
+
 import numpy as np
 from edges_cal import modelling as mdl
-import pytest
 from pytest_cases import fixture_ref as fxref
 from pytest_cases import parametrize
 
-from edges_analysis.analysis import averaging
+from edges_analysis.averaging import averaging
 
 
 def test_get_binned_weights_1d():
@@ -114,7 +117,7 @@ def test_model_bin_gha(params, weights, refit):
         resids=resids,
         weights=weights,
         gha=np.linspace(0, 24, N_GHA),
-        bins=[-12, 12.1],
+        bins=[0, 24],
     )
 
     # output should have one GHA bin
@@ -167,7 +170,7 @@ class TestBinArray:
         outc, mean, wght = averaging.bin_array_unbiased_irregular(
             corrupt, coords=coords, axis=-1, bins=11
         )
-        assert mean.shape == outc.shape == wght.shape == (50, 46)
+        assert mean.shape == outc.shape == wght.shape == (50, 45)
 
         outc, mean, wght = averaging.bin_array_unbiased_irregular(
             corrupt, coords=coords, axis=-1, bins=1.0

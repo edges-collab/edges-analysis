@@ -1,19 +1,20 @@
 """Corrections for S11 measurements."""
 from __future__ import annotations
+
+import attr
 import numpy as np
+from astropy import units as u
+from edges_cal import modelling as mdl
+from edges_cal import types as tp
 from edges_cal.s11 import (
     InternalSwitch,
-    StandardsReadings,
-    VNAReading,
     LoadPlusSwitchS11,
     LoadS11,
+    StandardsReadings,
+    VNAReading,
 )
-from typing import Sequence
-from edges_cal import modelling as mdl
-from astropy import units as u
 from edges_cal.tools import FrequencyRange
-from edges_cal import types as tp
-import attr
+from typing import Sequence
 
 
 @attr.s

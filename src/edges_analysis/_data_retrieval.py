@@ -1,6 +1,7 @@
 import requests
-from .config import config
 from pathlib import Path
+
+from .config import config
 
 # The google drive ID for the folder containing these files:
 # 14hH-zBhHGddVacc0ncqRWq7ofhGLWfND

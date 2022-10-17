@@ -1,30 +1,34 @@
 """CLI routines for edges-analysis."""
 from __future__ import annotations
-import glob
-import logging
-import sys
-from pathlib import Path
-import shutil
-import time
-import os
 
 import click
+import glob
 import h5py
-import questionary as qs
+import inspect
+import logging
+import os
+import psutil
+import shutil
+import time
+import tqdm
 import yaml
+from collections import defaultdict
 from edges_io import io
+from functools import partial
+from jinja2 import Template
+from pathlib import Path
+from pathos.multiprocessing import ProcessPool as Pool
 from rich import box
 from rich.console import Console
 from rich.logging import RichHandler
 from rich.panel import Panel
 from rich.rule import Rule
 from rich.table import Table
-from .analysis import levels, filters
-from .config import config
-import psutil
-import astropy
-from pathos.multiprocessing import ProcessPool as Pool
-import tqdm
+from typing import Callable
+
+from . import const
+from .aux_data import WeatherError
+from .gsdata import GSDATA_PROCESSORS, GSData
 
 console = Console()
 
@@ -50,115 +54,208 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def _get_settings(settings, **cli_settings):
-    with open(settings) as fl:
-        settings = yaml.load(fl, Loader=astropy.io.misc.yaml.AstropyLoader)
-
-    settings.update(cli_settings)
-
-    console.print()
-    tab = Table(title="Settings", show_header=False)
-    tab.add_column()
-    tab.add_column()
-    for k, v in settings.items():
-        tab.add_row(k, str(v))
-    console.print(tab)
-    console.print()
-
-    return settings
-
-
-def _ctx_to_dct(args):
-    dct = {}
-    j = 0
-    while j < len(args):
-        arg = args[j]
-        if "=" in arg:
-            a = arg.split("=")
-            dct[a[0].replace("--", "")] = a[-1]
-            j += 1
-        else:
-            dct[arg.replace("--", "")] = args[j + 1]
-            j += 2
-
-    for k in dct:
-        for tp in (int, float):
-            try:
-                dct[k] = tp(dct[k])
-                break
-            except TypeError:
-                pass
-
-    return dct
-
-
 def _get_files(pth: Path, filt=h5py.is_hdf5) -> list[Path]:
     if pth.is_dir():
-        return [fl for fl in pth.glob("*") if filt(fl)]
+        return sorted(fl for fl in pth.glob("*") if filt(fl))
     else:
-        return [Path(fl) for fl in glob.glob(str(pth)) if filt(Path(fl))]
+        return sorted(Path(fl) for fl in glob.glob(str(pth)) if filt(Path(fl)))
 
 
-def get_output_dir(prefix, label, settings):
-    """Get an output directory from given settings."""
-    out = Path(prefix) / label
+def read_progressfile(fl: Path) -> dict[str, dict]:
+    """Read the .progress file."""
+    with open(fl) as openfile:
+        progress = yaml.load(openfile, Loader=yaml.FullLoader)
 
-    if out.exists():
-        try:
-            with open(out / "settings.yaml") as fl:
-                existing_settings = yaml.load(fl, Loader=yaml.FullLoader)
-        except FileNotFoundError:
-            # Empty directory most likely due to an error in a previous run.
-            return out
+    progress = {p.pop("name"): p for p in progress}
+    return progress
 
-        if existing_settings != settings:
-            tab = Table("existing", "proposed", width=console.width)
-            tab.add_row(yaml.dump(existing_settings), yaml.dump(settings))
-            console.print(tab)
 
-            if qs.confirm(
-                f"{out} has existing files with different settings. Remove existing and"
-                f"continue?"
-            ).ask():
-                for fl in out.glob("*"):
-                    if fl.is_file():
-                        fl.unlink()
-            else:
-                console.print("Fine. Be that way.")
-                sys.exit()
+def write_progressfile(progressfile: Path, progress: dict[str, dict]):
+    """Write the progress file."""
+    assert progressfile.name == "progressfile.yaml"
 
+    progress = [{**{"name": k}, **v} for k, v in progress.items()]
+    with open(progressfile, "w") as fl:
+        yaml.dump(progress, fl)
+
+
+def create_progressfile(
+    progressfile: Path,
+    steps: dict[str, dict],
+    inputs: list[Path] = None,
+):
+    """Write out the progress file."""
+    progress = {name: {**p, **{"inout": []}} for name, p in steps.items()}
+    progress["convert"]["inout"] = [([], [str(p) for p in inputs])]
+
+    write_progressfile(progressfile, progress)
+
+
+def update_progressfile(
+    progressfile: Path, name: str, inout: list[tuple[list[Path], list[Path]]]
+):
+    """Update the progress file."""
+    prg = read_progressfile(progressfile)
+
+    if name not in prg:
+        raise ValueError(f"Progress file has no step called '{name}'")
+
+    prg[name]["inout"] += [
+        ([str(p) for p in pair[0]], [str(p) for p in pair[1]]) for pair in inout
+    ]
+
+    if name == "convert":
+        # We also need to remove files that are gotten by combining datafile, because
+        # if we're adding new inputs, these files will end up changing.
+        blastoff = False
+        for k, v in prg.items():
+            if k == "convert":
+                continue
+
+            if GSDATA_PROCESSORS[v["function"].lower()].kind == "gather":
+                blastoff = True
+
+            if blastoff:
+                for fl in get_all_outputs(v["inout"]):
+                    if Path(fl).exists():
+                        Path(fl).unlink()
+                v["inout"] = []
+
+    write_progressfile(progressfile, prg)
+
+
+class WorkflowProgressError(RuntimeError):
+    """Exception raised when the workflow and progress files are discrepant."""
+
+    pass
+
+
+def harmonize_workflow_with_steps(
+    steps: tuple[dict],
+    progressfile: Path,
+    error: bool = True,
+    start: str = None,
+):
+    """Check the compatibility of the current steps with the progressfile."""
+    # progress should be a list very similar to "steps" except with a few extra
+    # keys (like "files")
+    progress = read_progressfile(progressfile)
+    progressdicts = list(progress.values())
+
+    new_progress = {}
+    start_changing = False
+    for i, (sname, s) in enumerate(steps.items()):
+        if i >= len(progress):
+            # This is the case when new steps are added to the workflow since last run.
+            new_progress[sname] = {**s, **{"inout": []}}
         else:
-            console.print("Using existing label with identical settings.")
+            ps = {k: v for k, v in progressdicts[i].items() if k != "inout"}
+            if ps != s:
+                start_changing = True
+                if error:
+                    raise WorkflowProgressError(
+                        "The workflow is in conflict with the progressfile at step "
+                        f"'{sname}'. To remove conflicting outputs and adopt new "
+                        "workflow, run with --ignore-conflicting. To keep the existing "
+                        "outputs and branch off with the new workflow, run the 'fork' "
+                        "command."
+                    )
+            if sname == start:
+                start_changing = True
 
-    return out
+            if start_changing:
+                outputs = get_all_outputs(progressdicts[i]["inout"])
+                for fl in outputs:
+                    if str(progressfile.parent) in str(fl):  # ensure file is in outdir
+                        Path(fl).unlink(missing_ok=True)
+                new_progress[sname] = {**s, **{"inout": []}}
+            else:
+                new_progress[sname] = progressdicts[i]
+
+    write_progressfile(progressfile, new_progress)
 
 
-def expand_colon(pth: str, band: str = "", raw=True) -> Path:
-    """Expand the meaning of : in front of a path pointing to raw field data."""
-    if pth[0] != ":":
-        return Path(pth)
-    elif raw:
-        if not band:
-            raise ValueError("must provide 'band' in settings to find raw files!")
-
-        return Path(config["paths"]["raw_field_data"]) / "mro" / band / pth[1:]
-    else:
-        return Path(config["paths"]["field_products"]) / pth[1:]
+def get_all_outputs(inout) -> list[str]:
+    """Get a list of output files from a step."""
+    return sum((p[1] for p in inout), []) if inout else []
 
 
-@main.command(
-    context_settings={  # Doing this allows arbitrary options to override config
-        "ignore_unknown_options": True,
-        "allow_extra_args": True,
-    }
-)
-@click.argument(
-    "step",
-    type=click.Choice(
-        ["raw", "calibrate", "model", "combine", "day", "bin"], case_sensitive=False
-    ),
-)
-@click.argument("settings", type=click.Path(dir_okay=False, exists=True))
+def get_all_inputs(inout) -> list[str]:
+    """Get a list of input files from a step."""
+    return sum((p[0] for p in inout), []) if inout else []
+
+
+def get_files_for_step(stepname: str, progress: dict[str, dict]) -> list[str]:
+    """Get all the files we need to read for a given step."""
+    # First, get most recent outputs.
+    names = list(progress.keys())
+    current_index = names.index(stepname)
+
+    potential_files = get_all_outputs(progress[stepname]["inout"])
+    final_files = []
+
+    def _check_fl(fl):
+        # Check if an output file (fl) for the current step appears as an input file
+        # for a later step, and whether all the output files from that step exist.
+        for p in list(progress.values())[current_index + 1 :]:
+            for inout in p["inout"]:
+                if fl in inout[0] and all(Path(x).exists() for x in inout[1]):
+                    return False
+        return True
+
+    for fl in potential_files:
+        if _check_fl(fl):
+            final_files.append(fl)
+
+    return final_files
+
+
+def get_steps_from_workflow(workflow: Path) -> tuple[dict]:
+    """Read the steps from a workflow."""
+    with open(workflow) as fl:
+        workflowd = yaml.load(fl, Loader=yaml.FullLoader)
+
+    global_params = workflowd.pop("globals", {})
+
+    with open(workflow) as fl:
+        txt = Template(fl.read())
+        txt = txt.render(globals=global_params)
+        workflow = yaml.load(txt, Loader=yaml.FullLoader)
+
+    steps = workflow.pop("steps")
+
+    for step in steps:
+        if "name" not in step:
+            step["name"] = step["function"]
+
+    all_names = [step["name"].lower() for step in steps]
+    for name in all_names:
+        if all_names.count(name) > 1:
+            raise ValueError(
+                f"Duplicate step name {name}. "
+                "Please give one of the steps an explicit 'name'."
+            )
+
+    all_funcs = {step["function"].lower() for step in steps}
+    wrong_funcs = [
+        fnc for fnc in all_funcs if fnc not in GSDATA_PROCESSORS and fnc != "convert"
+    ]
+    if wrong_funcs:
+        raise ValueError(
+            f"Unknown functions in workflow: {wrong_funcs}.\n"
+            f"Available: {GSDATA_PROCESSORS.keys()}"
+        )
+
+    steps = {step.pop("name"): step for step in steps}
+    return steps
+
+
+def _file_filter(pth: Path):
+    return pth.suffix[1:] in io.Spectrum.supported_formats
+
+
+@main.command()
+@click.argument("workflow", type=click.Path(dir_okay=False, exists=True))
 @click.option(
     "-i",
     "--path",
@@ -172,214 +269,282 @@ def expand_colon(pth: str, band: str = "", raw=True) -> Path:
     """,
 )
 @click.option(
-    "-l",
-    "--label",
-    default="",
-    help="""A label for the output. This label should be unique to the input settings
-    (but may be applied to different input files). If the same label is used for
-    different settings, the existing processed data will be removed (after prompting).
-    """,
-)
-@click.option(
-    "-m",
-    "--message",
-    default="",
-    help="""A message to save with the data. The message will be saved in a README.txt
-    file alongside the output data file(s). It is intended to provide a
-    human-understandable "reason" for running the particular analysis with the
-    particular settings.
-    """,
-)
-@click.option(
-    "-c/-C",
-    "--clobber/--no-clobber",
-    help="Whether to overwrite any existing data at the output location",
-)
-@click.option(
     "-o",
-    "--output",
-    default="",
-    help="Name of an output file. Only required for the 'combine' step.",
+    "--outdir",
+    default=".",
+    type=click.Path(dir_okay=True, file_okay=False),
+    help="""The directory into which to save the outputs. Relative paths in the workflow
+    are deemed relative to this directory.
+    """,
 )
 @click.option(
     "-v", "--verbosity", default="info", help="level of verbosity of the logging"
 )
 @click.option("-j", "--nthreads", default=1, help="How many threads to use.")
-@click.pass_context
+@click.option(
+    "--mem-check/--no-mem-check", default=True, help="Whether to perform a memory check"
+)
+@click.option(
+    "-e/-E",
+    "--exit-on-inconsistent/--ignore-inconsistent",
+    default=False,
+    help=(
+        "Whether to immediately exit if any *complete* step is inconsistent with the "
+        "progressfile."
+    ),
+)
+@click.option(
+    "-r/-a",
+    "--restart/--append",
+    default=False,
+    help=(
+        "whether any new input paths should be appended, or if everything should be "
+        "restarted with just those files."
+    ),
+)
+@click.option(
+    "--stop",
+    default=None,
+    type=str,
+    help="The name of the step at which to stop the workflow.",
+)
+@click.option(
+    "--start",
+    default=None,
+    type=str,
+    help="The name of the step at which to start the workflow.",
+)
 def process(
-    ctx, step, settings, path, label, message, clobber, output, nthreads, verbosity
+    workflow,
+    path,
+    outdir,
+    verbosity,
+    nthreads,
+    mem_check,
+    exit_on_inconsistent,
+    restart,
+    stop,
+    start,
 ):
     """Process a dataset to the STEP level of averaging/filtering using SETTINGS.
 
-    STEP
-        defines the analysis step as a string. Each of the steps should be applied
-        in turn.
-    SETTINGS
-        is a YAML settings file. The available settings for each step can be seen
-        in the respective documentation for the classes "promote" method.
-
-    Each STEP should take one or more ``--input`` files that are the output of a
-    previous step. The first step (``raw``) should take raw ``.acq`` or ``.h5``
-    spectrum files.
-
-    The output files are placed in a directory inside the input file directory, with a
-    name determined by the ``--label``.
+    WORKFLOW
+        is a YAML file. Containing a "steps" parameter which should be a list of
+        steps to execute.
     """
     logging.getLogger("edges_analysis").setLevel(verbosity.upper())
     logging.getLogger("edges_io").setLevel(verbosity.upper())
     logging.getLogger("edges_cal").setLevel(verbosity.upper())
 
     console.print(
-        Panel(f"edges-analysis [blue]{step}[/]", box=box.DOUBLE_EDGE),
+        Panel("edges-analysis [blue]processing[/]", box=box.DOUBLE_EDGE),
         style="bold",
         justify="center",
     )
 
     console.print(Rule("Setting Up"))
 
-    step_cls = {
-        "raw": levels.RawData,
-        "calibrate": levels.CalibratedData,
-        "model": levels.ModelData,
-        "combine": levels.CombinedData,
-        "day": levels.DayAveragedData,
-        "bin": levels.BinnedData,
-    }[step]
+    steps = get_steps_from_workflow(workflow)
+    if start and start not in steps:
+        raise ValueError(f"The --start option needs to exist! Got {start}")
 
-    cli_settings = _ctx_to_dct(ctx.args)
-    settings = _get_settings(settings, **cli_settings)
-    label = settings.pop("label", "") or label
+    outdir = Path(outdir)
+    if not outdir.exists():
+        outdir.mkdir(parents=True)
 
-    if not label:
-        label = qs.text("Provide a short label to identify this run:").ask()
+    progressfile = outdir / "progressfile.yaml"
 
-    if step == "raw":
+    # Get input files (if any)
+    path = [Path(p) for p in path]
+    input_files = sum((_get_files(p, filt=_file_filter) for p in path), [])
 
-        def file_filter(pth: Path):
-            return pth.suffix[1:] in io.Spectrum.supported_formats
+    # First, write out a progress file if it doesn't exist.
+    if not progressfile.exists() or restart:
+        if not input_files:
+            raise ValueError(
+                "The first time a workflow is run, you need to provide "
+                "input files via -i or --path"
+            )
+        create_progressfile(progressfile, steps, input_files)
+    elif input_files:
+        # Here we're appending the input files.
+        update_progressfile(progressfile, "convert", [([], [x]) for x in input_files])
 
-    else:
-        file_filter = h5py.is_hdf5
+    harmonize_workflow_with_steps(steps, progressfile, exit_on_inconsistent, start)
+    progress = read_progressfile(progressfile)
 
-    # Get input file(s). If doing initial calibration, get them from raw_field_data
-    # otherwise they should be in field_products.
-    path = [
-        expand_colon(p, band=settings.get("band"), raw=step == "raw").expanduser()
-        for p in path
-    ]
-    input_files = sum((_get_files(p, filt=file_filter) for p in path), [])
-
-    if not input_files:
-        logger.error(f"No input files were found! Paths: {path}")
-        return
-    else:
-        console.print("[bold]Input Files:")
-        for fl in input_files:
-            console.print(f"   {fl}")
-        console.print()
-    # Check that input files are all homogeneously processed
-    if step != "raw" and len({p.parent for p in input_files}) != 1:
-        raise ValueError("Your input files do not come from a single processing.")
-
-    input_file_type = levels.get_step_type(input_files[0])
-    # Get unique output directory
-    if step == "raw":
-        output_dir = Path(config["paths"]["field_products"]) / label
-    else:
-        output_dir = get_output_dir(input_files[0].parent, label, settings)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    console.print(
-        f"[bold]Output Directory: [dim]{output_dir}",
-    )
-
-    # In most cases, the output filename will be the same as the (sole) input.
-    # However, when combining files, we need some extra label.
-    if step == "combine":
-        if not output:
-            output = [
-                Path(
-                    qs.text("Provide a filename for the output combined file:").ask()
-                ).with_suffix(".h5")
-            ]
-        else:
-            output = [Path(output).with_suffix(".h5")]
-    elif step != "raw":
-        output = [Path(p.name) for p in input_files]
-    else:
-        output = None
-
-    if step == "bin" and input_file_type in (
-        levels.CombinedData,
-        levels.CombinedBinnedData,
-    ):
-        step_cls = levels.CombinedBinnedData
-
-    if output:
-        for pth in output:
-            if (output_dir / pth).exists():
-                if clobber:
-                    (output_dir / pth).unlink()
-                else:
-                    raise FileExistsError(
-                        f"File {output_dir/pth} exists. Use --clobber to overwrite!"
-                    )
-
-    if message:
-        with open(output_dir / "README.txt", "w") as fl:
-            fl.write(message)
-
-    with open(output_dir / "settings.yaml", "w") as fl:
-        yaml.dump(settings, fl)
-
-    # Actually call the relevant function
-    console.print()
-    console.print(Rule("Beginning Processing"))
-    out_paths = promote(
-        input_files, nthreads, output_dir, output, step_cls, settings, clobber
-    )
-    console.print(Rule("Done Processing"))
-
-    for pth in out_paths:
-        with h5py.File(pth, "a") as fl:
-            fl.attrs["message"] = message
-
-    console.print()
-    if step == "combine":
-        console.print(f"[bold]Output File: [blue]{out_paths[0]}")
-    elif step in ("raw", "calibrate", "model"):
-        console.print(
-            f"[bold]All files written to: [dim]{output_dir}",
+    if stop and stop not in steps:
+        raise ValueError(
+            f"Your stopping step '{stop}' does not exist! "
+            f"Available: {list(steps.keys())}"
         )
-    else:
-        console.print("[bold]Output Files:")
-        for fname in output:
-            console.print(f"\t[bold]{output_dir}/{fname}")
+
+    console.print("[bold]Input Files:")
+    input_files = get_all_outputs(progress["convert"]["inout"])
+    for fl in input_files:
+        console.print(f"   {fl}")
+    console.print()
+
+    data: list[GSData] = []
+    for istep, (stepname, step) in enumerate(steps.items()):
+        fncname = step["function"]
+        params = step.get("params", {})
+        console.print(
+            f"[bold underline] {istep:>02}. {fncname.upper()} ({stepname})[/]"
+        )
+
+        files = get_files_for_step(stepname, progress)
+
+        if data:
+
+            fnc = GSDATA_PROCESSORS[fncname.lower()]
+            if params:
+                console.print()
+                tab = Table(title="Settings", show_header=False)
+                tab.add_column()
+                tab.add_column()
+                for k, v in params.items():
+                    tab.add_row(k, str(v))
+                console.print(tab)
+                console.print()
+
+            data = perform_step_on_object(
+                data,
+                fnc,
+                params,
+                step,
+                nthreads,
+                outdir,
+                name=stepname,
+                mem_check=mem_check,
+            )
+        else:
+            if stepname == "convert":
+                params.update({"telescope_location": const.edges_location})
+                data = [GSData.from_file(f, **params) for f in files]
+                if not data:
+                    console.print(f"{stepname} does not need to run on any files.")
+                continue
+
+            console.print(f"{stepname} does not need to run on any files.")
+
+        # Add any files that were output by previous runs that need to be loaded now.
+        data += [GSData.from_file(f) for f in files]
+
+        console.print()
+
+        if stepname == stop:
+            break
 
 
-def promote(
-    input_files: list[Path],
+@main.command()
+@click.argument("workflow", type=click.Path(dir_okay=False, exists=True))
+@click.argument("forked", type=click.Path(dir_okay=True, file_okay=False, exists=True))
+@click.option(
+    "-o",
+    "--outdir",
+    default=".",
+    type=click.Path(dir_okay=True, file_okay=False),
+    help="""The directory into which to save the outputs. Relative paths in the workflow
+    are deemed relative to this directory.
+    """,
+)
+def fork(workflow, forked, outdir):
+    """Fork the workflow."""
+    outdir = Path(outdir).absolute()
+    forked = Path(forked).absolute() / "progressfile.yaml"
+
+    # We copy the whole file structure. It's tempting to use symlinks to save space
+    # and time, BUT it's possible the new workflow will do filters different to the
+    # previous pipeline, which would update files in-place, and therefore follow the
+    # symlinks, changing the original files in the other working directory. This would
+    # be a mess.
+    # TODO: it may be useful in the future to catch this case in the add_filter function
+    # i.e. just check if the file is a symlink, and make a new file if so.
+    shutil.copytree(forked.parent, outdir)
+    newprogress = outdir / "progressfile.yaml"
+    workflow = Path(workflow).absolute()
+    steps = get_steps_from_workflow(workflow)
+    harmonize_workflow_with_steps(steps, newprogress, error=False)
+
+    console.print("Done. Please run the rest of the processing as normal.")
+
+
+def perform_step_on_object(
+    data: GSData,
+    fnc: Callable,
+    params: dict,
+    step: dict,
     nthreads: int,
-    output_dir: Path,
-    output_fname: list[Path | None] | None,
-    step_cls: type[levels._ReductionStep],
-    settings: dict,
-    clobber: bool,
-) -> list[Path]:
-    """Calibrate field data to produce CalibratedData files."""
-    if not input_files:
-        raise ValueError("No input files!")
+    outdir: str,
+    name: str,
+    mem_check: bool,
+) -> GSData:
+    """Perform a workflow step on a GSData object.
 
-    if step_cls._multi_input:
-        data = step_cls.promote(prev_step=input_files, **settings)
-        data.write(output_dir / output_fname[0])
-        return [output_dir / output_fname[0]]
-    else:
-        output_fname = output_fname or [None] * len(input_files)
+    Parameters
+    ----------
+    data : GSData
+        The data to process.
+    step : dict
+        The step to perform.
+    """
+    oldfiles = [str(d.filename.absolute()) for d in data]
+    progressfile = outdir / "progressfile.yaml"
 
-        def _pro(fl, fname):
-            pr = psutil.Process()
+    def write_data(data: GSData, step: dict):
+        if "write" not in step:
+            return data
 
+        fname = step["write"]
+
+        # Now, use templating to create the actual filename
+        fname = fname.format(
+            prev_stem=data.filename.stem,
+            prev_dir=data.filename.parent,
+            fncname=fnc.__name__,
+            **params,
+        )
+
+        fname = Path(fname)
+
+        if not fname.is_absolute():
+            fname = Path(outdir) / fname
+
+        if not fname.parent.exists():
+            fname.parent.mkdir(parents=True)
+
+        if fname.exists():
+            fname.unlink()
+
+        logger.info(f"Writing {fname}")
+        return data.write_gsh5(fname)
+
+    if fnc.kind == "gather":
+        data = fnc(*data, **params)
+        data = write_data(data, step)
+        if "write" in step:
+            update_progressfile(
+                progressfile, name, [(oldfiles, [str(data.filename.absolute())])]
+            )
+        return [data]
+
+    if fnc.kind == "filter":
+        params = {**params, "flag_id": name, "write": True}
+
+    this_fnc = partial(fnc, **params)
+
+    def run_process_with_memory_checks(data: GSData):
+        if data.complete_flags.all():
+            return
+
+        if fnc.kind == "filter" and name in data.flags:
+            logger.warning(f"Overwriting existing flags for filter '{name}'")
+            data = data.remove_flags(name)
+
+        pr = psutil.Process()
+
+        if mem_check:
             paused = False
             if psutil.virtual_memory().available < 4 * 1024**3:
                 logger.warning(
@@ -395,225 +560,69 @@ def promote(
             if paused:
                 logger.warning(f"Resuming processing on pid={os.getpid()}")
 
-            logger.debug(f"Initial memory: {pr.memory_info().rss / 1024**2} MB")
-            try:
-                data = step_cls.promote(prev_step=fl, **settings)
-                data._parent.clear()
-            except (levels.FullyFlaggedError, levels.WeatherError) as e:
-                logger.warning(str(e))
-                return
+        logger.debug(f"Initial memory: {pr.memory_info().rss / 1024**2} MB")
+        try:
+            data = this_fnc(data)
+        except (WeatherError) as e:
+            logger.warning(str(e))
+            return
 
-            fname = fname or f"{data.datestring}.h5"
-            fname = output_dir / fname
-            data.write(fname, clobber=clobber)
+        if data.complete_flags.all():
+            return
 
-            logger.debug(f"Memory After Writing: {pr.memory_info().rss / 1024**2} MB")
+        return write_data(data, step)
 
-            data.clear()
+    mp = Pool(nthreads).map if nthreads > 1 else map
 
-            logger.debug(f"Memory After Clearing: {pr.memory_info().rss / 1024**2} MB")
-
-            return fname
-
-        if len(input_files) == 1:
-            out = [
-                _pro(infile, outfile)
-                for infile, outfile in zip(input_files, output_fname)
-            ]
-        else:
-            if nthreads > 1:
-                pool = Pool(nthreads)
-
-                def prg(fnc, x, y, **args):
-                    return tqdm.tqdm(pool.map(fnc, x, y), total=len(x), **args)
-
-            else:
-
-                def prg(fnc, x, y, **args):
-                    return tqdm.tqdm(map(fnc, x, y), total=len(x), **args)
-
-            out = list(
-                prg(
-                    _pro,
-                    input_files,
-                    output_fname,
-                    unit="files",
-                )
-            )
-        return [o for o in out if o is not None]
-
-
-@main.command()  # noqa: A001
-@click.argument("settings", type=click.Path(dir_okay=False, exists=True))
-@click.option(
-    "-i",
-    "--path",
-    type=click.Path(dir_okay=True),
-    multiple=True,
-    help="""The path(s) to input files. Multiple specifications of ``-i`` can be
-    included. Each input path may have glob-style wildcards, eg. ``/path/to/file.*``.
-    If the path is a directory, all HDF5/ACQ files in the directory will be used. You
-    may prefix the path with a colon to indicate the "standard" location (given by
-    ``config['paths']``), e.g. ``-i :big-calibration/``.
-    """,
-)
-@click.option("-j", "--nthreads", default=1, help="How many threads to use.")
-@click.option(
-    "--flag-idx",
-    default=-1,
-    type=int,
-    help="""
-    Set this to a non-negative integer to copy the input files to a new location
-    and clear all flags up to the given index, performing the filter based on those
-    flags.
-    """,
-)
-@click.option(
-    "-l",
-    "--label",
-    default="",
-    help="""A label for the output. This label should be unique to the input settings
-    (but may be applied to different input files).
-    """,
-)
-@click.option(
-    "-c/-C",
-    "--clobber/--no-clobber",
-    default=False,
-    help="""Whether to clobber files -- only applies if flag-idx is applied and a label
-    is given, and the label already exists. If False, the program will interactively
-    ask.
-    """,
-)
-def filter(settings, path, nthreads, flag_idx, label, clobber):  # noqa: A001
-    """Filter a dataset using SETTINGS.
-
-    SETTINGS
-        is a YAML settings file. The available settings for each step can be seen
-        in the respective documentation for the classes "promote" method.
-
-    Takes one or more ``--input`` files that are the output of a process.
-
-    The output is written within the given input files, inside a special "flags"
-    hDF5 group.
-    """
-    console.print(
-        Panel("edges-analysis [blue]filter[/]", box=box.DOUBLE_EDGE),
-        style="bold",
-        justify="center",
+    newdata = list(
+        tqdm.tqdm(
+            mp(run_process_with_memory_checks, data), total=len(data), unit="files"
+        )
     )
 
-    console.print(Rule("Setting Up"))
+    if "write" in step or fnc.kind == "filter":
+        # Update the progress file. Each input file gets one output file.
+        update_progressfile(
+            progressfile,
+            name,
+            [
+                ([x], [str(d.filename.absolute())] if d else [])
+                for x, d in zip(oldfiles, newdata)
+            ],
+        )
 
-    with open(settings) as fl:
-        settings = yaml.load(fl, Loader=yaml.FullLoader)
+    # Some of the data is now potentially None, because it was all flagged or something
+    return [d for d in newdata if d is not None]
 
-    if isinstance(settings, dict):
-        raise OSError("The settings file for filters should be a list")
 
-    console.print()
-    tab = Table(title="Settings", show_header=False)
-    tab.add_column()
-    tab.add_column()
-    tab.add_column()
-    for item in settings:
-        k = list(item.keys())[0]
-        v = item[k]
-        if v:
-            for i, (param, val) in enumerate(v.items()):
-                tab.add_row(k if not i else "", param, str(val))
-    console.print(tab)
-    console.print()
+@main.command()
+@click.option(
+    "-k", "--kinds", default=None, help="Kinds of data to process", multiple=True
+)
+def avail(kinds):
+    """List all available GSData processing commands."""
+    bykind = defaultdict(dict)
 
-    file_filter = h5py.is_hdf5
+    for command, fnc in GSDATA_PROCESSORS.items():
+        bykind[fnc.kind][command] = fnc
 
-    # Get input file(s). If doing initial calibration, get them from raw_field_data
-    # otherwise they should be in field_products.
-    path = [expand_colon(p, raw=False).expanduser() for p in path]
-    input_files = sum((_get_files(p, filt=file_filter) for p in path), [])
+    for kind, commands in bykind.items():
+        if kinds and kind not in kinds:
+            continue
 
-    if not input_files:
-        logger.error(f"No input files were found! Paths: {path}")
-        return
-    else:
-        console.print("[bold]Input Files:")
-        for fl in input_files:
-            console.print(f"   {fl}")
-        console.print()
+        console.print(f"[bold underline]{kind.upper()}[/]")
+        for command, fnc in commands.items():
+            console.print(f"[bold]{command}[/]")
 
-    # Check that input files are all homogeneously processed
-    if len({p.parent for p in input_files}) != 1:
-        raise ValueError("Your input files do not come from a single processing.")
+            args = inspect.signature(fnc)
 
-    input_data = [levels.read_step(fl, validate=False) for fl in input_files]
+            for pname, p in args.parameters.items():
+                if p.annotation == GSData or pname == "data" or pname == "self":
+                    continue
 
-    # Save the settings file
-    output_dir = input_files[0].parent
-
-    if flag_idx >= 0:
-        if label:
-            output_dir /= label
-
-            if output_dir.exists():
-                if (
-                    clobber
-                    or qs.confirm(f"The label '{label}' already exists. Remove?").ask()
-                ):
-                    shutil.rmtree(output_dir)
+                if p.annotation and p.annotation is not inspect._empty:
+                    console.print(f"    {pname}: [dim]{p.annotation}[/]")
                 else:
-                    logger.info("OK. Exiting")
-                    sys.exit()
+                    console.print(f"    {pname}")
 
-            output_dir.mkdir()
-
-            for fl in input_files:
-                shutil.copy(fl, output_dir / fl.name)
-
-            input_files = [output_dir / fl.name for fl in input_files]
-            input_data = [levels.read_step(fl, validate=False) for fl in input_files]
-        elif not (
-            clobber
-            or qs.confirm(
-                "Using flag_idx without a label removes flagging steps in place. "
-                "Is this really what you want?"
-            ).ask()
-        ):
-            logger.info("OK. Exiting.")
-
-        for d in input_data:
-            with d.open("r+") as flobj:
-                if "flags" not in flobj:
-                    if flag_idx > 0:
-                        raise ValueError(
-                            f"{d.filename} has no flag array, but you want to keep "
-                            f"{flag_idx} filters."
-                        )
-                    else:
-                        continue
-
-                dset = flobj["flags"]["flags"]
-                dset.resize(flag_idx, axis=0)
-
-                for name, indx in dict(flobj["flags"].attrs).items():
-                    if indx >= flag_idx:
-                        del flobj["flags"].attrs[name]
-                        del flobj["flags"][name]
-
-    n_filters = len(list(output_dir.glob("filter_*.yaml")))
-    with open(output_dir / f"filter_settings_{n_filters}.yaml", "w") as fl:
-        yaml.dump(settings, fl)
-
-    # Actually call the relevant function
-    console.print()
-    console.print(Rule("Beginning Filtering"))
-
-    for item in settings:
-        filt = list(item.keys())[0]
-        cfg = item[filt] or {}
-        fnc = filters.get_step_filter(filt)
-        fnc(data=input_data, in_place=True, n_threads=nthreads, **cfg)
-
-    console.print(Rule("Done Filtering"))
-
-    console.print()
-    console.print("[bold]All flags written inside input files.")
+        console.print()

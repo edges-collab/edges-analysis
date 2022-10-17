@@ -1,0 +1,21 @@
+# Simple Calibration Workflow that starts from data that's already been converted.
+steps:
+  - function: dicke_calibration
+  - function: apply_noise_wave_calibration
+    params:
+      calobs: "{{ calfile }}"
+      band: low
+      s11_path: "{{ s11_path }}"
+  - function: apply_loss_correction
+    params:
+      band: low
+      antenna_correction: false
+      balun_correction: true
+      ground_correction: ':'
+      calobs: "{{ calfile }}"
+      s11_path: "{{ s11_path }}"
+  - function: apply_beam_correction
+    params:
+      band: low
+      beam_file: "{{ beam_file }}"
+    write: cal/{prev_stem}.gsh5
