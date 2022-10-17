@@ -1295,7 +1295,7 @@ def select_lsts(
 ) -> GSData:
     """Selects a subset of the times."""
     if load == "all":
-        load = slice()
+        load = slice(None)
     if isinstance(load, str):
         load = data.loads.index(load)
 
