@@ -1294,6 +1294,8 @@ def select_lsts(
     gha: bool = False,
 ) -> GSData:
     """Selects a subset of the times."""
+    if load == "all":
+        load = slice()
     if isinstance(load, str):
         load = data.loads.index(load)
 
@@ -1310,6 +1312,9 @@ def select_lsts(
             mask = (t >= range[1]) & (t <= range[0])
         else:
             mask = (t >= range[0]) & (t <= range[1])
+
+        if mask.ndim == 2:
+            mask = np.all(mask, axis=1)
 
     if indx is not None:
         if mask is None:
