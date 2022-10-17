@@ -857,7 +857,7 @@ class GSData:
     @cached_property
     def gha(self) -> np.ndarray:
         """The GHA's of the observations."""
-        return crd.lst2gha(self.lst_array.hour) * un.hourangle
+        return Longitude(crd.lst2gha(self.lst_array.hour) * un.hourangle)
 
     def get_moon_azel(self) -> tuple[np.ndarray, np.ndarray]:
         """Get the Moon's azimuth and elevation for each time in deg."""
