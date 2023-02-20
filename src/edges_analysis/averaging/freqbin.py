@@ -131,22 +131,29 @@ def gauss_smooth(
         decimate = 1
     else:
         decimate = size
-    sums = convolve1d(data.flagged_nsamples * data.data, window, mode="nearest")[
+    ### masking data and flagged samples whereever it is NaN 
+    data_mask = np.where(np.isnan(data.data),0,data.data)
+    f_nsamples = np.where(np.isnan(data.data),0,data.flagged_nsamples)
+    
+    sums = convolve1d(data.flagged_nsamples * data_mask, window, mode="nearest")[
         ..., decimate_at::decimate
     ]
-    nsamples = convolve1d(data.flagged_nsamples, window, mode="nearest")
+    nsamples = convolve1d(f_nsamples, window, mode="nearest")
     if maintain_flags:
         nsamples[data.complete_flags] = 0
 
     nsamples = nsamples[..., decimate_at::decimate]
 
     nsamples[nsamples / data.nsamples.max() <= size * flag_threshold] = 0
+    mask = nsamples==0
+    sums[mask] = np.nan
+    sums[~mask] /= nsamples[~mask]
+
     return data.update(
-        data=sums / nsamples,
+        data=sums,
         nsamples=nsamples,
         flags={},
         freq_array=data.freq_array[decimate_at::decimate],
-        data_model=None,
     )
 
 
