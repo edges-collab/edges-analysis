@@ -2,13 +2,14 @@
 from __future__ import annotations
 
 import glob
+import hickle
 import numpy as np
 import os
 import re
 from astropy.time import Time
 from datetime import datetime
 from edges_cal import types as tp
-from edges_cal.cal_coefficients import Calibrator
+from edges_cal.cal_coefficients import CalibrationObservation, Calibrator
 from pathlib import Path
 
 from .. import beams, const
@@ -237,6 +238,12 @@ def get_labcal(
     )
 
     if not isinstance(calobs, Calibrator):
+        try:
+            calobs = hickle.load(calobs)
+            if isinstance(calobs, CalibrationObservation):
+                calobs = calobs.to_calibrator()
+        except Exception:
+            pass
         try:
             calobs = Calibrator.from_calfile(calobs)
         except Exception:
