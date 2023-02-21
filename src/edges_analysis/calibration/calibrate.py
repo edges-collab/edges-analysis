@@ -244,6 +244,7 @@ def get_labcal(
                 calobs = calobs.to_calibrator()
         except Exception:
             pass
+    if not isinstance(calobs, Calibrator):
         try:
             calobs = Calibrator.from_calfile(calobs)
         except Exception:
