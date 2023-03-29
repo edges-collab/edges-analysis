@@ -436,6 +436,9 @@ def apply_beam_correction(
     data: GSData,
     band: str | None = None,
     beam_file: tp.PathLike | None = ":",
+    gha_min: float | None = None,
+    gha_max: float | None = None,
+    time_resolution: int | None = None,
 ) -> GSData:
     """Apply beam correction to the data.
 
@@ -449,9 +452,18 @@ def apply_beam_correction(
     beam_file
         Path to file containing beam correction coefficients. If there is an existing
         beam file in the standard location, this can be set to ``":"``.
+    
     """
     beam_fac = beams.InterpolatedBeamFactor.from_beam_factor(
         beam_file, band=band, f_new=data.freq_array
     )
-    bf = beam_fac.evaluate(data.lst_array.hour)
-    return data.update(data=data.data / bf, data_model=None)
+    
+    if gha_min is not None:
+        if data.lst_array.size != 1:
+            raise ValueError("data has multiple LST bins. Cannot evaluate one Beam factor")
+        gha_list = np.arange(gha_min, gha_max, time_resolution)
+        lst_list = coords.gha2lst(gha_list)
+        bf = beam_fac.evaluate(lst_list)
+    else:
+        bf = beam_fac.evaluate(data.lst_array.hour)
+    return data.update(data=data.data / np.average(bf,axis=0), data_model=None)
