@@ -1114,7 +1114,7 @@ class GSDataModel:
         return spectra
 
     @classmethod
-    def from_gsdata(cls, model: mdl.Model, gsdata: GSData) -> GSDataModel:
+    def from_gsdata(cls, model: mdl.Model, gsdata: GSData, **fit_kwargs) -> GSDataModel:
         """Creates a GSDataModel from a GSData object."""
         d = gsdata.spectra.reshape((-1, gsdata.nfreqs))
         w = gsdata.flagged_nsamples.reshape((-1, gsdata.nfreqs))
@@ -1125,7 +1125,9 @@ class GSDataModel:
 
         for i, (dd, ww) in enumerate(zip(d, w)):
             try:
-                params[i] = xmodel.fit(ydata=dd, weights=ww).model_parameters
+                params[i] = xmodel.fit(
+                    ydata=dd, weights=ww, **fit_kwargs
+                ).model_parameters
             except np.linalg.LinAlgError as e:
                 raise ValueError(
                     f"Linear algebra error: {e}.\nIndex={i}\ndata={dd}\nweights={ww}"

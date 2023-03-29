@@ -360,6 +360,7 @@ def bin_freq_unbiased_regular(
     resids: np.ndarray,
     weights: np.ndarray,
     resolution: float | int | None = None,
+    **fit_kwargs,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Bin an array along the frequency axis into *regular* bins.
@@ -381,8 +382,8 @@ def bin_freq_unbiased_regular(
         The weights of the data.
     resolution
         The resolution of the new data.
-    kwargs
-        Anything passed to construct the model.
+    fit_kwargs
+        Anything passed to construct the :class:`ModelFit` instance, example ``method``.
 
     Returns
     -------
@@ -424,7 +425,7 @@ def bin_freq_unbiased_regular(
     new_p = []
 
     for ss, ww in zip(s, w):
-        m = model.fit(ss, ww)
+        m = model.fit(ss, ww, **fit_kwargs)
         new_r.append(m.residual)
         new_p.append(m.model_parameters)
 
