@@ -5,7 +5,7 @@ ci:
 
 repos:
 - repo: https://github.com/pre-commit/pre-commit-hooks
-  rev: v4.3.0
+  rev: v4.4.0
   hooks:
   - id: trailing-whitespace
   - id: check-added-large-files
@@ -21,7 +21,7 @@ repos:
   - id: mixed-line-ending
     args: ['--fix=no']
 - repo: https://github.com/PyCQA/flake8
-  rev: 5.0.4
+  rev: 6.0.0
   hooks:
   - id: flake8
     additional_dependencies:
@@ -38,28 +38,28 @@ repos:
       - flake8-copyright
 
 - repo: https://github.com/PyCQA/isort
-  rev: 5.10.1
+  rev: 5.12.0
   hooks:
   - id: isort
 
 - repo: https://github.com/psf/black
-  rev: 22.10.0
+  rev: 23.3.0
   hooks:
   - id: black
 
 - repo: https://github.com/pre-commit/pygrep-hooks
-  rev: v1.9.0
+  rev: v1.10.0
   hooks:
     - id: rst-backticks
     - id: rst-directive-colons
     - id: rst-inline-touching-normal
 - repo: https://github.com/asottile/pyupgrade
-  rev: v3.2.0
+  rev: v3.3.1
   hooks:
   -   id: pyupgrade
       args: [--py36-plus]
 - repo: https://github.com/commitizen-tools/commitizen
-  rev: v2.37.0
+  rev: v2.42.1
   hooks:
     - id: commitizen
       stages: [commit-msg]
