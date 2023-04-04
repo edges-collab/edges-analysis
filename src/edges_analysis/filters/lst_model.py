@@ -7,6 +7,7 @@ import h5py
 import logging
 import numpy as np
 import yaml
+from astropy import units as un
 from attrs import define, field
 from edges_cal import types as tp
 from edges_cal.modelling import FourierDay, LinLog, Model
@@ -271,7 +272,7 @@ def get_gha_model_filter(
     std_model: Model,
     detrend_metric_model: Model | None = None,
     detrend_std_model: Model | None = None,
-    detrend_gha_chunk_size: float = 24.0,
+    detrend_gha_chunk_size: un.Quantity[un.hourangle] = 24.0 * un.hourangle,
     n_resid: int = 1,
     **kwargs,
 ) -> tuple[GHAModelFilter, GHAModelFilterInfo]:
