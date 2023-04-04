@@ -1016,7 +1016,6 @@ class GSData:
                     v = flg_grp["values"]
 
                     if v.shape[0] < len(self.flags):
-
                         # The file is inconsistent with the object, so we need to
                         # delete it.
                         del flg_grp["values"]
@@ -1196,13 +1195,15 @@ def add_model(data: GSData, *, model: mdl.Model, append_to_file: bool | None = N
 
     return new
 
+
 @gsregister("supplement")
 def swap_data(data: GSData):
     """Swaps the data attribute in the GSdata object from spectra to residuals."""
     if data.data_model is None:
         raise ValueError("Cannot swap data attribute without add_model step")
 
-    return data.update(data=data.resids, data_unit = "model_residuals")   
+    return data.update(data=data.resids, data_unit="model_residuals")
+
 
 @gsregister("reduce")
 def select_freqs(

@@ -149,7 +149,6 @@ class Beam:
         with open(path) as fn:
             i = -1
             for line in fn:
-
                 if line[2] == ">":
                     i += 1
                     j = -1
@@ -317,7 +316,6 @@ class Beam:
                 if x > 1:
                     check = 0
                     for o in range(len(line)):
-
                         if line[o] != "":
                             check = check + 1
                             if check == 3:

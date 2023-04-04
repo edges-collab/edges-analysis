@@ -71,7 +71,6 @@ def get_bin_edges(
     elif isinstance(bins, astropy.units.Quantity) and not bins.isscalar:
         return bins
     else:
-
         last_edge = coords[-1] + 0.1
 
         if isinstance(bins, int):
@@ -478,7 +477,6 @@ def bin_gha_unbiased_regular(
     assert gha.ndim == 1
 
     for i, bin_low in enumerate(bins[:-1]):
-
         bin_high = bins[i + 1]
         bin_low %= 24
         bin_high %= 24

@@ -396,7 +396,6 @@ def process(
         files = get_files_for_step(stepname, progress)
 
         if data:
-
             fnc = GSDATA_PROCESSORS[fncname.lower()]
             if params:
                 console.print()
@@ -563,7 +562,7 @@ def perform_step_on_object(
         logger.debug(f"Initial memory: {pr.memory_info().rss / 1024**2} MB")
         try:
             data = this_fnc(data)
-        except (WeatherError) as e:
+        except WeatherError as e:
             logger.warning(str(e))
             return
 

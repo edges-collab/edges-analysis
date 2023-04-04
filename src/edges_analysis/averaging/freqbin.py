@@ -116,7 +116,6 @@ def gauss_smooth(
     """
     assert isinstance(size, int)
     if decimate:
-
         if decimate_at is None:
             decimate_at = size // 2
 
@@ -127,14 +126,12 @@ def gauss_smooth(
     # This choice of size scaling corresponds to Alan's C code.
     y = np.arange(-size * 4, size * 4 + 1) * 2 / size
     window = np.exp(-(y**2) * 0.69)
-    if not decimate:
-        decimate = 1
-    else:
-        decimate = size
-    ### masking data and flagged samples whereever it is NaN 
-    data_mask = np.where(np.isnan(data.data),0,data.data)
-    f_nsamples = np.where(np.isnan(data.data),0,data.flagged_nsamples)
-    
+    decimate = size if decimate else 1
+
+    # mask data and flagged samples wherever it is NaN
+    data_mask = np.where(np.isnan(data.data), 0, data.data)
+    f_nsamples = np.where(np.isnan(data.data), 0, data.flagged_nsamples)
+
     sums = convolve1d(data.flagged_nsamples * data_mask, window, mode="nearest")[
         ..., decimate_at::decimate
     ]
@@ -145,7 +142,7 @@ def gauss_smooth(
     nsamples = nsamples[..., decimate_at::decimate]
 
     nsamples[nsamples / data.nsamples.max() <= size * flag_threshold] = 0
-    mask = nsamples==0
+    mask = nsamples == 0
     sums[mask] = np.nan
     sums[~mask] /= nsamples[~mask]
 
