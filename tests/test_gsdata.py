@@ -1,5 +1,6 @@
 import pytest
 
+import attrs
 import numpy as np
 from astropy import units as un
 from astropy.coordinates import EarthLocation
@@ -7,7 +8,15 @@ from astropy.time import Time
 from datetime import datetime, timedelta
 from edges_cal.modelling import LinLog
 
-from edges_analysis.gsdata import GSData, GSDataModel, History, Stamp, gsregister
+from edges_analysis.gsdata import (
+    GSData,
+    GSDataModel,
+    History,
+    Stamp,
+    add_model,
+    gsregister,
+    swap_data,
+)
 
 
 @pytest.fixture(scope="module")
@@ -271,6 +280,44 @@ def test_select_lsts_and_times(power_gsdata):
     assert stime != power_gsdata
 
 
+def test_select_lsts(power_gsdata: GSData):
+    rng = (power_gsdata.lst_array.min().hour, power_gsdata.lst_array.max().hour)
+
+    new = power_gsdata.select_lsts(range=rng, load="all")
+    assert new == power_gsdata
+
+    new = power_gsdata.select_lsts(range=rng, load="ant")
+    assert new == power_gsdata
+
+    with pytest.raises(ValueError, match="range must be a length-2 tuple"):
+        power_gsdata.select_lsts(range=[0, 2, 3])
+
+    # Use different order of range
+    new = power_gsdata.select_lsts(range=(-2, 4))
+    new2 = power_gsdata.select_lsts(range=(22, 4))
+    assert new == new2
+
+    # Test with both indx and range
+    new = power_gsdata.select_lsts(range=rng, indx=np.arange(0, 50, 2))
+    new2 = power_gsdata.select_lsts(indx=np.arange(0, 50, 2))
+
+    print(new.data.shape, new2.data.shape)
+
+    flds = attrs.fields(GSData)
+    for fld in flds:
+        v1 = getattr(new, fld.name)
+        v2 = getattr(new2, fld.name)
+
+        if not fld.eq:
+            continue
+        if fld.eq_key is not None:
+            if fld.eq_key(v1) != fld.eq_key(v2):
+                print(fld)
+        elif v1 != v2:
+            print(fld)
+    assert new == new2
+
+
 def test_select_freqs(simple_gsdata):
     new = simple_gsdata.select_freqs(range=(50 * un.MHz, 70 * un.MHz))
     assert new.freq_array.max() <= 70 * un.MHz
@@ -424,3 +471,29 @@ def test_shape(gsdata_model):
         gsdata_model.ntimes,
         gsdata_model.nparams,
     )
+
+
+def test_swap_data(simple_gsdata):
+    with pytest.raises(
+        ValueError, match="Cannot swap data attribute without add_model step"
+    ):
+        swap_data(simple_gsdata)
+
+    model = LinLog(n_terms=2, parameters=[5, 6])
+    mx = model.at(x=simple_gsdata.freq_array)
+    newdata = np.array(
+        [
+            mx() * (1 + np.random.normal(scale=0.1))
+            for _ in range(
+                simple_gsdata.ntimes * simple_gsdata.nloads * simple_gsdata.npols
+            )
+        ]
+    )
+    newdata.shape = simple_gsdata.data.shape
+    newdata = simple_gsdata.update(data=newdata)
+
+    gsd_model = add_model(newdata, model=model)
+    gsd_resids = swap_data(gsd_model)
+
+    assert not np.allclose(newdata.data, gsd_resids.data)
+    assert np.allclose(newdata.spectra, gsd_resids.spectra)

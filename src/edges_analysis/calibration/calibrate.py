@@ -2,13 +2,14 @@
 from __future__ import annotations
 
 import glob
+import hickle
 import numpy as np
 import os
 import re
 from astropy.time import Time
 from datetime import datetime
 from edges_cal import types as tp
-from edges_cal.cal_coefficients import Calibrator
+from edges_cal.cal_coefficients import CalibrationObservation, Calibrator
 from pathlib import Path
 
 from .. import beams, const
@@ -38,6 +39,24 @@ def dicke_calibration(data: GSData) -> GSData:
             name: np.any(flag, axis=0)[np.newaxis] for name, flag in data.flags.items()
         },
         data_model=None,
+    )
+
+
+@gsregister("calibrate")
+def approximate_temperature(data: GSData, *, tload: float, tns: float):
+    """Convert an uncalibrated object to an uncalibrated_temp object.
+
+    This uses a guess for T0 and T1 that provides an approximate temperature spectrum.
+    One does not need this step to perform actual calibration, and if actual calibration
+    is done following applying this function, you will need to provide the same tload
+    and tns as used here.
+    """
+    if data.data_unit != "uncalibrated":
+        raise ValueError(
+            "data_unit must be 'uncalibrated' to calculate approximate temperature"
+        )
+    return data.update(
+        data=data.data * tns + tload, data_unit="uncalibrated_temp", data_model=None
     )
 
 
@@ -220,6 +239,13 @@ def get_labcal(
 
     if not isinstance(calobs, Calibrator):
         try:
+            calobs = hickle.load(calobs)
+            if isinstance(calobs, CalibrationObservation):
+                calobs = calobs.to_calibrator()
+        except Exception:
+            pass
+    if not isinstance(calobs, Calibrator):
+        try:
             calobs = Calibrator.from_calfile(calobs)
         except Exception:
             calobs = Calibrator.from_old_calfile(calobs)
@@ -240,6 +266,8 @@ def apply_noise_wave_calibration(
     s11_file_pattern: str = r"{y}_{jd}_{h}_*_input{input}.s1p",
     ignore_s11_files: list[str] | None = None,
     antenna_s11_n_terms: int = 15,
+    tload: float | None = None,
+    tns: float | None = None,
 ) -> GSData:
     """Apply noise-wave calibration to data.
 
@@ -268,8 +296,13 @@ def apply_noise_wave_calibration(
     antenna_s11_n_terms
         The number of terms to use in the antenna S11 model.
     """
-    if data.data_unit != "uncalibrated":
+    if data.data_unit not in ("uncalibrated", "uncalibrated_temp"):
         raise ValueError("Data must be uncalibrated to apply calibration!")
+
+    if data.data_unit == "uncalibrated_temp" and (tload is None or tns is None):
+        raise ValueError(
+            "You need to supply tload and tns if data_unit is uncalibrated_temp"
+        )
 
     if data.nloads != 1:
         raise ValueError("Can only apply noise-wave calibration to single load data!")
@@ -284,7 +317,11 @@ def apply_noise_wave_calibration(
         antenna_s11_n_terms=antenna_s11_n_terms,
     )
 
-    new_data = labcal.calibrate_q(data.data, freq=data.freq_array)
+    if data.data_unit == "uncalibrated_temp":
+        q = (data.data - tload) / tns
+    else:
+        q = data.data
+    new_data = labcal.calibrate_q(q, freq=data.freq_array)
     return data.update(data=new_data, data_unit="temperature", data_model=None)
 
 
@@ -399,6 +436,10 @@ def apply_beam_correction(
     data: GSData,
     band: str | None = None,
     beam_file: tp.PathLike | None = ":",
+    gha_min: float | None = None,
+    gha_max: float | None = None,
+    time_resolution: int | None = None,
+    average_before_correction: bool = True,
 ) -> GSData:
     """Apply beam correction to the data.
 
@@ -412,9 +453,54 @@ def apply_beam_correction(
     beam_file
         Path to file containing beam correction coefficients. If there is an existing
         beam file in the standard location, this can be set to ``":"``.
+    gha_min
+        The minimum GHA to use for the beam correction. If not provided, the GHA is
+        calculated from the LST bins of the data. If the data has multiple LST bins,
+        and ``average_before_correction`` is ``True``, then this cannot be provided.
+    gha_max
+        The maximum GHA to use for the beam correction. If not provided, the GHA is
+        calculated from the LST bins of the data. If the data has multiple LST bins,
+        and ``average_before_correction`` is ``True``, then this cannot be provided.
+    time_resolution
+        The time resolution to use for the beam correction. If not provided, the
+        resolution is calculated from the LST bins of the data. If the data has multiple
+        LST bins, and ``average_before_correction`` is ``True``, then this cannot be
+        provided.
+    average_before_correction
+        Whether to average the beam correction across the time dimension before
+        applying it to the data.
     """
     beam_fac = beams.InterpolatedBeamFactor.from_beam_factor(
         beam_file, band=band, f_new=data.freq_array
     )
-    bf = beam_fac.evaluate(data.lst_array.hour)
-    return data.update(data=data.data / bf, data_model=None)
+
+    if not (
+        (gha_min is None and gha_max is None and time_resolution is None)
+        or (gha_min is not None and gha_max is not None and time_resolution is not None)
+    ):
+        raise ValueError(
+            "All of gha_min, gha_max and time_resolution must be provided, if any!"
+        )
+
+    if not average_before_correction:
+        if gha_min is not None:
+            raise ValueError(
+                "gha_min, gha_max and time_resolution cannot be provided if "
+                "average_before_correction is False!"
+            )
+
+        bf = beam_fac.evaluate(data.lst_array.hour)
+        return data.update(data=data.data / bf, data_model=None)
+    else:
+        if gha_min is not None:
+            gha_min %= 24
+            gha_max %= 24
+            while gha_max < gha_min:
+                gha_max += 24
+
+            gha_list = np.arange(gha_min, gha_max, time_resolution)
+            lst_list = coords.gha2lst(gha_list)
+            bf = beam_fac.evaluate(lst_list)
+        else:
+            bf = beam_fac.evaluate(data.lst_array.hour)
+        return data.update(data=data.data / np.average(bf, axis=0), data_model=None)

@@ -56,9 +56,9 @@ logger = logging.getLogger(__name__)
 
 def _get_files(pth: Path, filt=h5py.is_hdf5) -> list[Path]:
     if pth.is_dir():
-        return sorted(fl for fl in pth.glob("*") if filt(fl))
+        return sorted({fl for fl in pth.glob("*") if filt(fl)})
     else:
-        return sorted(Path(fl) for fl in glob.glob(str(pth)) if filt(Path(fl)))
+        return sorted({Path(fl) for fl in glob.glob(str(pth)) if filt(Path(fl))})
 
 
 def read_progressfile(fl: Path) -> dict[str, dict]:
@@ -356,7 +356,7 @@ def process(
 
     # Get input files (if any)
     path = [Path(p) for p in path]
-    input_files = sum((_get_files(p, filt=_file_filter) for p in path), [])
+    input_files = sorted(set(sum((_get_files(p, filt=_file_filter) for p in path), [])))
 
     # First, write out a progress file if it doesn't exist.
     if not progressfile.exists() or restart:
@@ -396,7 +396,6 @@ def process(
         files = get_files_for_step(stepname, progress)
 
         if data:
-
             fnc = GSDATA_PROCESSORS[fncname.lower()]
             if params:
                 console.print()
@@ -420,8 +419,13 @@ def process(
             )
         else:
             if stepname == "convert":
-                params.update({"telescope_location": const.edges_location})
-                data = [GSData.from_file(f, **params) for f in files]
+                telescope_loc = params.get("telescope_location", "edges")
+                telescope_loc = const.KNOWN_LOCATIONS[telescope_loc]
+
+                data = [
+                    GSData.from_file(f, telescope_location=telescope_loc, **params)
+                    for f in files
+                ]
                 if not data:
                     console.print(f"{stepname} does not need to run on any files.")
                 continue
@@ -563,7 +567,7 @@ def perform_step_on_object(
         logger.debug(f"Initial memory: {pr.memory_info().rss / 1024**2} MB")
         try:
             data = this_fnc(data)
-        except (WeatherError) as e:
+        except WeatherError as e:
             logger.warning(str(e))
             return
 
