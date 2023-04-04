@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 import numpy as np
+from astropy import units as un
 from edges_cal import modelling as mdl
 
 from edges_analysis import GSData
@@ -98,3 +99,25 @@ def test_percent_power_filter(raw_step):
 
 def test_rfi_filter(raw_step):
     run_filter_check(raw_step[0], filters.rfi_model_filter, freq_range=(40, 100))
+
+
+def test_rmsf_filter(gsd_ones: GSData):
+    with pytest.raises(ValueError, match="Unsupported data_unit for rmsf_filter."):
+        filters.rmsf_filter(gsd_ones.update(data_unit="power"), threshold=100)
+
+    # Let data be perfect:
+    pl = np.outer(
+        1 + np.random.normal(scale=0.1, size=gsd_ones.ntimes * gsd_ones.npols),
+        (gsd_ones.freq_array / (75 * un.MHz)) ** -2.5,
+    )
+    pl.shape = gsd_ones.data.shape
+
+    data = gsd_ones.update(data=pl, data_unit="uncalibrated_temp")
+
+    print(gsd_ones.data.shape, data.data.shape)
+    new = filters.rmsf_filter(data, threshold=1)
+
+    data = gsd_ones.update(data=(pl - 300) / 1000, data_unit="uncalibrated")
+    new2 = filters.rmsf_filter(data, threshold=1, tcal=300, tload=1000)
+
+    assert np.all(new.complete_flags == new2.complete_flags)

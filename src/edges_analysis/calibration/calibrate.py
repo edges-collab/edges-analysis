@@ -439,6 +439,7 @@ def apply_beam_correction(
     gha_min: float | None = None,
     gha_max: float | None = None,
     time_resolution: int | None = None,
+    average_before_correction: bool = True,
 ) -> GSData:
     """Apply beam correction to the data.
 
@@ -452,20 +453,54 @@ def apply_beam_correction(
     beam_file
         Path to file containing beam correction coefficients. If there is an existing
         beam file in the standard location, this can be set to ``":"``.
-
+    gha_min
+        The minimum GHA to use for the beam correction. If not provided, the GHA is
+        calculated from the LST bins of the data. If the data has multiple LST bins,
+        and ``average_before_correction`` is ``True``, then this cannot be provided.
+    gha_max
+        The maximum GHA to use for the beam correction. If not provided, the GHA is
+        calculated from the LST bins of the data. If the data has multiple LST bins,
+        and ``average_before_correction`` is ``True``, then this cannot be provided.
+    time_resolution
+        The time resolution to use for the beam correction. If not provided, the
+        resolution is calculated from the LST bins of the data. If the data has multiple
+        LST bins, and ``average_before_correction`` is ``True``, then this cannot be
+        provided.
+    average_before_correction
+        Whether to average the beam correction across the time dimension before
+        applying it to the data.
     """
     beam_fac = beams.InterpolatedBeamFactor.from_beam_factor(
         beam_file, band=band, f_new=data.freq_array
     )
 
-    if gha_min is not None:
-        if data.lst_array.size != 1:
+    if not (
+        (gha_min is None and gha_max is None and time_resolution is None)
+        or (gha_min is not None and gha_max is not None and time_resolution is not None)
+    ):
+        raise ValueError(
+            "All of gha_min, gha_max and time_resolution must be provided, if any!"
+        )
+
+    if not average_before_correction:
+        if gha_min is not None:
             raise ValueError(
-                "data has multiple LST bins. Cannot evaluate one Beam factor"
+                "gha_min, gha_max and time_resolution cannot be provided if "
+                "average_before_correction is False!"
             )
-        gha_list = np.arange(gha_min, gha_max, time_resolution)
-        lst_list = coords.gha2lst(gha_list)
-        bf = beam_fac.evaluate(lst_list)
-    else:
+
         bf = beam_fac.evaluate(data.lst_array.hour)
-    return data.update(data=data.data / np.average(bf, axis=0), data_model=None)
+        return data.update(data=data.data / bf, data_model=None)
+    else:
+        if gha_min is not None:
+            gha_min %= 24
+            gha_max %= 24
+            while gha_max < gha_min:
+                gha_max += 24
+
+            gha_list = np.arange(gha_min, gha_max, time_resolution)
+            lst_list = coords.gha2lst(gha_list)
+            bf = beam_fac.evaluate(lst_list)
+        else:
+            bf = beam_fac.evaluate(data.lst_array.hour)
+        return data.update(data=data.data / np.average(bf, axis=0), data_model=None)

@@ -419,8 +419,13 @@ def process(
             )
         else:
             if stepname == "convert":
-                params.update({"telescope_location": const.edges_location})
-                data = [GSData.from_file(f, **params) for f in files]
+                telescope_loc = params.get("telescope_location", "edges")
+                telescope_loc = const.KNOWN_LOCATIONS[telescope_loc]
+
+                data = [
+                    GSData.from_file(f, telescope_location=telescope_loc, **params)
+                    for f in files
+                ]
                 if not data:
                     console.print(f"{stepname} does not need to run on any files.")
                 continue

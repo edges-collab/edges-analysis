@@ -31,7 +31,6 @@ def freq_bin_direct(data: GSData, resolution: int | float) -> GSData:
         axis=-1,
         bins=resolution,
     )
-    print("HERE>>>", new_freqs[0], spec.shape, wght.shape)
     return data.update(freq_array=new_freqs, data=spec, nsamples=wght, flags={})
 
 

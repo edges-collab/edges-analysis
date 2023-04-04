@@ -59,24 +59,24 @@ class _Register:
                     "timestamp": now,
                 },
             )
-        else:
-            try:
-                return [
-                    nd.update(
-                        history={
-                            "message": message,
-                            "function": self.func.__name__,
-                            "parameters": kw,
-                            "timestamp": now,
-                        },
-                    )
-                    for nd in newdata
-                ]
-            except Exception as e:
-                raise TypeError(
-                    f"{self.func.__name__} returned {type(newdata)} "
-                    f"instead of GSData or list thereof."
-                ) from e
+
+        try:
+            return [
+                nd.update(
+                    history={
+                        "message": message,
+                        "function": self.func.__name__,
+                        "parameters": kw,
+                        "timestamp": now,
+                    },
+                )
+                for nd in newdata
+            ]
+        except Exception as e:
+            raise TypeError(
+                f"{self.func.__name__} returned {type(newdata)} "
+                f"instead of GSData or list thereof."
+            ) from e
 
 
 GSDATA_PROCESSORS = {}
@@ -719,9 +719,11 @@ class GSData:
         self,
         range: tuple[Time | Longitude, Time | Longitude] | None = None,
         indx: np.ndarray | None = None,
+        gha: bool = False,
+        load: str = "all",
     ) -> GSData:
         """Selects a subset of the times."""
-        return select_lsts(self, range=range, indx=indx)
+        return select_lsts(self, range=range, indx=indx, gha=gha, load=load)
 
     def select(
         self,
@@ -1321,12 +1323,22 @@ def select_lsts(
         else:
             mask = (t >= range[0]) & (t <= range[1])
 
+        # Account for the case of load=='all' -- in this case require all loads
+        # to be within the range.
         if mask.ndim == 2:
             mask = np.all(mask, axis=1)
 
     if indx is not None:
         if mask is None:
-            mask = np.zeros((len(data.time_array),), dtype=bool)
-        mask[indx] = True
+            mask = np.ones((len(data.time_array),), dtype=bool)
+            print("got mask", mask.shape, np.sum(mask))
+
+        if indx.dtype == bool:
+            mask[~indx] = False
+        else:
+            for i in np.arange(data.ntimes):
+                if i not in indx:
+                    mask[i] = False
+        print("2 mask", mask.shape, np.sum(mask))
 
     return _mask_times(data, mask)

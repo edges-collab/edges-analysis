@@ -628,19 +628,20 @@ def rmsf_filter(
         spec = data.spectra
     else:
         raise ValueError(
-            "Unsupported data_type for rmsf_filter. "
+            "Unsupported data_unit for rmsf_filter. "
             "Need uncalibrated or uncalibrated_temp"
         )
     freq = data.freq_array.value[freq_mask]
     init_model = (freq / 75.0) ** -2.5
 
-    T75 = np.sum(init_model * spec[..., freq_mask], axis=-1) / np.sum(init_model**2)
-    rms = np.sqrt(
-        np.mean(
-            (spec[..., freq_mask] - np.outer(T75, init_model)) ** 2,
-            axis=-1,
-        )
-    )
+    spec = spec[..., freq_mask]
+    T75 = np.sum(init_model * spec, axis=-1) / np.sum(init_model**2)
+
+    prod = np.outer(T75, init_model)
+    # We have to set the shape explicitly, because the outer product collapses
+    # the dimensions.
+    prod.shape = spec.shape
+    rms = np.sqrt(np.mean((spec - prod) ** 2, axis=-1))
 
     return rms > threshold
 
