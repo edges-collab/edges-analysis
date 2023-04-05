@@ -84,7 +84,6 @@ def bitsy_flags():
 @parametrize("weights", [fxref(ideal_weights), fxref(row_flags), fxref(bitsy_flags)])
 @pytest.mark.parametrize("refit", [5, 3, False])
 def test_model_bin_gha(params, weights, refit):
-
     model, data, sigma = make_data(params, weights)
 
     if refit:

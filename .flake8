@@ -1,12 +1,18 @@
 [flake8]
 ignore =
-  E203    # No space before colon
+  # No space before colon
+  E203
   W503
-  N806    # Variable name should be lower case. We have some single-letter variables that make more sense to be caps.
-  A003    # Class attribute shadows a python builtin -- not much chance of that causing a problem
-  D401    # First line should be in imperative mood -- cached_properties don't fit this bill.
-  D101    # Missing docstring in public class -- my docstrings are in the __init__ which seems to fail this ?
-  RST210  # because **kwargs is allowed.
+  # Variable name should be lower case. We have some single-letter variables that make more sense to be caps.
+  N806
+  # Class attribute shadows a python builtin -- not much chance of that causing a problem
+  A003
+  # First line should be in imperative mood -- cached_properties don't fit this bill.
+  D401
+  # Missing docstring in public class -- my docstrings are in the __init__ which seems to fail this ?
+  D101
+  # because **kwargs is allowed.
+  RST210
 max-line-length = 88
 max-complexity = 25
 inline-quotes = double

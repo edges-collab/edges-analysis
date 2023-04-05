@@ -44,8 +44,11 @@ class _Register:
         self.kind = kind
         functools.update_wrapper(self, func, updated=())
 
-    def __call__(self, *args, message: str = "", **kw) -> GSData | list[GSData]:
-        newdata = self.func(*args, **kw)
+    def __call__(
+        self, data: GSData, *args, message: str = "", **kw
+    ) -> GSData | list[GSData]:
+        now = datetime.datetime.now()
+        newdata = self.func(data, *args, **kw)
 
         if isinstance(newdata, GSData):
             return newdata.update(
@@ -53,25 +56,27 @@ class _Register:
                     "message": message,
                     "function": self.func.__name__,
                     "parameters": kw,
-                }
+                    "timestamp": now,
+                },
             )
-        else:
-            try:
-                return [
-                    nd.update(
-                        history={
-                            "message": message,
-                            "function": self.func.__name__,
-                            "parameters": kw,
-                        }
-                    )
-                    for nd in newdata
-                ]
-            except Exception as e:
-                raise TypeError(
-                    f"{self.func.__name__} returned {type(newdata)} "
-                    f"instead of GSData or list thereof."
-                ) from e
+
+        try:
+            return [
+                nd.update(
+                    history={
+                        "message": message,
+                        "function": self.func.__name__,
+                        "parameters": kw,
+                        "timestamp": now,
+                    },
+                )
+                for nd in newdata
+            ]
+        except Exception as e:
+            raise TypeError(
+                f"{self.func.__name__} returned {type(newdata)} "
+                f"instead of GSData or list thereof."
+            ) from e
 
 
 GSDATA_PROCESSORS = {}
@@ -327,7 +332,7 @@ class GSData:
     telescope_name: str = field(default="unknown")
     data_model: GSDataModel | None = field(default=None)
     data_unit: Literal[
-        "power", "temperature", "uncalibrated", "model_residuals"
+        "power", "temperature", "uncalibrated", "uncalibrated_temp", "model_residuals"
     ] = field(default="power")
     auxiliary_measurements: dict = field(factory=dict)
     filename: Path | None = field(default=None, converter=cnv.optional(Path))
@@ -455,10 +460,16 @@ class GSData:
 
     @data_unit.validator
     def _data_unit_validator(self, attribute, value):
-        if value not in ("power", "temperature", "uncalibrated", "model_residuals"):
+        if value not in (
+            "power",
+            "temperature",
+            "uncalibrated",
+            "model_residuals",
+            "uncalibrated_temp",
+        ):
             raise ValueError(
                 'data_unit must be one of "power", "temperature", "uncalibrated",'
-                '"model_residuals"'
+                '"model_residuals", "uncalibrated_temp'
             )
 
         if value == "model_residuals" and self.data_model is None:
@@ -708,9 +719,11 @@ class GSData:
         self,
         range: tuple[Time | Longitude, Time | Longitude] | None = None,
         indx: np.ndarray | None = None,
+        gha: bool = False,
+        load: str = "all",
     ) -> GSData:
         """Selects a subset of the times."""
-        return select_lsts(self, range=range, indx=indx)
+        return select_lsts(self, range=range, indx=indx, gha=gha, load=load)
 
     def select(
         self,
@@ -857,7 +870,7 @@ class GSData:
     @cached_property
     def gha(self) -> np.ndarray:
         """The GHA's of the observations."""
-        return crd.lst2gha(self.lst_array.hour)
+        return Longitude(crd.lst2gha(self.lst_array.hour) * un.hourangle)
 
     def get_moon_azel(self) -> tuple[np.ndarray, np.ndarray]:
         """Get the Moon's azimuth and elevation for each time in deg."""
@@ -988,6 +1001,10 @@ class GSData:
 
         if append_to_file:
             with h5py.File(new.filename, "a") as fl:
+                if fl["data"].shape != flags.shape:
+                    # Can't append to file because it would be inconsistent.
+                    return new
+
                 flg_grp = fl["flags"]
 
                 if "values" not in flg_grp:
@@ -1001,7 +1018,6 @@ class GSData:
                     v = flg_grp["values"]
 
                     if v.shape[0] < len(self.flags):
-
                         # The file is inconsistent with the object, so we need to
                         # delete it.
                         del flg_grp["values"]
@@ -1172,11 +1188,23 @@ def add_model(data: GSData, *, model: mdl.Model, append_to_file: bool | None = N
                 logger.warning(
                     f"Data model already exists in {new.filename}, not overwriting."
                 )
-
+            elif fl["data"].shape[:3] != new.data_model.parameters.shape[:3]:
+                logger.warning(
+                    "File on disk is incompatible with the data model. Write new file."
+                )
             else:
                 new.data_model.write(fl, "data_model")
 
     return new
+
+
+@gsregister("supplement")
+def swap_data(data: GSData):
+    """Swaps the data attribute in the GSdata object from spectra to residuals."""
+    if data.data_model is None:
+        raise ValueError("Cannot swap data attribute without add_model step")
+
+    return data.update(data=data.resids, data_unit="model_residuals")
 
 
 @gsregister("reduce")
@@ -1273,8 +1301,11 @@ def select_lsts(
     range: tuple[Longitude | float, Longitude | float] | None = None,
     indx: np.ndarray | None = None,
     load: int | str = "ant",
+    gha: bool = False,
 ) -> GSData:
     """Selects a subset of the times."""
+    if load == "all":
+        load = slice(None)
     if isinstance(load, str):
         load = data.loads.index(load)
 
@@ -1286,15 +1317,28 @@ def select_lsts(
         if not isinstance(range[0], Longitude):
             range = (range[0] % 24 * un.hourangle, range[1] % 24 * un.hourangle)
 
-        t = data.lst_array[:, load]
+        t = data.gha[:, load] if gha else data.lst_array[:, load]
         if range[0] > range[1]:
             mask = (t >= range[1]) & (t <= range[0])
         else:
             mask = (t >= range[0]) & (t <= range[1])
 
+        # Account for the case of load=='all' -- in this case require all loads
+        # to be within the range.
+        if mask.ndim == 2:
+            mask = np.all(mask, axis=1)
+
     if indx is not None:
         if mask is None:
-            mask = np.zeros((len(data.time_array),), dtype=bool)
-        mask[indx] = True
+            mask = np.ones((len(data.time_array),), dtype=bool)
+            print("got mask", mask.shape, np.sum(mask))
+
+        if indx.dtype == bool:
+            mask[~indx] = False
+        else:
+            for i in np.arange(data.ntimes):
+                if i not in indx:
+                    mask[i] = False
+        print("2 mask", mask.shape, np.sum(mask))
 
     return _mask_times(data, mask)

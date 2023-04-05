@@ -82,8 +82,15 @@ class _GSDataFilter:
                 new = np.sum(outflags)
                 tot = np.sum(data.complete_flags)
 
+                if not data.in_lst:
+                    rep = data.get_initial_yearday(hours=True)
+                elif data.filename:
+                    rep = data.filename
+                else:
+                    rep = "unknown"
+
                 logger.info(
-                    f"'{data.get_initial_yearday(hours=True)}': "
+                    f"'{rep}': "
                     f"{old / sz:.2f} + {new / sz:.2f} → "
                     f"{tot / sz:.2f}% [bold]<+{(tot - old) / sz:.2f}%>[/] "
                     f"flagged after [blue]{self.func.__name__}[/]"
@@ -615,19 +622,26 @@ def rmsf_filter(
     if not np.any(freq_mask):
         return np.zeros(data.ntimes, dtype=bool)
 
-    semi_calibrated_data = (data.spectra * tload) + tcal
+    if data.data_unit == "uncalibrated":
+        spec = (data.spectra * tload) + tcal
+    elif data.data_unit in ("uncalibrated_temp", "temperature", "model_residuals"):
+        spec = data.spectra
+    else:
+        raise ValueError(
+            "Unsupported data_unit for rmsf_filter. "
+            "Need uncalibrated or uncalibrated_temp"
+        )
     freq = data.freq_array.value[freq_mask]
     init_model = (freq / 75.0) ** -2.5
 
-    T75 = np.sum(init_model * semi_calibrated_data[..., freq_mask], axis=-1) / np.sum(
-        init_model**2
-    )
-    rms = np.sqrt(
-        np.mean(
-            (semi_calibrated_data[..., freq_mask] - np.outer(T75, init_model)) ** 2,
-            axis=-1,
-        )
-    )
+    spec = spec[..., freq_mask]
+    T75 = np.sum(init_model * spec, axis=-1) / np.sum(init_model**2)
+
+    prod = np.outer(T75, init_model)
+    # We have to set the shape explicitly, because the outer product collapses
+    # the dimensions.
+    prod.shape = spec.shape
+    rms = np.sqrt(np.mean((spec - prod) ** 2, axis=-1))
 
     return rms > threshold
 

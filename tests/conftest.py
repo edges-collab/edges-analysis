@@ -2,13 +2,16 @@ from __future__ import annotations
 
 import pytest
 
+import numpy as np
 import yaml
+from astropy import units as un
+from astropy.time import Time
 from click.testing import CliRunner
 from jinja2 import Template
 from pathlib import Path
 from subprocess import run
 
-from edges_analysis import cli
+from edges_analysis import cli, const
 from edges_analysis.config import config
 from edges_analysis.gsdata import GSData
 
@@ -71,6 +74,21 @@ def beam_settings() -> Path:
 @pytest.fixture(scope="session")
 def workflow_dir(tmp_path_factory) -> Path:
     return tmp_path_factory.mktemp("integration-workflow")
+
+
+@pytest.fixture(scope="session")
+def calpath(integration_test_data: Path) -> Path:
+    return integration_test_data / "calfile_2015.h5"
+
+
+@pytest.fixture(scope="session")
+def s11path(integration_test_data: Path) -> Path:
+    return integration_test_data / "s11"
+
+
+@pytest.fixture(scope="session")
+def beamfile(integration_test_data: Path) -> Path:
+    return integration_test_data / "feko_Haslam408_ref70.00.h5"
 
 
 def get_workflow(
@@ -262,4 +280,36 @@ def final_step(run_workflow: Path) -> tuple[GSData]:
         GSData.from_file(
             run_workflow / "cal/linlog/L15min/lst-avg/lstbin24hr.400kHz.gsh5"
         ),
+    )
+
+
+@pytest.fixture(scope="session")
+def gsd_ones():
+    nload, npol, ntime, nfreq = 1, 2, 10, 26
+    return GSData(
+        data=np.ones((nload, npol, ntime, nfreq)),
+        freq_array=np.linspace(50, 100, nfreq) * un.MHz,
+        time_array=Time(
+            np.linspace(2459856, 2459857, ntime + 1)[:-1, None],
+            format="jd",
+            scale="utc",
+        ),
+        telescope_location=const.edges_location,
+        loads=("ant",),
+    )
+
+
+@pytest.fixture(scope="session")
+def gsd_ones_power():
+    nload, npol, ntime, nfreq = 3, 2, 10, 26
+    times = np.linspace(2459856, 2459857, ntime + 1)[:-1]
+    times = np.array([times, times, times]).T
+
+    return GSData(
+        data=np.ones((nload, npol, ntime, nfreq)),
+        freq_array=np.linspace(50, 100, nfreq) * un.MHz,
+        time_array=Time(times, format="jd", scale="utc"),
+        telescope_location=const.edges_location,
+        loads=("p0", "p1", "p2"),
+        data_unit="power",
     )
