@@ -463,6 +463,7 @@ class Beam:
         model: mdl.Model = mdl.Polynomial(
             n_terms=13, transform=mdl.ScaleTransform(scale=75.0)
         ),
+        **fit_kwargs,
     ) -> Beam:
         """
         Interpolate the beam to a new set of frequencies.
@@ -487,7 +488,7 @@ class Beam:
         cached_model = model.at(x=self.frequency.to_value("MHz"))
         for i, bm in enumerate(self.beam.T):
             for j, b in enumerate(bm):
-                model_fit = cached_model.fit(ydata=b)
+                model_fit = cached_model.fit(ydata=b, **fit_kwargs)
                 interp_beam[:, j, i] = model_fit.evaluate(freq.to_value("MHz"))
 
         return Beam(
@@ -498,8 +499,7 @@ class Beam:
         )
 
     def smoothed(
-        self,
-        model: mdl.Model = mdl.Polynomial(n_terms=12),
+        self, model: mdl.Model = mdl.Polynomial(n_terms=12), **fit_kwargs
     ) -> Beam:
         """
         Smoothes the beam within its same set of frequencies.
@@ -521,7 +521,7 @@ class Beam:
         cached_model = model.at(x=self.frequency.to_value("MHz"))
         for i, bm in enumerate(self.beam.T):
             for j, b in enumerate(bm):
-                model_fit = cached_model.fit(ydata=b)
+                model_fit = cached_model.fit(ydata=b, **fit_kwargs)
                 smooth_beam[:, j, i] = model_fit.evaluate()
         return Beam(
             frequency=self.frequency,
