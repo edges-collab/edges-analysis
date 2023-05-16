@@ -81,7 +81,7 @@ def test_simulate_spectra():
         f_low=50 * u.MHz,
         f_high=55 * u.MHz,
         lsts=np.arange(0, 24, 12),
-        sky_model=Haslam408(max_res=3),
+        sky_model=Haslam408(max_nside=8),
     )
 
     assert sky_map.shape == (len(lst), len(freq))
@@ -102,7 +102,7 @@ def test_antenna_beam_factor():
         f_low=50 * u.MHz,
         f_high=56 * u.MHz,
         lsts=np.arange(0, 24, 12),
-        sky_model=Haslam408(max_res=3),
+        sky_model=Haslam408(max_nside=8),
     )
     assert isinstance(abf, beams.BeamFactor)
 

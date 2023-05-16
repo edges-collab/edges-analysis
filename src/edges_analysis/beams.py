@@ -677,7 +677,6 @@ class BeamFactor(HDF5Object):
             "rotation_from_north": lambda x: isinstance(x, float),
             "index_model": lambda x: isinstance(x, str),
             "reference_frequency": lambda x: isinstance(x, float),
-            "max_nside": lambda x: isinstance(x, (int, np.int64)),
         },
     }
 
@@ -768,14 +767,13 @@ def sky_convolution_generator(
     ground_gain = ground_loss(
         ground_loss_file, band=beam.instrument, freq=beam.frequency.to_value("MHz")
     )
-    galactic_coords = sky_model.get_sky_coords()
 
     # Get the local times corresponding to the given LSTs
     times = coords.lsts_to_times(lsts, ref_time, location)
 
     for i, time in tqdm(enumerate(times), unit="LST"):
         # Transform Galactic coordinates of Sky Model to Local coordinates
-        altaz = galactic_coords.transform_to(
+        altaz = sky_model.coords.transform_to(
             apc.AltAz(
                 location=const.edges_location,
                 obstime=time,
@@ -1005,11 +1003,10 @@ def antenna_beam_factor(
             "f_low": f_low.to_value("MHz"),
             "f_high": f_high.to_value("MHz"),
             "normalize_beam": bool(normalize_beam),
-            "sky_model": str(sky_model),
+            "sky_model": sky_model.name,
             "index_model": str(index_model),
             "reference_frequency": reference_frequency.to_value("MHz"),
             "rotation_from_north": float(90),
-            "max_nside": int(sky_model.max_res or 0),
         },
     }
 
