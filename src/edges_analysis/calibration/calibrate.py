@@ -415,6 +415,7 @@ def apply_loss_correction(
             band, f, labcal.antenna_s11_model(data.freq_array)
         )
         gain *= balun_gain * connector_gain
+        
 
     # Ground Loss
     if isinstance(ground_correction, (str, Path)):
@@ -425,7 +426,6 @@ def apply_loss_correction(
         gain *= ground_correction
 
     a = ambient_temp + const.absolute_zero if ambient_temp[0] < 200 else ambient_temp
-
     spec = (data.data - np.outer(a, (1 - gain))) / gain
 
     return data.update(data=spec, data_unit="temperature", data_model=None)
@@ -440,6 +440,7 @@ def apply_beam_correction(
     gha_max: float | None = None,
     time_resolution: int | None = None,
     average_before_correction: bool = True,
+    beam_factor_file: tp.PathLike | None = ":",
 ) -> GSData:
     """Apply beam correction to the data.
 
@@ -481,7 +482,10 @@ def apply_beam_correction(
         raise ValueError(
             "All of gha_min, gha_max and time_resolution must be provided, if any!"
         )
-
+    if beam_factor_file is not None:
+        alan_beam_factor = np.genfromtxt(beam_factor_file)
+        bf = alan_beam_factor[:,3]
+        return data.update(data=data.data/bf, data_model = None)
     if not average_before_correction:
         if gha_min is not None:
             raise ValueError(
