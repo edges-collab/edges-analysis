@@ -9,7 +9,7 @@ edges_location = apc.EarthLocation(
 )
 galactic_centre_lst = 17 + (45 / 60) + (40.04 / (60 * 60))
 absolute_zero = (0 * apu.deg_C).to(apu.K, equivalencies=apu.temperature()).value
-
+alan_location = apc.EarthLocation(lat=-26.7 * apu.deg, lon=116.5 * apu.deg)
 KNOWN_LOCATIONS = {
     "edges": edges_location,
     "alan-edges": apc.EarthLocation(lat=edges_lat_deg * apu.deg, lon=116.5 * apu.deg),
