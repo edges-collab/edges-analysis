@@ -816,7 +816,7 @@ class BeamFactor:
         if freqs is None:
             freqs = self.frequencies
 
-        bf = self.antenna_temp.T / self.antenna_temp_ref.T
+        bf = (self.antenna_temp.T / self.antenna_temp_ref.T).T
 
         fixed_model = model.at(x=self.frequencies)
         ref_bf = np.zeros(self.nlst)
