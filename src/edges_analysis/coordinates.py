@@ -138,6 +138,6 @@ def lsts_to_times(
     times = []
     for i, this_lst in enumerate(lsts):
         lst_diff = apc.Longitude(this_lst * apu.hour) - ref_lst
-        sec_diff = dt.timedelta(seconds=int(lst_diff.arcsecond / 15 / lst_per_sec))
+        sec_diff = apt.TimeDelta(lst_diff.arcsecond / 15 / lst_per_sec, format="sec")
         times.append(ref_time + sec_diff)
     return times

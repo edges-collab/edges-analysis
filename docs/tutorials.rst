@@ -9,6 +9,7 @@ After reading the `basic usage <../usage>`_, a good place to get a feel for how
 
    demos/processing_bowman2018
    demos/rfi_algorithm_exploration
+   demos/comparison_of_beamfactor_to_alan
 
 If you've covered the tutorials and still have questions about "how to do stuff" in
 ``edges-analysis``, consult the FAQs:

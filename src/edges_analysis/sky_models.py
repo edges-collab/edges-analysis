@@ -105,6 +105,26 @@ class SkyModel:
     This is simpler than pyradiosky's SkyModel class in that it doesn't deal with
     polarizations, assumes a single frequency, and doesn't know intrinsically about
     the time of observation etc.
+
+    Parameters
+    ----------
+    frequency
+        The frequency of the sky model in Hz.
+    temperature
+        The temperature of the sky model in K, shape (Nsky,).
+    coords
+        The coordinates of the sky model, shape (Nsky,).
+    name
+        The name of the sky model.
+    healpix
+        An astropy-healpix HEALPix object describing the pixelization of the sky model,
+        if applicable.
+    pixel_res
+        The solid angle of each pixel in the sky model, in steradians. If a float, this
+        is assumed to be the same for all pixels. If an array, it must have the same
+        shape as temperature. The mean temperature of the sky is assumed to be the
+        sum of the temperature array multiplied by the pixel_res array, divided
+        by the sum of the pixel_res array.
     """
 
     frequency: float = attr.field(converter=float, validator=attr.validators.gt(0))
@@ -112,6 +132,7 @@ class SkyModel:
     coords: apc.SkyCoord = attr.field()
     name: str = attr.field(default="SkyModel")
     healpix: ahp.HEALPix | None = attr.field(default=None, eq=False)
+    pixel_res: float | np.ndarray = attr.field(eq=attr.cmp_using(eq=np.allclose))
 
     @coords.validator
     def _check_coords(self, attribute, value):
@@ -121,6 +142,19 @@ class SkyModel:
             raise ValueError(f"coords must be 1D, not {value.ndim}D")
         if value.size != self.temperature.size:
             raise ValueError("coords must have same size as temperature")
+
+    @pixel_res.default
+    def _default_pixel_res(self) -> float:
+        return 4 * np.pi / len(self.coords)
+
+    @pixel_res.validator
+    def _check_pixel_res(self, attribute, value):
+        if isinstance(value, (float, int)):
+            return
+        if value.shape != self.temperature.shape:
+            raise ValueError("pixel_res must have same shape as temperature")
+        if not value.dtype == float:
+            raise ValueError("pixel_res must be float dtype")
 
     def at_freq(
         self, freq: float | np.ndarray, index_model: IndexModel = ConstantIndex()
@@ -215,6 +249,9 @@ class SkyModel:
             temperature=temperature.flatten(),
             coords=coords,
             name=name,
+            pixel_res=(np.pi / 512.0)
+            * (2 * np.pi / 1024.0)
+            * np.cos(glat.flatten() * np.pi / 180.0),
         )
 
 
@@ -225,6 +262,10 @@ def Haslam408AllNoh():
 
     It probably came from here: https://www3.mpifr-bonn.mpg.de/cgi-bin/survey ?
 
+    Note that by default, the pixel resolution for each pixel is set to be equivalent
+    to what Alan uses in his C-Code (for the Nature Paper). This is a little inaccurate,
+    as it gives exactly zero weight to pixels on the poles, instead of acknowledging
+    that those pixels have a non-zero size.
     """
     fl = download_file(
         (

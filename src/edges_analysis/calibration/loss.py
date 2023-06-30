@@ -238,7 +238,7 @@ def balun_and_connector_loss(
     return Gb, Gc
 
 
-def _get_loss(fname, freq, n_terms):
+def _get_loss(fname: str | Path, freq: np.ndarray, n_terms: int) -> np.ndarray:
     gr = np.genfromtxt(fname)
     fr = gr[:, 0]
     dr = gr[:, 1]
@@ -249,14 +249,14 @@ def _get_loss(fname, freq, n_terms):
     return 1 - model
 
 
-def ground_loss_from_beam(beam, deg_step):
+def ground_loss_from_beam(beam, deg_step: float) -> np.ndarray:
     """
     Calculate ground loss from a given beam instance.
 
     Parameters
     ----------
-    beam : instance
-
+    beam : Beam instance
+        The beam to use for the calculation.
     deg_step : float
         Frequency in MHz. For mid-band (low-band), between 50 and 150 (120) MHz.
 
@@ -283,13 +283,13 @@ def ground_loss_from_beam(beam, deg_step):
 
 
 def ground_loss(
-    filename: str | Path | bool,
+    filename: str | Path,
     freq: np.ndarray,
     beam=None,
     deg_step: float = 1.0,
     band: str | None = None,
     configuration: str = "",
-):
+) -> np.ndarray:
     """
     Calculate ground loss of a particular antenna at given frequencies.
 

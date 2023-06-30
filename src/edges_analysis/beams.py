@@ -3,9 +3,9 @@ from __future__ import annotations
 
 import astropy.coordinates as apc
 import astropy.time as apt
-import attr
-import h5py
+import attrs
 import hashlib
+import hickle
 import logging
 import numpy as np
 import scipy.interpolate as spi
@@ -14,11 +14,12 @@ from edges_cal import FrequencyRange
 from edges_cal import modelling as mdl
 from edges_cal import types as tp
 from edges_cal.tools import vld_unit
-from edges_io.h5 import HDF5Object
-from methodtools import lru_cache
+from edges_io.h5 import hickleable
 from pathlib import Path
 from tqdm import tqdm
+from typing import Literal
 
+from . import _coordinates_alan as crda
 from . import const
 from . import coordinates as coords
 from . import sky_models
@@ -34,15 +35,15 @@ logger = logging.getLogger(__name__)
 REFERENCE_TIME = apt.Time("2014-01-01T09:39:42", location=const.edges_location)
 
 
-@attr.s(kw_only=True)
+@attrs.define(kw_only=True)
 class Beam:
-    beam: np.ndarray = attr.ib()
-    frequency: tp.FreqType = attr.ib(validator=vld_unit("frequency"))
-    elevation = attr.ib()
-    azimuth = attr.ib()
-    simulator = attr.ib(default=None, converter=str)
-    instrument = attr.ib(default=None, converter=str)
-    raw_file = attr.ib(default=None, converter=str)
+    beam: np.ndarray = attrs.field()
+    frequency: tp.FreqType = attrs.field(validator=vld_unit("frequency"))
+    elevation: np.ndarray = attrs.field(converter=np.asarray)
+    azimuth: np.ndarray = attrs.field(converter=np.asarray)
+    simulator: str | None = attrs.field(default=None, converter=str)
+    instrument: str | None = attrs.field(default=None, converter=str)
+    raw_file: str | None = attrs.field(default=None, converter=str)
 
     @classmethod
     def from_hfss(
@@ -245,9 +246,8 @@ class Beam:
         with open(filename) as fl:
             for line in fl.readlines():
                 if line.startswith("#FREQUENCY"):
-                    line = line.split(" ")
-                    indx = line.index("MHz")
-                    frequency.append(float(line[indx - 1]))
+                    line = line.split("MHz")[0].strip().split(" ")
+                    frequency.append(float(line[-1]))
         freq = FrequencyRange(np.array(frequency) * u.MHz)
 
         # Loading data and convert to linear representation
@@ -457,6 +457,17 @@ class Beam:
             raise FileNotFoundError(f"No beam exists for band={band}.")
         return pth
 
+    def select_freqs(self, indx: tp.Sequence[int]) -> Beam:
+        """Select a subset of frequencies."""
+        if not hasattr(indx, "__len__"):
+            indx = [indx]
+
+        return attrs.evolve(
+            self,
+            frequency=self.frequency[indx],
+            beam=self.beam[indx],
+        )
+
     def at_freq(
         self,
         freq: tp.FreqType,
@@ -599,7 +610,7 @@ class Beam:
         beam_file = cls.resolve_file(beam_file, band, configuration, simulator)
 
         if simulator == "feko":
-            rotation_from_north -= 90
+            # rotation_from_north -= 90
             out = cls.from_feko(beam_file, az_antenna_axis=rotation_from_north)
         elif simulator == "wipl-d":  # Beams from WIPL-D
             out = cls.from_wipld(beam_file, rotation_from_north)
@@ -611,39 +622,66 @@ class Beam:
         out.instrument = band
         return out
 
-    @lru_cache(maxsize=1000)
-    def angular_interpolator(self, freq_indx: int):
+    #    @lru_cache(maxsize=1000)
+    def angular_interpolator(
+        self,
+        freq_indx: int,
+        interp_kind: Literal[
+            "linear",
+            "nearest",
+            "slinear",
+            "cubic",
+            "quintic",
+            "pchip",
+            "spline",
+            "sphere-spline",
+        ] = "sphere-spline",
+    ) -> callable[[np.ndarray, np.ndarray], np.ndarray]:
         """Return a callable function that interpolates the beam.
 
         The returned function has the signature ``interp(az, el)``, where ``az`` is
         azimuth in degrees, and ``el`` is elevation in degrees. They may be arrays,
         in which case they should be the same length.
         """
-        el = self.elevation * np.pi / 180 + np.pi / 2
-
         beam = self.beam[freq_indx]
 
-        if el[-1] > 0.999 * np.pi:
-            el = el[:-1]
-            beam = beam[:-1]
+        if interp_kind == "sphere-spline":
+            el = self.elevation * np.pi / 180 + np.pi / 2
 
-        spl = spi.RectSphereBivariateSpline(
-            el,
-            self.azimuth * np.pi / 180,
-            beam,
-            pole_values=(None, beam[-1]),
-            pole_exact=True,
-        )
-        return lambda az, el: spl(
-            el * np.pi / 180 + np.pi / 2, az * np.pi / 180, grid=False
-        )
+            if el[-1] > 0.999 * np.pi:
+                el = el[:-1]
+                beam = beam[:-1]
+
+            spl = spi.RectSphereBivariateSpline(
+                el,
+                self.azimuth * np.pi / 180,
+                beam,
+                pole_values=(None, beam[-1]),
+                pole_exact=True,
+            )
+            return lambda az, el: spl(
+                el * np.pi / 180 + np.pi / 2, az * np.pi / 180, grid=False
+            )
+        else:
+            az = np.concatenate([self.azimuth, [self.azimuth[0] + 360]])
+            beam = np.hstack((beam, beam[:, 0][:, None]))
+            if interp_kind == "spline":
+                spl = spi.RectBivariateSpline(az, self.elevation, beam, kx=3, ky=3, s=0)
+                return lambda az, el: spl([az, el])
+            else:
+                spl = spi.RegularGridInterpolator(
+                    (az, self.elevation),
+                    beam.T,
+                    method=interp_kind,
+                )
+                return lambda az, el: spl(np.array([az, el]).T)
 
     def between_freqs(
         self, low: tp.FreqType = 0 * u.MHz, high: tp.Freqtype = np.inf * u.MHz
     ) -> Beam:
-        """Return a new :class:`Beam` object restricted a given frequency range."""
+        """Return a new :class:`Beam` object restricted to a given frequency range."""
         mask = (self.frequency >= low) & (self.frequency <= high)
-        return attr.evolve(self, frequency=self.frequency[mask], beam=self.beam[mask])
+        return attrs.evolve(self, frequency=self.frequency[mask], beam=self.beam[mask])
 
     def get_beam_solid_angle(self) -> float:
         """Calculate the integrated beam solid angle."""
@@ -658,42 +696,159 @@ class Beam:
         return (1 / (4 * np.pi)) * ((np.pi / 180) ** 2) * beam_integration
 
 
-class BeamFactor(HDF5Object):
+@hickleable()
+@attrs.define(slots=False)
+class BeamFactor:
     """A non-interpolated beam factor."""
 
-    _structure = {
-        "frequency": lambda x: (x.ndim == 1 and x.dtype == float),
-        "lst": lambda x: (x.ndim == 1 and x.dtype == float),
-        "antenna_temp_above_horizon": lambda x: (x.ndim == 2 and x.dtype == float),
-        "loss_fraction": lambda x: (x.ndim == 2 and x.dtype == float),
-        "beam_factor": lambda x: (x.ndim == 2 and x.dtype == float),
-        "meta": {
-            "beam_file": lambda x: isinstance(x, str),
-            "simulator": lambda x: isinstance(x, str),
-            "f_low": lambda x: isinstance(x, float),
-            "f_high": lambda x: isinstance(x, float),
-            "normalize_beam": lambda x: isinstance(x, (bool, np.bool_)),
-            "sky_model": lambda x: isinstance(x, str),
-            "rotation_from_north": lambda x: isinstance(x, float),
-            "index_model": lambda x: isinstance(x, str),
-            "reference_frequency": lambda x: isinstance(x, float),
-        },
-    }
+    frequencies: np.ndarray = attrs.field(converter=np.asarray)
+    lsts: np.ndarray = attrs.field(converter=np.asarray)
+    reference_frequency: float = attrs.field(
+        converter=float,
+    )
+    antenna_temp: np.ndarray = attrs.field(converter=np.asarray)
+    antenna_temp_ref: np.ndarray = attrs.field(converter=np.asarray)
+    loss_fraction: np.ndarray | None = attrs.field(default=None)
+    meta: dict[str, tp.Any] = attrs.field(factory=dict, converter=dict)
 
     @property
-    def beam_factor(self):
-        """The beam chromaticity factor. Array is ``(n_lsts, n_freq)``."""
-        return self.load("beam_factor")
+    def nfreq(self) -> int:
+        """The number of frequencies in the beam factor."""
+        return len(self.frequencies)
 
     @property
-    def frequency(self):
-        """The frequencies at which the beam factor is defined."""
-        return self.load("frequency")
+    def nlst(self) -> int:
+        """The number of LSTs in the beam factor."""
+        return len(self.lsts)
 
-    @property
-    def lsts(self):
-        """The LSTs at which the beam factor is defined."""
-        return self.load("lst")
+    @frequencies.validator
+    def _check_frequencies(self, attribute: attrs.Attribute, value: np.ndarray) -> None:
+        if not np.all(np.diff(value) > 0):
+            raise ValueError("Frequencies must be monotonically increasing.")
+
+    @lsts.validator
+    def _check_lsts(self, attribute: attrs.Attribute, value: np.ndarray) -> None:
+        # LSTs can wrap around 24 hours, but only once.
+        if np.sum(np.diff(value) < 0) > 1:
+            raise ValueError("LSTs must be monotonically increasing.")
+
+    @reference_frequency.validator
+    def _check_reference_frequency(
+        self, attribute: attrs.Attribute, value: float
+    ) -> None:
+        if value <= 0:
+            raise ValueError("Reference frequency must be positive.")
+
+    @antenna_temp.validator
+    @loss_fraction.validator
+    def _check_antenna_temp(
+        self, attribute: attrs.Attribute, value: np.ndarray
+    ) -> None:
+        if attribute.name == "loss_fraction" and value is None:
+            return
+
+        if value.ndim != 2:
+            raise ValueError(f"{attribute.name} must be a 2D array.")
+
+        if value.shape != (self.nlst, self.nfreq):
+            raise ValueError(f"{attribute.name} must have shape (nlst, nfreq).")
+
+    @antenna_temp.validator
+    def _check_positive(self, attribute: str, value: np.ndarray) -> None:
+        if np.any(value < 0):
+            raise ValueError(
+                f"Antenna temperature must be positive, got min of {np.nanmin(value)}"
+            )
+
+    @antenna_temp_ref.validator
+    def _check_antenna_temp_ref(self, attribute: str, value: np.ndarray) -> None:
+        if value.ndim not in (1, 2):
+            raise ValueError("Reference antenna temperature must be a 1D or 2D array.")
+
+        if value.ndim == 1 and value.shape != (self.nlst,):
+            raise ValueError(
+                "If Reference antenna temperature is 1D, it must have shape (nlst,)."
+            )
+
+        if value.ndim == 2 and value.shape != (self.nlst, self.nfreq):
+            raise ValueError(
+                "If Reference antenna temperature is 2D, it must have shape "
+                "(nlst, nfreq)."
+            )
+
+        if np.any(value < 0):
+            raise ValueError(
+                "Reference antenna temperature must be positive, "
+                f"got min of {np.nanmin(value)}"
+            )
+
+    def at_lsts(self, lsts: np.ndarray, interp_kind: int | str = "cubic") -> BeamFactor:
+        """Return a new BeamFactor at the given LSTs."""
+        d = attrs.asdict(self)
+        lst_like = [
+            k
+            for k, v in d.items()
+            if isinstance(v, np.ndarray) and v.shape[0] == self.nlst
+        ]
+
+        these_lsts = self.lsts % 24
+        while np.any(these_lsts < these_lsts[0]):
+            these_lsts[these_lsts < these_lsts[0]] += 24
+
+        use_lsts = lsts % 24
+        use_lsts[use_lsts < these_lsts[0]] += 24
+        these_lsts = np.append(these_lsts, these_lsts[0] + 24)
+        out = {}
+        for k in lst_like:
+            val = np.vstack((d[k], d[k][0]))
+            out[k] = spi.interp1d(these_lsts, val, axis=0, kind=interp_kind)(use_lsts)
+
+        return attrs.evolve(self, lsts=lsts, **out)
+
+    def get_beam_factor(
+        self, model: mdl.Model, freqs: np.ndarray | None = None
+    ) -> np.ndarray:
+        """Return the beam factor as a function of LST and frequency.
+
+        This will always be normalized to unity at the reference frequency, via
+        a model fit.
+        """
+        if freqs is None:
+            freqs = self.frequencies
+
+        bf = self.antenna_temp.T / self.antenna_temp_ref.T
+
+        fixed_model = model.at(x=self.frequencies)
+        ref_bf = np.zeros(self.nlst)
+        out = np.zeros((self.nlst, len(freqs)))
+        for i, ibf in enumerate(bf):
+            fit = fixed_model.fit(ibf)
+            ref_bf = fit.evaluate(self.reference_frequency)
+            out[i] = fit.evaluate(freqs) / ref_bf
+
+        return out
+
+    def get_mean_beam_factor(
+        self, model: mdl.Model, freqs: np.ndarray | None
+    ) -> np.ndarray:
+        """Return the mean beam factor over all LSTs."""
+        return np.mean(self.get_beam_factor(model, freqs), axis=0)
+
+    def get_integrated_beam_factor(
+        self, model: mdl.Model, freqs: np.ndarray | None
+    ) -> np.ndarray:
+        """Return the beam factor integrated over the LST range.
+
+        This is the ratio of summed LSTs, rather than the sum of the ratio at each LST,
+        i.e. it is not the same as the mean beam factor over the LST range.
+        It is normalized to unity at the reference frequency via a model fit.
+        """
+        if freqs is None:
+            freqs = self.frequencies
+
+        bf = np.sum(self.antenna_temp, axis=0) / np.sum(self.antenna_temp_ref, axis=0)
+        fit = model.fit(self.frequencies, bf)
+        return fit.evaluate(freqs) / fit.evaluate(self.reference_frequency)
 
 
 def sky_convolution_generator(
@@ -707,6 +862,20 @@ def sky_convolution_generator(
     smoothing_model: mdl.Model,
     location: apc.EarthLocation = const.edges_location,
     ref_time: apt.Time = REFERENCE_TIME,
+    interp_kind: Literal[
+        "linear",
+        "nearest",
+        "slinear",
+        "cubic",
+        "quintic",
+        "pchip",
+        "spline",
+        "sphere-spline",
+    ] = "sphere-spline",
+    lst_progress: bool = True,
+    freq_progress: bool = True,
+    ref_freq_idx: int = 0,
+    use_astropy_azel: bool = True,
 ):
     """
     Iterate through given LSTs and generate a beam*sky product at each freq and LST.
@@ -729,6 +898,15 @@ def sky_convolution_generator(
         Whether to ensure the beam is properly normalised.
     beam_interpolation
         Whether to smooth over freq axis
+    interp_kind
+        The kind of interpolation to use for the beam. "spline" uses
+        :class:`scipy.interpolate.RectBivariateSpline` and "sphere-spline" uses
+        :class:`scipy.interpolate.RectSphereBivariateSpline`. All other options use
+        :class:`scipy.interpolate.RegularGridInterpolator`. with the given kind as
+        ``method``.
+    use_astropy_azel
+        Whether to use the astropy coordinate system for azimuth and elevation. If
+        False, compute the az/el using Alan's method.
 
     Yields
     ------
@@ -759,70 +937,103 @@ def sky_convolution_generator(
     """
     if beam_smoothing:
         beam = beam.smoothed(smoothing_model)
-    sky_map = sky_model.at_freq(
-        beam.frequency.to_value("MHz"),
-        index_model=index_model,
-    )
 
-    ground_gain = ground_loss(
-        ground_loss_file, band=beam.instrument, freq=beam.frequency.to_value("MHz")
-    )
+    if ground_loss_file is not None:
+        ground_gain = ground_loss(
+            ground_loss_file, band=beam.instrument, freq=beam.frequency.to_value("MHz")
+        )
+    else:
+        ground_gain = np.ones(beam.frequency.size)
 
     # Get the local times corresponding to the given LSTs
     times = coords.lsts_to_times(lsts, ref_time, location)
 
-    for i, time in tqdm(enumerate(times), unit="LST"):
-        # Transform Galactic coordinates of Sky Model to Local coordinates
-        altaz = sky_model.coords.transform_to(
-            apc.AltAz(
-                location=const.edges_location,
-                obstime=time,
-            )
-        )
-        az = np.asarray(altaz.az.deg)
-        el = np.asarray(altaz.alt.deg)
+    beam_above_horizon = np.full(sky_model.coords.shape, np.nan)
+    interpolators = {}
 
-        # Number of pixels over 4pi that are not 'nan'
+    for lst_idx, time in tqdm(enumerate(times), unit="LST", disable=not lst_progress):
+        # Transform Galactic coordinates of Sky Model to Local coordinates
+        if use_astropy_azel:
+            altaz = sky_model.coords.transform_to(
+                apc.AltAz(location=location, obstime=time)
+            )
+            az = np.asarray(altaz.az.deg)
+            el = np.asarray(altaz.alt.deg)
+        else:
+            ra, dec = crda.galactic_to_radec(
+                sky_model.coords.galactic.b.deg, sky_model.coords.galactic.l.deg
+            )
+            az, el = crda.radec_azel_from_lst(
+                lsts[lst_idx] * np.pi / 12, ra, dec, location.lat.rad
+            )
+            az *= 180 / np.pi
+            el *= 180 / np.pi
+        # Number of pixels over FULL SKY (4pi) in the sky model
         n_pix_tot = len(el)
 
         # Selecting coordinates above the horizon
-        horizon_mask = el >= 0
+        horizon_mask = el > 0
         az_above_horizon = az[horizon_mask]
         el_above_horizon = el[horizon_mask]
 
-        # Selecting sky data above the horizon
-        sky_above_horizon = np.ones_like(sky_map) * np.nan
-        sky_above_horizon[horizon_mask, :] = sky_map[horizon_mask, :]
-
         # Loop over frequency
-        for j in tqdm(range(len(beam.frequency)), unit="Frequency"):
-            beam_above_horizon = np.ones(len(sky_map)) * np.nan
-            beam_above_horizon[horizon_mask] = beam.angular_interpolator(j)(
-                az_above_horizon, el_above_horizon
-            )
+        # Using np.roll means we start at the reference frequency and loop around.
+        # Starting at ref freq (if there is one) means that we can use the
+        # reference beam with other frequencies.
+        for freq_idx in tqdm(
+            np.roll(range(len(beam.frequency)), -ref_freq_idx),
+            unit="Frequency",
+            disable=not freq_progress,
+        ):
+            if freq_idx not in interpolators:
+                interpolators[freq_idx] = beam.angular_interpolator(
+                    freq_idx, interp_kind=interp_kind
+                )
 
+            sky_map = sky_model.at_freq(
+                beam.frequency[freq_idx].to_value("MHz"),
+                index_model=index_model,
+            )
+            sky_map[~horizon_mask] = np.nan
+
+            beam_above_horizon *= np.nan
+            try:
+                beam_above_horizon[horizon_mask] = interpolators[freq_idx](
+                    az_above_horizon, el_above_horizon
+                )
+            except ValueError as e:
+                raise ValueError(
+                    f"az min/max: {np.min(az_above_horizon), np.max(az_above_horizon)}."
+                    f" el min/max: {np.min(el_above_horizon), np.max(el_above_horizon)}"
+                ) from e
+
+            # Weight the beam by the pixel resolution of the sky model.
+            beam_above_horizon *= sky_model.pixel_res
+
+            # Number of pixels above the horizon that are used.
             n_pix_ok = np.sum(~np.isnan(beam_above_horizon))
 
-            # The nans are only above the horizon
+            # Number of pixels in the whole sky, but not counting pixels that are
+            # above horizon and nan.
             n_pix_tot_no_nan = n_pix_tot - (len(el_above_horizon) - n_pix_ok)
 
             if normalize_beam:
                 solid_angle = np.nansum(beam_above_horizon) / n_pix_tot_no_nan
-                beam_above_horizon *= ground_gain[j] / solid_angle
+                beam_above_horizon *= ground_gain[freq_idx] / solid_angle
 
-            antenna_temperature_above_horizon = (
-                beam_above_horizon * sky_above_horizon[:, j]
-            )
-
+            antenna_temperature_above_horizon = beam_above_horizon * sky_map
             yield (
-                i,
-                j,
+                lst_idx,
+                freq_idx,
                 np.nansum(antenna_temperature_above_horizon) / n_pix_tot_no_nan,
                 antenna_temperature_above_horizon,
-                sky_above_horizon,
+                sky_map,
                 beam_above_horizon,
                 time,
                 n_pix_tot_no_nan,
+                az,
+                el,
+                interpolators[freq_idx],
             )
 
 
@@ -837,6 +1048,16 @@ def simulate_spectra(
     lsts: np.ndarray = None,
     beam_smoothing: bool = True,
     smoothing_model: mdl.Model = mdl.Polynomial(n_terms=12),
+    interp_kind: Literal[
+        "linear",
+        "nearest",
+        "slinear",
+        "cubic",
+        "quintic",
+        "pchip",
+        "spline",
+        "sphere-spline",
+    ] = "sphere-spline",
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Simulate global spectra from sky and beam models.
@@ -880,7 +1101,7 @@ def simulate_spectra(
         lsts = np.arange(0, 24, 0.5)
 
     antenna_temperature_above_horizon = np.zeros((len(lsts), len(beam.frequency)))
-    for i, j, temperature, _, _, _, _, _ in sky_convolution_generator(
+    for i, j, temperature, _, _, _, _, _, _, _ in sky_convolution_generator(
         lsts,
         ground_loss_file,
         beam,
@@ -889,6 +1110,7 @@ def simulate_spectra(
         normalize_beam,
         beam_smoothing,
         smoothing_model,
+        interp_kind=interp_kind,
     ):
         antenna_temperature_above_horizon[i, j] = temperature
 
@@ -897,7 +1119,7 @@ def simulate_spectra(
 
 def antenna_beam_factor(
     beam: Beam,
-    ground_loss_file: tp.PathLike = ":",
+    ground_loss_file: tp.PathLike | None = ":",
     f_low: tp.FreqType = 0 * u.MHz,
     f_high: tp.Freqtype = np.inf * u.MHz,
     normalize_beam: bool = True,
@@ -909,6 +1131,21 @@ def antenna_beam_factor(
     reference_frequency: tp.FreqType | None = None,
     beam_smoothing: bool = True,
     smoothing_model: mdl.Model = mdl.Polynomial(n_terms=12),
+    interp_kind: Literal[
+        "linear",
+        "nearest",
+        "slinear",
+        "cubic",
+        "quintic",
+        "pchip",
+        "spline",
+        "sphere-spline",
+    ] = "sphere-spline",
+    lst_progress: bool = True,
+    freq_progress: bool = True,
+    location: apc.EarthLocation = const.edges_location,
+    sky_at_reference_frequency: bool = True,
+    use_astropy_azel: bool = True,
 ):
     """
     Calculate the antenna beam factor.
@@ -942,6 +1179,12 @@ def antenna_beam_factor(
     reference_frequency
         The frequency to take as the "reference", i.e. where the chromaticity will
         be by construction unity.
+    lst_progress
+        Whether to show a progress bar over the LSTs.
+    freq_progress
+        Whether to show a progress bar over the frequencies.
+    location
+        The location of the telescope.
 
     Returns
     -------
@@ -964,14 +1207,32 @@ def antenna_beam_factor(
     if reference_frequency is None:
         reference_frequency = (f_high + f_low) / 2
 
-    indx_ref_freq = np.argwhere(beam.frequency >= reference_frequency)[0][0]
-    reference_frequency = beam.frequency[indx_ref_freq]
+    indx_ref_freq = np.argmin(np.abs(beam.frequency - reference_frequency))
+    # Don't reset the reference frequency. Alan uses the discrete ref frequency
+    # to get the weighted sky temp, then models that, and divides by the model at
+    # non-discrete ref frequency to normalize.
+    #    reference_frequency = beam.frequency[indx_ref_freq]
 
     antenna_temperature_above_horizon = np.zeros((len(lsts), len(beam.frequency)))
-    convolution_ref = np.zeros((len(lsts), len(beam.frequency)))
+    if sky_at_reference_frequency:
+        convolution_ref = np.zeros((len(lsts),))
+    else:
+        convolution_ref = np.zeros((len(lsts), len(beam.frequency)))
     loss_fraction = np.zeros((len(lsts), len(beam.frequency)))
-
-    for i, j, temperature, _, sky, bm, _, npix_no_nan in sky_convolution_generator(
+    beamsums = np.zeros((len(lsts), len(beam.frequency)))
+    for (
+        lst_idx,
+        freq_idx,
+        temperature,
+        _,
+        sky,
+        bm,
+        _,
+        npix_no_nan,
+        az,
+        el,
+        interp,
+    ) in sky_convolution_generator(
         lsts,
         beam=beam,
         sky_model=sky_model,
@@ -980,24 +1241,47 @@ def antenna_beam_factor(
         beam_smoothing=beam_smoothing,
         smoothing_model=smoothing_model,
         ground_loss_file=ground_loss_file,
+        interp_kind=interp_kind,
+        lst_progress=lst_progress,
+        freq_progress=freq_progress,
+        location=location,
+        ref_freq_idx=indx_ref_freq,
+        use_astropy_azel=use_astropy_azel,
     ):
-        antenna_temperature_above_horizon[i, j] = temperature
-        # Convolution between (beam at all frequencies) and (sky at reference frequency)
-        convolution_ref[i, j] = np.nansum(bm * sky[:, indx_ref_freq])
+        # 'temperature' is the mean beam-weighted foreground above the horizon (single
+        #               float for this lst, freq). If normalize_beam is True, it's
+        #               normalized by the integral of the beam (at each freq)
+        # 'sky' is the full sky model for this LST and freq
+        # 'bm' is the full beam model for this freq (same for all LSTs)
+        antenna_temperature_above_horizon[lst_idx, freq_idx] = temperature
+
+        if freq_idx == indx_ref_freq:
+            ref_bm = bm.copy()
+
+            # This updates once per LST, on the first frequency iteration
+            if sky_at_reference_frequency:
+                convolution_ref[lst_idx] = np.nansum(ref_bm * sky) / npix_no_nan
+
+        if not sky_at_reference_frequency:
+            convolution_ref[lst_idx, freq_idx] = np.nansum(ref_bm * sky) / npix_no_nan
+
+        beamsums[lst_idx, freq_idx] = np.nansum(bm) / npix_no_nan
 
         # Loss fraction
-        loss_fraction[i, j] = 1 - np.nansum(bm) / npix_no_nan
+        loss_fraction[lst_idx, freq_idx] = 1 - np.nansum(bm) / npix_no_nan
 
-    # Beam factor
-    beam_factor = (convolution_ref.T / convolution_ref[:, indx_ref_freq]).T
-
-    out = {
-        "frequency": beam.frequency.to_value("MHz").astype(float),
-        "lst": np.array(lsts).astype(float),
-        "antenna_temp_above_horizon": antenna_temperature_above_horizon,
-        "loss_fraction": loss_fraction,
-        "beam_factor": beam_factor,
-        "meta": {
+    out = BeamFactor(
+        frequencies=beam.frequency.to_value("MHz").astype(float),
+        lsts=np.array(lsts).astype(float),
+        antenna_temp=antenna_temperature_above_horizon
+        if normalize_beam
+        else antenna_temperature_above_horizon / beamsums,
+        antenna_temp_ref=convolution_ref
+        if normalize_beam
+        else (convolution_ref.T / beamsums[:, indx_ref_freq]).T,
+        loss_fraction=loss_fraction,
+        reference_frequency=reference_frequency.to_value("MHz"),
+        meta={
             "beam_file": str(beam.raw_file),
             "simulator": beam.simulator,
             "f_low": f_low.to_value("MHz"),
@@ -1005,111 +1289,18 @@ def antenna_beam_factor(
             "normalize_beam": bool(normalize_beam),
             "sky_model": sky_model.name,
             "index_model": str(index_model),
-            "reference_frequency": reference_frequency.to_value("MHz"),
             "rotation_from_north": float(90),
         },
-    }
+    )
 
     if save_fname is None:
-        hsh = hashlib.md5(repr(out["meta"]).encode()).hexdigest()
+        hsh = hashlib.md5(repr(out.meta).encode()).hexdigest()
         save_fname = save_dir / (
             f"{beam.simulator}_{sky_model.__class__.__name__}_"
             f"ref{reference_frequency:.2f}_{hsh}.h5"
         )
 
     logger.info(f"Writing out beam file to {save_fname}")
-    bf = BeamFactor.from_data(out, filename=save_fname)
-    bf.write(clobber=True)
+    hickle.dump(out, save_fname, compression="gzip")
 
-    return bf
-
-
-class InterpolatedBeamFactor(HDF5Object):
-    _structure = {
-        "beam_factor": None,
-        "frequency": None,
-        "lst": None,
-    }
-
-    @classmethod
-    def from_beam_factor(
-        cls,
-        beam_factor_file,
-        band: str | None = None,
-        lst_new: np.ndarray | None = None,
-        f_new: np.ndarray | None = None,
-    ):
-        """
-        Interpolate beam factor to a new set of LSTs and frequencies.
-
-        The LST interpolation is done using `griddata`, whilst the frequency
-        interpolation is done using a polynomial fit.
-
-        Parameters
-        ----------
-        beam_factor_file : path
-            Path to a file containing beam factors produced by
-            :func:`antenna_beam_factor`.
-            If just a filename (no path), the `beams/band/beam_factors/` directory will
-            be searched (dependent on the configured "beams" directory).
-        band : str, optional
-            If `beam_factor_file` is relative, the band is required to find the file.
-        lst_new : array-like, optional
-            The LSTs to interpolate to. By default, keep same LSTs as input.
-        f_new : array-like, optional
-            The frequencies to interpolate to. By default, keep same frequencies as
-            input.
-        """
-        beam_factor_file = Path(beam_factor_file).expanduser()
-        if str(beam_factor_file).startswith(":"):
-            beam_factor_file = (
-                Path(config["paths"]["beams"])
-                / band
-                / "beam_factors"
-                / str(beam_factor_file)[1:]
-            )
-
-        if not beam_factor_file.exists():
-            raise ValueError(f"The beam factor file {beam_factor_file} does not exist!")
-
-        with h5py.File(beam_factor_file, "r") as fl:
-            beam_factor = fl["beam_factor"][...]
-            freq = fl["frequency"][...]
-            lst = fl["lst"][...]
-
-        # Wrap beam factor and LST for 24-hr interpolation
-        beam_factor = np.vstack((beam_factor[-1], beam_factor, beam_factor[0]))
-        lst0 = np.append(lst[-1] - 24, lst)
-        lst = np.append(lst0, lst[0] + 24)
-
-        if lst_new is not None:
-            beam_factor_lst = np.zeros((len(lst_new), len(freq)))
-            for i, bf in enumerate(beam_factor.T):
-                beam_factor_lst[:, i] = spi.interp1d(lst, bf, kind="cubic")(lst_new)
-            lst = lst_new
-        else:
-            beam_factor_lst = beam_factor
-
-        if f_new is not None:
-            # Interpolating beam factor to high frequency resolution
-            beam_factor_freq = np.zeros((len(beam_factor_lst), len(f_new)))
-            for i, bf in enumerate(beam_factor_lst):
-                beam_factor_freq[i] = spi.interp1d(freq, bf, kind="cubic")(f_new)
-
-            freq = f_new
-        else:
-            beam_factor_freq = beam_factor_lst
-
-        return cls.from_data(
-            {"beam_factor": beam_factor_freq, "frequency": freq, "lst": lst}
-        )
-
-    def evaluate(self, lst):
-        """Fast nearest-neighbour evaluation of the beam factor for a given LST."""
-        beam_factor = np.zeros((len(lst), len(self["frequency"])))
-
-        for i, lst_ in enumerate(lst):
-            index = np.argmin(np.abs(self["lst"] - lst_))
-            beam_factor[i] = self["beam_factor"][index]
-
-        return beam_factor
+    return out
