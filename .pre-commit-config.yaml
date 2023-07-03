@@ -54,12 +54,12 @@ repos:
     - id: rst-directive-colons
     - id: rst-inline-touching-normal
 - repo: https://github.com/asottile/pyupgrade
-  rev: v3.4.0
+  rev: v3.8.0
   hooks:
   -   id: pyupgrade
       args: [--py36-plus]
 - repo: https://github.com/commitizen-tools/commitizen
-  rev: 3.2.2
+  rev: 3.5.2
   hooks:
     - id: commitizen
       stages: [commit-msg]
