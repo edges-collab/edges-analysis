@@ -419,7 +419,7 @@ def process(
             )
         else:
             if stepname == "convert":
-                telescope_loc = params.pop("telescope_location", "edges")
+                telescope_loc = params.pop("telescope_location", "alan_edges")#"edges")
                 telescope_loc = const.KNOWN_LOCATIONS[telescope_loc]
 
                 data = [
