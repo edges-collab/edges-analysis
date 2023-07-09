@@ -434,12 +434,13 @@ def apply_loss_correction(
 @gsregister("calibrate")
 def apply_beam_correction(
     data: GSData,
-    band: str | None = None,
-    beam_file: tp.PathLike | None = ":",
-    gha_min: float | None = None,
-    gha_max: float | None = None,
+    beam: tp.PathLike | beams.BeamFactor,
+    time_range: tuple[float, float] | None = None,
+    time_format: Literal["gha", "lst"] = "gha",
+    time_unit: str = "hour",
     time_resolution: int | None = None,
     average_before_correction: bool = True,
+    integrate_before_ratio: bool = True,
 ) -> GSData:
     """Apply beam correction to the data.
 
@@ -447,32 +448,32 @@ def apply_beam_correction(
     ----------
     data
         Data to be calibrated.
-    band
-        The band that the data is in (eg. low, mid, high). Used for auto-finding beam
-        file (if one exists in the standard location).
-    beam_file
-        Path to file containing beam correction coefficients. If there is an existing
-        beam file in the standard location, this can be set to ``":"``.
-    gha_min
-        The minimum GHA to use for the beam correction. If not provided, the GHA is
-        calculated from the LST bins of the data. If the data has multiple LST bins,
-        and ``average_before_correction`` is ``True``, then this cannot be provided.
-    gha_max
-        The maximum GHA to use for the beam correction. If not provided, the GHA is
-        calculated from the LST bins of the data. If the data has multiple LST bins,
-        and ``average_before_correction`` is ``True``, then this cannot be provided.
+    beam
+        Either a path to a file containing beam correction coefficients, or the
+        BeamFactor object itself.
+    time_range
+        The minimum and maximum time (either GHA or LST) to use for integrating
+        the beam correction. Will only be used if average_before_correction is True.
+    time_format
+        The format of the time_range. Can be either "gha" or "lst".
+    time_unit
+        The time unit to use for the time_range. Can be any astropy unit that can be
+        converted to hours.
     time_resolution
-        The time resolution to use for the beam correction. If not provided, the
-        resolution is calculated from the LST bins of the data. If the data has multiple
-        LST bins, and ``average_before_correction`` is ``True``, then this cannot be
-        provided.
+        The time resolution to use when averaging over time before correction. By
+        default, just uses the times inherent in the beam factor data, otherwise
+        if given, the beam factor will be interpolated to this resolution before
+        averaging.
     average_before_correction
         Whether to average the beam correction across the time dimension before
         applying it to the data.
+    integrate_before_ratio
+        Whether to integrate (over time) the beam-weighted sky temperature and the
+        reference sky temperature individually before taking their ratio to get
+        the beam factor.
     """
-    beam_fac = beams.InterpolatedBeamFactor.from_beam_factor(
-        beam_file, band=band, f_new=data.freq_array
-    )
+    if not isinstance(beam, beams.BeamFactor):
+        beam = hickle.load(beam)
 
     if not (
         (gha_min is None and gha_max is None and time_resolution is None)

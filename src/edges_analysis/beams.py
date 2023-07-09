@@ -1101,7 +1101,7 @@ def simulate_spectra(
         lsts = np.arange(0, 24, 0.5)
 
     antenna_temperature_above_horizon = np.zeros((len(lsts), len(beam.frequency)))
-    for i, j, temperature, _, _, _, _, _, _, _ in sky_convolution_generator(
+    for i, j, temperature, _, _, _, _, _, _, _, _, _ in sky_convolution_generator(
         lsts,
         ground_loss_file,
         beam,
