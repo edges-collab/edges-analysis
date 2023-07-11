@@ -8,6 +8,7 @@ import os
 import re
 from astropy.time import Time
 from datetime import datetime
+from edges_cal import modelling as mdl
 from edges_cal import types as tp
 from edges_cal.cal_coefficients import CalibrationObservation, Calibrator
 from pathlib import Path
@@ -33,6 +34,7 @@ def dicke_calibration(data: GSData) -> GSData:
         data=q[np.newaxis],
         data_unit="uncalibrated",
         time_array=data.time_array[:, [iant]],
+        time_ranges=data.time_ranges[:, [iant]],
         loads=("ant",),
         nsamples=data.nsamples[[iant]],
         flags={
@@ -434,15 +436,28 @@ def apply_loss_correction(
 @gsregister("calibrate")
 def apply_beam_correction(
     data: GSData,
-    beam: tp.PathLike | beams.BeamFactor,
-    time_range: tuple[float, float] | None = None,
-    time_format: Literal["gha", "lst"] = "gha",
-    time_unit: str = "hour",
-    time_resolution: int | None = None,
-    average_before_correction: bool = True,
+    beam: str | Path | beams.BeamFactor,
+    freq_model: mdl.Model,
     integrate_before_ratio: bool = True,
+    oversample_factor: int = 5,
+    resample_beam_lsts: bool = True,
 ) -> GSData:
     """Apply beam correction to the data.
+
+    This always applies the beam correction to each time sample in the data. If you want
+    to average the data *before* applying the beam correction, you must average the data
+    before applying this function to it. The input beam factor object should cover the
+    full range of LSTs included in the data itself.
+
+    The beam factor object is defined at a set of LSTs, and by default, the correction
+    applied to the data is the *average* beam factor in each LST-bin of the data.
+    To use the beam factor *interpolated* to the LSTs of the data instead, set
+    ``interpolate_to_lsts`` to True.
+
+    There are two ways to define the average beam factor within an LST-bin: either
+    by taking the mean of ratios (of beam-weighted foreground model to *reference*
+    beam-weighted foreground model) or the ratio of means. Switch between these
+    by using the ``integrate_before_ratio`` parameter.
 
     Parameters
     ----------
@@ -451,57 +466,56 @@ def apply_beam_correction(
     beam
         Either a path to a file containing beam correction coefficients, or the
         BeamFactor object itself.
-    time_range
-        The minimum and maximum time (either GHA or LST) to use for integrating
-        the beam correction. Will only be used if average_before_correction is True.
-    time_format
-        The format of the time_range. Can be either "gha" or "lst".
-    time_unit
-        The time unit to use for the time_range. Can be any astropy unit that can be
-        converted to hours.
-    time_resolution
-        The time resolution to use when averaging over time before correction. By
-        default, just uses the times inherent in the beam factor data, otherwise
-        if given, the beam factor will be interpolated to this resolution before
-        averaging.
-    average_before_correction
-        Whether to average the beam correction across the time dimension before
-        applying it to the data.
+    freq_model
+        The (linear) model to use when evaluating the beam factor at the data freqs.
     integrate_before_ratio
         Whether to integrate (over time) the beam-weighted sky temperature and the
         reference sky temperature individually before taking their ratio to get
         the beam factor.
+    oversample_factor
+        The number of LST samples to use when interpolating the beam factor to the
+        LSTs of the data. For every data LST, ``oversample_factor`` LSTs will be
+        interpolated to (regularly spaced between each data LST, regardless of whether
+        the data LSTs are regular). This is only used if ``resample_beam_lsts`` is True.
+    resample_beam_lsts
+        Whether to resample LSTs before averaging (by ``oversample_factor``).
     """
-    if not isinstance(beam, beams.BeamFactor):
+    if isinstance(beam, (str, Path)):
         beam = hickle.load(beam)
 
-    if not (
-        (gha_min is None and gha_max is None and time_resolution is None)
-        or (gha_min is not None and gha_max is not None and time_resolution is not None)
-    ):
-        raise ValueError(
-            "All of gha_min, gha_max and time_resolution must be provided, if any!"
+    if len(data.loads) > 1:
+        raise NotImplementedError(
+            "Can only apply beam correction to data with a single load"
         )
 
-    if not average_before_correction:
-        if gha_min is not None:
-            raise ValueError(
-                "gha_min, gha_max and time_resolution cannot be provided if "
-                "average_before_correction is False!"
+    if len(beam.lsts) < 4 and resample_beam_lsts:
+        raise ValueError(
+            "Your beam has a single LST so you cannot interpolate over LSTs."
+        )
+
+    if resample_beam_lsts:
+        new_beam_lsts = []
+        for lst0, lst1 in data.lst_ranges[:, 0, :]:
+            lst1 = lst1.hour
+            if lst1 < lst0.hour:
+                lst1 = lst1 + 24
+
+            new_beam_lsts.append(
+                np.linspace(lst0.hour, lst1, oversample_factor + 1)[:-1]
+            )
+        new_beam_lsts = np.concatenate(new_beam_lsts)
+        beam = beam.at_lsts(new_beam_lsts)
+
+    new_data = data.spectra.copy()
+    for i, (lst0, lst1) in enumerate(data.lst_ranges[:, 0, :]):
+        new = beam.between_lsts(lst0.hour, lst1.hour)
+        if integrate_before_ratio:
+            new_data[:, :, i] /= new.get_integrated_beam_factor(
+                model=freq_model, freqs=data.freq_array.to_value("MHz")
+            )
+        else:
+            new_data[:, :, i] /= new.get_mean_beam_factor(
+                model=freq_model, freqs=data.freq_array.to_value("MHz")
             )
 
-        bf = beam_fac.evaluate(data.lst_array.hour)
-        return data.update(data=data.data / bf, data_model=None)
-    else:
-        if gha_min is not None:
-            gha_min %= 24
-            gha_max %= 24
-            while gha_max < gha_min:
-                gha_max += 24
-
-            gha_list = np.arange(gha_min, gha_max, time_resolution)
-            lst_list = coords.gha2lst(gha_list)
-            bf = beam_fac.evaluate(lst_list)
-        else:
-            bf = beam_fac.evaluate(data.lst_array.hour)
-        return data.update(data=data.data / np.average(bf, axis=0), data_model=None)
+    return data.update(data=new_data, data_model=None, data_unit="temperature")

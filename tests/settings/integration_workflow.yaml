@@ -38,10 +38,6 @@ steps:
       ground_correction: ':'
       calobs: "{{ calfile }}"
       s11_path: "{{ s11_path }}"
-  - function: apply_beam_correction
-    params:
-      band: low
-      beam_file: "{{ beam_file }}"
     write: cal/{prev_stem}.gsh5
 
   - function: add_model
@@ -67,6 +63,23 @@ steps:
     params:
       binsize: 24.0
     write: "{prev_dir}/lstbin24hr.gsh5"
+  - function: apply_beam_correction
+    params:
+      beam: "{{ beam_file }}"
+      freq_model: !Model
+        model: fourier
+        n_terms: 31
+        period: 50.0
+      resample_beam_lsts: false
+  - function: add_model
+    name: linlog2
+    params:
+      model: !Model
+        model: linlog
+        beta: -2.5
+        f_center: 75.0
+        n_terms: 5
+        with_cmb: false
   - function: freq_bin
     params:
       resolution: 8

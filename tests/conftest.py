@@ -88,7 +88,7 @@ def s11path(integration_test_data: Path) -> Path:
 
 @pytest.fixture(scope="session")
 def beamfile(integration_test_data: Path) -> Path:
-    return integration_test_data / "feko_Haslam408_ref70.00.h5"
+    return integration_test_data / "alan_beam_factor.h5"
 
 
 def get_workflow(
@@ -105,15 +105,13 @@ def get_workflow(
         beam_file=beam_file,
     )
 
-    wf = yaml.load(txt, Loader=yaml.FullLoader)
-
     if not beam_file:
+        print("loading up the yaml...")
+        wf = yaml.load(txt, Loader=yaml.FullLoader)
         wf["steps"] = tuple(
             x for x in wf["steps"] if x["function"] != "apply_beam_correction"
         )
-
-    txt = yaml.dump(wf)
-
+        txt = yaml.dump(wf)
     with open(workflow_dir / f"workflow_{name}.yaml", "w") as fl:
         fl.write(txt)
 
@@ -127,7 +125,7 @@ def workflow(integration_test_data: Path, settings: Path, workflow_dir: Path) ->
         settings,
         workflow_dir,
         integration_test_data,
-        str(integration_test_data / "feko_Haslam408_ref70.00.h5"),
+        str(integration_test_data / "alan_beam_factor.h5"),
         str(integration_test_data / "s11"),
     )
 

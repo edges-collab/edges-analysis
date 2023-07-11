@@ -104,6 +104,9 @@ def lst_bin_direct(
         time_array=np.repeat(times, data.data.shape[0]).reshape(
             (len(times), data.data.shape[0])
         ),
+        time_ranges=Longitude(
+            np.tile(np.array([bins[:-1], bins[1:]]).T[:, None, :], (1, 3, 1)) * un.hour
+        ),
         data=specs,
         nsamples=wghts,
         flags={},
@@ -182,6 +185,10 @@ def lst_bin_with_models(
         nsamples=nsmpls,
         flags={},
         time_array=times,
+        time_ranges=Longitude(
+            np.tile(np.array([bins[:-1], bins[1:]]).T[:, None, :], (1, data.nloads, 1))
+            * un.hour
+        ),
         data_unit="model_residuals",
         data_model=data.data_model.update(parameters=params),
     )

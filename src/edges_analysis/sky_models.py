@@ -13,6 +13,7 @@ import logging
 import numpy as np
 from abc import ABC, abstractmethod
 from astropy import coordinates as apc
+from astropy.coordinates import Galactic
 from astropy.io import fits
 from astropy.utils.data import download_file
 from pathlib import Path
@@ -202,7 +203,7 @@ class SkyModel:
             nside = int(fl[header_hdu].header["NSIDE"])
             temp_map = fl[header_hdu].data[data_name].flatten()
 
-        hpix = ahp.HEALPix(nside=nside, order=ordering.lower(), frame="galactic")
+        hpix = ahp.HEALPix(nside=nside, order=ordering.lower(), frame=Galactic())
         coords = hpix.healpix_to_skycoord(np.arange(hpix.npix))
 
         # Downgrade the data quality to max_res to improve performance, if desired.
@@ -225,7 +226,7 @@ class SkyModel:
         fname: str | Path,
         frequency: float,
         axes=("lat", "lon"),
-        frame: str = "galactic",
+        frame=Galactic(),
         name: str | None = None,
     ) -> SkyModel:
         """Load a sky model from a lat-lon grid file."""

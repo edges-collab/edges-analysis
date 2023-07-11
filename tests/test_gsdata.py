@@ -340,7 +340,8 @@ def test_add(simple_gsdata):
         simple_gsdata + 3
 
     new_times = simple_gsdata.update(
-        time_array=simple_gsdata.time_array + timedelta(days=1)
+        time_array=simple_gsdata.time_array + timedelta(days=1),
+        time_ranges=simple_gsdata.time_ranges + 1 * un.day,
     )
 
     new_freqs = simple_gsdata.update(freq_array=simple_gsdata.freq_array + 50 * un.MHz)

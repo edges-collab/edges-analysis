@@ -14,7 +14,7 @@ from edges_cal import FrequencyRange
 from edges_cal import modelling as mdl
 from edges_cal import types as tp
 from edges_cal.tools import vld_unit
-from edges_io.h5 import hickleable
+from hickleable import hickleable
 from pathlib import Path
 from tqdm import tqdm
 from typing import Literal
@@ -805,6 +805,36 @@ class BeamFactor:
 
         return attrs.evolve(self, lsts=lsts, **out)
 
+    def between_lsts(self, lst0: float, lst1: float) -> BeamFactor:
+        """Return a new BeamFactor including only LSTs between those given.
+
+        Parameters
+        ----------
+        lst0
+            Lower edge of lsts in hours.
+        lst1
+            Upper edge of lsts in hours.
+        """
+        if lst1 < lst0:
+            lst1 += 24
+
+        these_lsts = self.lsts % 24
+        these_lsts[these_lsts < lst0] += 24
+
+        mask = np.logical_and(these_lsts >= lst0, these_lsts < lst1)
+        if not np.any(mask):
+            raise ValueError(
+                f"BeamFactor does not contain any LSTs between {lst0} and {lst1}."
+            )
+        d = attrs.asdict(self)
+        lst_like = [
+            k
+            for k, v in d.items()
+            if isinstance(v, np.ndarray) and v.shape[0] == self.nlst
+        ]
+        out = {k: getattr(self, k)[mask] for k in lst_like}
+        return attrs.evolve(self, **out)
+
     def get_beam_factor(
         self, model: mdl.Model, freqs: np.ndarray | None = None
     ) -> np.ndarray:
@@ -1101,7 +1131,7 @@ def simulate_spectra(
         lsts = np.arange(0, 24, 0.5)
 
     antenna_temperature_above_horizon = np.zeros((len(lsts), len(beam.frequency)))
-    for i, j, temperature, _, _, _, _, _, _, _, _, _ in sky_convolution_generator(
+    for i, j, temperature, _, _, _, _, _, _, _, _ in sky_convolution_generator(
         lsts,
         ground_loss_file,
         beam,

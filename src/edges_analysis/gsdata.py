@@ -335,6 +335,7 @@ class GSData:
         "power", "temperature", "uncalibrated", "uncalibrated_temp", "model_residuals"
     ] = field(default="power")
     auxiliary_measurements: dict = field(factory=dict)
+    time_ranges: Time | Longitude = npfield()
     filename: Path | None = field(default=None, converter=cnv.optional(Path))
 
     @data.validator
@@ -407,6 +408,50 @@ class GSData:
                 f"time_array must have the size (ntimes, nloads), got {value.shape} "
                 f"instead of {(self.ntimes, self.nloads)}"
             )
+
+    @time_ranges.default
+    def _time_ranges_default(self):
+        if self.in_lst:
+            return Longitude(
+                np.concatenate(
+                    (
+                        self.time_array.hour[:, :, None],
+                        self.time_array.hour[:, :, None]
+                        + self.effective_integration_time.to_value("hour"),
+                    ),
+                    axis=-1,
+                )
+                * un.hour
+            )
+        else:
+            return Time(
+                np.concatenate(
+                    (
+                        self.time_array.jd[:, :, None],
+                        self.time_array.jd[:, :, None]
+                        + self.effective_integration_time.to_value("day"),
+                    ),
+                    axis=-1,
+                ),
+                format="jd",
+            )
+
+    @time_ranges.validator
+    def _time_ranges_validator(self, attribute, value):
+        if not isinstance(value, (Time, Longitude)):
+            raise TypeError(
+                "time_ranges must either be an astropy Time or Longitude object"
+            )
+
+        if value.shape != (self.ntimes, self.nloads, 2):
+            raise ValueError(
+                f"time_ranges must have the size (ntimes, nloads, 2), got {value.shape}"
+                f" instead of {(self.ntimes, self.nloads, 2)}."
+            )
+
+        if not self.in_lst and not np.all(value[..., 1] - value[..., 0] > 0):
+            # TODO: properly check lst-type input, which can wrap...
+            raise ValueError("time_ranges must all be greater than zero")
 
     @loads.default
     def _loads_default(self) -> tuple[str]:
@@ -793,9 +838,16 @@ class GSData:
 
             if self.in_lst:
                 time_array = np.concatenate((self.time_array, other.time_array), axis=0)
+                time_ranges = np.concatenate(
+                    (self.time_ranges, other.time_ranges), axis=0
+                )
             else:
                 time_array = Time(
                     np.concatenate((self.time_array.jd, other.time_array.jd), axis=0),
+                    format="jd",
+                )
+                time_ranges = Time(
+                    np.concatenate((self.time_ranges.jd, other.time_ranges.jd), axis=0),
                     format="jd",
                 )
 
@@ -805,6 +857,7 @@ class GSData:
                 nsamples=nsamples,
                 flags=flags,
                 time_array=time_array,
+                time_ranges=time_ranges,
                 data_model=data_model,
             )
 
@@ -866,6 +919,14 @@ class GSData:
             return self.time_array
         else:
             return self.time_array.sidereal_time("apparent", self.telescope_location)
+
+    @cached_property
+    def lst_ranges(self) -> Longitude:
+        """The local sidereal time array."""
+        if self.in_lst:
+            return self.time_ranges
+        else:
+            return self.time_ranges.sidereal_time("apparent", self.telescope_location)
 
     @cached_property
     def gha(self) -> np.ndarray:
@@ -1248,6 +1309,7 @@ def _mask_times(data: GSData, mask: np.ndarray) -> GSData:
     return data.update(
         data=data.data[:, :, mask],
         time_array=data.time_array[mask],
+        time_ranges=data.time_ranges[mask],
         auxiliary_measurements={
             k: v[mask] for k, v in data.auxiliary_measurements.items()
         },
