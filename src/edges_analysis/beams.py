@@ -4,8 +4,6 @@ from __future__ import annotations
 import astropy.coordinates as apc
 import astropy.time as apt
 import attrs
-import hashlib
-import hickle
 import logging
 import numpy as np
 import scipy.interpolate as spi
@@ -1156,8 +1154,6 @@ def antenna_beam_factor(
     sky_model: sky_models.SkyModel = sky_models.Haslam408(),
     index_model: sky_models.IndexModel = sky_models.GaussianIndex(),
     lsts: np.ndarray | None = None,
-    save_dir: tp.PathLike | None = None,
-    save_fname: tp.PathLike | bool | None = None,
     reference_frequency: tp.FreqType | None = None,
     beam_smoothing: bool = True,
     smoothing_model: mdl.Model = mdl.Polynomial(n_terms=12),
@@ -1220,14 +1216,6 @@ def antenna_beam_factor(
     -------
     beam_factor : :class`BeamFactor` instance
     """
-    if not save_dir:
-        save_dir = Path(config["paths"]["beams"]) / f"{beam.instrument}/beam_factors/"
-    else:
-        save_dir = Path(save_dir)
-
-    if str(save_fname).startswith(":"):
-        save_fname = Path(save_dir).absolute() / str(save_fname)[1:]
-
     beam = beam.between_freqs(f_low, f_high)
 
     if lsts is None:
@@ -1322,15 +1310,5 @@ def antenna_beam_factor(
             "rotation_from_north": float(90),
         },
     )
-
-    if save_fname is None:
-        hsh = hashlib.md5(repr(out.meta).encode()).hexdigest()
-        save_fname = save_dir / (
-            f"{beam.simulator}_{sky_model.__class__.__name__}_"
-            f"ref{reference_frequency:.2f}_{hsh}.h5"
-        )
-
-    logger.info(f"Writing out beam file to {save_fname}")
-    hickle.dump(out, save_fname, compression="gzip")
 
     return out
