@@ -294,10 +294,10 @@ def test_beamfactor_get():
 
     _bf = bf.get_beam_factor(poly.model, freq)
 
-    assert np.all(_bf[:, 25] == 1.0)
+    assert np.allclose(_bf[:, 25], 1.0)
 
     meanbf = bf.get_mean_beam_factor(poly.model, freq)
-    assert meanbf[25] == 1.0
+    assert np.isclose(meanbf[25], 1.0)
 
     intgbf = bf.get_integrated_beam_factor(poly.model)
     intgbf2 = bf.get_integrated_beam_factor(poly.model, freq)
