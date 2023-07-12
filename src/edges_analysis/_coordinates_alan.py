@@ -70,24 +70,6 @@ def galactic_to_radec(glat: Number, glon: Number) -> tuple[Number, Number]:
     return ra, dec
 
 
-def sunradec(time: float) -> tuple[float, float]:
-    """Calculate Sun RA and DEC (approximate).
-
-    See Astronomical Almanac page C24 Sun 1999
-    """
-    n = -365.5 + (time - tosecs(1999, 1, 0, 0, 0)) / 86400.0
-    g = (357.528 + 0.9856003 * n) * np.pi / 180.0
-    lonn = (
-        (280.460 + 0.9856474 * n + 1.915 * np.sin(g) + 0.02 * np.sin(2 * g))
-        * np.pi
-        / 180.0
-    )
-    ecl = (23.439 - 0.0000004 * n) * np.pi / 180.0
-    ra = np.arctan2(np.sin(lonn) * np.cos(ecl), np.cos(lonn)) % (2 * np.pi)
-    dec = np.arcsin(np.sin(lonn) * np.sin(ecl))
-    return ra, dec
-
-
 def toyrday(secs: float) -> tuple[int, int, int, int, int]:
     """Convert Seconds to Yr/Day/Hr/Min/Sec."""
     day = np.floor(secs / 86400.0)
@@ -177,16 +159,3 @@ def radec_azel_from_lst(
     """
     ha = lst - ra
     return radec_azel(ha, dec, lat)
-
-
-def gst_to_lst(gst: Number, lon: Number) -> Number:
-    """Convert from GST to LST.
-
-    Parameters
-    ----------
-    gst
-        Greenwich sidereal time in radians.
-    lon
-        Longitude of the antenna in radians.
-    """
-    return (gst + lon) * 12.0 / np.pi

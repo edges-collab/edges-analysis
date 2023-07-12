@@ -242,7 +242,7 @@ class Beam:
         data = np.genfromtxt(str(filename))
         frequency = []
         with open(filename) as fl:
-            for line in fl.readlines():
+            for line in fl:
                 if line.startswith("#FREQUENCY"):
                     line = line.split("MHz")[0].strip().split(" ")
                     frequency.append(float(line[-1]))
@@ -307,19 +307,16 @@ class Beam:
 
         for i in range(freq_p):
             n = int(i * res + f_low)
-            fc_file = open(
-                file_name_prefix + "farfield (f=" + str(n) + ") [1].txt", "rb"
-            )  #
-            for x, line in enumerate(fc_file):
-                if x > 1:
-                    check = 0
-                    for o in range(len(line)):
-                        if line[o] != "":
-                            check = check + 1
-                            if check == 3:
-                                phi_t[i][x - 2] = float(line.split()[2])
+            with open(f"{file_name_prefix}farfield (f={n}) [1].txt", "rb") as fc_file:
+                for x, line in enumerate(fc_file):
+                    if x > 1:
+                        check = 0
+                        for o in range(len(line)):
+                            if line[o] != "":
+                                check = check + 1
+                                if check == 3:
+                                    phi_t[i][x - 2] = float(line.split()[2])
 
-            fc_file.close()
         for i in range(freq_p):
             for x in range(phi_p):
                 beam_square[i, :, x] = phi_t[i, x * theta_p : (x + 1) * theta_p]
@@ -380,10 +377,10 @@ class Beam:
         """
         beam_square = np.zeros((freq_p, theta_p, phi_p))
         frequency = np.linspace(f_low, f_high, freq_p)
-        f1 = open(str(file_name_prefix) + "_0-90." + ext)
-        f2 = open(str(file_name_prefix) + "_91-180." + ext)
-        f3 = open(str(file_name_prefix) + "_181-270." + ext)
-        f4 = open(str(file_name_prefix) + "_271-360." + ext)
+        f1 = open(f"{file_name_prefix}_0-90.{ext}")
+        f2 = open(f"{file_name_prefix}_91-180.{ext}")
+        f3 = open(f"{file_name_prefix}_181-270.{ext}")
+        f4 = open(f"{file_name_prefix}_271-360.{ext}")
 
         z = (
             theta_p * 91 + 10
@@ -628,7 +625,6 @@ class Beam:
             "linear",
             "nearest",
             "slinear",
-            "cubic",
             "quintic",
             "pchip",
             "spline",
@@ -664,8 +660,10 @@ class Beam:
             az = np.concatenate([self.azimuth, [self.azimuth[0] + 360]])
             beam = np.hstack((beam, beam[:, 0][:, None]))
             if interp_kind == "spline":
-                spl = spi.RectBivariateSpline(az, self.elevation, beam, kx=3, ky=3, s=0)
-                return lambda az, el: spl([az, el])
+                spl = spi.RectBivariateSpline(
+                    az, self.elevation, beam.T, kx=3, ky=3, s=0
+                )
+                return lambda az, el: spl(az, el, grid=False)
             else:
                 spl = spi.RegularGridInterpolator(
                     (az, self.elevation),
@@ -683,15 +681,14 @@ class Beam:
 
     def get_beam_solid_angle(self) -> float:
         """Calculate the integrated beam solid angle."""
-        # Theta vector valid for the FEKO beams. In the beam, dimension 1 increases
-        # from index 0 to 90 corresponding to elevation, which is 90-theta
-        theta = self.elevation[::-1]
+        sin_theta = np.cos(self.elevation * (np.pi / 180))
+        sin_theta_2D = np.tile(sin_theta, (len(self.azimuth), 1)).T
 
-        sin_theta = np.sin(theta * (np.pi / 180))
-        sin_theta_2D = np.tile(sin_theta, (360, 1)).T
+        beam_integration = np.sum(self.beam * sin_theta_2D, axis=(1, 2))
 
-        beam_integration = np.sum(self.beam * sin_theta_2D)
-        return (1 / (4 * np.pi)) * ((np.pi / 180) ** 2) * beam_integration
+        d_el = self.elevation[1] - self.elevation[0]
+        d_az = self.azimuth[1] - self.azimuth[0]
+        return d_el * d_az * (np.pi / 180) ** 2 * beam_integration
 
 
 @hickleable()
@@ -786,7 +783,7 @@ class BeamFactor:
         lst_like = [
             k
             for k, v in d.items()
-            if isinstance(v, np.ndarray) and v.shape[0] == self.nlst
+            if isinstance(v, np.ndarray) and v.shape[0] == self.nlst and v.ndim == 2
         ]
 
         these_lsts = self.lsts % 24
@@ -828,10 +825,10 @@ class BeamFactor:
         lst_like = [
             k
             for k, v in d.items()
-            if isinstance(v, np.ndarray) and v.shape[0] == self.nlst
+            if isinstance(v, np.ndarray) and v.shape[0] == self.nlst and v.ndim == 2
         ]
         out = {k: getattr(self, k)[mask] for k in lst_like}
-        return attrs.evolve(self, **out)
+        return attrs.evolve(self, lsts=these_lsts, **out)
 
     def get_beam_factor(
         self, model: mdl.Model, freqs: np.ndarray | None = None
@@ -863,7 +860,7 @@ class BeamFactor:
         return np.mean(self.get_beam_factor(model, freqs), axis=0)
 
     def get_integrated_beam_factor(
-        self, model: mdl.Model, freqs: np.ndarray | None
+        self, model: mdl.Model, freqs: np.ndarray | None = None
     ) -> np.ndarray:
         """Return the beam factor integrated over the LST range.
 
