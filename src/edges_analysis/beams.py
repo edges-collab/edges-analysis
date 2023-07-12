@@ -828,7 +828,7 @@ class BeamFactor:
             if isinstance(v, np.ndarray) and v.shape[0] == self.nlst and v.ndim == 2
         ]
         out = {k: getattr(self, k)[mask] for k in lst_like}
-        return attrs.evolve(self, lsts=these_lsts, **out)
+        return attrs.evolve(self, lsts=these_lsts[mask], **out)
 
     def get_beam_factor(
         self, model: mdl.Model, freqs: np.ndarray | None = None
