@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import Callable, Iterable, Literal
 
 from . import __version__
+from . import _coordinates_alan as crda
 from . import coordinates as crd
 
 logger = logging.getLogger(__name__)
@@ -1366,6 +1367,7 @@ def select_lsts(
     indx: np.ndarray | None = None,
     load: int | str = "ant",
     gha: bool = False,
+    use_alan_coordinates: bool = False,
 ) -> GSData:
     """Selects a subset of the times."""
     if load == "all":
@@ -1381,7 +1383,38 @@ def select_lsts(
         if not isinstance(range[0], Longitude):
             range = (range[0] % 24 * un.hourangle, range[1] % 24 * un.hourangle)
 
-        t = data.gha[:, load] if gha else data.lst_array[:, load]
+        if use_alan_coordinates:
+            secs = np.array(
+                [
+                    crda.datetime_tosecs(dt)
+                    for dt in data.time_array[:, load].to_datetime().flatten()
+                ]
+            ).reshape(data.time_array[:, load].shape)
+            gst = crda.gst(secs)
+            if gha:
+                t = (
+                    (
+                        gst
+                        - (17.0 + 45.67 / 60.0) * np.pi / 12.0
+                        + data.telescope_location.lon.rad
+                    )
+                    * 12.0
+                    / np.pi
+                    * un.hourangle
+                )
+            else:
+                t = (
+                    (gst + data.telescope_location.lon.rad)
+                    * 12.0
+                    / np.pi
+                    * un.hourangle
+                )
+        else:
+            t = data.gha[:, load] if gha else data.lst_array[:, load]
+
+        # In case we have negative LST/GHA
+        t = t % (24 * un.hourangle)
+
         if range[0] > range[1]:
             mask = (t >= range[1]) & (t <= range[0])
         else:
@@ -1395,7 +1428,6 @@ def select_lsts(
     if indx is not None:
         if mask is None:
             mask = np.ones((len(data.time_array),), dtype=bool)
-            print("got mask", mask.shape, np.sum(mask))
 
         if indx.dtype == bool:
             mask[~indx] = False
@@ -1403,6 +1435,5 @@ def select_lsts(
             for i in np.arange(data.ntimes):
                 if i not in indx:
                     mask[i] = False
-        print("2 mask", mask.shape, np.sum(mask))
 
     return _mask_times(data, mask)
