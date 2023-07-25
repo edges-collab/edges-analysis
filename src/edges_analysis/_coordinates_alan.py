@@ -9,6 +9,7 @@ as functions there.
 from __future__ import annotations
 
 import numpy as np
+from datetime import datetime
 from typing import Union
 
 Number = Union[float, np.ndarray]
@@ -23,6 +24,17 @@ def gst(time: float) -> float:
     """Convert time to GST."""
     secs = tosecs(2011, 1, 17, 15, 58.0778)
     return (((time - secs) / 86164.09053) % 1) * 2 * np.pi
+
+
+def datetime_tosecs(dt: datetime):
+    """Convert a datetime object to seconds since New Year 1970."""
+    return tosecs(
+        dt.year,
+        dt.timetuple().tm_yday,
+        dt.hour,
+        dt.minute,
+        round(dt.second + dt.microsecond / 1e6),
+    )
 
 
 def tosecs(yr: int, day: int, hour: int, minutes: int, sec: int | float) -> int | float:
