@@ -430,6 +430,25 @@ def process(
                 ]
                 if not data:
                     console.print(f"{stepname} does not need to run on any files.")
+
+                if "write" in step:
+                    data = [
+                        write_data(d, step, GSData.from_file, outdir, **params)
+                        for d in data
+                    ]
+
+                oldfiles = [str(d.filename.absolute()) for d in data]
+
+                # Update the progress file. Each input file gets one output file.
+                update_progressfile(
+                    progressfile,
+                    stepname,
+                    [
+                        ([x], [str(d.filename.absolute())] if d else [])
+                        for x, d in zip(oldfiles, data)
+                    ],
+                )
+
                 continue
 
             console.print(f"{stepname} does not need to run on any files.")
@@ -476,6 +495,36 @@ def fork(workflow, forked, outdir):
     console.print("Done. Please run the rest of the processing as normal.")
 
 
+def write_data(data: GSData, step: dict, fnc: callable, outdir=None, **params):
+    """Write data to disk at a particular step."""
+    if "write" not in step:
+        return data
+
+    fname = step["write"]
+
+    # Now, use templating to create the actual filename
+    fname = fname.format(
+        prev_stem=data.filename.stem,
+        prev_dir=data.filename.parent,
+        fncname=fnc.__name__,
+        **params,
+    )
+
+    fname = Path(fname)
+
+    if not fname.is_absolute():
+        fname = Path(outdir) / fname
+
+    if not fname.parent.exists():
+        fname.parent.mkdir(parents=True)
+
+    if fname.exists():
+        fname.unlink()
+
+    logger.info(f"Writing {fname}")
+    return data.write_gsh5(fname)
+
+
 def perform_step_on_object(
     data: GSData,
     fnc: Callable,
@@ -498,37 +547,9 @@ def perform_step_on_object(
     oldfiles = [str(d.filename.absolute()) for d in data]
     progressfile = outdir / "progressfile.yaml"
 
-    def write_data(data: GSData, step: dict):
-        if "write" not in step:
-            return data
-
-        fname = step["write"]
-
-        # Now, use templating to create the actual filename
-        fname = fname.format(
-            prev_stem=data.filename.stem,
-            prev_dir=data.filename.parent,
-            fncname=fnc.__name__,
-            **params,
-        )
-
-        fname = Path(fname)
-
-        if not fname.is_absolute():
-            fname = Path(outdir) / fname
-
-        if not fname.parent.exists():
-            fname.parent.mkdir(parents=True)
-
-        if fname.exists():
-            fname.unlink()
-
-        logger.info(f"Writing {fname}")
-        return data.write_gsh5(fname)
-
     if fnc.kind == "gather":
         data = fnc(*data, **params)
-        data = write_data(data, step)
+        data = write_data(data, step, fnc, outdir, **params)
         if "write" in step:
             update_progressfile(
                 progressfile, name, [(oldfiles, [str(data.filename.absolute())])]
@@ -576,7 +597,7 @@ def perform_step_on_object(
         if data.complete_flags.all():
             return
 
-        return write_data(data, step)
+        return write_data(data, step, fnc, outdir, **params)
 
     mp = Pool(nthreads).map if nthreads > 1 else map
 
