@@ -105,7 +105,11 @@ def lst_bin_direct(
             (len(times), data.data.shape[0])
         ),
         time_ranges=Longitude(
-            np.tile(np.array([bins[:-1], bins[1:]]).T[:, None, :], (1, 3, 1)) * un.hour
+            np.tile(
+                np.array([bins[:-1], bins[1:]]).T[:, None, :],
+                (1, data.data.shape[0], 1),
+            )
+            * un.hour
         ),
         data=specs,
         nsamples=wghts,
