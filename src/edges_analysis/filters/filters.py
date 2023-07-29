@@ -421,6 +421,9 @@ rfi_model_sweep_filter = gsregister("filter")(
 rfi_watershed_filter = gsregister("filter")(
     gsdata_filter(axis="all")(_RFIFilterFactory("watershed"))
 )
+rfi_model_nonlinear_window_filter = gsregister("filter")(
+    gsdata_filter(axis="all")(_RFIFilterFactory("model_nonlinear_window"))
+)
 
 
 @gsregister("filter")
