@@ -11,6 +11,7 @@ from edges_cal.modelling import LinLog
 from edges_analysis.gsdata import (
     GSData,
     GSDataModel,
+    GSFlag,
     History,
     Stamp,
     add_model,
@@ -137,53 +138,37 @@ def test_history():
 
 
 def test_bad_gsdata_init(simple_gsdata: GSData):
-    with pytest.raises(TypeError, match="data must be a numpy array"):
-        simple_gsdata.update(data="rubbish_input")
-
-    with pytest.raises(ValueError, match="data must be a 4D array"):
+    with pytest.raises(ValueError, match="data must have ndim in"):
         simple_gsdata.update(data=np.zeros((3, 4, 5)))
-
-    with pytest.raises(ValueError, match="data must be real"):
-        simple_gsdata.update(data=np.zeros((3, 4, 5, 6)) + 1j)
 
     with pytest.raises(ValueError, match="nsamples must have the same shape as data"):
         simple_gsdata.update(nsamples=np.zeros((2, 1, 50, 100)))
 
-    with pytest.raises(ValueError, match="nsamples must be real"):
-        simple_gsdata.update(nsamples=np.zeros_like(simple_gsdata.data) + 1j)
-
     with pytest.raises(TypeError, match="flags must be a dict"):
         simple_gsdata.update(flags=np.zeros(simple_gsdata.data.shape, dtype=bool))
 
-    with pytest.raises(TypeError, match="flags values must be numpy arrays"):
-        simple_gsdata.update(flags={"flag1": True})
-
-    with pytest.raises(ValueError, match="flags must have the same shape as the data"):
-        simple_gsdata.update(
-            flags={"flag1": np.zeros(simple_gsdata.data.shape[:-1], dtype=bool)}
-        )
-
-    with pytest.raises(ValueError, match="flags must be boolean"):
-        simple_gsdata.update(
-            flags={"flag1": np.zeros(simple_gsdata.data.shape, dtype=int)}
-        )
-
     with pytest.raises(ValueError, match="flags keys must be strings"):
-        simple_gsdata.update(flags={1: np.zeros(simple_gsdata.data.shape, dtype=bool)})
+        simple_gsdata.update(
+            flags={
+                1: GSFlag(
+                    flags=np.zeros(simple_gsdata.data.shape, dtype=bool),
+                    axes=("load", "pol", "time", "freq"),
+                )
+            }
+        )
 
     with pytest.raises(TypeError, match="freq_array must be a Quantity"):
         simple_gsdata.update(freq_array=np.linspace(50, 100, 100))
 
-    with pytest.raises(ValueError, match="freq_array must have frequency units"):
+    with pytest.raises(
+        ValueError, match="freq_array must have units compatible with MHz"
+    ):
         simple_gsdata.update(freq_array=np.linspace(50, 100, 100) * un.m)
 
     with pytest.raises(ValueError, match="freq_array must have the size nfreqs"):
         simple_gsdata.update(freq_array=simple_gsdata.freq_array[:-1])
 
-    with pytest.raises(TypeError, match="time_array must either be an astropy Time"):
-        simple_gsdata.update(time_array=np.linspace(50, 100, 50))
-
-    with pytest.raises(ValueError, match="time_array must have the size"):
+    with pytest.raises(ValueError, match="time_array must have ndim in "):
         simple_gsdata.update(time_array=simple_gsdata.time_array[:, 0])
 
     with pytest.raises(ValueError, match="loads must have the same length as"):
@@ -411,7 +396,7 @@ def test_cumulative_flags(simple_gsdata: GSData):
         # can't add the same flags twice
         no_flags.add_flags("zeros", flg0)
 
-    with pytest.raises(ValueError, match="Shape mismatch between flags"):
+    with pytest.raises(ValueError, match="Cannot multiply GSFlag objects"):
         no_flags.add_flags("new", np.zeros((1, 2, 3)))
 
     with pytest.raises(ValueError, match="Cannot append to file without a filename"):
@@ -455,12 +440,6 @@ def gsdata_model():
 
 
 def test_bad_gsdata_model_init(gsdata_model):
-    with pytest.raises(TypeError, match="parameters must be a numpy array"):
-        gsdata_model.update(parameters=3)
-
-    with pytest.raises(ValueError, match="parameters must have 4 dimensions"):
-        gsdata_model.update(parameters=np.random.random(size=(1, 2, 3)))
-
     with pytest.raises(ValueError, match="parameters array has 3 parameters"):
         gsdata_model.update(parameters=np.random.random(size=(1, 1, 50, 3)))
 

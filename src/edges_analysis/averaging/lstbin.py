@@ -163,6 +163,14 @@ def lst_bin_with_models(
 
     lsts = data.lst_array.copy().hour
 
+    lsts %= 24
+    lsts[lsts < bins[0]] += 24
+
+    # Get only non-empty bins
+    idx = np.digitize(lsts, bins) - 1
+    idx = np.sort(np.unique(idx[(idx >= 0) & (idx < len(bins))]))
+    bins = bins[idx]
+
     params = np.zeros((data.nloads, data.npols, len(bins) - 1, data.data_model.nparams))
     resids = np.zeros((data.nloads, data.npols, len(bins) - 1, data.nfreqs))
     nsmpls = np.zeros_like(resids)

@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Sequence
 
 from ..data import DATA_PATH
-from ..gsdata import GSData, add_model, gsregister
+from ..gsdata import GSData, GSFlag, add_model, gsregister
 from .filters import chunked_iterative_model_filter, gsdata_filter
 
 logger = logging.getLogger(__name__)
@@ -324,6 +324,7 @@ def get_gha_model_filter(
     # Aggregate the data for each file along the frequency axis.
     gha, metric, indx_map = aggregator.aggregate(data)
     init_flags = aggregator.get_init_flags(gha, metric)
+    print("HERE INIT: ", np.sum(init_flags), len(init_flags))
 
     if detrend_metric_model is None:
         detrend_metric_model = metric_model
@@ -497,7 +498,7 @@ def apply_gha_model_filter(
 
 
 @gsregister("filter")
-@gsdata_filter(axis="time", multi_data=True)
+@gsdata_filter(multi_data=True)
 def rms_filter(
     *,
     data: Sequence[GSData],
@@ -526,15 +527,17 @@ def rms_filter(
         )
         for band in bands
     ]
-    return np.any(flags, axis=0)
+    flags = np.any(flags, axis=0)
+    return [GSFlag(flg, axes=("time",)) for flg in flags]
 
 
 @gsregister("filter")
-@gsdata_filter(axis="time", multi_data=True)
+@gsdata_filter(multi_data=True)
 def total_power_filter(
     *,
     data: Sequence[GSData],
     bands: Sequence[tuple[float, float]] = ((0, np.inf),),
+    init_flag_threshold: float = 1.0,
     **kwargs,
 ):
     """Perform a filter on the total power of an integration.
@@ -548,9 +551,16 @@ def total_power_filter(
     """
     flags = [
         apply_gha_model_filter(
-            data=data, aggregator=TotalPowerAggregator(band=band), **kwargs
+            data=data,
+            aggregator=TotalPowerAggregator(
+                band=band, init_threshold=init_flag_threshold
+            ),
+            **kwargs,
         )
         for band in bands
     ]
 
-    return [np.any([f[iday] for f in flags], axis=0) for iday in range(len(flags[0]))]
+    return [
+        GSFlag(flags=np.any([f[iday] for f in flags], axis=0), axes=("time",))
+        for iday in range(len(flags[0]))
+    ]

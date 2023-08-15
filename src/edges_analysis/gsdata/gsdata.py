@@ -7,253 +7,27 @@ key methods for data selection, I/O, and analysis.
 """
 from __future__ import annotations
 
-import astropy
 import astropy.units as un
-import datetime
-import edges_cal
-import edges_cal.modelling as mdl
-import edges_io
-import functools
 import h5py
+import hickle
 import logging
 import numpy as np
-import read_acq
 import warnings
-import yaml
 from astropy.coordinates import EarthLocation, Longitude
 from astropy.time import Time
-from attrs import asdict, cmp_using
 from attrs import converters as cnv
 from attrs import define, evolve, field
 from attrs import validators as vld
-from functools import cached_property, partial
+from functools import cached_property
 from pathlib import Path
-from typing import Callable, Iterable, Literal
+from typing import Iterable, Literal
 
-from . import __version__
-from . import _coordinates_alan as crda
-from . import coordinates as crd
+from .. import coordinates as crd
+from .attrs import npfield, timefield
+from .gsflag import GSFlag
+from .history import History, Stamp
 
 logger = logging.getLogger(__name__)
-
-npfield = partial(field, eq=cmp_using(np.array_equal))
-
-
-class _Register:
-    def __init__(self, func: Callable, kind: str) -> None:
-        self.func = func
-        self.kind = kind
-        functools.update_wrapper(self, func, updated=())
-
-    def __call__(
-        self, data: GSData, *args, message: str = "", **kw
-    ) -> GSData | list[GSData]:
-        now = datetime.datetime.now()
-        newdata = self.func(data, *args, **kw)
-
-        if isinstance(newdata, GSData):
-            return newdata.update(
-                history={
-                    "message": message,
-                    "function": self.func.__name__,
-                    "parameters": kw,
-                    "timestamp": now,
-                },
-            )
-
-        try:
-            return [
-                nd.update(
-                    history={
-                        "message": message,
-                        "function": self.func.__name__,
-                        "parameters": kw,
-                        "timestamp": now,
-                    },
-                )
-                for nd in newdata
-            ]
-        except Exception as e:
-            raise TypeError(
-                f"{self.func.__name__} returned {type(newdata)} "
-                f"instead of GSData or list thereof."
-            ) from e
-
-
-GSDATA_PROCESSORS = {}
-
-
-@define
-class gsregister:  # noqa: N801
-    kind: Literal["gather", "calibrate", "filter", "reduce", "supplement"]
-
-    def __call__(self, func: Callable) -> Callable:
-        """Register a function as a processor for GSData objects."""
-        out = _Register(func, self.kind)
-        GSDATA_PROCESSORS[func.__name__] = out
-        return out
-
-
-@define(frozen=True)
-class Stamp:
-    """Class representing a historical record of a process applying to an object.
-
-    Parameters
-    ----------
-    message
-        A message describing the process. Optional -- either this or the function
-        must be defined.
-    function
-        The name of the function that was applied. Optional -- either this or the
-        message must be defined.
-    parameter(s)
-        The parameters passed to the function. Optional -- if ``function`` is defined,
-        this should be specified.
-    versions
-        A dictionary of the versions of the software used to perform the process.
-        Created by default when the History is created.
-    timestamp
-        A datetime object corresponding to the time the process was performed.
-        By default, this is set to the time that the Stamp object is created.
-    """
-
-    message: str = field(default="")
-    function: str = field(default="")
-    parameters: dict = field(factory=dict)
-    versions: dict = field()
-    timestamp: datetime.datetime = field(factory=datetime.datetime.now)
-
-    @function.validator
-    def _function_vld(self, _, value):
-        if not value and not self.message:
-            raise ValueError("History record must have a message or a function")
-
-    @versions.default
-    def _versions_default(self):
-        return {
-            "edges-analysis": __version__,
-            "edges-cal": edges_cal.__version__,
-            "read_acq": read_acq.__version__,
-            "edges-io": edges_io.__version__,
-            "numpy": np.__version__,
-            "astropy": astropy.__version__,
-        }
-
-    def _to_yaml_dict(self):
-        dct = asdict(self)
-        dct["timestamp"] = dct["timestamp"].isoformat()
-        return dct
-
-    def __repr__(self):
-        """Technical representation of the history record."""
-        return yaml.dump(self._to_yaml_dict())
-
-    def __str__(self):
-        """Human-readable representation of the history record."""
-        pstring = "        ".join(f"{k}: {v}" for k, v in self.parameters.items())
-        vstring = " | ".join(f"{k} ({v})" for k, v in self.versions.items())
-
-        return f"""{self.timestamp.isoformat()}
-    function: {self.function}
-    message : {self.message}
-    parameters:
-        {pstring}
-    versions: {vstring}
-        """
-
-    def pretty(self):
-        """Return a rich-compatible string representation of the history record."""
-        pstring = "        ".join(
-            f"[green]{k}[/]: [dim]{v}[/]" for k, v in self.parameters.items()
-        )
-        vstring = " | ".join(f"{k} ([blue]{v}[/])" for k, v in self.versions.items())
-
-        return f"""[bold underline blue]{self.timestamp.isoformat()}[/]
-    [bold green]function[/]  : {self.function}
-    [bold green]message [/]  : {self.message}
-    [bold green]parameters[/]:
-        {pstring}
-    [bold green]versions[/]  : {vstring}
-        """
-
-    @classmethod
-    def from_repr(cls, repr_string: str):
-        """Create a Stamp object from a string representation."""
-        dct = yaml.load(repr_string, Loader=yaml.FullLoader)
-        return cls.from_yaml_dict(dct)
-
-    @classmethod
-    def from_yaml_dict(cls, d: dict) -> Stamp:
-        """Create a Stamp object from a dictionary representing a history record."""
-        d["timestamp"] = datetime.datetime.strptime(
-            d["timestamp"], "%Y-%m-%dT%H:%M:%S.%f"
-        )
-        return cls(**d)
-
-
-@define(slots=False)
-class History:
-    """A collection of Stamp objects defining the history."""
-
-    stamps: tuple[Stamp] = field(
-        factory=tuple,
-        converter=tuple,
-        validator=vld.deep_iterable(vld.instance_of(Stamp), vld.instance_of(tuple)),
-    )
-
-    def __attrs_post_init__(self):
-        """Define the timestamps as keys."""
-        self._keysdates = tuple(stamp.timestamp for stamp in self.stamps)
-        self._keystring = tuple(stamp.timestamp.isoformat() for stamp in self.stamps)
-
-    def __repr__(self):
-        """Technical representation of the history."""
-        out = tuple(s._to_yaml_dict() for s in self.stamps)
-        return yaml.dump(out)
-
-    def __str__(self):
-        """Human-readable representation of the history."""
-        return "\n\n".join(str(s) for s in self.stamps)
-
-    def pretty(self):
-        """Return a rich-compatible string representation of the history."""
-        return "\n\n".join(s.pretty() for s in self.stamps)
-
-    def __getitem__(self, key):
-        """Return the Stamp object corresponding to the given key."""
-        if isinstance(key, int):
-            return self.stamps[key]
-        elif isinstance(key, str):
-            if key not in self._keystring:
-                raise KeyError(
-                    f"{key} not in history. Make sure the key is in ISO format."
-                )
-            return self.stamps[self._keystring.index(key)]
-        elif isinstance(key, datetime.datetime):
-            if key not in self._keysdates:
-                raise KeyError(f"{key} not in history")
-            return self.stamps[self._keysdates.index(key)]
-        else:
-            raise KeyError(
-                f"{key} not a valid key. Must be int, ISO date string, or datetime."
-            )
-
-    @classmethod
-    def from_repr(cls, repr_string: str):
-        """Create a History object from a string representation."""
-        d = yaml.load(repr_string, Loader=yaml.FullLoader)
-        return cls(stamps=[Stamp.from_yaml_dict(s) for s in d])
-
-    def add(self, stamp: Stamp | dict):
-        """Add a stamp to the history."""
-        if isinstance(stamp, dict):
-            stamp = Stamp(**stamp)
-
-        return evolve(self, stamps=self.stamps + (stamp,))
-
-    def __len__(self):
-        """Returns the number of stamps."""
-        return len(self.stamps)
 
 
 @define(slots=False)
@@ -311,9 +85,9 @@ class GSData:
         data if more is added (eg. flags, data model).
     """
 
-    data: np.ndarray = npfield()
-    freq_array: un.Quantity[un.MHz] = npfield()
-    time_array: Time | Longitude = npfield()
+    data: np.ndarray = npfield(dtype=float, possible_ndims=(4,))
+    freq_array: un.Quantity[un.MHz] = npfield(possible_ndims=(1,), unit=un.MHz)
+    time_array: Time | Longitude = timefield(possible_ndims=(2,))
     telescope_location: EarthLocation = field(
         validator=vld.instance_of(EarthLocation),
         converter=lambda x: EarthLocation(*x)
@@ -322,44 +96,27 @@ class GSData:
     )
 
     loads: tuple[str] = field(converter=tuple)
-    nsamples: np.ndarray = npfield()
+    nsamples: np.ndarray = npfield(dtype=float, possible_ndims=(4,))
 
     effective_integration_time: un.Quantity[un.s] = field(default=1 * un.s)
-    flags: dict[str, np.ndarray] = npfield(factory=dict)
+    flags: dict[str, GSFlag] = field(factory=dict)
 
     history: History = field(
         factory=History, validator=vld.instance_of(History), eq=False
     )
     telescope_name: str = field(default="unknown")
-    data_model: GSDataModel | None = field(default=None)
+    data_model = field(default=None)
     data_unit: Literal[
         "power", "temperature", "uncalibrated", "uncalibrated_temp", "model_residuals"
     ] = field(default="power")
     auxiliary_measurements: dict = field(factory=dict)
-    time_ranges: Time | Longitude = npfield()
+    time_ranges: Time | Longitude = timefield(shape=(None, None, 2))
     filename: Path | None = field(default=None, converter=cnv.optional(Path))
-
-    @data.validator
-    def _data_validator(self, attribute, value):
-        if not isinstance(value, np.ndarray):
-            raise TypeError("data must be a numpy array")
-
-        if value.ndim != 4:
-            raise ValueError(
-                "data must be a 4D array: (Nload, Npol, Ntime, Nfreq). "
-                f"Got {value.shape}"
-            )
-
-        if np.iscomplex(value).any():
-            raise ValueError("data must be real")
 
     @nsamples.validator
     def _nsamples_validator(self, attribute, value):
         if value.shape != self.data.shape:
             raise ValueError("nsamples must have the same shape as data")
-
-        if np.iscomplex(value).any():
-            raise ValueError("nsamples must be real")
 
     @nsamples.default
     def _nsamples_default(self) -> np.ndarray:
@@ -371,26 +128,16 @@ class GSData:
             raise TypeError("flags must be a dict")
 
         for key, flag in value.items():
-            if not isinstance(flag, np.ndarray):
-                raise TypeError("flags values must be numpy arrays")
+            if not isinstance(flag, GSFlag):
+                raise TypeError("flags values must be GSFlag instances")
 
-            if flag.shape != self.data.shape:
-                raise ValueError("flags must have the same shape as the data")
-
-            if flag.dtype != bool:
-                raise ValueError("flags must be boolean")
+            flag._check_compat(self)
 
             if not isinstance(key, str):
                 raise ValueError("flags keys must be strings")
 
     @freq_array.validator
     def _freq_array_validator(self, attribute, value):
-        if not isinstance(value, un.Quantity):
-            raise TypeError("freq_array must be a Quantity")
-
-        if not value.unit.is_equivalent("Hz"):
-            raise ValueError("freq_array must have frequency units")
-
         if value.shape != (self.nfreqs,):
             raise ValueError(
                 "freq_array must have the size nfreqs. "
@@ -399,11 +146,6 @@ class GSData:
 
     @time_array.validator
     def _time_array_validator(self, attribute, value):
-        if not isinstance(value, (Time, Longitude)):
-            raise TypeError(
-                "time_array must either be an astropy Time object or a Longitude object"
-            )
-
         if value.shape != (self.ntimes, self.nloads):
             raise ValueError(
                 f"time_array must have the size (ntimes, nloads), got {value.shape} "
@@ -439,11 +181,6 @@ class GSData:
 
     @time_ranges.validator
     def _time_ranges_validator(self, attribute, value):
-        if not isinstance(value, (Time, Longitude)):
-            raise TypeError(
-                "time_ranges must either be an astropy Time or Longitude object"
-            )
-
         if value.shape != (self.ntimes, self.nloads, 2):
             raise ValueError(
                 f"time_ranges must have the size (ntimes, nloads, 2), got {value.shape}"
@@ -525,6 +262,8 @@ class GSData:
 
     @data_model.validator
     def _data_model_validator(self, att, val):
+        from .datamodel import GSDataModel
+
         if val is None:
             return
 
@@ -624,6 +363,8 @@ class GSData:
     @classmethod
     def read_gsh5(cls, filename: str) -> GSData:
         """Reads a GSH5 file and stores the data in the GSData object."""
+        from .datamodel import GSDataModel
+
         with h5py.File(filename, "r") as fl:
             data = fl["data"][:]
             lat, lon, alt = fl["telescope_location"][:]
@@ -646,12 +387,11 @@ class GSData:
             nsamples = fl["nsamples"][:]
 
             flg_grp = fl["flags"]
+            flags = {}
             if "names" in flg_grp.attrs:
                 flag_keys = flg_grp.attrs["names"]
-                flags = flg_grp["values"][:]
-                flags = {name: flags[i] for i, name in enumerate(flag_keys)}
-            else:
-                flags = {}
+                for name in flag_keys:
+                    flags[name] = hickle.load(fl["flags"][name])
 
             filename = filename
 
@@ -704,12 +444,8 @@ class GSData:
             flg_grp = fl.create_group("flags")
             if self.flags:
                 flg_grp.attrs["names"] = tuple(self.flags.keys())
-                flg_grp.create_dataset(
-                    "values",
-                    data=np.array(list(self.flags.values())),
-                    maxshape=(None,) + self.data.shape,
-                    chunks=True,
-                )
+                for name, flag in self.flags.items():
+                    hickle.dump(flag, flg_grp.create_group(name))
 
             fl.attrs["telescope_name"] = self.telescope_name
             fl.attrs["data_unit"] = self.data_unit
@@ -743,48 +479,6 @@ class GSData:
             history = self.history
 
         return evolve(self, history=history, **kwargs)
-
-    def select_freqs(
-        self,
-        range: tuple[un.Quantity[un.MHz], un.Quantity[un.MHz]] | None = None,
-        indx: np.ndarray | None = None,
-    ) -> GSData:
-        """Selects a subset of the frequency channels."""
-        return select_freqs(self, range=range, indx=indx)
-
-    def select_times(
-        self,
-        range: tuple[Time | Longitude, Time | Longitude] | None = None,
-        fmt: str = "jd",
-        indx: np.ndarray | None = None,
-    ) -> GSData:
-        """Selects a subset of the times."""
-        return select_times(self, range=range, fmt=fmt, indx=indx)
-
-    def select_lsts(
-        self,
-        range: tuple[Time | Longitude, Time | Longitude] | None = None,
-        indx: np.ndarray | None = None,
-        gha: bool = False,
-        load: str = "all",
-    ) -> GSData:
-        """Selects a subset of the times."""
-        return select_lsts(self, range=range, indx=indx, gha=gha, load=load)
-
-    def select(
-        self,
-        freq_range: tuple[Time | Longitude, Time | Longitude] | None = None,
-        freq_indx: np.ndarray | None = None,
-        time_range: tuple[Time | Longitude, Time | Longitude] | None = None,
-        time_indx: np.ndarray | None = None,
-        lst_range: tuple[Time | Longitude, Time | Longitude] | None = None,
-    ) -> GSData:
-        """Selects a subset of the data."""
-        return (
-            self.select_freqs(freq_range, freq_indx)
-            .select_times(time_range, time_indx)
-            .select_lsts(lst_range)
-        )
 
     def __add__(self, other: GSData) -> GSData:
         """Adds two GSData objects."""
@@ -988,20 +682,23 @@ class GSData:
             return np.zeros(self.data.shape, dtype=bool)
 
         which_flags = tuple(s for s in which_flags if s not in ignore_flags)
+        if not which_flags:
+            return np.zeros(self.data.shape, dtype=bool)
 
-        if len(which_flags) == self.nflagging_ops:
-            return self.complete_flags
-        else:
-            return np.any(tuple(self.flags[k] for k in which_flags), axis=0)
+        flg = self.flags[which_flags[0]].full_rank_flags
+        for k in which_flags[1:]:
+            flg = flg | self.flags[k].full_rank_flags
+
+        # Get into full data-shape
+        if flg.shape != self.data.shape:
+            flg = flg | np.zeros(self.data.shape, dtype=bool)
+
+        return flg
 
     @cached_property
     def complete_flags(self) -> np.ndarray:
         """Returns the complete flag array."""
-        return (
-            np.any(tuple(self.flags.values()), axis=0)
-            if self.flags
-            else np.zeros(self.data.shape, dtype=bool)
-        )
+        return self.get_cumulative_flags()
 
     def get_flagged_nsamples(
         self, which_flags: tuple[str] | None = None, ignore_flags: tuple[str] = ()
@@ -1038,15 +735,17 @@ class GSData:
         return out
 
     def add_flags(
-        self, filt: str, flags: np.ndarray, append_to_file: bool | None = None
+        self, filt: str, flags: np.ndarray | GSFlag, append_to_file: bool | None = None
     ):
         """Append a set of flags to the object and optionally append them to file.
 
         You can always write out a *new* file, but appending flags is non-destructive,
         and so we allow it to be appended, in order to save disk space and I/O.
         """
-        if flags.shape != self.data.shape:
-            raise ValueError("Shape mismatch between flags and data")
+        if isinstance(flags, np.ndarray):
+            flags = GSFlag(flags=flags, axes=("load", "pol", "time", "freq"))
+
+        flags._check_compat(self)
 
         if filt in self.flags:
             raise ValueError(f"Flags for filter '{filt}' already exist")
@@ -1063,35 +762,24 @@ class GSData:
 
         if append_to_file:
             with h5py.File(new.filename, "a") as fl:
-                if fl["data"].shape != flags.shape:
+                try:
+                    np.zeros(fl["data"].shape) * flags.full_rank_flags
+                except ValueError:
                     # Can't append to file because it would be inconsistent.
                     return new
 
                 flg_grp = fl["flags"]
 
-                if "values" not in flg_grp:
-                    flg_grp.create_dataset(
-                        "values",
-                        data=flags[np.newaxis],
-                        maxshape=(None,) + new.data.shape,
-                        chunks=True,
-                    )
+                if "names" not in flg_grp.attrs:
+                    names_in_file = ()
                 else:
-                    v = flg_grp["values"]
+                    names_in_file = flg_grp.attrs["names"]
 
-                    if v.shape[0] < len(self.flags):
-                        # The file is inconsistent with the object, so we need to
-                        # delete it.
-                        del flg_grp["values"]
-                        flg_grp.create_dataset(
-                            "values",
-                            data=np.array(list(new.flags.values())),
-                            maxshape=(None,) + new.data.shape,
-                            chunks=True,
-                        )
-                    else:
-                        v.resize(v.shape[0] + 1, axis=0)
-                        v[-1] = flags
+                new_flags = tuple(k for k in new.flags.keys() if k not in names_in_file)
+
+                for name in new_flags:
+                    grp = flg_grp.create_group(name)
+                    hickle.dump(new.flags[name], grp)
 
                 flg_grp.attrs["names"] = tuple(new.flags.keys())
 
@@ -1118,322 +806,3 @@ class GSData:
         """Returns an iterator over the frequency axis of data-shape arrays."""
         for i in range(self.nfreqs):
             yield (slice(None), slice(None), slice(None), i)
-
-
-@define
-class GSDataModel:
-    """A model of a GSData object."""
-
-    model: mdl.Model = field()
-    parameters: np.ndarray = npfield()
-
-    @parameters.validator
-    def _params_vld(self, att, val):
-        if not isinstance(val, np.ndarray):
-            raise TypeError("parameters must be a numpy array")
-
-        if val.ndim != 4:
-            raise ValueError(
-                "parameters must have 4 dimensions (Nloads, Npol, Ntimes, Nparams)"
-            )
-
-        if val.shape[-1] != self.model.n_terms:
-            raise ValueError(
-                f"parameters array has {val.shape[-1]} parameters, "
-                f"but model has {self.model.n_terms}"
-            )
-
-    @property
-    def nloads(self) -> int:
-        """Number of loads in the model."""
-        return self.parameters.shape[0]
-
-    @property
-    def npols(self) -> int:
-        """Number of polarisations in the model."""
-        return self.parameters.shape[1]
-
-    @property
-    def ntimes(self) -> int:
-        """Number of times in the model."""
-        return self.parameters.shape[2]
-
-    @property
-    def nparams(self) -> int:
-        """Number of parameters in the model."""
-        return self.parameters.shape[3]
-
-    def get_residuals(self, gsdata: GSData) -> np.ndarray:
-        """Calculates the residuals of the model given the input GSData object."""
-        d = gsdata.spectra.reshape((-1, gsdata.nfreqs))
-        p = self.parameters.reshape((-1, gsdata.data_model.nparams))
-
-        model = self.model.at(x=gsdata.freq_array.to_value("MHz"))
-
-        resids = np.zeros_like(d)
-        for i, (dd, pp) in enumerate(zip(d, p)):
-            resids[i] = dd - model(parameters=pp)
-
-        resids.shape = gsdata.data.shape
-        return resids
-
-    def get_spectra(self, gsdata: GSData) -> np.ndarray:
-        """Calculates the data spectra given the input GSData object."""
-        d = gsdata.resids.reshape((-1, gsdata.nfreqs))
-        p = self.parameters.reshape((-1, self.nparams))
-
-        model = self.model.at(x=gsdata.freq_array.to_value("MHz"))
-
-        spectra = np.zeros_like(d)
-        for i, (dd, pp) in enumerate(zip(d, p)):
-            spectra[i] = dd + model(parameters=pp)
-
-        spectra.shape = gsdata.data.shape
-        return spectra
-
-    @classmethod
-    def from_gsdata(cls, model: mdl.Model, gsdata: GSData, **fit_kwargs) -> GSDataModel:
-        """Creates a GSDataModel from a GSData object."""
-        d = gsdata.spectra.reshape((-1, gsdata.nfreqs))
-        w = gsdata.flagged_nsamples.reshape((-1, gsdata.nfreqs))
-
-        xmodel = model.at(x=gsdata.freq_array.to_value("MHz"))
-
-        params = np.zeros((gsdata.nloads * gsdata.npols * gsdata.ntimes, model.n_terms))
-
-        for i, (dd, ww) in enumerate(zip(d, w)):
-            try:
-                params[i] = xmodel.fit(
-                    ydata=dd, weights=ww, **fit_kwargs
-                ).model_parameters
-            except np.linalg.LinAlgError as e:
-                raise ValueError(
-                    f"Linear algebra error: {e}.\nIndex={i}\ndata={dd}\nweights={ww}"
-                ) from e
-
-        params.shape = (gsdata.nloads, gsdata.npols, gsdata.ntimes, model.n_terms)
-        return cls(model=model, parameters=params)
-
-    def update(self, **kw) -> GSDataModel:
-        """Return a new GSDataModel instance with updated attributes."""
-        return evolve(self, **kw)
-
-    def write(self, fl: h5py.File | h5py.Group, path: str = ""):
-        """Write the object to an HDF5 file, potentially to a particular path."""
-        grp = fl.create_group(path) if path else fl
-        grp.attrs["model"] = yaml.dump(self.model)
-        grp.create_dataset("parameters", data=self.parameters)
-
-    @classmethod
-    def from_h5(cls, fl: h5py.File | h5py.Group, path: str = "") -> GSDataModel:
-        """Read the object from an HDF5 file, potentially from a particular path."""
-        grp = fl[path] if path else fl
-        model = yaml.load(grp.attrs["model"], Loader=yaml.FullLoader)
-        params = grp["parameters"][Ellipsis]
-        return cls(model=model, parameters=params)
-
-
-@gsregister("supplement")
-def add_model(data: GSData, *, model: mdl.Model, append_to_file: bool | None = None):
-    """Return a new GSData instance which contains a data model."""
-    new = data.update(data_model=GSDataModel.from_gsdata(model, data))
-
-    if append_to_file is None:
-        append_to_file = new.filename is not None
-
-    if append_to_file and new.filename is None:
-        raise ValueError(
-            "Cannot append to file without a filename specified on the object!"
-        )
-
-    if append_to_file:
-        with h5py.File(new.filename, "a") as fl:
-            if "data_model" in fl.keys():
-                logger.warning(
-                    f"Data model already exists in {new.filename}, not overwriting."
-                )
-            elif fl["data"].shape[:3] != new.data_model.parameters.shape[:3]:
-                logger.warning(
-                    "File on disk is incompatible with the data model. Write new file."
-                )
-            else:
-                new.data_model.write(fl, "data_model")
-
-    return new
-
-
-@gsregister("supplement")
-def swap_data(data: GSData):
-    """Swaps the data attribute in the GSdata object from spectra to residuals."""
-    if data.data_model is None:
-        raise ValueError("Cannot swap data attribute without add_model step")
-
-    return data.update(data=data.resids, data_unit="model_residuals")
-
-
-@gsregister("reduce")
-def select_freqs(
-    data: GSData,
-    *,
-    range: tuple[un.Quantity[un.MHz], un.Quantity[un.MHz]] | None = None,
-    indx: np.ndarray | None = None,
-) -> GSData:
-    """Selects a subset of the frequency channels."""
-    mask = None
-    if range is not None:
-        if not isinstance(range[0], un.Quantity):
-            logger.warning("frequency range given without units, assuming MHz.")
-            range = (range[0] * un.MHz, range[1] * un.MHz)
-
-        mask = (data.freq_array >= range[0]) & (data.freq_array <= range[1])
-
-    if indx is not None:
-        if mask is None:
-            mask = np.zeros(len(data.freq_array), dtype=bool)
-        mask[indx] = True
-
-    if mask is None:
-        return data
-
-    return data.update(
-        data=data.data[..., mask],
-        freq_array=data.freq_array[mask],
-        nsamples=data.nsamples[..., mask],
-        flags={k: v[..., mask] for k, v in data.flags.items()},
-    )
-
-
-def _mask_times(data: GSData, mask: np.ndarray) -> GSData:
-    if mask is None:
-        return data
-
-    return data.update(
-        data=data.data[:, :, mask],
-        time_array=data.time_array[mask],
-        time_ranges=data.time_ranges[mask],
-        auxiliary_measurements={
-            k: v[mask] for k, v in data.auxiliary_measurements.items()
-        },
-        nsamples=data.nsamples[:, :, mask],
-        flags={k: v[:, :, mask] for k, v in data.flags.items()},
-        data_model=data.data_model.update(
-            parameters=data.data_model.parameters[:, :, mask]
-        )
-        if data.data_model is not None
-        else None,
-    )
-
-
-@gsregister("reduce")
-def select_times(
-    data: GSData,
-    *,
-    range: tuple[Time | float, Time | float] | None = None,
-    fmt: str = "jd",
-    indx: np.ndarray | None = None,
-    load: int | str = "ant",
-) -> GSData:
-    """Selects a subset of the times."""
-    if data.in_lst:
-        raise ValueError("LST-binned data cannot be selected on times.")
-
-    if isinstance(load, str):
-        load = data.loads.index(load)
-
-    mask = None
-    if range is not None:
-        if len(range) != 2:
-            raise ValueError("range must be a length-2 tuple")
-
-        if not isinstance(range[0], Time):
-            range = (Time(range[0], format=fmt), Time(range[1], format=fmt))
-
-            t = data.time_array[:, load]
-            mask = (t >= range[0]) & (t <= range[1])
-
-    if indx is not None:
-        if mask is None:
-            mask = np.zeros((len(data.time_array),), dtype=bool)
-        mask[indx] = True
-
-    return _mask_times(data, mask)
-
-
-@gsregister("reduce")
-def select_lsts(
-    data: GSData,
-    *,
-    range: tuple[Longitude | float, Longitude | float] | None = None,
-    indx: np.ndarray | None = None,
-    load: int | str = "ant",
-    gha: bool = False,
-    use_alan_coordinates: bool = False,
-) -> GSData:
-    """Selects a subset of the times."""
-    if load == "all":
-        load = slice(None)
-    if isinstance(load, str):
-        load = data.loads.index(load)
-
-    mask = None
-    if range is not None:
-        if len(range) != 2:
-            raise ValueError("range must be a length-2 tuple")
-
-        if not isinstance(range[0], Longitude):
-            range = (range[0] % 24 * un.hourangle, range[1] % 24 * un.hourangle)
-
-        if use_alan_coordinates:
-            secs = np.array(
-                [
-                    crda.datetime_tosecs(dt)
-                    for dt in data.time_array[:, load].to_datetime().flatten()
-                ]
-            ).reshape(data.time_array[:, load].shape)
-            gst = crda.gst(secs)
-            if gha:
-                t = (
-                    (
-                        gst
-                        - (17.0 + 45.67 / 60.0) * np.pi / 12.0
-                        + data.telescope_location.lon.rad
-                    )
-                    * 12.0
-                    / np.pi
-                    * un.hourangle
-                )
-            else:
-                t = (
-                    (gst + data.telescope_location.lon.rad)
-                    * 12.0
-                    / np.pi
-                    * un.hourangle
-                )
-        else:
-            t = data.gha[:, load] if gha else data.lst_array[:, load]
-
-        # In case we have negative LST/GHA
-        t = t % (24 * un.hourangle)
-
-        if range[0] > range[1]:
-            mask = (t >= range[1]) & (t <= range[0])
-        else:
-            mask = (t >= range[0]) & (t <= range[1])
-
-        # Account for the case of load=='all' -- in this case require all loads
-        # to be within the range.
-        if mask.ndim == 2:
-            mask = np.all(mask, axis=1)
-
-    if indx is not None:
-        if mask is None:
-            mask = np.ones((len(data.time_array),), dtype=bool)
-
-        if indx.dtype == bool:
-            mask[~indx] = False
-        else:
-            for i in np.arange(data.ntimes):
-                if i not in indx:
-                    mask[i] = False
-
-    return _mask_times(data, mask)

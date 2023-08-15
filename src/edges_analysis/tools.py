@@ -120,7 +120,6 @@ def run_xrfi(
         else:
 
             def fnc(i):
-                print("DOING THIS ONE")
                 print(np.sum(weights[i]), len(weights[i]))
                 print(np.max(np.diff(weights[i])))
 
