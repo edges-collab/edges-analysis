@@ -8,19 +8,6 @@ from edges_cal import modelling as mdl
 
 from edges_analysis import GSData
 from edges_analysis.filters import filters, lst_model
-from edges_analysis.gsdata import add_model
-
-from .mock_gsdata import create_mock_edges_data
-
-
-@pytest.fixture(scope="module")
-def mock():
-    return create_mock_edges_data(add_noise=True)
-
-
-@pytest.fixture(scope="module")
-def mock_with_model(mock):
-    return add_model(data=mock, model=mdl.LinLog(n_terms=2))
 
 
 def test_aux_filter(mock):
@@ -48,9 +35,8 @@ def test_moon_filter(mock):
 
 
 def test_tp_filter(mock_with_model):
-    print(mock_with_model.data_model)
     run_filter_check(
-        mock_with_model,
+        [mock_with_model],
         lst_model.total_power_filter,
         write=False,
         metric_model=mdl.FourierDay(n_terms=3),
@@ -61,7 +47,7 @@ def test_tp_filter(mock_with_model):
 
 def test_rms_filter(mock):
     run_filter_check(
-        mock,
+        [mock],
         lst_model.rms_filter,
         write=False,
         metric_model=mdl.FourierDay(n_terms=3),
@@ -86,6 +72,8 @@ def run_filter_check(data: GSData, fnc: callable, **kwargs):
         assert fnc.__name__ in new_data.flags
         assert len(new_data.flags) - len(data.flags) == 1
     else:
+        print(len(new_data))
+        print(len(data))
         for nd, d in zip(new_data, data):
             assert nd.data.shape == d.data.shape
             assert fnc.__name__ in nd.flags
@@ -108,8 +96,8 @@ def test_max_fm_filter(mock):
     run_filter_check(mock, filters.maxfm_filter, threshold=200)
 
 
-def test_percent_power_filter(mock):
-    run_filter_check(mock, filters.power_percent_filter)
+def test_percent_power_filter(mock_power):
+    run_filter_check(mock_power, filters.power_percent_filter)
 
 
 def test_rfi_filter(mock):

@@ -589,9 +589,10 @@ class GSData:
             raise ValueError("Cannot add GSData objects with auxiliary measurements")
 
         nsamples = self.flagged_nsamples + other.flagged_nsamples
-        mean = (
-            self.flagged_nsamples * self.data + other.flagged_nsamples * other.data
-        ) / nsamples
+        d1 = np.ma.masked_array(self.data, mask=self.complete_flags)
+        d2 = np.ma.masked_array(other.data, mask=other.complete_flags)
+
+        mean = (self.flagged_nsamples * d1 + other.flagged_nsamples * d2) / nsamples
 
         if getattr(self.data_model, "model", 1) != getattr(
             other.data_model, "model", 2
@@ -601,11 +602,30 @@ class GSData:
                 "Result will have no data model."
             )
             data_model = None
-        else:
-            data_model = self.data_model.update(
-                parameters=self.data_model.parameters + other.data_model.parameters
+        elif self.data_model is not None and (
+            np.any(np.diff(self.flagged_nsamples, axis=-1) != 0)
+            or np.any(np.diff(other.flagged_nsamples, axis=-1) != 0)
+        ):
+            warnings.warn(
+                "Cannot add data models for objects with non-uniform nsamples over freq."
             )
-        return self.update(data=mean, nsamples=nsamples, data_model=data_model)
+            data_model = None
+        elif self.data_model is not None and other.data_model is not None:
+            mp1 = self.data_model.parameters.copy()
+            mp1[np.isnan(mp1)] = 0  # we're going to be multiplying by nsamples anyway
+            mp2 = other.data_model.parameters.copy()
+            mp2[np.isnan(mp2)] = 0
+
+            data_model = self.data_model.update(
+                parameters=(
+                    mp1 * self.flagged_nsamples[..., [0]]
+                    + mp2 * other.flagged_nsamples[..., [0]]
+                )
+                / nsamples[..., [0]]
+            )
+        else:
+            data_model = None
+        return self.update(data=mean.data, nsamples=nsamples, data_model=data_model)
 
     @cached_property
     def lst_array(self) -> Longitude:

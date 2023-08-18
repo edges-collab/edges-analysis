@@ -16,6 +16,9 @@ from edges_analysis.gsdata import (
     Stamp,
     add_model,
     gsregister,
+    select_freqs,
+    select_lsts,
+    select_times,
     swap_data,
 )
 
@@ -256,35 +259,35 @@ def test_select_lsts_and_times(power_gsdata):
     indx = np.zeros(50, dtype=bool)
     indx[::2] = True
 
-    lst = power_gsdata.select_lsts(indx=indx)
-    tm = power_gsdata.select_times(indx=indx)
+    lst = select_lsts(power_gsdata, indx=indx)
+    tm = select_times(power_gsdata, indx=indx)
 
     assert lst == tm
 
-    stime = power_gsdata.select_times(range=(2459811.5, 2459811.7))
+    stime = select_times(power_gsdata, range=(2459811.5, 2459811.7))
     assert stime != power_gsdata
 
 
 def test_select_lsts(power_gsdata: GSData):
     rng = (power_gsdata.lst_array.min().hour, power_gsdata.lst_array.max().hour)
 
-    new = power_gsdata.select_lsts(range=rng, load="all")
+    new = select_lsts(power_gsdata, lst_range=rng, load="all")
     assert new == power_gsdata
 
-    new = power_gsdata.select_lsts(range=rng, load="ant")
+    new = select_lsts(power_gsdata, lst_range=rng, load="ant")
     assert new == power_gsdata
 
     with pytest.raises(ValueError, match="range must be a length-2 tuple"):
-        power_gsdata.select_lsts(range=[0, 2, 3])
+        select_lsts(power_gsdata, lst_range=[0, 2, 3])
 
     # Use different order of range
-    new = power_gsdata.select_lsts(range=(-2, 4))
-    new2 = power_gsdata.select_lsts(range=(22, 4))
+    new = select_lsts(power_gsdata, lst_range=(-2, 4))
+    new2 = select_lsts(power_gsdata, lst_range=(22, 4))
     assert new == new2
 
     # Test with both indx and range
-    new = power_gsdata.select_lsts(range=rng, indx=np.arange(0, 50, 2))
-    new2 = power_gsdata.select_lsts(indx=np.arange(0, 50, 2))
+    new = select_lsts(power_gsdata, lst_range=rng, indx=np.arange(0, 50, 2))
+    new2 = select_lsts(power_gsdata, indx=np.arange(0, 50, 2))
 
     print(new.data.shape, new2.data.shape)
 
@@ -304,20 +307,8 @@ def test_select_lsts(power_gsdata: GSData):
 
 
 def test_select_freqs(simple_gsdata):
-    new = simple_gsdata.select_freqs(range=(50 * un.MHz, 70 * un.MHz))
+    new = select_freqs(simple_gsdata, freq_range=(50 * un.MHz, 70 * un.MHz))
     assert new.freq_array.max() <= 70 * un.MHz
-
-    new1 = simple_gsdata.select(freq_range=(50 * un.MHz, 70 * un.MHz))
-    assert new1 == new
-
-    new2 = simple_gsdata.select(freq_indx=np.arange(0, len(new1.freq_array)))
-    print(
-        new.freq_array.min(),
-        new.freq_array.max(),
-        new2.freq_array.min(),
-        new2.freq_array.max(),
-    )
-    assert new2 == new
 
 
 def test_add(simple_gsdata):

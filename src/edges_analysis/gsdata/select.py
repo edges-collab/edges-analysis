@@ -7,6 +7,7 @@ import warnings
 from astropy import units as un
 from astropy.coordinates import Longitude
 from astropy.time import Time
+from typing import Union
 
 from .. import _coordinates_alan as crda
 from .gsdata import GSData
@@ -16,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 FreqType = un.Quantity[un.MHz]
 FreqRangeType = tuple[FreqType, FreqType]
-LSTType = un.Quantity[un.hourangle] | Longitude
+LSTType = Union[un.Quantity[un.hourangle], Longitude]
 LSTRangeType = tuple[LSTType, LSTType]
 
 
@@ -161,7 +162,7 @@ def select_lsts(
         load = data.loads.index(load)
 
     mask = None
-    if range is not None:
+    if lst_range is not None:
         if len(lst_range) != 2:
             raise ValueError("range must be a length-2 tuple")
 
@@ -225,3 +226,10 @@ def select_lsts(
                     mask[i] = False
 
     return _mask_times(data, mask)
+
+
+@gsregister("reduce")
+def prune_flagged_integrations(data: GSData, **kwargs) -> GSData:
+    """Removes integrations that are flagged for all freq-pol-loads."""
+    flg = np.all(data.complete_flags, axis=(0, 1, 3))
+    return _mask_times(data, ~flg)

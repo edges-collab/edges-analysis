@@ -130,7 +130,7 @@ class GSFlag:
         return new.update(filename=filename)
 
     def update(self, **kwargs) -> Self:
-        """Returns a new GSData object with updated attributes."""
+        """Returns a new GSFlag object with updated attributes."""
         # If the user passes a single dictionary as history, append it.
         # Otherwise raise an error, unless it's not passed at all.
         history = kwargs.pop("history", None)
@@ -138,8 +138,12 @@ class GSFlag:
             history = self.history.add(history)
         elif isinstance(history, dict):
             history = self.history.add(Stamp(**history))
+        elif isinstance(history, History):
+            history = self.history
         elif history is not None:
-            raise ValueError("History must be a Stamp object or dictionary")
+            raise ValueError(
+                f"History must be a Stamp object or dictionary, got {history}"
+            )
         else:
             history = self.history
 
@@ -250,6 +254,11 @@ class GSFlag:
         if axis not in ("load", "pol", "time", "freq"):
             raise ValueError(f"Axis {axis} not recognized")
 
+        if isinstance(idx, slice):
+            idx = np.arange(*idx.indices(self.flags.shape[self.axes.index(axis)]))
+        elif idx.dtype == bool:
+            idx = np.where(idx)[0]
+
         # Do nothing if the axis is not present
         if axis not in self.axes:
             return self
@@ -267,12 +276,13 @@ class GSFlag:
         else:
             axes = self.axes
 
+        history = self.history.add(
+            Stamp("Selected subset of data", parameters={"axis": axis, "idx": idx})
+        )
         return self.update(
             flags=new_flags,
             axes=axes,
-            history=self.history.add(
-                Stamp("Selected subset of data", axis=axis, idx=idx)
-            ),
+            history=history,
             filename=None,
         )
 

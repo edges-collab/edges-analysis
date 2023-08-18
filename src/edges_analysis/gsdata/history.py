@@ -168,9 +168,15 @@ class History:
         """Add a stamp to the history."""
         if isinstance(stamp, dict):
             stamp = Stamp(**stamp)
+        if not isinstance(stamp, Stamp):
+            raise TypeError("stamp must be a Stamp or a dictionary")
 
         return evolve(self, stamps=self.stamps + (stamp,))
 
     def __len__(self):
         """Returns the number of stamps."""
         return len(self.stamps)
+
+    def __iter__(self):
+        """Iterate over the stamps."""
+        return iter(self.stamps)

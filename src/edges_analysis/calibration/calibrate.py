@@ -505,7 +505,9 @@ def apply_beam_correction(
         beam = beam.at_lsts(new_beam_lsts)
 
     new_data = data.spectra.copy()
+
     for i, (lst0, lst1) in enumerate(data.lst_ranges[:, 0, :]):
+        print("BEAM CORR:", i, lst0, lst1)
         new = beam.between_lsts(lst0.hour, lst1.hour)
         if integrate_before_ratio:
             new_data[:, :, i] /= new.get_integrated_beam_factor(

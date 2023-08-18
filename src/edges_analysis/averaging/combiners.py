@@ -33,7 +33,6 @@ def lst_average(*objs) -> GSData:
 
     out = objs[0]
     for obj in objs[1:]:
-        print(out.data)
         out += obj
     return out
 

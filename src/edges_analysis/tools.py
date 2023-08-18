@@ -120,9 +120,6 @@ def run_xrfi(
         else:
 
             def fnc(i):
-                print(np.sum(weights[i]), len(weights[i]))
-                print(np.max(np.diff(weights[i])))
-
                 if np.any(weights[i] > 0):
                     return rfi(spectrum[i], freq=freq, weights=weights[i], **kwargs)[0]
                 else:

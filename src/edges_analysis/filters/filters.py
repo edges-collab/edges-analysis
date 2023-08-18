@@ -183,9 +183,6 @@ def chunked_iterative_model_filter(
     while xmin < x.max():
         mask = (x >= xmin) & (x < xmin + chunk_size)
 
-        print(x[mask])
-        print("flags", np.sum(out_flags[mask]))
-        print("init flags", np.sum(init_flags[mask]))
         out_flags[mask], info = model_filter(
             x=x[mask],
             data=data[mask],
@@ -591,7 +588,7 @@ def peak_orbcomm_filter(
             "load",
             "pol",
             "time",
-        ),
+        )[-flags.ndim :],
     )
 
 
@@ -707,9 +704,6 @@ def filter_150mhz(*, data: GSData, threshold: float):
     av = np.mean(data.spectrum[..., freq_mask2], axis=-1)
     d = 200.0 * np.sqrt(rms) / av
 
-    print(d.shape)
-    for name, flg in data.flags.items():
-        print(name, flg.ntimes)
     return GSFlag(
         flags=d > threshold,
         axes=(
@@ -744,7 +738,7 @@ def power_percent_filter(
     mask = (freqs > freq_range[0]) & (freqs <= freq_range[1])
 
     if not np.any(mask):
-        return GSData(flags=np.zeros(data.ntimes, dtype=bool), axes=("time",))
+        return GSFlag(flags=np.zeros(data.ntimes, dtype=bool), axes=("time",))
 
     ppercent = 100 * np.sum(p0[..., mask], axis=-1) / np.sum(p0, axis=-1)
     return GSFlag(

@@ -7,7 +7,7 @@ from astropy import units as un
 from astropy.coordinates import Longitude
 
 from .. import coordinates as crd
-from ..gsdata import GSData, add_model, gsregister
+from ..gsdata import GSData, GSFlag, add_model, gsregister
 from .averaging import bin_array_biased_regular, bin_gha_unbiased_regular
 
 
@@ -100,7 +100,7 @@ def lst_bin_direct(
             bins=bins,
         )
     times = Longitude((bins[1:] + bins[:-1]) / 2 * un.hour)
-    return data.update(
+    data = data.update(
         time_array=np.repeat(times, data.data.shape[0]).reshape(
             (len(times), data.data.shape[0])
         ),
@@ -113,8 +113,14 @@ def lst_bin_direct(
         ),
         data=specs,
         nsamples=wghts,
-        flags={},
+        flags={
+            "empty_lsts": GSFlag(
+                flags=np.all(np.isnan(specs), axis=(0, 1, 3)), axes=("time",)
+            )
+        },
     )
+
+    return data
 
 
 @gsregister("reduce")
@@ -166,11 +172,6 @@ def lst_bin_with_models(
     lsts %= 24
     lsts[lsts < bins[0]] += 24
 
-    # Get only non-empty bins
-    idx = np.digitize(lsts, bins) - 1
-    idx = np.sort(np.unique(idx[(idx >= 0) & (idx < len(bins))]))
-    bins = bins[idx]
-
     params = np.zeros((data.nloads, data.npols, len(bins) - 1, data.data_model.nparams))
     resids = np.zeros((data.nloads, data.npols, len(bins) - 1, data.nfreqs))
     nsmpls = np.zeros_like(resids)
@@ -192,10 +193,12 @@ def lst_bin_with_models(
     times = (bins[1:] + bins[:-1]) / 2
     times = Longitude(np.tile(times, (data.nloads, 1)).T * un.hour)
 
-    return data.update(
+    # Flag anything that is all nan -- these are just empty LSTs.
+    flg = GSFlag(flags=np.all(np.isnan(resids), axis=(0, 1, 3)), axes=("time",))
+    data = data.update(
         data=resids,
         nsamples=nsmpls,
-        flags={},
+        flags={"empty_lsts": flg},
         time_array=times,
         time_ranges=Longitude(
             np.tile(np.array([bins[:-1], bins[1:]]).T[:, None, :], (1, data.nloads, 1))
@@ -204,6 +207,7 @@ def lst_bin_with_models(
         data_unit="model_residuals",
         data_model=data.data_model.update(parameters=params),
     )
+    return data
 
 
 @gsregister("reduce")

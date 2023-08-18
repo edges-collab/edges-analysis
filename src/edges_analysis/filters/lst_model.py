@@ -324,7 +324,6 @@ def get_gha_model_filter(
     # Aggregate the data for each file along the frequency axis.
     gha, metric, indx_map = aggregator.aggregate(data)
     init_flags = aggregator.get_init_flags(gha, metric)
-    print("HERE INIT: ", np.sum(init_flags), len(init_flags))
 
     if detrend_metric_model is None:
         detrend_metric_model = metric_model

@@ -9,6 +9,7 @@ from astropy import units as apu
 from .averaging import averaging
 from .averaging.lstbin import lst_bin
 from .gsdata import GSData, add_model
+from .gsdata.select import select_lsts
 
 
 def plot_waterfall(
@@ -160,8 +161,7 @@ def plot_time_average(
         fig, ax = plt.subplots(1, 1)
 
     if lst_min > 0 or lst_max < 24:
-        data = data.select_lsts(range=(lst_min, lst_max))
-
+        data = select_lsts(data, lst_range=(lst_min, lst_max))
     data = lst_bin(data, binsize=24.0)
 
     q = getattr(data, attribute)

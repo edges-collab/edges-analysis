@@ -477,7 +477,6 @@ def bin_gha_unbiased_regular(
 
     assert gha.ndim == 1
 
-    included_bins = []
     for i, bin_low in enumerate(bins[:-1]):
         bin_high = bins[i + 1]
         bin_low %= 24
@@ -503,7 +502,6 @@ def bin_gha_unbiased_regular(
         resids_out[i], weights_out[i] = weighted_mean(
             these_resids, weights=these_weights, axis=0
         )
-        included_bins.append(i)
 
     return params_out, resids_out, weights_out
 

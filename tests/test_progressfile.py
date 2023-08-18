@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 from click.testing import CliRunner
 
 from edges_analysis import cli
@@ -167,6 +168,8 @@ def test_delete_file(workflow, integration_test_data):
             "--no-mem-check",
         ],
     )
+
+    shutil.copy(workdir / "progressfile.yaml", workdir / "progressfile.yaml.bak")
 
     assert (workdir / "2016_292_00_small.gsh5").exists()
     assert (workdir / "2016_295_00_small.gsh5").exists()
