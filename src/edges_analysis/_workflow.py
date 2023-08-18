@@ -242,7 +242,7 @@ class ProgressFile:
         start_changing = False
         for i, step in enumerate(workflow):
             if i >= len(self):
-                # This is the case when new steps are added to the workflow since 
+                # This is the case when new steps are added to the workflow since
                 # last run.
                 self.workflow.append(step)
             else:
