@@ -23,28 +23,16 @@ class _Register:
 
         from .gsdata import GSData
 
+        history = {
+            "message": message,
+            "function": self.func.__name__,
+            "parameters": kw,
+            "timestamp": now,
+        }
         if isinstance(newdata, GSData):
-            return newdata.update(
-                history={
-                    "message": message,
-                    "function": self.func.__name__,
-                    "parameters": kw,
-                    "timestamp": now,
-                },
-            )
-
+            return newdata.update(history=history)
         try:
-            return [
-                nd.update(
-                    history={
-                        "message": message,
-                        "function": self.func.__name__,
-                        "parameters": kw,
-                        "timestamp": now,
-                    },
-                )
-                for nd in newdata
-            ]
+            return [nd.update(history=history) for nd in newdata]
         except Exception as e:
             raise TypeError(
                 f"{self.func.__name__} returned {type(newdata)} "

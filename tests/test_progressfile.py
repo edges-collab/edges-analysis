@@ -182,9 +182,6 @@ def test_delete_file(workflow, integration_test_data):
     (workdir / "cal/2016_292_00_small.gsh5").unlink()
     (workdir / "cal/2016_295_00_small.gsh5").unlink()
 
-    if (workdir / "cal/2016_295_00_small.gsh5").exists():
-        assert False
-
     res = invoke(
         cli.process,
         [

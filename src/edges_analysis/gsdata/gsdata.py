@@ -13,7 +13,7 @@ import hickle
 import logging
 import numpy as np
 import warnings
-from astropy.coordinates import EarthLocation, Longitude
+from astropy.coordinates import EarthLocation, Longitude, UnknownSiteException
 from astropy.time import Time
 from attrs import converters as cnv
 from attrs import define, evolve, field
@@ -24,6 +24,7 @@ from typing import Iterable, Literal
 
 from .. import coordinates as crd
 from .attrs import npfield, timefield
+from .constants import KNOWN_LOCATIONS
 from .gsflag import GSFlag
 from .history import History, Stamp
 
@@ -321,7 +322,9 @@ class GSData:
         return self.data.shape[1]
 
     @classmethod
-    def read_acq(cls, filename: str | Path, **kw) -> GSData:
+    def read_acq(
+        cls, filename: str | Path, telescope_location: str | EarthLocation, **kw
+    ) -> GSData:
         """Read an ACQ file."""
         try:
             from read_acq import read_acq
@@ -334,6 +337,17 @@ class GSData:
 
         times = Time(anc.data.pop("times"), format="yday", scale="utc")
 
+        if isinstance(telescope_location, str):
+            try:
+                telescope_location = EarthLocation.of_site(telescope_location)
+            except UnknownSiteException:
+                try:
+                    telescope_location = KNOWN_LOCATIONS[telescope_location]
+                except KeyError:
+                    raise ValueError(
+                        "telescope_location must be an EarthLocation or a known site, "
+                        f"got {telescope_location}"
+                    )
         return cls(
             data=np.array([pant.T, pload.T, plns.T])[:, np.newaxis],
             time_array=times,
@@ -342,6 +356,7 @@ class GSData:
             loads=("ant", "internal_load", "internal_load_plus_noise_source"),
             auxiliary_measurements={name: anc.data[name] for name in anc.data},
             filename=filename,
+            telescope_location=telescope_location,
             **kw,
         )
 
@@ -607,7 +622,8 @@ class GSData:
             or np.any(np.diff(other.flagged_nsamples, axis=-1) != 0)
         ):
             warnings.warn(
-                "Cannot add data models for objects with non-uniform nsamples over freq."
+                "Cannot add data models for objects with non-uniform nsamples "
+                "over freq."
             )
             data_model = None
         elif self.data_model is not None and other.data_model is not None:
