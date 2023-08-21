@@ -83,7 +83,7 @@ import yaml
 from frozendict import frozendict
 from jinja2 import Template
 from pathlib import Path
-from typing import Any, Iterable, Union
+from typing import Any, Iterable, Tuple, Union
 
 from .gsdata import GSDATA_PROCESSORS
 
@@ -117,7 +117,7 @@ class FileMapEntry:
         }
 
 
-_FileMapType = tuple[Iterable[Pathy], Iterable[Pathy]]
+_FileMapType = Tuple[Iterable[Pathy], Iterable[Pathy]]
 
 
 def _filemap_converter(
