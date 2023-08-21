@@ -7,7 +7,7 @@ import warnings
 from astropy import units as un
 from astropy.coordinates import Longitude
 from astropy.time import Time
-from typing import Union
+from typing import Tuple, Union
 
 from .. import _coordinates_alan as crda
 from .gsdata import GSData
@@ -16,9 +16,9 @@ from .register import gsregister
 logger = logging.getLogger(__name__)
 
 FreqType = un.Quantity[un.MHz]
-FreqRangeType = tuple[FreqType, FreqType]
+FreqRangeType = Tuple[FreqType, FreqType]
 LSTType = Union[un.Quantity[un.hourangle], Longitude]
-LSTRangeType = tuple[LSTType, LSTType]
+LSTRangeType = Tuple[LSTType, LSTType]
 
 
 @gsregister("supplement")
