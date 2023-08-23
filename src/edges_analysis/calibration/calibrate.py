@@ -28,7 +28,8 @@ def dicke_calibration(data: GSData) -> GSData:
     iload = data.loads.index("internal_load")
     ilns = data.loads.index("internal_load_plus_noise_source")
 
-    q = (data.data[iant] - data.data[iload]) / (data.data[ilns] - data.data[iload])
+    with np.errstate(divide="ignore", invalid="ignore"):
+        q = (data.data[iant] - data.data[iload]) / (data.data[ilns] - data.data[iload])
 
     return data.update(
         data=q[np.newaxis],
@@ -507,7 +508,6 @@ def apply_beam_correction(
     new_data = data.spectra.copy()
 
     for i, (lst0, lst1) in enumerate(data.lst_ranges[:, 0, :]):
-        print("BEAM CORR:", i, lst0, lst1)
         new = beam.between_lsts(lst0.hour, lst1.hour)
         if integrate_before_ratio:
             new_data[:, :, i] /= new.get_integrated_beam_factor(

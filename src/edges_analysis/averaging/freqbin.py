@@ -58,7 +58,7 @@ def freq_bin_with_models(
     if data.data_model is None:
         data = add_model(data, model=model, append_to_file=False)
 
-    # Averaging data within GHA bins
+    # Averaging data within freq bins
     f, weights, _, resids, params = bin_freq_unbiased_regular(
         model=data.data_model.model,
         params=data.data_model.parameters.reshape((-1, data.data_model.model.n_terms)),
@@ -86,6 +86,7 @@ def gauss_smooth(
     decimate_at: int = None,
     flag_threshold: float = 0,
     maintain_flags: bool = False,
+    use_residuals: bool | None = None,
 ) -> np.ndarray:
     """Smooth data with a Gaussian function, and reduce the size of the array.
 
@@ -112,7 +113,16 @@ def gauss_smooth(
         that were originally flagged will be flagged in the output. The default
         behaviour is to simply sum all weights within the window, but Alan's code
         uses this feature.
+    use_residuals
+        Whether to smooth the residuals to a model fit instead of the spectrum
+        itself. By default, this is ``True`` if a model is present in the data.
     """
+    if use_residuals is None:
+        use_residuals = data.data_model is not None
+
+    if use_residuals and data.data_model is None:
+        raise ValueError("Cannot smooth residuals without a model in the data!")
+
     assert isinstance(size, int)
     if decimate:
         if decimate_at is None:
@@ -128,8 +138,13 @@ def gauss_smooth(
     decimate = size if decimate else 1
 
     # mask data and flagged samples wherever it is NaN
-    data_mask = np.where(np.isnan(data.data), 0, data.data)
-    f_nsamples = np.where(np.isnan(data.data), 0, data.flagged_nsamples)
+    if use_residuals:
+        dd = data.resids
+    else:
+        dd = data.spectrum
+
+    data_mask = np.where(np.isnan(dd), 0, dd)
+    f_nsamples = np.where(np.isnan(dd), 0, data.flagged_nsamples)
 
     sums = convolve1d(data.flagged_nsamples * data_mask, window, mode="nearest")[
         ..., decimate_at::decimate
@@ -150,6 +165,8 @@ def gauss_smooth(
         nsamples=nsamples,
         flags={},
         freq_array=data.freq_array[decimate_at::decimate],
+        data_model=None,
+        data_unit="model_residuals" if use_residuals else data.unit,
     )
 
 

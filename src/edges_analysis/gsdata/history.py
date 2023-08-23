@@ -10,10 +10,12 @@ import read_acq
 import yaml
 from attrs import asdict, define, evolve, field
 from attrs import validators as vld
+from hickleable import hickleable
 
 from .. import __version__
 
 
+@hickleable()
 @define(frozen=True)
 class Stamp:
     """Class representing a historical record of a process applying to an object.
@@ -111,6 +113,7 @@ class Stamp:
         return cls(**d)
 
 
+@hickleable()
 @define(slots=False)
 class History:
     """A collection of Stamp objects defining the history."""

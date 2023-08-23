@@ -176,13 +176,10 @@ def process(
         progress = wf.ProgressFile.create(progressfile, steps, input_files)
     else:
         progress = wf.ProgressFile.read(progressfile)
+        progress.harmonize_with_workflow(steps, exit_on_inconsistent, start)
 
         if input_files:
-            # TODO: I think this is wrong!
-            # Here we're appending the input files.
             progress.add_inputs(input_files)
-
-    progress.harmonize_with_workflow(steps, exit_on_inconsistent, start)
 
     if stop and stop not in steps:
         raise ValueError(
