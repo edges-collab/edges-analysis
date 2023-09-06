@@ -20,6 +20,7 @@ from attrs import define, evolve, field
 from attrs import validators as vld
 from functools import cached_property
 from pathlib import Path
+from read_acq.read_acq import ACQError
 from typing import Iterable, Literal
 
 from .. import coordinates as crd
@@ -309,6 +310,9 @@ class GSData:
             ) from e
 
         _, (pant, pload, plns), anc = read_acq.decode_file(filename, meta=True)
+
+        if pant.size == 0:
+            raise ACQError(f"No data in file {filename}")
 
         times = Time(anc.data.pop("times"), format="yday", scale="utc")
 

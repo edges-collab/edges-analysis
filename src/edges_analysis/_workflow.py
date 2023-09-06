@@ -163,6 +163,12 @@ class FileMap:
         """Add to the filemap."""
         self.maps.update(_filemap_converter(maps))
 
+    def remove(self, fl: Pathy):
+        """Remove an input file from the filemap."""
+        for fmap in list(self.maps):
+            if Path(fl) in fmap.inputs:
+                self.maps.remove(fmap)
+
     def as_yamlable(self) -> list[_FileMapType]:
         """Get the filemap as a YAML-serializable object."""
         return [m.asdict() for m in self.maps]
@@ -279,6 +285,10 @@ class WorkflowStep:
     def add_to_filemap(self, maps: Iterable[FileMapEntry | dict | _FileMapType]):
         """Add to the filemap."""
         self.filemap.add(maps)
+
+    def remove_from_filemap(self, fl: Pathy):
+        """Remove an input file from the filemap."""
+        self.filemap.remove(fl)
 
 
 @attrs.define()
@@ -422,6 +432,41 @@ class ProgressFile:
 
         # We also need to remove files that are gotten by combining datafiles,
         # because if we're adding new inputs, these files will end up changing.
+        blastoff = False
+        for step in self:
+            if step.name == "convert":
+                continue
+
+            if step.kind == "gather":
+                blastoff = True
+
+            if blastoff:
+                for fl in step.get_all_outputs():
+                    if Path(fl).exists():
+                        Path(fl).unlink()
+                step.filemap.clear()
+
+        self.workflow.write_as_progressfile(self.path)
+
+    def remove_inputs(self, inputs: Iterable[Path]):
+        """Remove inputs from the progressfile."""
+        inputs = list(map(Path, inputs))
+        if "convert" not in self:
+            raise ValueError(
+                "Cannot remove inputs from a progressfile with no convert step."
+            )
+
+        current = self["convert"].get_all_inputs()
+
+        if not any(p in current for p in inputs):
+            # Everything's there already, do nothing.
+            return
+
+        for inp in inputs:
+            self["convert"].remove_from_filemap(inp)
+
+        # We also need to remove files that are gotten by combining datafiles,
+        # because if we're remove new inputs, these files will end up changing.
         blastoff = False
         for step in self:
             if step.name == "convert":

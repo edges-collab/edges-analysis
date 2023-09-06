@@ -16,6 +16,7 @@ from edges_io import io
 from functools import partial
 from pathlib import Path
 from pathos.multiprocessing import ProcessPool as Pool
+from read_acq.read_acq import ACQError
 from rich import box
 from rich.console import Console
 from rich.logging import RichHandler
@@ -228,7 +229,13 @@ def process(
         else:
             # For the convert step, the from_file method IS the step, so we need to
             # pass the parameters, if any.
-            data = [GSData.from_file(f, **step.params) for f in files]
+            data = []
+            for fl in files:
+                try:
+                    data.append(GSData.from_file(fl, **step.params))
+                except ACQError as e:
+                    logger.warning(f"Could not read {fl}: {e}")
+                    progress.remove_inputs([fl])
 
         if not data:
             console.print(f"{stepname} does not need to run on any files.")
