@@ -649,7 +649,10 @@ class GSData:
         return out
 
     def add_flags(
-        self, filt: str, flags: np.ndarray | GSFlag, append_to_file: bool | None = None
+        self,
+        filt: str,
+        flags: np.ndarray | GSFlag | Path,
+        append_to_file: bool | None = None,
     ):
         """Append a set of flags to the object and optionally append them to file.
 
@@ -658,6 +661,8 @@ class GSData:
         """
         if isinstance(flags, np.ndarray):
             flags = GSFlag(flags=flags, axes=("load", "pol", "time", "freq"))
+        elif isinstance(flags, str | Path):
+            flags = GSFlag.from_file(flags)
 
         flags._check_compat(self)
 
@@ -667,9 +672,9 @@ class GSData:
         new = self.update(flags={**self.flags, **{filt: flags}})
 
         if append_to_file is None:
-            append_to_file = new.filename is not None
+            append_to_file = new.filename is not None and new._file_appendable
 
-        if append_to_file and new.filename is None:
+        if append_to_file and new.filename is None or not new._file_appendable:
             raise ValueError(
                 "Cannot append to file without a filename specified on the object!"
             )

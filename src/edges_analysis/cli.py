@@ -324,10 +324,15 @@ def interpolate_step_params(params: dict, data: GSData) -> dict:
         "prev_stem": data.filename.stem,
         "prev_dir": data.filename.parent,
     }
-    if isinstance(data.year, int):
-        interpolators["year"] = data.year
-    if isinstance(data.day, int):
-        interpolators["day"] = data.day
+    try:
+        yearday = data.get_initial_yearday()
+        year = int(yearday.split(":")[0])
+        day = int(yearday.split(":")[1])
+        interpolators["year"] = year
+        interpolators["day"] = day
+
+    except ValueError:
+        pass
 
     out = {}
     for k, v in params.items():
