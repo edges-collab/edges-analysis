@@ -7,6 +7,7 @@ import functools
 from typing import Callable, Literal
 
 from .gsdata import GSData
+from .gsflag import GSFlag
 
 
 class _Register:
@@ -20,8 +21,6 @@ class _Register:
     ) -> GSData | list[GSData]:
         now = datetime.datetime.now()
         newdata = self.func(data, *args, **kw)
-
-        from .gsdata import GSData
 
         history = {
             "message": message,
@@ -67,3 +66,12 @@ class gsregister:  # noqa: N801
         out = _Register(func, self.kind)
         GSDATA_PROCESSORS[func.__name__] = out
         return out
+
+
+# Some simple registered functions
+
+
+@gsregister("supplement")
+def add_flags(data: GSData, filt: str, flags: GSFlag) -> GSData:
+    """Add flags to a GSData object."""
+    return data.add_flags(filt, flags)

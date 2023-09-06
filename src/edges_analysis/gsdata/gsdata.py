@@ -661,7 +661,7 @@ class GSData:
         """
         if isinstance(flags, np.ndarray):
             flags = GSFlag(flags=flags, axes=("load", "pol", "time", "freq"))
-        elif isinstance(flags, str | Path):
+        elif isinstance(flags, (str, Path)):
             flags = GSFlag.from_file(flags)
 
         flags._check_compat(self)
@@ -674,7 +674,7 @@ class GSData:
         if append_to_file is None:
             append_to_file = new.filename is not None and new._file_appendable
 
-        if append_to_file and new.filename is None or not new._file_appendable:
+        if append_to_file and (new.filename is None or not new._file_appendable):
             raise ValueError(
                 "Cannot append to file without a filename specified on the object!"
             )

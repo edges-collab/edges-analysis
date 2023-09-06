@@ -36,7 +36,7 @@ class _GSDataFilter:
         self,
         data: Sequence[tp.PathLike | GSData],
         *,
-        write: bool = False,
+        write: bool | None = None,
         flag_id: str = None,
         **kwargs,
     ) -> GSData | Sequence[GSData]:
