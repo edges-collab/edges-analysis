@@ -16,7 +16,7 @@ from .. import __version__
 
 
 @hickleable()
-@define(frozen=True)
+@define(frozen=True, slots=False)
 class Stamp:
     """Class representing a historical record of a process applying to an object.
 

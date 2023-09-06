@@ -136,7 +136,9 @@ class GSFlag:
 
     def write_gsflag(self, filename: str) -> Self:
         """Writes the data in the GSData object to a GSH5 file."""
-        new = self.update(history=Stamp("Wrote GSFlag file", filename=filename))
+        new = self.update(
+            history=Stamp("Wrote GSFlag file", parameters={"filename": filename})
+        )
         hickle.dump(new, filename, mode="w")
         return new.update(filename=filename)
 

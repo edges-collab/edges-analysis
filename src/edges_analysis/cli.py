@@ -11,9 +11,9 @@ import psutil
 import shutil
 import time
 import tqdm
+import yaml
 from collections import defaultdict
 from edges_io import io
-from functools import partial
 from pathlib import Path
 from pathos.multiprocessing import ProcessPool as Pool
 from read_acq.read_acq import ACQError
@@ -318,6 +318,27 @@ def write_data(data: GSData, step: dict, outdir=None):
     return data.write_gsh5(fname)
 
 
+def interpolate_step_params(params: dict, data: GSData) -> dict:
+    """String-interpolation for step parameters, from attributes of the data."""
+    interpolators = {
+        "prev_stem": data.filename.stem,
+        "prev_dir": data.filename.parent,
+    }
+    if isinstance(data.year, int):
+        interpolators["year"] = data.year
+    if isinstance(data.day, int):
+        interpolators["day"] = data.day
+
+    out = {}
+    for k, v in params.items():
+        if isinstance(v, str):
+            out[k] = yaml.safe_load(v.format(**interpolators))
+        else:
+            out[k] = v
+
+    return out
+
+
 def perform_step_on_object(
     data: GSData,
     progress: wf.ProgressFile,
@@ -350,8 +371,6 @@ def perform_step_on_object(
     else:
         params = step.params
 
-    this_fnc = partial(step._function, **params)
-
     def run_process_with_memory_checks(data: GSData):
         if data.complete_flags.all():
             return
@@ -379,8 +398,10 @@ def perform_step_on_object(
                 logger.warning(f"Resuming processing on pid={os.getpid()}")
 
         logger.debug(f"Initial memory: {pr.memory_info().rss / 1024**2} MB")
+
+        interp_params = interpolate_step_params(params, data)
         try:
-            data = this_fnc(data)
+            data = step._function(data, **interp_params)
         except WeatherError as e:
             logger.warning(str(e))
             return
