@@ -21,15 +21,6 @@ LSTType = Union[un.Quantity[un.hourangle], Longitude]
 LSTRangeType = Tuple[LSTType, LSTType]
 
 
-@gsregister("supplement")
-def swap_data(data: GSData):
-    """Swaps the data attribute in the GSdata object from spectra to residuals."""
-    if data.data_model is None:
-        raise ValueError("Cannot swap data attribute without add_model step")
-
-    return data.update(data=data.resids, data_unit="model_residuals")
-
-
 @gsregister("reduce")
 def select_freqs(
     data: GSData,
@@ -83,11 +74,7 @@ def _mask_times(data: GSData, mask: np.ndarray) -> GSData:
         },
         nsamples=data.nsamples[:, :, mask],
         flags={k: v.select(idx=mask, axis="time") for k, v in data.flags.items()},
-        data_model=data.data_model.update(
-            parameters=data.data_model.parameters[:, :, mask]
-        )
-        if data.data_model is not None
-        else None,
+        residuals=data.residuals[:, :, mask] if data.residuals is not None else None,
     )
 
 

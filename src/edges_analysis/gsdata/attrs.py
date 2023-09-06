@@ -1,6 +1,7 @@
 """Utilities for attrs used in GSData."""
 from __future__ import annotations
 
+import attrs
 import numpy as np
 from astropy import units as un
 from astropy.coordinates import Longitude
@@ -17,6 +18,7 @@ def ndim_validator(ndim: int | tuple[int, ...]):
 
     def validator(inst, att, value):
         if value.ndim not in ndim:
+            print(att.validator, value)
             raise ValueError(f"{att.name} must have ndim in {ndim}, got {value.ndim}")
 
     return validator
@@ -37,11 +39,17 @@ def shape_validator(shape: tuple[int | None, ...]):
     return validator
 
 
-def array_converter(dtype=None):
+def array_converter(dtype=None, allow_none=False):
     """Construct an attrs converter to make arrays from other iterables."""
 
-    def _converter(x: np.ArrayLike | Quantity):
+    def _converter(x: np.ArrayLike | Quantity | None):
         """Convert an array to a numpy array."""
+        if x is None:
+            if not allow_none:
+                raise ValueError("None is not allowed")
+            else:
+                return None
+
         if not isinstance(x, (Quantity, Time, Longitude)):
             return np.asarray(x, dtype=dtype)
         else:
@@ -71,15 +79,34 @@ def npfield(
     shape: tuple[int | None] | None = None,
     unit: un.Unit | None | str = None,
     validator: list | None | Callable = None,
+    required: bool | None = None,
     **kwargs,
 ):
     """Construct an attrs field for a numpy array."""
+    if kwargs.get("default", 1) is None and required is None:
+        required = False
+    elif required is None:
+        required = True
+
     if dtype is bool:
-        cmp = np.array_equal
+
+        def cmp(x, y):
+            if x is None and y is None:
+                return True
+            elif x is None or y is None:
+                return False
+            else:
+                return np.array_equal(x, y)
+
     else:
 
         def cmp(x, y):
-            return x.shape == y.shape and np.allclose(x, y)
+            if x is None and y is None:
+                return True
+            elif x is None or y is None:
+                return False
+            else:
+                return x.shape == y.shape and np.allclose(x, y)
 
     if validator is None:
         validator = []
@@ -98,9 +125,16 @@ def npfield(
         validator.append(unit_validator(unit))
 
     if validator:
-        kwargs["validator"] = validator
+        if required:
+            kwargs["validator"] = validator
+        else:
+            kwargs["validator"] = attrs.validators.optional(validator)
 
-    return field(eq=cmp_using(cmp), converter=array_converter(dtype=dtype), **kwargs)
+    return field(
+        eq=cmp_using(cmp),
+        converter=array_converter(dtype=dtype, allow_none=not required),
+        **kwargs,
+    )
 
 
 def timefield(

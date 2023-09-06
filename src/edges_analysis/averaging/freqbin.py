@@ -6,75 +6,50 @@ import numpy as np
 from astropy import units as un
 from scipy.ndimage import convolve1d
 
-from ..gsdata import GSData, add_model, gsregister
-from .averaging import bin_array_biased_regular, bin_freq_unbiased_regular
-
-
-def freq_bin_direct(data: GSData, resolution: int | float) -> GSData:
-    """Bin the data in the LST axis.
-
-    This function does a direct weighted averaged within each LST bin. This is biased
-    if the mean spectrum is not constant within each bin *and* the weights are not
-    uniform.
-
-    Parameters
-    ----------
-    data
-        The :class:`GSData` object to bin.
-    resolution
-        The resolution of the binning in MHz or number of existing channels (if int).
-    """
-    new_freqs, spec, wght = bin_array_biased_regular(
-        data=data.data,
-        weights=data.flagged_nsamples,
-        coords=data.freq_array,
-        axis=-1,
-        bins=resolution,
-    )
-    return data.update(freq_array=new_freqs, data=spec, nsamples=wght, flags={})
+from ..datamodel import add_model
+from ..gsdata import GSData, gsregister
+from . import averaging as avg
 
 
 @gsregister("reduce")
-def freq_bin_with_models(
+def freq_bin(
     data: GSData,
-    resolution: int | float,
+    resolution: int | un.Quantity[un.MHz],
     model: mdl.Model | None = None,
+    debias: bool | None = None,
 ):
-    """Bin the data in the LST axis using model information to de-bias the mean.
+    """Bin on frequency axis."""
+    bins = avg.get_bin_edges(data.freq_array, resolution)
+    bins = [
+        (data.freq_array >= b[0]) & (data.freq_array <= b[1])
+        for b in zip(bins[:-1], bins[1:])
+    ]
 
-    Parameters
-    ----------
-    data
-        The :class:`GSData` object to bin.
-    resolution
-        The resolution of the binning in MHz or number of existing channels (if int).
-    model
-        A :class:`edges_cal.modelling.Model` object to use for de-biasing the mean. If
-        the ``data`` object has a ``data_model`` defined, this will be used instead.
-    """
-    if data.data_model is None and model is None:
-        raise ValueError("Cannot bin with models without a model in the data!")
+    if debias is None:
+        debias = model is not None or data.residuals is not None
 
-    if data.data_model is None:
-        data = add_model(data, model=model, append_to_file=False)
+    if debias and model is None and data.residuals is None:
+        raise ValueError("Cannot debias without data residuals or a model!")
 
-    # Averaging data within freq bins
-    f, weights, _, resids, params = bin_freq_unbiased_regular(
-        model=data.data_model.model,
-        params=data.data_model.parameters.reshape((-1, data.data_model.model.n_terms)),
-        freq=data.freq_array.to_value("MHz"),
-        resids=data.resids.reshape((-1, data.nfreqs)),
-        weights=data.flagged_nsamples.reshape((-1, data.nfreqs)),
-        resolution=resolution,
+    if debias:
+        if data.residuals is None:
+            data = add_model(data, model=model, append_to_file=False)
+
+    d, w, r = avg.bin_data(
+        data=data.data,
+        weights=data.flagged_nsamples,
+        residuals=data.residuals if debias else None,
+        bins=bins,
+        axis=-1,
     )
 
-    params = params.reshape(data.data.shape[:-1] + (data.data_model.model.n_terms,))
     return data.update(
-        data=resids.reshape(data.data.shape[:-1] + (-1,)),
-        nsamples=weights.reshape(data.data.shape[:-1] + (-1,)),
-        flags={},
-        freq_array=f * un.MHz,
-        data_model=data.data_model.update(parameters=params),
+        data=d,
+        nsamples=w,
+        flags={k: v for k, v in data.flags.items() if "freq" not in v.axes},
+        freq_array=np.array([np.mean(data.freq_array.value[b]) for b in bins])
+        * data.freq_array.unit,
+        residuals=r,
     )
 
 
@@ -118,9 +93,9 @@ def gauss_smooth(
         itself. By default, this is ``True`` if a model is present in the data.
     """
     if use_residuals is None:
-        use_residuals = data.data_model is not None
+        use_residuals = data.residuals is not None
 
-    if use_residuals and data.data_model is None:
+    if use_residuals and data.residuals is None:
         raise ValueError("Cannot smooth residuals without a model in the data!")
 
     assert isinstance(size, int)
@@ -139,9 +114,9 @@ def gauss_smooth(
 
     # mask data and flagged samples wherever it is NaN
     if use_residuals:
-        dd = data.resids
+        dd = data.residuals
     else:
-        dd = data.spectrum
+        dd = data.data
 
     data_mask = np.where(np.isnan(dd), 0, dd)
     f_nsamples = np.where(np.isnan(dd), 0, data.flagged_nsamples)
@@ -160,36 +135,41 @@ def gauss_smooth(
     sums[mask] = np.nan
     sums[~mask] /= nsamples[~mask]
 
+    if use_residuals:
+        models = data.model[..., decimate_at::decimate]
+    else:
+        models = 0
+
     return data.update(
-        data=sums,
+        data=sums + models,
         nsamples=nsamples,
-        flags={},
+        residuals=sums if use_residuals else None,
+        flags={k: v for k, v in data.flags.items() if "freq" not in v.axes},
         freq_array=data.freq_array[decimate_at::decimate],
-        data_model=None,
-        data_unit="model_residuals" if use_residuals else data.unit,
+        data_unit=data.data_unit,
     )
 
 
-@gsregister("reduce")
-def freq_bin(
-    data: GSData,
-    resolution: int | float,
-    model: mdl.Model | None = None,
-) -> GSData:
-    """Frequency binning that auto-selects which kind of binning to do.
+# @gsregister("reduce")
+# def freq_bin(
+#     data: GSData,
+#     resolution: int | float,
+#     model: mdl.Model | None = None,
+# ) -> GSData:
+#     """Frequency binning that auto-selects which kind of binning to do.
 
-    Parameters
-    ----------
-    data
-        The :class:`GSData` object to bin.
-    resolution
-        The resolution of the binning in MHz or number of existing channels (if int).
-    model
-        A :class:`edges_cal.modelling.Model` object to use for de-biasing the mean. If
-        the ``data`` object has a ``data_model`` defined, this will be used instead.
-        If not provided, simple direct binning will be used.
-    """
-    if data.data_model is None and model is None:
-        return freq_bin_direct(data, resolution)
-    else:
-        return freq_bin_with_models(data, resolution, model)
+#     Parameters
+#     ----------
+#     data
+#         The :class:`GSData` object to bin.
+#     resolution
+#         The resolution of the binning in MHz or number of existing channels (if int).
+#     model
+#         A :class:`edges_cal.modelling.Model` object to use for de-biasing the mean. If
+#         the ``data`` object has a ``data_model`` defined, this will be used instead.
+#         If not provided, simple direct binning will be used.
+#     """
+#     if data.data_model is None and model is None:
+#         return freq_bin_direct(data, resolution)
+#     else:
+#         return freq_bin_with_models(data, resolution, model)

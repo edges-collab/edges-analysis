@@ -8,15 +8,20 @@ import yaml
 from attrs import define, evolve, field
 from edges_cal import modelling as mdl
 
-from .attrs import npfield
-from .gsdata import GSData
-from .register import gsregister
+try:
+    from typing import Self
+except ImportError:
+    from typing_extensions import Self
+
+from .gsdata.attrs import npfield
+from .gsdata.gsdata import GSData
+from .gsdata.register import gsregister
 
 logger = logging.getLogger(__name__)
 
 
 @define
-class GSDataModel:
+class GSDataLinearModel:
     """A model of a GSData object."""
 
     model: mdl.Model = field()
@@ -52,8 +57,8 @@ class GSDataModel:
 
     def get_residuals(self, gsdata: GSData) -> np.ndarray:
         """Calculates the residuals of the model given the input GSData object."""
-        d = gsdata.spectra.reshape((-1, gsdata.nfreqs))
-        p = self.parameters.reshape((-1, gsdata.data_model.nparams))
+        d = gsdata.data.reshape((-1, gsdata.nfreqs))
+        p = self.parameters.reshape((-1, self.nparams))
 
         model = self.model.at(x=gsdata.freq_array.to_value("MHz"))
 
@@ -66,7 +71,7 @@ class GSDataModel:
 
     def get_spectra(self, gsdata: GSData) -> np.ndarray:
         """Calculates the data spectra given the input GSData object."""
-        d = gsdata.resids.reshape((-1, gsdata.nfreqs))
+        d = gsdata.residuals.reshape((-1, gsdata.nfreqs))
         p = self.parameters.reshape((-1, self.nparams))
 
         model = self.model.at(x=gsdata.freq_array.to_value("MHz"))
@@ -79,9 +84,9 @@ class GSDataModel:
         return spectra
 
     @classmethod
-    def from_gsdata(cls, model: mdl.Model, gsdata: GSData, **fit_kwargs) -> GSDataModel:
+    def from_gsdata(cls, model: mdl.Model, gsdata: GSData, **fit_kwargs) -> Self:
         """Creates a GSDataModel from a GSData object."""
-        d = gsdata.spectra.reshape((-1, gsdata.nfreqs))
+        d = gsdata.data.reshape((-1, gsdata.nfreqs))
         w = gsdata.flagged_nsamples.reshape((-1, gsdata.nfreqs))
 
         xmodel = model.at(x=gsdata.freq_array.to_value("MHz"))
@@ -101,7 +106,7 @@ class GSDataModel:
         params.shape = (gsdata.nloads, gsdata.npols, gsdata.ntimes, model.n_terms)
         return cls(model=model, parameters=params)
 
-    def update(self, **kw) -> GSDataModel:
+    def update(self, **kw) -> Self:
         """Return a new GSDataModel instance with updated attributes."""
         return evolve(self, **kw)
 
@@ -112,7 +117,7 @@ class GSDataModel:
         grp.create_dataset("parameters", data=self.parameters)
 
     @classmethod
-    def from_h5(cls, fl: h5py.File | h5py.Group, path: str = "") -> GSDataModel:
+    def from_h5(cls, fl: h5py.File | h5py.Group, path: str = "") -> Self:
         """Read the object from an HDF5 file, potentially from a particular path."""
         grp = fl[path] if path else fl
         model = yaml.load(grp.attrs["model"], Loader=yaml.FullLoader)
@@ -121,29 +126,34 @@ class GSDataModel:
 
 
 @gsregister("supplement")
-def add_model(data: GSData, *, model: mdl.Model, append_to_file: bool | None = None):
+def add_model(
+    data: GSData, *, model: mdl.Model, append_to_file: bool | None = None
+) -> GSData:
     """Return a new GSData instance which contains a data model."""
-    new = data.update(data_model=GSDataModel.from_gsdata(model, data))
+    data_model = GSDataLinearModel.from_gsdata(model, data)
+    new = data.update(residuals=data_model.get_residuals(data))
 
     if append_to_file is None:
-        append_to_file = new.filename is not None
-
-    if append_to_file and new.filename is None:
-        raise ValueError(
-            "Cannot append to file without a filename specified on the object!"
-        )
+        append_to_file = new.filename is not None and new._file_appendable
 
     if append_to_file:
+        if not new._file_appendable or new.filename is None:
+            logger.warning(
+                "Cannot add model residuals to existing file, as it either doesn't "
+                "exist or is out-of-sync with the data in memory. "
+                "Write the data to a new file manually."
+            )
+
         with h5py.File(new.filename, "a") as fl:
-            if "data_model" in fl.keys():
+            if "residuals" in fl.keys():
                 logger.warning(
-                    f"Data model already exists in {new.filename}, not overwriting."
+                    f"Residuals already exists in {new.filename}, not overwriting."
                 )
-            elif fl["data"].shape[:3] != new.data_model.parameters.shape[:3]:
+            elif fl["data"].shape != new.residuals.shape:
                 logger.warning(
                     "File on disk is incompatible with the data model. Write new file."
                 )
             else:
-                new.data_model.write(fl, "data_model")
+                fl["residuals"] = new.residuals
 
     return new

@@ -8,18 +8,16 @@ from astropy.time import Time
 from datetime import datetime, timedelta
 from edges_cal.modelling import LinLog
 
+from edges_analysis.datamodel import GSDataLinearModel
 from edges_analysis.gsdata import (
     GSData,
-    GSDataModel,
     GSFlag,
     History,
     Stamp,
-    add_model,
     gsregister,
     select_freqs,
     select_lsts,
     select_times,
-    swap_data,
 )
 
 
@@ -216,21 +214,6 @@ def test_bad_gsdata_init(simple_gsdata: GSData):
     with pytest.raises(ValueError, match="data_unit must be one of"):
         simple_gsdata.update(data_unit="my_custom_string")
 
-    with pytest.raises(
-        ValueError, match='data_unit cannot be "model_residuals" if data_model is None'
-    ):
-        simple_gsdata.update(data_unit="model_residuals")
-
-    with pytest.raises(TypeError, match="data_model must be a GSDataModel"):
-        simple_gsdata.update(data_model=3)
-
-    with pytest.raises(ValueError, match="data_model parameters shape mismatch"):
-        simple_gsdata.update(
-            data_model=GSDataModel(
-                model=LinLog(n_terms=5), parameters=np.zeros((1, 1, 49, 5))
-            )
-        )
-
 
 def test_read_bad_filetype():
     with pytest.raises(ValueError, match="Unrecognized file type"):
@@ -264,7 +247,7 @@ def test_select_lsts_and_times(power_gsdata):
 
     assert lst == tm
 
-    stime = select_times(power_gsdata, range=(2459811.5, 2459811.7))
+    stime = select_times(power_gsdata, time_range=(2459811.5, 2459811.7))
     assert stime != power_gsdata
 
 
@@ -272,10 +255,13 @@ def test_select_lsts(power_gsdata: GSData):
     rng = (power_gsdata.lst_array.min().hour, power_gsdata.lst_array.max().hour)
 
     new = select_lsts(power_gsdata, lst_range=rng, load="all")
-    assert new == power_gsdata
+    # even though they're the same, the _file_appendable is switched off now
+    assert new != power_gsdata
+    assert np.allclose(new.data, power_gsdata.data)
 
     new = select_lsts(power_gsdata, lst_range=rng, load="ant")
-    assert new == power_gsdata
+    assert new != power_gsdata
+    assert np.allclose(new.data, power_gsdata.data[0])
 
     with pytest.raises(ValueError, match="range must be a length-2 tuple"):
         select_lsts(power_gsdata, lst_range=[0, 2, 3])
@@ -288,8 +274,6 @@ def test_select_lsts(power_gsdata: GSData):
     # Test with both indx and range
     new = select_lsts(power_gsdata, lst_range=rng, indx=np.arange(0, 50, 2))
     new2 = select_lsts(power_gsdata, indx=np.arange(0, 50, 2))
-
-    print(new.data.shape, new2.data.shape)
 
     flds = attrs.fields(GSData)
     for fld in flds:
@@ -326,15 +310,9 @@ def test_add(simple_gsdata):
 
     with pytest.raises(
         ValueError,
-        match="Cannot add GSData objects with different frequency and time arrays",
+        match="Cannot add GSData objects with different frequencies",
     ):
         simple_gsdata + new_timefreq
-
-    time_concat = simple_gsdata + new_times
-    assert time_concat.ntimes == simple_gsdata.ntimes + new_times.ntimes
-
-    freq_concat = simple_gsdata + new_freqs
-    assert freq_concat.nfreqs == simple_gsdata.nfreqs + new_freqs.nfreqs
 
     doubled = simple_gsdata + simple_gsdata
     assert np.allclose(doubled.data, simple_gsdata.data * 2)
@@ -425,7 +403,7 @@ def test_iterators(simple_gsdata):
 
 @pytest.fixture(scope="module")
 def gsdata_model():
-    return GSDataModel(
+    return GSDataLinearModel(
         model=LinLog(n_terms=5), parameters=np.random.random(size=(1, 1, 50, 5))
     )
 
@@ -442,29 +420,3 @@ def test_shape(gsdata_model):
         gsdata_model.ntimes,
         gsdata_model.nparams,
     )
-
-
-def test_swap_data(simple_gsdata):
-    with pytest.raises(
-        ValueError, match="Cannot swap data attribute without add_model step"
-    ):
-        swap_data(simple_gsdata)
-
-    model = LinLog(n_terms=2, parameters=[5, 6])
-    mx = model.at(x=simple_gsdata.freq_array)
-    newdata = np.array(
-        [
-            mx() * (1 + np.random.normal(scale=0.1))
-            for _ in range(
-                simple_gsdata.ntimes * simple_gsdata.nloads * simple_gsdata.npols
-            )
-        ]
-    )
-    newdata.shape = simple_gsdata.data.shape
-    newdata = simple_gsdata.update(data=newdata)
-
-    gsd_model = add_model(newdata, model=model)
-    gsd_resids = swap_data(gsd_model)
-
-    assert not np.allclose(newdata.data, gsd_resids.data)
-    assert np.allclose(newdata.spectra, gsd_resids.spectra)

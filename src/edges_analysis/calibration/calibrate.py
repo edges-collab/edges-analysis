@@ -39,7 +39,7 @@ def dicke_calibration(data: GSData) -> GSData:
         loads=("ant",),
         nsamples=data.nsamples[[iant]],
         flags={name: flag.any(axis="load") for name, flag in data.flags.items()},
-        data_model=None,
+        residuals=None,
     )
 
 
@@ -57,7 +57,9 @@ def approximate_temperature(data: GSData, *, tload: float, tns: float):
             "data_unit must be 'uncalibrated' to calculate approximate temperature"
         )
     return data.update(
-        data=data.data * tns + tload, data_unit="uncalibrated_temp", data_model=None
+        data=data.data * tns + tload,
+        data_unit="uncalibrated_temp",
+        residuals=data.residuals * tns if data.residuals is not None else None,
     )
 
 
@@ -323,7 +325,18 @@ def apply_noise_wave_calibration(
     else:
         q = data.data
     new_data = labcal.calibrate_q(q, freq=data.freq_array)
-    return data.update(data=new_data, data_unit="temperature", data_model=None)
+
+    if data.model is not None:
+        qmodel = (
+            (data.model - tload) / tns
+            if data.data_unit == "uncalibrated_temp"
+            else data.model
+        )
+        resids = new_data - labcal.calibrate_q(qmodel, freq=data.freq_array)
+    else:
+        resids = None
+
+    return data.update(data=new_data, data_unit="temperature", residuals=resids)
 
 
 @gsregister("calibrate")
@@ -428,8 +441,12 @@ def apply_loss_correction(
     a = ambient_temp + const.absolute_zero if ambient_temp[0] < 200 else ambient_temp
 
     spec = (data.data - np.outer(a, (1 - gain))) / gain
+    if data.residuals is not None:
+        resids = data.residuals / gain
+    else:
+        resids = None
 
-    return data.update(data=spec, data_unit="temperature", data_model=None)
+    return data.update(data=spec, data_unit="temperature", residuals=resids)
 
 
 @gsregister("calibrate")
@@ -505,17 +522,22 @@ def apply_beam_correction(
         new_beam_lsts = np.concatenate(new_beam_lsts)
         beam = beam.at_lsts(new_beam_lsts)
 
-    new_data = data.spectra.copy()
+    new_data = data.data.copy()
 
+    resids = data.residuals.copy() if data.residuals is not None else None
     for i, (lst0, lst1) in enumerate(data.lst_ranges[:, 0, :]):
         new = beam.between_lsts(lst0.hour, lst1.hour)
         if integrate_before_ratio:
-            new_data[:, :, i] /= new.get_integrated_beam_factor(
+            bf = new.get_integrated_beam_factor(
                 model=freq_model, freqs=data.freq_array.to_value("MHz")
             )
         else:
-            new_data[:, :, i] /= new.get_mean_beam_factor(
+            bf = new.get_mean_beam_factor(
                 model=freq_model, freqs=data.freq_array.to_value("MHz")
             )
 
-    return data.update(data=new_data, data_model=None, data_unit="temperature")
+        new_data[:, :, i] /= bf
+        if resids is not None:
+            resids[:, :, i] /= bf
+
+    return data.update(data=new_data, residuals=resids, data_unit="temperature")

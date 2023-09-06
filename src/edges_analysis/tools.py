@@ -1,4 +1,6 @@
 """Various utility functions."""
+from __future__ import annotations
+
 import logging
 import numpy as np
 import warnings
@@ -6,7 +8,6 @@ from collections import defaultdict
 from edges_cal import xrfi
 from multiprocess import Pool, cpu_count, current_process
 from multiprocessing.sharedctypes import RawArray
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -37,8 +38,8 @@ def run_xrfi(
     method: str,
     spectrum: np.ndarray,
     freq: np.ndarray,
-    weights: Optional[np.ndarray] = None,
-    flags: Optional[np.ndarray] = None,
+    weights: np.ndarray | None = None,
+    flags: np.ndarray | None = None,
     n_threads: int = cpu_count(),
     fl_id=None,
     **kwargs,
@@ -145,3 +146,16 @@ def run_xrfi(
                 )
 
     return flags
+
+
+def slice_along_axis(x: np.ndarray, idx: np.ndarray | slice, axis: int = -1):
+    """Get a view of x at indices idx on a given axis."""
+    from_end = False
+    if axis < 0:  # choosing axis at the end
+        from_end = True
+        axis = -1 - axis
+    explicit_inds_slice = axis * (slice(None),)
+    if from_end:
+        return x[(Ellipsis, idx) + explicit_inds_slice]
+    else:
+        return x[explicit_inds_slice + (idx,)]

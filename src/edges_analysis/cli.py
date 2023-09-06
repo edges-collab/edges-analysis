@@ -206,7 +206,7 @@ def process(
         files = progress.get_files_to_read_for_step(stepname)
 
         # We need to remove any files that we have already read in.
-        current_files = [d.filename.absolute() for d in data]
+        current_files = [d.filename.absolute() for d in data if d.filename]
         files = [f for f in files if f not in current_files]
 
         if len(data + files) > 0 and step.params:

@@ -35,14 +35,14 @@ def test_step_basic(request, steps: tuple[GSData, GSData], nfreqs: int):
 
 def test_model_step(model_step: list[GSData]):
     m = model_step[0]
-    assert m.data_model.nparams == 5
+    assert m.residuals is not None
 
 
 def test_lstavg_step(
     lstavg_step: tuple[GSData, GSData], lstbin_step: tuple[GSData, GSData]
 ):
     avg = lstavg_step[0]
-    assert avg.data_model.nparams == 5
+    assert avg.residuals is not None
     assert avg.in_lst
 
     binned = lstbin_step[0]

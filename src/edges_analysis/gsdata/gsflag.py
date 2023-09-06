@@ -49,6 +49,8 @@ class GSFlag:
         data if more is added (eg. flags, data model).
     """
 
+    _axes = ("load", "pol", "time", "freq")
+
     flags: np.ndarray = npfield(dtype=bool)
     axes: tuple[str] = field(converter=tuple)
     history: History = field(
@@ -73,6 +75,15 @@ class GSFlag:
 
         if not idx == sorted(idx):
             raise ValueError("Axes must be in order load, pol, time, freq")
+
+    @axes.default
+    def _axes_default(self):
+        if self.flags.ndim == 4:
+            return self._axes
+        else:
+            raise ValueError(
+                "Axes must be specified if flag array has fewer than 4 dims"
+            )
 
     @cached_property
     def nfreqs(self) -> int | None:
