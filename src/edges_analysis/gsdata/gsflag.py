@@ -131,8 +131,9 @@ class GSFlag:
     def read_gsflag(cls, filename: str) -> Self:
         """Reads a GSFlag file and stores the data in the GSFlag object."""
         obj = hickle.load(filename)
-        obj = obj.update(history=Stamp("Read GSFlag file", filename=filename))
-        return obj
+        return obj.update(
+            history=Stamp("Read GSFlag file", parameters={"filename": filename})
+        )
 
     def write_gsflag(self, filename: str) -> Self:
         """Writes the data in the GSData object to a GSH5 file."""

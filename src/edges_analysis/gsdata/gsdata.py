@@ -114,6 +114,7 @@ class GSData:
     time_ranges: Time | Longitude = timefield(shape=(None, None, 2))
     filename: Path | None = field(default=None, converter=cnv.optional(Path))
     _file_appendable: bool = field(default=True, converter=bool)
+    name: str = field(default="", converter=str)
 
     @nsamples.validator
     def _nsamples_validator(self, attribute, value):
@@ -299,7 +300,11 @@ class GSData:
 
     @classmethod
     def read_acq(
-        cls, filename: str | Path, telescope_location: str | EarthLocation, **kw
+        cls,
+        filename: str | Path,
+        telescope_location: str | EarthLocation,
+        name="{year}_{day}",
+        **kw,
     ) -> GSData:
         """Read an ACQ file."""
         try:
@@ -327,6 +332,11 @@ class GSData:
                         "telescope_location must be an EarthLocation or a known site, "
                         f"got {telescope_location}"
                     )
+
+        year, day, hour, minute = times[0, 0].to_value("yday", "date_hm").split(":")
+        name = name.format(
+            year=year, day=day, hour=hour, minute=minute, stem=filename.stem
+        )
         return cls(
             data=np.array([pant.T, pload.T, plns.T])[:, np.newaxis],
             time_array=times,
@@ -336,6 +346,7 @@ class GSData:
             auxiliary_measurements={name: anc.data[name] for name in anc.data},
             filename=filename,
             telescope_location=telescope_location,
+            name=name,
             **kw,
         )
 
@@ -371,6 +382,7 @@ class GSData:
                 time_array = Time(times, format="jd", location=telescope_location)
             freq_array = fl["freq_array"][:] * un.MHz
             data_unit = fl.attrs["data_unit"]
+            name = fl.attrs["name"]
             loads = fl.attrs["loads"].split("|")
             auxiliary_measurements = {
                 name: fl["auxiliary_measurements"][name][:]
@@ -407,6 +419,7 @@ class GSData:
             history=history,
             telescope_location=telescope_location,
             residuals=residuals,
+            name=name,
         )
 
     def write_gsh5(self, filename: str) -> GSData:
@@ -444,6 +457,7 @@ class GSData:
 
             # Now history
             fl.attrs["history"] = repr(self.history)
+            fl.attrs["name"] = self.name
 
             # Data model
             if self.residuals is not None:

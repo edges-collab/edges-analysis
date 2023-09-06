@@ -126,19 +126,6 @@ def lst_bin(
         if use_model_residuals:
             resids[iload] = r
 
-        # for ipol in range(data.npols):
-        #     # Averaging data within GHA bins
-        #     (
-        #         params[iload, ipol],
-        #         resids[iload, ipol],
-        #         nsmpls[iload, ipol],
-        #     ) = bin_gha_unbiased_regular(
-        #         data.data_model.parameters[iload, ipol],
-        #         data.resids[iload, ipol],
-        #         data.flagged_nsamples[iload, ipol],
-        #         lsts[:, iload],
-        #         bins,
-        #     )
     times = (bins[1:] + bins[:-1]) / 2
     times = Longitude(np.tile(times, (data.nloads, 1)).T * un.hour)
 

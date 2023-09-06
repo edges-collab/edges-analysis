@@ -323,6 +323,7 @@ def interpolate_step_params(params: dict, data: GSData) -> dict:
     interpolators = {
         "prev_stem": data.filename.stem,
         "prev_dir": data.filename.parent,
+        "name": data.name,
     }
     try:
         yearday = data.get_initial_yearday()
