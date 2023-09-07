@@ -63,6 +63,7 @@ def gauss_smooth(
     maintain_flags: int = 0,
     use_residuals: bool | None = None,
     nsmooth: int = 4,
+    use_nsamples: bool = False,
 ) -> np.ndarray:
     """Smooth data with a Gaussian function, and reduce the size of the array.
 
@@ -119,29 +120,41 @@ def gauss_smooth(
     else:
         dd = data.data
 
-    data_mask = np.where(np.isnan(dd), 0, dd)
-    f_nsamples = np.where(np.isnan(dd), 0, data.flagged_nsamples)
+    inflags = data.flagged_nsamples == 0 | np.isnan(dd)
 
-    sums = convolve1d(data.flagged_nsamples * data_mask, window, mode="nearest")[
+    data_mask = np.where(np.isnan(dd), 0, dd)
+    if use_nsamples:
+        nsamples = data.flagged_nsamples
+    else:
+        nsamples = (~inflags).astype(float)
+
+    f_nsamples = np.where(np.isnan(dd), 0, nsamples)
+
+    sums = convolve1d(f_nsamples * data_mask, window, mode="constant", cval=0)[
         ..., decimate_at::decimate
     ]
-    nsamples = convolve1d(f_nsamples, window, mode="nearest")
+    nsamples = convolve1d(f_nsamples, window, mode="constant", cval=0)
+
     if maintain_flags > 0:
         if maintain_flags == 1:
-            nsamples[data.complete_flags] = 0
+            nsamples[inflags] = 0
         else:
             window = np.ones(maintain_flags)
-            _flags = convolve1d(
-                (~data.complete_flags).astype(int), window, mode="constant", cval=0
-            )
+            _flags = convolve1d((~inflags).astype(int), window, mode="constant", cval=0)
             nsamples[_flags == 0] = 0
 
     nsamples = nsamples[..., decimate_at::decimate]
 
     nsamples[nsamples / data.nsamples.max() <= size * flag_threshold] = 0
     mask = nsamples == 0
-    # sums[mask] = np.nan
     sums[~mask] /= nsamples[~mask]
+    sums[mask] = dd[..., decimate_at::decimate][mask]
+
+    if not use_nsamples:
+        # We have to still get the proper nsamples for the output.
+        _nsamples = convolve1d(data.flagged_nsamples, window, mode="constant", cval=0)
+        _nsamples[_nsamples == 0] = 0
+        nsamples = _nsamples[..., decimate_at::decimate]
 
     if use_residuals:
         models = data.model[..., decimate_at::decimate]

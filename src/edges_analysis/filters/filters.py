@@ -439,6 +439,31 @@ def rfi_explicit_filter(*, data: GSData, file: tp.PathLike | None = None):
 
 @gsregister("filter")
 @gsdata_filter()
+def flag_frequency_ranges(
+    *, data: GSData, freq_ranges: list[tuple[float, float]], invert: bool = False
+):
+    """Flag frequency ranges."""
+    if invert:
+        flags = np.ones(data.nfreqs, dtype=bool)
+    else:
+        flags = np.zeros(data.nfreqs, dtype=bool)
+
+    fmhz = data.freq_array.to_value("MHz")
+    for fmin, fmax in freq_ranges:
+        if invert:
+            flags[(fmhz >= fmin) & (fmhz < fmax)] = False
+        else:
+            flags |= fmhz >= fmin
+            flags |= fmhz < fmax
+
+    return GSFlag(
+        flags=flags,
+        axes=("freq",),
+    )
+
+
+@gsregister("filter")
+@gsdata_filter()
 def negative_power_filter(*, data: GSData):
     """Filter out integrations that have *any* negative/zero power.
 
