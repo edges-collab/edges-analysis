@@ -60,7 +60,7 @@ def gauss_smooth(
     decimate: bool = True,
     decimate_at: int = None,
     flag_threshold: float = 0,
-    maintain_flags: bool = False,
+    maintain_flags: int = 0,
     use_residuals: bool | None = None,
     nsmooth: int = 4,
 ) -> np.ndarray:
@@ -126,14 +126,21 @@ def gauss_smooth(
         ..., decimate_at::decimate
     ]
     nsamples = convolve1d(f_nsamples, window, mode="nearest")
-    if maintain_flags:
-        nsamples[data.complete_flags] = 0
+    if maintain_flags > 0:
+        if maintain_flags == 1:
+            nsamples[data.complete_flags] = 0
+        else:
+            window = np.ones(maintain_flags)
+            _flags = convolve1d(
+                (~data.complete_flags).astype(int), window, mode="constant", cval=0
+            )
+            nsamples[_flags == 0] = 0
 
     nsamples = nsamples[..., decimate_at::decimate]
 
     nsamples[nsamples / data.nsamples.max() <= size * flag_threshold] = 0
     mask = nsamples == 0
-    sums[mask] = np.nan
+    # sums[mask] = np.nan
     sums[~mask] /= nsamples[~mask]
 
     if use_residuals:
