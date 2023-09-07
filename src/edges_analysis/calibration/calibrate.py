@@ -222,23 +222,18 @@ def get_s11_paths(
 
 def get_labcal(
     calobs: Calibrator,
-    s11_path: str | Path | tuple | list,
-    band: str,
-    begin_time: datetime,
-    s11_file_pattern: str,
+    s11_path: str | Path | tuple | list | None = None,
+    ant_s11_object: str | Path | None = None,
+    band: str | None = None,
+    begin_time: datetime | None = None,
+    s11_file_pattern: str | None = None,
     ignore_s11_files: list[str] | None = None,
     antenna_s11_n_terms: int = 15,
 ):
     """Given an s11_path, return list of paths for each of the inputs."""
     # If we get four files, make sure they exist and pass them back
-
-    s11_files = get_s11_paths(
-        s11_path,
-        band,
-        begin_time,
-        s11_file_pattern,
-        ignore_files=ignore_s11_files,
-    )
+    if s11_path is None and ant_s11_object is None:
+        raise ValueError("Must provide either s11_path or ant_s11_object.")
 
     if not isinstance(calobs, Calibrator):
         try:
@@ -253,19 +248,35 @@ def get_labcal(
         except Exception:
             calobs = Calibrator.from_old_calfile(calobs)
 
-    return LabCalibration.from_s11_files(
-        calobs=calobs,
-        s11_files=s11_files,
-        n_terms=antenna_s11_n_terms,
-    )
+    if ant_s11_object is not None:
+        ants11 = hickle.load(ant_s11_object)
+        return LabCalibration(
+            calobs=calobs,
+            antenna_s11_model=ants11,
+        )
+    else:
+        s11_files = get_s11_paths(
+            s11_path,
+            band,
+            begin_time,
+            s11_file_pattern,
+            ignore_files=ignore_s11_files,
+        )
+
+        return LabCalibration.from_s11_files(
+            calobs=calobs,
+            s11_files=s11_files,
+            n_terms=antenna_s11_n_terms,
+        )
 
 
 @gsregister("calibrate")
 def apply_noise_wave_calibration(
     data: GSData,
     calobs: Calibrator | Path,
-    band: str,
-    s11_path: str | Path,
+    band: str | None = None,
+    s11_path: str | Path | None = None,
+    ant_s11_object: str | Path | None = None,
     s11_file_pattern: str = r"{y}_{jd}_{h}_*_input{input}.s1p",
     ignore_s11_files: list[str] | None = None,
     antenna_s11_n_terms: int = 15,
@@ -318,6 +329,7 @@ def apply_noise_wave_calibration(
         s11_file_pattern=s11_file_pattern,
         ignore_s11_files=ignore_s11_files,
         antenna_s11_n_terms=antenna_s11_n_terms,
+        ant_s11_object=ant_s11_object,
     )
 
     if data.data_unit == "uncalibrated_temp":
