@@ -62,6 +62,7 @@ def gauss_smooth(
     flag_threshold: float = 0,
     maintain_flags: bool = False,
     use_residuals: bool | None = None,
+    nsmooth: int = 4,
 ) -> np.ndarray:
     """Smooth data with a Gaussian function, and reduce the size of the array.
 
@@ -71,7 +72,7 @@ def gauss_smooth(
         The :class:`GSData` object to smooth.
     size
         The size of the Gaussian smoothing kernel. The ultimate size of the kernel will
-        be ``4*size``. The final array will be decimated by a factor of ``size``.
+        be ``nsmooth*size``. The final array will be decimated by a factor of ``size``.
     decimate
         Whether to decimate the array by a factor of ``size``.
     decimate_at
@@ -108,7 +109,7 @@ def gauss_smooth(
     else:
         decimate_at = 0
     # This choice of size scaling corresponds to Alan's C code.
-    y = np.arange(-size * 4, size * 4 + 1) * 2 / size
+    y = np.arange(-size * nsmooth, size * nsmooth + 1) * 2 / size
     window = np.exp(-(y**2) * 0.69)
     decimate = size if decimate else 1
 
