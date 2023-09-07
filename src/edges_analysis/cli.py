@@ -422,7 +422,6 @@ def process(
                 telescope_loc = params.pop("telescope_location", "edges")
                 telescope_loc = const.KNOWN_LOCATIONS[telescope_loc]
 
-                
                 data = [
                     GSData.from_file(f, telescope_location=telescope_loc, **params)
                     for f in files

@@ -56,7 +56,7 @@ def balun_and_connector_loss(
 
     # Metal conductivity
     sigma_copper = 1 * sigma_copper0
-    sigma_brass =  0.29 * sigma_copper0  # 0.24
+    sigma_brass = 0.29 * sigma_copper0  # 0.24
 
     sigma_xx_inner = 0.24 * sigma_copper0
     sigma_xx_outer = 0.024 * sigma_copper0
@@ -75,12 +75,12 @@ def balun_and_connector_loss(
     parameters = {
         "low": {
             "balun_length": 43.6 * inch2m,
-            "connector_length": 1.1811023622  * inch2m,  # 0.8
+            "connector_length": 1.1811023622 * inch2m,  # 0.8
             "er_air": 1.07,
             "ric_b": ((5 / 16) * inch2m) / 2,
             "roc_b": ((3 / 4) * inch2m) / 2,
             "roc_c": (0.161 * inch2m) / 2,
-            "ric_c" : (0.05 * inch2m) / 2,
+            "ric_c": (0.05 * inch2m) / 2,
         },
         "mid": {
             "balun_length": 35 * inch2m,
@@ -89,7 +89,7 @@ def balun_and_connector_loss(
             "ric_b": ((16 / 32) * inch2m) / 2,
             "roc_b": ((1.25) * inch2m) / 2,
             "roc_c": (0.161 * inch2m) / 2,
-            "ric_c" : (0.05 * inch2m) / 2,
+            "ric_c": (0.05 * inch2m) / 2,
         },
     }
 
@@ -121,7 +121,9 @@ def balun_and_connector_loss(
         l_b += 0.001 * np.random.normal()  # 1-sigma of 1 mm
 
     # Connector dimensions
-    ric_c = parameters[band]["ric_c"] #(0.05 * inch2m) / 2  # radius of outer wall of inner conductor
+    ric_c = parameters[band][
+        "ric_c"
+    ]  # (0.05 * inch2m) / 2  # radius of outer wall of inner conductor
     if monte_carlo_flags[3]:
         # 1-sigma of 3%, about < 0.04 mm
         ric_c *= 1 + 0.03 * np.random.normal()
