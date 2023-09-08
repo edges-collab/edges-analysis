@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Callable, Sequence
 
 from .. import tools
-from ..averaging import averaging, lstbin
+from ..averaging import averaging
 from ..data import DATA_PATH
 from ..datamodel import add_model
 from ..gsdata import GSData, GSFlag, gsregister
@@ -782,8 +782,6 @@ def power_percent_filter(
 def object_rms_filter(
     data: GSData,
     rms_threshold: float,
-    gha_min: float = 0,
-    gha_max: float = 24,
     f_low: float = 0.0,
     f_high: float = np.inf,
     weighted: bool = False,
@@ -791,7 +789,9 @@ def object_rms_filter(
 ) -> bool:
     """Filter integrations based on the rms of the residuals."""
     if data.ntimes > 1:
-        data = lstbin.lst_bin(data, first_edge=gha_min, binsize=gha_max - gha_min)
+        raise ValueError(
+            "The object_rms_filter is meant to be performed on lst-averaged data"
+        )
 
     data = flag_frequency_ranges(data=data, freq_ranges=[(f_low, f_high)], invert=True)
 
@@ -810,4 +810,7 @@ def object_rms_filter(
     else:
         rms = np.sqrt(np.mean(data.residuals**2))
 
-    return rms > rms_threshold
+    return GSFlag(
+        flags=np.array([rms > rms_threshold]),
+        axes=("time",),
+    )
