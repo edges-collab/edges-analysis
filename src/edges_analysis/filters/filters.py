@@ -774,6 +774,7 @@ def power_percent_filter(
         ),
     )
 
+
 @gsregister("filter")
 @gsdata_filter()
 def object_rms_filter(
