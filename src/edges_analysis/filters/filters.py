@@ -8,6 +8,7 @@ import numpy as np
 import yaml
 from astropy import units as u
 from attrs import define
+from edges_cal import modelling as mdl
 from edges_cal import types as tp
 from edges_cal import xrfi as rfi
 from edges_cal.xrfi import ModelFilterInfoContainer, model_filter
@@ -17,6 +18,7 @@ from typing import Callable, Sequence
 from .. import tools
 from ..averaging import averaging, lstbin
 from ..data import DATA_PATH
+from ..datamodel import add_model
 from ..gsdata import GSData, GSFlag, gsregister
 
 logger = logging.getLogger(__name__)
@@ -675,7 +677,7 @@ def rmsf_filter(
 
     if data.data_unit == "uncalibrated":
         spec = (data.data * tload) + tcal
-    elif data.data_unit in ("uncalibrated_temp", "temperature", "model_residuals"):
+    elif data.data_unit in ("uncalibrated_temp", "temperature"):
         spec = data.data
     else:
         raise ValueError(
@@ -785,17 +787,27 @@ def object_rms_filter(
     f_low: float = 0.0,
     f_high: float = np.inf,
     weighted: bool = False,
+    model: mdl.Model | None = None,
 ) -> bool:
-    """Filter out an entire object based on the rms of the residuals."""
+    """Filter integrations based on the rms of the residuals."""
     if data.ntimes > 1:
         data = lstbin.lst_bin(data, first_edge=gha_min, binsize=gha_max - gha_min)
-    data = data.select_freqs(freq_range=(f_low * u.MHz, f_high * u.MHz))
 
+    data = flag_frequency_ranges(data=data, freq_ranges=[(f_low, f_high)], invert=True)
+
+    if data.residuals is None:
+        if model is None:
+            raise ValueError(
+                "Cannot perform object rms filter without residuals or a model."
+            )
+        data = add_model(data=data, model=model)
     if weighted:
         rms = np.sqrt(
-            averaging.weighted_mean(data=data.resids**2, weights=data.nsamples)[0]
+            averaging.weighted_mean(
+                data=data.residuals**2, weights=data.flagged_nsamples
+            )[0]
         )
     else:
-        rms = np.sqrt(np.mean(data.resids**2))
+        rms = np.sqrt(np.mean(data.residuals**2))
 
     return rms > rms_threshold
