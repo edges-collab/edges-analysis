@@ -60,7 +60,7 @@ def _get_files(pth: Path, filt=h5py.is_hdf5) -> list[Path]:
 
 
 def _file_filter(pth: Path):
-    return pth.suffix[1:] in io.Spectrum.supported_formats
+    return pth.suffix[1:] in io.Spectrum.supported_formats + ["gsh5"]
 
 
 @main.command()

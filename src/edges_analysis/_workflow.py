@@ -356,6 +356,10 @@ class Workflow:
         """Get the index of a step."""
         return [s.name for s in self.steps].index(key)
 
+    def insert(self, index: int, step: WorkflowStep):
+        """Insert a step into the workflow."""
+        self.steps.insert(index, step)
+
     def __len__(self):
         """Get the length of the workflow."""
         return len(self.steps)
@@ -534,7 +538,7 @@ class ProgressFile:
                         # should not be deleted.
                         if self.path.parent in fl.parents:
                             Path(fl).unlink(missing_ok=True)
-                    ps.filemap.clear()
+                    self.workflow[i] = step
 
         self.workflow.write_as_progressfile(self.path)
 
