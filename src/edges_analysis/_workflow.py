@@ -340,6 +340,13 @@ class Workflow:
         elif isinstance(key, str):
             return self.steps[[s.name for s in self.steps].index(key)]
 
+    def __setitem__(self, key: int | str, value: WorkflowStep):
+        """Set a step in the workflow."""
+        if isinstance(key, int):
+            self.steps[key] = value
+        elif isinstance(key, str):
+            self.steps[[s.name for s in self.steps].index(key)] = value
+
     def __contains__(self, key: str) -> bool:
         """Check if a step is in the workflow."""
         return key in [s.name for s in self.steps]
