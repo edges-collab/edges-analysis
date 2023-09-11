@@ -373,7 +373,11 @@ def perform_step_on_object(
         return [data]
 
     if step.kind == "filter":
-        params = {**step.params, "flag_id": step.name, "write": None}
+        params = {
+            **step.params,
+            "flag_id": step.name,
+            "write": False if step.write is not None else None,
+        }
     else:
         params = step.params
 

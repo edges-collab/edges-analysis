@@ -55,7 +55,7 @@ class _GSDataFilter:
             )
 
         def per_file_processing(data: GSData, flags: GSFlag):
-            old = np.sum(data.complete_flags)
+            old = np.sum(data.flagged_nsamples == 0)
 
             data = data.add_flags(
                 flag_id or self.func.__name__, flags, append_to_file=write
@@ -73,7 +73,7 @@ class _GSDataFilter:
             else:
                 sz = flags.flags.size / 100
                 new = np.sum(flags.flags)
-                tot = np.sum(data.complete_flags)
+                tot = np.sum(data.flagged_nsamples == 0)
                 totsz = data.complete_flags.size
 
                 if not data.in_lst:
@@ -785,6 +785,7 @@ def object_rms_filter(
     f_low: float = 0.0,
     f_high: float = np.inf,
     weighted: bool = False,
+    flagged: bool = True,
     model: mdl.Model | None = None,
 ) -> bool:
     """Filter integrations based on the rms of the residuals."""
@@ -793,7 +794,9 @@ def object_rms_filter(
             "The object_rms_filter is meant to be performed on lst-averaged data"
         )
 
-    data = flag_frequency_ranges(data=data, freq_ranges=[(f_low, f_high)], invert=True)
+    data = flag_frequency_ranges(
+        data=data, freq_ranges=[(f_low, f_high)], invert=True, write=False
+    )
 
     if data.residuals is None:
         if model is None:
@@ -807,8 +810,13 @@ def object_rms_filter(
                 data=data.residuals**2, weights=data.flagged_nsamples
             )[0]
         )
+    elif flagged:
+        flags = data.flagged_nsamples == 0
+        rms = np.sqrt(np.mean(data.residuals[~flags] ** 2))
     else:
         rms = np.sqrt(np.mean(data.residuals**2))
+
+    logger.info(f"RMS for {data.name}: {rms:.2f} mK")
 
     return GSFlag(
         flags=np.array([rms > rms_threshold]),

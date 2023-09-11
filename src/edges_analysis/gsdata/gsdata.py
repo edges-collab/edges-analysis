@@ -382,7 +382,7 @@ class GSData:
                 time_array = Time(times, format="jd", location=telescope_location)
             freq_array = fl["freq_array"][:] * un.MHz
             data_unit = fl.attrs["data_unit"]
-            name = fl.attrs["name"]
+            objname = fl.attrs["name"]
             loads = fl.attrs["loads"].split("|")
             auxiliary_measurements = {
                 name: fl["auxiliary_measurements"][name][:]
@@ -419,7 +419,7 @@ class GSData:
             history=history,
             telescope_location=telescope_location,
             residuals=residuals,
-            name=name,
+            name=objname,
         )
 
     def write_gsh5(self, filename: str) -> GSData:

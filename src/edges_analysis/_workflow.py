@@ -78,10 +78,10 @@ at subsequent steps, these will be ignored until they are required down the pipe
 from __future__ import annotations
 
 import attrs
-import warnings
 import yaml
 from frozendict import frozendict
 from jinja2 import Template
+from logging import getLogger
 from pathlib import Path
 from typing import Any, Iterable, Tuple, Union
 
@@ -93,6 +93,9 @@ except ImportError:
     from typing_extensions import Self
 
 Pathy = Union[str, Path]
+
+
+logger = getLogger(__name__)
 
 
 def _setpath_converter(value: Iterable[Pathy]) -> set[Path]:
@@ -531,7 +534,7 @@ class ProgressFile:
                             " the 'fork' command."
                         )
                     else:
-                        warnings.warn(
+                        logger.warn(
                             f"Removing progress for step {step.name} and beyond "
                             "because this step has changed since the last run."
                         )
@@ -579,4 +582,4 @@ class ProgressFile:
                     return False
             return True
 
-        return {fl for fl in potential_files if _check_fl(fl)}
+        return {fl for fl in potential_files if _check_fl(fl.absolute())}
