@@ -61,6 +61,7 @@ def lst_average(
         residuals = sum(obj.residuals * n for obj, n in zip(objs, nsamples))
         residuals[tot_nsamples > 0] /= tot_nsamples[tot_nsamples > 0]
         tot_model = sum(obj.model for obj in objs)
+        tot_model[tot_nsamples > 0] /= tot_nsamples[tot_nsamples > 0]
         final_data = tot_model + residuals
     else:
         final_data = sum(obj.data * n for obj, n in zip(objs, nsamples))
