@@ -75,7 +75,7 @@ def balun_and_connector_loss(
     parameters = {
         "low": {
             "balun_length": 43.6 * inch2m,
-            "connector_length": 1.1811023622 * inch2m,  # 0.8
+            "connector_length": 1.1811023622* inch2m,  #   0.8
             "er_air": 1.07,
             "ric_b": ((5 / 16) * inch2m) / 2,
             "roc_b": ((3 / 4) * inch2m) / 2,
