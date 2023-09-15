@@ -338,7 +338,12 @@ def interpolate_step_params(params: dict, data: GSData) -> dict:
     out = {}
     for k, v in params.items():
         if isinstance(v, str):
-            out[k] = yaml.safe_load(v.format(**interpolators))
+            try:
+                out[k] = yaml.safe_load(v.format(**interpolators))
+            except yaml.parser.ParserError:
+                # Sometimes the string is a string and needed to be quoted.
+                out[k] = yaml.safe_load('"' + v.format(**interpolators) + '"')
+
         else:
             out[k] = v
 
