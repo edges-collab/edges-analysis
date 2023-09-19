@@ -15,5 +15,7 @@ absolute_zero = (0 * apu.deg_C).to(apu.K, equivalencies=apu.temperature()).value
 KNOWN_LOCATIONS = {
     "edges": edges_location,
     "alan-edges": apc.EarthLocation(lat=-26.7 * apu.deg, lon=116.5 * apu.deg),
-    "devon-island": apc.EarthLocation(lat= devon_island_lat_deg * apu.deg, lon =  devon_island_lon_deg * apu.deg),
+    "devon-island": apc.EarthLocation(
+        lat=devon_island_lat_deg * apu.deg, lon=devon_island_lon_deg * apu.deg
+    ),
 }
