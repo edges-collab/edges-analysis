@@ -6,7 +6,7 @@ steps:
 
   - function: select_freqs
     params:
-      range: [40, 200]
+      freq_range: [40, 200]
 
   - function: add_weather_data
     params:
@@ -23,7 +23,7 @@ steps:
   - function: select_freqs
     name: crop_50mhz
     params:
-      range: [50, 100]
+      freq_range: [50, 100]
   - function: dicke_calibration
   - function: apply_noise_wave_calibration
     params:

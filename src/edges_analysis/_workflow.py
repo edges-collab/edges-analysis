@@ -364,6 +364,24 @@ class Workflow:
         # re-validate
         self._validate_steps("steps", self.steps)
 
+    def __delitem__(self, key):
+        """Delete a step in the workflow."""
+        if isinstance(key, int):
+            del self.steps[key]
+        elif isinstance(key, str):
+            idx = [s.name for s in self.steps].index(key)
+            del self.steps[idx]
+        else:
+            raise TypeError(f"Invalid key type {type(key)}. Must be int or str")
+
+    def clear_after(self, key):
+        """Clear all steps after the given one."""
+        if isinstance(key, str):
+            key = [s.name for s in self.steps].index(key)
+
+        while len(self) > key:
+            del self[key]
+
     def __contains__(self, key: str) -> bool:
         """Check if a step is in the workflow."""
         return key in [s.name for s in self.steps]
@@ -562,7 +580,7 @@ class ProgressFile:
                             " the 'fork' command."
                         )
                     else:
-                        logger.warn(
+                        logger.warning(
                             f"Removing progress for step {step.name} and beyond "
                             "because this step has changed since the last run."
                         )
@@ -570,13 +588,17 @@ class ProgressFile:
                     start_changing = True
 
                 if start_changing:
+                    # Get rid of all steps after this one.
+                    self.workflow.clear_after(i)
+
                     outputs = ps.get_all_outputs()
                     for fl in outputs:
                         # ensure file is in outdir. Raw input files (eg. ACQ files)
                         # should not be deleted.
                         if self.path.parent in fl.parents:
                             Path(fl).unlink(missing_ok=True)
-                    self.workflow[i] = step
+
+                    self.workflow.append(step)
 
         self.workflow.write_as_progressfile(self.path)
 
