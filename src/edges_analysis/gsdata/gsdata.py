@@ -307,6 +307,8 @@ class GSData:
         **kw,
     ) -> GSData:
         """Read an ACQ file."""
+        filename = Path(filename)
+
         try:
             from read_acq import read_acq
         except ImportError as e:
