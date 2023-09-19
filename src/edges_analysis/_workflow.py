@@ -366,13 +366,10 @@ class Workflow:
 
     def __delitem__(self, key):
         """Delete a step in the workflow."""
-        if isinstance(key, int):
-            del self.steps[key]
-        elif isinstance(key, str):
-            idx = [s.name for s in self.steps].index(key)
-            del self.steps[idx]
-        else:
-            raise TypeError(f"Invalid key type {type(key)}. Must be int or str")
+        if isinstance(key, str):
+            key = [s.name for s in self.steps].index(key)
+
+        del self.steps[key]
 
     def clear_after(self, key):
         """Clear all steps after the given one."""
@@ -547,7 +544,7 @@ class ProgressFile:
         """Update the progress file with new filemaps for a step."""
         try:
             step = self[key]
-        except KeyError:
+        except (KeyError, ValueError):
             raise ValueError(f"Progress file has no step called '{key}'")
 
         step.filemap.add(filemap)

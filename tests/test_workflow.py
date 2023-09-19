@@ -364,6 +364,9 @@ class TestWorkflow:
         with pytest.raises(TypeError):
             simple_workflow["convert"] = 1
 
+        with pytest.raises(TypeError):
+            simple_workflow[27.8] = wf.WorkflowStep("select_lsts")
+
     def test_setitem_badname(self, simple_workflow):
         with pytest.raises(ValueError):
             simple_workflow["convert"] = simple_workflow["select"]
@@ -371,6 +374,9 @@ class TestWorkflow:
     def test_setitem(self, simple_workflow):
         simple_workflow["select"] = wf.WorkflowStep("select_lsts")
         assert len(simple_workflow) == 2
+
+        simple_workflow[1] = wf.WorkflowStep("select_freqs")
+        assert simple_workflow[1].name == "select_freqs"
 
     def test_contains(self, simple_workflow):
         assert "convert" in simple_workflow
@@ -413,6 +419,10 @@ class TestProgressFile:
         with pytest.raises(ValueError):
             wf.ProgressFile("non-existent.yaml")
 
+    def test_add_inputs_nonunique(self, progressfile):
+        progressfile.add_inputs(["input1.txt", "input2.txt"])
+        assert len(progressfile["convert"].get_all_inputs()) == 2
+
     def test_create_with_existing_filemap(self, simple_workflow):
         simple_workflow["convert"].add_to_filemap([[("input1.txt",), ()]])
         with pytest.raises(ValueError, match="Cannot create a new progressfile"):
@@ -439,6 +449,9 @@ class TestProgressFile:
         assert progressfile.workflow["convert"].has_input("input2.txt")
         assert not progressfile.workflow["convert"].has_input("input1.txt")
 
+        progressfile.remove_inputs(["non-existent.txt"])
+        assert progressfile.workflow["convert"].has_input("input2.txt")
+
     def test_update_step(self, progressfile: wf.ProgressFile):
         copy = progressfile.path.with_suffix(".tmp.yaml")
         copyfile(progressfile.path, copy)
@@ -446,6 +459,9 @@ class TestProgressFile:
 
         new.update_step("select", [[("input1.txt",), ("output1.txt",)]])
         assert new["select"].has_output("output1.txt")
+
+        with pytest.raises(ValueError, match="Progress file has no step"):
+            new.update_step("non-existent", ())
 
     def test_harmonize_no_change(
         self, progressfile: wf.ProgressFile, simple_workflow: wf.Workflow
