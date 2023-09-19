@@ -11,11 +11,12 @@ import psutil
 import shutil
 import time
 import tqdm
+import yaml
 from collections import defaultdict
 from edges_io import io
-from functools import partial
 from pathlib import Path
 from pathos.multiprocessing import ProcessPool as Pool
+from read_acq.read_acq import ACQError
 from rich import box
 from rich.console import Console
 from rich.logging import RichHandler
@@ -59,7 +60,7 @@ def _get_files(pth: Path, filt=h5py.is_hdf5) -> list[Path]:
 
 
 def _file_filter(pth: Path):
-    return pth.suffix[1:] in io.Spectrum.supported_formats
+    return pth.suffix[1:] in io.Spectrum.supported_formats + ["gsh5"]
 
 
 @main.command()
@@ -206,7 +207,7 @@ def process(
         files = progress.get_files_to_read_for_step(stepname)
 
         # We need to remove any files that we have already read in.
-        current_files = [d.filename.absolute() for d in data]
+        current_files = [d.filename.absolute() for d in data if d.filename]
         files = [f for f in files if f not in current_files]
 
         if len(data + files) > 0 and step.params:
@@ -228,7 +229,13 @@ def process(
         else:
             # For the convert step, the from_file method IS the step, so we need to
             # pass the parameters, if any.
-            data = [GSData.from_file(f, **step.params) for f in files]
+            data = []
+            for fl in files:
+                try:
+                    data.append(GSData.from_file(fl, **step.params))
+                except ACQError as e:
+                    logger.warning(f"Could not read {fl}: {e}")
+                    progress.remove_inputs([fl])
 
         if not data:
             console.print(f"{stepname} does not need to run on any files.")
@@ -311,6 +318,38 @@ def write_data(data: GSData, step: dict, outdir=None):
     return data.write_gsh5(fname)
 
 
+def interpolate_step_params(params: dict, data: GSData) -> dict:
+    """String-interpolation for step parameters, from attributes of the data."""
+    interpolators = {
+        "prev_stem": data.filename.stem,
+        "prev_dir": data.filename.parent,
+        "name": data.name,
+    }
+    try:
+        yearday = data.get_initial_yearday()
+        year = int(yearday.split(":")[0])
+        day = int(yearday.split(":")[1])
+        interpolators["year"] = year
+        interpolators["day"] = day
+
+    except ValueError:
+        pass
+
+    out = {}
+    for k, v in params.items():
+        if isinstance(v, str):
+            try:
+                out[k] = yaml.safe_load(v.format(**interpolators))
+            except yaml.parser.ParserError:
+                # Sometimes the string is a string and needed to be quoted.
+                out[k] = yaml.safe_load('"' + v.format(**interpolators) + '"')
+
+        else:
+            out[k] = v
+
+    return out
+
+
 def perform_step_on_object(
     data: GSData,
     progress: wf.ProgressFile,
@@ -339,11 +378,13 @@ def perform_step_on_object(
         return [data]
 
     if step.kind == "filter":
-        params = {**step.params, "flag_id": step.name, "write": True}
+        params = {
+            **step.params,
+            "flag_id": step.name,
+            "write": False if step.write is not None else None,
+        }
     else:
         params = step.params
-
-    this_fnc = partial(step._function, **params)
 
     def run_process_with_memory_checks(data: GSData):
         if data.complete_flags.all():
@@ -372,8 +413,10 @@ def perform_step_on_object(
                 logger.warning(f"Resuming processing on pid={os.getpid()}")
 
         logger.debug(f"Initial memory: {pr.memory_info().rss / 1024**2} MB")
+
+        interp_params = interpolate_step_params(params, data)
         try:
-            data = this_fnc(data)
+            data = step._function(data, **interp_params)
         except WeatherError as e:
             logger.warning(str(e))
             return

@@ -15,7 +15,8 @@ from pathlib import Path
 from typing import Sequence
 
 from ..data import DATA_PATH
-from ..gsdata import GSData, GSFlag, add_model, gsregister
+from ..datamodel import add_model
+from ..gsdata import GSData, GSFlag, gsregister
 from .filters import chunked_iterative_model_filter, gsdata_filter
 
 logger = logging.getLogger(__name__)
@@ -429,7 +430,7 @@ class TotalPowerAggregator(FrequencyAggregator):
             weights > 0,
             (
                 np.sum(
-                    data.spectra[0, 0, :, freq_mask].T
+                    data.data[0, 0, :, freq_mask].T
                     * data.nsamples[0, 0, :, freq_mask].T,
                     axis=-1,
                 )

@@ -8,6 +8,7 @@ import numpy as np
 import yaml
 from astropy import units as u
 from attrs import define
+from edges_cal import modelling as mdl
 from edges_cal import types as tp
 from edges_cal import xrfi as rfi
 from edges_cal.xrfi import ModelFilterInfoContainer, model_filter
@@ -15,8 +16,9 @@ from pathlib import Path
 from typing import Callable, Sequence
 
 from .. import tools
-from ..averaging import averaging, lstbin
+from ..averaging import averaging
 from ..data import DATA_PATH
+from ..datamodel import add_model
 from ..gsdata import GSData, GSFlag, gsregister
 
 logger = logging.getLogger(__name__)
@@ -36,7 +38,7 @@ class _GSDataFilter:
         self,
         data: Sequence[tp.PathLike | GSData],
         *,
-        write: bool = False,
+        write: bool | None = None,
         flag_id: str = None,
         **kwargs,
     ) -> GSData | Sequence[GSData]:
@@ -53,7 +55,7 @@ class _GSDataFilter:
             )
 
         def per_file_processing(data: GSData, flags: GSFlag):
-            old = np.sum(data.complete_flags)
+            old = np.sum(data.flagged_nsamples == 0)
 
             data = data.add_flags(
                 flag_id or self.func.__name__, flags, append_to_file=write
@@ -71,7 +73,7 @@ class _GSDataFilter:
             else:
                 sz = flags.flags.size / 100
                 new = np.sum(flags.flags)
-                tot = np.sum(data.complete_flags)
+                tot = np.sum(data.flagged_nsamples == 0)
                 totsz = data.complete_flags.size
 
                 if not data.in_lst:
@@ -382,7 +384,7 @@ class _RFIFilterFactory:
 
         out_flags = tools.run_xrfi(
             method=self.method,
-            spectrum=data.spectra[..., mask],
+            spectrum=data.data[..., mask],
             freq=data.freq_array[mask].to_value("MHz"),
             flags=flags[..., mask],
             weights=data.nsamples[..., mask],
@@ -439,12 +441,37 @@ def rfi_explicit_filter(*, data: GSData, file: tp.PathLike | None = None):
 
 @gsregister("filter")
 @gsdata_filter()
+def flag_frequency_ranges(
+    *, data: GSData, freq_ranges: list[tuple[float, float]], invert: bool = False
+):
+    """Flag frequency ranges."""
+    if invert:
+        flags = np.ones(data.nfreqs, dtype=bool)
+    else:
+        flags = np.zeros(data.nfreqs, dtype=bool)
+
+    fmhz = data.freq_array.to_value("MHz")
+    for fmin, fmax in freq_ranges:
+        if invert:
+            flags[(fmhz >= fmin) & (fmhz < fmax)] = False
+        else:
+            flags |= fmhz >= fmin
+            flags |= fmhz < fmax
+
+    return GSFlag(
+        flags=flags,
+        axes=("freq",),
+    )
+
+
+@gsregister("filter")
+@gsdata_filter()
 def negative_power_filter(*, data: GSData):
     """Filter out integrations that have *any* negative/zero power.
 
     These integrations obviously have some weird stuff going on.
     """
-    flags = np.array([np.any(data.spectra[slc] <= 0) for slc in data.time_iter()])
+    flags = np.array([np.any(data.data[slc] <= 0) for slc in data.time_iter()])
 
     return GSFlag(flags=flags, axes=("time",))
 
@@ -489,7 +516,7 @@ def _peak_power_filter(
     if not np.any(mask):
         return np.zeros(data.ntimes, dtype=bool)
 
-    spec = data.spectra[..., mask]
+    spec = data.data[..., mask]
     peak_power = spec.max(axis=-1)
 
     if mean_freq_range is not None:
@@ -498,7 +525,7 @@ def _peak_power_filter(
         if not np.any(mask):
             return np.zeros(data.ntimes, dtype=bool)
 
-        spec = data.spectra[..., mask]
+        spec = data.data[..., mask]
 
     mean, _ = averaging.weighted_mean(
         spec,
@@ -611,7 +638,7 @@ def maxfm_filter(*, data: GSData, threshold: float = 200):
     if not np.any(fm_freq):
         return GSData(flags=np.zeros(data.ntimes, dtype=bool), axes=("time",))
 
-    fm_power = data.spectra[..., fm_freq]
+    fm_power = data.data[..., fm_freq]
 
     avg = (fm_power[..., 2:] + fm_power[..., :-2]) / 2
     fm_deviation_power = np.abs(fm_power[..., 1:-1] - avg)
@@ -649,9 +676,9 @@ def rmsf_filter(
         return np.zeros(data.ntimes, dtype=bool)
 
     if data.data_unit == "uncalibrated":
-        spec = (data.spectra * tload) + tcal
-    elif data.data_unit in ("uncalibrated_temp", "temperature", "model_residuals"):
-        spec = data.spectra
+        spec = (data.data * tload) + tcal
+    elif data.data_unit in ("uncalibrated_temp", "temperature"):
+        spec = data.data
     else:
         raise ValueError(
             "Unsupported data_unit for rmsf_filter. "
@@ -695,8 +722,8 @@ def filter_150mhz(*, data: GSData, threshold: float):
     freq_mask = (data.freq_array >= 152.75 * u.MHz) & (
         data.freq_array <= 154.25 * u.MHz
     )
-    mean = np.mean(data.spectra[..., freq_mask], axis=-1)
-    rms = np.sqrt(np.mean((data.spectra[..., freq_mask] - mean) ** 2))
+    mean = np.mean(data.data[..., freq_mask], axis=-1)
+    rms = np.sqrt(np.mean((data.data[..., freq_mask] - mean) ** 2))
 
     freq_mask2 = (data.freq_array >= 156.25 * u.MHz) & (
         data.freq_array <= 157.75 * u.MHz
@@ -732,7 +759,7 @@ def power_percent_filter(
     if data.data_unit != "power" or data.nloads != 3 or "ant" not in data.loads:
         raise ValueError("Cannot perform power percent filter on non-power data!")
 
-    p0 = data.spectra[data.loads.index("ant")]
+    p0 = data.data[data.loads.index("ant")]
 
     freqs = data.freq_array.to_value("MHz")
     mask = (freqs > freq_range[0]) & (freqs <= freq_range[1])
@@ -750,26 +777,48 @@ def power_percent_filter(
     )
 
 
+@gsregister("filter")
 @gsdata_filter()
 def object_rms_filter(
     data: GSData,
     rms_threshold: float,
-    gha_min: float = 0,
-    gha_max: float = 24,
     f_low: float = 0.0,
     f_high: float = np.inf,
     weighted: bool = False,
+    flagged: bool = True,
+    model: mdl.Model | None = None,
 ) -> bool:
-    """Filter out an entire object based on the rms of the residuals."""
+    """Filter integrations based on the rms of the residuals."""
     if data.ntimes > 1:
-        data = lstbin.lst_bin(data, first_edge=gha_min, binsize=gha_max - gha_min)
-    data = data.select_freqs(range=(f_low * u.MHz, f_high * u.MHz))
+        raise ValueError(
+            "The object_rms_filter is meant to be performed on lst-averaged data"
+        )
 
+    data = flag_frequency_ranges(
+        data=data, freq_ranges=[(f_low, f_high)], invert=True, write=False
+    )
+
+    if data.residuals is None:
+        if model is None:
+            raise ValueError(
+                "Cannot perform object rms filter without residuals or a model."
+            )
+        data = add_model(data=data, model=model)
     if weighted:
         rms = np.sqrt(
-            averaging.weighted_mean(data=data.resids**2, weights=data.nsamples)[0]
+            averaging.weighted_mean(
+                data=data.residuals**2, weights=data.flagged_nsamples
+            )[0]
         )
+    elif flagged:
+        flags = data.flagged_nsamples == 0
+        rms = np.sqrt(np.mean(data.residuals[~flags] ** 2))
     else:
-        rms = np.sqrt(np.mean(data.resids**2))
+        rms = np.sqrt(np.mean(data.residuals**2))
 
-    return rms > rms_threshold
+    logger.info(f"RMS for {data.name}: {rms:.2f} mK")
+
+    return GSFlag(
+        flags=np.array([rms > rms_threshold]),
+        axes=("time",),
+    )

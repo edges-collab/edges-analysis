@@ -49,6 +49,8 @@ class GSFlag:
         data if more is added (eg. flags, data model).
     """
 
+    _axes = ("load", "pol", "time", "freq")
+
     flags: np.ndarray = npfield(dtype=bool)
     axes: tuple[str] = field(converter=tuple)
     history: History = field(
@@ -73,6 +75,15 @@ class GSFlag:
 
         if not idx == sorted(idx):
             raise ValueError("Axes must be in order load, pol, time, freq")
+
+    @axes.default
+    def _axes_default(self):
+        if self.flags.ndim == 4:
+            return self._axes
+        else:
+            raise ValueError(
+                "Axes must be specified if flag array has fewer than 4 dims"
+            )
 
     @cached_property
     def nfreqs(self) -> int | None:
@@ -120,12 +131,15 @@ class GSFlag:
     def read_gsflag(cls, filename: str) -> Self:
         """Reads a GSFlag file and stores the data in the GSFlag object."""
         obj = hickle.load(filename)
-        obj = obj.update(history=Stamp("Read GSFlag file", filename=filename))
-        return obj
+        return obj.update(
+            history=Stamp("Read GSFlag file", parameters={"filename": filename})
+        )
 
     def write_gsflag(self, filename: str) -> Self:
         """Writes the data in the GSData object to a GSH5 file."""
-        new = self.update(history=Stamp("Wrote GSFlag file", filename=filename))
+        new = self.update(
+            history=Stamp("Wrote GSFlag file", parameters={"filename": filename})
+        )
         hickle.dump(new, filename, mode="w")
         return new.update(filename=filename)
 

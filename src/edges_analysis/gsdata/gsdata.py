@@ -20,6 +20,7 @@ from attrs import define, evolve, field
 from attrs import validators as vld
 from functools import cached_property
 from pathlib import Path
+from read_acq.read_acq import ACQError
 from typing import Iterable, Literal
 
 from .. import coordinates as crd
@@ -71,13 +72,9 @@ class GSData:
         step.
     telescope_name
         The name of the telescope.
-    data_model
-        A :class:`GSDataModel` object describing a model of the data per-integration.
-        This is not required. If given, the data array is expected to be in the form
-        of residuals to the model.
-    data_unit
-        The type of the data. This must be one of "power", "temperature", "uncalibrated"
-        or "model_residuals".
+    residuals
+        An optional array of the same shape as data that holds the residuals of a model
+        fit to the data.
     auxiliary_measurements
         A dictionary mapping measurement names to arrays. Each array must have its
         leading axis be the same length as the time array.
@@ -106,13 +103,18 @@ class GSData:
         factory=History, validator=vld.instance_of(History), eq=False
     )
     telescope_name: str = field(default="unknown")
-    data_model = field(default=None)
+    residuals: np.ndarray | None = npfield(
+        default=None, possible_ndims=(4,), dtype=float
+    )
+
     data_unit: Literal[
-        "power", "temperature", "uncalibrated", "uncalibrated_temp", "model_residuals"
+        "power", "temperature", "uncalibrated", "uncalibrated_temp"
     ] = field(default="power")
     auxiliary_measurements: dict = field(factory=dict)
     time_ranges: Time | Longitude = timefield(shape=(None, None, 2))
     filename: Path | None = field(default=None, converter=cnv.optional(Path))
+    _file_appendable: bool = field(default=True, converter=bool)
+    name: str = field(default="", converter=str)
 
     @nsamples.validator
     def _nsamples_validator(self, attribute, value):
@@ -136,6 +138,11 @@ class GSData:
 
             if not isinstance(key, str):
                 raise ValueError("flags keys must be strings")
+
+    @residuals.validator
+    def _residuals_validator(self, attribute, value):
+        if value is not None and value.shape != self.data.shape:
+            raise ValueError("residuals must have the same shape as data")
 
     @freq_array.validator
     def _freq_array_validator(self, attribute, value):
@@ -248,58 +255,12 @@ class GSData:
             "power",
             "temperature",
             "uncalibrated",
-            "model_residuals",
             "uncalibrated_temp",
         ):
             raise ValueError(
                 'data_unit must be one of "power", "temperature", "uncalibrated",'
-                '"model_residuals", "uncalibrated_temp'
+                '"uncalibrated_temp"'
             )
-
-        if value == "model_residuals" and self.data_model is None:
-            raise ValueError(
-                'data_unit cannot be "model_residuals" if data_model is None'
-            )
-
-    @data_model.validator
-    def _data_model_validator(self, att, val):
-        from .datamodel import GSDataModel
-
-        if val is None:
-            return
-
-        if not isinstance(val, GSDataModel):
-            raise TypeError("data_model must be a GSDataModel")
-
-        if val.parameters.shape[:3] != self.data.shape[:3]:
-            raise ValueError(
-                f"data_model parameters shape mismatch: {val.parameters.shape[:3]} "
-                f"vs. {self.data.shape[:3]}"
-            )
-
-    @cached_property
-    def spectra(self) -> np.ndarray:
-        """The measured spectra.
-
-        In the case that the data is not in units of "model_residuals", this is simply
-        the data. Otherwise, it is the models + data.
-        """
-        if self.data_unit == "model_residuals":
-            return self.data_model.get_spectra(self)
-        else:
-            return self.data
-
-    @cached_property
-    def resids(self) -> np.ndarray:
-        """The model residuals.
-
-        In the case that the data is in units of "model_residuals", this is simply
-        the data. Otherwise, it is the data - model.
-        """
-        if self.data_unit != "model_residuals":
-            return self.data_model.get_residuals(self)
-        else:
-            return self.data
 
     @property
     def nfreqs(self) -> int:
@@ -321,11 +282,33 @@ class GSData:
         """The number of polarizations."""
         return self.data.shape[1]
 
+    @property
+    def model(self) -> np.ndarray | None:
+        """The model of the data."""
+        if self.residuals is None:
+            return None
+
+        return self.data - self.residuals
+
+    @property
+    def resids(self) -> np.ndarray | None:
+        """The residuals of the data."""
+        warnings.warn(
+            DeprecationWarning("Use the 'residuals' attribute instead of 'resids'")
+        )
+        return self.residuals
+
     @classmethod
     def read_acq(
-        cls, filename: str | Path, telescope_location: str | EarthLocation, **kw
+        cls,
+        filename: str | Path,
+        telescope_location: str | EarthLocation,
+        name="{year}_{day}",
+        **kw,
     ) -> GSData:
         """Read an ACQ file."""
+        filename = Path(filename)
+
         try:
             from read_acq import read_acq
         except ImportError as e:
@@ -334,6 +317,9 @@ class GSData:
             ) from e
 
         _, (pant, pload, plns), anc = read_acq.decode_file(filename, meta=True)
+
+        if pant.size == 0:
+            raise ACQError(f"No data in file {filename}")
 
         times = Time(anc.data.pop("times"), format="yday", scale="utc")
 
@@ -348,6 +334,11 @@ class GSData:
                         "telescope_location must be an EarthLocation or a known site, "
                         f"got {telescope_location}"
                     )
+
+        year, day, hour, minute = times[0, 0].to_value("yday", "date_hm").split(":")
+        name = name.format(
+            year=year, day=day, hour=hour, minute=minute, stem=filename.stem
+        )
         return cls(
             data=np.array([pant.T, pload.T, plns.T])[:, np.newaxis],
             time_array=times,
@@ -357,6 +348,7 @@ class GSData:
             auxiliary_measurements={name: anc.data[name] for name in anc.data},
             filename=filename,
             telescope_location=telescope_location,
+            name=name,
             **kw,
         )
 
@@ -378,8 +370,6 @@ class GSData:
     @classmethod
     def read_gsh5(cls, filename: str) -> GSData:
         """Reads a GSH5 file and stores the data in the GSData object."""
-        from .datamodel import GSDataModel
-
         with h5py.File(filename, "r") as fl:
             data = fl["data"][:]
             lat, lon, alt = fl["telescope_location"][:]
@@ -394,6 +384,7 @@ class GSData:
                 time_array = Time(times, format="jd", location=telescope_location)
             freq_array = fl["freq_array"][:] * un.MHz
             data_unit = fl.attrs["data_unit"]
+            objname = fl.attrs["name"]
             loads = fl.attrs["loads"].split("|")
             auxiliary_measurements = {
                 name: fl["auxiliary_measurements"][name][:]
@@ -412,10 +403,10 @@ class GSData:
 
             history = History.from_repr(fl.attrs["history"])
 
-            if "data_model" in fl:
-                data_model = GSDataModel.from_h5(fl["data_model"])
+            if "residuals" in fl:
+                residuals = fl["residuals"][()]
             else:
-                data_model = None
+                residuals = None
 
         return cls(
             data=data,
@@ -428,8 +419,9 @@ class GSData:
             nsamples=nsamples,
             flags=flags,
             history=history,
-            data_model=data_model,
             telescope_location=telescope_location,
+            residuals=residuals,
+            name=objname,
         )
 
     def write_gsh5(self, filename: str) -> GSData:
@@ -467,10 +459,11 @@ class GSData:
 
             # Now history
             fl.attrs["history"] = repr(self.history)
+            fl.attrs["name"] = self.name
 
             # Data model
-            if self.data_model is not None:
-                self.data_model.write(fl, "data_model")
+            if self.residuals is not None:
+                fl["residuals"] = self.residuals
 
             # Now aux measurements
             aux_grp = fl.create_group("auxiliary_measurements")
@@ -500,148 +493,49 @@ class GSData:
         if not isinstance(other, GSData):
             raise TypeError("can only add GSData objects")
 
-        if np.any(self.freq_array != other.freq_array) and np.any(
-            self.time_array != other.time_array
-        ):
-            raise ValueError(
-                "Cannot add GSData objects with different frequency and time arrays"
-            )
+        if self.data.shape != other.data.shape:
+            raise ValueError("Cannot add GSData objects with different shapes")
 
-        if not np.all(self.time_array == other.time_array):
-            # concatenate over time axis
-            data = np.concatenate((self.data, other.data), axis=2)
-            aux = {
-                k: np.concatenate(
-                    (self.auxiliary_measurements[k], other.auxiliary_measurements[k])
-                )
-                for k in self.auxiliary_measurements
-            }
-            nsamples = np.concatenate((self.nsamples, other.nsamples), axis=2)
-            if all(k in other.flags for k in self.flags):
-                flags = {
-                    k: np.concatenate((self.flags[k], other.flags[k]), axis=2)
-                    for k in self.flags
-                }
-            else:
-                # Can only use "complete flags"
-                flags = {
-                    "complete": np.concatenate(
-                        (self.complete_flags, other.complete_flags), axis=2
-                    )
-                }
-
-            if getattr(self.data_model, "model", 1) != getattr(
-                other.data_model, "model", 2
-            ):
-                warnings.warn(
-                    "data models for two objects are different. "
-                    "Result will have no data model."
-                )
-                data_model = None
-            else:
-                data_model = self.data_model.update(
-                    parameters=np.concatenate(
-                        (self.data_model.parameters, other.data_model.parameters),
-                        axis=2,
-                    )
-                )
-
-            if self.in_lst:
-                time_array = np.concatenate((self.time_array, other.time_array), axis=0)
-                time_ranges = np.concatenate(
-                    (self.time_ranges, other.time_ranges), axis=0
-                )
-            else:
-                time_array = Time(
-                    np.concatenate((self.time_array.jd, other.time_array.jd), axis=0),
-                    format="jd",
-                )
-                time_ranges = Time(
-                    np.concatenate((self.time_ranges.jd, other.time_ranges.jd), axis=0),
-                    format="jd",
-                )
-
-            return self.update(
-                data=data,
-                auxiliary_measurements=aux,
-                nsamples=nsamples,
-                flags=flags,
-                time_array=time_array,
-                time_ranges=time_ranges,
-                data_model=data_model,
-            )
-
-        if not np.all(self.freq_array == other.freq_array):
-            if self.data_model is not None:
-                warnings.warn(
-                    "Cannot concatenate existing data_models over frequency axis."
-                )
-
-            if all(k in other.flags for k in self.flags):
-                flags = {
-                    k: np.concatenate((self.flags[k], other.flags[k]), axis=3)
-                    for k in self.flags
-                }
-            else:
-                # Can only use "complete flags"
-                flags = {
-                    "complete": np.concatenate(
-                        (self.complete_flags, other.complete_flags), axis=3
-                    )
-                }
-            # concatenate over frequency axis
-            return self.update(
-                data=np.concatenate((self.data, other.data), axis=3),
-                nsamples=np.concatenate((self.nsamples, other.nsamples), axis=3),
-                freq_array=np.concatenate((self.freq_array, other.freq_array)),
-                data_model=None,
-                flags=flags,
-            )
-
-        # If non of the above, then we have two GSData objects at the same times and
-        # frequencies. Adding them should just be a weighted sum.
         if self.auxiliary_measurements or other.auxiliary_measurements:
             raise ValueError("Cannot add GSData objects with auxiliary measurements")
 
+        if not np.allclose(self.freq_array, other.freq_array):
+            raise ValueError("Cannot add GSData objects with different frequencies")
+
+        if self.in_lst != other.in_lst:
+            raise ValueError("Cannot add GSData objects with different time formats")
+
+        if self.in_lst:
+            if not np.allclose(self.time_array.hour, other.time_array.hour):
+                raise ValueError("Cannot add GSData objects with different LSTs")
+        else:
+            if not np.allclose(self.time_array.jd, other.time_array.jd):
+                raise ValueError("Cannot add GSData objects with different times")
+
+        # If non of the above, then we have two GSData objects at the same times and
+        # frequencies. Adding them should just be a weighted sum.
         nsamples = self.flagged_nsamples + other.flagged_nsamples
         d1 = np.ma.masked_array(self.data, mask=self.complete_flags)
         d2 = np.ma.masked_array(other.data, mask=other.complete_flags)
 
         mean = (self.flagged_nsamples * d1 + other.flagged_nsamples * d2) / nsamples
 
-        if getattr(self.data_model, "model", 1) != getattr(
-            other.data_model, "model", 2
-        ):
-            warnings.warn(
-                "data models for two objects are different. "
-                "Result will have no data model."
-            )
-            data_model = None
-        elif self.data_model is not None and (
-            np.any(np.diff(self.flagged_nsamples, axis=-1) != 0)
-            or np.any(np.diff(other.flagged_nsamples, axis=-1) != 0)
-        ):
-            warnings.warn(
-                "Cannot add data models for objects with non-uniform nsamples "
-                "over freq."
-            )
-            data_model = None
-        elif self.data_model is not None and other.data_model is not None:
-            mp1 = self.data_model.parameters.copy()
-            mp1[np.isnan(mp1)] = 0  # we're going to be multiplying by nsamples anyway
-            mp2 = other.data_model.parameters.copy()
-            mp2[np.isnan(mp2)] = 0
-
-            data_model = self.data_model.update(
-                parameters=(
-                    mp1 * self.flagged_nsamples[..., [0]]
-                    + mp2 * other.flagged_nsamples[..., [0]]
-                )
-                / nsamples[..., [0]]
-            )
+        if self.residuals is not None and other.residuals is not None:
+            r1 = np.ma.masked_array(self.residuals, mask=self.complete_flags)
+            r2 = np.ma.masked_array(other.residuals, mask=other.complete_flags)
+            resids = (
+                self.flagged_nsamples * r1 + other.flagged_nsamples * r2
+            ) / nsamples
         else:
-            data_model = None
-        return self.update(data=mean.data, nsamples=nsamples, data_model=data_model)
+            resids = None
+
+        total_flags = GSFlag(flags=self.complete_flags & other.complete_flags)
+        return self.update(
+            data=mean.data,
+            residuals=resids,
+            nsamples=nsamples,
+            flags={"summed_flags": total_flags},
+        )
 
     @cached_property
     def lst_array(self) -> Longitude:
@@ -771,7 +665,10 @@ class GSData:
         return out
 
     def add_flags(
-        self, filt: str, flags: np.ndarray | GSFlag, append_to_file: bool | None = None
+        self,
+        filt: str,
+        flags: np.ndarray | GSFlag | Path,
+        append_to_file: bool | None = None,
     ):
         """Append a set of flags to the object and optionally append them to file.
 
@@ -780,6 +677,8 @@ class GSData:
         """
         if isinstance(flags, np.ndarray):
             flags = GSFlag(flags=flags, axes=("load", "pol", "time", "freq"))
+        elif isinstance(flags, (str, Path)):
+            flags = GSFlag.from_file(flags)
 
         flags._check_compat(self)
 
@@ -789,9 +688,9 @@ class GSData:
         new = self.update(flags={**self.flags, **{filt: flags}})
 
         if append_to_file is None:
-            append_to_file = new.filename is not None
+            append_to_file = new.filename is not None and new._file_appendable
 
-        if append_to_file and new.filename is None:
+        if append_to_file and (new.filename is None or not new._file_appendable):
             raise ValueError(
                 "Cannot append to file without a filename specified on the object!"
             )

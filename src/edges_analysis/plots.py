@@ -8,7 +8,8 @@ from astropy import units as apu
 
 from .averaging import averaging
 from .averaging.lstbin import lst_bin
-from .gsdata import GSData, add_model
+from .datamodel import add_model
+from .gsdata import GSData
 from .gsdata.select import select_lsts
 
 
@@ -23,7 +24,7 @@ def plot_waterfall(
     xlab: bool = True,
     ylab: bool = True,
     title: bool | str = True,
-    attribute: str = "spectra",
+    attribute: str = "data",
     **imshow_kwargs,
 ):
     """Plot a waterfall from a GSData object.
@@ -54,8 +55,8 @@ def plot_waterfall(
         of the dataset. If a string, use that as the title.
     attribute
         The attribute to actually plot. Can be any attribute of the data object that has
-        the same array shape as the primary data array. This includes "data", "spectra",
-        "resids", "complete_flags", "nsamples".
+        the same array shape as the primary data array. This includes "data",
+        "residuals", "complete_flags", "nsamples".
     """
     q = getattr(data, attribute)
     if not hasattr(q, "shape") or q.shape != data.data.shape:
@@ -125,7 +126,7 @@ def plot_time_average(
     lst_max: float = 24,
     load: int = 0,
     pol: int = 0,
-    attribute: str = "spectra",
+    attribute: str = "data",
     offset: float = 0.0,
 ):
     """Make a 1D plot of the time-averaged data.
@@ -149,8 +150,8 @@ def plot_time_average(
         The polarization to plot (only one polarization is plotted).
     attribute
         The attribute to actually plot. Can be any attribute of the data object that has
-        the same array shape as the primary data array. This includes "data", "spectra",
-        "resids", "complete_flags", "nsamples".
+        the same array shape as the primary data array. This includes "data",
+        "residuals", "complete_flags", "nsamples".
     offset
         The offset to add to the data before plotting. Useful if plotting multiple
         averages on the same axis.
@@ -216,14 +217,14 @@ def plot_daily_residuals(
         fig, ax = plt.subplots(1, 1)
 
     for i, data in enumerate(objs):
-        if data.data_model is None and model is None:
+        if data.residuals is None and model is None:
             raise ValueError("If data has no model, must provide one!")
 
-        if data.data_model is None:
+        if data.residuals is None:
             data = add_model(data, model=model)
 
         ax, d = plot_time_average(
-            data, attribute="resids", offset=separation * i, ax=ax, **kw
+            data, attribute="residuals", offset=separation * i, ax=ax, **kw
         )
 
         rms = np.sqrt(

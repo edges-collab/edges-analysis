@@ -15,7 +15,8 @@ from subprocess import run
 from edges_analysis import cli, const
 from edges_analysis.calibration.calibrate import dicke_calibration
 from edges_analysis.config import config
-from edges_analysis.gsdata import GSData, add_model
+from edges_analysis.datamodel import add_model
+from edges_analysis.gsdata import GSData
 
 from .mock_gsdata import create_mock_edges_data
 

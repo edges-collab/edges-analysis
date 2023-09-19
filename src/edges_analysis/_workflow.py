@@ -78,10 +78,10 @@ at subsequent steps, these will be ignored until they are required down the pipe
 from __future__ import annotations
 
 import attrs
-import warnings
 import yaml
 from frozendict import frozendict
 from jinja2 import Template
+from logging import getLogger
 from pathlib import Path
 from typing import Any, Iterable, Tuple, Union
 
@@ -93,6 +93,9 @@ except ImportError:
     from typing_extensions import Self
 
 Pathy = Union[str, Path]
+
+
+logger = getLogger(__name__)
 
 
 def _setpath_converter(value: Iterable[Pathy]) -> set[Path]:
@@ -162,6 +165,12 @@ class FileMap:
     def add(self, maps: Iterable[FileMapEntry | dict | _FileMapType]):
         """Add to the filemap."""
         self.maps.update(_filemap_converter(maps))
+
+    def remove(self, fl: Pathy):
+        """Remove an input file from the filemap."""
+        for fmap in list(self.maps):
+            if Path(fl) in fmap.inputs:
+                self.maps.remove(fmap)
 
     def as_yamlable(self) -> list[_FileMapType]:
         """Get the filemap as a YAML-serializable object."""
@@ -280,6 +289,10 @@ class WorkflowStep:
         """Add to the filemap."""
         self.filemap.add(maps)
 
+    def remove_from_filemap(self, fl: Pathy):
+        """Remove an input file from the filemap."""
+        self.filemap.remove(fl)
+
 
 @attrs.define()
 class Workflow:
@@ -330,6 +343,13 @@ class Workflow:
         elif isinstance(key, str):
             return self.steps[[s.name for s in self.steps].index(key)]
 
+    def __setitem__(self, key: int | str, value: WorkflowStep):
+        """Set a step in the workflow."""
+        if isinstance(key, int):
+            self.steps[key] = value
+        elif isinstance(key, str):
+            self.steps[[s.name for s in self.steps].index(key)] = value
+
     def __contains__(self, key: str) -> bool:
         """Check if a step is in the workflow."""
         return key in [s.name for s in self.steps]
@@ -345,6 +365,10 @@ class Workflow:
     def index(self, key: str) -> int:
         """Get the index of a step."""
         return [s.name for s in self.steps].index(key)
+
+    def insert(self, index: int, step: WorkflowStep):
+        """Insert a step into the workflow."""
+        self.steps.insert(index, step)
 
     def __len__(self):
         """Get the length of the workflow."""
@@ -438,6 +462,41 @@ class ProgressFile:
 
         self.workflow.write_as_progressfile(self.path)
 
+    def remove_inputs(self, inputs: Iterable[Path]):
+        """Remove inputs from the progressfile."""
+        inputs = list(map(Path, inputs))
+        if "convert" not in self:
+            raise ValueError(
+                "Cannot remove inputs from a progressfile with no convert step."
+            )
+
+        current = self["convert"].get_all_inputs()
+
+        if not any(p in current for p in inputs):
+            # Everything's there already, do nothing.
+            return
+
+        for inp in inputs:
+            self["convert"].remove_from_filemap(inp)
+
+        # We also need to remove files that are gotten by combining datafiles,
+        # because if we're remove new inputs, these files will end up changing.
+        blastoff = False
+        for step in self:
+            if step.name == "convert":
+                continue
+
+            if step.kind == "gather":
+                blastoff = True
+
+            if blastoff:
+                for fl in step.get_all_outputs():
+                    if Path(fl).exists():
+                        Path(fl).unlink()
+                step.filemap.clear()
+
+        self.workflow.write_as_progressfile(self.path)
+
     def update_step(self, key: str, filemap: FileMap | _FileMapType):
         """Update the progress file with new filemaps for a step."""
         try:
@@ -475,7 +534,7 @@ class ProgressFile:
                             " the 'fork' command."
                         )
                     else:
-                        warnings.warn(
+                        logger.warn(
                             f"Removing progress for step {step.name} and beyond "
                             "because this step has changed since the last run."
                         )
@@ -489,7 +548,7 @@ class ProgressFile:
                         # should not be deleted.
                         if self.path.parent in fl.parents:
                             Path(fl).unlink(missing_ok=True)
-                    ps.filemap.clear()
+                    self.workflow[i] = step
 
         self.workflow.write_as_progressfile(self.path)
 
@@ -523,4 +582,4 @@ class ProgressFile:
                     return False
             return True
 
-        return {fl for fl in potential_files if _check_fl(fl)}
+        return {fl for fl in potential_files if _check_fl(fl.absolute())}
