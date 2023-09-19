@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import pytest
+
 import numpy as np
 from astropy import units as u
+from edges_cal import modelling as mdl
 from pathlib import Path
 
-from edges_analysis import beams
+from edges_analysis import beams, const
 from edges_analysis.calibration import loss
-from edges_analysis.sky_models import Haslam408
+from edges_analysis.sky_models import ConstantIndex, Haslam408, Haslam408AllNoh
 
 
 def test_beam_from_feko():
@@ -81,7 +84,7 @@ def test_simulate_spectra():
         f_low=50 * u.MHz,
         f_high=55 * u.MHz,
         lsts=np.arange(0, 24, 12),
-        sky_model=Haslam408(max_res=3),
+        sky_model=Haslam408(max_nside=8),
     )
 
     assert sky_map.shape == (len(lst), len(freq))
@@ -102,7 +105,7 @@ def test_antenna_beam_factor():
         f_low=50 * u.MHz,
         f_high=56 * u.MHz,
         lsts=np.arange(0, 24, 12),
-        sky_model=Haslam408(max_res=3),
+        sky_model=Haslam408(max_nside=8),
     )
     assert isinstance(abf, beams.BeamFactor)
 
@@ -120,3 +123,211 @@ def test_ground_loss_from_beam(beam_settings: Path):
 
     loss_fraction = 1 - loss.ground_loss(filename=None, beam=beam, freq=beam.frequency)
     assert loss_fraction.max() < 1
+
+
+def test_interp_methods():
+    beam = beams.Beam.from_file("low")
+
+    sphere = beam.angular_interpolator(0, "sphere-spline")
+    cubic = beam.angular_interpolator(0, "linear")
+
+    assert np.allclose(
+        sphere(beam.azimuth[:10], beam.elevation[:10]),
+        cubic(beam.azimuth[:10], beam.elevation[:10]),
+    )
+
+    rspline = beam.angular_interpolator(0, "spline")
+    assert np.allclose(
+        sphere(beam.azimuth[:10], beam.elevation[:10]),
+        rspline(beam.azimuth[:10], beam.elevation[:10]),
+    )
+
+
+def test_beam_solid_angle():
+    beam = beams.Beam.from_ideal(delta_el=0.1, delta_az=0.1)
+    assert np.allclose(
+        beam.get_beam_solid_angle(), 2 * np.pi, rtol=1e-3
+    )  # half the sky
+
+
+def test_bad_beamfactor_args():
+    with pytest.raises(ValueError, match="Frequencies must be monotonically"):
+        beams.BeamFactor(
+            frequencies=np.array([1, 10, 2, 7]),
+            lsts=np.array([0, 1, 2]),
+            reference_frequency=75.0,
+            antenna_temp=np.zeros((3, 4)),
+            antenna_temp_ref=np.zeros((3, 4)),
+        )
+
+    with pytest.raises(ValueError, match="LSTs must be monotonically increasing"):
+        beams.BeamFactor(
+            frequencies=np.linspace(50, 100, 10),
+            lsts=np.array([0, np.pi, 2.0, 2 * np.pi, 0.1]),
+            reference_frequency=75.0,
+            antenna_temp=np.zeros((5, 10)),
+            antenna_temp_ref=np.zeros((5, 10)),
+        )
+
+    with pytest.raises(ValueError, match="Reference frequency must be positive"):
+        beams.BeamFactor(
+            frequencies=np.linspace(50, 100, 10),
+            lsts=np.array([0, 1, 2]),
+            reference_frequency=-75.0,
+            antenna_temp=np.zeros((3, 10)),
+            antenna_temp_ref=np.zeros((3, 10)),
+        )
+
+    with pytest.raises(ValueError, match="antenna_temp must be a 2D array"):
+        beams.BeamFactor(
+            frequencies=np.linspace(50, 100, 10),
+            lsts=np.array([0, 1, 2]),
+            reference_frequency=75.0,
+            antenna_temp=np.zeros((3,)),
+            antenna_temp_ref=np.zeros((3, 10)),
+        )
+
+    with pytest.raises(ValueError, match="antenna_temp must have shape"):
+        beams.BeamFactor(
+            frequencies=np.linspace(50, 100, 10),
+            lsts=np.array([0, 1, 2]),
+            reference_frequency=75.0,
+            antenna_temp=np.zeros((3, 11)),
+            antenna_temp_ref=np.zeros((3, 10)),
+        )
+
+    with pytest.raises(ValueError, match="Antenna temperature must be positive"):
+        beams.BeamFactor(
+            frequencies=np.linspace(50, 100, 10),
+            lsts=np.array([0, 1, 2]),
+            reference_frequency=75.0,
+            antenna_temp=-np.ones((3, 10)),
+            antenna_temp_ref=np.zeros((3, 10)),
+        )
+
+    with pytest.raises(ValueError, match="Reference antenna temperature must be a 1D"):
+        beams.BeamFactor(
+            frequencies=np.linspace(50, 100, 10),
+            lsts=np.array([0, 1, 2]),
+            reference_frequency=75.0,
+            antenna_temp=np.zeros((3, 10)),
+            antenna_temp_ref=np.zeros((3, 10, 7)),
+        )
+
+    with pytest.raises(ValueError, match="If Reference antenna temperature is 1D"):
+        beams.BeamFactor(
+            frequencies=np.linspace(50, 100, 10),
+            lsts=np.array([0, 1, 2]),
+            reference_frequency=75.0,
+            antenna_temp=np.zeros((3, 10)),
+            antenna_temp_ref=np.zeros((10,)),
+        )
+
+    with pytest.raises(ValueError, match="If Reference antenna temperature is 2D"):
+        beams.BeamFactor(
+            frequencies=np.linspace(50, 100, 10),
+            lsts=np.array([0, 1, 2]),
+            reference_frequency=75.0,
+            antenna_temp=np.zeros((3, 10)),
+            antenna_temp_ref=np.zeros((10, 3)),
+        )
+
+    with pytest.raises(ValueError, match="Reference antenna temperature must be pos"):
+        beams.BeamFactor(
+            frequencies=np.linspace(50, 100, 10),
+            lsts=np.array([0, 1, 2]),
+            reference_frequency=75.0,
+            antenna_temp=np.zeros((3, 10)),
+            antenna_temp_ref=-np.ones((3, 10)),
+        )
+
+
+def test_beamfactor_at_lsts_null():
+    bf = beams.BeamFactor(
+        frequencies=np.linspace(50, 100, 10),
+        lsts=np.linspace(3, 26, 24),
+        reference_frequency=75.0,
+        antenna_temp=np.ones((24, 10)),
+        antenna_temp_ref=np.ones((24, 10)),
+    )
+    new = bf.at_lsts(np.linspace(10.5, 33.5, 24))
+    assert np.allclose(new.antenna_temp, 1.0)
+
+
+def test_beamfactor_between_lsts():
+    bf = beams.BeamFactor(
+        frequencies=np.linspace(50, 100, 10),
+        lsts=np.linspace(3, 26, 24),
+        reference_frequency=75.0,
+        antenna_temp=np.ones((24, 10)),
+        antenna_temp_ref=np.ones((24, 10)),
+    )
+    new = bf.between_lsts(23, 3)
+    assert len(new.lsts) == 4
+
+
+def test_beamfactor_between_lsts_nodata():
+    bf = beams.BeamFactor(
+        frequencies=np.linspace(50, 100, 10),
+        lsts=np.linspace(3, 7, 24),
+        reference_frequency=75.0,
+        antenna_temp=np.ones((24, 10)),
+        antenna_temp_ref=np.ones((24, 10)),
+    )
+    with pytest.raises(ValueError, match="BeamFactor does not contain any LSTs"):
+        bf.between_lsts(8, 10)
+
+
+def test_beamfactor_get():
+    freq = np.linspace(50, 100, 51)
+    poly = mdl.Polynomial(n_terms=4).at(x=freq)
+
+    bf = beams.BeamFactor(
+        frequencies=freq,
+        lsts=np.linspace(3, 7, 5),
+        reference_frequency=75.0,
+        antenna_temp=np.array([poly(parameters=[i * 100, 2, 3, 4]) for i in range(5)]),
+        antenna_temp_ref=np.array(
+            [poly(parameters=[i * 100, 2.5, 3, 4]) for i in range(5)]
+        ),
+    )
+
+    _bf = bf.get_beam_factor(poly.model, freq)
+
+    assert np.allclose(_bf[:, 25], 1.0)
+
+    meanbf = bf.get_mean_beam_factor(poly.model, freq)
+    assert np.isclose(meanbf[25], 1.0)
+
+    intgbf = bf.get_integrated_beam_factor(poly.model)
+    intgbf2 = bf.get_integrated_beam_factor(poly.model, freq)
+    assert np.allclose(intgbf, intgbf2)
+
+
+def test_beam_factor_alan_azel():
+    defaults = dict(
+        beam=beams.Beam.from_file("low"),
+        f_low=40 * u.MHz,
+        f_high=100 * u.MHz,
+        lsts=[12.0],
+        sky_model=Haslam408AllNoh(),
+        index_model=ConstantIndex(),
+        normalize_beam=False,
+        ground_loss_file=None,
+        reference_frequency=75 * u.MHz,
+        beam_smoothing=False,
+        interp_kind="nearest",
+        freq_progress=False,
+        location=const.KNOWN_LOCATIONS["alan-edges"],
+        sky_at_reference_frequency=False,
+        use_astropy_azel=True,
+    )
+
+    default = beams.antenna_beam_factor(**defaults)
+    alanazel = beams.antenna_beam_factor(**{**defaults, **{"use_astropy_azel": False}})
+    poly = mdl.Polynomial(n_terms=10)
+    assert np.isclose(
+        default.get_mean_beam_factor(poly, np.array([55.0])),
+        alanazel.get_mean_beam_factor(poly, np.array([55.0])),
+        atol=1e-2,
+    )

@@ -7,13 +7,18 @@ import yaml
 from astropy import units as un
 from astropy.time import Time
 from click.testing import CliRunner
+from edges_cal import modelling as mdl
 from jinja2 import Template
 from pathlib import Path
 from subprocess import run
 
 from edges_analysis import cli, const
+from edges_analysis.calibration.calibrate import dicke_calibration
 from edges_analysis.config import config
+from edges_analysis.datamodel import add_model
 from edges_analysis.gsdata import GSData
+
+from .mock_gsdata import create_mock_edges_data
 
 runner = CliRunner()
 
@@ -88,7 +93,7 @@ def s11path(integration_test_data: Path) -> Path:
 
 @pytest.fixture(scope="session")
 def beamfile(integration_test_data: Path) -> Path:
-    return integration_test_data / "feko_Haslam408_ref70.00.h5"
+    return integration_test_data / "alan_beam_factor.h5"
 
 
 def get_workflow(
@@ -105,15 +110,13 @@ def get_workflow(
         beam_file=beam_file,
     )
 
-    wf = yaml.load(txt, Loader=yaml.FullLoader)
-
     if not beam_file:
+        print("loading up the yaml...")
+        wf = yaml.load(txt, Loader=yaml.FullLoader)
         wf["steps"] = tuple(
             x for x in wf["steps"] if x["function"] != "apply_beam_correction"
         )
-
-    txt = yaml.dump(wf)
-
+        txt = yaml.dump(wf)
     with open(workflow_dir / f"workflow_{name}.yaml", "w") as fl:
         fl.write(txt)
 
@@ -127,7 +130,7 @@ def workflow(integration_test_data: Path, settings: Path, workflow_dir: Path) ->
         settings,
         workflow_dir,
         integration_test_data,
-        str(integration_test_data / "feko_Haslam408_ref70.00.h5"),
+        str(integration_test_data / "alan_beam_factor.h5"),
         str(integration_test_data / "s11"),
     )
 
@@ -313,3 +316,40 @@ def gsd_ones_power():
         loads=("p0", "p1", "p2"),
         data_unit="power",
     )
+
+
+@pytest.fixture(scope="session")
+def mock() -> GSData:
+    return create_mock_edges_data(add_noise=True)
+
+
+@pytest.fixture(scope="session")
+def mock_power() -> GSData:
+    return create_mock_edges_data(add_noise=True, as_power=True)
+
+
+@pytest.fixture(scope="session")
+def mock_with_model(mock) -> GSData:
+    return add_model(data=mock, model=mdl.LinLog(n_terms=2))
+
+
+@pytest.fixture(scope="session")
+def mock_season() -> list[GSData]:
+    """A mock 'season' with three days."""
+    return [
+        create_mock_edges_data(add_noise=True, as_power=True, time0=2459900.27),
+        create_mock_edges_data(add_noise=True, as_power=True, time0=2459901.27),
+        create_mock_edges_data(add_noise=True, as_power=True, time0=2459902.27),
+    ]
+
+
+@pytest.fixture(scope="session")
+def mock_season_dicke(mock_season: list[GSData]) -> list[GSData]:
+    """Dicke-calibrated mock season"""
+    return [dicke_calibration(m) for m in mock_season]
+
+
+@pytest.fixture(scope="session")
+def mock_season_modelled(mock_season_dicke: list[GSData]) -> list[GSData]:
+    """Dicke-calibrated mock season"""
+    return [add_model(m, model=mdl.LinLog(n_terms=2)) for m in mock_season_dicke]

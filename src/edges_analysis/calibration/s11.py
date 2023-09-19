@@ -14,9 +14,11 @@ from edges_cal.s11 import (
     VNAReading,
 )
 from edges_cal.tools import FrequencyRange
+from hickleable import hickleable
 from typing import Sequence
 
 
+@hickleable()
 @attr.s
 class AntennaS11(LoadS11):
     _complex_model_type_default = mdl.ComplexRealImagModel

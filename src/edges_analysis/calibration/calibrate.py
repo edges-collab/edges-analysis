@@ -8,6 +8,7 @@ import os
 import re
 from astropy.time import Time
 from datetime import datetime
+from edges_cal import modelling as mdl
 from edges_cal import types as tp
 from edges_cal.cal_coefficients import CalibrationObservation, Calibrator
 from pathlib import Path
@@ -27,18 +28,18 @@ def dicke_calibration(data: GSData) -> GSData:
     iload = data.loads.index("internal_load")
     ilns = data.loads.index("internal_load_plus_noise_source")
 
-    q = (data.data[iant] - data.data[iload]) / (data.data[ilns] - data.data[iload])
+    with np.errstate(divide="ignore", invalid="ignore"):
+        q = (data.data[iant] - data.data[iload]) / (data.data[ilns] - data.data[iload])
 
     return data.update(
         data=q[np.newaxis],
         data_unit="uncalibrated",
         time_array=data.time_array[:, [iant]],
+        time_ranges=data.time_ranges[:, [iant]],
         loads=("ant",),
         nsamples=data.nsamples[[iant]],
-        flags={
-            name: np.any(flag, axis=0)[np.newaxis] for name, flag in data.flags.items()
-        },
-        data_model=None,
+        flags={name: flag.any(axis="load") for name, flag in data.flags.items()},
+        residuals=None,
     )
 
 
@@ -56,7 +57,9 @@ def approximate_temperature(data: GSData, *, tload: float, tns: float):
             "data_unit must be 'uncalibrated' to calculate approximate temperature"
         )
     return data.update(
-        data=data.data * tns + tload, data_unit="uncalibrated_temp", data_model=None
+        data=data.data * tns + tload,
+        data_unit="uncalibrated_temp",
+        residuals=data.residuals * tns if data.residuals is not None else None,
     )
 
 
@@ -219,23 +222,18 @@ def get_s11_paths(
 
 def get_labcal(
     calobs: Calibrator,
-    s11_path: str | Path | tuple | list,
-    band: str,
-    begin_time: datetime,
-    s11_file_pattern: str,
+    s11_path: str | Path | tuple | list | None = None,
+    ant_s11_object: str | Path | None = None,
+    band: str | None = None,
+    begin_time: datetime | None = None,
+    s11_file_pattern: str | None = None,
     ignore_s11_files: list[str] | None = None,
     antenna_s11_n_terms: int = 15,
 ):
     """Given an s11_path, return list of paths for each of the inputs."""
     # If we get four files, make sure they exist and pass them back
-
-    s11_files = get_s11_paths(
-        s11_path,
-        band,
-        begin_time,
-        s11_file_pattern,
-        ignore_files=ignore_s11_files,
-    )
+    if s11_path is None and ant_s11_object is None:
+        raise ValueError("Must provide either s11_path or ant_s11_object.")
 
     if not isinstance(calobs, Calibrator):
         try:
@@ -250,19 +248,35 @@ def get_labcal(
         except Exception:
             calobs = Calibrator.from_old_calfile(calobs)
 
-    return LabCalibration.from_s11_files(
-        calobs=calobs,
-        s11_files=s11_files,
-        n_terms=antenna_s11_n_terms,
-    )
+    if ant_s11_object is not None:
+        ants11 = hickle.load(ant_s11_object)
+        return LabCalibration(
+            calobs=calobs,
+            antenna_s11_model=ants11,
+        )
+    else:
+        s11_files = get_s11_paths(
+            s11_path,
+            band,
+            begin_time,
+            s11_file_pattern,
+            ignore_files=ignore_s11_files,
+        )
+
+        return LabCalibration.from_s11_files(
+            calobs=calobs,
+            s11_files=s11_files,
+            n_terms=antenna_s11_n_terms,
+        )
 
 
 @gsregister("calibrate")
 def apply_noise_wave_calibration(
     data: GSData,
     calobs: Calibrator | Path,
-    band: str,
-    s11_path: str | Path,
+    band: str | None = None,
+    s11_path: str | Path | None = None,
+    ant_s11_object: str | Path | None = None,
     s11_file_pattern: str = r"{y}_{jd}_{h}_*_input{input}.s1p",
     ignore_s11_files: list[str] | None = None,
     antenna_s11_n_terms: int = 15,
@@ -315,6 +329,7 @@ def apply_noise_wave_calibration(
         s11_file_pattern=s11_file_pattern,
         ignore_s11_files=ignore_s11_files,
         antenna_s11_n_terms=antenna_s11_n_terms,
+        ant_s11_object=ant_s11_object,
     )
 
     if data.data_unit == "uncalibrated_temp":
@@ -322,7 +337,18 @@ def apply_noise_wave_calibration(
     else:
         q = data.data
     new_data = labcal.calibrate_q(q, freq=data.freq_array)
-    return data.update(data=new_data, data_unit="temperature", data_model=None)
+
+    if data.model is not None:
+        qmodel = (
+            (data.model - tload) / tns
+            if data.data_unit == "uncalibrated_temp"
+            else data.model
+        )
+        resids = new_data - labcal.calibrate_q(qmodel, freq=data.freq_array)
+    else:
+        resids = None
+
+    return data.update(data=new_data, data_unit="temperature", residuals=resids)
 
 
 @gsregister("calibrate")
@@ -427,80 +453,103 @@ def apply_loss_correction(
     a = ambient_temp + const.absolute_zero if ambient_temp[0] < 200 else ambient_temp
 
     spec = (data.data - np.outer(a, (1 - gain))) / gain
+    if data.residuals is not None:
+        resids = data.residuals / gain
+    else:
+        resids = None
 
-    return data.update(data=spec, data_unit="temperature", data_model=None)
+    return data.update(data=spec, data_unit="temperature", residuals=resids)
 
 
 @gsregister("calibrate")
 def apply_beam_correction(
     data: GSData,
-    band: str | None = None,
-    beam_file: tp.PathLike | None = ":",
-    gha_min: float | None = None,
-    gha_max: float | None = None,
-    time_resolution: int | None = None,
-    average_before_correction: bool = True,
+    beam: str | Path | beams.BeamFactor,
+    freq_model: mdl.Model,
+    integrate_before_ratio: bool = True,
+    oversample_factor: int = 5,
+    resample_beam_lsts: bool = True,
 ) -> GSData:
     """Apply beam correction to the data.
+
+    This always applies the beam correction to each time sample in the data. If you want
+    to average the data *before* applying the beam correction, you must average the data
+    before applying this function to it. The input beam factor object should cover the
+    full range of LSTs included in the data itself.
+
+    The beam factor object is defined at a set of LSTs, and by default, the correction
+    applied to the data is the *average* beam factor in each LST-bin of the data.
+    To use the beam factor *interpolated* to the LSTs of the data instead, set
+    ``interpolate_to_lsts`` to True.
+
+    There are two ways to define the average beam factor within an LST-bin: either
+    by taking the mean of ratios (of beam-weighted foreground model to *reference*
+    beam-weighted foreground model) or the ratio of means. Switch between these
+    by using the ``integrate_before_ratio`` parameter.
 
     Parameters
     ----------
     data
         Data to be calibrated.
-    band
-        The band that the data is in (eg. low, mid, high). Used for auto-finding beam
-        file (if one exists in the standard location).
-    beam_file
-        Path to file containing beam correction coefficients. If there is an existing
-        beam file in the standard location, this can be set to ``":"``.
-    gha_min
-        The minimum GHA to use for the beam correction. If not provided, the GHA is
-        calculated from the LST bins of the data. If the data has multiple LST bins,
-        and ``average_before_correction`` is ``True``, then this cannot be provided.
-    gha_max
-        The maximum GHA to use for the beam correction. If not provided, the GHA is
-        calculated from the LST bins of the data. If the data has multiple LST bins,
-        and ``average_before_correction`` is ``True``, then this cannot be provided.
-    time_resolution
-        The time resolution to use for the beam correction. If not provided, the
-        resolution is calculated from the LST bins of the data. If the data has multiple
-        LST bins, and ``average_before_correction`` is ``True``, then this cannot be
-        provided.
-    average_before_correction
-        Whether to average the beam correction across the time dimension before
-        applying it to the data.
+    beam
+        Either a path to a file containing beam correction coefficients, or the
+        BeamFactor object itself.
+    freq_model
+        The (linear) model to use when evaluating the beam factor at the data freqs.
+    integrate_before_ratio
+        Whether to integrate (over time) the beam-weighted sky temperature and the
+        reference sky temperature individually before taking their ratio to get
+        the beam factor.
+    oversample_factor
+        The number of LST samples to use when interpolating the beam factor to the
+        LSTs of the data. For every data LST, ``oversample_factor`` LSTs will be
+        interpolated to (regularly spaced between each data LST, regardless of whether
+        the data LSTs are regular). This is only used if ``resample_beam_lsts`` is True.
+    resample_beam_lsts
+        Whether to resample LSTs before averaging (by ``oversample_factor``).
     """
-    beam_fac = beams.InterpolatedBeamFactor.from_beam_factor(
-        beam_file, band=band, f_new=data.freq_array
-    )
+    if isinstance(beam, (str, Path)):
+        beam = hickle.load(beam)
 
-    if not (
-        (gha_min is None and gha_max is None and time_resolution is None)
-        or (gha_min is not None and gha_max is not None and time_resolution is not None)
-    ):
-        raise ValueError(
-            "All of gha_min, gha_max and time_resolution must be provided, if any!"
+    if len(data.loads) > 1:
+        raise NotImplementedError(
+            "Can only apply beam correction to data with a single load"
         )
 
-    if not average_before_correction:
-        if gha_min is not None:
-            raise ValueError(
-                "gha_min, gha_max and time_resolution cannot be provided if "
-                "average_before_correction is False!"
+    if len(beam.lsts) < 4 and resample_beam_lsts:
+        raise ValueError(
+            "Your beam has a single LST so you cannot interpolate over LSTs."
+        )
+
+    if resample_beam_lsts:
+        new_beam_lsts = []
+        for lst0, lst1 in data.lst_ranges[:, 0, :]:
+            lst1 = lst1.hour
+            if lst1 < lst0.hour:
+                lst1 = lst1 + 24
+
+            new_beam_lsts.append(
+                np.linspace(lst0.hour, lst1, oversample_factor + 1)[:-1]
+            )
+        new_beam_lsts = np.concatenate(new_beam_lsts)
+        beam = beam.at_lsts(new_beam_lsts)
+
+    new_data = data.data.copy()
+
+    resids = data.residuals.copy() if data.residuals is not None else None
+    for i, (lst0, lst1) in enumerate(data.lst_ranges[:, 0, :]):
+        new = beam.between_lsts(lst0.hour, lst1.hour)
+        if integrate_before_ratio:
+            bf = new.get_integrated_beam_factor(
+                model=freq_model, freqs=data.freq_array.to_value("MHz")
+            )
+        else:
+            bf = new.get_mean_beam_factor(
+                model=freq_model, freqs=data.freq_array.to_value("MHz")
             )
 
-        bf = beam_fac.evaluate(data.lst_array.hour)
-        return data.update(data=data.data / bf, data_model=None)
-    else:
-        if gha_min is not None:
-            gha_min %= 24
-            gha_max %= 24
-            while gha_max < gha_min:
-                gha_max += 24
+        new_data[:, :, i] /= bf
+        if resids is not None:
+            resids[:, :, i] /= bf
 
-            gha_list = np.arange(gha_min, gha_max, time_resolution)
-            lst_list = coords.gha2lst(gha_list)
-            bf = beam_fac.evaluate(lst_list)
-        else:
-            bf = beam_fac.evaluate(data.lst_array.hour)
-        return data.update(data=data.data / np.average(bf, axis=0), data_model=None)
+    return data.update(data=new_data, residuals=resids, data_unit="temperature")

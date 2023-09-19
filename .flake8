@@ -43,3 +43,4 @@ per-file-ignores =
     */*/__init__.py:F401
     */*/*/__init__.py:F401
     src/edges_analysis/calibration/loss.py:N803
+    src/edges_analysis/sky_models.py:N802

@@ -6,16 +6,17 @@ control to us to interpolate how we wish.
 """
 from __future__ import annotations
 
+import astropy_healpix as ahp
 import attr
 import healpy as hp
 import logging
 import numpy as np
 from abc import ABC, abstractmethod
 from astropy import coordinates as apc
+from astropy.coordinates import Galactic
 from astropy.io import fits
 from astropy.utils.data import download_file
-from cached_property import cached_property
-from contextlib import contextmanager
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -47,9 +48,9 @@ class GaussianIndex(IndexModel):
 
     def get_index(
         self,
-        lat: [None, np.ndarray] = None,
-        lon: [None, np.ndarray] = None,
-        sky_model: [None, SkyModel] = None,
+        lat: None | np.ndarray = None,
+        lon: None | np.ndarray = None,
+        sky_model: None | SkyModel = None,
     ) -> np.ndarray:
         """Generate the index at a given sky location."""
         if lat is None:
@@ -98,95 +99,66 @@ class ConstantIndex(IndexModel):
         return np.ones_like(lat) * self.index
 
 
+@attr.define(kw_only=True)
 class SkyModel:
+    """A simple diffuse unpolarized sky model at a single frequency.
+
+    This is simpler than pyradiosky's SkyModel class in that it doesn't deal with
+    polarizations, assumes a single frequency, and doesn't know intrinsically about
+    the time of observation etc.
+
+    Parameters
+    ----------
+    frequency
+        The frequency of the sky model in Hz.
+    temperature
+        The temperature of the sky model in K, shape (Nsky,).
+    coords
+        The coordinates of the sky model, shape (Nsky,).
+    name
+        The name of the sky model.
+    healpix
+        An astropy-healpix HEALPix object describing the pixelization of the sky model,
+        if applicable.
+    pixel_res
+        The solid angle of each pixel in the sky model, in steradians. If a float, this
+        is assumed to be the same for all pixels. If an array, it must have the same
+        shape as temperature. The mean temperature of the sky is assumed to be the
+        sum of the temperature array multiplied by the pixel_res array, divided
+        by the sum of the pixel_res array.
     """
-    A base class representing a sky model at one frequency in healpix.
 
-    Do not use this class -- use a specific subclass that specifies an actual sky model
+    frequency: float = attr.field(converter=float, validator=attr.validators.gt(0))
+    temperature: np.ndarray = attr.field(converter=np.asarray)
+    coords: apc.SkyCoord = attr.field()
+    name: str = attr.field(default="SkyModel")
+    healpix: ahp.HEALPix | None = attr.field(default=None, eq=False)
+    pixel_res: float | np.ndarray = attr.field(eq=attr.cmp_using(eq=np.allclose))
 
-    Each sky model's data is gotten from lambda, and the first time it is accessed it
-    is downloaded and cached on disk using astropy.
+    @coords.validator
+    def _check_coords(self, attribute, value):
+        if not isinstance(value, apc.SkyCoord):
+            raise TypeError(f"coords must be an astropy SkyCoord, not {type(value)}")
+        if value.ndim != 1:
+            raise ValueError(f"coords must be 1D, not {value.ndim}D")
+        if value.size != self.temperature.size:
+            raise ValueError("coords must have same size as temperature")
 
-    The primary attribute is `sky_map`, which is always in NESTED galactic co-ordinates.
-    Other methods/attributes exist to help with understanding the metadata of the
-    object, and interpolating in frequency.
+    @pixel_res.default
+    def _default_pixel_res(self) -> float:
+        return 4 * np.pi / len(self.coords)
 
-    Examples
-    --------
-    >>> from edges_analysis.sky_models import Haslam408
-    >>> import healpy as hp
-    >>> haslam = Haslam408()
-    >>> hp.mollview(np.log10(haslam.sky_map), nest=True)
-
-    """
-
-    url = None  # url of the file to download
-    header_hdu = 0  # the index of the HDU of the FITS file containing header info
-    frequency = None  # frequency at which the sky model is defined.
-    data_name = "TEMPERATURE"
-
-    def __init__(self, max_res=None):
-        self.max_res = max_res
-        self.filename = download_file(self.url, cache=True)
-
-    @contextmanager
-    def open(self):
-        """Open the FITS file for reading."""
-        fl = fits.open(self.filename)
-        yield fl
-        fl.close()
-
-    @cached_property
-    def sky_map(self) -> np.ndarray:
-        """The sky map of this SkyModel in NESTED Galactic co-ordinates."""
-        sky_map = self._get_sky_model_from_lambda(self.max_res)
-        return self._process_map(sky_map, self.lonlat[0], self.lonlat[1])
-
-    @cached_property
-    def lonlat(self) -> tuple[np.ndarray, np.ndarray]:
-        """The galactic latitude/longitude co-ordinates of the map."""
-        with self.open() as fl:
-            ordering = fl[self.header_hdu].header["ORDERING"]
-            nside = int(fl[self.header_hdu].header["NSIDE"])
-
-        return self.get_map_coords(nside=nside, nest=ordering.lower() == "nested")
-
-    @classmethod
-    def get_map_coords(cls, nside: int, nest: bool = True):
-        """Get the angular co-ordinates of the map pixels."""
-        return hp.pix2ang(
-            nside, np.arange(hp.nside2npix(nside)), lonlat=True, nest=nest
-        )
-
-    @classmethod
-    def _get_sky_model_from_lambda(cls, max_res: [None, int] = None) -> np.ndarray:
-        with fits.open(download_file(cls.url, cache=True)) as fl:
-            ordering = fl[cls.header_hdu].header["ORDERING"]
-
-            # Need to flatten because sometimes they are over multiple axes... ??
-            temp_map = fl[cls.header_hdu].data[cls.data_name].flatten()
-
-        if ordering.lower() == "ring":
-            temp_map = hp.reorder(temp_map, r2n=True)
-
-        # Downgrade the data quality to max_res to improve performance, if desired.
-        if max_res and hp.get_nside(temp_map) > 2**max_res:
-            hp.ud_grade(temp_map, nside_out=2**max_res)
-
-        return temp_map
-
-    def get_sky_coords(self):
-        """Get the sky coords of the map as :class:`astropy.coordinates.SkyCoord`."""
-        return apc.SkyCoord(
-            self.lonlat[0], self.lonlat[1], frame="galactic", unit="deg"
-        )
-
-    def _process_map(self, sky_map, lon, lat):
-        """Optional over-writeable method to process the sky map before returning it."""
-        return sky_map
+    @pixel_res.validator
+    def _check_pixel_res(self, attribute, value):
+        if isinstance(value, (float, int)):
+            return
+        if value.shape != self.temperature.shape:
+            raise ValueError("pixel_res must have same shape as temperature")
+        if not value.dtype == float:
+            raise ValueError("pixel_res must be float dtype")
 
     def at_freq(
-        self, freq: float | np.ndarray, index_model: IndexModel = GaussianIndex()
+        self, freq: float | np.ndarray, index_model: IndexModel = ConstantIndex()
     ) -> np.ndarray:
         """
         Generate the sky model at a new set of frequencies.
@@ -194,29 +166,121 @@ class SkyModel:
         Parameters
         ----------
         freq
-            The frequencies at which to evaluate the model (can be a single float)
+            The frequencies at which to evaluate the model (can be a single float or
+            an array of floats).
         index_model
             A spectral index model to shift to the new frequencies.
 
         Returns
         -------
-        maps
-            The healpix sky maps at the new frequencies, shape (Nsky, Nfreq).
+        temperature
+            The sky maps as numpy arrays at the new frequencies, shape (Nsky, Nfreq).
         """
-        lon, lat = self.lonlat
-        index = index_model.get_index(lon, lat, self)
+        index = index_model.get_index(
+            lon=self.coords.l.deg, lat=self.coords.b.deg, sky_model=self
+        )
         f = freq / self.frequency
         Tcmb = 2.725
         scale = np.power.outer(f, -index)
-        return ((self.sky_map - Tcmb) * scale + Tcmb).T
+        return ((self.temperature - Tcmb) * scale + Tcmb).T
+
+    @classmethod
+    def from_lambda(
+        cls,
+        url: str,
+        frequency: float,
+        max_nside: int = 2**100,
+        min_nside: int = 2**0,
+        header_hdu: int = 1,
+        data_name="TEMPERATURE",
+        name: str = "SkyModel",
+    ) -> SkyModel:
+        """Load a sky model from the LAMBDA website."""
+        fname = download_file(url, cache=True)
+
+        with fits.open(fname) as fl:
+            ordering = fl[header_hdu].header["ORDERING"]
+            nside = int(fl[header_hdu].header["NSIDE"])
+            temp_map = fl[header_hdu].data[data_name].flatten()
+
+        hpix = ahp.HEALPix(nside=nside, order=ordering.lower(), frame=Galactic())
+        coords = hpix.healpix_to_skycoord(np.arange(hpix.npix))
+
+        # Downgrade the data quality to max_res to improve performance, if desired.
+        if nside > max_nside:
+            hp.ud_grade(temp_map, nside_out=max_nside, order_in=ordering.upper())
+        if nside < min_nside:
+            hp.ud_grade(temp_map, nside_out=min_nside, order_in=ordering.upper())
+
+        return cls(
+            frequency=frequency,
+            temperature=temp_map,
+            coords=coords,
+            healpix=hpix,
+            name=name,
+        )
+
+    @classmethod
+    def from_latlon_grid_file(
+        cls,
+        fname: str | Path,
+        frequency: float,
+        axes=("lat", "lon"),
+        frame=Galactic(),
+        name: str | None = None,
+    ) -> SkyModel:
+        """Load a sky model from a lat-lon grid file."""
+        temperature = np.genfromtxt(fname)
+        if name is None:
+            name = Path(fname).stem
+
+        assert temperature.ndim == 2, "Temperature must be 2D"
+        if axes == ("lon", "lat"):
+            temperature = temperature.T
+
+        nlat, nlon = temperature.shape
+
+        glat = np.linspace(-90, 90, nlat + 1)[:-1]
+        glon = np.linspace(180, -180, nlon + 1)[:-1]
+        glon, glat = np.meshgrid(glon, glat)
+
+        coords = apc.SkyCoord(glon.flatten(), glat.flatten(), unit="deg", frame=frame)
+        return cls(
+            frequency=frequency,
+            temperature=temperature.flatten(),
+            coords=coords,
+            name=name,
+            pixel_res=(np.pi / 512.0)
+            * (2 * np.pi / 1024.0)
+            * np.cos(glat.flatten() * np.pi / 180.0),
+        )
 
 
-class Haslam408(SkyModel):
-    url = (
-        "https://lambda.gsfc.nasa.gov/data/foregrounds/haslam/"
-        "lambda_haslam408_dsds.fits"
-    )
+def Haslam408AllNoh():
+    """The original raw Haslam 408 MHz all-sky map.
+
+    This is the file in Alan's repo.
+
+    It probably came from here: https://www3.mpifr-bonn.mpg.de/cgi-bin/survey ?
+
+    Note that by default, the pixel resolution for each pixel is set to be equivalent
+    to what Alan uses in his C-Code (for the Nature Paper). This is a little inaccurate,
+    as it gives exactly zero weight to pixels on the poles, instead of acknowledging
+    that those pixels have a non-zero size.
     """
+    fl = download_file(
+        (
+            "https://raw.githubusercontent.com/edges-collab/alans-pipeline/main/"
+            "scripts/408-all-noh"
+        ),
+        cache=True,
+    )
+    return SkyModel.from_latlon_grid_file(fl, frequency=408.0, name="Haslam408AllNoh")
+
+
+def Haslam408(min_nside=2**0, max_nside=2**100):
+    """The Haslam 408 MHz all-sky map.
+
     408MHz radio continuum all-sky map of Haslam etal combines data from
     4 different surveys. The destriped/desourced (dsds) version was constructed from
     survey data obtained from the archives of the NCSA ADIL in
@@ -226,16 +290,21 @@ class Haslam408(SkyModel):
     point sources. These data were then
     interpolated onto a HEALPix projection.
     """
-    frequency = 408.0
-    header_hdu = 1
-
-
-class Remazeilles408(SkyModel):
-    url = (
-        "https://lambda.gsfc.nasa.gov/data/foregrounds/haslam_2014/haslam408_dsds_"
-        "Remazeilles2014.fits"
+    return SkyModel.from_lambda(
+        (
+            "https://lambda.gsfc.nasa.gov/data/foregrounds/haslam/"
+            "lambda_haslam408_dsds.fits"
+        ),
+        frequency=408.0,
+        min_nside=min_nside,
+        max_nside=max_nside,
+        name="Haslam408",
     )
-    """
+
+
+def Remazeilles408(min_nside=2**0, max_nside=2**100):
+    """The Remazeilles 408 MHz all-sky map.
+
     Remazeilles et al. 2014 have re-evaluated and re-processed the rawest Haslam
     408 MHz data, available from the Max Planck
     Institute for Radioastronomy Survey Sampler website, to produce an improved
@@ -249,16 +318,21 @@ class Remazeilles408(SkyModel):
     available. They are described below. The sky maps are generated using the HEALPix
     sky pixelization scheme.
     """
-    frequency = 408.0
-    header_hdu = 1
-
-
-class LW150(SkyModel):
-    url = (
-        "https://lambda.gsfc.nasa.gov/data/foregrounds/landecker_150/"
-        "lambda_landecker_wielebinski_150MHz_SARAS_recalibrated_hpx_r8.fits"
+    return SkyModel.from_lambda(
+        (
+            "https://lambda.gsfc.nasa.gov/data/foregrounds/"
+            "haslam_2014/lambda_rema408_dsds.fits"
+        ),
+        frequency=408.0,
+        min_nside=min_nside,
+        max_nside=max_nside,
+        name="Remazeilles408",
     )
-    """
+
+
+def LW150(min_nside=2**0, max_nside=2**100):
+    """The Landecker & Wielebinski 150 MHz all-sky map.
+
     Patra et al. 2015, provided a recalibration of the 150 MHz map based on comparison
     with absolutely calibrated sky brightness measurements between 110 and 175 MHz made
     with the SARAS spectrometer, and Monsalve et al. 2021, provided a recalibration
@@ -271,13 +345,21 @@ class LW150(SkyModel):
     150 MHz map was constructed from separate southern, northern, and intermediate
     declination surveys
     """
-    header_hdu = 1
-    frequency = 150.0
+    return SkyModel.from_lambda(
+        url=(
+            "https://lambda.gsfc.nasa.gov/data/foregrounds/landecker_150/"
+            "lambda_landecker_wielebinski_150MHz_SARAS_recalibrated_hpx_r8.fits"
+        ),
+        frequency=150.0,
+        min_nside=min_nside,
+        max_nside=max_nside,
+        name="LandeckerWielebinski150",
+    )
 
 
-class Guzman45(SkyModel):
-    url = "https://lambda.gsfc.nasa.gov/data/foregrounds/maipu_45/MAIPU_MU_1_64.fits"
-    """
+def Guzman45(min_nside=2**0, max_nside=2**100):
+    """The Guzman 45 MHz all-sky map.
+
     Guzmán et al. (2011) produced an all-sky map of 45 MHz emission by combining data
     from the 45 MHz survey of Alvarez et al (1997) between declinations -90° and +19.1°
     with data from the 46.5 MHz survey of Maeda et al. (1999) between declinations
@@ -286,20 +368,26 @@ class Guzman45(SkyModel):
     The northern survey was made with the Japanese Middle and Upper atmosphere
     (MU) radar array with a beam of 3.6° x 3.6°.
     """
-    frequency = 45.0
-    header_hdu = 1
-    data_name = "UNKNOWN1"
+    out = SkyModel.from_lambda(
+        url="https://lambda.gsfc.nasa.gov/data/foregrounds/maipu_45/MAIPU_MU_1_64.fits",
+        frequency=45.0,
+        data_name="UNKNOWN1",
+        min_nside=min_nside,
+        max_nside=max_nside,
+        name="Guzman45",
+    )
 
-    def _process_map(self, sky_map, lon, lat):
-        # Fill the hole
-        sky_map[lat > 68] = np.mean(sky_map[(lat > 60) & (lat < 68)])
+    # Process the bad values in the map
+    new_temp = np.zeros_like(out.temperature)
+    new_temp[out.coords.dec.deg > 68.0] = np.mean(
+        out.temperature[(out.coords.dec.deg < 68.0) & (out.coords.dec.deg > 60.0)]
+    )
+    return attr.evolve(out, temperature=new_temp)
 
-        return sky_map
 
+def WhamHAlpha(min_nside=2**0, max_nside=2**100):
+    """The WHAM H-alpha all-sky map.
 
-class WhamHAlpha(SkyModel):
-    url = "https://lambda.gsfc.nasa.gov/data/foregrounds/wham/lambda_WHAM_1_256.fits"
-    """
     The Wisconsin H-Alpha Mapper (WHAM) made a survey of H alpha intensity over the full
     sky with a 1 degree beam and velocity resolution of 12 km/s. The WHAM public data
     release DR1 includes a data product containing H alpha intensity integrated
@@ -308,19 +396,20 @@ class WhamHAlpha(SkyModel):
     HEALPix format map following method described in Appendix A of Paradis etal 2012
     Their HEALPix map is provided here. LAMBDA made a new version of their FITS file
     with minor changes to the headers to make them compliant with FITS standards.
-
     """
-    frequency = 457108000
-    header_hdu = 1
-    data_name = "UNKNOWN1"
-
-
-class PlanckCO(SkyModel):
-    url = (
-        "https://irsa.ipac.caltech.edu/data/Planck/release_2/all-sky-maps/maps"
-        "/component-maps/foregrounds/COM_CompMap_CO-commander_0256_R2.00.fits"
+    return SkyModel.from_lambda(
+        url="https://lambda.gsfc.nasa.gov/data/foregrounds/wham/lambda_WHAM_1_256.fits",
+        frequency=457108000,
+        data_name="UNKNOWN1",
+        min_nside=min_nside,
+        max_nside=max_nside,
+        name="WHAMHAlpha",
     )
-    """
+
+
+def PlanckCO(min_nside=2**0, max_nside=2**100):
+    """The Planck CO all-sky map.
+
     Planck All Sky Maps are in HEALPix format, with Nside 2048, in Galactic coordinates
     and nested ordering. The signal is given in units of Kcmb for 30-353 GHz.
     Unpolarized maps contain 3 planes, labeled I_Stokes (intensity), Hits (hit count),
@@ -329,24 +418,37 @@ class PlanckCO(SkyModel):
     count), II_cov, QQ_cov, and UU_cov (variance of each of the Stokes parameters),
     and IQ_cov, IU_cov, and QU_cov (covariances between the Stokes parameters).
     """
-    frequency = 115270
-    header_hdu = 1
-    data_name = "I_MEAN"
-
-
-class HI4PI(SkyModel):
-    url = (
-        "https://lambda.gsfc.nasa.gov/data/foregrounds/ebv_2017/mom0_-90_90_1024"
-        ".hpx.fits"
+    return SkyModel.from_lambda(
+        url=(
+            "https://irsa.ipac.caltech.edu/data/Planck/release_2/all-sky-maps/maps"
+            "/component-maps/foregrounds/COM_CompMap_CO-commander_0256_R2.00.fits"
+        ),
+        frequency=115270,
+        data_name="I_MEAN",
+        min_nside=min_nside,
+        max_nside=max_nside,
+        name="PlanckCO",
     )
-    """
+
+
+def HI4PI(min_nside=2**0, max_nside=2**100):
+    r"""The HI4PI all-sky map.
+
     The HI 4-PI Survey (HI4PI) is a 21-cm all-sky survey of neutral atomic hydrogen.
     It is constructed from the Effelsberg Bonn HI Survey (EBHIS), made with the 100-m
     radio telescope at Effelsberg/Germany, and the Galactic All-Sky Survey (GASS),
     observed with the Parkes 64-m dish in Australia. HI4PI comprises HI line emission
     from the Milky Way. This dataset is the atomic neutral hydrogen (HI) column density
-    map derived from HI4PI (|vLSR|< 600 km/s).
+    map derived from HI4PI (:math:`|vLSR|< 600` km/s).
     """
-    frequency = 1420.40575177
-    header_hdu = 1
-    data_name = "NHI"
+    return SkyModel.from_lambda(
+        url=(
+            "https://lambda.gsfc.nasa.gov/data/foregrounds/ebv_2017/mom0_-90_90_1024"
+            ".hpx.fits"
+        ),
+        frequency=1420.40575177,
+        data_name="NHI",
+        min_nside=min_nside,
+        max_nside=max_nside,
+        name="HI4PI",
+    )

@@ -10,43 +10,44 @@ from edges_analysis import GSData
 from edges_analysis.filters import filters, lst_model
 
 
-def test_aux_filter(raw_step):
+def test_aux_filter(mock):
     run_filter_check(
-        raw_step[0],
+        mock,
         filters.aux_filter,
         maxima={"ambient_hum": 100, "receiver_temp": 100},
     )
 
 
-def test_sun_filter(raw_step):
+def test_sun_filter(mock):
     run_filter_check(
-        raw_step[0],
+        mock,
         filters.sun_filter,
         elevation_range=(-np.inf, 40),
     )
 
 
-def test_moon_filter(raw_step):
+def test_moon_filter(mock):
     run_filter_check(
-        raw_step[0],
+        mock,
         filters.moon_filter,
         elevation_range=(-np.inf, 40),
     )
 
 
-def test_tp_filter(cal_step):
+def test_tp_filter(mock_with_model):
     run_filter_check(
-        cal_step,
+        [mock_with_model],
         lst_model.total_power_filter,
         write=False,
         metric_model=mdl.FourierDay(n_terms=3),
         std_model=mdl.FourierDay(n_terms=3),
+        init_flag_threshold=np.inf,
     )
 
 
-def test_rms_filter(cal_step):
+def test_rms_filter(mock):
     run_filter_check(
-        cal_step,
+        [mock],
         lst_model.rms_filter,
         write=False,
         metric_model=mdl.FourierDay(n_terms=3),
@@ -54,14 +55,14 @@ def test_rms_filter(cal_step):
     )
 
 
-def test_peak_power_filter(cal_step):
-    run_filter_check(cal_step[0], filters.peak_power_filter)
+def test_peak_power_filter(mock):
+    run_filter_check(mock, filters.peak_power_filter)
 
     with pytest.raises(ValueError):
-        filters.peak_power_filter(data=cal_step[0], peak_freq_range=(60, 60))
+        filters.peak_power_filter(data=mock, peak_freq_range=(60, 60))
 
     with pytest.raises(ValueError):
-        filters.peak_power_filter(data=cal_step[0], mean_freq_range=(61, 60))
+        filters.peak_power_filter(data=mock, mean_freq_range=(61, 60))
 
 
 def run_filter_check(data: GSData, fnc: callable, **kwargs):
@@ -71,34 +72,36 @@ def run_filter_check(data: GSData, fnc: callable, **kwargs):
         assert fnc.__name__ in new_data.flags
         assert len(new_data.flags) - len(data.flags) == 1
     else:
+        print(len(new_data))
+        print(len(data))
         for nd, d in zip(new_data, data):
             assert nd.data.shape == d.data.shape
             assert fnc.__name__ in nd.flags
             assert len(nd.flags) - len(d.flags) == 1
 
 
-def test_peak_orbcomm_filter(cal_step):
-    run_filter_check(cal_step[0], filters.peak_orbcomm_filter)
+def test_peak_orbcomm_filter(mock):
+    run_filter_check(mock, filters.peak_orbcomm_filter)
 
 
-def test_150mhz_filter(cal_step):
-    run_filter_check(cal_step[0], filters.filter_150mhz, threshold=100)
+def test_150mhz_filter(mock):
+    run_filter_check(mock, filters.filter_150mhz, threshold=100)
 
 
-def test_rmsf(cal_step):
-    run_filter_check(cal_step[0], filters.rmsf_filter, threshold=100)
+def test_rmsf(mock):
+    run_filter_check(mock, filters.rmsf_filter, threshold=100)
 
 
-def test_max_fm_filter(cal_step):
-    run_filter_check(cal_step[0], filters.maxfm_filter, threshold=200)
+def test_max_fm_filter(mock):
+    run_filter_check(mock, filters.maxfm_filter, threshold=200)
 
 
-def test_percent_power_filter(raw_step):
-    run_filter_check(raw_step[0], filters.power_percent_filter)
+def test_percent_power_filter(mock_power):
+    run_filter_check(mock_power, filters.power_percent_filter)
 
 
-def test_rfi_filter(raw_step):
-    run_filter_check(raw_step[0], filters.rfi_model_filter, freq_range=(40, 100))
+def test_rfi_filter(mock):
+    run_filter_check(mock, filters.rfi_model_filter, freq_range=(40, 100))
 
 
 def test_rmsf_filter(gsd_ones: GSData):

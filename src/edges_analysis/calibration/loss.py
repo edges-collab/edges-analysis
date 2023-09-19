@@ -75,11 +75,12 @@ def balun_and_connector_loss(
     parameters = {
         "low": {
             "balun_length": 43.6 * inch2m,
-            "connector_length": 1.18 * inch2m,  # 0.8
+            "connector_length": 1.1811023622 * inch2m,
             "er_air": 1.07,
             "ric_b": ((5 / 16) * inch2m) / 2,
             "roc_b": ((3 / 4) * inch2m) / 2,
-            "roc_c": (0.16 * inch2m) / 2,
+            "roc_c": (0.161 * inch2m) / 2,
+            "ric_c": (0.05 * inch2m) / 2,
         },
         "mid": {
             "balun_length": 35 * inch2m,
@@ -88,6 +89,7 @@ def balun_and_connector_loss(
             "ric_b": ((16 / 32) * inch2m) / 2,
             "roc_b": ((1.25) * inch2m) / 2,
             "roc_c": (0.161 * inch2m) / 2,
+            "ric_c": (0.05 * inch2m) / 2,
         },
     }
 
@@ -119,7 +121,7 @@ def balun_and_connector_loss(
         l_b += 0.001 * np.random.normal()  # 1-sigma of 1 mm
 
     # Connector dimensions
-    ric_c = (0.05 * inch2m) / 2  # radius of outer wall of inner conductor
+    ric_c = parameters[band]["ric_c"]  # radius of outer wall of inner conductor
     if monte_carlo_flags[3]:
         # 1-sigma of 3%, about < 0.04 mm
         ric_c *= 1 + 0.03 * np.random.normal()
@@ -238,7 +240,7 @@ def balun_and_connector_loss(
     return Gb, Gc
 
 
-def _get_loss(fname, freq, n_terms):
+def _get_loss(fname: str | Path, freq: np.ndarray, n_terms: int) -> np.ndarray:
     gr = np.genfromtxt(fname)
     fr = gr[:, 0]
     dr = gr[:, 1]
@@ -249,14 +251,14 @@ def _get_loss(fname, freq, n_terms):
     return 1 - model
 
 
-def ground_loss_from_beam(beam, deg_step):
+def ground_loss_from_beam(beam, deg_step: float) -> np.ndarray:
     """
     Calculate ground loss from a given beam instance.
 
     Parameters
     ----------
-    beam : instance
-
+    beam : Beam instance
+        The beam to use for the calculation.
     deg_step : float
         Frequency in MHz. For mid-band (low-band), between 50 and 150 (120) MHz.
 
@@ -283,13 +285,13 @@ def ground_loss_from_beam(beam, deg_step):
 
 
 def ground_loss(
-    filename: str | Path | bool,
+    filename: str | Path,
     freq: np.ndarray,
     beam=None,
     deg_step: float = 1.0,
     band: str | None = None,
     configuration: str = "",
-):
+) -> np.ndarray:
     """
     Calculate ground loss of a particular antenna at given frequencies.
 
