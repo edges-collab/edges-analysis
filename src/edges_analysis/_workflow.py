@@ -79,6 +79,7 @@ from __future__ import annotations
 
 import attrs
 import yaml
+from copy import deepcopy
 from frozendict import frozendict
 from jinja2 import Template
 from logging import getLogger
@@ -271,7 +272,7 @@ class WorkflowStep:
         inputs = self.get_all_inputs()
         return Path(fl) in inputs
 
-    def has_ouput(self, fl: Pathy) -> bool:
+    def has_output(self, fl: Pathy) -> bool:
         """Check if the step has a given output file."""
         outputs = self.get_all_outputs()
 
@@ -298,6 +299,22 @@ class WorkflowStep:
 class Workflow:
     steps: list[WorkflowStep] = attrs.field(factory=list)
 
+    @steps.validator
+    def _validate_steps(self, attribute, value):
+        for step in value:
+            if not isinstance(step, WorkflowStep):
+                raise TypeError(
+                    f"Workflow steps must be of type WorkflowStep, got {type(step)}"
+                )
+
+        all_names = [step.name for step in value]
+        for name in all_names:
+            if all_names.count(name) > 1:
+                raise ValueError(
+                    f"Duplicate step name {name}. "
+                    "Please give one of the steps an explicit 'name'."
+                )
+
     @classmethod
     def read(cls, workflow: Pathy) -> Self:
         """Read a workflow from a file."""
@@ -313,14 +330,6 @@ class Workflow:
 
         steps = workflow.pop("steps")
         steps = [WorkflowStep(**step) for step in steps]
-
-        all_names = [step.name for step in steps]
-        for name in all_names:
-            if all_names.count(name) > 1:
-                raise ValueError(
-                    f"Duplicate step name {name}. "
-                    "Please give one of the steps an explicit 'name'."
-                )
 
         return cls(steps=steps)
 
@@ -349,6 +358,11 @@ class Workflow:
             self.steps[key] = value
         elif isinstance(key, str):
             self.steps[[s.name for s in self.steps].index(key)] = value
+        else:
+            raise TypeError(f"Invalid key type {type(key)}. Must be int or str.")
+
+        # re-validate
+        self._validate_steps("steps", self.steps)
 
     def __contains__(self, key: str) -> bool:
         """Check if a step is in the workflow."""
@@ -362,6 +376,9 @@ class Workflow:
         """Append a step to the workflow."""
         self.steps.append(step)
 
+        # re-validate
+        self._validate_steps("steps", self.steps)
+
     def index(self, key: str) -> int:
         """Get the index of a step."""
         return [s.name for s in self.steps].index(key)
@@ -369,6 +386,9 @@ class Workflow:
     def insert(self, index: int, step: WorkflowStep):
         """Insert a step into the workflow."""
         self.steps.insert(index, step)
+
+        # re-validate
+        self._validate_steps("steps", self.steps)
 
     def __len__(self):
         """Get the length of the workflow."""
@@ -388,6 +408,9 @@ class ProgressFile:
     @classmethod
     def create(cls, progressfile: Pathy, workflow: Workflow, inputs: list[Path] = None):
         """Create a new progressfile."""
+        # Make a copy
+        workflow = deepcopy(workflow)
+
         if any(bool(s.filemap) for s in workflow.steps):
             raise ValueError(
                 "Cannot create a new progressfile for a workflow with filemaps "
@@ -426,6 +449,11 @@ class ProgressFile:
     def __len__(self):
         """Get the length of the workflow."""
         return len(self.workflow)
+
+    def has_input(self, fl: Pathy) -> bool:
+        """Whether a given file is an input to the progressfile."""
+        fl = Path(fl)
+        return any(step.has_input(fl) for step in self)
 
     def add_inputs(self, inputs: Iterable[Path]):
         """Add inputs to the progressfile."""
@@ -563,6 +591,7 @@ class ProgressFile:
         # didn't, it needed to have been run, and therefore those outputs will already
         # exist as data that has been read.
         potential_files = self.workflow[current_index].get_all_inputs()
+
         if current_index > 0:
             potential_files.update(self.workflow[current_index - 1].get_all_outputs())
 
@@ -580,6 +609,7 @@ class ProgressFile:
                 # exist.
                 if out and all(x.exists() for x in out):
                     return False
+
             return True
 
         return {fl for fl in potential_files if _check_fl(fl.absolute())}
