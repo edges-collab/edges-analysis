@@ -9,56 +9,55 @@ from edges_analysis.gsdata import GSData
 @pytest.mark.parametrize(
     "step",
     [
-        "raw_step",
-        "cal_step",
-        "model_step",
-        "lstbin_step",
-        "lstavg_step",
-        "lstbin24_step",
-        "final_step",
+        "mock",
+        "mock_power",
+        "mock_with_model",
     ],
 )
 def test_plot_waterfall(step, request):
     """Test that plotting a waterfall doesn't crash."""
     astep = request.getfixturevalue(step)
     plots.plot_waterfall(
-        astep[0], attribute="resids" if step == "model_step" else "spectra"
+        astep, attribute="residuals" if step == "mock_with_model" else "data"
     )
 
 
-def test_plot_waterfall_bad_attribute(cal_step):
+def test_plot_waterfall_bad_attribute(mock):
     with pytest.raises(ValueError, match="Cannot use attribute"):
-        plots.plot_waterfall(cal_step[0], attribute="flags")
+        plots.plot_waterfall(mock, attribute="flags")
 
 
-def test_plot_time_average_bad_attribute(cal_step):
+def test_plot_time_average_bad_attribute(mock):
     with pytest.raises(ValueError, match="Cannot use attribute"):
-        plots.plot_time_average(cal_step[0], attribute="flags")
+        plots.plot_time_average(mock, attribute="flags")
 
 
 @pytest.mark.parametrize(
     "step",
     [
-        "raw_step",
-        "cal_step",
-        "model_step",
-        "lstbin_step",
-        "lstavg_step",
-        "lstbin24_step",
-        "final_step",
+        "mock",
+        "mock_power",
+        "mock_with_model",
     ],
 )
 def test_plot_time_average(step, request):
     """Test that plotting a time average doesn't crash."""
     step = request.getfixturevalue(step)
-    plots.plot_time_average(step[0], lst_min=6.0, lst_max=18.0)
+    plots.plot_time_average(step, lst_min=6.0, lst_max=18.0)
 
 
-@pytest.mark.parametrize("step", ["raw_step", "cal_step", "model_step", "lstbin_step"])
+@pytest.mark.parametrize(
+    "step",
+    [
+        "mock_season",
+        "mock_season_dicke",
+        "mock_season_modelled",
+    ],
+)
 def test_plot_daily_residuals(step, request):
     """Test that plotting daily residuals doesn't crash."""
     step: GSData = request.getfixturevalue(step)
-    if step[0].data_model is None:
+    if step[0].residuals is None:
         with pytest.raises(ValueError, match="If data has no model, must provide one!"):
             plots.plot_daily_residuals(step)
         plots.plot_daily_residuals(step, model=LinLog(n_terms=5))

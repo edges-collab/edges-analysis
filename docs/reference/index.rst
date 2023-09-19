@@ -7,7 +7,11 @@ The GSData Interface
     :toctree: _autosummary
     :template: module.rst
 
-    edges_analysis.gsdata
+    edges_analysis.gsdata.gsdata
+    edges_analysis.gsdata.datamodel
+    edges_analysis.gsdata.gsflag
+    edges_analysis.gsdata.history
+    edges_analysis.gsdata.select
 
 
 High Level Methods
@@ -82,7 +86,6 @@ Sky and Beam Modelling
     edges_analysis.sky_models
     edges_analysis.beams
 
-
 Package Config and Utilities
 ----------------------------
 .. autosummary::
@@ -93,3 +96,11 @@ Package Config and Utilities
     edges_analysis.config
     edges_analysis.tools
     edges_analysis.coordinates
+
+Developer Documentation
+-----------------------
+.. autosummary::
+    :toctree: _autosummary
+    :template: module.rst
+
+    edges_analysis._workflow

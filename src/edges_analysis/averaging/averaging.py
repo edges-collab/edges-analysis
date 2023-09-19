@@ -8,10 +8,12 @@ for averaging, in order to make the average unbiased (given flags).
 
 from __future__ import annotations
 
-import astropy
 import contextlib
 import numpy as np
+from astropy import units as un
 from edges_cal import modelling as mdl
+
+from ..tools import slice_along_axis
 
 
 def get_binned_weights(
@@ -47,14 +49,17 @@ def get_binned_weights(
 
 def get_bin_edges(
     coords: np.ndarray,
-    bins: np.ndarray | int | float | None = None,
+    bins: np.ndarray | un.Quantity | int | float | None = None,
+    start: float | un.Quantity | None = None,
+    stop: float | un.Quantity | None = None,
 ) -> np.ndarray:
     """Get bin edges given input coordinates and a simple description of the binning.
 
     Parameters
     ----------
     coords
-        The input co-ordinates to bin.
+        The input co-ordinates to bin. These must be regular and monotonically
+        increasing.
     bins
         The bin *edges* (lower inclusive, upper not inclusive). If an ``int``, simply
         use ``bins`` samples per bin, starting from the first bin. If a float, use
@@ -64,31 +69,42 @@ def get_bin_edges(
     unit = getattr(coords, "unit", 1)
     coords = getattr(coords, "value", coords)
 
-    if bins is None:
-        return np.array([coords[0], coords[-1] + 0.1]) * unit
-    elif not isinstance(bins, astropy.units.Quantity) and hasattr(bins, "__len__"):
-        return np.array(bins)
-    elif isinstance(bins, astropy.units.Quantity) and not bins.isscalar:
-        return bins
-    else:
-        last_edge = coords[-1] + 0.1
+    diffs = np.diff(coords)
+    dx = np.median(diffs)
+    if not np.all(diffs > 0):
+        raise ValueError("coords must be monotonically increasing!")
 
-        if isinstance(bins, int):
-            # works if its an integer
-            if len(coords) % bins == 0:
-                edges = coords[::bins]
-                return (
-                    np.concatenate((edges, [edges[-1] + (edges[-1] - edges[-2])]))
-                    * unit
-                )
-            else:
-                return coords[::bins] * unit
+    if not np.allclose(diffs, dx, rtol=1e-3):
+        raise ValueError("coords must be regularly spaced!")
+
+    if start is None:
+        start = coords[0] - dx / 2
+    else:
+        start = getattr(start, "value", start)
+
+    if stop is None:
+        stop = coords[-1] + dx / 2
+    else:
+        stop = getattr(stop, "value", stop)
+
+    if bins is None:
+        return np.array([start, stop]) * unit
+    elif not isinstance(bins, un.Quantity) and hasattr(bins, "__len__"):
+        return np.array(bins)
+    elif isinstance(bins, un.Quantity) and not bins.isscalar:
+        return bins
+    elif isinstance(bins, int):
+        # works if its an integer
+        if len(coords) % bins == 0:
+            edges = coords[::bins] - dx / 2
+            return np.concatenate((edges, [coords[-1] + dx])) * unit
+        else:
+            return (coords[::bins] - dx / 2) * unit
+    else:
         if unit != 1:
             with contextlib.suppress(AttributeError):
                 bins = bins.to_value(unit)
-        return (
-            np.concatenate((np.arange(coords[0], coords[-1], bins), [last_edge])) * unit
-        )
+        return np.arange(start, stop, bins) * unit
 
 
 def bin_array_biased_regular(
@@ -643,3 +659,83 @@ def weighted_sorted_metric(data, weights=None, metric="median", **kwargs):
 def weighted_standard_deviation(av, data, std, axis=0):
     """Calcualte a careful weighted standard deviation."""
     return np.sqrt(weighted_mean((data - av) ** 2, 1 / std**2, axis=axis)[0])
+
+
+def bin_data(
+    data: np.ndarray,
+    residuals: np.ndarray | None = None,
+    weights: np.ndarray | None = None,
+    bins: list[np.ndarray | slice] | None = None,
+    axis: int = -1,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Bin data, in an un-biased way if possible.
+
+    This uses the estimator from memo #183:
+    http://loco.lab.asu.edu/wp-content/uploads/2020/10/averaging_with_weights.pdf.
+
+    Parameters
+    ----------
+    data
+        The data to be binned.
+    residuals
+        The residuals of the data, if known. If not provided, and weights is non
+        uniform, the average will be biased.
+    weights
+        The weights of the data. If not provided, assume all weights are unity.
+    bins
+        The bins into which to bin the data. If not provided, assume a single bin
+        encompassing all the data. Each element should be either an array that
+        indexes into the axis over which to bin, or a slice object.
+    axis
+        The axis over which to bin.
+
+    Returns
+    -------
+    data
+        The binned data.
+    weights
+        The weights of the binned data.
+    residuals
+        The binned residuals (if provided).
+    """
+    if residuals is not None:
+        model = data - residuals
+
+    if axis < 0:
+        axis += data.ndim
+
+    shape = list(data.shape)
+    shape[axis] = len(bins)
+
+    outd = np.zeros(tuple(shape), dtype=data.dtype)
+    outw = np.zeros(tuple(shape), dtype=float)
+    if residuals is not None:
+        outr = np.zeros(tuple(shape), dtype=residuals.dtype)
+    else:
+        outr = None
+
+    ell = (slice(None),) * axis
+
+    for ibin, bn in enumerate(bins):
+        if weights is not None:
+            w = slice_along_axis(weights, bn, axis=axis)
+        else:
+            w = None
+
+        if residuals is not None:
+            m = slice_along_axis(model, bn, axis=axis)
+            r = slice_along_axis(residuals, bn, axis=axis)
+
+            m = weighted_mean(m, axis=axis)[0]
+            r, w = weighted_mean(r, weights=w, axis=axis)
+            d = r + m
+        else:
+            d = slice_along_axis(data, bn, axis=axis)
+            d, w = weighted_mean(d, weights=w, axis=axis)
+
+        outd[ell + (ibin,)] = d
+        outw[ell + (ibin,)] = w
+        if residuals is not None:
+            outr[ell + (ibin,)] = r
+
+    return outd, outw, outr

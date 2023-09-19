@@ -8,14 +8,16 @@ from astropy.time import Time
 from datetime import datetime, timedelta
 from edges_cal.modelling import LinLog
 
+from edges_analysis.datamodel import GSDataLinearModel
 from edges_analysis.gsdata import (
     GSData,
-    GSDataModel,
+    GSFlag,
     History,
     Stamp,
-    add_model,
     gsregister,
-    swap_data,
+    select_freqs,
+    select_lsts,
+    select_times,
 )
 
 
@@ -137,53 +139,37 @@ def test_history():
 
 
 def test_bad_gsdata_init(simple_gsdata: GSData):
-    with pytest.raises(TypeError, match="data must be a numpy array"):
-        simple_gsdata.update(data="rubbish_input")
-
-    with pytest.raises(ValueError, match="data must be a 4D array"):
+    with pytest.raises(ValueError, match="data must have ndim in"):
         simple_gsdata.update(data=np.zeros((3, 4, 5)))
-
-    with pytest.raises(ValueError, match="data must be real"):
-        simple_gsdata.update(data=np.zeros((3, 4, 5, 6)) + 1j)
 
     with pytest.raises(ValueError, match="nsamples must have the same shape as data"):
         simple_gsdata.update(nsamples=np.zeros((2, 1, 50, 100)))
 
-    with pytest.raises(ValueError, match="nsamples must be real"):
-        simple_gsdata.update(nsamples=np.zeros_like(simple_gsdata.data) + 1j)
-
     with pytest.raises(TypeError, match="flags must be a dict"):
         simple_gsdata.update(flags=np.zeros(simple_gsdata.data.shape, dtype=bool))
 
-    with pytest.raises(TypeError, match="flags values must be numpy arrays"):
-        simple_gsdata.update(flags={"flag1": True})
-
-    with pytest.raises(ValueError, match="flags must have the same shape as the data"):
-        simple_gsdata.update(
-            flags={"flag1": np.zeros(simple_gsdata.data.shape[:-1], dtype=bool)}
-        )
-
-    with pytest.raises(ValueError, match="flags must be boolean"):
-        simple_gsdata.update(
-            flags={"flag1": np.zeros(simple_gsdata.data.shape, dtype=int)}
-        )
-
     with pytest.raises(ValueError, match="flags keys must be strings"):
-        simple_gsdata.update(flags={1: np.zeros(simple_gsdata.data.shape, dtype=bool)})
+        simple_gsdata.update(
+            flags={
+                1: GSFlag(
+                    flags=np.zeros(simple_gsdata.data.shape, dtype=bool),
+                    axes=("load", "pol", "time", "freq"),
+                )
+            }
+        )
 
     with pytest.raises(TypeError, match="freq_array must be a Quantity"):
         simple_gsdata.update(freq_array=np.linspace(50, 100, 100))
 
-    with pytest.raises(ValueError, match="freq_array must have frequency units"):
+    with pytest.raises(
+        ValueError, match="freq_array must have units compatible with MHz"
+    ):
         simple_gsdata.update(freq_array=np.linspace(50, 100, 100) * un.m)
 
     with pytest.raises(ValueError, match="freq_array must have the size nfreqs"):
         simple_gsdata.update(freq_array=simple_gsdata.freq_array[:-1])
 
-    with pytest.raises(TypeError, match="time_array must either be an astropy Time"):
-        simple_gsdata.update(time_array=np.linspace(50, 100, 50))
-
-    with pytest.raises(ValueError, match="time_array must have the size"):
+    with pytest.raises(ValueError, match="time_array must have ndim in "):
         simple_gsdata.update(time_array=simple_gsdata.time_array[:, 0])
 
     with pytest.raises(ValueError, match="loads must have the same length as"):
@@ -228,21 +214,6 @@ def test_bad_gsdata_init(simple_gsdata: GSData):
     with pytest.raises(ValueError, match="data_unit must be one of"):
         simple_gsdata.update(data_unit="my_custom_string")
 
-    with pytest.raises(
-        ValueError, match='data_unit cannot be "model_residuals" if data_model is None'
-    ):
-        simple_gsdata.update(data_unit="model_residuals")
-
-    with pytest.raises(TypeError, match="data_model must be a GSDataModel"):
-        simple_gsdata.update(data_model=3)
-
-    with pytest.raises(ValueError, match="data_model parameters shape mismatch"):
-        simple_gsdata.update(
-            data_model=GSDataModel(
-                model=LinLog(n_terms=5), parameters=np.zeros((1, 1, 49, 5))
-            )
-        )
-
 
 def test_read_bad_filetype():
     with pytest.raises(ValueError, match="Unrecognized file type"):
@@ -271,37 +242,38 @@ def test_select_lsts_and_times(power_gsdata):
     indx = np.zeros(50, dtype=bool)
     indx[::2] = True
 
-    lst = power_gsdata.select_lsts(indx=indx)
-    tm = power_gsdata.select_times(indx=indx)
+    lst = select_lsts(power_gsdata, indx=indx)
+    tm = select_times(power_gsdata, indx=indx)
 
     assert lst == tm
 
-    stime = power_gsdata.select_times(range=(2459811.5, 2459811.7))
+    stime = select_times(power_gsdata, time_range=(2459811.5, 2459811.7))
     assert stime != power_gsdata
 
 
 def test_select_lsts(power_gsdata: GSData):
     rng = (power_gsdata.lst_array.min().hour, power_gsdata.lst_array.max().hour)
 
-    new = power_gsdata.select_lsts(range=rng, load="all")
-    assert new == power_gsdata
+    new = select_lsts(power_gsdata, lst_range=rng, load="all")
+    # even though they're the same, the _file_appendable is switched off now
+    assert new != power_gsdata
+    assert np.allclose(new.data, power_gsdata.data)
 
-    new = power_gsdata.select_lsts(range=rng, load="ant")
-    assert new == power_gsdata
+    new = select_lsts(power_gsdata, lst_range=rng, load="ant")
+    assert new != power_gsdata
+    assert np.allclose(new.data, power_gsdata.data[0])
 
     with pytest.raises(ValueError, match="range must be a length-2 tuple"):
-        power_gsdata.select_lsts(range=[0, 2, 3])
+        select_lsts(power_gsdata, lst_range=[0, 2, 3])
 
     # Use different order of range
-    new = power_gsdata.select_lsts(range=(-2, 4))
-    new2 = power_gsdata.select_lsts(range=(22, 4))
+    new = select_lsts(power_gsdata, lst_range=(-2, 4))
+    new2 = select_lsts(power_gsdata, lst_range=(22, 4))
     assert new == new2
 
     # Test with both indx and range
-    new = power_gsdata.select_lsts(range=rng, indx=np.arange(0, 50, 2))
-    new2 = power_gsdata.select_lsts(indx=np.arange(0, 50, 2))
-
-    print(new.data.shape, new2.data.shape)
+    new = select_lsts(power_gsdata, lst_range=rng, indx=np.arange(0, 50, 2))
+    new2 = select_lsts(power_gsdata, indx=np.arange(0, 50, 2))
 
     flds = attrs.fields(GSData)
     for fld in flds:
@@ -319,20 +291,8 @@ def test_select_lsts(power_gsdata: GSData):
 
 
 def test_select_freqs(simple_gsdata):
-    new = simple_gsdata.select_freqs(range=(50 * un.MHz, 70 * un.MHz))
+    new = select_freqs(simple_gsdata, freq_range=(50 * un.MHz, 70 * un.MHz))
     assert new.freq_array.max() <= 70 * un.MHz
-
-    new1 = simple_gsdata.select(freq_range=(50 * un.MHz, 70 * un.MHz))
-    assert new1 == new
-
-    new2 = simple_gsdata.select(freq_indx=np.arange(0, len(new1.freq_array)))
-    print(
-        new.freq_array.min(),
-        new.freq_array.max(),
-        new2.freq_array.min(),
-        new2.freq_array.max(),
-    )
-    assert new2 == new
 
 
 def test_add(simple_gsdata):
@@ -350,15 +310,9 @@ def test_add(simple_gsdata):
 
     with pytest.raises(
         ValueError,
-        match="Cannot add GSData objects with different frequency and time arrays",
+        match="Cannot add GSData objects with different frequencies",
     ):
         simple_gsdata + new_timefreq
-
-    time_concat = simple_gsdata + new_times
-    assert time_concat.ntimes == simple_gsdata.ntimes + new_times.ntimes
-
-    freq_concat = simple_gsdata + new_freqs
-    assert freq_concat.nfreqs == simple_gsdata.nfreqs + new_freqs.nfreqs
 
     doubled = simple_gsdata + simple_gsdata
     assert np.allclose(doubled.data, simple_gsdata.data * 2)
@@ -411,7 +365,7 @@ def test_cumulative_flags(simple_gsdata: GSData):
         # can't add the same flags twice
         no_flags.add_flags("zeros", flg0)
 
-    with pytest.raises(ValueError, match="Shape mismatch between flags"):
+    with pytest.raises(ValueError, match="Cannot multiply GSFlag objects"):
         no_flags.add_flags("new", np.zeros((1, 2, 3)))
 
     with pytest.raises(ValueError, match="Cannot append to file without a filename"):
@@ -449,18 +403,12 @@ def test_iterators(simple_gsdata):
 
 @pytest.fixture(scope="module")
 def gsdata_model():
-    return GSDataModel(
+    return GSDataLinearModel(
         model=LinLog(n_terms=5), parameters=np.random.random(size=(1, 1, 50, 5))
     )
 
 
 def test_bad_gsdata_model_init(gsdata_model):
-    with pytest.raises(TypeError, match="parameters must be a numpy array"):
-        gsdata_model.update(parameters=3)
-
-    with pytest.raises(ValueError, match="parameters must have 4 dimensions"):
-        gsdata_model.update(parameters=np.random.random(size=(1, 2, 3)))
-
     with pytest.raises(ValueError, match="parameters array has 3 parameters"):
         gsdata_model.update(parameters=np.random.random(size=(1, 1, 50, 3)))
 
@@ -472,29 +420,3 @@ def test_shape(gsdata_model):
         gsdata_model.ntimes,
         gsdata_model.nparams,
     )
-
-
-def test_swap_data(simple_gsdata):
-    with pytest.raises(
-        ValueError, match="Cannot swap data attribute without add_model step"
-    ):
-        swap_data(simple_gsdata)
-
-    model = LinLog(n_terms=2, parameters=[5, 6])
-    mx = model.at(x=simple_gsdata.freq_array)
-    newdata = np.array(
-        [
-            mx() * (1 + np.random.normal(scale=0.1))
-            for _ in range(
-                simple_gsdata.ntimes * simple_gsdata.nloads * simple_gsdata.npols
-            )
-        ]
-    )
-    newdata.shape = simple_gsdata.data.shape
-    newdata = simple_gsdata.update(data=newdata)
-
-    gsd_model = add_model(newdata, model=model)
-    gsd_resids = swap_data(gsd_model)
-
-    assert not np.allclose(newdata.data, gsd_resids.data)
-    assert np.allclose(newdata.spectra, gsd_resids.spectra)

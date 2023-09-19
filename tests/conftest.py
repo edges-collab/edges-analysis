@@ -7,13 +7,18 @@ import yaml
 from astropy import units as un
 from astropy.time import Time
 from click.testing import CliRunner
+from edges_cal import modelling as mdl
 from jinja2 import Template
 from pathlib import Path
 from subprocess import run
 
 from edges_analysis import cli, const
+from edges_analysis.calibration.calibrate import dicke_calibration
 from edges_analysis.config import config
+from edges_analysis.datamodel import add_model
 from edges_analysis.gsdata import GSData
+
+from .mock_gsdata import create_mock_edges_data
 
 runner = CliRunner()
 
@@ -311,3 +316,40 @@ def gsd_ones_power():
         loads=("p0", "p1", "p2"),
         data_unit="power",
     )
+
+
+@pytest.fixture(scope="session")
+def mock() -> GSData:
+    return create_mock_edges_data(add_noise=True)
+
+
+@pytest.fixture(scope="session")
+def mock_power() -> GSData:
+    return create_mock_edges_data(add_noise=True, as_power=True)
+
+
+@pytest.fixture(scope="session")
+def mock_with_model(mock) -> GSData:
+    return add_model(data=mock, model=mdl.LinLog(n_terms=2))
+
+
+@pytest.fixture(scope="session")
+def mock_season() -> list[GSData]:
+    """A mock 'season' with three days."""
+    return [
+        create_mock_edges_data(add_noise=True, as_power=True, time0=2459900.27),
+        create_mock_edges_data(add_noise=True, as_power=True, time0=2459901.27),
+        create_mock_edges_data(add_noise=True, as_power=True, time0=2459902.27),
+    ]
+
+
+@pytest.fixture(scope="session")
+def mock_season_dicke(mock_season: list[GSData]) -> list[GSData]:
+    """Dicke-calibrated mock season"""
+    return [dicke_calibration(m) for m in mock_season]
+
+
+@pytest.fixture(scope="session")
+def mock_season_modelled(mock_season_dicke: list[GSData]) -> list[GSData]:
+    """Dicke-calibrated mock season"""
+    return [add_model(m, model=mdl.LinLog(n_terms=2)) for m in mock_season_dicke]

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 from click.testing import CliRunner
 
 from edges_analysis import cli
@@ -119,7 +120,7 @@ def test_stop(workflow, integration_test_data):
 
 def test_stop_at_filter(workflow, integration_test_data):
     workdir = workflow.parent / "stop_at_filter"
-    res = invoke(
+    invoke(
         cli.process,
         [
             str(workflow),
@@ -138,9 +139,9 @@ def test_stop_at_filter(workflow, integration_test_data):
 
     data = GSData.from_file(workdir / "2016_292_00_small.gsh5")
 
-    assert "negative_power_filter" in data.flags
+    assert "negative_power_filter" not in data.flags
 
-    res = invoke(
+    invoke(
         cli.process,
         [
             str(workflow),
@@ -150,7 +151,6 @@ def test_stop_at_filter(workflow, integration_test_data):
         ],
     )
 
-    assert "negative_power_filter does not need to run on any files" in res.output
     assert (workdir / "cal/linlog/L15min/2016_292_00_small.gsh5").exists()
 
 
@@ -168,19 +168,14 @@ def test_delete_file(workflow, integration_test_data):
         ],
     )
 
+    shutil.copy(workdir / "progressfile.yaml", workdir / "progressfile.yaml.bak")
+
     assert (workdir / "2016_292_00_small.gsh5").exists()
     assert (workdir / "2016_295_00_small.gsh5").exists()
-
-    data = GSData.from_file(workdir / "2016_292_00_small.gsh5")
-
-    assert "negative_power_filter" in data.flags
 
     # Remove the calibration files
     (workdir / "cal/2016_292_00_small.gsh5").unlink()
     (workdir / "cal/2016_295_00_small.gsh5").unlink()
-
-    if (workdir / "cal/2016_295_00_small.gsh5").exists():
-        assert False
 
     res = invoke(
         cli.process,
