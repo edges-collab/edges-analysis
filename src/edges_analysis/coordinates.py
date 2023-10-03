@@ -136,7 +136,7 @@ def lsts_to_times(
     ref_lst = ref_time.sidereal_time("apparent")
     lst_per_sec = lst_to_earth_time(ref_time)
     times = []
-    for i, this_lst in enumerate(lsts):
+    for this_lst in lsts:
         lst_diff = apc.Longitude(this_lst * apu.hour) - ref_lst
         sec_diff = apt.TimeDelta(lst_diff.arcsecond / 15 / lst_per_sec, format="sec")
         times.append(ref_time + sec_diff)
