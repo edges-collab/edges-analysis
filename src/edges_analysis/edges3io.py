@@ -26,20 +26,19 @@ INFO on EDGES-3 file structure:
 """
 
 import numpy as np
-import matplotlib.pyplot as plt
-from glob  import glob
-from edges_cal.s11 import VNAReading
-from edges_cal.s11 import StandardsReadings
-import pandas as pd
-from edges_analysis import GSData
 import astropy.units as u
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 from datetime import datetime, timedelta
+from edges_cal.s11 import StandardsReadings, VNAReading
+from glob import glob
+from edges_analysis import GSData
 import cmath
 import matplotlib.pyplot as plt
 import numpy as np
 from edges_cal.s11 import StandardsReadings, VNAReading
 from glob import glob
-
 root_dir = "/data5/edges/data/EDGES3_data/MRO"
 
 # constants from reads1p1.c
@@ -316,68 +315,68 @@ def gets11(load, year, day, cablen=0, cabloss=0, cabdiel=0):
 
 
 
-#temperature logger related functions    
-    
+#temperature logger related functions
+
 def extract_dates(anc_obj):
-    
-    
+
+
     '''
     Take ancilliary data from acq file and return the start and end time as datetime objects.
-    
+
     '''
-    
+
     start_time = anc_obj.data['times'][0][0].decode('utf-8') #first instance of time
     end_time = anc_obj.data['times'][-1][0].decode('utf-8')  #second instance of time
-    
+
     date_format = "%Y:%j:%H:%M:%S"
-    
-    
-    
+
+
+
     # Parse the string into a datetime object
     start_time = datetime.strptime(start_time, date_format)
-    
+
     end_time = datetime.strptime(end_time, date_format)
 
-    
+
     return(start_time, end_time)
 
 
 
 
 def extract_temp_values_from_logger(temperature_file=root_dir+"/temperature_logger/temperature.log"):
-     
+
 
 
     '''
         Easiest way (i think) is to read one line at a time, check conditions in each line,
         extract a datetime object and temperature readouts.
-        I am throwing away the readouts that don't have complete information. 
+        I am throwing away the readouts that don't have complete information.
         If such read out is encountered, count is 'reset' meaning that readout won't be appended to the dataframe
-        
+
     '''
-    
+
     #lets first create a panda dataframe
 
     df = pd.DataFrame({'Time':[], 'Front End temperature':[], 'Amb load temperature':[], 'Hot load temperature':[],
-                      'Inner box temperature':[], 'Thermal Control':[], 'Battery Voltage':[], 
+                      'Inner box temperature':[], 'Thermal Control':[], 'Battery Voltage':[],
                        'PR59 Current':[]})
-            
+
     with open(temperature_file, 'r') as file:
-    
-        
-        
+
+
+
         for line in file:
-            
+
             this_line = line
             #print(this_line)
-            
+
             if '_' in this_line:
                 #print(this_line)
-            
-                values = this_line.split('_')  # this is the line that looks like 2022_318_03 
+
+                values = this_line.split('_')  # this is the line that looks like 2022_318_03
                 if(len(values)==3):
                     count =0 # reset everytime the first line is encountered
-                    
+
                     try:
                         year = int(values[0])
                         doy = int(values[1])
@@ -385,178 +384,173 @@ def extract_temp_values_from_logger(temperature_file=root_dir+"/temperature_logg
                     except:
                         #skip this data record
                         count = count #do nothing
-                    
-                
-            if 'UTC' in this_line: 
-                
+
+
+            if 'UTC' in this_line:
+
                 values = this_line.split(' ') #this_line is alredy split with single space
-                
+
                 # this is the line that looks like "Mon Nov 14 03:20:26 UTC 2022"
                                         #we only want time from this
                 if(len(values)==6):
-                        
+
                     time = values[3]
                     values = time.split(':')  # we take the time that looks like "03:20:26"
-                    
+
                     try:
                         hh = int(values[0])
                         mm = int(values[1])
                         ss = int(values[2])
-        
+
                         #create datetime object using year, day of the year, hh,mm,ss information.
-        
+
                         date_object = datetime(year, 1, 1, hh, mm, ss) + timedelta(days=doy - 1)
                         count +=1
-                
+
                     except:
                         #skip this data record
                         count = count #do nothing
-        
+
             if '0 ' in this_line:      #this is the line that looks like "0 +3.000000e+01" --> we don't need this now
                 count += 1 # do nothing
-        
+
             if '100 ' in this_line:
-                values = this_line.split(" ")        #this line is for sensor 100   
+                values = this_line.split(" ")        #this line is for sensor 100
                 if(len(values)==2):
                     #check if there are two values in that line -- one for the sensor and one for the value
-                    
+
                     try:
                         front_end_box_temp = float(values[1].strip())
                         count +=1
                     except:
                         #skip this data record
                         count = count #do nothing
-                    
+
             if '101 ' in this_line:
-                values = this_line.split(" ")        #this line is for sensor 101   
+                values = this_line.split(" ")        #this line is for sensor 101
                 if(len(values)==2):  #check if there are two values in that line -- one for the sensor and one for the value
-                    
+
                     try:
                         amb_load_temp = float(values[1].strip())
                         count +=1
-                        
+
                     except ValueError:
                         #skip this data record
                         count = count #do nothing
-                    
+
             if '102 ' in this_line:
-                values = this_line.split(" ")        #this line is for sensor 102   
-                if(len(values)==2): 
-                    
+                values = this_line.split(" ")        #this line is for sensor 102
+                if(len(values)==2):
+
                     try:
                         hot_load_temp = float(values[1].strip())
                         count +=1
-                        
-                    except ValueError:
-                        #skip this data record 
-                        count = count #do nothing
-                    
-            if '103 ' in this_line:
-                values = this_line.split(" ")        #this line is for sensor 103   
-                if(len(values)==2):
-                    
-                    try:
-                        innerbox_temp = float(values[1].strip())
-                        count +=1
-                        
+
                     except ValueError:
                         #skip this data record
                         count = count #do nothing
-                    
-            if '106 ' in this_line:
-                values = this_line.split(" ")        #this line is for sensor 106   
+
+            if '103 ' in this_line:
+                values = this_line.split(" ")        #this line is for sensor 103
                 if(len(values)==2):
-                    
+
+                    try:
+                        innerbox_temp = float(values[1].strip())
+                        count +=1
+
+                    except ValueError:
+                        #skip this data record
+                        count = count #do nothing
+
+            if '106 ' in this_line:
+                values = this_line.split(" ")        #this line is for sensor 106
+                if(len(values)==2):
+
                     try:
                         therm_control = float(values[1].strip())
                         count +=1
-                    
+
                     except ValueError:
                         #skip this data record
                         count = count #do nothing
 
             if '150 ' in this_line:
-                values = this_line.split(" ")        #this is battery voltage 150   
-                if(len(values)==2):    
-                    
+                values = this_line.split(" ")        #this is battery voltage 150
+                if(len(values)==2):
+
                     try:
                         battery_voltage = float(values[1].strip())
                         count +=1
-                    
+
                     except ValueError:
                         #skip this data record
                         count = count #do nothing
-                        
-                    
-                    
+
+
+
             if '152 ' in this_line:
-                values = this_line.split(" ")        #this is PR59 current 152 
-                if(len(values)==2):     
-                    
+                values = this_line.split(" ")        #this is PR59 current 152
+                if(len(values)==2):
+
                     try:
                         pr59_current = float(values[1].strip())
                         count +=1
-                    
+
                     except ValueError:
                         #skip this data record
                         count = count #do nothing
-             
+
             if(count ==10):
-                
-                temp_df = pd.DataFrame({'Time':[date_object], 'Front End temperature':[front_end_box_temp], 
+
+                temp_df = pd.DataFrame({'Time':[date_object], 'Front End temperature':[front_end_box_temp],
                                             'Amb load temperature':[amb_load_temp],
                                             'Hot load temperature':[hot_load_temp],
-                                            'Inner box temperature':[innerbox_temp], 
-                                            'Thermal Control':[therm_control], 
-                                            'Battery Voltage':[battery_voltage], 
+                                            'Inner box temperature':[innerbox_temp],
+                                            'Thermal Control':[therm_control],
+                                            'Battery Voltage':[battery_voltage],
                                             'PR59 Current':[pr59_current]})
-                
-        
-        
+
+
+
                 # Concatenate the this DataFrame with the original DataFrame
                 df = pd.concat([df, temp_df], ignore_index=True)
                 count=0 #reset
 
-        
-        
+
+
     df.to_csv('meta_data_files/temperature_data.csv')
-    
-    
+
+
     return('meta_data_files/temperature_data.csv')
-   
-    
-    
 
 def extract_temperature(anc_obj, load='box', extract_log= False, temperature_file='meta_data_files/temperature_data.csv'):
-    
+
     '''
-    Take start and end time from the ancillary data and return the average temperature in that time range
-    
+    Take start and end time from the ancillary data and return the average temperature in that time range    
     --  For hot load, temperature from hot load temperature sensor is used (register 102) that
     sits directly on the hot load at the end of 8 position switch
     --  For amb, long cable open and short, the register 101 is used which is the temperature of the ambient load
-    
     '''
-    
+
     start_time, end_time = extract_dates(anc_obj)
-    
+
     if(extract_log == True):
-        
+
         '''
-        extract the data from log only if required. 
+        extract the data from log only if required.
         Default is False, meaning the pre-extracted file will be used
         This is don to avoid repeted file parsing
-        
+
         '''
         temperature_file = extract_temp_values_from_logger(root_dir+'/temperature_logger/temperature.log')
-        
+
         #default file is temperature_data.csv
 
-    
+
     df = pd.read_csv(temperature_file)
-    
+
     df['Time'] = pd.to_datetime(df['Time'])
-    
+
     front_end_temp = df[(df['Time'] >= start_time) & (df['Time'] <= end_time)]['Front End temperature']
     amb_load_temp = df[(df['Time'] >= start_time) & (df['Time'] <= end_time)]['Amb load temperature']
     hot_load_temp = df[(df['Time'] >= start_time) & (df['Time'] <= end_time)]['Hot load temperature']
@@ -564,8 +558,7 @@ def extract_temperature(anc_obj, load='box', extract_log= False, temperature_fil
     therm_control = df[(df['Time'] >= start_time) & (df['Time'] <= end_time)]['Thermal Control']
     battery_voltage = df[(df['Time'] >= start_time) & (df['Time'] <= end_time)]['Battery Voltage']
     battery_current = df[(df['Time'] >= start_time) & (df['Time'] <= end_time)]['PR59 Current']
-    
-    
+
     if load =='hot':
         
         temperature = hot_load_temp.values
@@ -574,12 +567,26 @@ def extract_temperature(anc_obj, load='box', extract_log= False, temperature_fil
     elif load == 'open' or 'short' or 'box' or 'amb':
         
         temperature =amb_load_temp.values  #this is default if no load is specified
+
+
+    if load =='amb':
+
+        temperature = amb_load_temp.values
+        #print('amb', temperature)
+
+    elif load =='hot':
+
+        temperature = hot_load_temp.values
+        #print('hot', temperature)
+
+    elif load == 'open' or 'short' or 'box':
+
+        temperature =front_end_temp.values  #this is default if no load is specified
         #print('default', temperature)
-    
+
     temperature_deg_C = temperature * u.deg_C
     temperature_K = temperature_deg_C.to(u.K,  equivalencies=u.temperature())
 
-    
+
     return(temperature_K.mean())
-    
 
