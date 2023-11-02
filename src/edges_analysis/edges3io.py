@@ -25,7 +25,6 @@ INFO on EDGES-3 file structure:
 
 """
 
-<<<<<<< HEAD
 import numpy as np
 import matplotlib.pyplot as plt
 from glob  import glob
@@ -35,13 +34,11 @@ import pandas as pd
 from edges_analysis import GSData
 import astropy.units as u
 from datetime import datetime, timedelta
-=======
 import cmath
 import matplotlib.pyplot as plt
 import numpy as np
 from edges_cal.s11 import StandardsReadings, VNAReading
 from glob import glob
->>>>>>> a01e13006a80b80d5a868fa49970c78862a53b8c
 
 root_dir = "/data5/edges/data/EDGES3_data/MRO"
 
@@ -315,7 +312,9 @@ def gets11(load, year, day, cablen=0, cabloss=0, cabdiel=0):
 
         ss11ant = Ta
 
-<<<<<<< HEAD
+    return ss11ant, vna_load.freq.freq.value, vna_input.s11
+
+
 
 #temperature logger related functions    
     
@@ -528,11 +527,14 @@ def extract_temp_values_from_logger(temperature_file=root_dir+"/temperature_logg
     
     
 
-    
 def extract_temperature(anc_obj, load='box', extract_log= False, temperature_file='meta_data_files/temperature_data.csv'):
     
     '''
     Take start and end time from the ancillary data and return the average temperature in that time range
+    
+    --  For hot load, temperature from hot load temperature sensor is used (register 102) that
+    sits directly on the hot load at the end of 8 position switch
+    --  For amb, long cable open and short, the register 101 is used which is the temperature of the ambient load
     
     '''
     
@@ -563,19 +565,15 @@ def extract_temperature(anc_obj, load='box', extract_log= False, temperature_fil
     battery_voltage = df[(df['Time'] >= start_time) & (df['Time'] <= end_time)]['Battery Voltage']
     battery_current = df[(df['Time'] >= start_time) & (df['Time'] <= end_time)]['PR59 Current']
     
-    if load =='amb':
-        
-        temperature = amb_load_temp.values
-        #print('amb', temperature)
     
-    elif load =='hot':
+    if load =='hot':
         
         temperature = hot_load_temp.values
         #print('hot', temperature)
     
-    elif load == 'open' or 'short' or 'box':
+    elif load == 'open' or 'short' or 'box' or 'amb':
         
-        temperature =front_end_temp.values  #this is default if no load is specified
+        temperature =amb_load_temp.values  #this is default if no load is specified
         #print('default', temperature)
     
     temperature_deg_C = temperature * u.deg_C
@@ -584,7 +582,4 @@ def extract_temperature(anc_obj, load='box', extract_log= False, temperature_fil
     
     return(temperature_K.mean())
     
-    
-=======
-    return ss11ant, vna_load.freq.freq.value, vna_input.s11
->>>>>>> a01e13006a80b80d5a868fa49970c78862a53b8c
+
