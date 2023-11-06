@@ -78,7 +78,7 @@ def run_xrfi(
 
         # Use a parallel map unless this function itself is being called by a
         # parallel map.
-        wrns = defaultdict(lambda: 0)
+        wrns = defaultdict(int)
 
         def count_warnings(message, *args, **kwargs):
             wrns[str(message)] += 1
