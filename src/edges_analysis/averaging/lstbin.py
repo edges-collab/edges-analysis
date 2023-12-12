@@ -41,7 +41,12 @@ def get_lst_bins(
 
     while max_edge < first_edge:
         max_edge += 24
-
+    logger.debug(
+        "lst_bin: first_edge: %f, max_edge: %f, binsize: %f",
+        first_edge,
+        max_edge,
+        binsize,
+    )
     bins = np.arange(first_edge, max_edge, binsize)
     if np.isclose(bins.max() + binsize, max_edge):
         bins = np.append(bins, max_edge)
@@ -99,7 +104,7 @@ def lst_bin(
         max_edge = crd.gha2lst(max_edge)
 
     bins = get_lst_bins(binsize, first_edge, max_edge=max_edge)
-
+    logger.debug(f"Got bins: {bins}")
     if not data.in_lst:
         data = data.to_lsts()
 
