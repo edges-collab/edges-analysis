@@ -39,7 +39,7 @@ def get_lst_bins(
 
     first_edge %= 24
 
-    while max_edge < first_edge:
+    while max_edge <= first_edge:
         max_edge += 24
     logger.debug(
         "lst_bin: first_edge: %f, max_edge: %f, binsize: %f",
