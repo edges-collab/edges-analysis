@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import edges_cal.modelling as mdl
+import logging
 import numpy as np
 from astropy import units as un
 from astropy.coordinates import Longitude
@@ -10,6 +11,8 @@ from .. import coordinates as crd
 from ..datamodel import add_model
 from ..gsdata import GSData, GSFlag, gsregister
 from .averaging import bin_data
+
+logger = logging.getLogger(__name__)
 
 
 def get_lst_bins(
@@ -131,6 +134,8 @@ def lst_bin(
 
     # Flag anything that is all nan -- these are just empty LSTs.
     flg = GSFlag(flags=np.all(np.isnan(spec), axis=(0, 1, 3)), axes=("time",))
+    logger.debug(f"Flags in LST BIN: {flg}")
+    logger.debug(f"Spec shape after LST bin: {spec.shape}")
     data = data.update(
         data=spec,
         residuals=resids,
