@@ -99,7 +99,7 @@ def lst_bin(
         max_edge = crd.gha2lst(max_edge)
 
     bins = get_lst_bins(binsize, first_edge, max_edge=max_edge)
-    logger.debug(f"Got bins: {bins}")
+    logger.debug(f"Got LST bins: {bins}")
     if not data.in_lst:
         data = data.to_lsts()
 
@@ -111,7 +111,7 @@ def lst_bin(
     spec = np.zeros((data.nloads, data.npols, len(bins) - 1, data.nfreqs))
     resids = np.zeros_like(spec) if use_model_residuals else None
     nsmpls = np.zeros_like(spec)
-    
+
     for iload in range(data.nloads):
         bbins = [
             (b[0] <= lsts[:, iload]) & (lsts[:, iload] < b[1])
@@ -134,8 +134,6 @@ def lst_bin(
 
     # Flag anything that is all nan -- these are just empty LSTs.
     flg = GSFlag(flags=np.all(np.isnan(spec), axis=(0, 1, 3)), axes=("time",))
-    logger.debug(f"Flags in LST BIN: {flg}")
-    logger.debug(f"Spec shape after LST bin: {spec.shape}")
     data = data.update(
         data=spec,
         residuals=resids,
