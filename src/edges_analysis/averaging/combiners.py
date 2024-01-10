@@ -78,6 +78,7 @@ def lst_average(
         data=final_data,
         residuals=residuals,
         nsamples=tot_nsamples,
+        flags={},
     )
 
 
