@@ -120,7 +120,7 @@ def lst_bin(
     spec = np.zeros((data.nloads, data.npols, len(bins) - 1, data.nfreqs))
     resids = np.zeros_like(spec) if use_model_residuals else None
     nsmpls = np.zeros_like(spec)
-
+    
     for iload in range(data.nloads):
         bbins = [
             (b[0] <= lsts[:, iload]) & (lsts[:, iload] < b[1])

@@ -5,6 +5,8 @@ import numpy as np
 
 from ..gsdata import GSData, gsregister
 
+import logging
+logger = logging.getLogger(__name__)
 
 @gsregister("gather")
 def concatenate_gsdata(*objs) -> GSData:
@@ -45,11 +47,17 @@ def lst_average(
     if use_nsamples:
         nsamples = [obj.nsamples for obj in objs]
     elif use_flags:
+        for obj in objs:
+
+            logger.debug(f"obj nsamples: {np.sum(obj.nsamples)}")
+
         nsamples = [(~(obj.nsamples == 0)).astype(float) for obj in objs]
+        #logger.debug(f"nsamples: {nsamples}")
     else:
         nsamples = [1] * len(objs)
 
     tot_nsamples = sum(nsamples)
+    logger.debug(f"total samples: {np.sum(tot_nsamples)}")
 
     if use_resids is None:
         use_resids = all(obj.residuals is not None for obj in objs)
@@ -58,13 +66,17 @@ def lst_average(
         raise ValueError("One or more of the input objects has no residuals.")
 
     if use_resids:
-        residuals = sum(obj.residuals * n for obj, n in zip(objs, nsamples))
+        for obj,n in zip(objs, nsamples):
+            logger.debug(f'obj sum(residuals): {np.nansum(obj.residuals * n)}')
+
+        residuals = np.nansum([obj.residuals * n for obj, n in zip(objs, nsamples)], axis=0)
         residuals[tot_nsamples > 0] /= tot_nsamples[tot_nsamples > 0]
-        tot_model = sum(obj.model for obj in objs)
+        tot_model = np.nansum([obj.model for obj in objs], axis=0)
         tot_model /= len(objs)
+        logger.debug(f"After combining sum(residuals): {np.nansum(residuals)}")
         final_data = tot_model + residuals
     else:
-        final_data = sum(obj.data * n for obj, n in zip(objs, nsamples))
+        final_data = np.nansum(obj.data * n for obj, n in zip(objs, nsamples))
         final_data[tot_nsamples > 0] /= tot_nsamples[tot_nsamples > 0]
         residuals = None
 
