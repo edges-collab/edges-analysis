@@ -145,7 +145,7 @@ def gauss_smooth(
 
     nsamples = nsamples[..., decimate_at::decimate]
 
-    maxn = np.max(nsamples, axis=-1)[:, :, :, None]
+    maxn = np.max(data.nsamples, axis=-1)[:, :, :, None]
     nsamples[nsamples / maxn <= size * flag_threshold] = 0
     mask = nsamples == 0
     sums[~mask] /= nsamples[~mask]
