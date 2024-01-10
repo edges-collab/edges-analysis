@@ -110,6 +110,10 @@ def plot_waterfall(
             ax.set_title(
                 f"{data.get_initial_yearday()}. LST0={data.lst_array[0][0]:.2f}"
             )
+    if title and isinstance(title, str):
+        ax.set_title(
+            title
+        )
 
     if cbar:
         cb = plt.colorbar(img, ax=ax)

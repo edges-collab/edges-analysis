@@ -1,9 +1,12 @@
 """Functions for combining multiple GSData files/objects."""
 from __future__ import annotations
 
+import logging
 import numpy as np
 
 from ..gsdata import GSData, gsregister
+
+logger = logging.getLogger(__name__)
 
 
 @gsregister("gather")
@@ -58,13 +61,16 @@ def lst_average(
         raise ValueError("One or more of the input objects has no residuals.")
 
     if use_resids:
-        residuals = sum(obj.residuals * n for obj, n in zip(objs, nsamples))
+        residuals = np.nansum(
+            [obj.residuals * n for obj, n in zip(objs, nsamples)], axis=0
+        )
         residuals[tot_nsamples > 0] /= tot_nsamples[tot_nsamples > 0]
-        tot_model = sum(obj.model for obj in objs)
+        tot_model = np.nansum([obj.model for obj in objs], axis=0)
         tot_model /= len(objs)
+        logger.debug(f"After combining sum(residuals): {np.nansum(residuals)}")
         final_data = tot_model + residuals
     else:
-        final_data = sum(obj.data * n for obj, n in zip(objs, nsamples))
+        final_data = np.nansum(obj.data * n for obj, n in zip(objs, nsamples))
         final_data[tot_nsamples > 0] /= tot_nsamples[tot_nsamples > 0]
         residuals = None
 
