@@ -512,17 +512,19 @@ def extract_temp_values_from_logger(
                 # Concatenate the this DataFrame with the original DataFrame
                 df = pd.concat([df, temp_df], ignore_index=True)
                 count = 0  # reset
+                
+    #for now I am saving it where the function is called, but we could find a more organized way of saving this file           
 
-    df.to_csv("meta_data_files/temperature_data.csv")
+    df.to_csv("temperature_data.csv")
 
-    return "meta_data_files/temperature_data.csv"
+    return ("temperature_data.csv")
 
 
 def extract_temperature(
     anc_obj,
     load="box",
     extract_log=False,
-    temperature_file="meta_data_files/temperature_data.csv",
+    temperature_file="temperature_data.csv",
 ):
     """
     Take start and end time from the ancillary data and return the average temperature in that time range
