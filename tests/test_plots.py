@@ -8,17 +8,16 @@ from edges_analysis.gsdata import GSData
 
 @pytest.mark.parametrize(
     "step",
-    [
-        "mock",
-        "mock_power",
-        "mock_with_model",
-    ],
+    ["mock", "mock_power", "mock_with_model", "mock_lstbinned"],
 )
-def test_plot_waterfall(step, request):
+@pytest.mark.parametrize("title", [None, "a title"])
+def test_plot_waterfall(step, title, request):
     """Test that plotting a waterfall doesn't crash."""
     astep = request.getfixturevalue(step)
     plots.plot_waterfall(
-        astep, attribute="residuals" if step == "mock_with_model" else "data"
+        astep,
+        attribute="residuals" if step == "mock_with_model" else "data",
+        title=title,
     )
 
 

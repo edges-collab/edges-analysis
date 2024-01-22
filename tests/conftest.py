@@ -13,6 +13,7 @@ from pathlib import Path
 from subprocess import run
 
 from edges_analysis import cli, const
+from edges_analysis.averaging import lstbin
 from edges_analysis.calibration.calibrate import dicke_calibration
 from edges_analysis.config import config
 from edges_analysis.datamodel import add_model
@@ -331,6 +332,16 @@ def mock_power() -> GSData:
 @pytest.fixture(scope="session")
 def mock_with_model(mock) -> GSData:
     return add_model(data=mock, model=mdl.LinLog(n_terms=2))
+
+
+@pytest.fixture(scope="session")
+def mock_lstbinned(mock: GSData) -> GSData:
+    return lstbin.lst_bin(
+        mock,
+        binsize=0.02,
+        first_edge=mock.lst_array.min().hour,
+        max_edge=mock.lst_array.max().hour,
+    )
 
 
 @pytest.fixture(scope="session")
