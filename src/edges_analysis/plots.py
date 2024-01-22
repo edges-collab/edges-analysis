@@ -78,15 +78,21 @@ def plot_waterfall(
 
     times = data.time_array
 
+    if data.in_lst:
+        times = times.hour
+        times[times < times[0]] += 24
+        if times.max() > 36:
+            times -= 24
+
     img = ax.imshow(
         q,
         origin="lower",
         extent=(
             data.freq_array.min().to_value("MHz"),
             data.freq_array.max().to_value("MHz"),
-            0,
+            times.min() if data.in_lst else 0,
             (
-                (times.max() - times.min()).hour
+                times.max()
                 if data.in_lst
                 else (times.max() - times.min()).to_value("hour")
             ),
@@ -111,9 +117,7 @@ def plot_waterfall(
                 f"{data.get_initial_yearday()}. LST0={data.lst_array[0][0]:.2f}"
             )
     if title and isinstance(title, str):
-        ax.set_title(
-            title
-        )
+        ax.set_title(title)
 
     if cbar:
         cb = plt.colorbar(img, ax=ax)

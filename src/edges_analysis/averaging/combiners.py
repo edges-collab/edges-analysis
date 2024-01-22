@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import numpy as np
+import warnings
 
 from ..gsdata import GSData, gsregister
 
@@ -52,7 +53,7 @@ def lst_average(
     else:
         nsamples = [1] * len(objs)
 
-    tot_nsamples = sum(nsamples)
+    tot_nsamples = np.nansum(nsamples, axis=0)
 
     if use_resids is None:
         use_resids = all(obj.residuals is not None for obj in objs)
@@ -66,11 +67,14 @@ def lst_average(
         )
         residuals[tot_nsamples > 0] /= tot_nsamples[tot_nsamples > 0]
         tot_model = np.nansum([obj.model for obj in objs], axis=0)
-        tot_model /= len(objs)
+        tot_obj = len(objs) - sum([np.all(np.isnan(obj.model), axis=3) for obj in objs])
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore")
+            tot_model /= (tot_obj)[..., None]
         logger.debug(f"After combining sum(residuals): {np.nansum(residuals)}")
         final_data = tot_model + residuals
     else:
-        final_data = np.nansum(obj.data * n for obj, n in zip(objs, nsamples))
+        final_data = np.nansum([obj.data * n for obj, n in zip(objs, nsamples)], axis=0)
         final_data[tot_nsamples > 0] /= tot_nsamples[tot_nsamples > 0]
         residuals = None
 
@@ -78,6 +82,7 @@ def lst_average(
         data=final_data,
         residuals=residuals,
         nsamples=tot_nsamples,
+        flags={},
     )
 
 
