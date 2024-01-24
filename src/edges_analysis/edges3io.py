@@ -1,4 +1,3 @@
-
 """
 INFO on EDGES-3 file structure:
 
@@ -29,9 +28,7 @@ from pathlib import Path
 from edges_analysis import GSData
 
 
-
-
-def get_s1p_files(load, year, day, root_dir = "/data5/edges/data/EDGES3_data/MRO/"):
+def get_s1p_files(load, year, day, root_dir="/data5/edges/data/EDGES3_data/MRO/"):
     """
     Take the load (amb, ant, hot, open, short or lna) and return a list of .s1p files
 
@@ -42,14 +39,13 @@ def get_s1p_files(load, year, day, root_dir = "/data5/edges/data/EDGES3_data/MRO
 
     # first get the input and then LOS
 
-    file_temp = root_dir.glob(f"{year}_{day}*[00-99]_{load}.s1p") 
+    file_temp = root_dir.glob(f"{year}_{day}*[00-99]_{load}.s1p")
     file_temp = list(file_temp)
 
     if len(file_temp) == 0:
-        raise IOError("No files found in {root_dir} for {year}, {day}, {load}")
+        raise OSError("No files found in {root_dir} for {year}, {day}, {load}")
     elif len(file_temp) > 1:
-        raise IOError("More than one file found for {year}, {day}, {load}")
-
+        raise OSError("More than one file found for {year}, {day}, {load}")
 
     file_list["input"] = file_temp[0]
 
@@ -59,10 +55,9 @@ def get_s1p_files(load, year, day, root_dir = "/data5/edges/data/EDGES3_data/MRO
             file_temp = list(file_temp)
 
             if len(file_temp) == 0:
-                raise IOError("No files found in {root_dir} for {year}, {day}, {load}")
+                raise OSError("No files found in {root_dir} for {year}, {day}, {load}")
             elif len(file_temp) > 1:
-                raise IOError("More than one file found for {year}, {day}, {load}")
-
+                raise OSError("More than one file found for {year}, {day}, {load}")
 
             file_list[name] = file_temp[0]
 
@@ -71,19 +66,19 @@ def get_s1p_files(load, year, day, root_dir = "/data5/edges/data/EDGES3_data/MRO
             file_temp = list(file_temp)
 
             if len(file_temp) == 0:
-                raise IOError("No files found in {root_dir} for {year}, {day}, {load}")
+                raise OSError("No files found in {root_dir} for {year}, {day}, {load}")
             elif len(file_temp) > 1:
-                raise IOError("More than one file found for {year}, {day}, {load}")
+                raise OSError("More than one file found for {year}, {day}, {load}")
             file_list[name] = file_temp[0]
 
     # throw an error if len(file_lest !4)
     return file_list
 
 
-def agilent(freq, res, delayps, loss = 2.30 * 1e9):
+def agilent(freq, res, delayps, loss=2.30 * 1e9):
     """
     Calculating T_gamma for LOS calibration.
-    Return value for each load is used in calculation of S matrix.  
+    Return value for each load is used in calculation of S matrix.
 
     Keeping the commented lines from Alan's code as is. We might need it later
 
@@ -91,7 +86,6 @@ def agilent(freq, res, delayps, loss = 2.30 * 1e9):
 
     # Agilent approx. follow
 
-    
     #    print("loss %f Gohm/s\n",loss/1e9);
     Zcab = 50 + (1 - 1j) * (loss / (2 * 2 * np.pi * freq * 1e6)) * np.sqrt(
         freq * 1e6 / 1e9
@@ -253,9 +247,9 @@ def gets11(load, year, day, cablen=0, cabloss=0, cabdiel=0):
     default delay is set to 33 ps
     """
 
-    t_gamma_load = agilent(vna_load.freq.freq.value / 1e6, res["load"], delayps = 33)
-    t_gamma_open = agilent(vna_open.freq.freq.value / 1e6, res["open"], delayps = 33)
-    t_gamma_short = agilent(vna_short.freq.freq.value / 1e6, res["short"], delayps = 33)
+    t_gamma_load = agilent(vna_load.freq.freq.value / 1e6, res["load"], delayps=33)
+    t_gamma_open = agilent(vna_open.freq.freq.value / 1e6, res["open"], delayps=33)
+    t_gamma_short = agilent(vna_short.freq.freq.value / 1e6, res["short"], delayps=33)
 
     s11, s1221, s22 = cabsparams(
         t_gamma_open,
@@ -328,7 +322,7 @@ def extract_dates(anc_obj):
 
 
 def extract_temp_values_from_logger(
-    temperature_file= "/data5/edges/data/EDGES3_data/MRO/temperature_logger/temperature.log",
+    temperature_file="/data5/edges/data/EDGES3_data/MRO/temperature_logger/temperature.log",
 ):
     """
     Easiest way (i think) is to read one line at a time, check conditions in each line,
@@ -506,12 +500,12 @@ def extract_temp_values_from_logger(
                 # Concatenate the this DataFrame with the original DataFrame
                 df = pd.concat([df, temp_df], ignore_index=True)
                 count = 0  # reset
-                
-    #for now I am saving it where the function is called, but we could find a more organized way of saving this file           
+
+    # for now I am saving it where the function is called, but we could find a more organized way of saving this file
 
     df.to_csv("temperature_data.csv")
 
-    return ("temperature_data.csv")
+    return "temperature_data.csv"
 
 
 def extract_temperature(
@@ -537,7 +531,7 @@ def extract_temperature(
 
         """
         temperature_file = extract_temp_values_from_logger(
-           "/data5/edges/data/EDGES3_data/MRO/temperature_logger/temperature.log"
+            "/data5/edges/data/EDGES3_data/MRO/temperature_logger/temperature.log"
         )
 
         # default file is temperature_data.csv
