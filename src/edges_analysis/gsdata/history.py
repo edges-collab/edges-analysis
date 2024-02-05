@@ -1,4 +1,5 @@
 """Classes for defining the history of a GSData / GSFlag object."""
+
 from __future__ import annotations
 
 import astropy

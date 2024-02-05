@@ -1,4 +1,5 @@
 """Module providing routines for calibration of field data."""
+
 from __future__ import annotations
 
 import attr
@@ -24,9 +25,9 @@ class LabCalibration:
     """Lab calibration of field data."""
 
     calobs: Calibrator = attr.ib(
-        converter=lambda x: x.to_calibrator()
-        if isinstance(x, CalibrationObservation)
-        else x
+        converter=lambda x: (
+            x.to_calibrator() if isinstance(x, CalibrationObservation) else x
+        )
     )
     _antenna_s11_model: AntennaS11 | Callable = attr.ib()
 

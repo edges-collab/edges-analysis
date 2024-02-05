@@ -1,4 +1,5 @@
 """CLI routines for edges-analysis."""
+
 from __future__ import annotations
 
 import click

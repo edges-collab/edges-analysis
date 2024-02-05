@@ -1,4 +1,5 @@
 """Data models for GSData objects."""
+
 from __future__ import annotations
 
 import h5py

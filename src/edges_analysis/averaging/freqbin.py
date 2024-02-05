@@ -1,4 +1,5 @@
 """Functions for binning GSData objects in frequency."""
+
 from __future__ import annotations
 
 import edges_cal.modelling as mdl

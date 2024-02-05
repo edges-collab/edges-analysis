@@ -1,4 +1,5 @@
 """Functions that identify and flag bad data in various ways."""
+
 from __future__ import annotations
 
 import functools

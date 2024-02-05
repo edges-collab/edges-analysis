@@ -1,4 +1,5 @@
 """Core GSData classes and functions."""
+
 from .gsdata import GSData
 from .gsflag import GSFlag
 from .history import History, Stamp

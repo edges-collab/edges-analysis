@@ -94,9 +94,11 @@ def test_model_bin_gha(params, weights, refit):
         ]
         fit_params = np.array(
             [
-                fit.model_parameters
-                if fit is not None
-                else np.nan * np.ones(refit_mdl.n_terms)
+                (
+                    fit.model_parameters
+                    if fit is not None
+                    else np.nan * np.ones(refit_mdl.n_terms)
+                )
                 for fit in fits
             ]
         )

@@ -1,4 +1,5 @@
 """Functions defining expected losses from the instruments."""
+
 from __future__ import annotations
 
 import numpy as np

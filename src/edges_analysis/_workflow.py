@@ -75,6 +75,7 @@ files it needs using the :meth:`ProgressFile.get_files_to_read_for_step()` metho
 described above. Since files that ahve already been processed will have valid outputs
 at subsequent steps, these will be ignored until they are required down the pipe.
 """
+
 from __future__ import annotations
 
 import attrs

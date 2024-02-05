@@ -6,6 +6,7 @@ the C-code for a particular reason.
 They have essentially just been transcripted from the C-code, and keep the same names
 as functions there.
 """
+
 from __future__ import annotations
 
 import numpy as np
