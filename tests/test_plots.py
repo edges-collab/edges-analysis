@@ -1,3 +1,5 @@
+"""Test the plots module."""
+
 import pytest
 
 from edges_cal.modelling import LinLog

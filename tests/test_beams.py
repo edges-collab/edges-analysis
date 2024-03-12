@@ -1,3 +1,5 @@
+"""Test the beams module."""
+
 from __future__ import annotations
 
 import pytest
@@ -305,26 +307,26 @@ def test_beamfactor_get():
 
 
 def test_beam_factor_alan_azel():
-    defaults = dict(
-        beam=beams.Beam.from_file("low"),
-        f_low=40 * u.MHz,
-        f_high=100 * u.MHz,
-        lsts=[12.0],
-        sky_model=Haslam408AllNoh(),
-        index_model=ConstantIndex(),
-        normalize_beam=False,
-        ground_loss_file=None,
-        reference_frequency=75 * u.MHz,
-        beam_smoothing=False,
-        interp_kind="nearest",
-        freq_progress=False,
-        location=const.KNOWN_LOCATIONS["alan-edges"],
-        sky_at_reference_frequency=False,
-        use_astropy_azel=True,
-    )
+    defaults = {
+        "beam": beams.Beam.from_file("low"),
+        "f_low": 40 * u.MHz,
+        "f_high": 100 * u.MHz,
+        "lsts": [12.0],
+        "sky_model": Haslam408AllNoh(),
+        "index_model": ConstantIndex(),
+        "normalize_beam": False,
+        "ground_loss_file": None,
+        "reference_frequency": 75 * u.MHz,
+        "beam_smoothing": False,
+        "interp_kind": "nearest",
+        "freq_progress": False,
+        "location": const.KNOWN_LOCATIONS["alan-edges"],
+        "sky_at_reference_frequency": False,
+        "use_astropy_azel": True,
+    }
 
     default = beams.antenna_beam_factor(**defaults)
-    alanazel = beams.antenna_beam_factor(**{**defaults, **{"use_astropy_azel": False}})
+    alanazel = beams.antenna_beam_factor(**{**defaults, "use_astropy_azel": False})
     poly = mdl.Polynomial(n_terms=10)
     assert np.isclose(
         default.get_mean_beam_factor(poly, np.array([55.0])),

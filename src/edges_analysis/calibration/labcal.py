@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import attr
 import numpy as np
-from cached_property import cached_property
+from collections.abc import Sequence
 from edges_cal import CalibrationObservation, Calibrator
 from edges_cal import receiver_calibration_func as rcf
 from edges_cal import s11
 from edges_cal import types as tp
+from functools import cached_property
 from pathlib import Path
-from typing import Callable, Sequence
+from typing import Callable
 
 from .s11 import AntennaS11
 

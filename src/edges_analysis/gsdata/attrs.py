@@ -19,7 +19,6 @@ def ndim_validator(ndim: int | tuple[int, ...]):
 
     def validator(inst, att, value):
         if value.ndim not in ndim:
-            print(att.validator, value)
             raise ValueError(f"{att.name} must have ndim in {ndim}, got {value.ndim}")
 
     return validator
@@ -116,8 +115,6 @@ def npfield(
 
     if possible_ndims is not None:
         validator.append(ndim_validator(possible_ndims))
-
-    # validator.append(type_validator)
 
     if shape is not None:
         validator.append(shape_validator(shape))

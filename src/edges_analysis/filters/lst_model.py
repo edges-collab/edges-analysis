@@ -9,10 +9,10 @@ import numpy as np
 import yaml
 from astropy import units as un
 from attrs import define, field
+from collections.abc import Sequence
 from edges_cal import types as tp
 from edges_cal.modelling import FourierDay, LinLog, Model
 from pathlib import Path
-from typing import Sequence
 
 from ..data import DATA_PATH
 from ..datamodel import add_model
@@ -124,7 +124,7 @@ class GHAModelFilter:
             for k, v in self.meta.items():
                 try:
                     meta[k] = v
-                except TypeError:
+                except TypeError:  # noqa: PERF203
                     if isinstance(v, Model):
                         meta[k] = yaml.dump(v)
                     else:
@@ -204,13 +204,15 @@ class GHAModelFilterInfo:
 
 @define(frozen=True)
 class FrequencyAggregator(metaclass=abc.ABCMeta):
+    """An aggregator over frequency."""
+
     @abc.abstractmethod
     def aggregate_file(self, data: GSData) -> np.ndarray:
         """Actually aggregate over frequency."""
         raise NotImplementedError
 
     def get_init_flags(self, gha, metric):
-        """Base function to define some inital set of flags."""
+        """Define some inital set of flags."""
         return np.zeros(len(gha), dtype=bool)
 
     def aggregate(
@@ -357,12 +359,10 @@ def get_gha_model_filter(
         std_model,
         n_sigma=flag_info.thresholds[-1],
         meta={
-            **{
-                "infiles": ":".join(str(getattr(d, "filename", str(d))) for d in data),
-                "gha_chunk_size": detrend_gha_chunk_size,
-                "detrend_model": detrend_metric_model,
-                "detrend_std_model": detrend_std_model,
-            },
+            "infiles": ":".join(str(getattr(d, "filename", str(d))) for d in data),
+            "gha_chunk_size": detrend_gha_chunk_size,
+            "detrend_model": detrend_metric_model,
+            "detrend_std_model": detrend_std_model,
             **kwargs,
         },
     )
@@ -475,10 +475,10 @@ def apply_gha_model_filter(
         if write_info:
             if out_file is None:
                 hsh = hash(
-                    "".join(f"{k}:{repr(v)}" for k, v in kwargs.items())
+                    "".join(f"{k}:{v!r}" for k, v in kwargs.items())
                     + ":".join(str(d) for d in data[:n_files])
                 )
-                out_file = Path(f"GHAModel_{str(aggregator)}{hsh}")
+                out_file = Path(f"GHAModel_{aggregator!s}{hsh}")
             else:
                 out_file = Path(out_file)
 

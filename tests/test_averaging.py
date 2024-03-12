@@ -1,3 +1,5 @@
+"""Test the averaging module."""
+
 from __future__ import annotations
 
 import pytest
@@ -58,7 +60,8 @@ def evolving_params():
 def make_data(params, weights):
     model = np.array([LINLOG(parameters=p) for p in params])
     noise_level = model / 50
-    data = model + np.random.normal(loc=0, scale=noise_level)
+    rng = np.random.default_rng(1234)
+    data = model + rng.normal(loc=0, scale=noise_level)
     return model, np.where(weights > 0, data, 1e6), noise_level
 
 
@@ -76,8 +79,8 @@ def row_flags():
 
 @pytest.fixture(scope="module")
 def bitsy_flags():
-    np.random.seed(1234)
-    return np.random.binomial(1, 0.6, size=(N_GHA, len(FREQ)))
+    rng = np.random.default_rng(1234)
+    return rng.binomial(1, 0.6, size=(N_GHA, len(FREQ)))
 
 
 @parametrize("params", [fxref(fid_params), fxref(evolving_params)])
@@ -155,7 +158,7 @@ class TestBinArray:
         model, corrupt, noise = make_data(fid_params, ideal_weights)
 
         coords = FREQ
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="coords must be same length as the data"):
             averaging.bin_array_unbiased_irregular(corrupt, coords=coords, axis=0)
 
         outc, mean, wght = averaging.bin_array_unbiased_irregular(

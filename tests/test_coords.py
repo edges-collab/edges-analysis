@@ -1,3 +1,5 @@
+"""Test the coordinates module."""
+
 import numpy as np
 from astropy import time as apt
 

@@ -1,3 +1,5 @@
+"""Tests of workflow outputs."""
+
 from __future__ import annotations
 
 import pytest
@@ -10,7 +12,7 @@ from edges_analysis.gsdata import GSData
 
 
 @pytest.mark.parametrize(
-    "steps, nfreqs",
+    ("steps", "nfreqs"),
     [
         ("raw_step", 26214),
         ("cal_step", 8193),

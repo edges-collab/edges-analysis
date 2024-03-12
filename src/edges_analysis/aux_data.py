@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class WeatherError(ValueError):
-    pass
+    """Error for weather data issues."""
 
 
 def _interpolate_times(thing, times):

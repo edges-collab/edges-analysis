@@ -95,20 +95,64 @@ norecursedirs = [
 ]
 testpaths = "tests"
 
-[tool.black]
-exclude = '''
-(
-  /(
-      \.eggs         # exclude a few common directories in the
-    | \.git          # root of the project
-    | \.hg
-    | \.mypy_cache
-    | \.tox
-    | \.venv
-    | _build
-    | buck-out
-    | build
-    | dist
-  )/
-)
-'''
+
+[tool.ruff.lint]
+extend-select = [
+  "UP",   # pyupgrade
+  "E",    # pycodestyle
+  "W",    # pycodestyle warning
+  "F",    # pyflakes
+  "C90",  # mccabe complexity
+  "I",    # isort
+  "N",    # pep8-naming
+  "D",    # docstyle
+  # "ANN"   # type annotations
+  "B",    # bugbear
+  "A",    # builtins
+  "C4",   # comprehensions
+  "DTZ",  # datetime
+  "FA",   # future annotations
+  "PIE",  # flake8-pie
+  "T",    # print statements
+  "PT",   # pytest-style
+  "Q",    # quotes
+  "SIM",  # simplify
+  "PTH",  # use Pathlib
+  "ERA",  # kill commented code
+  "NPY",  # numpy-specific rules
+  "PERF", # performance
+  # "FURB", # refurb
+  "RUF",  # ruff-specific rules
+]
+ignore = [
+    "DTZ007",   # use %z in strptime
+    "DTZ001",   # require tzinfo in datetime
+    "B008",     # do not performa function call in argument defaults
+    "PTH207",   # allow glob.glob() because when we use it, it's necessary
+]
+ignore-init-module-imports = true
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*.py" = [
+    "D103",  # ignore missing docstring in tests
+    "D102",  # same here but for methods
+    "D101",
+    "DTZ",   # ignore datetime in tests
+    "T",     # print statements
+]
+"docs/conf.py" = [
+    "A",  # conf.py can shadow builtins
+    "ERA",
+]
+"src/edges_analysis/calibration/loss.py" = [
+  "N806",  # upper-case variables because it's more mathy
+]
+"src/edges_analysis/config.py" = [
+  "PTH111",  # here we want to use strings
+]
+[tool.ruff.lint.pydocstyle]
+convention = 'numpy'
+property-decorators = ["pytest.fixture"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 18

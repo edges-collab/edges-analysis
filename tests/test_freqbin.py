@@ -1,3 +1,5 @@
+"""Test the freqbin module."""
+
 import numpy as np
 
 from edges_analysis.averaging import freqbin

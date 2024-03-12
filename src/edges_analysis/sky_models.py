@@ -36,7 +36,6 @@ class IndexModel(ABC):
     @abstractmethod
     def get_index(self, lat=None, lon=None, sky_model=None):
         """Overloadable method to compute the index at a specific sky location."""
-        pass
 
 
 @attr.s
@@ -88,6 +87,8 @@ class StepIndex(IndexModel):
 
 @attr.s
 class ConstantIndex(IndexModel):
+    """A spectral index model with constant spectral-index."""
+
     index = attr.ib(default=2.5, converter=float)
 
     def get_index(
@@ -181,9 +182,9 @@ class SkyModel:
             lon=self.coords.l.deg, lat=self.coords.b.deg, sky_model=self
         )
         f = freq / self.frequency
-        Tcmb = 2.725
+        t_cmb = 2.725
         scale = np.power.outer(f, -index)
-        return ((self.temperature - Tcmb) * scale + Tcmb).T
+        return ((self.temperature - t_cmb) * scale + t_cmb).T
 
     @classmethod
     def from_lambda(
@@ -257,8 +258,8 @@ class SkyModel:
         )
 
 
-def Haslam408AllNoh():
-    """The original raw Haslam 408 MHz all-sky map.
+def Haslam408AllNoh():  # noqa: N802
+    """Return the original raw Haslam 408 MHz all-sky map.
 
     This is the file in Alan's repo.
 
@@ -279,8 +280,8 @@ def Haslam408AllNoh():
     return SkyModel.from_latlon_grid_file(fl, frequency=408.0, name="Haslam408AllNoh")
 
 
-def Haslam408(min_nside=2**0, max_nside=2**100):
-    """The Haslam 408 MHz all-sky map.
+def Haslam408(min_nside=2**0, max_nside=2**100):  # noqa: N802
+    """Return he Haslam 408 MHz all-sky map.
 
     408MHz radio continuum all-sky map of Haslam etal combines data from
     4 different surveys. The destriped/desourced (dsds) version was constructed from
@@ -303,8 +304,8 @@ def Haslam408(min_nside=2**0, max_nside=2**100):
     )
 
 
-def Remazeilles408(min_nside=2**0, max_nside=2**100):
-    """The Remazeilles 408 MHz all-sky map.
+def Remazeilles408(min_nside=2**0, max_nside=2**100):  # noqa: N802
+    """Return the Remazeilles 408 MHz all-sky map.
 
     Remazeilles et al. 2014 have re-evaluated and re-processed the rawest Haslam
     408 MHz data, available from the Max Planck
@@ -313,8 +314,8 @@ def Remazeilles408(min_nside=2**0, max_nside=2**100):
     sky map. Large-scale striations associated with correlated low-frequency noise in
     the scan direction are reduced using a Fourier-based filtering technique.
     The most important improvement results from the removal of extra-galactic sources.
-    An iterative combination of two techniques − two-dimensional Gaussian fitting and
-    minimum curvature spline surface inpainting− are used to remove the brightest
+    An iterative combination of two techniques--two-dimensional Gaussian fitting and
+    minimum curvature spline surface inpainting--are used to remove the brightest
     sources (with flux density larger than 2 Jy). Four products are made publicly
     available. They are described below. The sky maps are generated using the HEALPix
     sky pixelization scheme.
@@ -331,8 +332,8 @@ def Remazeilles408(min_nside=2**0, max_nside=2**100):
     )
 
 
-def LW150(min_nside=2**0, max_nside=2**100):
-    """The Landecker & Wielebinski 150 MHz all-sky map.
+def LW150(min_nside=2**0, max_nside=2**100):  # noqa: N802
+    """Return the Landecker & Wielebinski 150 MHz all-sky map.
 
     Patra et al. 2015, provided a recalibration of the 150 MHz map based on comparison
     with absolutely calibrated sky brightness measurements between 110 and 175 MHz made
@@ -358,8 +359,8 @@ def LW150(min_nside=2**0, max_nside=2**100):
     )
 
 
-def Guzman45(min_nside=2**0, max_nside=2**100):
-    """The Guzman 45 MHz all-sky map.
+def Guzman45(min_nside=2**0, max_nside=2**100):  # noqa: N802
+    """Return the Guzman 45 MHz all-sky map.
 
     Guzmán et al. (2011) produced an all-sky map of 45 MHz emission by combining data
     from the 45 MHz survey of Alvarez et al (1997) between declinations -90° and +19.1°
@@ -386,8 +387,8 @@ def Guzman45(min_nside=2**0, max_nside=2**100):
     return attr.evolve(out, temperature=new_temp)
 
 
-def WhamHAlpha(min_nside=2**0, max_nside=2**100):
-    """The WHAM H-alpha all-sky map.
+def WhamHAlpha(min_nside=2**0, max_nside=2**100):  # noqa: N802
+    """Return the WHAM H-alpha all-sky map.
 
     The Wisconsin H-Alpha Mapper (WHAM) made a survey of H alpha intensity over the full
     sky with a 1 degree beam and velocity resolution of 12 km/s. The WHAM public data
@@ -408,8 +409,8 @@ def WhamHAlpha(min_nside=2**0, max_nside=2**100):
     )
 
 
-def PlanckCO(min_nside=2**0, max_nside=2**100):
-    """The Planck CO all-sky map.
+def PlanckCO(min_nside=2**0, max_nside=2**100):  # noqa: N802
+    """Return the Planck CO all-sky map.
 
     Planck All Sky Maps are in HEALPix format, with Nside 2048, in Galactic coordinates
     and nested ordering. The signal is given in units of Kcmb for 30-353 GHz.
@@ -432,8 +433,8 @@ def PlanckCO(min_nside=2**0, max_nside=2**100):
     )
 
 
-def HI4PI(min_nside=2**0, max_nside=2**100):
-    r"""The HI4PI all-sky map.
+def HI4PI(min_nside=2**0, max_nside=2**100):  # noqa: N802
+    r"""Return an HI4PI all-sky map.
 
     The HI 4-PI Survey (HI4PI) is a 21-cm all-sky survey of neutral atomic hydrogen.
     It is constructed from the Effelsberg Bonn HI Survey (EBHIS), made with the 100-m

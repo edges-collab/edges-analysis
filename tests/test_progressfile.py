@@ -1,3 +1,5 @@
+"""Test the progress file and workflow."""
+
 from __future__ import annotations
 
 import shutil

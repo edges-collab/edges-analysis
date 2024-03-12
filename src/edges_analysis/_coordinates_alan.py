@@ -99,10 +99,11 @@ def toyrday(secs: float) -> tuple[int, int, int, int, int]:
     sec -= minute * 60
     day += 1
 
-    if day == 366:  # fix for leap year
-        if not isleapyear(year):
-            day -= 365
-            year += 1
+    if day == 366 and not isleapyear(year):
+        # fix for alan
+        day -= 365
+        year += 1
+
     return year, int(day), int(hour), int(minute), int(sec)
 
 

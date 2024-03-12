@@ -9,12 +9,13 @@ import numpy as np
 import yaml
 from astropy import units as u
 from attrs import define
+from collections.abc import Sequence
 from edges_cal import modelling as mdl
 from edges_cal import types as tp
 from edges_cal import xrfi as rfi
 from edges_cal.xrfi import ModelFilterInfoContainer, model_filter
 from pathlib import Path
-from typing import Callable, Sequence
+from typing import Callable
 
 from .. import tools
 from ..averaging import averaging
@@ -40,7 +41,7 @@ class _GSDataFilter:
         data: Sequence[tp.PathLike | GSData],
         *,
         write: bool | None = None,
-        flag_id: str = None,
+        flag_id: str | None = None,
         **kwargs,
     ) -> GSData | Sequence[GSData]:
         # Read all the data, in case they haven't been turned into objects yet.
@@ -230,8 +231,8 @@ def explicit_filter(times, bad, ret_times=False):
     times :
         Only if `ret_times=True`. An array of the times that are good.
     """
-    if isinstance(bad, str):
-        with open(bad) as fl:
+    if isinstance(bad, (str, Path)):
+        with Path(bad).open("r") as fl:
             bad = yaml.load(fl, Loader=yaml.FullLoader)["bad_days"]
 
     try:
@@ -427,7 +428,7 @@ def apply_flags(*, data: GSData, flags: tp.PathLike | GSFlag):
 @gsregister("filter")
 @gsdata_filter()
 def rfi_explicit_filter(*, data: GSData, file: tp.PathLike | None = None):
-    """A filter of explicit channels of RFI."""
+    """Filter explicit channels of RFI."""
     if file is None:
         file = DATA_PATH / "known_rfi_channels.yaml"
 
@@ -485,7 +486,7 @@ def _peak_power_filter(
     mean_freq_range: tuple[float, float] | None = None,
 ):
     """
-    Filters out whole integrations that have high power > 80 MHz.
+    Filter out whole integrations that have high power > 80 MHz.
 
     Parameters
     ----------
@@ -550,7 +551,7 @@ def peak_power_filter(
     mean_freq_range: tuple[float, float] | None = None,
 ):
     """
-    Filters out whole integrations that have high power > 80 MHz.
+    Filter out whole integrations that have high power > 80 MHz.
 
     Parameters
     ----------
@@ -591,7 +592,7 @@ def peak_orbcomm_filter(
     mean_freq_range: tuple[float, float] | None = (80, 200),
 ):
     """
-    Filters out whole integrations that have high power between (137, 138) MHz.
+    Filter out whole integrations that have high power between (137, 138) MHz.
 
     Parameters
     ----------
@@ -623,7 +624,7 @@ def peak_orbcomm_filter(
 @gsregister("filter")
 @gsdata_filter()
 def maxfm_filter(*, data: GSData, threshold: float = 200):
-    """Max FM power filter.
+    """Filter data based on max FM power.
 
     This takes power of the spectrum between 80 MHz and 120 MHz(the fm range).
     In that range, it checks each frequency bin to the estimated values using the
@@ -662,7 +663,7 @@ def rmsf_filter(
     tcal: float = 300,
 ):
     """
-    Rmsf filter - filters out based on rms calculated between 60 and 80 MHz.
+    Filter data based on rms calculated between 60 and 80 MHz.
 
     An initial powerlaw model is calculated using the normalized frequency range.
     Data between the freq_range is clipped.
@@ -689,9 +690,9 @@ def rmsf_filter(
     init_model = (freq / 75.0) ** -2.5
 
     spec = spec[..., freq_mask]
-    T75 = np.sum(init_model * spec, axis=-1) / np.sum(init_model**2)
+    t_75 = np.sum(init_model * spec, axis=-1) / np.sum(init_model**2)
 
-    prod = np.outer(T75, init_model)
+    prod = np.outer(t_75, init_model)
     # We have to set the shape explicitly, because the outer product collapses
     # the dimensions.
     prod.shape = spec.shape
@@ -710,7 +711,7 @@ def rmsf_filter(
 @gsregister("filter")
 @gsdata_filter()
 def filter_150mhz(*, data: GSData, threshold: float):
-    """Filter based on power around 150 MHz.
+    """Filter data based on power around 150 MHz.
 
     This takes the RMS of the power around 153.5 MHz (in a 1.5 MHz bin), after
     subtracting the mean, then compares this to the mean power of a 1.5 MHz bin around
@@ -751,7 +752,7 @@ def power_percent_filter(
     min_threshold: float = -0.7,
     max_threshold: float = 3,
 ):
-    """Filter for the power above 100 MHz seen in swpos 0.
+    """Filter data based on the power above 100 MHz seen in swpos 0.
 
     Calculates the percentage of power between 100 and 200 MHz
     & when the switch is in position 0.

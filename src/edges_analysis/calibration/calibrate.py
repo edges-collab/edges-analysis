@@ -5,7 +5,6 @@ from __future__ import annotations
 import glob
 import hickle
 import numpy as np
-import os
 import re
 from astropy.time import Time
 from datetime import datetime
@@ -199,7 +198,7 @@ def get_s11_paths(
             fls.append(p)
 
         return fls
-    if (os.path.isfile(s11_path)) and (not s11_path.endswith("s1p")):
+    if Path(s11_path).is_file() and (not s11_path.endswith("s1p")):
         return [s11_path]
     # Otherwise it must be a path.
     s11_path = Path(s11_path).expanduser()
@@ -361,7 +360,7 @@ def apply_loss_correction(
     configuration="",
     balun_correction: tp.PathLike | None = ":",
     ground_correction: tp.PathLike | None | float = ":",
-    s11_path: str | Path = None,
+    s11_path: str | Path | None = None,
     calobs: Calibrator | Path = None,
     s11_file_pattern: str = r"{y}_{jd}_{h}_*_input{input}.s1p",
     ignore_s11_files: list[str] | None = None,
@@ -454,10 +453,7 @@ def apply_loss_correction(
     a = ambient_temp + const.absolute_zero if ambient_temp[0] < 200 else ambient_temp
 
     spec = (data.data - np.outer(a, (1 - gain))) / gain
-    if data.residuals is not None:
-        resids = data.residuals / gain
-    else:
-        resids = None
+    resids = data.residuals / gain if data.residuals is not None else None
 
     return data.update(data=spec, data_unit="temperature", residuals=resids)
 

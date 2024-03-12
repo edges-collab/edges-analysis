@@ -1,3 +1,5 @@
+"""Test the calibration module."""
+
 import pytest
 
 import numpy as np

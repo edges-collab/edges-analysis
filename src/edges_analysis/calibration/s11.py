@@ -5,6 +5,7 @@ from __future__ import annotations
 import attr
 import numpy as np
 from astropy import units as u
+from collections.abc import Sequence
 from edges_cal import modelling as mdl
 from edges_cal import types as tp
 from edges_cal.s11 import (
@@ -16,12 +17,13 @@ from edges_cal.s11 import (
 )
 from edges_cal.tools import FrequencyRange
 from hickleable import hickleable
-from typing import Sequence
 
 
 @hickleable()
 @attr.s
 class AntennaS11(LoadS11):
+    """Class to represent the S11 of an antenna."""
+
     _complex_model_type_default = mdl.ComplexRealImagModel
     _default_nterms = 10
     _model_type_default = mdl.Polynomial
@@ -68,10 +70,7 @@ class AntennaS11(LoadS11):
         **kwargs,
     ):
         """Generate from a single pre-calibrated file."""
-        if path.endswith(".csv"):
-            delimiter = ","
-        else:
-            delimiter = " "
+        delimiter = "," if path.endswith(".csv") else " "
 
         f_orig, gamma_real, gamma_imag = np.loadtxt(
             path,

@@ -20,7 +20,7 @@ class _Register:
     def __call__(
         self, data: GSData, *args, message: str = "", **kw
     ) -> GSData | list[GSData]:
-        now = datetime.datetime.now()
+        now = datetime.datetime.now()  # noqa: DTZ
         newdata = self.func(data, *args, **kw)
 
         history = {
@@ -56,6 +56,8 @@ RegKind = Literal["gather", "calibrate", "filter", "reduce", "supplement"]
 
 @attrs.define()
 class gsregister:  # noqa: N801
+    """Decorator for registering functions as GSData processors."""
+
     kind: RegKind = attrs.field(
         validator=attrs.validators.in_(
             ["gather", "calibrate", "filter", "reduce", "supplement"]
