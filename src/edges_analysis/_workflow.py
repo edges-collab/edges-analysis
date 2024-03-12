@@ -78,15 +78,16 @@ at subsequent steps, these will be ignored until they are required down the pipe
 
 from __future__ import annotations
 
-import attrs
-import yaml
 from collections.abc import Iterable
 from copy import deepcopy
-from frozendict import frozendict
-from jinja2 import Template
 from logging import getLogger
 from pathlib import Path
 from typing import Any, Union
+
+import attrs
+import yaml
+from frozendict import frozendict
+from jinja2 import Template
 
 from .gsdata import GSDATA_PROCESSORS
 

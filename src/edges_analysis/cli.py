@@ -2,22 +2,23 @@
 
 from __future__ import annotations
 
-import click
 import functools
 import glob
-import h5py
 import inspect
 import logging
 import operator
 import os
-import psutil
 import shutil
 import time
+from collections import defaultdict
+from pathlib import Path
+
+import click
+import h5py
+import psutil
 import tqdm
 import yaml
-from collections import defaultdict
 from edges_io import io
-from pathlib import Path
 from pathos.multiprocessing import ProcessPool as Pool
 from read_acq.read_acq import ACQError
 from rich import box

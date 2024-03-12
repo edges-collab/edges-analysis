@@ -3,19 +3,20 @@
 from __future__ import annotations
 
 import functools
-import hickle
 import logging
+from collections.abc import Sequence
+from pathlib import Path
+from typing import Callable
+
+import hickle
 import numpy as np
 import yaml
 from astropy import units as u
 from attrs import define
-from collections.abc import Sequence
 from edges_cal import modelling as mdl
 from edges_cal import types as tp
 from edges_cal import xrfi as rfi
 from edges_cal.xrfi import ModelFilterInfoContainer, model_filter
-from pathlib import Path
-from typing import Callable
 
 from .. import tools
 from ..averaging import averaging

@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import shutil
-from click.testing import CliRunner
 
+from click.testing import CliRunner
 from edges_analysis import cli
 from edges_analysis.gsdata import GSData
 

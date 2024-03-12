@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
+from pathlib import Path
+from typing import Literal
+
 import astropy.coordinates as apc
 import astropy.time as apt
 import attrs
-import logging
 import numpy as np
 import scipy.interpolate as spi
 from astropy import units as u
@@ -14,14 +17,11 @@ from edges_cal import modelling as mdl
 from edges_cal import types as tp
 from edges_cal.tools import vld_unit
 from hickleable import hickleable
-from pathlib import Path
 from tqdm import tqdm
-from typing import Literal
 
 from . import _coordinates_alan as crda
-from . import const
+from . import const, sky_models
 from . import coordinates as coords
-from . import sky_models
 from .calibration.loss import ground_loss
 from .config import config
 from .data import BEAM_PATH

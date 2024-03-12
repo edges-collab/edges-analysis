@@ -3,16 +3,17 @@
 from __future__ import annotations
 
 import abc
-import h5py
 import logging
+from collections.abc import Sequence
+from pathlib import Path
+
+import h5py
 import numpy as np
 import yaml
 from astropy import units as un
 from attrs import define, field
-from collections.abc import Sequence
 from edges_cal import types as tp
 from edges_cal.modelling import FourierDay, LinLog, Model
-from pathlib import Path
 
 from ..data import DATA_PATH
 from ..datamodel import add_model

@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-import astropy
 import datetime
+
+import astropy
 import edges_cal
 import edges_io
 import numpy as np

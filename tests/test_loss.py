@@ -1,9 +1,7 @@
 """Test the loss module."""
 
-import pytest
-
 import numpy as np
-
+import pytest
 from edges_analysis.calibration import loss
 
 

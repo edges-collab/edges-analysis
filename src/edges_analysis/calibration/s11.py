@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 import attr
 import numpy as np
 from astropy import units as u
-from collections.abc import Sequence
 from edges_cal import modelling as mdl
 from edges_cal import types as tp
 from edges_cal.s11 import (

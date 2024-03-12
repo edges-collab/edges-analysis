@@ -7,17 +7,18 @@ control to us to interpolate how we wish.
 
 from __future__ import annotations
 
+import logging
+from abc import ABC, abstractmethod
+from pathlib import Path
+
 import astropy_healpix as ahp
 import attr
 import healpy as hp
-import logging
 import numpy as np
-from abc import ABC, abstractmethod
 from astropy import coordinates as apc
 from astropy.coordinates import Galactic
 from astropy.io import fits
 from astropy.utils.data import download_file
-from pathlib import Path
 
 logger = logging.getLogger(__name__)
 

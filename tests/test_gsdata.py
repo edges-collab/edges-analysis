@@ -1,15 +1,13 @@
 """Tests for the GSData class."""
 
-import pytest
+from datetime import datetime, timedelta
 
 import attrs
 import numpy as np
+import pytest
 from astropy import units as un
 from astropy.coordinates import EarthLocation
 from astropy.time import Time
-from datetime import datetime, timedelta
-from edges_cal.modelling import LinLog
-
 from edges_analysis.datamodel import GSDataLinearModel
 from edges_analysis.gsdata import (
     GSData,
@@ -21,6 +19,7 @@ from edges_analysis.gsdata import (
     select_lsts,
     select_times,
 )
+from edges_cal.modelling import LinLog
 
 
 @pytest.fixture(scope="module")

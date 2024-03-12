@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import pytest
-
 import numpy as np
+import pytest
 from astropy import units as un
-from edges_cal import modelling as mdl
-
 from edges_analysis import GSData
 from edges_analysis.filters import filters, lst_model
+from edges_cal import modelling as mdl
 
 
 def test_aux_filter(mock):

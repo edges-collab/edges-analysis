@@ -1,7 +1,6 @@
 """Test sky models."""
 
 import numpy as np
-
 from edges_analysis import sky_models as sm
 
 

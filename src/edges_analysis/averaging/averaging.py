@@ -9,6 +9,7 @@ for averaging, in order to make the average unbiased (given flags).
 from __future__ import annotations
 
 import contextlib
+
 import numpy as np
 from astropy import units as un
 from edges_cal import modelling as mdl

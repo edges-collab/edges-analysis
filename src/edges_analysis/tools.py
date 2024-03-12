@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import functools
 import logging
-import numpy as np
 import operator
 import warnings
 from collections import defaultdict
+from multiprocessing.sharedctypes import RawArray
+
+import numpy as np
 from edges_cal import xrfi
 from multiprocess import Pool, cpu_count, current_process
-from multiprocessing.sharedctypes import RawArray
 
 logger = logging.getLogger(__name__)
 

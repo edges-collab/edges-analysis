@@ -1,12 +1,11 @@
 """Test of the _workflow module."""
 
-import pytest
-
-import yaml
 from copy import deepcopy
 from pathlib import Path
 from shutil import copyfile
 
+import pytest
+import yaml
 from edges_analysis import _workflow as wf
 from edges_analysis.gsdata.select import select_freqs
 

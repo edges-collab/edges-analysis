@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-import edges_cal.modelling as mdl
 import logging
+
+import edges_cal.modelling as mdl
 import numpy as np
 from astropy import units as un
 from astropy.coordinates import Longitude

@@ -9,9 +9,10 @@ as functions there.
 
 from __future__ import annotations
 
-import numpy as np
 from datetime import datetime
 from typing import Union
+
+import numpy as np
 
 Number = Union[float, np.ndarray]
 

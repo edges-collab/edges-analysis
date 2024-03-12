@@ -8,22 +8,23 @@ key methods for data selection, I/O, and analysis.
 
 from __future__ import annotations
 
+import logging
+import warnings
+from collections.abc import Iterable
+from functools import cached_property
+from pathlib import Path
+from typing import Literal
+
 import astropy.units as un
 import h5py
 import hickle
-import logging
 import numpy as np
-import warnings
 from astropy.coordinates import EarthLocation, Longitude, UnknownSiteException
 from astropy.time import Time
 from attrs import converters as cnv
 from attrs import define, evolve, field
 from attrs import validators as vld
-from collections.abc import Iterable
-from functools import cached_property
-from pathlib import Path
 from read_acq.read_acq import ACQError
-from typing import Literal
 
 from .. import coordinates as crd
 from .attrs import npfield, timefield
@@ -109,9 +110,9 @@ class GSData:
         default=None, possible_ndims=(4,), dtype=float
     )
 
-    data_unit: Literal["power", "temperature", "uncalibrated", "uncalibrated_temp"] = (
-        field(default="power")
-    )
+    data_unit: Literal[
+        "power", "temperature", "uncalibrated", "uncalibrated_temp"
+    ] = field(default="power")
     auxiliary_measurements: dict = field(factory=dict)
     time_ranges: Time | Longitude = timefield(shape=(None, None, 2))
     filename: Path | None = field(default=None, converter=cnv.optional(Path))
@@ -444,9 +445,9 @@ class GSData:
 
             fl.attrs["loads"] = "|".join(self.loads)
             fl["nsamples"] = self.nsamples
-            fl.attrs["effective_integration_time"] = (
-                self.effective_integration_time.to_value("s")
-            )
+            fl.attrs[
+                "effective_integration_time"
+            ] = self.effective_integration_time.to_value("s")
 
             flg_grp = fl.create_group("flags")
             if self.flags:

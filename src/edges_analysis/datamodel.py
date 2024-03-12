@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-import h5py
 import logging
+
+import h5py
 import numpy as np
 import yaml
 from attrs import define, evolve, field

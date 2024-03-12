@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import pytest
-
 import dill as pickle
 import numpy as np
+import pytest
 from astropy import units as u
-
 from edges_analysis.gsdata import GSData
 
 

@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-import attr
-import numpy as np
 from collections.abc import Sequence
-from edges_cal import CalibrationObservation, Calibrator
-from edges_cal import receiver_calibration_func as rcf
-from edges_cal import s11
-from edges_cal import types as tp
 from functools import cached_property
 from pathlib import Path
 from typing import Callable
+
+import attr
+import numpy as np
+from edges_cal import CalibrationObservation, Calibrator, s11
+from edges_cal import receiver_calibration_func as rcf
+from edges_cal import types as tp
 
 from .s11 import AntennaS11
 

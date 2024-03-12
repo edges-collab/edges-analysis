@@ -2,24 +2,23 @@
 
 from __future__ import annotations
 
-import pytest
+from pathlib import Path
+from subprocess import run
 
 import numpy as np
+import pytest
 import yaml
 from astropy import units as un
 from astropy.time import Time
 from click.testing import CliRunner
-from edges_cal import modelling as mdl
-from jinja2 import Template
-from pathlib import Path
-from subprocess import run
-
 from edges_analysis import cli, const
 from edges_analysis.averaging import lstbin
 from edges_analysis.calibration.calibrate import dicke_calibration
 from edges_analysis.config import config
 from edges_analysis.datamodel import add_model
 from edges_analysis.gsdata import GSData
+from edges_cal import modelling as mdl
+from jinja2 import Template
 
 from .mock_gsdata import create_mock_edges_data
 
