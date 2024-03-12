@@ -19,7 +19,7 @@ steps. The primary goal of the code is to allow the analysis to be fully reprodu
 efficient, and clear.
 
 .. note:: This code originated from Raul Monsalve's private repo.
-          The original code before modification is tagged as `original_version`.
+          The original code before modification is tagged as ``original_version``.
 
 Features
 ========
@@ -42,7 +42,6 @@ Installation
 
 This package can be installed with ``pip`` either by cloning the repo first, or directly
 from github::
-
 
     git clone https://github.com/edges-collab/edges-analysis
     cd edges-analysis
