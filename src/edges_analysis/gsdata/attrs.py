@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Callable
+
 import attrs
 import numpy as np
 from astropy import units as un
@@ -9,7 +11,6 @@ from astropy.coordinates import Longitude
 from astropy.time import Time
 from astropy.units import Quantity
 from attrs import Attribute, cmp_using, field
-from typing import Callable
 
 
 def ndim_validator(ndim: int | tuple[int, ...]):
@@ -19,7 +20,6 @@ def ndim_validator(ndim: int | tuple[int, ...]):
 
     def validator(inst, att, value):
         if value.ndim not in ndim:
-            print(att.validator, value)
             raise ValueError(f"{att.name} must have ndim in {ndim}, got {value.ndim}")
 
     return validator
@@ -116,8 +116,6 @@ def npfield(
 
     if possible_ndims is not None:
         validator.append(ndim_validator(possible_ndims))
-
-    # validator.append(type_validator)
 
     if shape is not None:
         validator.append(shape_validator(shape))

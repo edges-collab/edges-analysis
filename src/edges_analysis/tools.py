@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import functools
 import logging
-import numpy as np
+import operator
 import warnings
 from collections import defaultdict
+from multiprocessing.sharedctypes import RawArray
+
+import numpy as np
 from edges_cal import xrfi
 from multiprocess import Pool, cpu_count, current_process
-from multiprocessing.sharedctypes import RawArray
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +29,7 @@ def _init_worker(spectrum, weights, shape):
 
 def join_struct_arrays(arrays):
     """Join a list of structured numpy arrays (make new columns)."""
-    dtype = sum((a.dtype.descr for a in arrays), [])
+    dtype = functools.reduce(operator.iadd, (a.dtype.descr for a in arrays), [])
     out = np.empty(len(arrays[0]), dtype=dtype)
     for a in arrays:
         for name in a.dtype.names:
@@ -49,10 +52,7 @@ def run_xrfi(
     rfi = getattr(xrfi, f"xrfi_{method}")
 
     if weights is None:
-        if flags is None:
-            weights = np.ones_like(spectrum)
-        else:
-            weights = (~flags).astype(float)
+        weights = np.ones_like(spectrum) if flags is None else (~flags).astype(float)
 
     if flags is not None:
         weights = np.where(flags, 0, weights)
@@ -157,6 +157,6 @@ def slice_along_axis(x: np.ndarray, idx: np.ndarray | slice, axis: int = -1):
         axis = -1 - axis
     explicit_inds_slice = axis * (slice(None),)
     if from_end:
-        return x[(Ellipsis, idx) + explicit_inds_slice]
+        return x[(Ellipsis, idx, *explicit_inds_slice)]
     else:
-        return x[explicit_inds_slice + (idx,)]
+        return x[(*explicit_inds_slice, idx)]

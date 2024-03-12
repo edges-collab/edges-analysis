@@ -1,5 +1,6 @@
-import requests
 from pathlib import Path
+
+import requests
 
 from .config import config
 
@@ -40,7 +41,6 @@ def retrieve_beam(band, configuration=""):
         # Get it from gdrive
         urlbase = "https://drive.google.com/uc?export=download"
         fileid = _FILE_IDS["beam_model"][band][configuration]
-        print(f"Downloading new beam from Google Drive to {abspath}.")
 
         r = requests.get(
             urlbase, params={"id": fileid, "authuser": 0, "export": "download"}
@@ -48,7 +48,7 @@ def retrieve_beam(band, configuration=""):
         if not abspath.parent.exists():
             abspath.parent.mkdir(parents=True)
 
-        with open(abspath, "wb") as ofile:
+        with abspath.open("wb") as ofile:
             ofile.write(r.content)
 
     return f":{fname}"

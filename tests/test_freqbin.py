@@ -1,5 +1,6 @@
-import numpy as np
+"""Test the freqbin module."""
 
+import numpy as np
 from edges_analysis.averaging import freqbin
 from edges_analysis.gsdata import GSFlag
 

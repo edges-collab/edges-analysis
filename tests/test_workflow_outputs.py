@@ -1,16 +1,16 @@
-from __future__ import annotations
+"""Tests of workflow outputs."""
 
-import pytest
+from __future__ import annotations
 
 import dill as pickle
 import numpy as np
+import pytest
 from astropy import units as u
-
 from edges_analysis.gsdata import GSData
 
 
 @pytest.mark.parametrize(
-    "steps, nfreqs",
+    ("steps", "nfreqs"),
     [
         ("raw_step", 26214),
         ("cal_step", 8193),

@@ -1,12 +1,11 @@
 """Test of the _workflow module."""
 
-import pytest
-
-import yaml
 from copy import deepcopy
 from pathlib import Path
 from shutil import copyfile
 
+import pytest
+import yaml
 from edges_analysis import _workflow as wf
 from edges_analysis.gsdata.select import select_freqs
 
@@ -87,7 +86,7 @@ class TestFileMapEntry:
         assert isinstance(entry.asdict()["outputs"][0], str)
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture()
 def file_map() -> wf.FileMap:
     return wf.FileMap(
         (
@@ -184,12 +183,12 @@ class TestFileMap:
         assert loaded == yamlable
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture()
 def empty_step() -> wf.WorkflowStep:
     return wf.WorkflowStep("convert")
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture()
 def map_step(file_map: wf.FileMap) -> wf.WorkflowStep:
     return wf.WorkflowStep("convert", filemap=file_map)
 
@@ -322,11 +321,11 @@ class TestWorkflowStep:
         assert len(map_step.filemap) == 1
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture()
 def simple_workflow_yaml(tmp_path) -> Path:
     out = tmp_path / "workflow.yaml"
 
-    with open(out, "w") as fl:
+    with out.open("w") as fl:
         fl.write(
             """
         steps:
@@ -339,7 +338,7 @@ def simple_workflow_yaml(tmp_path) -> Path:
     return out
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture()
 def simple_workflow(simple_workflow_yaml) -> wf.Workflow:
     return wf.Workflow.read(simple_workflow_yaml)
 
@@ -368,7 +367,7 @@ class TestWorkflow:
             simple_workflow[27.8] = wf.WorkflowStep("select_lsts")
 
     def test_setitem_badname(self, simple_workflow):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Duplicate step name select"):
             simple_workflow["convert"] = simple_workflow["select"]
 
     def test_setitem(self, simple_workflow):
@@ -395,7 +394,7 @@ class TestWorkflow:
         assert simple_workflow.index("select") == 2
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture()
 def simple_progressfile_yaml(simple_workflow, tmp_path):
     out = tmp_path / "progressfile.yaml"
 
@@ -403,12 +402,12 @@ def simple_progressfile_yaml(simple_workflow, tmp_path):
     return out
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture()
 def empty_progressfile(simple_progressfile_yaml) -> wf.ProgressFile:
     return wf.ProgressFile.read(simple_progressfile_yaml)
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture()
 def progressfile(empty_progressfile) -> wf.ProgressFile:
     empty_progressfile.add_inputs(["input1.txt", "input2.txt"])
     return empty_progressfile
@@ -416,7 +415,7 @@ def progressfile(empty_progressfile) -> wf.ProgressFile:
 
 class TestProgressFile:
     def test_create_badly(self):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="does not exist"):
             wf.ProgressFile("non-existent.yaml")
 
     def test_add_inputs_nonunique(self, progressfile):
@@ -508,11 +507,11 @@ class TestProgressFile:
             assert not step.get_all_outputs()
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture()
 def progressfile_extended(tmp_path):
     workflow = tmp_path / "workflow_extended.yaml"
 
-    with open(workflow, "w") as fl:
+    with workflow.open("w") as fl:
         fl.write(
             """
 steps:
@@ -562,7 +561,7 @@ class TestProgressFileDynamics:
             required_files[step.name] = files
 
             # Mock read-in of the data at this step
-            data += [f for f in files]
+            data += list(files)
 
             if step.write:
                 oldfiles = data.copy()

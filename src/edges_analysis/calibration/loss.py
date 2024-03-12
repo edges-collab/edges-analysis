@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 from edges_cal import reflection_coefficient as rc
-from pathlib import Path
 from scipy import integrate
 
 from ..config import config
@@ -14,7 +15,6 @@ def balun_and_connector_loss(
     band: str,
     freq,
     gamma_ant,
-    monte_carlo_flags=(False, False, False, False, False, False, False, False),
 ):
     """
     Compute balun and connector losses.
@@ -27,16 +27,6 @@ def balun_and_connector_loss(
         Frequency in MHz
     gamma_ant: float
         Reflection coefficient of antenna at the reference plane, the LNA input.
-    monte_carlo_flags : tuple of bool
-        Which parameters to add a random offset to, in order:
-        * tube_inner_radius
-        * tube_outer_radius
-        * tube_length
-        * connector_inner_radius
-        * connector_outer_radius
-        * connector_length
-        * metal_conductivity
-        * teflon_permittivity
 
     Returns
     -------
@@ -108,43 +98,17 @@ def balun_and_connector_loss(
     u_teflon = u0 * ur_teflon
 
     ric_b = parameters[band]["ric_b"]
-    if monte_carlo_flags[0]:
-        # 1-sigma of 3%
-        ric_b *= 1 + 0.03 * np.random.normal()
 
     roc_b = parameters[band]["roc_b"]
-    if monte_carlo_flags[1]:
-        # 1-sigma of 3%
-        roc_b *= 1 + 0.03 * np.random.normal()
 
     l_b = parameters[band]["balun_length"]  # length in meters
-    if monte_carlo_flags[2]:
-        l_b += 0.001 * np.random.normal()  # 1-sigma of 1 mm
 
     # Connector dimensions
     ric_c = parameters[band]["ric_c"]  # radius of outer wall of inner conductor
-    if monte_carlo_flags[3]:
-        # 1-sigma of 3%, about < 0.04 mm
-        ric_c *= 1 + 0.03 * np.random.normal()
 
     roc_c = parameters[band]["roc_c"]
-    if monte_carlo_flags[4]:
-        # 1-sigma of 3%
-        roc_c *= 1 + 0.03 * np.random.normal()
 
     l_c = parameters[band]["connector_length"]
-    if monte_carlo_flags[5]:
-        l_c += 0.0001 * np.random.normal()
-
-    if monte_carlo_flags[6]:
-        sigma_copper *= 1 + 0.01 * np.random.normal()
-        sigma_brass *= 1 + 0.01 * np.random.normal()
-        sigma_xx_inner *= 1 + 0.01 * np.random.normal()
-        sigma_xx_outer *= 1 + 0.01 * np.random.normal()
-
-    if monte_carlo_flags[7] == 1:
-        # 1-sigma of 1%
-        epp_teflon *= 1 + 0.01 * np.random.normal()
 
     # Skin Depth
     skin_depth_copper = np.sqrt(2 / (w * u0 * sigma_copper))
@@ -219,24 +183,24 @@ def balun_and_connector_loss(
 
     # S-parameters (it has to be done in this order, first the Connector+Bend, then the
     # Balun)
-    ra_c, S11c, S12S21c, S22c = rc.de_embed(
+    ra_c, s11c, s12s21c, s22c = rc.de_embed(
         Ropen, Rshort, Rmatch, Rin_c_open, Rin_c_short, Rin_c_match, gamma_ant
     )
 
     # Reflection of antenna only, at the input of bend+connector
-    ra_b, S11b, S12S21b, S22b = rc.de_embed(
+    ra_b, s11b, s12s21b, s22b = rc.de_embed(
         Ropen, Rshort, Rmatch, Rin_b_open, Rin_b_short, Rin_b_match, ra_c
     )
 
-    def get_g(S11_rev, S12S21, ra_x, ra_y):
+    def get_g(s11_rev, s12s21, ra_x, ra_y):
         return (
-            np.abs(S12S21)
+            np.abs(s12s21)
             * (1 - np.abs(ra_x) ** 2)
-            / ((np.abs(1 - S11_rev * ra_x)) ** 2 * (1 - (np.abs(ra_y)) ** 2))
+            / ((np.abs(1 - s11_rev * ra_x)) ** 2 * (1 - (np.abs(ra_y)) ** 2))
         )
 
-    Gb = get_g(S22b, S12S21b, ra_b, ra_c)
-    Gc = get_g(S22c, S12S21c, ra_c, gamma_ant)
+    Gb = get_g(s22b, s12s21b, ra_b, ra_c)
+    Gc = get_g(s22c, s12s21c, ra_c, gamma_ant)
 
     return Gb, Gc
 

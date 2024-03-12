@@ -1,23 +1,24 @@
+"""Pytest configuration for the edges-analysis package."""
+
 from __future__ import annotations
 
-import pytest
+from pathlib import Path
+from subprocess import run
 
 import numpy as np
+import pytest
 import yaml
 from astropy import units as un
 from astropy.time import Time
 from click.testing import CliRunner
-from edges_cal import modelling as mdl
-from jinja2 import Template
-from pathlib import Path
-from subprocess import run
-
 from edges_analysis import cli, const
 from edges_analysis.averaging import lstbin
 from edges_analysis.calibration.calibrate import dicke_calibration
 from edges_analysis.config import config
 from edges_analysis.datamodel import add_model
 from edges_analysis.gsdata import GSData
+from edges_cal import modelling as mdl
+from jinja2 import Template
 
 from .mock_gsdata import create_mock_edges_data
 
@@ -61,7 +62,7 @@ def edges_config(tmp_path_factory):
     new_path = tmp_path_factory.mktemp("edges-levels")
 
     old_paths = config["paths"]
-    new_paths = {**old_paths, **{"field_products": new_path}}
+    new_paths = {**old_paths, "field_products": new_path}
 
     with config.use(paths=new_paths) as cfg:
         yield cfg
@@ -100,7 +101,7 @@ def beamfile(integration_test_data: Path) -> Path:
 def get_workflow(
     name: str, settings, workflow_dir, integration_test_data, beam_file, s11_path
 ):
-    with open(settings / "integration_workflow.yaml") as fl:
+    with (settings / "integration_workflow.yaml").open("r") as fl:
         workflow = Template(fl.read())
 
     txt = workflow.render(
@@ -118,7 +119,7 @@ def get_workflow(
             x for x in wf["steps"] if x["function"] != "apply_beam_correction"
         )
         txt = yaml.dump(wf)
-    with open(workflow_dir / f"workflow_{name}.yaml", "w") as fl:
+    with (workflow_dir / f"workflow_{name}.yaml").open("w") as fl:
         fl.write(txt)
 
     return workflow_dir / f"workflow_{name}.yaml"
@@ -346,7 +347,6 @@ def mock_lstbinned(mock: GSData) -> GSData:
 
 @pytest.fixture(scope="session")
 def mock_season() -> list[GSData]:
-    """A mock 'season' with three days."""
     return [
         create_mock_edges_data(add_noise=True, as_power=True, time0=2459900.27),
         create_mock_edges_data(add_noise=True, as_power=True, time0=2459901.27),
@@ -356,11 +356,11 @@ def mock_season() -> list[GSData]:
 
 @pytest.fixture(scope="session")
 def mock_season_dicke(mock_season: list[GSData]) -> list[GSData]:
-    """Dicke-calibrated mock season"""
+    """Dicke-calibrated mock season."""
     return [dicke_calibration(m) for m in mock_season]
 
 
 @pytest.fixture(scope="session")
 def mock_season_modelled(mock_season_dicke: list[GSData]) -> list[GSData]:
-    """Dicke-calibrated mock season"""
+    """Dicke-calibrated mock season."""
     return [add_model(m, model=mdl.LinLog(n_terms=2)) for m in mock_season_dicke]

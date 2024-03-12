@@ -3,13 +3,12 @@
 import numpy as np
 from astropy import units as un
 from astropy.time import Time
-from edges_cal.tools import FrequencyRange
-from scipy.interpolate import interp1d
-
 from edges_analysis.const import edges_location
 from edges_analysis.coordinates import lst2gha
 from edges_analysis.data import DATA_PATH
 from edges_analysis.gsdata import GSData
+from edges_cal.tools import FrequencyRange
+from scipy.interpolate import interp1d
 
 # To get "reasonable" data values, read the model of the haslam sky convolved with
 # the 30x30m ground-plane beam that we have in our data folder. This exact model is
@@ -45,7 +44,8 @@ def create_mock_edges_data(
     skydata = spl75(gha)[:, None] * ((freqs.freq / (75 * un.MHz)) ** (-2.5))[None, :]
 
     if add_noise:
-        skydata += np.random.normal(0, 0.001, skydata.shape) * skydata
+        rng = np.random.default_rng()
+        skydata += rng.normal(0, 0.001, skydata.shape) * skydata
 
     data = skydata[None, None]
 

@@ -1,13 +1,13 @@
-import pytest
+"""Tests for the GSData class."""
+
+from datetime import datetime, timedelta
 
 import attrs
 import numpy as np
+import pytest
 from astropy import units as un
 from astropy.coordinates import EarthLocation
 from astropy.time import Time
-from datetime import datetime, timedelta
-from edges_cal.modelling import LinLog
-
 from edges_analysis.datamodel import GSDataLinearModel
 from edges_analysis.gsdata import (
     GSData,
@@ -19,6 +19,7 @@ from edges_analysis.gsdata import (
     select_lsts,
     select_times,
 )
+from edges_cal.modelling import LinLog
 
 
 @pytest.fixture(scope="module")
@@ -403,14 +404,16 @@ def test_iterators(simple_gsdata):
 
 @pytest.fixture(scope="module")
 def gsdata_model():
+    rng = np.random.default_rng(42)
     return GSDataLinearModel(
-        model=LinLog(n_terms=5), parameters=np.random.random(size=(1, 1, 50, 5))
+        model=LinLog(n_terms=5), parameters=rng.random(size=(1, 1, 50, 5))
     )
 
 
 def test_bad_gsdata_model_init(gsdata_model):
+    rng = np.random.default_rng(42)
     with pytest.raises(ValueError, match="parameters array has 3 parameters"):
-        gsdata_model.update(parameters=np.random.random(size=(1, 1, 50, 3)))
+        gsdata_model.update(parameters=rng.random(size=(1, 1, 50, 3)))
 
 
 def test_shape(gsdata_model):

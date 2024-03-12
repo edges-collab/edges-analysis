@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
+from pathlib import Path
+from typing import Literal
+
 import astropy.coordinates as apc
 import astropy.time as apt
 import attrs
-import logging
 import numpy as np
 import scipy.interpolate as spi
 from astropy import units as u
@@ -14,14 +17,11 @@ from edges_cal import modelling as mdl
 from edges_cal import types as tp
 from edges_cal.tools import vld_unit
 from hickleable import hickleable
-from pathlib import Path
 from tqdm import tqdm
-from typing import Literal
 
 from . import _coordinates_alan as crda
-from . import const
+from . import const, sky_models
 from . import coordinates as coords
-from . import sky_models
 from .calibration.loss import ground_loss
 from .config import config
 from .data import BEAM_PATH
@@ -36,6 +36,8 @@ REFERENCE_TIME = apt.Time("2014-01-01T09:39:42", location=const.edges_location)
 
 @attrs.define(kw_only=True)
 class Beam:
+    """A beam model object."""
+
     beam: np.ndarray = attrs.field()
     frequency: tp.FreqType = attrs.field(validator=vld_unit("frequency"))
     elevation: np.ndarray = attrs.field(converter=np.asarray)
@@ -116,7 +118,7 @@ class Beam:
     @classmethod
     def from_wipld(cls, path: tp.PathLike, az_antenna_axis: float = 0) -> Beam:
         """Read a WIPL-D beam."""
-        with open(path) as fn:
+        with Path(path).open("r") as fn:
             file_length = 0
             number_of_frequencies = 0
 
@@ -146,7 +148,7 @@ class Beam:
 
         frequencies = np.array(frequencies_list)
 
-        with open(path) as fn:
+        with Path(path).open("r") as fn:
             i = -1
             for line in fn:
                 if line[2] == ">":
@@ -164,13 +166,11 @@ class Beam:
         beam = np.zeros((len(frequencies), len(theta_u), len(phi_u)))
 
         for i in range(len(frequencies)):
-            out_2D = output[i, :, :]
+            out2d = output[i, :, :]
 
-            phi = out_2D[:, 0]
-            theta = (
-                90 - out_2D[:, 1]
-            )  # theta is zero at the zenith, and goes to 180 deg
-            gain = out_2D[:, 6]
+            phi = out2d[:, 0]
+            theta = 90 - out2d[:, 1]  # theta is zero at the zenith, and goes to 180 deg
+            gain = out2d[:, 6]
 
             theta_u = np.unique(theta)
             it = np.argsort(theta_u)
@@ -242,7 +242,7 @@ class Beam:
 
         data = np.genfromtxt(str(filename))
         frequency = []
-        with open(filename) as fl:
+        with filename.open("r") as fl:
             for line in fl:
                 if line.startswith("#FREQUENCY"):
                     line = line.split("MHz")[0].strip().split(" ")
@@ -308,7 +308,8 @@ class Beam:
 
         for i in range(freq_p):
             n = int(i * res + f_low)
-            with open(f"{file_name_prefix}farfield (f={n}) [1].txt", "rb") as fc_file:
+            thispath = Path(f"{file_name_prefix}farfield (f={n}) [1].txt")
+            with thispath.open("rb") as fc_file:
                 for x, line in enumerate(fc_file):
                     if x > 1:
                         check = 0
@@ -378,56 +379,28 @@ class Beam:
         """
         beam_square = np.zeros((freq_p, theta_p, phi_p))
         frequency = np.linspace(f_low, f_high, freq_p)
-        f1 = open(f"{file_name_prefix}_0-90.{ext}")
-        f2 = open(f"{file_name_prefix}_91-180.{ext}")
-        f3 = open(f"{file_name_prefix}_181-270.{ext}")
-        f4 = open(f"{file_name_prefix}_271-360.{ext}")
 
-        z = (
-            theta_p * 91 + 10
-        )  # ---> change this to no.of theta * no.of phi + No.of header lines
+        # TODO: change this to no.of theta * no.of phi + No.of header lines
+        z = theta_p * 91 + 10
 
-        for index, line in enumerate(f1):
-            if index % z == 0:
-                co = 0
-            if index % z >= 10:
-                x = list(map(float, line.split()))
-                beam_square[int(index / z), co % theta_p, int(co / theta_p)] = 10 ** (
-                    x[8] / 10
-                )
-                co += 1
+        def read_file(path, idx: int):
+            with path.open("r") as fl:
+                for index, line in enumerate(fl):
+                    if index % z == 0:
+                        co = 0
+                    if index % z >= 10:
+                        x = list(map(float, line.split()))
+                        here = int(index / z), co % theta_p, int(co / theta_p) + idx
+                        beam_square[here] = 10 ** (x[8] / 10)
+                        co += 1
+
+        read_file(Path(f"{file_name_prefix}_0-90.{ext}"), 0)
 
         z = theta_p * 90 + 10  #
 
-        for index, line in enumerate(f2):
-            if index % z == 0:
-                co = 0
-            if index % z >= 10:
-                x = list(map(float, line.split()))
-                beam_square[int(index / z), co % theta_p, int(co / theta_p) + 91] = (
-                    10 ** (x[8] / 10)
-                )
-                co += 1
-
-        for index, line in enumerate(f3):
-            if index % z == 0:
-                co = 0
-            if index % z >= 10:
-                x = list(map(float, line.split()))
-                beam_square[int(index / z), co % theta_p, int(co / theta_p) + 181] = (
-                    10 ** (x[8] / 10)
-                )
-                co += 1
-
-        for index, line in enumerate(f4):
-            if index % z == 0:
-                co = 0
-            if index % z >= 10:
-                x = list(map(float, line.split()))
-                beam_square[int(index / z), co % theta_p, int(co / theta_p) + 271] = (
-                    10 ** (x[8] / 10)
-                )
-                co += 1
+        read_file(Path(f"{file_name_prefix}_91-180.{ext}"), 91)
+        read_file(Path(f"{file_name_prefix}_181-270.{ext}"), 181)
+        read_file(Path(f"{file_name_prefix}_271-360.{ext}"), 271)
 
         freq = FrequencyRange(np.array(frequency) * u.MHz)
         beam_square[:, 90:, :] = 0
@@ -606,7 +579,6 @@ class Beam:
         beam_file = cls.resolve_file(beam_file, band, configuration, simulator)
 
         if simulator == "feko":
-            # rotation_from_north -= 90
             out = cls.from_feko(beam_file, az_antenna_axis=rotation_from_north)
         elif simulator == "wipl-d":  # Beams from WIPL-D
             out = cls.from_wipld(beam_file, rotation_from_north)
@@ -618,7 +590,6 @@ class Beam:
         out.instrument = band
         return out
 
-    #    @lru_cache(maxsize=1000)
     def angular_interpolator(
         self,
         freq_indx: int,
@@ -683,9 +654,9 @@ class Beam:
     def get_beam_solid_angle(self) -> float:
         """Calculate the integrated beam solid angle."""
         sin_theta = np.cos(self.elevation * (np.pi / 180))
-        sin_theta_2D = np.tile(sin_theta, (len(self.azimuth), 1)).T
+        sin_theta = np.tile(sin_theta, (len(self.azimuth), 1)).T
 
-        beam_integration = np.sum(self.beam * sin_theta_2D, axis=(1, 2))
+        beam_integration = np.sum(self.beam * sin_theta, axis=(1, 2))
 
         d_el = self.elevation[1] - self.elevation[0]
         d_az = self.azimuth[1] - self.azimuth[0]
@@ -1227,7 +1198,6 @@ def antenna_beam_factor(
     # Don't reset the reference frequency. Alan uses the discrete ref frequency
     # to get the weighted sky temp, then models that, and divides by the model at
     # non-discrete ref frequency to normalize.
-    #    reference_frequency = beam.frequency[indx_ref_freq]
 
     antenna_temperature_above_horizon = np.zeros((len(lsts), len(beam.frequency)))
     if sky_at_reference_frequency:
@@ -1245,9 +1215,9 @@ def antenna_beam_factor(
         bm,
         _,
         npix_no_nan,
-        az,
-        el,
-        interp,
+        _az,
+        _el,
+        _interp,
     ) in sky_convolution_generator(
         lsts,
         beam=beam,

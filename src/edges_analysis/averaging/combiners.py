@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import logging
-import numpy as np
 import warnings
+
+import numpy as np
 
 from ..gsdata import GSData, gsregister
 
@@ -103,6 +104,6 @@ def lst_average_files(*files) -> GSData:
         try:
             obj = lst_average(obj, new)
         except ValueError as e:
-            raise ValueError(f"{str(e)}: File {i}") from e
+            raise ValueError(f"{e!s}: File {i}") from e
 
     return obj

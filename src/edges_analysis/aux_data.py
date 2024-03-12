@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-import edges_cal.types as tp
 import logging
-import numpy as np
 import time
-from edges_io.auxiliary import read_thermlog_file, read_weather_file
 from pathlib import Path
+
+import edges_cal.types as tp
+import numpy as np
+from edges_io.auxiliary import read_thermlog_file, read_weather_file
 
 from .config import config
 from .coordinates import dt_from_jd, get_jd
@@ -17,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 class WeatherError(ValueError):
-    pass
+    """Error for weather data issues."""
 
 
 def _interpolate_times(thing, times):

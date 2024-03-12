@@ -18,7 +18,7 @@ def plot_waterfall(
     data: GSData,
     load: int = 0,
     pol: int = 0,
-    which_flags: tuple[str] = None,
+    which_flags: tuple[str] | None = None,
     ignore_flags: tuple[str] = (),
     ax: plt.Axes | None = None,
     cbar: bool = True,
@@ -112,11 +112,8 @@ def plot_waterfall(
         else:
             ax.set_ylabel("Hours into Observation")
 
-    if title and not isinstance(title, str):
-        if not data.in_lst:
-            ax.set_title(
-                f"{data.get_initial_yearday()}. LST0={data.lst_array[0][0]:.2f}"
-            )
+    if title and not isinstance(title, str) and not data.in_lst:
+        ax.set_title(f"{data.get_initial_yearday()}. LST0={data.lst_array[0][0]:.2f}")
     if title and isinstance(title, str):
         ax.set_title(title)
 

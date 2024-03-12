@@ -4,7 +4,6 @@ import numpy as np
 from astropy import coordinates as apc
 from astropy import units as u
 from astropy.time import Time
-
 from edges_analysis import _coordinates_alan as crda
 from edges_analysis import const, sky_models
 
