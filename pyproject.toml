@@ -129,6 +129,7 @@ ignore = [
     "DTZ001",   # require tzinfo in datetime
     "B008",     # do not performa function call in argument defaults
     "PTH207",   # allow glob.glob() because when we use it, it's necessary
+    "A003",     # class attribute shadowing builtins
 ]
 ignore-init-module-imports = true
 
