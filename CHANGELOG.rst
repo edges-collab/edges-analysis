@@ -1,8 +1,11 @@
 Changelog
 =========
 
-Version dev
------------
+This is the legacy changelog for versions ``<=3.0``. For the latest changelog, please
+see the [GitHub releases page](https://github.com/edges-collab/edges-cal/releases).
+
+Version 3.0.0
+-------------
 
 Added
 ~~~~~
