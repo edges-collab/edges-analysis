@@ -1,4 +1,5 @@
 """Beam models and chromaticity corrections."""
+
 from __future__ import annotations
 
 import astropy.coordinates as apc
@@ -403,9 +404,9 @@ class Beam:
                 co = 0
             if index % z >= 10:
                 x = list(map(float, line.split()))
-                beam_square[
-                    int(index / z), co % theta_p, int(co / theta_p) + 91
-                ] = 10 ** (x[8] / 10)
+                beam_square[int(index / z), co % theta_p, int(co / theta_p) + 91] = (
+                    10 ** (x[8] / 10)
+                )
                 co += 1
 
         for index, line in enumerate(f3):
@@ -413,9 +414,9 @@ class Beam:
                 co = 0
             if index % z >= 10:
                 x = list(map(float, line.split()))
-                beam_square[
-                    int(index / z), co % theta_p, int(co / theta_p) + 181
-                ] = 10 ** (x[8] / 10)
+                beam_square[int(index / z), co % theta_p, int(co / theta_p) + 181] = (
+                    10 ** (x[8] / 10)
+                )
                 co += 1
 
         for index, line in enumerate(f4):
@@ -423,9 +424,9 @@ class Beam:
                 co = 0
             if index % z >= 10:
                 x = list(map(float, line.split()))
-                beam_square[
-                    int(index / z), co % theta_p, int(co / theta_p) + 271
-                ] = 10 ** (x[8] / 10)
+                beam_square[int(index / z), co % theta_p, int(co / theta_p) + 271] = (
+                    10 ** (x[8] / 10)
+                )
                 co += 1
 
         freq = FrequencyRange(np.array(frequency) * u.MHz)
@@ -1288,12 +1289,16 @@ def antenna_beam_factor(
     out = BeamFactor(
         frequencies=beam.frequency.to_value("MHz").astype(float),
         lsts=np.array(lsts).astype(float),
-        antenna_temp=antenna_temperature_above_horizon
-        if normalize_beam
-        else antenna_temperature_above_horizon / beamsums,
-        antenna_temp_ref=convolution_ref
-        if normalize_beam
-        else (convolution_ref.T / beamsums[:, indx_ref_freq]).T,
+        antenna_temp=(
+            antenna_temperature_above_horizon
+            if normalize_beam
+            else antenna_temperature_above_horizon / beamsums
+        ),
+        antenna_temp_ref=(
+            convolution_ref
+            if normalize_beam
+            else (convolution_ref.T / beamsums[:, indx_ref_freq]).T
+        ),
         loss_fraction=loss_fraction,
         reference_frequency=reference_frequency.to_value("MHz"),
         meta={

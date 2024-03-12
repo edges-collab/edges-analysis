@@ -4,6 +4,7 @@ A module defining various sky models that can be used to generate beam correctio
 The models here are preferably *not* interpolated over frequency, as that gives more
 control to us to interpolate how we wish.
 """
+
 from __future__ import annotations
 
 import astropy_healpix as ahp

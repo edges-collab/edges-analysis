@@ -1,4 +1,5 @@
 """Data for use in edges-analysis."""
+
 from pathlib import Path
 
 DATA_PATH = Path(__file__).absolute().parent

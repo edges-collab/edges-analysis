@@ -1,4 +1,5 @@
 """Perform tests of the _coordinates_alan module."""
+
 import numpy as np
 from astropy import coordinates as apc
 from astropy import units as u

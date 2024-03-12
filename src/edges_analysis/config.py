@@ -1,4 +1,5 @@
 """Global configuration options."""
+
 import os
 from edges_io.config import config, default_config
 

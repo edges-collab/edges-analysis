@@ -1,4 +1,5 @@
 """Functions for doing LST binning on GSData objects."""
+
 from __future__ import annotations
 
 import edges_cal.modelling as mdl
