@@ -17,7 +17,7 @@ jobs:
       changelog: ${{ steps.bump.outputs.changelog }}
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         # Ensure full history is gotten.
         with:
           fetch-depth: 0
