@@ -21,7 +21,7 @@ class _Register:
     def __call__(
         self, data: GSData, *args, message: str = "", **kw
     ) -> GSData | list[GSData]:
-        now = datetime.datetime.now()  # noqa: DTZ
+        now = datetime.datetime.now()  # noqa: DTZ005
         newdata = self.func(data, *args, **kw)
 
         history = {
