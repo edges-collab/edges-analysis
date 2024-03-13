@@ -6,7 +6,7 @@ import dill as pickle
 import numpy as np
 import pytest
 from astropy import units as u
-from edges_analysis.gsdata import GSData
+from pygsdata import GSData
 
 
 @pytest.mark.parametrize(
@@ -26,8 +26,8 @@ from edges_analysis.gsdata import GSData
 def test_step_basic(request, steps: tuple[GSData, GSData], nfreqs: int):
     steps = request.getfixturevalue(steps)
     for step in steps:
-        assert step.freq_array.shape == (nfreqs,)
-        assert np.min(step.freq_array) >= 40 * u.MHz
+        assert step.freqs.shape == (nfreqs,)
+        assert np.min(step.freqs) >= 40 * u.MHz
 
         # Ensure it's pickleable
         pickle.dumps(step)
@@ -43,7 +43,6 @@ def test_lstavg_step(
 ):
     avg = lstavg_step[0]
     assert avg.residuals is not None
-    assert avg.in_lst
 
     binned = lstbin_step[0]
     assert avg.ntimes == binned.ntimes

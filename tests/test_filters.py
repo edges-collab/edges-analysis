@@ -5,9 +5,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 from astropy import units as un
-from edges_analysis import GSData
 from edges_analysis.filters import filters, lst_model
 from edges_cal import modelling as mdl
+from pygsdata import GSData
 
 
 def test_aux_filter(mock):
@@ -117,7 +117,7 @@ def test_rmsf_filter(gsd_ones: GSData):
     rng = np.random.default_rng()
     pl = np.outer(
         1 + rng.normal(scale=0.1, size=gsd_ones.ntimes * gsd_ones.npols),
-        (gsd_ones.freq_array / (75 * un.MHz)) ** -2.5,
+        (gsd_ones.freqs / (75 * un.MHz)) ** -2.5,
     )
     pl.shape = gsd_ones.data.shape
 

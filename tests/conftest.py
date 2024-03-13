@@ -1,5 +1,4 @@
 """Pytest configuration for the edges-analysis package."""
-
 from __future__ import annotations
 
 from pathlib import Path
@@ -16,9 +15,9 @@ from edges_analysis.averaging import lstbin
 from edges_analysis.calibration.calibrate import dicke_calibration
 from edges_analysis.config import config
 from edges_analysis.datamodel import add_model
-from edges_analysis.gsdata import GSData
 from edges_cal import modelling as mdl
 from jinja2 import Template
+from pygsdata import GSData
 
 from .mock_gsdata import create_mock_edges_data
 
@@ -293,13 +292,13 @@ def gsd_ones():
     nload, npol, ntime, nfreq = 1, 2, 10, 26
     return GSData(
         data=np.ones((nload, npol, ntime, nfreq)),
-        freq_array=np.linspace(50, 100, nfreq) * un.MHz,
-        time_array=Time(
+        freqs=np.linspace(50, 100, nfreq) * un.MHz,
+        times=Time(
             np.linspace(2459856, 2459857, ntime + 1)[:-1, None],
             format="jd",
             scale="utc",
         ),
-        telescope_location=const.edges_location,
+        telescope=const.KNOWN_TELESCOPES["edges-low"],
         loads=("ant",),
     )
 
@@ -312,9 +311,9 @@ def gsd_ones_power():
 
     return GSData(
         data=np.ones((nload, npol, ntime, nfreq)),
-        freq_array=np.linspace(50, 100, nfreq) * un.MHz,
-        time_array=Time(times, format="jd", scale="utc"),
-        telescope_location=const.edges_location,
+        freqs=np.linspace(50, 100, nfreq) * un.MHz,
+        times=Time(times, format="jd", scale="utc"),
+        telescope=const.KNOWN_TELESCOPES["edges-low"],
         loads=("p0", "p1", "p2"),
         data_unit="power",
     )
@@ -340,13 +339,14 @@ def mock_lstbinned(mock: GSData) -> GSData:
     return lstbin.lst_bin(
         mock,
         binsize=0.02,
-        first_edge=mock.lst_array.min().hour,
-        max_edge=mock.lst_array.max().hour,
+        first_edge=mock.lsts.min().hour,
+        max_edge=mock.lsts.max().hour,
     )
 
 
 @pytest.fixture(scope="session")
 def mock_season() -> list[GSData]:
+    """A mock 'season' with three days."""
     return [
         create_mock_edges_data(add_noise=True, as_power=True, time0=2459900.27),
         create_mock_edges_data(add_noise=True, as_power=True, time0=2459901.27),

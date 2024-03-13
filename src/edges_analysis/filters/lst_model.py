@@ -12,12 +12,12 @@ import numpy as np
 import yaml
 from astropy import units as un
 from attrs import define, field
-from edges_cal import types as tp
 from edges_cal.modelling import FourierDay, LinLog, Model
+from edges_io import types as tp
+from pygsdata import GSData, GSFlag, gsregister
 
 from ..data import DATA_PATH
 from ..datamodel import add_model
-from ..gsdata import GSData, GSFlag, gsregister
 from .filters import chunked_iterative_model_filter, gsdata_filter
 
 logger = logging.getLogger(__name__)
@@ -385,7 +385,7 @@ class RMSAggregator(FrequencyAggregator):
         data = add_model(data, model=self.model)
 
         mask = data.nsamples[0, 0] > 0
-        r = data.resids[0, 0].copy()
+        r = data.residuals[0, 0].copy()
         r = np.where(mask, r, np.nan)
         return np.sqrt(np.nanmean(r**2, axis=-1))
 
@@ -423,7 +423,7 @@ class TotalPowerAggregator(FrequencyAggregator):
         if data.data_unit not in ("temperature", "model_residuals"):
             raise ValueError("Can only run total power aggregator on temperature data.")
 
-        freqs = data.freq_array.to_value("MHz")
+        freqs = data.freqs.to_value("MHz")
         freq_mask = (freqs >= self.band[0]) & (freqs < self.band[1])
 
         weights = np.sum(data.nsamples[0, 0, :, freq_mask].T, axis=-1)

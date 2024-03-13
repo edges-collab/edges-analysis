@@ -20,6 +20,7 @@ import tqdm
 import yaml
 from edges_io import io
 from pathos.multiprocessing import ProcessPool as Pool
+from pygsdata import GSDATA_PROCESSORS, GSData
 from read_acq.read_acq import ACQError
 from rich import box
 from rich.console import Console
@@ -30,7 +31,6 @@ from rich.table import Table
 
 from . import _workflow as wf
 from .aux_data import WeatherError
-from .gsdata import GSDATA_PROCESSORS, GSData
 
 console = Console()
 

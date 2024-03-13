@@ -6,8 +6,7 @@ import logging
 import warnings
 
 import numpy as np
-
-from ..gsdata import GSData, gsregister
+from pygsdata import GSData, gsregister
 
 logger = logging.getLogger(__name__)
 
@@ -34,15 +33,7 @@ def lst_average(
     use_resids: bool | None = None,
 ) -> GSData:
     """Average multiple objects together using their flagged weights."""
-    if any(not obj.in_lst for obj in objs):
-        raise ValueError(
-            "One or more of the input objects is not in LST-mode. Can't LST-average."
-        )
-
-    if any(
-        not np.allclose(obj.time_array.hour, objs[0].time_array.hour)
-        for obj in objs[1:]
-    ):
+    if any(not np.allclose(obj.lsts.hour, objs[0].lsts.hour) for obj in objs[1:]):
         raise ValueError("All objects must have the same LST array to average them.")
 
     if any(obj.data.shape != objs[0].data.shape for obj in objs[1:]):

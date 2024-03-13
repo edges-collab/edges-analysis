@@ -11,7 +11,7 @@ from edges_analysis import const, sky_models
 def test_alan_coordinates_azel():
     sky_model = sky_models.Haslam408AllNoh()
     t = Time("2016-09-16T16:26:57", format="isot", scale="utc")
-    loc = const.KNOWN_LOCATIONS["alan-edges"]
+    loc = const.KNOWN_TELESCOPES["edges-low-alan"].location
 
     antenna_frame = apc.AltAz(location=loc, obstime=t)
 

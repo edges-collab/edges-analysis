@@ -11,7 +11,7 @@ import attr
 import numpy as np
 from edges_cal import CalibrationObservation, Calibrator, s11
 from edges_cal import receiver_calibration_func as rcf
-from edges_cal import types as tp
+from edges_io import types as tp
 
 from .s11 import AntennaS11
 

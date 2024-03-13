@@ -4,10 +4,10 @@ import numpy as np
 from astropy import units as un
 from astropy.time import Time
 from edges_analysis.const import edges_location
-from edges_analysis.coordinates import lst2gha
 from edges_analysis.data import DATA_PATH
-from edges_analysis.gsdata import GSData
 from edges_cal.tools import FrequencyRange
+from pygsdata import KNOWN_TELESCOPES, GSData
+from pygsdata.coordinates import lst2gha
 from scipy.interpolate import interp1d
 
 # To get "reasonable" data values, read the model of the haslam sky convolved with
@@ -39,9 +39,11 @@ def create_mock_edges_data(
     )
 
     lsts = times.sidereal_time("apparent", longitude=edges_location.lon)
-    gha = lst2gha(lsts.hour)[:, 0]
+    gha = lst2gha(lsts)[:, 0]
 
-    skydata = spl75(gha)[:, None] * ((freqs.freq / (75 * un.MHz)) ** (-2.5))[None, :]
+    skydata = (
+        spl75(gha.hour)[:, None] * ((freqs.freq / (75 * un.MHz)) ** (-2.5))[None, :]
+    )
 
     if add_noise:
         rng = np.random.default_rng()
@@ -63,15 +65,13 @@ def create_mock_edges_data(
             ),
             format="jd",
         )
-        print("TIMESHAPE: ", times.shape)
     return GSData(
         data=data,
-        freq_array=freqs.freq,
-        time_array=times,
-        telescope_location=edges_location,
+        freqs=freqs.freq,
+        times=times,
+        telescope=KNOWN_TELESCOPES["edges-low"],
         nsamples=np.ones_like(data),
         effective_integration_time=dt / 3,
-        telescope_name="Mock-EDGES",
         data_unit="power" if as_power else "temperature",
         auxiliary_measurements={
             "ambient_hum": np.linspace(10.0, 90.0, ntime),

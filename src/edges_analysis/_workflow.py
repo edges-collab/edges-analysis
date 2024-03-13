@@ -88,8 +88,7 @@ import attrs
 import yaml
 from frozendict import frozendict
 from jinja2 import Template
-
-from .gsdata import GSDATA_PROCESSORS
+from pygsdata.register import GSDATA_PROCESSORS
 
 try:
     from typing import Self

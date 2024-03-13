@@ -6,13 +6,13 @@ import logging
 import time
 from pathlib import Path
 
-import edges_cal.types as tp
+import edges_io.types as tp
 import numpy as np
 from edges_io.auxiliary import read_thermlog_file, read_weather_file
+from pygsdata import GSData, gsregister
 
 from .config import config
 from .coordinates import dt_from_jd, get_jd
-from .gsdata import GSData, gsregister
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +64,7 @@ def add_weather_data(data: GSData, weather_file: tp.PathLike | None = None) -> G
         the current directory and the `raw_field_data` directory for the given
         file (if not an absolute path).
     """
-    times = data.time_array[..., data.loads.index("ant")]
+    times = data.times[..., data.loads.index("ant")]
     start = min(times).to_datetime()
     end = max(times).to_datetime()
 
@@ -129,7 +129,7 @@ def add_thermlog_data(
         the current directory and the `raw_field_data` directory for the given
         file (if not an absolute path).
     """
-    times = data.time_array[..., data.loads.index("ant")]
+    times = data.times[..., data.loads.index("ant")]
     start = min(times).to_datetime()
     end = max(times).to_datetime()
 

@@ -3,15 +3,17 @@
 from __future__ import annotations
 
 import logging
+import warnings
 
 import edges_cal.modelling as mdl
 import numpy as np
 from astropy import units as un
 from astropy.coordinates import Longitude
+from pygsdata import GSData, GSFlag, gsregister
+from pygsdata.coordinates import lsts_to_times
 
 from .. import coordinates as crd
 from ..datamodel import add_model
-from ..gsdata import GSData, GSFlag, gsregister
 from .averaging import bin_data
 
 logger = logging.getLogger(__name__)
@@ -102,10 +104,8 @@ def lst_bin(
 
     bins = get_lst_bins(binsize, first_edge, max_edge=max_edge)
     logger.debug(f"Got LST bins: {bins}")
-    if not data.in_lst:
-        data = data.to_lsts()
 
-    lsts = data.lst_array.copy().hour
+    lsts = data.lsts.hour.copy()
 
     lsts %= 24
     lsts[lsts < bins[0]] += 24
@@ -131,20 +131,42 @@ def lst_bin(
         if use_model_residuals:
             resids[iload] = r
 
-    times = (bins[1:] + bins[:-1]) / 2
-    times = Longitude(np.tile(times, (data.nloads, 1)).T * un.hour)
+    lst_ranges = np.tile(
+        np.array(list(zip(bins[:-1], bins[1:])))[:, None], (1, data.nloads, 1)
+    )
+    lst_ranges = Longitude(lst_ranges * un.hour)
+
+    lstbins = np.mean(lst_ranges, axis=-1)
 
     # Flag anything that is all nan -- these are just empty LSTs.
     flg = GSFlag(flags=np.all(np.isnan(spec), axis=(0, 1, 3)), axes=("time",))
+
+    if data.auxiliary_measurements is not None:
+        warnings.warn("Auxiliary measurements cannot being binned!", stacklevel=2)
+
+    if data._effective_integration_time.size > 1:
+        if np.unique(data._effective_integration_time).size > 1:
+            warnings.warn(
+                "lstbin does not yet support variable integration times!", stacklevel=2
+            )
+        intg_time = np.mean(data._effective_integration_time)
+    else:
+        intg_time = data._effective_integration_time
+
     data = data.update(
         data=spec,
         residuals=resids,
         nsamples=nsmpls,
         flags={"empty_lsts": flg},
-        time_array=times,
-        time_ranges=Longitude(
-            np.tile(np.array([bins[:-1], bins[1:]]).T[:, None, :], (1, data.nloads, 1))
-            * un.hour
+        lsts=lstbins,
+        lst_ranges=lst_ranges,
+        times=lsts_to_times(
+            lstbins, ref_time=data.times.min(), location=data.telescope.location
         ),
+        time_ranges=lsts_to_times(
+            lst_ranges, ref_time=data.times.min(), location=data.telescope.location
+        ),
+        auxiliary_measurements=None,
+        effective_integration_time=intg_time,
     )
     return data

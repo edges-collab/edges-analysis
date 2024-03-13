@@ -319,7 +319,7 @@ def test_beam_factor_alan_azel():
         "beam_smoothing": False,
         "interp_kind": "nearest",
         "freq_progress": False,
-        "location": const.KNOWN_LOCATIONS["alan-edges"],
+        "location": const.KNOWN_TELESCOPES["edges-low-alan"].location,
         "sky_at_reference_frequency": False,
         "use_astropy_azel": True,
     }

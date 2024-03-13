@@ -2,8 +2,8 @@
 
 import pytest
 from edges_analysis import plots
-from edges_analysis.gsdata import GSData
 from edges_cal.modelling import LinLog
+from pygsdata import GSData
 
 
 @pytest.mark.parametrize(

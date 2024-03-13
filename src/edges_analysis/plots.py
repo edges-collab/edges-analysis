@@ -6,12 +6,12 @@ import edges_cal.modelling as mdl
 import matplotlib.pyplot as plt
 import numpy as np
 from astropy import units as apu
+from pygsdata import GSData
+from pygsdata.select import select_lsts
 
 from .averaging import averaging
 from .averaging.lstbin import lst_bin
 from .datamodel import add_model
-from .gsdata import GSData
-from .gsdata.select import select_lsts
 
 
 def plot_waterfall(
@@ -77,26 +77,16 @@ def plot_waterfall(
     else:
         cmap = imshow_kwargs.pop("cmap", "magma")
 
-    times = data.time_array
-
-    if data.in_lst:
-        times = times.hour
-        times[times < times[0]] += 24
-        if times.max() > 36:
-            times -= 24
+    times = data.times
 
     img = ax.imshow(
         q,
         origin="lower",
         extent=(
-            data.freq_array.min().to_value("MHz"),
-            data.freq_array.max().to_value("MHz"),
-            times.min() if data.in_lst else 0,
-            (
-                times.max()
-                if data.in_lst
-                else (times.max() - times.min()).to_value("hour")
-            ),
+            data.freqs.min().to_value("MHz"),
+            data.freqs.max().to_value("MHz"),
+            times.jd.min(),
+            times.jd.max(),
         ),
         cmap=cmap,
         aspect="auto",
@@ -107,10 +97,17 @@ def plot_waterfall(
     if xlab:
         ax.set_xlabel("Frequency [MHz]")
     if ylab:
-        if data.in_lst:
-            ax.set_ylabel("LST")
-        else:
-            ax.set_ylabel("Hours into Observation")
+        ax.set_ylabel("JD")
+
+    def jd2lst(jd):
+        return data.telescope.location.sidereal_time(jd).hour
+
+    def lst2jd(lst):
+        dlst = lst - data.lsts[0].hour
+        return data.times.jd[0] + dlst / 24.0
+
+    v2 = ax.secondary_yaxis("right", functions=(jd2lst, lst2jd))
+    v2.set_ylabel("LST [hour]")
 
     if title and not isinstance(title, str) and not data.in_lst:
         ax.set_title(f"{data.get_initial_yearday()}. LST0={data.lst_array[0][0]:.2f}")
@@ -178,7 +175,7 @@ def plot_time_average(
             "have the same shape as data."
         )
 
-    ax.plot(data.freq_array, q[load, pol, 0] - offset)
+    ax.plot(data.freqs, q[load, pol, 0] - offset)
     ax.set_xlabel("Frequency [MHz]")
     ax.set_ylabel("Average Spectrum")
 
@@ -235,12 +232,12 @@ def plot_daily_residuals(
 
         rms = np.sqrt(
             averaging.weighted_mean(
-                data=d.resids[load, pol, 0] ** 2, weights=d.nsamples[load, pol, 0]
+                data=d.residuals[load, pol, 0] ** 2, weights=d.nsamples[load, pol, 0]
             )[0]
         )
-        title = data.filename.name if data.in_lst else data.get_initial_yearday()
+        title = data.get_initial_yearday()
         ax.text(
-            data.freq_array.max() + 5 * apu.MHz,
+            data.freqs.max() + 5 * apu.MHz,
             -i * separation,
             f"{title} RMS={rms:.2f}",
         )

@@ -8,7 +8,6 @@ import attr
 import numpy as np
 from astropy import units as u
 from edges_cal import modelling as mdl
-from edges_cal import types as tp
 from edges_cal.s11 import (
     InternalSwitch,
     LoadPlusSwitchS11,
@@ -17,6 +16,7 @@ from edges_cal.s11 import (
     VNAReading,
 )
 from edges_cal.tools import FrequencyRange
+from edges_io import types as tp
 from hickleable import hickleable
 
 

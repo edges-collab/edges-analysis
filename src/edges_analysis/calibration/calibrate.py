@@ -11,13 +11,13 @@ import hickle
 import numpy as np
 from astropy.time import Time
 from edges_cal import modelling as mdl
-from edges_cal import types as tp
 from edges_cal.cal_coefficients import CalibrationObservation, Calibrator
+from edges_io import types as tp
+from pygsdata import GSData, gsregister
 
 from .. import beams, const
 from .. import coordinates as coords
 from ..config import config
-from ..gsdata import GSData, gsregister
 from . import loss
 from .labcal import LabCalibration
 
@@ -35,8 +35,11 @@ def dicke_calibration(data: GSData) -> GSData:
     return data.update(
         data=q[np.newaxis],
         data_unit="uncalibrated",
-        time_array=data.time_array[:, [iant]],
+        times=data.times[:, [iant]],
         time_ranges=data.time_ranges[:, [iant]],
+        effective_integration_time=data.effective_integration_time[[iant]],
+        lsts=data.lsts[:, [iant]],
+        lst_ranges=data.lst_ranges[:, [iant]],
         loads=("ant",),
         nsamples=data.nsamples[[iant]],
         flags={name: flag.any(axis="load") for name, flag in data.flags.items()},
@@ -326,7 +329,7 @@ def apply_noise_wave_calibration(
         calobs=calobs,
         s11_path=s11_path,
         band=band,
-        begin_time=data.time_array.min(),
+        begin_time=data.times.min(),
         s11_file_pattern=s11_file_pattern,
         ignore_s11_files=ignore_s11_files,
         antenna_s11_n_terms=antenna_s11_n_terms,
@@ -337,7 +340,7 @@ def apply_noise_wave_calibration(
         q = (data.data - tload) / tns
     else:
         q = data.data
-    new_data = labcal.calibrate_q(q, freq=data.freq_array)
+    new_data = labcal.calibrate_q(q, freq=data.freqs)
 
     if data.model is not None:
         qmodel = (
@@ -345,7 +348,7 @@ def apply_noise_wave_calibration(
             if data.data_unit == "uncalibrated_temp"
             else data.model
         )
-        resids = new_data - labcal.calibrate_q(qmodel, freq=data.freq_array)
+        resids = new_data - labcal.calibrate_q(qmodel, freq=data.freqs)
     else:
         resids = None
 
@@ -411,15 +414,16 @@ def apply_loss_correction(
         ambient_temp = "ambient_temp"
 
     if isinstance(ambient_temp, str):
-        ambient_temp = data.auxiliary_measurements.get(ambient_temp)
-
-    if ambient_temp is None:
-        raise ValueError("Ambient temperature must be provided or stored in data!")
+        if ambient_temp not in data.auxiliary_measurements.keys():  # noqa: SIM118
+            raise ValueError(
+                f"Ambient temperature must be stored in data under {ambient_temp}!"
+            )
+        ambient_temp = data.auxiliary_measurements[ambient_temp]
 
     if not hasattr(ambient_temp, "__len__"):
-        ambient_temp = ambient_temp * np.ones(len(data.time_array))
+        ambient_temp = ambient_temp * np.ones(data.ntimes)
 
-    f = data.freq_array.to_value("MHz")
+    f = data.freqs.to_value("MHz")
     gain = np.ones_like(f)
 
     if antenna_correction:
@@ -433,13 +437,13 @@ def apply_loss_correction(
             calobs=calobs,
             s11_path=s11_path,
             band=band,
-            begin_time=data.time_array.min(),
+            begin_time=data.times.min(),
             s11_file_pattern=s11_file_pattern,
             ignore_s11_files=ignore_s11_files,
             antenna_s11_n_terms=antenna_s11_n_terms,
         )
         balun_gain, connector_gain = loss.balun_and_connector_loss(
-            band, f, labcal.antenna_s11_model(data.freq_array)
+            band, f, labcal.antenna_s11_model(data.freqs)
         )
         gain *= balun_gain * connector_gain
 
@@ -539,11 +543,11 @@ def apply_beam_correction(
         new = beam.between_lsts(lst0.hour, lst1.hour)
         if integrate_before_ratio:
             bf = new.get_integrated_beam_factor(
-                model=freq_model, freqs=data.freq_array.to_value("MHz")
+                model=freq_model, freqs=data.freqs.to_value("MHz")
             )
         else:
             bf = new.get_mean_beam_factor(
-                model=freq_model, freqs=data.freq_array.to_value("MHz")
+                model=freq_model, freqs=data.freqs.to_value("MHz")
             )
 
         new_data[:, :, i] /= bf

@@ -14,14 +14,14 @@ import scipy.interpolate as spi
 from astropy import units as u
 from edges_cal import FrequencyRange
 from edges_cal import modelling as mdl
-from edges_cal import types as tp
 from edges_cal.tools import vld_unit
+from edges_io import types as tp
 from hickleable import hickleable
+from pygsdata import coordinates as gscrd
 from tqdm import tqdm
 
 from . import _coordinates_alan as crda
 from . import const, sky_models
-from . import coordinates as coords
 from .calibration.loss import ground_loss
 from .config import config
 from .data import BEAM_PATH
@@ -857,7 +857,7 @@ def sky_convolution_generator(
     normalize_beam: bool,
     beam_smoothing: bool,
     smoothing_model: mdl.Model,
-    location: apc.EarthLocation = const.edges_location,
+    location: apc.EarthLocation = const.KNOWN_TELESCOPES["edges-low"].location,
     ref_time: apt.Time = REFERENCE_TIME,
     interp_kind: Literal[
         "linear",
@@ -943,7 +943,7 @@ def sky_convolution_generator(
         ground_gain = np.ones(beam.frequency.size)
 
     # Get the local times corresponding to the given LSTs
-    times = coords.lsts_to_times(lsts, ref_time, location)
+    times = gscrd.lsts_to_times(lsts * u.hourangle, ref_time, location)
 
     beam_above_horizon = np.full(sky_model.coords.shape, np.nan)
     interpolators = {}
