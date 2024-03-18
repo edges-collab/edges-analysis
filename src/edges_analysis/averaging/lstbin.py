@@ -153,6 +153,21 @@ def lst_bin(
     else:
         intg_time = data._effective_integration_time
 
+    times = lsts_to_times(
+        np.where(lstbins < lstbins[0, 0], lstbins + 2 * np.pi * un.rad, lstbins),
+        ref_time=data.times.min(),
+        location=data.telescope.location,
+    )
+    time_ranges = lsts_to_times(
+        np.where(
+            lst_ranges < lst_ranges[0, 0, 0],
+            lst_ranges + 2 * np.pi * un.rad,
+            lst_ranges,
+        ),
+        ref_time=data.times.min(),
+        location=data.telescope.location,
+    )
+
     data = data.update(
         data=spec,
         residuals=resids,
@@ -160,12 +175,8 @@ def lst_bin(
         flags={"empty_lsts": flg},
         lsts=lstbins,
         lst_ranges=lst_ranges,
-        times=lsts_to_times(
-            lstbins, ref_time=data.times.min(), location=data.telescope.location
-        ),
-        time_ranges=lsts_to_times(
-            lst_ranges, ref_time=data.times.min(), location=data.telescope.location
-        ),
+        times=times,
+        time_ranges=time_ranges,
         auxiliary_measurements=None,
         effective_integration_time=intg_time,
     )
