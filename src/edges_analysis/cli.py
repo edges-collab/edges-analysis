@@ -381,12 +381,16 @@ def perform_step_on_object(
 
     if step.kind == "gather":
         data = step(*data)
-        data = write_data(data, step, outdir=progress.path.parent)
+        if isinstance(data, GSData):
+            data = [data]
+
+        out = [write_data(d, step, outdir=progress.path.parent) for d in data]
+
         if step.write:
             progress.update_step(
-                step.name, filemap=[(oldfiles, [data.filename.absolute()])]
+                step.name, filemap=[(oldfiles, [d.absolute() for d in out])]
             )
-        return [data]
+        return out
 
     if step.kind == "filter":
         params = {
