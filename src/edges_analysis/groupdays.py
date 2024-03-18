@@ -1,9 +1,9 @@
 """Functions for grouping GSData objects together."""
-from pygsdata import GSData, register
+from pygsdata import GSData, gsregister
 from pygsdata.concat import concat
 
 
-@register("gather")
+@gsregister("gather")
 def group_days(data: list[GSData]) -> list[GSData]:
     """Group multiple GSData objects together by days."""
     sublists = {}
