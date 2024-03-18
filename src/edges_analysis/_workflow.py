@@ -259,6 +259,7 @@ class WorkflowStep:
         fname = self.write.format(
             prev_stem=data.filename.stem,
             prev_dir=data.filename.parent,
+            fname=data.filename.name,
             fncname=self.function,
             name=data.name,
             year=yd.split(":")[0],
