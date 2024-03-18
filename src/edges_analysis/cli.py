@@ -333,6 +333,7 @@ def interpolate_step_params(params: dict, data: GSData) -> dict:
     interpolators = {
         "prev_stem": data.filename.stem,
         "prev_dir": data.filename.parent,
+        "fname": data.filename,
         "name": data.name,
     }
     try:

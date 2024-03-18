@@ -1,0 +1,20 @@
+"""Functions for grouping GSData objects together."""
+from pygsdata import GSData, register
+from pygsdata.concat import concat
+
+
+@register("gather")
+def group_days(data: list[GSData]) -> list[GSData]:
+    """Group multiple GSData objects together by days."""
+    sublists = {}
+    for d in data:
+        yd = d.get_initial_yearday()
+        if yd not in sublists:
+            sublists[yd] = [d]
+        else:
+            sublists[yd].append(d)
+
+    # Ensure they're sorted
+    sublists = {k: sorted(v, key=lambda x: x.times.min()) for k, v in sublists.items()}
+
+    return [concat(x, axis="time") for x in sublists.values()]
