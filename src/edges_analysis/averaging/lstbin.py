@@ -7,12 +7,12 @@ import warnings
 
 import edges_cal.modelling as mdl
 import numpy as np
+import pygsdata.coordinates as crd
 from astropy import units as un
 from astropy.coordinates import Longitude
 from pygsdata import GSData, GSFlag, gsregister
 from pygsdata.coordinates import lsts_to_times
 
-from .. import coordinates as crd
 from ..datamodel import add_model
 from .averaging import bin_data
 
