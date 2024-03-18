@@ -99,8 +99,8 @@ def lst_bin(
             data = add_model(data, model=model)
 
     if in_gha:
-        first_edge = crd.gha2lst(first_edge * un.hourangle)
-        max_edge = crd.gha2lst(max_edge * un.hourangle)
+        first_edge = crd.gha2lst(first_edge * un.hourangle).to_value("hour")
+        max_edge = crd.gha2lst(max_edge * un.hourangle).to_value("hour")
 
     bins = get_lst_bins(binsize, first_edge, max_edge=max_edge)
     logger.debug(f"Got LST bins: {bins}")
