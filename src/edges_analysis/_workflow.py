@@ -257,7 +257,7 @@ class WorkflowStep:
 
         # Now, use templating to create the actual filename
         fname = self.write.format(
-            prev_stem=data.fiename.stem,
+            prev_stem=data.filename.stem,
             prev_dir=data.filename.parent,
             fncname=self.function,
             name=data.name,
