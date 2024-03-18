@@ -19,7 +19,17 @@ __all__ = [
     "sky_models",
     "tools",
     "cfg",
+    "groupdays",
 ]
 
-from . import averaging, beams, calibration, coordinates, filters, sky_models, tools
+from . import (
+    averaging,
+    beams,
+    calibration,
+    coordinates,
+    filters,
+    groupdays,
+    sky_models,
+    tools,
+)
 from .config import config as cfg
