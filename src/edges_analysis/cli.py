@@ -313,7 +313,7 @@ def fork(workflow, forked, outdir):
 
 def write_data(data: GSData, step: dict, outdir=None):
     """Write data to disk at a particular step."""
-    fname = step.get_output_path(outdir, data.filename)
+    fname = step.get_output_path(outdir, data)
 
     if fname is None:
         return data

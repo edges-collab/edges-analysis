@@ -88,6 +88,7 @@ import attrs
 import yaml
 from frozendict import frozendict
 from jinja2 import Template
+from pygsdata import GSData
 from pygsdata.register import GSDATA_PROCESSORS
 
 try:
@@ -247,16 +248,21 @@ class WorkflowStep:
         """Call the step function."""
         return self._function(*data, **self.params)
 
-    def get_output_path(self, outdir: Path, infile: Path) -> Path | None:
+    def get_output_path(self, outdir: Path, data: GSData) -> Path | None:
         """Get the output path for the step."""
         if self.write is None:
             return None
 
+        yd = data.get_initial_yearday()
+
         # Now, use templating to create the actual filename
         fname = self.write.format(
-            prev_stem=infile.stem,
-            prev_dir=infile.parent,
+            prev_stem=data.fiename.stem,
+            prev_dir=data.filename.parent,
             fncname=self.function,
+            name=data.name,
+            year=yd.split(":")[0],
+            day=yd.split(":")[1],
             **self.params,
         )
 
