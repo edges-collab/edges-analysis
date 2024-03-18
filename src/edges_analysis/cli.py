@@ -388,7 +388,7 @@ def perform_step_on_object(
 
         if step.write:
             progress.update_step(
-                step.name, filemap=[(oldfiles, [d.absolute() for d in out])]
+                step.name, filemap=[(oldfiles, [d.filename.absolute() for d in out])]
             )
         return out
 
