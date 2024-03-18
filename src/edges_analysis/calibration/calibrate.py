@@ -11,7 +11,11 @@ import hickle
 import numpy as np
 from astropy.time import Time
 from edges_cal import modelling as mdl
-from edges_cal.cal_coefficients import CalibrationObservation, Calibrator
+from edges_cal.cal_coefficients import (
+    CalFileReadError,
+    CalibrationObservation,
+    Calibrator,
+)
 from edges_io import types as tp
 from pygsdata import GSData, gsregister
 
@@ -249,7 +253,7 @@ def get_labcal(
     if not isinstance(calobs, Calibrator):
         try:
             calobs = Calibrator.from_calfile(calobs)
-        except Exception:
+        except CalFileReadError:
             calobs = Calibrator.from_old_calfile(calobs)
 
     if ant_s11_object is not None:
