@@ -66,10 +66,7 @@ class _GSDataFilter:
             )
 
             if np.all(flags.flags):
-                if data.in_lst:
-                    name = data.filename
-                else:
-                    name = data.get_initial_yearday(hours=True)
+                name = data.get_initial_yearday(hours=True)
 
                 logger.warning(
                     f"{name} was fully flagged during {self.func.__name__} filter"
