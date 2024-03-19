@@ -12,6 +12,7 @@ from astropy import units as un
 from astropy.coordinates import Longitude
 from pygsdata import GSData, GSFlag, gsregister
 from pygsdata.coordinates import lsts_to_times
+from pygsdata.utils import angle_centre
 
 from ..datamodel import add_model
 from .averaging import bin_data
@@ -136,7 +137,7 @@ def lst_bin(
     )
     lst_ranges = Longitude(lst_ranges * un.hour)
 
-    lstbins = np.mean(lst_ranges, axis=-1)
+    lstbins = angle_centre(lst_ranges[..., 0], lst_ranges[..., 1])
 
     # Flag anything that is all nan -- these are just empty LSTs.
     flg = GSFlag(flags=np.all(np.isnan(spec), axis=(0, 1, 3)), axes=("time",))
