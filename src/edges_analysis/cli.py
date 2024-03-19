@@ -25,7 +25,7 @@ from rich import box
 from rich.console import Console
 from rich.logging import RichHandler
 from rich.panel import Panel
-from rich.progress import track
+from rich.progress import Progress
 from rich.rule import Rule
 from rich.table import Table
 
@@ -439,16 +439,16 @@ def perform_step_on_object(
         if data.complete_flags.all():
             return
 
+        prg.advance(prgtask)
         return write_data(data, step, outdir=progress.path.parent)
 
     mp = Pool(nthreads).map if nthreads > 1 else map
 
+    prg = Progress(console=console)
+    prgtask = prg.add_task("Processing", total=len(data))
+
     newdata = list(
-        track(
-            mp(run_process_with_memory_checks, data),
-            total=len(data),
-            description="Files",
-        )
+        mp(run_process_with_memory_checks, data),
     )
 
     if step.write or step.kind == "filter":
