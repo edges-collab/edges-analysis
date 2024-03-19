@@ -436,6 +436,7 @@ def perform_step_on_object(
             logger.warning(str(e))
             return
 
+        logger.info(f"DATA NOW HAS UNIT: {data.data_unit}")
         if data.complete_flags.all():
             return
 
