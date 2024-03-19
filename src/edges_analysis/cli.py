@@ -16,7 +16,6 @@ from pathlib import Path
 import click
 import h5py
 import psutil
-import tqdm
 import yaml
 from edges_io import io
 from pathos.multiprocessing import ProcessPool as Pool
@@ -26,6 +25,7 @@ from rich import box
 from rich.console import Console
 from rich.logging import RichHandler
 from rich.panel import Panel
+from rich.progress import track
 from rich.rule import Rule
 from rich.table import Table
 
@@ -436,7 +436,6 @@ def perform_step_on_object(
             logger.warning(str(e))
             return
 
-        logger.info(f"DATA NOW HAS UNIT: {data.data_unit}")
         if data.complete_flags.all():
             return
 
@@ -445,8 +444,10 @@ def perform_step_on_object(
     mp = Pool(nthreads).map if nthreads > 1 else map
 
     newdata = list(
-        tqdm.tqdm(
-            mp(run_process_with_memory_checks, data), total=len(data), unit="files"
+        track(
+            mp(run_process_with_memory_checks, data),
+            total=len(data),
+            description="Files",
         )
     )
 
