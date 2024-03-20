@@ -361,6 +361,57 @@ def interpolate_step_params(params: dict, data: GSData) -> dict:
     return out
 
 
+def _memblock():
+    paused = False
+    if psutil.virtual_memory().available < 4 * 1024**3:
+        logger.warning(
+            "Available Memory < 4GB, waiting for resources on "
+            f"pid={os.getpid()}. Cancel and restart with fewer threads if this"
+            "thread appears to be frozen"
+        )
+        paused = True
+
+    while psutil.virtual_memory().available < 4 * 1024**3:
+        time.sleep(2)
+
+    if paused:
+        logger.warning(f"Resuming processing on pid={os.getpid()}")
+
+
+def _run_process_with_memory_checks(
+    data: GSData,
+    step: wf.WorkflowStep,
+    params: dict,
+    outdir,
+    mem_check: bool = True,
+):
+    if data.complete_flags.all():
+        return
+
+    if step.kind == "filter" and step.name in data.flags:
+        logger.warning(f"Overwriting existing flags for filter '{step.name}'")
+        data = data.remove_flags(step.name)
+
+    pr = psutil.Process()
+
+    if mem_check:
+        _memblock()
+
+    logger.debug(f"Initial memory: {pr.memory_info().rss / 1024**2} MB")
+
+    interp_params = interpolate_step_params(params, data)
+    try:
+        data = step._function(data, **interp_params)
+    except WeatherError as e:
+        logger.warning(str(e))
+        return
+
+    if data.complete_flags.all():
+        return
+
+    return write_data(data, step, outdir=outdir)
+
+
 def perform_step_on_object(
     data: GSData,
     progress: wf.ProgressFile,
@@ -401,51 +452,21 @@ def perform_step_on_object(
     else:
         params = step.params
 
-    def run_process_with_memory_checks(data: GSData):
-        if data.complete_flags.all():
-            return
-
-        if step.kind == "filter" and step.name in data.flags:
-            logger.warning(f"Overwriting existing flags for filter '{step.name}'")
-            data = data.remove_flags(step.name)
-
-        pr = psutil.Process()
-
-        if mem_check:
-            paused = False
-            if psutil.virtual_memory().available < 4 * 1024**3:
-                logger.warning(
-                    "Available Memory < 4GB, waiting for resources on "
-                    f"pid={os.getpid()}. Cancel and restart with fewer threads if this"
-                    "thread appears to be frozen"
-                )
-                paused = True
-
-            while psutil.virtual_memory().available < 4 * 1024**3:
-                time.sleep(2)
-
-            if paused:
-                logger.warning(f"Resuming processing on pid={os.getpid()}")
-
-        logger.debug(f"Initial memory: {pr.memory_info().rss / 1024**2} MB")
-
-        interp_params = interpolate_step_params(params, data)
-        try:
-            data = step._function(data, **interp_params)
-        except WeatherError as e:
-            logger.warning(str(e))
-            return
-
-        if data.complete_flags.all():
-            return
-
-        return write_data(data, step, outdir=progress.path.parent)
-
     with Progress(console=console) as prg:
         prgtask = prg.add_task("Processing", total=len(data))
         ntasks = len(data)
         with ProcessPoolExecutor(max_workers=nthreads) as executor:
-            futures = [executor.submit(run_process_with_memory_checks, d) for d in data]
+            futures = [
+                executor.submit(
+                    _run_process_with_memory_checks,
+                    d,
+                    step,
+                    params,
+                    progress.path.parent,
+                    mem_check,
+                )
+                for d in data
+            ]
 
             # monitor the progress:
             while (n_finished := sum(future.done() for future in futures)) < ntasks:
