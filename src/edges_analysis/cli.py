@@ -11,6 +11,7 @@ import os
 import shutil
 import time
 from collections import defaultdict
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 import click
@@ -18,7 +19,6 @@ import h5py
 import psutil
 import yaml
 from edges_io import io
-from pathos.multiprocessing import ProcessPool as Pool
 from pygsdata import GSDATA_PROCESSORS, GSData
 from read_acq.read_acq import ACQError
 from rich import box
@@ -439,17 +439,19 @@ def perform_step_on_object(
         if data.complete_flags.all():
             return
 
-        prg.advance(prgtask)
         return write_data(data, step, outdir=progress.path.parent)
 
-    mp = Pool(nthreads).map if nthreads > 1 else map
+    with Progress(console=console) as prg:
+        prgtask = prg.add_task("Processing", total=len(data))
+        ntasks = len(data)
+        with ProcessPoolExecutor(max_workers=nthreads) as executor:
+            futures = [executor.submit(run_process_with_memory_checks, d) for d in data]
 
-    prg = Progress(console=console)
-    prgtask = prg.add_task("Processing", total=len(data))
+            # monitor the progress:
+            while (n_finished := sum(future.done() for future in futures)) < ntasks:
+                prg.update(prgtask, completed=n_finished)
 
-    newdata = list(
-        mp(run_process_with_memory_checks, data),
-    )
+    newdata = [f.result() for f in futures]
 
     if step.write or step.kind == "filter":
         # Update the progress file. Each input file gets one output file.
