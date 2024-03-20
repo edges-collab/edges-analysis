@@ -7,7 +7,7 @@ from shutil import copyfile
 import pytest
 import yaml
 from edges_analysis import _workflow as wf
-from edges_analysis.gsdata.select import select_freqs
+from pygsdata.select import select_freqs
 
 
 class TestFileMapEntry:

@@ -15,9 +15,9 @@ try:
 except ImportError:
     from typing_extensions import Self
 
-from .gsdata.attrs import npfield
-from .gsdata.gsdata import GSData
-from .gsdata.register import gsregister
+from pygsdata import GSData
+from pygsdata.attrs import npfield
+from pygsdata.register import gsregister
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +62,7 @@ class GSDataLinearModel:
         d = gsdata.data.reshape((-1, gsdata.nfreqs))
         p = self.parameters.reshape((-1, self.nparams))
 
-        model = self.model.at(x=gsdata.freq_array.to_value("MHz"))
+        model = self.model.at(x=gsdata.freqs.to_value("MHz"))
 
         resids = np.zeros_like(d)
         for i, (dd, pp) in enumerate(zip(d, p)):
@@ -76,7 +76,7 @@ class GSDataLinearModel:
         d = gsdata.residuals.reshape((-1, gsdata.nfreqs))
         p = self.parameters.reshape((-1, self.nparams))
 
-        model = self.model.at(x=gsdata.freq_array.to_value("MHz"))
+        model = self.model.at(x=gsdata.freqs.to_value("MHz"))
 
         spectra = np.zeros_like(d)
         for i, (dd, pp) in enumerate(zip(d, p)):
@@ -91,7 +91,7 @@ class GSDataLinearModel:
         d = gsdata.data.reshape((-1, gsdata.nfreqs))
         w = gsdata.flagged_nsamples.reshape((-1, gsdata.nfreqs))
 
-        xmodel = model.at(x=gsdata.freq_array.to_value("MHz"))
+        xmodel = model.at(x=gsdata.freqs.to_value("MHz"))
 
         params = np.zeros((gsdata.nloads * gsdata.npols * gsdata.ntimes, model.n_terms))
 
