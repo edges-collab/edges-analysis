@@ -12,6 +12,7 @@ import hickle
 import numpy as np
 import yaml
 from astropy import units as u
+from astropy.time import Time
 from attrs import define
 from edges_cal import modelling as mdl
 from edges_cal import xrfi as rfi
@@ -812,6 +813,46 @@ def object_rms_filter(
 
     return GSFlag(
         flags=np.array([rms > rms_threshold]),
+        axes=("time",),
+    )
+
+
+@gsregister("filter")
+@gsdata_filter()
+def explicit_day_filter(
+    data: GSData,
+    flag_days: list[tuple[int, int] | tuple[int, int, int] | int | Time],
+) -> GSFlag:
+    """Filter out any data coming from specific days.
+
+    Parameters
+    ----------
+    flag_days
+        A list of days to flag. Each entry can be a 2-tuple, 3-tuple, astropy.Time or an
+        int. If a 2-tuple, it is interpreted as ``(year, day_of_year)``. If a 3-tuple,
+        it is interpreted as ``(year, month, day)``. If an int, it is interpreted as a
+        Julian day.
+    """
+    for i, day in enumerate(flag_days):
+        if hasattr(day, "__len__"):
+            if len(day) == 2:
+                t = Time(f"{day[0]:04}:{day[1]:03}:00:00:00.000", format="yday")
+            elif len(day) == 3:
+                t = Time(
+                    f"{day[0]:04}-{day[1]:02}-{day[2]:02} 00:00:00.000", format="iso"
+                )
+            else:
+                raise ValueError("Day must be a 2-tuple, 3-tuple, Time or an int.")
+
+            flag_days[i] = int(t.jd)
+        elif isinstance(day, Time):
+            flag_days[i] = int(day.jd)
+
+    if not all(isinstance(day, int) for day in flag_days):
+        raise ValueError("All entries in flag_days must be integers.")
+
+    return GSFlag(
+        flags=np.any(np.isin(data.times.jd.astype(int), flag_days), axis=-1),
         axes=("time",),
     )
 
