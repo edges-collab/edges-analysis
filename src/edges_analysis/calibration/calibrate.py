@@ -469,6 +469,8 @@ def apply_beam_correction(
     integrate_before_ratio: bool = True,
     oversample_factor: int = 5,
     resample_beam_lsts: bool = True,
+    use_beam_factor: bool = False,
+    beam_file: str | Path = None,
 ) -> GSData:
     """Apply beam correction to the data.
 
@@ -537,19 +539,25 @@ def apply_beam_correction(
     new_data = data.data.copy()
 
     resids = data.residuals.copy() if data.residuals is not None else None
-    for i, (lst0, lst1) in enumerate(data.lst_ranges[:, 0, :]):
-        new = beam.between_lsts(lst0.hour, lst1.hour)
-        if integrate_before_ratio:
-            bf = new.get_integrated_beam_factor(
-                model=freq_model, freqs=data.freq_array.to_value("MHz")
-            )
-        else:
-            bf = new.get_mean_beam_factor(
-                model=freq_model, freqs=data.freq_array.to_value("MHz")
-            )
+    if use_beam_factor == True: 
+        bf = np.loadtxt(beam_file)
+        new_data*=bf[:,3]
+    else:
 
-        new_data[:, :, i] /= bf
-        if resids is not None:
-            resids[:, :, i] /= bf
-
+        for i, (lst0, lst1) in enumerate(data.lst_ranges[:, 0, :]):
+            new = beam.between_lsts(lst0.hour, lst1.hour)
+            if integrate_before_ratio:
+                bf = new.get_integrated_beam_factor(
+                    model=freq_model, freqs=data.freq_array.to_value("MHz")
+                )
+            else:
+                bf = new.get_mean_beam_factor(
+                    model=freq_model, freqs=data.freq_array.to_value("MHz")
+                )
+        
+            new_data[:, :, i] /= bf
+            if resids is not None:
+                resids[:, :, i] /= bf
+        
+    
     return data.update(data=new_data, residuals=resids, data_unit="temperature")
