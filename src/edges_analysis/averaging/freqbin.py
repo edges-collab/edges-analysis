@@ -157,7 +157,11 @@ def gauss_smooth(
         nsamples = _nsamples[..., decimate_at::decimate]
 
     if use_residuals:
+        #model_mask = np.where(np.isnan(dd), 0, data.model)
+        #models = convolve1d( data.model, window, mode="constant", cval=0)[..., decimate_at::decimate]
+        #models[~mask] /= nsamples[~mask]
         models = data.model[..., decimate_at::decimate]
+
     else:
         models = 0
 
