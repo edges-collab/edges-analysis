@@ -856,7 +856,8 @@ def explicit_day_filter(
 
     
     thist = Time(f"{data.name.replace('_',':')}:00:00:00.000", format='yday')
-    return GSFlag(
-        flags = np.ones(data.time_array.size, dtype=bool) if int(thist.jd) in day_flags else np.zeros(data.time_array.size),
-        axes=("time",),
-    )
+    thist = data.times[:, 0].jd.astype(int)
+    flags = np.isin(thist, flag_days)
+    return GSFlag(flags=flags, axes=("time",))
+    
+    
