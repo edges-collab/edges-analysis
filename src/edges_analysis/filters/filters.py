@@ -859,5 +859,3 @@ def explicit_day_filter(
     thist = data.times[:, 0].jd.astype(int)
     flags = np.isin(thist, flag_days)
     return GSFlag(flags=flags, axes=("time",))
-    
-    
