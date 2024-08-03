@@ -823,6 +823,7 @@ def object_rms_filter(
         axes=("time",),
     )
 
+
 @gsregister("filter")
 @gsdata_filter()
 def explicit_day_filter(
@@ -830,6 +831,7 @@ def explicit_day_filter(
     flag_days: list[tuple[int, int] | tuple[int, int, int] | int | Time],
 ) -> GSFlag:
     """Filter out any data coming from specific days.
+
     Parameters
     ----------
     flag_days
@@ -850,12 +852,10 @@ def explicit_day_filter(
             else:
                 raise ValueError("Day must be a 2-tuple, 3-tuple, Time or an int.")
 
-            day_flags[i] = int(t.jd) #t.value
+            day_flags[i] = int(t.jd)  # t.value
         elif isinstance(day, Time):
             flag_days[i] = int(day.jd)
 
-    
-    thist = Time(f"{data.name.replace('_',':')}:00:00:00.000", format='yday')
     thist = data.times[:, 0].jd.astype(int)
     flags = np.isin(thist, flag_days)
     return GSFlag(flags=flags, axes=("time",))
