@@ -5,7 +5,6 @@ from edges_cal.modelling import LinLog
 from pygsdata import GSData, plots
 
 
-
 def test_plot_time_average_bad_attribute(mock):
     with pytest.raises(ValueError, match="Cannot use attribute"):
         plots.plot_time_average(mock, attribute="flags")
