@@ -29,7 +29,7 @@ class AntennaS11(LoadS11):
     _default_nterms = 10
     _model_type_default = mdl.Polynomial
 
-    model_delay: tp.Time = attr.ib(170 * u.ns)
+    model_delay: tp.Time = attr.ib(default=0 * u.ns)
 
     @classmethod
     def from_s1p_files(
