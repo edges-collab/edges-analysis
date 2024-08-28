@@ -771,7 +771,7 @@ class BeamFactor:
             if d[k].ndim == 2:
                 val = np.vstack((d[k], d[k][0]))
             elif d[k].ndim == 1:
-                val = np.concatenate((d[k], d[k][0]))
+                val = np.concatenate((d[k], [d[k][0]]))
 
             out[k] = spi.interp1d(these_lsts, val, axis=0, kind=interp_kind)(use_lsts)
 
