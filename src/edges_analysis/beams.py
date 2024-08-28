@@ -756,9 +756,8 @@ class BeamFactor:
         lst_like = [
             k
             for k, v in d.items()
-            if isinstance(v, np.ndarray) and v.shape[0] == self.nlst and v.ndim == 2
+            if isinstance(v, np.ndarray) and v.shape[0] == self.nlst
         ]
-        lst_like += ["antenna_temp_ref"]
 
         these_lsts = self.lsts % 24
         while np.any(these_lsts < these_lsts[0]):
@@ -769,7 +768,11 @@ class BeamFactor:
         these_lsts = np.append(these_lsts, these_lsts[0] + 24)
         out = {}
         for k in lst_like:
-            val = np.vstack((d[k], d[k][0]))
+            if d[k].ndim == 2:
+                val = np.vstack((d[k], d[k][0]))
+            elif d[k].ndim == 1:
+                val = np.concatenate((d[k], d[k][0]))
+
             out[k] = spi.interp1d(these_lsts, val, axis=0, kind=interp_kind)(use_lsts)
 
         # print(out, lsts)  # noqa
