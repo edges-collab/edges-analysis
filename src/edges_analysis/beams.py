@@ -758,6 +758,7 @@ class BeamFactor:
             for k, v in d.items()
             if isinstance(v, np.ndarray) and v.shape[0] == self.nlst and v.ndim == 2
         ]
+        lst_like += ["antenna_temp_ref"]
 
         these_lsts = self.lsts % 24
         while np.any(these_lsts < these_lsts[0]):
@@ -771,8 +772,8 @@ class BeamFactor:
             val = np.vstack((d[k], d[k][0]))
             out[k] = spi.interp1d(these_lsts, val, axis=0, kind=interp_kind)(use_lsts)
 
-        print(out, lsts)  # noqa
-        print(out.shape, lsts.shape)  # noqa
+        # print(out, lsts)  # noqa
+        # print(out.shape, lsts.shape)  # noqa
         return attrs.evolve(self, lsts=lsts, **out)
 
     def between_lsts(self, lst0: float, lst1: float) -> BeamFactor:
