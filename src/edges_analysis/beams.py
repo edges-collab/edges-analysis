@@ -735,6 +735,7 @@ class BeamFactor:
         if value.ndim == 1 and value.shape != (self.nlst,):
             raise ValueError(
                 "If Reference antenna temperature is 1D, it must have shape (nlst,)."
+                f"Got shape {value.shape} instead of {(self.nlst,)}"
             )
 
         if value.ndim == 2 and value.shape != (self.nlst, self.nfreq):
@@ -770,6 +771,8 @@ class BeamFactor:
             val = np.vstack((d[k], d[k][0]))
             out[k] = spi.interp1d(these_lsts, val, axis=0, kind=interp_kind)(use_lsts)
 
+        print(out, lsts)  # noqa
+        print(out.shape, lsts.shape)  # noqa
         return attrs.evolve(self, lsts=lsts, **out)
 
     def between_lsts(self, lst0: float, lst1: float) -> BeamFactor:
