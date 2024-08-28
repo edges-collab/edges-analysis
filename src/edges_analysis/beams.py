@@ -753,12 +753,14 @@ class BeamFactor:
     def at_lsts(self, lsts: np.ndarray, interp_kind: int | str = "cubic") -> BeamFactor:
         """Return a new BeamFactor at the given LSTs."""
         d = attrs.asdict(self)
+
         lst_like = [
             k
             for k, v in d.items()
             if isinstance(v, np.ndarray) and v.shape[0] == self.nlst
             if k != "lsts"
         ]
+
 
         these_lsts = self.lsts % 24
         while np.any(these_lsts < these_lsts[0]):
@@ -779,6 +781,8 @@ class BeamFactor:
         # print(out, lsts)  # noqa
         # print(out.shape, lsts.shape)  # noqa
         return attrs.evolve(self, lsts=lsts, **out)
+
+
 
     def between_lsts(self, lst0: float, lst1: float) -> BeamFactor:
         """Return a new BeamFactor including only LSTs between those given.
@@ -805,8 +809,10 @@ class BeamFactor:
         lst_like = [
             k
             for k, v in d.items()
-            if isinstance(v, np.ndarray) and v.shape[0] == self.nlst and v.ndim == 2
+            if isinstance(v, np.ndarray) and v.shape[0] == self.nlst #and v.ndim == 2
+            if k != 'lsts'
         ]
+
         out = {k: getattr(self, k)[mask] for k in lst_like}
         return attrs.evolve(self, lsts=these_lsts[mask], **out)
 
