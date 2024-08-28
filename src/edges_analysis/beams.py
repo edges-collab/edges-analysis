@@ -757,6 +757,7 @@ class BeamFactor:
             k
             for k, v in d.items()
             if isinstance(v, np.ndarray) and v.shape[0] == self.nlst
+            if k != "lsts"
         ]
 
         these_lsts = self.lsts % 24
