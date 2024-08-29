@@ -777,8 +777,6 @@ class BeamFactor:
 
             out[k] = spi.interp1d(these_lsts, val, axis=0, kind=interp_kind)(use_lsts)
 
-        # print(out, lsts)  # noqa
-        # print(out.shape, lsts.shape)  # noqa
         return attrs.evolve(self, lsts=lsts, **out)
 
     def between_lsts(self, lst0: float, lst1: float) -> BeamFactor:
