@@ -991,18 +991,17 @@ def sky_convolution_generator(
             unit="Frequency",
             disable=not freq_progress,
         ):
-
             if freq_idx not in interpolators:
                 interpolators[freq_idx] = beam.angular_interpolator(
                     freq_idx, interp_kind=interp_kind
                 )
-            
+
             sky_map = sky_model.at_freq(
                 beam.frequency[freq_idx].to_value("MHz"),
                 index_model=index_model,
             )
             sky_map[~horizon_mask] = np.nan
-            
+
             beam_above_horizon *= np.nan
 
             try:
@@ -1262,10 +1261,10 @@ def antenna_beam_factor(
             ref_sky = sky.copy()
 
             # This updates once per LST, on the first frequency iteration
-            '''
+            """
             sky_at_reference_frequency is a toggle between Eq-4 and Eq-A1 from Sims+23
 
-            '''
+            """
             if sky_at_reference_frequency:
                 convolution_ref[lst_idx] = np.nansum(ref_bm * ref_sky) / npix_no_nan
 
