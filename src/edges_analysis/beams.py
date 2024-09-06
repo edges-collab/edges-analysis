@@ -1216,8 +1216,6 @@ def antenna_beam_factor(
 
     else:
         convolution_ref = np.zeros((len(lsts), len(beam.frequency)))
-        
-
 
     loss_fraction = np.zeros((len(lsts), len(beam.frequency)))
     beamsums = np.zeros((len(lsts), len(beam.frequency)))
