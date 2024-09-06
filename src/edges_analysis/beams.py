@@ -1214,8 +1214,12 @@ def antenna_beam_factor(
     antenna_temperature_above_horizon = np.zeros((len(lsts), len(beam.frequency)))
     if sky_at_reference_frequency:
         convolution_ref = np.zeros((len(lsts),))
+
     else:
         convolution_ref = np.zeros((len(lsts), len(beam.frequency)))
+        
+
+
     loss_fraction = np.zeros((len(lsts), len(beam.frequency)))
     beamsums = np.zeros((len(lsts), len(beam.frequency)))
     for (
@@ -1255,6 +1259,7 @@ def antenna_beam_factor(
 
         if freq_idx == indx_ref_freq:
             ref_bm = bm.copy()
+            ref_sky = sky.copy()
 
             # This updates once per LST, on the first frequency iteration
             '''
@@ -1262,7 +1267,7 @@ def antenna_beam_factor(
 
             '''
             if sky_at_reference_frequency:
-                convolution_ref[lst_idx] = np.nansum(ref_bm * sky) / npix_no_nan
+                convolution_ref[lst_idx] = np.nansum(ref_bm * ref_sky) / npix_no_nan
 
         if not sky_at_reference_frequency:
             convolution_ref[lst_idx, freq_idx] = np.nansum(ref_bm * sky) / npix_no_nan
