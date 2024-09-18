@@ -11,7 +11,7 @@ import attr
 import numpy as np
 from edges_cal import CalibrationObservation, Calibrator, s11
 from edges_cal import receiver_calibration_func as rcf
-from edges_cal import types as tp
+from edges_io import types as tp
 
 from .s11 import AntennaS11
 
@@ -37,6 +37,7 @@ class LabCalibration:
         cls,
         calobs: Calibrator | CalibrationObservation,
         s11_files: tp.PathLike | Sequence[tp.PathLike],
+        with_model_delay: bool = True,
         **kwargs,
     ):
         """Generate LabCalibration object from files.
@@ -77,6 +78,9 @@ class LabCalibration:
                 internal_switch=calobs.internal_switch,
                 **kwargs,
             )
+
+        if with_model_delay:
+            ant_s11 = ant_s11.with_model_delay()
 
         return cls(
             calobs=calobs,

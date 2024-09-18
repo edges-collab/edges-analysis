@@ -5,10 +5,10 @@ from __future__ import annotations
 import edges_cal.modelling as mdl
 import numpy as np
 from astropy import units as un
+from pygsdata import GSData, gsregister
 from scipy.ndimage import convolve1d
 
 from ..datamodel import add_model
-from ..gsdata import GSData, gsregister
 from . import averaging as avg
 
 
@@ -20,10 +20,9 @@ def freq_bin(
     debias: bool | None = None,
 ):
     """Bin on frequency axis."""
-    bins = avg.get_bin_edges(data.freq_array, resolution)
+    bins = avg.get_bin_edges(data.freqs, resolution)
     bins = [
-        (data.freq_array >= b[0]) & (data.freq_array <= b[1])
-        for b in zip(bins[:-1], bins[1:])
+        (data.freqs >= b[0]) & (data.freqs <= b[1]) for b in zip(bins[:-1], bins[1:])
     ]
 
     if debias is None:
@@ -47,8 +46,7 @@ def freq_bin(
         data=d,
         nsamples=w,
         flags={k: v for k, v in data.flags.items() if "freq" not in v.axes},
-        freq_array=np.array([np.mean(data.freq_array.value[b]) for b in bins])
-        * data.freq_array.unit,
+        freqs=np.array([np.mean(data.freqs.value[b]) for b in bins]) * data.freqs.unit,
         residuals=r,
     )
 
@@ -158,6 +156,6 @@ def gauss_smooth(
         nsamples=nsamples,
         residuals=sums if use_residuals else None,
         flags={k: v for k, v in data.flags.items() if "freq" not in v.axes},
-        freq_array=data.freq_array[decimate_at::decimate],
+        freqs=data.freqs[decimate_at::decimate],
         data_unit=data.data_unit,
     )

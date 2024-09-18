@@ -14,14 +14,14 @@ import scipy.interpolate as spi
 from astropy import units as u
 from edges_cal import FrequencyRange
 from edges_cal import modelling as mdl
-from edges_cal import types as tp
 from edges_cal.tools import vld_unit
+from edges_io import types as tp
 from hickleable import hickleable
+from pygsdata import coordinates as gscrd
 from tqdm import tqdm
 
 from . import _coordinates_alan as crda
 from . import const, sky_models
-from . import coordinates as coords
 from .calibration.loss import ground_loss
 from .config import config
 from .data import BEAM_PATH
@@ -735,6 +735,7 @@ class BeamFactor:
         if value.ndim == 1 and value.shape != (self.nlst,):
             raise ValueError(
                 "If Reference antenna temperature is 1D, it must have shape (nlst,)."
+                f"Got shape {value.shape} instead of {(self.nlst,)}"
             )
 
         if value.ndim == 2 and value.shape != (self.nlst, self.nfreq):
@@ -752,10 +753,12 @@ class BeamFactor:
     def at_lsts(self, lsts: np.ndarray, interp_kind: int | str = "cubic") -> BeamFactor:
         """Return a new BeamFactor at the given LSTs."""
         d = attrs.asdict(self)
+
         lst_like = [
             k
             for k, v in d.items()
-            if isinstance(v, np.ndarray) and v.shape[0] == self.nlst and v.ndim == 2
+            if isinstance(v, np.ndarray) and v.shape[0] == self.nlst
+            if k != "lsts"
         ]
 
         these_lsts = self.lsts % 24
@@ -767,7 +770,11 @@ class BeamFactor:
         these_lsts = np.append(these_lsts, these_lsts[0] + 24)
         out = {}
         for k in lst_like:
-            val = np.vstack((d[k], d[k][0]))
+            if d[k].ndim == 2:
+                val = np.vstack((d[k], d[k][0]))
+            elif d[k].ndim == 1:
+                val = np.concatenate((d[k], [d[k][0]]))
+
             out[k] = spi.interp1d(these_lsts, val, axis=0, kind=interp_kind)(use_lsts)
 
         return attrs.evolve(self, lsts=lsts, **out)
@@ -797,8 +804,10 @@ class BeamFactor:
         lst_like = [
             k
             for k, v in d.items()
-            if isinstance(v, np.ndarray) and v.shape[0] == self.nlst and v.ndim == 2
+            if isinstance(v, np.ndarray) and v.shape[0] == self.nlst  # and v.ndim == 2
+            if k != "lsts"
         ]
+
         out = {k: getattr(self, k)[mask] for k in lst_like}
         return attrs.evolve(self, lsts=these_lsts[mask], **out)
 
@@ -857,7 +866,7 @@ def sky_convolution_generator(
     normalize_beam: bool,
     beam_smoothing: bool,
     smoothing_model: mdl.Model,
-    location: apc.EarthLocation = const.edges_location,
+    location: apc.EarthLocation = const.KNOWN_TELESCOPES["edges-low"].location,
     ref_time: apt.Time = REFERENCE_TIME,
     interp_kind: Literal[
         "linear",
@@ -943,7 +952,7 @@ def sky_convolution_generator(
         ground_gain = np.ones(beam.frequency.size)
 
     # Get the local times corresponding to the given LSTs
-    times = coords.lsts_to_times(lsts, ref_time, location)
+    times = gscrd.lsts_to_times(lsts * u.hourangle, ref_time, location)
 
     beam_above_horizon = np.full(sky_model.coords.shape, np.nan)
     interpolators = {}
@@ -994,6 +1003,7 @@ def sky_convolution_generator(
             sky_map[~horizon_mask] = np.nan
 
             beam_above_horizon *= np.nan
+
             try:
                 beam_above_horizon[horizon_mask] = interpolators[freq_idx](
                     az_above_horizon, el_above_horizon
@@ -1019,6 +1029,7 @@ def sky_convolution_generator(
                 beam_above_horizon *= ground_gain[freq_idx] / solid_angle
 
             antenna_temperature_above_horizon = beam_above_horizon * sky_map
+
             yield (
                 lst_idx,
                 freq_idx,
@@ -1202,8 +1213,10 @@ def antenna_beam_factor(
     antenna_temperature_above_horizon = np.zeros((len(lsts), len(beam.frequency)))
     if sky_at_reference_frequency:
         convolution_ref = np.zeros((len(lsts),))
+
     else:
         convolution_ref = np.zeros((len(lsts), len(beam.frequency)))
+
     loss_fraction = np.zeros((len(lsts), len(beam.frequency)))
     beamsums = np.zeros((len(lsts), len(beam.frequency)))
     for (
@@ -1243,10 +1256,15 @@ def antenna_beam_factor(
 
         if freq_idx == indx_ref_freq:
             ref_bm = bm.copy()
+            ref_sky = sky.copy()
 
             # This updates once per LST, on the first frequency iteration
+            """
+            sky_at_reference_frequency is a toggle between Eq-4 and Eq-A1 from Sims+23
+
+            """
             if sky_at_reference_frequency:
-                convolution_ref[lst_idx] = np.nansum(ref_bm * sky) / npix_no_nan
+                convolution_ref[lst_idx] = np.nansum(ref_bm * ref_sky) / npix_no_nan
 
         if not sky_at_reference_frequency:
             convolution_ref[lst_idx, freq_idx] = np.nansum(ref_bm * sky) / npix_no_nan

@@ -242,9 +242,9 @@ def ground_loss_from_beam(beam, deg_step: float) -> np.ndarray:
             * beam.beam[k]
         )
 
-        gain_t[k] = integrate.trapz(p_in[k], dx=deg_step * np.pi / 180, axis=0)
+        gain_t[k] = integrate.trapezoid(p_in[k], dx=deg_step * np.pi / 180, axis=0)
 
-        gain[k] = integrate.trapz(gain_t[k], dx=deg_step * np.pi / 180, axis=0)
+        gain[k] = integrate.trapezoid(gain_t[k], dx=deg_step * np.pi / 180, axis=0)
         gain[k] = gain[k] / (4 * np.pi)
     return gain
 
