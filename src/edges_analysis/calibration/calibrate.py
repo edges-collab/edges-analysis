@@ -237,6 +237,7 @@ def get_labcal(
     s11_file_pattern: str | None = None,
     ignore_s11_files: list[str] | None = None,
     antenna_s11_n_terms: int = 15,
+    **kwargs,
 ):
     """Given an s11_path, return list of paths for each of the inputs."""
     # If we get four files, make sure they exist and pass them back
@@ -272,9 +273,7 @@ def get_labcal(
         )
 
         return LabCalibration.from_s11_files(
-            calobs=calobs,
-            s11_files=s11_files,
-            n_terms=antenna_s11_n_terms,
+            calobs=calobs, s11_files=s11_files, n_terms=antenna_s11_n_terms, **kwargs
         )
 
 
@@ -290,6 +289,7 @@ def apply_noise_wave_calibration(
     antenna_s11_n_terms: int = 15,
     tload: float | None = None,
     tns: float | None = None,
+    **kwargs,
 ) -> GSData:
     """Apply noise-wave calibration to data.
 
@@ -338,6 +338,7 @@ def apply_noise_wave_calibration(
         ignore_s11_files=ignore_s11_files,
         antenna_s11_n_terms=antenna_s11_n_terms,
         ant_s11_object=ant_s11_object,
+        **kwargs,
     )
 
     if data.data_unit == "uncalibrated_temp":
