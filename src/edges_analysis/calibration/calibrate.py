@@ -346,7 +346,7 @@ def apply_noise_wave_calibration(
     )
 
     if data.data_unit == "uncalibrated_temp":
-        q = (data.data - tload) / tns
+        q = (data.data - calobs.t_load) / calobs.t_load_ns
     else:
         q = data.data
     new_data = labcal.calibrate_q(q, freq=data.freqs)
