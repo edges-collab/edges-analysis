@@ -372,16 +372,12 @@ def apply_noise_wave_calibration(
 def apply_loss_correction(
     data: GSData,
     band: str,
+    ant_s11_object: Path | AntennaS11 | None = None,
     ambient_temp: np.ndarray | float | str = None,
     antenna_correction: tp.PathLike | None = ":",
     configuration="",
     balun_correction: tp.PathLike | None = ":",
     ground_correction: tp.PathLike | None | float = ":",
-    s11_path: str | Path | None = None,
-    calobs: Calibrator | Path = None,
-    s11_file_pattern: str = r"{y}_{jd}_{h}_*_input{input}.s1p",
-    ignore_s11_files: list[str] | None = None,
-    antenna_s11_n_terms: int = 15,
 ) -> GSData:
     """Apply antenna, balun and ground loss corrections.
 
@@ -446,17 +442,10 @@ def apply_loss_correction(
 
     # Balun+Connector Loss
     if balun_correction:
-        labcal = get_labcal(
-            calobs=calobs,
-            s11_path=s11_path,
-            band=band,
-            begin_time=data.times.min(),
-            s11_file_pattern=s11_file_pattern,
-            ignore_s11_files=ignore_s11_files,
-            antenna_s11_n_terms=antenna_s11_n_terms,
-        )
+        if not isinstance(ant_s11_object, AntennaS11):
+            ant_s11_object = AntennaS11.from_file(ant_s11_object)
         balun_gain, connector_gain = loss.balun_and_connector_loss(
-            band, f, labcal.antenna_s11_model(data.freqs)
+            band, f, ant_s11_object.s11_model(data.freqs)
         )
         gain *= balun_gain * connector_gain
 

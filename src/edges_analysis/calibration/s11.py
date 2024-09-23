@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 import attr
+import hickle
 import numpy as np
 from astropy import units as u
 from edges_cal import modelling as mdl
@@ -87,3 +88,9 @@ class AntennaS11(LoadS11):
             internal_switch=internal_switch,
             **kwargs,
         )
+
+    @classmethod
+    def from_file(cls, fname):
+        """Read AntennaS11 from HDF5 file."""
+        # For now, just hickle load, but let's change that later...
+        return hickle.load(fname)
