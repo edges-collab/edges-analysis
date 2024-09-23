@@ -24,6 +24,7 @@ from .. import coordinates as coords
 from ..config import config
 from . import loss
 from .labcal import LabCalibration
+from .s11 import AntennaS11
 
 
 @gsregister("calibrate")
@@ -231,7 +232,7 @@ def get_s11_paths(
 def get_labcal(
     calobs: Calibrator,
     s11_path: str | Path | tuple | list | None = None,
-    ant_s11_object: str | Path | None = None,
+    ant_s11_object: str | Path | AntennaS11 | None = None,
     band: str | None = None,
     begin_time: datetime | None = None,
     s11_file_pattern: str | None = None,
@@ -258,7 +259,10 @@ def get_labcal(
             calobs = Calibrator.from_old_calfile(calobs)
 
     if ant_s11_object is not None:
-        ants11 = hickle.load(ant_s11_object)
+        if not isinstance(ant_s11_object, AntennaS11):
+            ants11 = hickle.load(ant_s11_object)
+        else:
+            ants11 = ant_s11_object
         return LabCalibration(
             calobs=calobs,
             antenna_s11_model=ants11,
