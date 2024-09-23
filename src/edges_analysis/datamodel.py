@@ -1,8 +1,10 @@
 """Data models for GSData objects."""
+
 from __future__ import annotations
 
-import h5py
 import logging
+
+import h5py
 import numpy as np
 import yaml
 from attrs import define, evolve, field
@@ -56,7 +58,7 @@ class GSDataLinearModel:
         return self.parameters.shape[3]
 
     def get_residuals(self, gsdata: GSData) -> np.ndarray:
-        """Calculates the residuals of the model given the input GSData object."""
+        """Calculate the residuals of the model given the input GSData object."""
         d = gsdata.data.reshape((-1, gsdata.nfreqs))
         p = self.parameters.reshape((-1, self.nparams))
 
@@ -70,7 +72,7 @@ class GSDataLinearModel:
         return resids
 
     def get_spectra(self, gsdata: GSData) -> np.ndarray:
-        """Calculates the data spectra given the input GSData object."""
+        """Calculate the data spectra given the input GSData object."""
         d = gsdata.residuals.reshape((-1, gsdata.nfreqs))
         p = self.parameters.reshape((-1, self.nparams))
 
@@ -85,7 +87,7 @@ class GSDataLinearModel:
 
     @classmethod
     def from_gsdata(cls, model: mdl.Model, gsdata: GSData, **fit_kwargs) -> Self:
-        """Creates a GSDataModel from a GSData object."""
+        """Create a GSDataModel from a GSData object."""
         d = gsdata.data.reshape((-1, gsdata.nfreqs))
         w = gsdata.flagged_nsamples.reshape((-1, gsdata.nfreqs))
 
@@ -93,15 +95,15 @@ class GSDataLinearModel:
 
         params = np.zeros((gsdata.nloads * gsdata.npols * gsdata.ntimes, model.n_terms))
 
-        for i, (dd, ww) in enumerate(zip(d, w)):
-            try:
+        try:
+            for i, (dd, ww) in enumerate(zip(d, w)):
                 params[i] = xmodel.fit(
                     ydata=dd, weights=ww, **fit_kwargs
                 ).model_parameters
-            except np.linalg.LinAlgError as e:
-                raise ValueError(
-                    f"Linear algebra error: {e}.\nIndex={i}\ndata={dd}\nweights={ww}"
-                ) from e
+        except np.linalg.LinAlgError as e:
+            raise ValueError(
+                f"Linear algebra error: {e}.\nIndex={i}\ndata={dd}\nweights={ww}"
+            ) from e
 
         params.shape = (gsdata.nloads, gsdata.npols, gsdata.ntimes, model.n_terms)
         return cls(model=model, parameters=params)
@@ -145,7 +147,7 @@ def add_model(
             )
 
         with h5py.File(new.filename, "a") as fl:
-            if "residuals" in fl.keys():
+            if "residuals" in fl:
                 logger.warning(
                     f"Residuals already exists in {new.filename}, not overwriting."
                 )

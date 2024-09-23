@@ -1,13 +1,15 @@
 """Selection functions for GSData objects."""
+
 from __future__ import annotations
 
 import logging
-import numpy as np
 import warnings
+from typing import Union
+
+import numpy as np
 from astropy import units as un
 from astropy.coordinates import Longitude
 from astropy.time import Time
-from typing import Tuple, Union
 
 from .. import _coordinates_alan as crda
 from .gsdata import GSData
@@ -16,9 +18,9 @@ from .register import gsregister
 logger = logging.getLogger(__name__)
 
 FreqType = un.Quantity[un.MHz]
-FreqRangeType = Tuple[FreqType, FreqType]
+FreqRangeType = tuple[FreqType, FreqType]
 LSTType = Union[un.Quantity[un.hourangle], Longitude]
-LSTRangeType = Tuple[LSTType, LSTType]
+LSTRangeType = tuple[LSTType, LSTType]
 
 
 @gsregister("reduce")
@@ -29,9 +31,11 @@ def select_freqs(
     indx: np.ndarray | None = None,
     **kwargs,
 ) -> GSData:
-    """Selects a subset of the frequency channels."""
+    """Select a subset of the frequency channels."""
     if "range" in kwargs:
-        warnings.warn("The 'range' keyword is deprecated, use 'freq_range' instead.")
+        warnings.warn(
+            "The 'range' keyword is deprecated, use 'freq_range' instead.", stacklevel=2
+        )
         freq_range = kwargs.pop("range")
 
     if kwargs:
@@ -88,12 +92,14 @@ def select_times(
     load: int | str = "ant",
     **kwargs,
 ) -> GSData:
-    """Selects a subset of the times."""
+    """Select a subset of the times."""
     if data.in_lst:
         raise ValueError("LST-binned data cannot be selected on times.")
 
     if "range" in kwargs:
-        warnings.warn("The 'range' keyword is deprecated, use 'time_range' instead.")
+        warnings.warn(
+            "The 'range' keyword is deprecated, use 'time_range' instead.", stacklevel=2
+        )
         time_range = kwargs.pop("range")
 
     if kwargs:
@@ -135,9 +141,11 @@ def select_lsts(
     use_alan_coordinates: bool = False,
     **kwargs,
 ) -> GSData:
-    """Selects a subset of the times."""
+    """Select a subset of the times."""
     if "range" in kwargs:
-        warnings.warn("The 'range' keyword is deprecated, use 'lst_range' instead.")
+        warnings.warn(
+            "The 'range' keyword is deprecated, use 'lst_range' instead.", stacklevel=2
+        )
         lst_range = kwargs.pop("range")
 
     if kwargs:
@@ -217,6 +225,6 @@ def select_lsts(
 
 @gsregister("reduce")
 def prune_flagged_integrations(data: GSData, **kwargs) -> GSData:
-    """Removes integrations that are flagged for all freq-pol-loads."""
+    """Remove integrations that are flagged for all freq-pol-loads."""
     flg = np.all(data.complete_flags, axis=(0, 1, 3))
     return _mask_times(data, ~flg)

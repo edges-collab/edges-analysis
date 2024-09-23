@@ -1,4 +1,5 @@
 """Functions for binning GSData objects in frequency."""
+
 from __future__ import annotations
 
 import edges_cal.modelling as mdl
@@ -31,9 +32,8 @@ def freq_bin(
     if debias and model is None and data.residuals is None:
         raise ValueError("Cannot debias without data residuals or a model!")
 
-    if debias:
-        if data.residuals is None:
-            data = add_model(data, model=model, append_to_file=False)
+    if debias and data.residuals is None:
+        data = add_model(data, model=model, append_to_file=False)
 
     d, w, r = avg.bin_data(
         data=data.data,
@@ -58,7 +58,7 @@ def gauss_smooth(
     data: GSData,
     size: int,
     decimate: bool = True,
-    decimate_at: int = None,
+    decimate_at: int | None = None,
     flag_threshold: float = 0,
     maintain_flags: int = 0,
     use_residuals: bool | None = None,
@@ -115,18 +115,12 @@ def gauss_smooth(
     decimate = size if decimate else 1
 
     # mask data and flagged samples wherever it is NaN
-    if use_residuals:
-        dd = data.residuals
-    else:
-        dd = data.data
+    dd = data.residuals if use_residuals else data.data
 
     inflags = data.flagged_nsamples == 0 | np.isnan(dd)
 
     data_mask = np.where(np.isnan(dd), 0, dd)
-    if use_nsamples:
-        nsamples = data.flagged_nsamples
-    else:
-        nsamples = (~inflags).astype(float)
+    nsamples = data.flagged_nsamples if use_nsamples else (~inflags).astype(float)
 
     f_nsamples = np.where(np.isnan(dd), 0, nsamples)
 
@@ -145,7 +139,8 @@ def gauss_smooth(
 
     nsamples = nsamples[..., decimate_at::decimate]
 
-    nsamples[nsamples / data.nsamples.max() <= size * flag_threshold] = 0
+    maxn = np.max(data.nsamples, axis=-1)[:, :, :, None]
+    nsamples[nsamples / maxn <= size * flag_threshold] = 0
     mask = nsamples == 0
     sums[~mask] /= nsamples[~mask]
     sums[mask] = dd[..., decimate_at::decimate][mask]
@@ -156,10 +151,7 @@ def gauss_smooth(
         _nsamples[_nsamples == 0] = 0
         nsamples = _nsamples[..., decimate_at::decimate]
 
-    if use_residuals:
-        models = data.model[..., decimate_at::decimate]
-    else:
-        models = 0
+    models = data.model[..., decimate_at::decimate] if use_residuals else 0
 
     return data.update(
         data=sums + models,
@@ -169,28 +161,3 @@ def gauss_smooth(
         freq_array=data.freq_array[decimate_at::decimate],
         data_unit=data.data_unit,
     )
-
-
-# @gsregister("reduce")
-# def freq_bin(
-#     data: GSData,
-#     resolution: int | float,
-#     model: mdl.Model | None = None,
-# ) -> GSData:
-#     """Frequency binning that auto-selects which kind of binning to do.
-
-#     Parameters
-#     ----------
-#     data
-#         The :class:`GSData` object to bin.
-#     resolution
-#         The resolution of the binning in MHz or number of existing channels (if int).
-#     model
-#         A :class:`edges_cal.modelling.Model` object to use for de-biasing the mean. If
-#         the ``data`` object has a ``data_model`` defined, this will be used instead.
-#         If not provided, simple direct binning will be used.
-#     """
-#     if data.data_model is None and model is None:
-#         return freq_bin_direct(data, resolution)
-#     else:
-#         return freq_bin_with_models(data, resolution, model)

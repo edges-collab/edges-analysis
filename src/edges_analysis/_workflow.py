@@ -75,16 +75,19 @@ files it needs using the :meth:`ProgressFile.get_files_to_read_for_step()` metho
 described above. Since files that ahve already been processed will have valid outputs
 at subsequent steps, these will be ignored until they are required down the pipe.
 """
+
 from __future__ import annotations
+
+from collections.abc import Iterable
+from copy import deepcopy
+from logging import getLogger
+from pathlib import Path
+from typing import Any, Union
 
 import attrs
 import yaml
-from copy import deepcopy
 from frozendict import frozendict
 from jinja2 import Template
-from logging import getLogger
-from pathlib import Path
-from typing import Any, Iterable, Tuple, Union
 
 from .gsdata import GSDATA_PROCESSORS
 
@@ -121,7 +124,7 @@ class FileMapEntry:
         }
 
 
-_FileMapType = Tuple[Iterable[Pathy], Iterable[Pathy]]
+_FileMapType = tuple[Iterable[Pathy], Iterable[Pathy]]
 
 
 def _filemap_converter(
@@ -184,8 +187,6 @@ class FileMap:
 
 class WorkflowProgressError(RuntimeError):
     """Exception raised when the workflow and progress files are discrepant."""
-
-    pass
 
 
 @attrs.define()
@@ -318,12 +319,13 @@ class Workflow:
     @classmethod
     def read(cls, workflow: Pathy) -> Self:
         """Read a workflow from a file."""
-        with open(workflow) as fl:
+        workflow = Path(workflow)
+        with workflow.open("r") as fl:
             workflowd = yaml.load(fl, Loader=yaml.FullLoader)
 
         global_params = workflowd.pop("globals", {})
 
-        with open(workflow) as fl:
+        with workflow.open("r") as fl:
             txt = Template(fl.read())
             txt = txt.render(globals=global_params)
             workflow = yaml.load(txt, Loader=yaml.FullLoader)
@@ -342,7 +344,7 @@ class Workflow:
             step["filemap"] = step["filemap"].as_yamlable()
             step["params"] = dict(step["params"])  # convert frozendict to dict
 
-        with open(progressfile, "w") as fl:
+        with Path(progressfile).open("w") as fl:
             yaml.dump(progress, fl)
 
     def __getitem__(self, key: int | str):
@@ -421,7 +423,9 @@ class ProgressFile:
             raise ValueError(f"Progress file {value} does not exist.")
 
     @classmethod
-    def create(cls, progressfile: Pathy, workflow: Workflow, inputs: list[Path] = None):
+    def create(
+        cls, progressfile: Pathy, workflow: Workflow, inputs: list[Path] | None = None
+    ):
         """Create a new progressfile."""
         # Make a copy
         workflow = deepcopy(workflow)
@@ -443,7 +447,7 @@ class ProgressFile:
     @classmethod
     def read(cls, progressfile: Pathy) -> Self:
         """Read the progressfile."""
-        with open(progressfile) as openfile:
+        with Path(progressfile).open("r") as openfile:
             progress = yaml.load(openfile, Loader=yaml.FullLoader)
 
         progress = Workflow([WorkflowStep(**p) for p in progress])
@@ -544,8 +548,8 @@ class ProgressFile:
         """Update the progress file with new filemaps for a step."""
         try:
             step = self[key]
-        except (KeyError, ValueError):
-            raise ValueError(f"Progress file has no step called '{key}'")
+        except (KeyError, ValueError) as e:
+            raise ValueError(f"Progress file has no step called '{key}'") from e
 
         step.filemap.add(filemap)
 
@@ -555,7 +559,7 @@ class ProgressFile:
         self,
         workflow: Workflow,
         error: bool = True,
-        start: str = None,
+        start: str | None = None,
     ) -> Self:
         """Check the compatibility of the current steps with the progressfile."""
         start_changing = False

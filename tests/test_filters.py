@@ -1,13 +1,13 @@
+"""Test the filters module."""
+
 from __future__ import annotations
 
-import pytest
-
 import numpy as np
+import pytest
 from astropy import units as un
-from edges_cal import modelling as mdl
-
 from edges_analysis import GSData
 from edges_analysis.filters import filters, lst_model
+from edges_cal import modelling as mdl
 
 
 def test_aux_filter(mock):
@@ -58,10 +58,15 @@ def test_rms_filter(mock):
 def test_peak_power_filter(mock):
     run_filter_check(mock, filters.peak_power_filter)
 
-    with pytest.raises(ValueError):
+    with pytest.raises(
+        ValueError, match="The frequency range of the peak must be non-zero"
+    ):
         filters.peak_power_filter(data=mock, peak_freq_range=(60, 60))
 
-    with pytest.raises(ValueError):
+    with pytest.raises(
+        ValueError,
+        match="The freq range of the mean must be a tuple with first less than second",
+    ):
         filters.peak_power_filter(data=mock, mean_freq_range=(61, 60))
 
 
@@ -109,8 +114,9 @@ def test_rmsf_filter(gsd_ones: GSData):
         filters.rmsf_filter(gsd_ones.update(data_unit="power"), threshold=100)
 
     # Let data be perfect:
+    rng = np.random.default_rng()
     pl = np.outer(
-        1 + np.random.normal(scale=0.1, size=gsd_ones.ntimes * gsd_ones.npols),
+        1 + rng.normal(scale=0.1, size=gsd_ones.ntimes * gsd_ones.npols),
         (gsd_ones.freq_array / (75 * un.MHz)) ** -2.5,
     )
     pl.shape = gsd_ones.data.shape

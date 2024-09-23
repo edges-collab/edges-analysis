@@ -1,10 +1,12 @@
 """Register functions as processors for GSData objects."""
+
 from __future__ import annotations
 
-import attrs
 import datetime
 import functools
 from typing import Callable, Literal
+
+import attrs
 
 from .gsdata import GSData
 from .gsflag import GSFlag
@@ -19,7 +21,7 @@ class _Register:
     def __call__(
         self, data: GSData, *args, message: str = "", **kw
     ) -> GSData | list[GSData]:
-        now = datetime.datetime.now()
+        now = datetime.datetime.now()  # noqa: DTZ005
         newdata = self.func(data, *args, **kw)
 
         history = {
@@ -55,6 +57,8 @@ RegKind = Literal["gather", "calibrate", "filter", "reduce", "supplement"]
 
 @attrs.define()
 class gsregister:  # noqa: N801
+    """Decorator for registering functions as GSData processors."""
+
     kind: RegKind = attrs.field(
         validator=attrs.validators.in_(
             ["gather", "calibrate", "filter", "reduce", "supplement"]

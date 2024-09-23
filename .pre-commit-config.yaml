@@ -5,7 +5,7 @@ ci:
 
 repos:
 - repo: https://github.com/pre-commit/pre-commit-hooks
-  rev: v4.4.0
+  rev: v4.5.0
   hooks:
   - id: trailing-whitespace
   - id: check-added-large-files
@@ -20,32 +20,19 @@ repos:
   - id: requirements-txt-fixer
   - id: mixed-line-ending
     args: ['--fix=no']
-- repo: https://github.com/PyCQA/flake8
-  rev: 6.1.0
-  hooks:
-  - id: flake8
-    additional_dependencies:
-      - flake8-quotes
-      # - flake8-comprehensions
-      - flake8-builtins
-      # - flake8-eradicate
-      - pep8-naming
-      - flake8-pytest
-      - flake8-docstrings
-      - flake8-rst-docstrings
-      - flake8-rst
-#      - darglint
-      - flake8-copyright
 
-- repo: https://github.com/PyCQA/isort
-  rev: 5.12.0
-  hooks:
-  - id: isort
 
-- repo: https://github.com/psf/black
-  rev: 23.9.1
+
+- repo: https://github.com/astral-sh/ruff-pre-commit
+  # Ruff version.
+  rev: v0.1.4
   hooks:
-  - id: black
+    # Run the linter.
+    - id: ruff
+      args: [--fix]
+
+    # Run the formatter.
+    - id: ruff-format
 
 - repo: https://github.com/pre-commit/pygrep-hooks
   rev: v1.10.0
@@ -53,13 +40,10 @@ repos:
     - id: rst-backticks
     - id: rst-directive-colons
     - id: rst-inline-touching-normal
-- repo: https://github.com/asottile/pyupgrade
-  rev: v3.14.0
-  hooks:
-  -   id: pyupgrade
-      args: [--py38-plus]
+
+
 - repo: https://github.com/commitizen-tools/commitizen
-  rev: 3.10.0
+  rev: v3.14.1
   hooks:
     - id: commitizen
       stages: [commit-msg]

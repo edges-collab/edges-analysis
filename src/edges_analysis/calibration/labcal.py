@@ -1,15 +1,17 @@
 """Module providing routines for calibration of field data."""
+
 from __future__ import annotations
+
+from collections.abc import Sequence
+from functools import cached_property
+from pathlib import Path
+from typing import Callable
 
 import attr
 import numpy as np
-from cached_property import cached_property
-from edges_cal import CalibrationObservation, Calibrator
+from edges_cal import CalibrationObservation, Calibrator, s11
 from edges_cal import receiver_calibration_func as rcf
-from edges_cal import s11
 from edges_cal import types as tp
-from pathlib import Path
-from typing import Callable, Sequence
 
 from .s11 import AntennaS11
 
@@ -24,9 +26,9 @@ class LabCalibration:
     """Lab calibration of field data."""
 
     calobs: Calibrator = attr.ib(
-        converter=lambda x: x.to_calibrator()
-        if isinstance(x, CalibrationObservation)
-        else x
+        converter=lambda x: (
+            x.to_calibrator() if isinstance(x, CalibrationObservation) else x
+        )
     )
     _antenna_s11_model: AntennaS11 | Callable = attr.ib()
 

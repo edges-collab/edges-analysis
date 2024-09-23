@@ -1,20 +1,24 @@
 """CLI routines for edges-analysis."""
+
 from __future__ import annotations
 
-import click
+import functools
 import glob
-import h5py
 import inspect
 import logging
+import operator
 import os
-import psutil
 import shutil
 import time
+from collections import defaultdict
+from pathlib import Path
+
+import click
+import h5py
+import psutil
 import tqdm
 import yaml
-from collections import defaultdict
 from edges_io import io
-from pathlib import Path
 from pathos.multiprocessing import ProcessPool as Pool
 from read_acq.read_acq import ACQError
 from rich import box
@@ -60,7 +64,7 @@ def _get_files(pth: Path, filt=h5py.is_hdf5) -> list[Path]:
 
 
 def _file_filter(pth: Path):
-    return pth.suffix[1:] in io.Spectrum.supported_formats + ["gsh5"]
+    return pth.suffix[1:] in [*io.Spectrum.supported_formats, "gsh5"]
 
 
 @main.command()
@@ -165,7 +169,13 @@ def process(
 
     # Get input files (if any)
     path = [Path(p) for p in path]
-    input_files = sorted(set(sum((_get_files(p, filt=_file_filter) for p in path), [])))
+    input_files = sorted(
+        set(
+            functools.reduce(
+                operator.iadd, (_get_files(p, filt=_file_filter) for p in path), []
+            )
+        )
+    )
 
     # First, write out a progress file if it doesn't exist.
     if not progressfile.exists() or restart:
@@ -233,7 +243,7 @@ def process(
             for fl in files:
                 try:
                     data.append(GSData.from_file(fl, **step.params))
-                except ACQError as e:
+                except ACQError as e:  # noqa: PERF203
                     logger.warning(f"Could not read {fl}: {e}")
                     progress.remove_inputs([fl])
 

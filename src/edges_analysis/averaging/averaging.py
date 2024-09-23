@@ -9,6 +9,7 @@ for averaging, in order to make the average unbiased (given flags).
 from __future__ import annotations
 
 import contextlib
+
 import numpy as np
 from astropy import units as un
 from edges_cal import modelling as mdl
@@ -77,15 +78,9 @@ def get_bin_edges(
     if not np.allclose(diffs, dx, rtol=1e-3):
         raise ValueError("coords must be regularly spaced!")
 
-    if start is None:
-        start = coords[0] - dx / 2
-    else:
-        start = getattr(start, "value", start)
+    start = coords[0] - dx / 2 if start is None else getattr(start, "value", start)
 
-    if stop is None:
-        stop = coords[-1] + dx / 2
-    else:
-        stop = getattr(stop, "value", stop)
+    stop = coords[-1] + dx / 2 if stop is None else getattr(stop, "value", stop)
 
     if bins is None:
         return np.array([start, stop]) * unit
@@ -282,7 +277,7 @@ def bin_array_unbiased_irregular(
             this_wght = weights.take(mask, axis=axis)
 
             this_crd = np.swapaxes(
-                np.broadcast_to(coords[mask], init_shape + (len(coords[mask]),)),
+                np.broadcast_to(coords[mask], (*init_shape, len(coords[mask]))),
                 axis,
                 -1,
             )
@@ -550,7 +545,7 @@ def bin_spectrum_unbiased_regular(
 
 
 def weighted_sum(data, weights=None, normalize=False, axis=0):
-    """A careful weighted sum.
+    """Perform a careful weighted sum.
 
     Parameters
     ----------
@@ -587,7 +582,7 @@ def weighted_sum(data, weights=None, normalize=False, axis=0):
 
 
 def weighted_mean(data, weights=None, axis=0):
-    """A careful weighted mean where zero-weights don't error.
+    """Perform a careful weighted mean where zero-weights don't error.
 
     In this function, if the total weight is zero, np.nan is returned.
 
@@ -717,10 +712,7 @@ def bin_data(
     ell = (slice(None),) * axis
 
     for ibin, bn in enumerate(bins):
-        if weights is not None:
-            w = slice_along_axis(weights, bn, axis=axis)
-        else:
-            w = None
+        w = slice_along_axis(weights, bn, axis=axis) if weights is not None else None
 
         if residuals is not None:
             m = slice_along_axis(model, bn, axis=axis)
@@ -733,9 +725,9 @@ def bin_data(
             d = slice_along_axis(data, bn, axis=axis)
             d, w = weighted_mean(d, weights=w, axis=axis)
 
-        outd[ell + (ibin,)] = d
-        outw[ell + (ibin,)] = w
+        outd[(*ell, ibin)] = d
+        outw[(*ell, ibin)] = w
         if residuals is not None:
-            outr[ell + (ibin,)] = r
+            outr[(*ell, ibin)] = r
 
     return outd, outw, outr

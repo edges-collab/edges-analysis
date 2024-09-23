@@ -6,11 +6,13 @@ the C-code for a particular reason.
 They have essentially just been transcripted from the C-code, and keep the same names
 as functions there.
 """
+
 from __future__ import annotations
 
-import numpy as np
 from datetime import datetime
 from typing import Union
+
+import numpy as np
 
 Number = Union[float, np.ndarray]
 
@@ -98,10 +100,11 @@ def toyrday(secs: float) -> tuple[int, int, int, int, int]:
     sec -= minute * 60
     day += 1
 
-    if day == 366:  # fix for leap year
-        if not isleapyear(year):
-            day -= 365
-            year += 1
+    if day == 366 and not isleapyear(year):
+        # fix for alan
+        day -= 365
+        year += 1
+
     return year, int(day), int(hour), int(minute), int(sec)
 
 

@@ -1,5 +1,8 @@
 """Functions for doing LST binning on GSData objects."""
+
 from __future__ import annotations
+
+import logging
 
 import edges_cal.modelling as mdl
 import numpy as np
@@ -10,6 +13,8 @@ from .. import coordinates as crd
 from ..datamodel import add_model
 from ..gsdata import GSData, GSFlag, gsregister
 from .averaging import bin_data
+
+logger = logging.getLogger(__name__)
 
 
 def get_lst_bins(
@@ -36,7 +41,7 @@ def get_lst_bins(
 
     first_edge %= 24
 
-    while max_edge < first_edge:
+    while max_edge <= (first_edge + 1e-4):
         max_edge += 24
 
     bins = np.arange(first_edge, max_edge, binsize)
@@ -96,7 +101,7 @@ def lst_bin(
         max_edge = crd.gha2lst(max_edge)
 
     bins = get_lst_bins(binsize, first_edge, max_edge=max_edge)
-
+    logger.debug(f"Got LST bins: {bins}")
     if not data.in_lst:
         data = data.to_lsts()
 

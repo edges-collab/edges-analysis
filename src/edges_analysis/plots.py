@@ -1,4 +1,5 @@
 """Plotting utilities."""
+
 from __future__ import annotations
 
 import edges_cal.modelling as mdl
@@ -17,7 +18,7 @@ def plot_waterfall(
     data: GSData,
     load: int = 0,
     pol: int = 0,
-    which_flags: tuple[str] = None,
+    which_flags: tuple[str] | None = None,
     ignore_flags: tuple[str] = (),
     ax: plt.Axes | None = None,
     cbar: bool = True,
@@ -78,15 +79,21 @@ def plot_waterfall(
 
     times = data.time_array
 
+    if data.in_lst:
+        times = times.hour
+        times[times < times[0]] += 24
+        if times.max() > 36:
+            times -= 24
+
     img = ax.imshow(
         q,
         origin="lower",
         extent=(
             data.freq_array.min().to_value("MHz"),
             data.freq_array.max().to_value("MHz"),
-            0,
+            times.min() if data.in_lst else 0,
             (
-                (times.max() - times.min()).hour
+                times.max()
                 if data.in_lst
                 else (times.max() - times.min()).to_value("hour")
             ),
@@ -105,11 +112,10 @@ def plot_waterfall(
         else:
             ax.set_ylabel("Hours into Observation")
 
-    if title and not isinstance(title, str):
-        if not data.in_lst:
-            ax.set_title(
-                f"{data.get_initial_yearday()}. LST0={data.lst_array[0][0]:.2f}"
-            )
+    if title and not isinstance(title, str) and not data.in_lst:
+        ax.set_title(f"{data.get_initial_yearday()}. LST0={data.lst_array[0][0]:.2f}")
+    if title and isinstance(title, str):
+        ax.set_title(title)
 
     if cbar:
         cb = plt.colorbar(img, ax=ax)

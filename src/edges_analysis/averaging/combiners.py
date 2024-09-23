@@ -1,9 +1,15 @@
 """Functions for combining multiple GSData files/objects."""
+
 from __future__ import annotations
+
+import logging
+import warnings
 
 import numpy as np
 
 from ..gsdata import GSData, gsregister
+
+logger = logging.getLogger(__name__)
 
 
 @gsregister("gather")
@@ -49,7 +55,7 @@ def lst_average(
     else:
         nsamples = [1] * len(objs)
 
-    tot_nsamples = sum(nsamples)
+    tot_nsamples = np.nansum(nsamples, axis=0)
 
     if use_resids is None:
         use_resids = all(obj.residuals is not None for obj in objs)
@@ -58,13 +64,19 @@ def lst_average(
         raise ValueError("One or more of the input objects has no residuals.")
 
     if use_resids:
-        residuals = sum(obj.residuals * n for obj, n in zip(objs, nsamples))
+        residuals = np.nansum(
+            [obj.residuals * n for obj, n in zip(objs, nsamples)], axis=0
+        )
         residuals[tot_nsamples > 0] /= tot_nsamples[tot_nsamples > 0]
-        tot_model = sum(obj.model for obj in objs)
-        tot_model /= len(objs)
+        tot_model = np.nansum([obj.model for obj in objs], axis=0)
+        tot_obj = len(objs) - sum([np.all(np.isnan(obj.model), axis=3) for obj in objs])
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore")
+            tot_model /= (tot_obj)[..., None]
+        logger.debug(f"After combining sum(residuals): {np.nansum(residuals)}")
         final_data = tot_model + residuals
     else:
-        final_data = sum(obj.data * n for obj, n in zip(objs, nsamples))
+        final_data = np.nansum([obj.data * n for obj, n in zip(objs, nsamples)], axis=0)
         final_data[tot_nsamples > 0] /= tot_nsamples[tot_nsamples > 0]
         residuals = None
 
@@ -72,6 +84,7 @@ def lst_average(
         data=final_data,
         residuals=residuals,
         nsamples=tot_nsamples,
+        flags={},
     )
 
 
@@ -91,6 +104,6 @@ def lst_average_files(*files) -> GSData:
         try:
             obj = lst_average(obj, new)
         except ValueError as e:
-            raise ValueError(f"{str(e)}: File {i}") from e
+            raise ValueError(f"{e!s}: File {i}") from e
 
     return obj

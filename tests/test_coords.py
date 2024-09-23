@@ -1,6 +1,7 @@
+"""Test the coordinates module."""
+
 import numpy as np
 from astropy import time as apt
-
 from edges_analysis.coordinates import lsts_to_times
 
 

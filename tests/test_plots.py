@@ -1,24 +1,23 @@
+"""Test the plots module."""
+
 import pytest
-
-from edges_cal.modelling import LinLog
-
 from edges_analysis import plots
 from edges_analysis.gsdata import GSData
+from edges_cal.modelling import LinLog
 
 
 @pytest.mark.parametrize(
     "step",
-    [
-        "mock",
-        "mock_power",
-        "mock_with_model",
-    ],
+    ["mock", "mock_power", "mock_with_model", "mock_lstbinned"],
 )
-def test_plot_waterfall(step, request):
+@pytest.mark.parametrize("title", [None, "a title"])
+def test_plot_waterfall(step, title, request):
     """Test that plotting a waterfall doesn't crash."""
     astep = request.getfixturevalue(step)
     plots.plot_waterfall(
-        astep, attribute="residuals" if step == "mock_with_model" else "data"
+        astep,
+        attribute="residuals" if step == "mock_with_model" else "data",
+        title=title,
     )
 
 

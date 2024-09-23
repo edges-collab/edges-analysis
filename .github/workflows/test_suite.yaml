@@ -22,12 +22,12 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
-        python-version: [3.9, "3.10", "3.11"]
+        python-version: [3.9, "3.10", "3.11", "3.12"]
     steps:
       - uses: actions/checkout@master
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
       - name: Setup Environment
@@ -37,9 +37,11 @@ jobs:
       - name: Run Tests
         run: |
           python -m pytest --cov edges_analysis --cov-report xml:./coverage.xml
-      - uses: codecov/codecov-action@v3
+      - uses: codecov/codecov-action@v4
         if: matrix.os == 'ubuntu-latest' && success()
         with:
           file: ./coverage.xml #optional
           verbose: true
-          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}

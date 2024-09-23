@@ -1,8 +1,10 @@
 """Classes for defining the history of a GSData / GSFlag object."""
+
 from __future__ import annotations
 
-import astropy
 import datetime
+
+import astropy
 import edges_cal
 import edges_io
 import numpy as np
@@ -174,10 +176,10 @@ class History:
         if not isinstance(stamp, Stamp):
             raise TypeError("stamp must be a Stamp or a dictionary")
 
-        return evolve(self, stamps=self.stamps + (stamp,))
+        return evolve(self, stamps=(*self.stamps, stamp))
 
     def __len__(self):
-        """Returns the number of stamps."""
+        """Return the number of stamps."""
         return len(self.stamps)
 
     def __iter__(self):

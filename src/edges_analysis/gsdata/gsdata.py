@@ -5,23 +5,26 @@ The GSData object simplifies handling of radio astronomy data taken from a singl
 antenna, adding self-consistent metadata along with the data itself, and providing
 key methods for data selection, I/O, and analysis.
 """
+
 from __future__ import annotations
+
+import logging
+import warnings
+from collections.abc import Iterable
+from functools import cached_property
+from pathlib import Path
+from typing import Literal
 
 import astropy.units as un
 import h5py
 import hickle
-import logging
 import numpy as np
-import warnings
 from astropy.coordinates import EarthLocation, Longitude, UnknownSiteException
 from astropy.time import Time
 from attrs import converters as cnv
 from attrs import define, evolve, field
 from attrs import validators as vld
-from functools import cached_property
-from pathlib import Path
 from read_acq.read_acq import ACQError
-from typing import Iterable, Literal
 
 from .. import coordinates as crd
 from .attrs import npfield, timefield
@@ -88,9 +91,9 @@ class GSData:
     time_array: Time | Longitude = timefield(possible_ndims=(2,))
     telescope_location: EarthLocation = field(
         validator=vld.instance_of(EarthLocation),
-        converter=lambda x: EarthLocation(*x)
-        if not isinstance(x, EarthLocation)
-        else x,
+        converter=lambda x: (
+            EarthLocation(*x) if not isinstance(x, EarthLocation) else x
+        ),
     )
 
     loads: tuple[str] = field(converter=tuple)
@@ -294,7 +297,8 @@ class GSData:
     def resids(self) -> np.ndarray | None:
         """The residuals of the data."""
         warnings.warn(
-            DeprecationWarning("Use the 'residuals' attribute instead of 'resids'")
+            DeprecationWarning("Use the 'residuals' attribute instead of 'resids'"),
+            stacklevel=2,
         )
         return self.residuals
 
@@ -329,11 +333,11 @@ class GSData:
             except UnknownSiteException:
                 try:
                     telescope_location = KNOWN_LOCATIONS[telescope_location]
-                except KeyError:
+                except KeyError as e:
                     raise ValueError(
                         "telescope_location must be an EarthLocation or a known site, "
                         f"got {telescope_location}"
-                    )
+                    ) from e
 
         year, day, hour, minute = times[0, 0].to_value("yday", "date_hm").split(":")
         name = name.format(
@@ -369,7 +373,7 @@ class GSData:
 
     @classmethod
     def read_gsh5(cls, filename: str) -> GSData:
-        """Reads a GSH5 file and stores the data in the GSData object."""
+        """Read a GSH5 file and stores the data in the GSData object."""
         with h5py.File(filename, "r") as fl:
             data = fl["data"][:]
             lat, lon, alt = fl["telescope_location"][:]
@@ -388,7 +392,7 @@ class GSData:
             loads = fl.attrs["loads"].split("|")
             auxiliary_measurements = {
                 name: fl["auxiliary_measurements"][name][:]
-                for name in fl["auxiliary_measurements"].keys()
+                for name in fl["auxiliary_measurements"]
             }
             nsamples = fl["nsamples"][:]
 
@@ -403,10 +407,7 @@ class GSData:
 
             history = History.from_repr(fl.attrs["history"])
 
-            if "residuals" in fl:
-                residuals = fl["residuals"][()]
-            else:
-                residuals = None
+            residuals = fl["residuals"][()] if "residuals" in fl else None
 
         return cls(
             data=data,
@@ -425,7 +426,7 @@ class GSData:
         )
 
     def write_gsh5(self, filename: str) -> GSData:
-        """Writes the data in the GSData object to a GSH5 file."""
+        """Write the data in the GSData object to a GSH5 file."""
         with h5py.File(filename, "w") as fl:
             fl["data"] = self.data
             fl["freq_array"] = self.freq_array.to_value("MHz")
@@ -473,7 +474,7 @@ class GSData:
         return self.update(filename=filename)
 
     def update(self, **kwargs):
-        """Returns a new GSData object with updated attributes."""
+        """Return a new GSData object with updated attributes."""
         # If the user passes a single dictionary as history, append it.
         # Otherwise raise an error, unless it's not passed at all.
         history = kwargs.pop("history", None)
@@ -489,7 +490,7 @@ class GSData:
         return evolve(self, history=history, **kwargs)
 
     def __add__(self, other: GSData) -> GSData:
-        """Adds two GSData objects."""
+        """Add two GSData objects."""
         if not isinstance(other, GSData):
             raise TypeError("can only add GSData objects")
 
@@ -582,7 +583,7 @@ class GSData:
 
     def to_lsts(self) -> GSData:
         """
-        Converts the time array to LST.
+        Convert the time array to LST.
 
         Warning: this is an irreversible operation. You cannot go back to UTC after
         doing this. Furthermore, the auxiliary measurements will be lost.
@@ -594,18 +595,18 @@ class GSData:
 
     @property
     def in_lst(self) -> bool:
-        """Returns True if the time array is in LST."""
+        """Return True if the time array is in LST."""
         return isinstance(self.time_array, Longitude)
 
     @property
     def nflagging_ops(self) -> int:
-        """Returns the number of flagging operations."""
+        """Return the number of flagging operations."""
         return len(self.flags)
 
     def get_cumulative_flags(
         self, which_flags: tuple[str] | None = None, ignore_flags: tuple[str] = ()
     ) -> np.ndarray:
-        """Returns accumulated flags."""
+        """Return accumulated flags."""
         if which_flags is None:
             which_flags = self.flags.keys()
         elif not which_flags or not self.flags:
@@ -627,7 +628,7 @@ class GSData:
 
     @cached_property
     def complete_flags(self) -> np.ndarray:
-        """Returns the complete flag array."""
+        """Return the complete flag array."""
         return self.get_cumulative_flags()
 
     def get_flagged_nsamples(
@@ -643,14 +644,11 @@ class GSData:
         return self.get_flagged_nsamples()
 
     def get_initial_yearday(self, hours: bool = False, minutes: bool = False) -> str:
-        """Returns the year-day representation of the first time-sample in the data."""
+        """Return the year-day representation of the first time-sample in the data."""
         if minutes and not hours:
             raise ValueError("Cannot return minutes without hours")
 
-        if hours:
-            subfmt = "date_hm"
-        else:
-            subfmt = "date"
+        subfmt = "date_hm" if hours else "date"
 
         if self.in_lst:
             raise ValueError(
@@ -685,7 +683,7 @@ class GSData:
         if filt in self.flags:
             raise ValueError(f"Flags for filter '{filt}' already exist")
 
-        new = self.update(flags={**self.flags, **{filt: flags}})
+        new = self.update(flags={**self.flags, filt: flags})
 
         if append_to_file is None:
             append_to_file = new.filename is not None and new._file_appendable
@@ -705,12 +703,9 @@ class GSData:
 
                 flg_grp = fl["flags"]
 
-                if "names" not in flg_grp.attrs:
-                    names_in_file = ()
-                else:
-                    names_in_file = flg_grp.attrs["names"]
+                names_in_file = flg_grp.attrs.get("names", ())
 
-                new_flags = tuple(k for k in new.flags.keys() if k not in names_in_file)
+                new_flags = tuple(k for k in new.flags if k not in names_in_file)
 
                 for name in new_flags:
                     grp = flg_grp.create_group(name)
@@ -728,16 +723,16 @@ class GSData:
         return self.update(flags={k: v for k, v in self.flags.items() if k != filt})
 
     def time_iter(self) -> Iterable[tuple[slice, slice, slice]]:
-        """Returns an iterator over the time axis of data-shape arrays."""
+        """Return an iterator over the time axis of data-shape arrays."""
         for i in range(self.ntimes):
             yield (slice(None), slice(None), i, slice(None))
 
     def load_iter(self) -> Iterable[tuple[int]]:
-        """Returns an iterator over the load axis of data-shape arrays."""
+        """Return an iterator over the load axis of data-shape arrays."""
         for i in range(self.nloads):
             yield (i,)
 
     def freq_iter(self) -> Iterable[tuple[slice, slice, slice]]:
-        """Returns an iterator over the frequency axis of data-shape arrays."""
+        """Return an iterator over the frequency axis of data-shape arrays."""
         for i in range(self.nfreqs):
             yield (slice(None), slice(None), slice(None), i)
