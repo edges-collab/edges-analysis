@@ -5,17 +5,21 @@ from __future__ import annotations
 from pathlib import Path
 
 import attrs
+import hickle
 import numpy as np
 import numpy.typing as npt
 from astropy import units as un
 from edges_cal import ee, loss
+from edges_cal.s11 import LoadS11
 from scipy import integrate
 
 from ..config import config
 
 
 def low2_balun_connector_loss(
-    freq: un.Quantity[un.MHz], use_approx_eps0: bool = True
+    freq: un.Quantity[un.MHz],
+    ants11: np.ndarray | LoadS11 | str | Path,
+    use_approx_eps0: bool = True,
 ) -> npt.NDArray:
     """Obtain the balun and connector loss for the low-2 instrument on-site at MRO.
 
@@ -33,6 +37,19 @@ def low2_balun_connector_loss(
     if use_approx_eps0:
         connector = attrs.evolve(connector, eps0=8.854e-12 * un.F / un.m)
         balun = attrs.evolve(balun, eps0=8.854e-12 * un.F / un.m)
+
+    # Get the antenna s11
+    if isinstance(ants11, (str, Path)):
+        ants11 = hickle.load(ants11).s11_model(freq)
+    elif isinstance(ants11, LoadS11):
+        ants11 = ants11.s11_model(freq)
+
+    try:
+        ants11 = np.asarray(ants11)
+    except Exception as e:
+        raise ValueError(
+            "ants11 must be a numpy array or a LoadS11 instance or path."
+        ) from e
 
     mdl = loss.get_cable_loss_model([connector, balun])
     return mdl(freq)
