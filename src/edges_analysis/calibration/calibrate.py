@@ -9,20 +9,20 @@ from pathlib import Path
 
 import hickle
 import numpy as np
+from astropy import units as un
 from astropy.time import Time
 from edges_cal import modelling as mdl
+from edges_cal import types as tp
 from edges_cal.cal_coefficients import (
     CalFileReadError,
     CalibrationObservation,
     Calibrator,
 )
-from edges_io import types as tp
 from pygsdata import GSData, gsregister
 
-from .. import beams, const
+from .. import beams
 from .. import coordinates as coords
 from ..config import config
-from . import loss
 from .labcal import LabCalibration
 from .s11 import AntennaS11
 
@@ -371,98 +371,52 @@ def apply_noise_wave_calibration(
 @gsregister("calibrate")
 def apply_loss_correction(
     data: GSData,
-    band: str,
-    ant_s11_object: Path | AntennaS11 | None = None,
-    ambient_temp: np.ndarray | float | str = None,
-    antenna_correction: tp.PathLike | None = ":",
-    configuration="",
-    balun_correction: tp.PathLike | None = ":",
-    ground_correction: tp.PathLike | None | float = ":",
+    ambient_temp: tp.TemperatureType,
+    loss: np.ndarray | None = None,
+    loss_function: callable | None = None,
+    **kwargs,
 ) -> GSData:
-    """Apply antenna, balun and ground loss corrections.
+    """Apply a loss-correction to data.
 
     Parameters
     ----------
     data
-        Data to be calibrated.
-    band
-        The band that the data is in (eg. low, mid, high). Used for auto-finding loss
-        model files.
+        The GSData object on which to apply the loss-correction.
     ambient_temp
-        The ambient temperature of the data. If not provided, the temperature is looked
-        for in the data's ``auxiliary_measurements`` attribute, under the
-        ``ambient_temp`` key. You can specify this as a different key, or simply provide
-        a float or array (with the same length as the time dimension of the data).
-    antenna_correction
-        Path to file containing antenna loss correction coefficients. A file will be
-        located automatically if set to ``":"``.
-    configuration
-        The configuration of the antenna (eg. "45" for low-45).
-    balun_correction
-        Path to file containing balun loss correction coefficients. A file will be
-        located automatically if set to ``":"``.
-    ground_correction
-        Path to file containing ground loss correction coefficients. A file will be
-        located automatically if set to ``":"``.
-    s11_path
-        Path to directory containing Antenna S11 files.
-    s11_file_pattern
-        The format-pattern used to search for the S11 files in ``s11_path``.
-        This can be used to limit the search to a specific time.
-    ignore_s11_files
-        A list of S11 files to ignore in the search.
-    antenna_s11_n_terms
-        The number of terms to use in the antenna S11 model.
-    calobs
-        Calibrator object or path to file containing calibrator object.
+        The ambient temperature at which to apply the loss-correction.
+    loss
+        An array of losses, where the size of the array must be equal to the number
+        of frequencies in the data. If None, a loss function is used to compute
+        the losses.
+    loss_function
+        A function to compute the loss. The function must accept an array of frequencies
+        as its first argument, and may accept arbitrary other keyword arguments, which
+        will can be passed as kwargs to this function. Either this or loss must be
+        specified.
+
+    Notes
+    -----
+    Loss functions can be stacked, either by multiplying the losses before passing
+    them to this function, or by calling this function multiple times, once for each
+    loss.
     """
+    if loss is None and loss_function is None:
+        raise ValueError("Either loss or loss_function must be provided!")
+
+    if loss is None:
+        loss = loss_function(data.freqs, **kwargs)
+
     if data.data_unit != "temperature":
         raise ValueError("Data must be temperature to apply antenna loss correction!")
 
-    if ambient_temp is None:
-        ambient_temp = "ambient_temp"
+    a = ambient_temp.to_value(un.K)
+    spec = (data.data - np.outer(a, (1 - loss))) / loss
 
-    if isinstance(ambient_temp, str):
-        if ambient_temp not in data.auxiliary_measurements.keys():  # noqa: SIM118
-            raise ValueError(
-                f"Ambient temperature must be stored in data under {ambient_temp}!"
-            )
-        ambient_temp = data.auxiliary_measurements[ambient_temp]
-
-    if not hasattr(ambient_temp, "__len__"):
-        ambient_temp = ambient_temp * np.ones(data.ntimes)
-
-    f = data.freqs.to_value("MHz")
-    gain = np.ones_like(f)
-
-    if antenna_correction:
-        gain *= loss.antenna_loss(
-            antenna_correction, f, band=band, configuration=configuration
-        )
-
-    # Balun+Connector Loss
-    if balun_correction:
-        if not isinstance(ant_s11_object, AntennaS11):
-            ant_s11_object = AntennaS11.from_file(ant_s11_object)
-        balun_gain, connector_gain = loss.balun_and_connector_loss(
-            band, f, ant_s11_object.s11_model(data.freqs)
-        )
-        gain *= balun_gain * connector_gain
-
-    # Ground Loss
-    if isinstance(ground_correction, (str, Path)):
-        gain *= loss.ground_loss(
-            ground_correction, f, band=band, configuration=configuration
-        )
-    elif isinstance(ground_correction, float):
-        gain *= ground_correction
-
-    a = ambient_temp + const.absolute_zero if ambient_temp[0] < 200 else ambient_temp
-
-    spec = (data.data - np.outer(a, (1 - gain))) / gain
-    resids = data.residuals / gain if data.residuals is not None else None
-
-    return data.update(data=spec, data_unit="temperature", residuals=resids)
+    return data.update(
+        data=spec,
+        data_unit="temperature",
+        residuals=None,
+    )
 
 
 @gsregister("calibrate")
