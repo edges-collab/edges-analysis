@@ -52,7 +52,7 @@ def low2_balun_connector_loss(
         ) from e
 
     mdl = loss.get_cable_loss_model([connector, balun])
-    return mdl(freq)
+    return mdl(freq, ants11)
 
 
 def ground_loss_from_beam(beam, deg_step: float) -> np.ndarray:
