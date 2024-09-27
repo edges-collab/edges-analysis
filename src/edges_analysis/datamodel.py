@@ -173,10 +173,43 @@ class GSDataLinearModel:
 
 @gsregister("supplement")
 def add_model(
-    data: GSData, *, model: mdl.Model, append_to_file: bool = False
+    data: GSData,
+    *,
+    model: mdl.Model,
+    append_to_file: bool = False,
+    nsamples_strategy: Literal[
+        "flagged-nsamples",
+        "flags-only",
+        "flagged-nsamples-uniform",
+        "nsamples-only",
+    ] = "flagged-nsamples",
 ) -> GSData:
-    """Return a new GSData instance which contains a data model."""
-    data_model = GSDataLinearModel.from_gsdata(model, data)
+    """Return a new GSData instance which contains a data model.
+
+    Parameters
+    ----------
+    data
+        The GSData instance to add the model to.
+    model
+        The model to add/fit.
+    append_to_file
+        Whether to directly add the model residuals to the file that is attached to the
+        GSData object. DON'T DO THIS.
+    nsamples_strategy
+        The strategy to use when defining the weights of each sample. Defaults to
+        'flagged-nsamples'. The choices are:
+        - 'flagged-nsamples': Use the flagged nsamples (i.e. set nsamples at flagged
+            data to zero, otherwise use nsamples)
+        - 'flags-only': Use the flags only (i.e. set nsamples at flagged data to
+            zero, otherwise use 1)
+        - 'flagged-nsamples-uniform': Use the flagged nsamples (i.e. set nsamples at
+            flagged data to zero, and keep zero-samples as zero, otherwise use 1)
+        - 'nsamples-only': Use the nsamples only (don't set nsamples at flagged
+            data to zero)
+    """
+    data_model = GSDataLinearModel.from_gsdata(
+        model, data, nsamples_strategy=nsamples_strategy
+    )
     new = data.update(residuals=data_model.get_residuals(data))
 
     if append_to_file:
