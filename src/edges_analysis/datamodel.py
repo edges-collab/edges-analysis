@@ -129,14 +129,11 @@ class GSDataLinearModel:
 
 @gsregister("supplement")
 def add_model(
-    data: GSData, *, model: mdl.Model, append_to_file: bool | None = None
+    data: GSData, *, model: mdl.Model, append_to_file: bool = False
 ) -> GSData:
     """Return a new GSData instance which contains a data model."""
     data_model = GSDataLinearModel.from_gsdata(model, data)
     new = data.update(residuals=data_model.get_residuals(data))
-
-    if append_to_file is None:
-        append_to_file = new.filename is not None and new._file_appendable
 
     if append_to_file:
         if not new._file_appendable or new.filename is None:
