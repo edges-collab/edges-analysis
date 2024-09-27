@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Literal
 
 import h5py
 import numpy as np
@@ -86,11 +87,54 @@ class GSDataLinearModel:
         return spectra
 
     @classmethod
-    def from_gsdata(cls, model: mdl.Model, gsdata: GSData, **fit_kwargs) -> Self:
-        """Create a GSDataModel from a GSData object."""
-        d = gsdata.data.reshape((-1, gsdata.nfreqs))
-        w = gsdata.flagged_nsamples.reshape((-1, gsdata.nfreqs))
+    def from_gsdata(
+        cls,
+        model: mdl.Model,
+        gsdata: GSData,
+        nsamples_strategy: Literal[
+            "flagged-nsamples",
+            "flags-only",
+            "flagged-nsamples-uniform",
+            "nsamples-only",
+        ] = "flagged-nsamples",
+        **fit_kwargs,
+    ) -> Self:
+        """Create a GSDataModel from a GSData object.
 
+        Parameters
+        ----------
+        model
+            The model to use. Applied separately to each time, load and pol.
+        gsdata : GSData object
+            The GSData object to fit to.
+        nsamples_strategy : str, optional
+            The strategy to use when defining the weights of each sample. Defaults to
+            'flagged-nsamples'. The choices are:
+            - 'flagged-nsamples': Use the flagged nsamples (i.e. set nsamples at flagged
+               data to zero, otherwise use nsamples)
+            - 'flags-only': Use the flags only (i.e. set nsamples at flagged data to
+               zero, otherwise use 1)
+            - 'flagged-nsamples-uniform': Use the flagged nsamples (i.e. set nsamples at
+               flagged data to zero, and keep zero-samples as zero, otherwise use 1)
+            - 'nsamples-only': Use the nsamples only (don't set nsamples at flagged
+               data to zero)
+        """
+        shp = (-1, gsdata.nfreqs)
+        d = gsdata.data.reshape(shp)
+        if nsamples_strategy == "flagged-nsamples":
+            w = gsdata.flagged_nsamples.reshape(shp)
+        elif nsamples_strategy == "flags-only":
+            w = (~gsdata.complete_flags.reshape(shp)).astype(float)
+        elif nsamples_strategy == "flagged-nsamples-uniform":
+            w = (gsdata.flagged_nsamples > 0).astype(float).reshape(shp)
+        elif nsamples_strategy == "nsamples-only":
+            w = np.nsamples.reshape(shp)
+        else:
+            raise ValueError(
+                f"Invalid nsamples_strategy: {nsamples_strategy}. Must be one of "
+                "'flagged-nsamples', 'flags-only', 'flagged-nsamples-uniform' or "
+                "'nsamples-only'"
+            )
         xmodel = model.at(x=gsdata.freqs.to_value("MHz"))
 
         params = np.zeros((gsdata.nloads * gsdata.npols * gsdata.ntimes, model.n_terms))
