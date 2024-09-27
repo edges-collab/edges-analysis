@@ -18,9 +18,9 @@ from edges_cal.tools import vld_unit
 from edges_io import types as tp
 from hickleable import hickleable
 from pygsdata import coordinates as gscrd
+from read_acq import _coordinates as crda
 from tqdm import tqdm
 
-from . import _coordinates_alan as crda
 from . import const, sky_models
 from .calibration.loss import ground_loss
 from .config import config
