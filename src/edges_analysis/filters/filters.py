@@ -6,7 +6,7 @@ import functools
 import logging
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Literal
 
 import hickle
 import numpy as np
@@ -371,6 +371,12 @@ class _RFIFilterFactory:
         *,
         n_threads: int = 1,
         freq_range: tuple[float, float] = (40, 200),
+        nsamples_strategy: Literal[
+            "flagged-nsamples",
+            "flags-only",
+            "flagged-nsamples-uniform",
+            "nsamples-only",
+        ] = "flagged-nsamples",
         **kwargs,
     ):
         mask = (data.freqs.to_value("MHz") >= freq_range[0]) & (
@@ -379,12 +385,30 @@ class _RFIFilterFactory:
 
         flags = data.complete_flags
 
+        if nsamples_strategy == "flagged-nsamples":
+            wgt = data.nsamples
+            flg = data.complete_flags
+        elif nsamples_strategy == "flags-only":
+            flg = data.complete_flags
+            wgt = np.ones_like(data.data)
+        elif nsamples_strategy == "flagged-nsamples-uniform":
+            flg = (data.flagged_nsamples > 0).astype(float)
+            wgt = np.ones_like(data.data)
+        elif nsamples_strategy == "nsamples-only":
+            wgt = np.nsamples
+            flg = np.zeros_like(data.complete_flags)
+        else:
+            raise ValueError(
+                f"Invalid nsamples_strategy: {nsamples_strategy}. Must be one of "
+                "'flagged-nsamples', 'flags-only', 'flagged-nsamples-uniform' or "
+                "'nsamples-only'"
+            )
         out_flags = tools.run_xrfi(
             method=self.method,
             spectrum=data.data[..., mask],
             freq=data.freqs[mask].to_value("MHz"),
-            flags=flags[..., mask],
-            weights=data.nsamples[..., mask],
+            flags=flg,
+            weights=wgt,
             n_threads=n_threads,
             **kwargs,
         )
