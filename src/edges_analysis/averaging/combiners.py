@@ -89,7 +89,12 @@ def average_spectra(
         sum_data = np.sum(data.data * w, axis=-2)
         new_data = sum_data / ntot
 
-    return data.update(data=new_data, model=None, nsamples=ntot, flags={})
+    return data.update(
+        data=new_data,
+        residuals=mean_resids if use_resids else None,
+        nsamples=ntot,
+        flags={},
+    )
 
 
 @gsregister("gather")
