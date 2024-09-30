@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import warnings
+from typing import Literal
 
 import numpy as np
 from pygsdata import GSData, gsregister
@@ -23,6 +24,72 @@ def concatenate_gsdata(*objs) -> GSData:
         )
 
     return sum(objs)
+
+
+@gsregister("reduce")
+def average_spectra(
+    data: GSData,
+    nsamples_strategy: Literal[
+        "flagged-nsamples",
+        "flags-only",
+        "flagged-nsamples-uniform",
+        "nsamples-only",
+    ] = "flagged-nsamples",
+    use_resids: bool | None = None,
+):
+    """Average a GSData object over the time axis.
+
+    Parameters
+    ----------
+    data : GSData object
+        The data over which to average.
+    nsamples_strategy : str, optional
+        The strategy to use when defining the weights of each sample. Defaults to
+        'flagged-nsamples'. The choices are:
+        - 'flagged-nsamples': Use the flagged nsamples (i.e. set nsamples at flagged
+            data to zero, otherwise use nsamples)
+        - 'flags-only': Use the flags only (i.e. set nsamples at flagged data to
+            zero, otherwise use 1)
+        - 'flagged-nsamples-uniform': Use the flagged nsamples (i.e. set nsamples at
+            flagged data to zero, and keep zero-samples as zero, otherwise use 1)
+        - 'nsamples-only': Use the nsamples only (don't set nsamples at flagged
+            data to zero)
+    use_resids : bool, optional
+        Whether to average the residuals and add them back to the mean model, or simply
+        average the data directly.
+    """
+    if use_resids is None:
+        use_resids = data.residuals is not None
+
+    if use_resids and data.residuals is None:
+        raise ValueError("Cannot average residuals without a model.")
+
+    if nsamples_strategy == "flagged-nsamples":
+        w = data.flagged_nsamples
+    elif nsamples_strategy == "flags-only":
+        w = (~data.complete_flags).astype(float)
+    elif nsamples_strategy == "flagged-nsamples-uniform":
+        w = (data.flagged_nsamples > 0).astype(float)
+    elif nsamples_strategy == "nsamples-only":
+        w = np.nsamples
+    else:
+        raise ValueError(
+            f"Invalid nsamples_strategy: {nsamples_strategy}. Must be one of "
+            "'flagged-nsamples', 'flags-only', 'flagged-nsamples-uniform' or "
+            "'nsamples-only'"
+        )
+
+    ntot = np.sum(w, axis=-2)
+    if use_resids:
+        sum_resids = np.sum(data.residuals * w, axis=-2)
+        mean_resids = sum_resids / ntot
+        mean_model = np.mean(data.model, axis=-2)
+        new_data = mean_model + mean_resids
+    else:
+        sum_data = np.sum(data.data * w, axis=-2)
+        new_data = sum_data / ntot
+
+    return data.update(data=new_data, model=None, nsamples=ntot, flags={})
 
 
 @gsregister("gather")
