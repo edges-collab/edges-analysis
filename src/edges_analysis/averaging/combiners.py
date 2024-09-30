@@ -39,6 +39,7 @@ def average_over_times(
         "nsamples-only",
     ] = "flagged-nsamples",
     use_resids: bool | None = None,
+    fill_value: float = 0.0,
 ):
     """Average a GSData object over the time axis.
 
@@ -91,6 +92,8 @@ def average_over_times(
     else:
         sum_data = np.sum(data.data * w, axis=-2)
         new_data = sum_data / ntot
+
+    new_data[np.isnan(new_data)] = fill_value
 
     return data.update(
         data=new_data[:, :, None, :],
