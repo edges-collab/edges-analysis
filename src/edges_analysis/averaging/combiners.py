@@ -9,6 +9,7 @@ from typing import Literal
 import numpy as np
 from astropy import units as un
 from astropy.coordinates import Longitude
+from astropy.time import Time
 from pygsdata import GSData, gsregister
 
 logger = logging.getLogger(__name__)
@@ -95,12 +96,19 @@ def average_over_times(
         data=new_data[:, :, None, :],
         residuals=mean_resids[:, :, None, :] if use_resids else None,
         times=np.atleast_2d(np.mean(data.times)),
-        time_ranges=np.array([[[data.time_ranges.min(), data.time_ranges.max()]]]),
+        time_ranges=Time(
+            np.array([[[data.time_ranges.min().jd, data.time_ranges.max().jd]]]),
+            format="jd",
+        ),
+        lsts=Longitude(np.array([[np.mean(data.lsts.hour)]]) * un.hour),
         lst_ranges=Longitude(
             np.array([[[data.lst_ranges.hour.min(), data.lst_ranges.hour.max()]]])
             * un.hour
         ),
-        nsamples=ntot,
+        effective_integration_time=np.mean(data.effective_integration_time, axis=2)[
+            :, :, None
+        ],
+        nsamples=ntot[:, :, None],
         flags={},
     )
 
