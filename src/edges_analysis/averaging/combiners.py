@@ -7,6 +7,7 @@ import warnings
 from typing import Literal
 
 import numpy as np
+from astropy import units as un
 from astropy.coordinates import Longitude
 from pygsdata import GSData, gsregister
 
@@ -97,6 +98,7 @@ def average_over_times(
         time_ranges=np.array([[[data.time_ranges.min(), data.time_ranges.max()]]]),
         lst_ranges=Longitude(
             np.array([[[data.lst_ranges.hour.min(), data.lst_ranges.hour.max()]]])
+            * un.hour
         ),
         nsamples=ntot,
         flags={},
