@@ -7,6 +7,7 @@ import warnings
 from typing import Literal
 
 import numpy as np
+from astropy.coordinates import Longitude
 from pygsdata import GSData, gsregister
 
 logger = logging.getLogger(__name__)
@@ -27,7 +28,7 @@ def concatenate_gsdata(*objs) -> GSData:
 
 
 @gsregister("reduce")
-def average_spectra(
+def average_over_times(
     data: GSData,
     nsamples_strategy: Literal[
         "flagged-nsamples",
@@ -90,8 +91,13 @@ def average_spectra(
         new_data = sum_data / ntot
 
     return data.update(
-        data=new_data,
-        residuals=mean_resids if use_resids else None,
+        data=new_data[:, :, None, :],
+        residuals=mean_resids[:, :, None, :] if use_resids else None,
+        times=np.atleast_2d(np.mean(data.times)),
+        time_ranges=np.array([[[data.time_ranges.min(), data.time_ranges.max()]]]),
+        lst_ranges=Longitude(
+            np.array([[[data.lst_ranges.hour.min(), data.lst_ranges.hour.max()]]])
+        ),
         nsamples=ntot,
         flags={},
     )
