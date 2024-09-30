@@ -392,7 +392,7 @@ class _RFIFilterFactory:
             flg = data.complete_flags
             wgt = np.ones_like(data.data)
         elif nsamples_strategy == "flagged-nsamples-uniform":
-            flg = (data.flagged_nsamples > 0).astype(float)
+            flg = (data.flagged_nsamples == 0).astype(float)
             wgt = np.ones_like(data.data)
         elif nsamples_strategy == "nsamples-only":
             wgt = np.nsamples
