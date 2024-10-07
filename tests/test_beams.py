@@ -7,10 +7,11 @@ from pathlib import Path
 import numpy as np
 import pytest
 from astropy import units as u
+from edges_cal import modelling as mdl
+
 from edges_analysis import beams, const
 from edges_analysis.calibration import loss
 from edges_analysis.sky_models import ConstantIndex, Haslam408, Haslam408AllNoh
-from edges_cal import modelling as mdl
 
 
 def test_beam_from_feko():

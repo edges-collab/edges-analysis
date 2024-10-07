@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from edges_analysis.averaging import averaging
 from edges_cal import modelling as mdl
 from pytest_cases import fixture_ref as fxref
 from pytest_cases import parametrize
+
+from edges_analysis.averaging import averaging
 
 
 def test_get_binned_weights_1d():

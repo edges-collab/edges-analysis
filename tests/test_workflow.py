@@ -6,6 +6,7 @@ from shutil import copyfile
 
 import pytest
 import yaml
+
 from edges_analysis import _workflow as wf
 from edges_analysis.gsdata.select import select_freqs
 
@@ -86,7 +87,7 @@ class TestFileMapEntry:
         assert isinstance(entry.asdict()["outputs"][0], str)
 
 
-@pytest.fixture()
+@pytest.fixture
 def file_map() -> wf.FileMap:
     return wf.FileMap(
         (
@@ -183,12 +184,12 @@ class TestFileMap:
         assert loaded == yamlable
 
 
-@pytest.fixture()
+@pytest.fixture
 def empty_step() -> wf.WorkflowStep:
     return wf.WorkflowStep("convert")
 
 
-@pytest.fixture()
+@pytest.fixture
 def map_step(file_map: wf.FileMap) -> wf.WorkflowStep:
     return wf.WorkflowStep("convert", filemap=file_map)
 
@@ -321,7 +322,7 @@ class TestWorkflowStep:
         assert len(map_step.filemap) == 1
 
 
-@pytest.fixture()
+@pytest.fixture
 def simple_workflow_yaml(tmp_path) -> Path:
     out = tmp_path / "workflow.yaml"
 
@@ -338,7 +339,7 @@ def simple_workflow_yaml(tmp_path) -> Path:
     return out
 
 
-@pytest.fixture()
+@pytest.fixture
 def simple_workflow(simple_workflow_yaml) -> wf.Workflow:
     return wf.Workflow.read(simple_workflow_yaml)
 
@@ -394,7 +395,7 @@ class TestWorkflow:
         assert simple_workflow.index("select") == 2
 
 
-@pytest.fixture()
+@pytest.fixture
 def simple_progressfile_yaml(simple_workflow, tmp_path):
     out = tmp_path / "progressfile.yaml"
 
@@ -402,12 +403,12 @@ def simple_progressfile_yaml(simple_workflow, tmp_path):
     return out
 
 
-@pytest.fixture()
+@pytest.fixture
 def empty_progressfile(simple_progressfile_yaml) -> wf.ProgressFile:
     return wf.ProgressFile.read(simple_progressfile_yaml)
 
 
-@pytest.fixture()
+@pytest.fixture
 def progressfile(empty_progressfile) -> wf.ProgressFile:
     empty_progressfile.add_inputs(["input1.txt", "input2.txt"])
     return empty_progressfile
@@ -507,7 +508,7 @@ class TestProgressFile:
             assert not step.get_all_outputs()
 
 
-@pytest.fixture()
+@pytest.fixture
 def progressfile_extended(tmp_path):
     workflow = tmp_path / "workflow_extended.yaml"
 
