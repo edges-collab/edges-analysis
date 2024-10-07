@@ -4,6 +4,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+
 from edges_analysis.calibration import calibrate
 from edges_analysis.gsdata import GSData
 

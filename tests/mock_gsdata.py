@@ -3,12 +3,13 @@
 import numpy as np
 from astropy import units as un
 from astropy.time import Time
+from edges_cal.tools import FrequencyRange
+from scipy.interpolate import interp1d
+
 from edges_analysis.const import edges_location
 from edges_analysis.coordinates import lst2gha
 from edges_analysis.data import DATA_PATH
 from edges_analysis.gsdata import GSData
-from edges_cal.tools import FrequencyRange
-from scipy.interpolate import interp1d
 
 # To get "reasonable" data values, read the model of the haslam sky convolved with
 # the 30x30m ground-plane beam that we have in our data folder. This exact model is
