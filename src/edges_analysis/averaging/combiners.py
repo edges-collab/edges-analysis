@@ -70,12 +70,16 @@ def average_over_times(
 
     if nsamples_strategy == "flagged-nsamples":
         w = data.flagged_nsamples
+        _n = w
     elif nsamples_strategy == "flags-only":
         w = (~data.complete_flags).astype(float)
+        _n = data.flagged_nsamples
     elif nsamples_strategy == "flagged-nsamples-uniform":
         w = (data.flagged_nsamples > 0).astype(float)
+        _n = data.flagged_nsamples
     elif nsamples_strategy == "nsamples-only":
-        w = np.nsamples
+        w = data.nsamples
+        _n = w
     else:
         raise ValueError(
             f"Invalid nsamples_strategy: {nsamples_strategy}. Must be one of "
@@ -84,6 +88,8 @@ def average_over_times(
         )
 
     ntot = np.sum(w, axis=-2)
+    nsamples_tot = np.sum(_n, axis=-2)
+
     if use_resids:
         sum_resids = np.sum(data.residuals * w, axis=-2)
         mean_resids = sum_resids / ntot
@@ -111,7 +117,7 @@ def average_over_times(
         effective_integration_time=np.mean(data.effective_integration_time, axis=2)[
             :, :, None
         ],
-        nsamples=ntot[:, :, None],
+        nsamples=nsamples_tot[:, :, None],
         flags={},
     )
 

@@ -1,7 +1,12 @@
 """Test sky models."""
 
 import numpy as np
+from astropy import coordinates as apc
+from astropy import units as u
+from astropy.time import Time
+from edges_analysis import const
 from edges_analysis import sky_models as sm
+from read_acq import _coordinates as crda
 
 
 def test_haslam_accuracy():
@@ -18,3 +23,30 @@ def test_haslam_accuracy():
         / len(h2.temperature)
         < 0.02
     )
+
+
+def test_alan_coordinates_azel():
+    sky_model = sm.Haslam408AllNoh()
+    t = Time("2016-09-16T16:26:57", format="isot", scale="utc")
+    loc = const.KNOWN_TELESCOPES["edges-low-alan"].location
+
+    antenna_frame = apc.AltAz(location=loc, obstime=t)
+
+    c = sky_model.coords.reshape((512, 1024))
+    altaz = c.transform_to(antenna_frame)
+
+    seconds_since_ny1970 = 1474043217.33333333
+    gstt = crda.gst(seconds_since_ny1970)
+    mya_raa, mya_dec = crda.galactic_to_radec(
+        sky_model.coords.b.deg, sky_model.coords.l.deg
+    )
+    mya_azz, mya_el = crda.radec_azel(
+        gstt - mya_raa + loc.lon.rad, mya_dec, loc.lat.rad
+    )
+
+    my_azel = apc.SkyCoord(alt=mya_el * u.rad, az=mya_azz * u.rad, frame=antenna_frame)
+
+    diff = my_azel.separation(altaz.reshape(my_azel.shape))
+
+    # Pretty weak measure of "working": 1/4 of a degree different from astropy.
+    assert np.max(diff.deg) < 0.25

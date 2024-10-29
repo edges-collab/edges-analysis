@@ -43,7 +43,7 @@ class _GSDataFilter:
         self,
         data: Sequence[tp.PathLike | GSData],
         *,
-        write: bool | None = None,
+        write: bool = False,
         flag_id: str | None = None,
         **kwargs,
     ) -> GSData | Sequence[GSData]:
@@ -505,7 +505,7 @@ def _peak_power_filter(
     mean_freq_range: tuple[float, float] | None = None,
 ):
     """
-    Filter out whole integrations that have high power > 80 MHz.
+    Filter out whole integrations that have high power in a given frequency range.
 
     Parameters
     ----------
@@ -796,48 +796,79 @@ def power_percent_filter(
 
 @gsregister("filter")
 @gsdata_filter()
-def object_rms_filter(
+def rms_filter(
     data: GSData,
-    rms_threshold: float,
-    f_low: float = 0.0,
-    f_high: float = np.inf,
-    weighted: bool = False,
-    flagged: bool = True,
+    threshold: float,
+    freq_range: float = (0.0, np.inf),
+    nsamples_strategy: Literal[
+        "flagged-nsamples",
+        "flags-only",
+        "flagged-nsamples-uniform",
+        "nsamples-only",
+    ] = "flagged-nsamples",
     model: mdl.Model | None = None,
 ) -> bool:
-    """Filter integrations based on the rms of the residuals."""
-    if data.ntimes > 1:
-        raise ValueError(
-            "The object_rms_filter is meant to be performed on lst-averaged data"
-        )
+    """Filter integrations based on the rms of the residuals.
 
-    data = flag_frequency_ranges(
-        data=data, freq_ranges=[(f_low, f_high)], invert=True, write=False
-    )
+    Parameters
+    ----------
+    data : GSData
+        The data to be filtered.
+    threshold
+        The threshold at which to flag integrations.
+    freq_range : float, optional
+        The frequency range to use in calculating the RMS.
+    nsamples_strategy : str, optional
+        The strategy to use when defining the weights of each sample. Defaults to
+        'flagged-nsamples'. The choices are:
+        - 'flagged-nsamples': Use the flagged nsamples (i.e. set nsamples at flagged
+            data to zero, otherwise use nsamples)
+        - 'flags-only': Use the flags only (i.e. set nsamples at flagged data to
+            zero, otherwise use 1)
+        - 'flagged-nsamples-uniform': Use the flagged nsamples (i.e. set nsamples at
+            flagged data to zero, and keep zero-samples as zero, otherwise use 1)
+        - 'nsamples-only': Use the nsamples only (don't set nsamples at flagged
+            data to zero)
+    model : Model, optional
+        A model to be used to fit each integration. Not required if a model
+        already exists on the data.
+    """
+    if (
+        freq_range[0] * u.MHz > data.freqs.min()
+        or freq_range[1] * u.MHz < data.freqs.max()
+    ):
+        data = flag_frequency_ranges(data=data, freq_ranges=[freq_range], invert=True)
 
     if data.residuals is None:
         if model is None:
             raise ValueError(
                 "Cannot perform object rms filter without residuals or a model."
             )
-        data = add_model(data=data, model=model)
-    if weighted:
-        rms = np.sqrt(
-            averaging.weighted_mean(
-                data=data.residuals**2, weights=data.flagged_nsamples
-            )[0]
-        )
-    elif flagged:
-        flags = data.flagged_nsamples == 0
-        rms = np.sqrt(np.mean(data.residuals[~flags] ** 2))
-    else:
-        rms = np.sqrt(np.mean(data.residuals**2))
+        data = add_model(data=data, model=model, nsamples_strategy=nsamples_strategy)
 
-    logger.info(f"RMS for {data.name}: {rms:.2f} mK")
+    shp = (-1, data.nfreqs)
+    if nsamples_strategy == "flagged-nsamples":
+        w = data.flagged_nsamples.reshape(shp)
+    elif nsamples_strategy == "flags-only":
+        w = (~data.complete_flags.reshape(shp)).astype(float)
+    elif nsamples_strategy == "flagged-nsamples-uniform":
+        w = (data.flagged_nsamples > 0).astype(float).reshape(shp)
+    elif nsamples_strategy == "nsamples-only":
+        w = np.nsamples.reshape(shp)
+
+    rms = np.sqrt(
+        averaging.weighted_mean(
+            data=data.residuals.reshape(shp) ** 2, weights=w, axis=-1
+        )[0]
+    )
 
     return GSFlag(
-        flags=np.array([rms > rms_threshold]),
-        axes=("time",),
+        flags=(rms > threshold).reshape(data.data.shape[:-1]),
+        axes=(
+            "load",
+            "pol",
+            "time",
+        ),
     )
 
 
