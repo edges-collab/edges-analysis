@@ -917,4 +917,3 @@ def prune_flagged_integrations(data: GSData, **kwargs) -> GSData:
     """Remove integrations that are flagged for all freq-pol-loads."""
     flg = np.all(data.complete_flags, axis=(0, 1, 3))
     return _mask_times(data, ~flg)
-
