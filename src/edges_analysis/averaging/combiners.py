@@ -179,7 +179,7 @@ def lst_average(
     ntot = np.sum(w, axis=-2)
     tot_nsamples_all = np.array(_n)
 
-    print('tot_nsamples', tot_nsamples_all.shape)
+    print("tot_nsamples", tot_nsamples_all.shape)
 
     if use_resids:
         residuals = np.nansum(
