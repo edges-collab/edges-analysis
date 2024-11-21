@@ -126,6 +126,12 @@ def average_over_times(
 def lst_average(
     *objs,
     use_nsamples: bool = True,
+    nsamples_strategy: Literal[
+        "flagged-nsamples",
+        "flags-only",
+        "flagged-nsamples-uniform",
+        "nsamples-only",
+    ] = "flagged-nsamples",
     use_flags: bool = True,
     use_resids: bool | None = None,
 ) -> GSData:
@@ -139,11 +145,11 @@ def lst_average(
     if use_nsamples:
         nsamples = [obj.nsamples for obj in objs]
     elif use_flags:
-        nsamples = [(~(obj.nsamples == 0)).astype(float) for obj in objs]
+        nsamples = [(~(obj.flagged_nsamples == 0)).astype(float) for obj in objs]
     else:
         nsamples = [1] * len(objs)
 
-    tot_nsamples = np.nansum(nsamples, axis=0)
+    # tot_nsamples = np.nansum(nsamples, axis=0)
 
     if use_resids is None:
         use_resids = all(obj.residuals is not None for obj in objs)
@@ -151,13 +157,42 @@ def lst_average(
     if use_resids and any(obj.residuals is None for obj in objs):
         raise ValueError("One or more of the input objects has no residuals.")
 
+    if nsamples_strategy == "flagged-nsamples":
+        w = [obj.flagged_nsamples for obj in objs]
+        _n = w
+    elif nsamples_strategy == "flags-only":
+        w = [(~obj.complete_flags).astype(float) for obj in objs]
+        _n = [obj.flagged_nsamples for obj in objs]
+    elif nsamples_strategy == "flagged-nsamples-uniform":
+        w = [(obj.flagged_nsamples > 0).astype(float) for obj in objs]
+        _n = [obj.flagged_nsamples for obj in objs]
+    elif nsamples_strategy == "nsamples-only":
+        w = [obj.nsamples for obj in objs]
+        _n = w
+    else:
+        raise ValueError(
+            f"Invalid nsamples_strategy: {nsamples_strategy}. Must be one of "
+            "'flagged-nsamples', 'flags-only', 'flagged-nsamples-uniform' or "
+            "'nsamples-only'"
+        )
+
+    ntot = np.sum(w, axis=-2)
+    tot_nsamples_all = np.array(_n)
+
+    print('tot_nsamples', tot_nsamples_all.shape)
+
     if use_resids:
         residuals = np.nansum(
             [obj.residuals * n for obj, n in zip(objs, nsamples)], axis=0
         )
-        residuals[tot_nsamples > 0] /= tot_nsamples[tot_nsamples > 0]
+
+        for i in range(len(objs)):
+            tot_nsamples = tot_nsamples_all[i]
+
+            residuals[tot_nsamples > 0] /= tot_nsamples[tot_nsamples > 0]
         tot_model = np.nansum([obj.model for obj in objs], axis=0)
         tot_obj = len(objs) - sum([np.all(np.isnan(obj.model), axis=3) for obj in objs])
+
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore")
             tot_model /= (tot_obj)[..., None]
@@ -165,13 +200,13 @@ def lst_average(
         final_data = tot_model + residuals
     else:
         final_data = np.nansum([obj.data * n for obj, n in zip(objs, nsamples)], axis=0)
-        final_data[tot_nsamples > 0] /= tot_nsamples[tot_nsamples > 0]
+        final_data[tot_nsamples_all > 0] /= tot_nsamples_all[tot_nsamples_all > 0]
         residuals = None
 
     return objs[0].update(
         data=final_data,
         residuals=residuals,
-        nsamples=tot_nsamples,
+        nsamples=tot_nsamples_all[0],
         flags={},
     )
 
