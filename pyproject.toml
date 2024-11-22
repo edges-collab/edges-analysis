@@ -59,9 +59,6 @@ Issues = "https://github.com/edges-collab/edges-analysis/issues"
 Changelog = "https://github.com/edges-collab/edges-analysis/releases"
 
 
-[project.scripts]
-edges-analysis = "edges_analysis.cli:main"
-
 [project.optional-dependencies]
 testing = [
   "pytest",

@@ -4,152 +4,31 @@ from __future__ import annotations
 
 import logging
 import warnings
-from typing import Literal
 
 import numpy as np
-from astropy import units as un
-from astropy.coordinates import Longitude
-from astropy.time import Time
 from pygsdata import GSData, gsregister
+
+from .lstbin import NsamplesStrategy, get_weights_from_strategy
 
 logger = logging.getLogger(__name__)
 
 
 @gsregister("gather")
-def concatenate_gsdata(*objs) -> GSData:
-    """Concatenate a set of GSData objects over the time axis.
-
-    Note that to do this, each object must be in time-mode, not LST mode.
-    """
-    if any(obj.in_lst for obj in objs):
-        raise ValueError(
-            "One or more of the input GSData objects is in LST-mode. Can't concatenate."
-        )
-
-    return sum(objs)
-
-
-@gsregister("reduce")
-def average_over_times(
-    data: GSData,
-    nsamples_strategy: Literal[
-        "flagged-nsamples",
-        "flags-only",
-        "flagged-nsamples-uniform",
-        "nsamples-only",
-    ] = "flagged-nsamples",
-    use_resids: bool | None = None,
-    fill_value: float = 0.0,
-):
-    """Average a GSData object over the time axis.
-
-    Parameters
-    ----------
-    data : GSData object
-        The data over which to average.
-    nsamples_strategy : str, optional
-        The strategy to use when defining the weights of each sample. Defaults to
-        'flagged-nsamples'. The choices are:
-        - 'flagged-nsamples': Use the flagged nsamples (i.e. set nsamples at flagged
-            data to zero, otherwise use nsamples)
-        - 'flags-only': Use the flags only (i.e. set nsamples at flagged data to
-            zero, otherwise use 1)
-        - 'flagged-nsamples-uniform': Use the flagged nsamples (i.e. set nsamples at
-            flagged data to zero, and keep zero-samples as zero, otherwise use 1)
-        - 'nsamples-only': Use the nsamples only (don't set nsamples at flagged
-            data to zero)
-    use_resids : bool, optional
-        Whether to average the residuals and add them back to the mean model, or simply
-        average the data directly.
-    """
-    if use_resids is None:
-        use_resids = data.residuals is not None
-
-    if use_resids and data.residuals is None:
-        raise ValueError("Cannot average residuals without a model.")
-
-    if nsamples_strategy == "flagged-nsamples":
-        w = data.flagged_nsamples
-        _n = w
-    elif nsamples_strategy == "flags-only":
-        w = (~data.complete_flags).astype(float)
-        _n = data.flagged_nsamples
-    elif nsamples_strategy == "flagged-nsamples-uniform":
-        w = (data.flagged_nsamples > 0).astype(float)
-        _n = data.flagged_nsamples
-    elif nsamples_strategy == "nsamples-only":
-        w = data.nsamples
-        _n = w
-    else:
-        raise ValueError(
-            f"Invalid nsamples_strategy: {nsamples_strategy}. Must be one of "
-            "'flagged-nsamples', 'flags-only', 'flagged-nsamples-uniform' or "
-            "'nsamples-only'"
-        )
-
-    ntot = np.sum(w, axis=-2)
-    nsamples_tot = np.sum(_n, axis=-2)
-
-    if use_resids:
-        sum_resids = np.sum(data.residuals * w, axis=-2)
-        mean_resids = sum_resids / ntot
-        mean_model = np.mean(data.model, axis=-2)
-        new_data = mean_model + mean_resids
-    else:
-        sum_data = np.sum(data.data * w, axis=-2)
-        new_data = sum_data / ntot
-
-    new_data[np.isnan(new_data)] = fill_value
-
-    return data.update(
-        data=new_data[:, :, None, :],
-        residuals=mean_resids[:, :, None, :] if use_resids else None,
-        times=np.atleast_2d(np.mean(data.times)),
-        time_ranges=Time(
-            np.array([[[data.time_ranges.min().jd, data.time_ranges.max().jd]]]),
-            format="jd",
-        ),
-        lsts=Longitude(np.array([[np.mean(data.lsts.hour)]]) * un.hour),
-        lst_ranges=Longitude(
-            np.array([[[data.lst_ranges.hour.min(), data.lst_ranges.hour.max()]]])
-            * un.hour
-        ),
-        effective_integration_time=np.mean(data.effective_integration_time, axis=2)[
-            :, :, None
-        ],
-        nsamples=nsamples_tot[:, :, None],
-        flags={},
-    )
-
-
-@gsregister("gather")
-def lst_average(
-    *objs,
-    use_nsamples: bool = True,
-    nsamples_strategy: Literal[
-        "flagged-nsamples",
-        "flags-only",
-        "flagged-nsamples-uniform",
-        "nsamples-only",
-    ] = "flagged-nsamples",
-    use_flags: bool = True,
+def average_multiple_objects(
+    *objs: tuple[GSData],
+    nsamples_strategy: NsamplesStrategy = NsamplesStrategy.FLAGGED_NSAMPLES,
     use_resids: bool | None = None,
 ) -> GSData:
-    """Average multiple objects together using their flagged weights."""
-    if any(not np.allclose(obj.lsts.hour, objs[0].lsts.hour) for obj in objs[1:]):
-        raise ValueError("All objects must have the same LST array to average them.")
+    """Average multiple GSData objects together.
 
+    In this function, each GSData object is expected to have the same data shape, so
+    that each GSData object's data array can be directly summed together. This is most
+    useful when each file represents a single night's worth of data, and the time axis
+    represents different LSTs. However, the function is agnostic to the details
+    of what each object represents.
+    """
     if any(obj.data.shape != objs[0].data.shape for obj in objs[1:]):
         raise ValueError("All objects must have the same shape to average them.")
-
-    if use_nsamples:
-        nsamples = [obj.nsamples for obj in objs]
-    elif use_flags:
-        nsamples = [(~(obj.flagged_nsamples == 0)).astype(float) for obj in objs]
-    else:
-        nsamples = [1] * len(objs)
-
-    # tot_nsamples = np.nansum(nsamples, axis=0)
 
     if use_resids is None:
         use_resids = all(obj.residuals is not None for obj in objs)
@@ -157,61 +36,43 @@ def lst_average(
     if use_resids and any(obj.residuals is None for obj in objs):
         raise ValueError("One or more of the input objects has no residuals.")
 
-    if nsamples_strategy == "flagged-nsamples":
-        w = [obj.flagged_nsamples for obj in objs]
-        _n = w
-    elif nsamples_strategy == "flags-only":
-        w = [(~obj.complete_flags).astype(float) for obj in objs]
-        _n = [obj.flagged_nsamples for obj in objs]
-    elif nsamples_strategy == "flagged-nsamples-uniform":
-        w = [(obj.flagged_nsamples > 0).astype(float) for obj in objs]
-        _n = [obj.flagged_nsamples for obj in objs]
-    elif nsamples_strategy == "nsamples-only":
-        w = [obj.nsamples for obj in objs]
-        _n = w
-    else:
-        raise ValueError(
-            f"Invalid nsamples_strategy: {nsamples_strategy}. Must be one of "
-            "'flagged-nsamples', 'flags-only', 'flagged-nsamples-uniform' or "
-            "'nsamples-only'"
-        )
+    weights, nsamples = [], []
+    for obj in objs:
+        w, n = get_weights_from_strategy(obj, nsamples_strategy)
+        weights.append(w)
+        nsamples.append(n)
 
-    ntot = np.sum(w, axis=-2)
-    tot_nsamples_all = np.array(_n)
-
-    print("tot_nsamples", tot_nsamples_all.shape)
+    wtot = np.sum(weights, axis=0)
+    ntot = np.sum(nsamples, axis=0)
 
     if use_resids:
         residuals = np.nansum(
-            [obj.residuals * n for obj, n in zip(objs, nsamples)], axis=0
+            [obj.residuals * w for obj, w in zip(objs, weights)], axis=0
         )
 
-        for i in range(len(objs)):
-            tot_nsamples = tot_nsamples_all[i]
-
-            residuals[tot_nsamples > 0] /= tot_nsamples[tot_nsamples > 0]
+        residuals[wtot > 0] /= wtot[wtot > 0]
         tot_model = np.nansum([obj.model for obj in objs], axis=0)
-        tot_obj = len(objs) - sum([np.all(np.isnan(obj.model), axis=3) for obj in objs])
+        nobj = len(objs) - sum(np.all(np.isnan(obj.model), axis=3) for obj in objs)
 
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore")
-            tot_model /= (tot_obj)[..., None]
-        logger.debug(f"After combining sum(residuals): {np.nansum(residuals)}")
+            tot_model /= nobj
+
         final_data = tot_model + residuals
     else:
-        final_data = np.nansum([obj.data * n for obj, n in zip(objs, nsamples)], axis=0)
-        final_data[tot_nsamples_all > 0] /= tot_nsamples_all[tot_nsamples_all > 0]
+        final_data = np.nansum([obj.data * w for obj, w in zip(objs, weights)], axis=0)
+        final_data[wtot > 0] /= wtot[wtot > 0]
         residuals = None
 
     return objs[0].update(
         data=final_data,
         residuals=residuals,
-        nsamples=tot_nsamples_all[0],
+        nsamples=ntot,
         flags={},
     )
 
 
-def lst_average_files(*files) -> GSData:
+def average_files_pairwise(*files, **kwargs) -> GSData:
     """Average multiple files together using their flagged weights.
 
     This has better memory management than lst_average, as it only ever reads two
@@ -219,13 +80,10 @@ def lst_average_files(*files) -> GSData:
     """
     obj = GSData.from_file(files[0])
 
-    if not obj.in_lst:
-        raise ValueError("First input file is not in LST-mode. Cannot LST-average.")
-
     for i, fl in enumerate(files, start=1):
         new = GSData.from_file(fl)
         try:
-            obj = lst_average(obj, new)
+            obj = average_multiple_objects(obj, new, **kwargs)
         except ValueError as e:
             raise ValueError(f"{e!s}: File {i}") from e
 

@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from edges_analysis.averaging import averaging, combiners
+from edges_analysis.averaging import averaging
 from edges_cal import modelling as mdl
-from pygsdata import GSData
 from pytest_cases import fixture_ref as fxref
 from pytest_cases import parametrize
 
@@ -216,8 +215,3 @@ class TestBinArray:
         )
         assert np.all(mean == 1)
         assert np.all(wght == 4)
-
-
-def test_averaging_over_times(gsd_ones: GSData):
-    new = combiners.average_over_times(gsd_ones)
-    assert np.all(new.data == 1.0)

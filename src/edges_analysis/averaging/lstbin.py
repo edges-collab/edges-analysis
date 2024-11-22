@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import logging
 import warnings
+from enum import Enum
 
 import edges_cal.modelling as mdl
 import numpy as np
 import pygsdata.coordinates as crd
 from astropy import units as un
 from astropy.coordinates import Longitude
+from astropy.time import Time
 from pygsdata import GSData, GSFlag, gsregister
 from pygsdata.coordinates import lsts_to_times
 from pygsdata.utils import angle_centre
@@ -18,6 +20,59 @@ from ..datamodel import add_model
 from .averaging import bin_data
 
 logger = logging.getLogger(__name__)
+
+
+class NsamplesStrategy(Enum):
+    """An enumeration of strategies for computing Nsamples when combining data.
+
+    Note that generally the strategy can influence *two* components of the calculation:
+    firstly it influences how the data is _weighted_ when it is being averaged, and
+    secondly, it influences what the final number of samples are (i.e. the effective
+    variance of the data). Generally, these align, but some options specifically choose
+    different conventions for each of these choices.
+
+    Options
+    -------
+    FLAGGED_NSAMPLES
+        Combine the underlying Nsamples, setting any flagged data to have zero samples.
+    FLAGS_ONLY
+        Count each datum as one sample, but only if it is not flagged.
+    FLAGGED_NSAMPLES_UNIFORM
+        Give each data that is both unflagged and has at least one sample a weight of
+        unity in an average/model, but propagate nsamples using the full flagged
+        nsamples.
+    NSAMPLES_ONLY
+        Only consider the Nsamples of the underlying data, not any flags.
+    """
+
+    FLAGGED_NSAMPLES = 0
+    FLAGS_ONLY = 1
+    FLAGGED_NSAMPLES_UNIFORM = 2
+    NSAMPLES_ONLY = 3
+
+
+def get_weights_from_strategy(
+    data: GSData, strategy: NsamplesStrategy
+) -> tuple[np.ndarray, np.ndarray]:
+    """Compute weights and nsamples used for a particular strategy."""
+    if strategy == NsamplesStrategy.FLAGGED_NSAMPLES:
+        w = data.flagged_nsamples
+        n = w
+    elif strategy == NsamplesStrategy.FLAGS_ONLY:
+        w = (~data.complete_flags).astype(float)
+        n = data.flagged_nsamples
+    elif strategy == NsamplesStrategy.FLAGGED_NSAMPLES_UNIFORM:
+        w = (data.flagged_nsamples > 0).astype(float)
+        n = data.flagged_nsamples
+    elif strategy == NsamplesStrategy.NSAMPLES_ONLY:
+        w = data.nsamples
+        n = w
+    else:
+        raise ValueError(
+            f"Invalid nsamples_strategy: {strategy}. "
+            f"Must be a member of {NsamplesStrategy}"
+        )
+    return w, n
 
 
 def get_lst_bins(
@@ -52,6 +107,77 @@ def get_lst_bins(
         bins = np.append(bins, max_edge)
 
     return bins
+
+
+@gsregister("reduce")
+def average_over_times(
+    data: GSData,
+    nsamples_strategy: NsamplesStrategy = NsamplesStrategy.FLAGGED_NSAMPLES,
+    use_resids: bool | None = None,
+    fill_value: float = 0.0,
+):
+    """Average a GSData object over the time axis.
+
+    Parameters
+    ----------
+    data : GSData object
+        The data over which to average.
+    nsamples_strategy : str, optional
+        The strategy to use when defining the weights of each sample. Defaults to
+        'flagged-nsamples'. The choices are:
+        - 'flagged-nsamples': Use the flagged nsamples (i.e. set nsamples at flagged
+            data to zero, otherwise use nsamples)
+        - 'flags-only': Use the flags only (i.e. set nsamples at flagged data to
+            zero, otherwise use 1)
+        - 'flagged-nsamples-uniform': Use the flagged nsamples (i.e. set nsamples at
+            flagged data to zero, and keep zero-samples as zero, otherwise use 1)
+        - 'nsamples-only': Use the nsamples only (don't set nsamples at flagged
+            data to zero)
+    use_resids : bool, optional
+        Whether to average the residuals and add them back to the mean model, or simply
+        average the data directly.
+    """
+    if use_resids is None:
+        use_resids = data.residuals is not None
+
+    if use_resids and data.residuals is None:
+        raise ValueError("Cannot average residuals without a model.")
+
+    w, _n = get_weights_from_strategy(data, nsamples_strategy)
+
+    ntot = np.sum(w, axis=-2)
+    nsamples_tot = np.sum(_n, axis=-2)
+
+    if use_resids:
+        sum_resids = np.sum(data.residuals * w, axis=-2)
+        mean_resids = sum_resids / ntot
+        mean_model = np.mean(data.model, axis=-2)
+        new_data = mean_model + mean_resids
+    else:
+        sum_data = np.sum(data.data * w, axis=-2)
+        new_data = sum_data / ntot
+
+    new_data[np.isnan(new_data)] = fill_value
+
+    return data.update(
+        data=new_data[:, :, None, :],
+        residuals=mean_resids[:, :, None, :] if use_resids else None,
+        times=np.atleast_2d(np.mean(data.times)),
+        time_ranges=Time(
+            np.array([[[data.time_ranges.min().jd, data.time_ranges.max().jd]]]),
+            format="jd",
+        ),
+        lsts=Longitude(np.array([[np.mean(data.lsts.hour)]]) * un.hour),
+        lst_ranges=Longitude(
+            np.array([[[data.lst_ranges.hour.min(), data.lst_ranges.hour.max()]]])
+            * un.hour
+        ),
+        effective_integration_time=np.mean(data.effective_integration_time, axis=2)[
+            :, :, None
+        ],
+        nsamples=nsamples_tot[:, :, None],
+        flags={},
+    )
 
 
 @gsregister("reduce")
@@ -143,7 +269,7 @@ def lst_bin(
     flg = GSFlag(flags=np.all(np.isnan(spec), axis=(0, 1, 3)), axes=("time",))
 
     if data.auxiliary_measurements is not None:
-        warnings.warn("Auxiliary measurements cannot being binned!", stacklevel=2)
+        warnings.warn("Auxiliary measurements cannot be binned!", stacklevel=2)
 
     if data._effective_integration_time.size > 1:
         if np.unique(data._effective_integration_time).size > 1:

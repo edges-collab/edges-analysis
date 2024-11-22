@@ -946,7 +946,9 @@ def sky_convolution_generator(
 
     if ground_loss_file is not None:
         ground_gain = ground_loss(
-            ground_loss_file, band=beam.instrument, freq=beam.frequency.to_value("MHz")
+            filename=ground_loss_file,
+            band=beam.instrument,
+            freq=beam.frequency.to_value("MHz"),
         )
     else:
         ground_gain = np.ones(beam.frequency.size)

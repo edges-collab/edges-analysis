@@ -283,7 +283,7 @@ def get_gha_model_filter(
     """Obtain a filtering object from a given set of representative data.
 
     The algorithm here is to first intrinsically flag the input data, then fit a model
-    to it over GHA, which can be used to flag further files. The initial intrinsice
+    to it over GHA, which can be used to flag further files. The initial intrinsic
     flagging is *by default* done with the same model that will be applied to other
     data, but it can be done at a more fine-grained level, fitting to small chunks of
     GHA at a time with a lower-order model.
@@ -479,7 +479,7 @@ def apply_gha_model_filter(
                     "".join(f"{k}:{v!r}" for k, v in kwargs.items())
                     + ":".join(str(d) for d in data[:n_files])
                 )
-                out_file = Path(f"GHAModel_{aggregator!s}{hsh}")
+                out_file = Path(f"GHAModel_{hsh}")
             else:
                 out_file = Path(out_file)
 
