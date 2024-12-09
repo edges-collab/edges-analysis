@@ -497,7 +497,7 @@ def apply_beam_correction(
     new_data = data.data.copy()
 
     resids = data.residuals.copy() if data.residuals is not None else None
-    if use_beam_factor: 
+    if use_beam_factor:
         bf = np.loadtxt(beam_file)
         new_data*=bf[:,3]
         if resids is not None:
