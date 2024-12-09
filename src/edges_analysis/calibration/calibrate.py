@@ -500,6 +500,8 @@ def apply_beam_correction(
     if use_beam_factor: 
         bf = np.loadtxt(beam_file)
         new_data*=bf[:,3]
+        if resids is not None:
+            resids[:, :, i] *= bf
     else:
         for i, (lst0, lst1) in enumerate(data.lst_ranges[:, 0, :]):
             new = beam.between_lsts(lst0.hour, lst1.hour)
