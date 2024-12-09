@@ -497,9 +497,9 @@ def apply_beam_correction(
     new_data = data.data.copy()
 
     resids = data.residuals.copy() if data.residuals is not None else None
-    if use_beam_factor: 
+    if use_beam_factor:
         bf = np.loadtxt(beam_file)
-        new_data*=bf[:,3]
+        new_data *= bf[:, 3]
     else:
         for i, (lst0, lst1) in enumerate(data.lst_ranges[:, 0, :]):
             new = beam.between_lsts(lst0.hour, lst1.hour)
