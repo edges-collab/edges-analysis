@@ -1,9 +1,10 @@
 """Test the plots module."""
 
 import pytest
+from edges_cal.modelling import LinLog
+
 from edges_analysis import plots
 from edges_analysis.gsdata import GSData
-from edges_cal.modelling import LinLog
 
 
 @pytest.mark.parametrize(

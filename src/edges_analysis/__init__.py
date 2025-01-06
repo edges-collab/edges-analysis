@@ -11,16 +11,16 @@ finally:
     del version, PackageNotFoundError
 
 __all__ = [
+    "GSData",
     "averaging",
     "beams",
     "calibration",
+    "cfg",
     "coordinates",
     "filters",
+    "gsregister",
     "sky_models",
     "tools",
-    "GSData",
-    "gsregister",
-    "cfg",
 ]
 
 from . import averaging, beams, calibration, coordinates, filters, sky_models, tools
