@@ -145,8 +145,8 @@ def test_interp_methods():
 
 
 def test_beam_solid_angle():
-    beam = beams.Beam.from_ideal(delta_el=0.1, delta_az=0.1)
-    assert np.allclose(
+    beam = beams.Beam.from_ideal(f_low=50, f_high=60, delta_el=0.1, delta_az=0.1)
+    np.testing.assert_allclose(
         beam.get_beam_solid_angle(), 2 * np.pi, rtol=1e-3
     )  # half the sky
 

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import warnings
-from enum import Enum
 
 import edges_cal.modelling as mdl
 import numpy as np
@@ -18,67 +17,19 @@ from pygsdata.utils import angle_centre
 
 from ..datamodel import add_model
 from .averaging import bin_data
+from .utils import NsamplesStrategy, get_weights_from_strategy
 
 logger = logging.getLogger(__name__)
-
-
-class NsamplesStrategy(Enum):
-    """An enumeration of strategies for computing Nsamples when combining data.
-
-    Note that generally the strategy can influence *two* components of the calculation:
-    firstly it influences how the data is _weighted_ when it is being averaged, and
-    secondly, it influences what the final number of samples are (i.e. the effective
-    variance of the data). Generally, these align, but some options specifically choose
-    different conventions for each of these choices.
-
-    Options
-    -------
-    FLAGGED_NSAMPLES
-        Combine the underlying Nsamples, setting any flagged data to have zero samples.
-    FLAGS_ONLY
-        Count each datum as one sample, but only if it is not flagged.
-    FLAGGED_NSAMPLES_UNIFORM
-        Give each data that is both unflagged and has at least one sample a weight of
-        unity in an average/model, but propagate nsamples using the full flagged
-        nsamples.
-    NSAMPLES_ONLY
-        Only consider the Nsamples of the underlying data, not any flags.
-    """
-
-    FLAGGED_NSAMPLES = 0
-    FLAGS_ONLY = 1
-    FLAGGED_NSAMPLES_UNIFORM = 2
-    NSAMPLES_ONLY = 3
-
-
-def get_weights_from_strategy(
-    data: GSData, strategy: NsamplesStrategy
-) -> tuple[np.ndarray, np.ndarray]:
-    """Compute weights and nsamples used for a particular strategy."""
-    if strategy == NsamplesStrategy.FLAGGED_NSAMPLES:
-        w = data.flagged_nsamples
-        n = w
-    elif strategy == NsamplesStrategy.FLAGS_ONLY:
-        w = (~data.complete_flags).astype(float)
-        n = data.flagged_nsamples
-    elif strategy == NsamplesStrategy.FLAGGED_NSAMPLES_UNIFORM:
-        w = (data.flagged_nsamples > 0).astype(float)
-        n = data.flagged_nsamples
-    elif strategy == NsamplesStrategy.NSAMPLES_ONLY:
-        w = data.nsamples
-        n = w
-    else:
-        raise ValueError(
-            f"Invalid nsamples_strategy: {strategy}. "
-            f"Must be a member of {NsamplesStrategy}"
-        )
-    return w, n
 
 
 def get_lst_bins(
     binsize: float, first_edge: float = 0, max_edge: float = 24
 ) -> np.ndarray:
-    """Get the LST bins.
+    """Determine LST bins given a bin size and first edge, in hours.
+
+    This function will return equi-spaced bins starting at `first_edge` and with
+    width `binsize`. The last bin will be less than or equal to `max_edge`, after
+    accounting for wrapping at 24 hours.
 
     Parameters
     ----------
@@ -86,6 +37,8 @@ def get_lst_bins(
         The size of the bins in hours.
     first_edge
         The first edge of the first bin.
+    max_edge
+        The maximum edge of the last bin.
 
     Returns
     -------
@@ -115,27 +68,21 @@ def average_over_times(
     nsamples_strategy: NsamplesStrategy = NsamplesStrategy.FLAGGED_NSAMPLES,
     use_resids: bool | None = None,
     fill_value: float = 0.0,
-):
+) -> GSData:
     """Average a GSData object over the time axis.
 
     Parameters
     ----------
-    data : GSData object
+    data
         The data over which to average.
-    nsamples_strategy : str, optional
-        The strategy to use when defining the weights of each sample. Defaults to
-        'flagged-nsamples'. The choices are:
-        - 'flagged-nsamples': Use the flagged nsamples (i.e. set nsamples at flagged
-            data to zero, otherwise use nsamples)
-        - 'flags-only': Use the flags only (i.e. set nsamples at flagged data to
-            zero, otherwise use 1)
-        - 'flagged-nsamples-uniform': Use the flagged nsamples (i.e. set nsamples at
-            flagged data to zero, and keep zero-samples as zero, otherwise use 1)
-        - 'nsamples-only': Use the nsamples only (don't set nsamples at flagged
-            data to zero)
+    nsamples_strategy
+        The strategy to use when defining the weights of each sample. See
+        :class:`~edges_analysis.averaging.NsamplesStrategy` for more information.
     use_resids : bool, optional
         Whether to average the residuals and add them back to the mean model, or simply
         average the data directly.
+    fill_value : float
+        The value to impute when no data exists in a bin.
     """
     if use_resids is None:
         use_resids = data.residuals is not None
@@ -162,14 +109,28 @@ def average_over_times(
     return data.update(
         data=new_data[:, :, None, :],
         residuals=mean_resids[:, :, None, :] if use_resids else None,
-        times=np.atleast_2d(np.mean(data.times)),
+        times=np.atleast_2d(np.mean(data.times, axis=0)),
         time_ranges=Time(
-            np.array([[[data.time_ranges.min().jd, data.time_ranges.max().jd]]]),
+            np.array(
+                [
+                    [
+                        data.time_ranges.jd.min(axis=(0, 2)),
+                        data.time_ranges.jd.max(axis=(0, 2)),
+                    ]
+                ]
+            ).transpose((0, 2, 1)),
             format="jd",
         ),
-        lsts=Longitude(np.array([[np.mean(data.lsts.hour)]]) * un.hour),
+        lsts=Longitude(np.atleast_2d(np.mean(data.lsts.hour, axis=0)) * un.hour),
         lst_ranges=Longitude(
-            np.array([[[data.lst_ranges.hour.min(), data.lst_ranges.hour.max()]]])
+            np.array(
+                [
+                    [
+                        data.lst_ranges.hour.min(axis=(0, 2)),
+                        data.lst_ranges.hour.max(axis=(0, 2)),
+                    ]
+                ]
+            ).transpose((0, 2, 1))
             * un.hour
         ),
         effective_integration_time=np.mean(data.effective_integration_time, axis=2)[
@@ -177,6 +138,7 @@ def average_over_times(
         ],
         nsamples=nsamples_tot[:, :, None],
         flags={},
+        auxiliary_measurements=None,
     )
 
 
@@ -185,12 +147,12 @@ def lst_bin(
     data: GSData,
     binsize: float = 24.0,
     first_edge: float = 0.0,
-    model: mdl.Model | None = None,
     max_edge: float = 24.0,
+    model: mdl.Model | None = None,
     in_gha: bool = False,
     use_model_residuals: bool | None = None,
 ):
-    """LST-bin by using model information to de-bias the mean.
+    """Average data within bins of LST.
 
     Parameters
     ----------
@@ -200,6 +162,8 @@ def lst_bin(
         The size of the LST bins in hours.
     first_edge
         The first edge of the first bin in hours.
+    max_edge
+        The maximum edge of the last bin in hours, see :func:`get_lst_bins`.
     model
         A :class:`edges_cal.modelling.Model` object to use for de-biasing the mean.
         If ``data`` already has a ``data_model`` defined, this argument is ignored.

@@ -10,7 +10,7 @@ from pygsdata import GSData
 from pygsdata.select import select_lsts
 
 from .averaging import averaging
-from .averaging.lstbin import lst_bin
+from .averaging.lstbin import average_over_times
 from .datamodel import add_model
 
 
@@ -59,7 +59,7 @@ def plot_time_average(
 
     if lst_min > 0 or lst_max < 24:
         data = select_lsts(data, lst_range=(lst_min, lst_max))
-    data = lst_bin(data, binsize=24.0)
+    data = average_over_times(data)
 
     q = getattr(data, attribute)
     if not hasattr(q, "shape") or q.shape != data.data.shape:

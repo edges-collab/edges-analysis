@@ -40,7 +40,7 @@ def utc2lst(utc_time_array, longitude):
     # necessary approximation to compute sidereal time
     t.delta_ut1_utc = 0
 
-    return t.sidereal_time("apparent", str(longitude) + "d", model="IAU2006A").value
+    return t.sidereal_time("apparent", f"{longitude!s}d", model="IAU2006A").value
 
 
 def f2z(fe: float | np.ndarray) -> float | np.ndarray:

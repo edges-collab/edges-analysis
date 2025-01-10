@@ -128,7 +128,7 @@ class GSDataLinearModel:
         elif nsamples_strategy == "flagged-nsamples-uniform":
             w = (gsdata.flagged_nsamples > 0).astype(float).reshape(shp)
         elif nsamples_strategy == "nsamples-only":
-            w = np.nsamples.reshape(shp)
+            w = gsdata.nsamples.reshape(shp)
         else:
             raise ValueError(
                 f"Invalid nsamples_strategy: {nsamples_strategy}. Must be one of "

@@ -4,6 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 from subprocess import run
 
+import matplotlib as mpl
 import numpy as np
 import pytest
 from astropy import units as un
@@ -30,6 +31,12 @@ def invoke(cmd, args, **kwargs):
         raise result.exc_info[1]
 
     return result
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _set_mpl_backend():
+    """Set the matplotlib backend for faster tests."""
+    mpl.use("pdf")
 
 
 @pytest.fixture(scope="session")
@@ -83,12 +90,12 @@ def workflow_dir(tmp_path_factory) -> Path:
 
 @pytest.fixture(scope="session")
 def calpath(integration_test_data: Path) -> Path:
-    return DATA_PATH / "calfile_v0_hickled.h5"
+    return DATA_PATH / "specal.h5"  # "calfile_v0_hickled.h5"
 
 
 @pytest.fixture(scope="session")
 def s11path(integration_test_data: Path) -> Path:
-    return integration_test_data / "s11"
+    return DATA_PATH / "2015_ants11_modelled_redone.h5"
 
 
 @pytest.fixture(scope="session")
@@ -130,7 +137,9 @@ def gsd_ones_power():
 
 @pytest.fixture(scope="session")
 def mock() -> GSData:
-    return create_mock_edges_data(add_noise=True)
+    data = create_mock_edges_data(add_noise=True)
+    print(data.ntimes, data.data.shape)
+    return data
 
 
 @pytest.fixture(scope="session")

@@ -141,8 +141,8 @@ def ground_loss(
             # Use the built-in loss files
             fl = "ground"
             if configuration:
-                fl += "_" + configuration
-            filename = Path(__file__).parent / "data" / "loss" / band / (fl + ".txt")
+                fl += f"_{configuration}"
+            filename = Path(__file__).parent / "data" / "loss" / band / f"{fl}.txt"
             if not filename.exists():
                 return np.ones_like(freq)
         else:
@@ -185,8 +185,8 @@ def antenna_loss(
             # Use the built-in loss files
             fl = "antenna"
             if configuration:
-                fl += "_" + configuration
-            filename = Path(__file__).parent / "data" / "loss" / band / (fl + ".txt")
+                fl += f"_{configuration}"
+            filename = Path(__file__).parent / "data" / "loss" / band / f"{fl}.txt"
             if not filename.exists():
                 return np.zeros_like(freq)
         else:

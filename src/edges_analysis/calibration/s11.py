@@ -1,4 +1,4 @@
-"""Corrections for S11 measurements."""
+"""Module defining an AntennaS11 object."""
 
 from __future__ import annotations
 

@@ -13,8 +13,7 @@ from astropy import units as un
 from astropy.time import Time
 from edges_cal import modelling as mdl
 from edges_cal import types as tp
-from edges_cal.cal_coefficients import (
-    CalFileReadError,
+from edges_cal.calobs import (
     CalibrationObservation,
     Calibrator,
 )
@@ -29,7 +28,13 @@ from .s11 import AntennaS11
 
 @gsregister("calibrate")
 def dicke_calibration(data: GSData) -> GSData:
-    """Calibrate field data using the Dicke switch data."""
+    """Calibrate field data using the Dicke switch data.
+
+    Assumes that the data has the three loads "ant", "internal_load" and
+    "internal_load_plus_noise_source". The data is calibrated using the
+    Dicke switch model (i.e.
+    ``(ant - internal_load)/(internal_load_plus_noise_source - internal_load)``).
+    """
     iant = data.loads.index("ant")
     iload = data.loads.index("internal_load")
     ilns = data.loads.index("internal_load_plus_noise_source")
@@ -239,8 +244,30 @@ def get_labcal(
     ignore_s11_files: list[str] | None = None,
     antenna_s11_n_terms: int = 15,
     **kwargs,
-):
-    """Given an s11_path, return list of paths for each of the inputs."""
+) -> LabCalibration:
+    """Get a LabCalibration object from the given inputs.
+
+    Parameters
+    ----------
+    calobs : Calibrator or str or Path or hickle file
+        The calibrator object to use for calibration.
+    s11_path : str or Path or tuple or list, optional
+        The path to the S11 files. If a tuple or list, it must contain four paths to
+        the four S11 files. If None, the S11 files will be searched for in the default
+        directory.
+    band : str, optional
+        The band that the data is in (eg. low, mid, high). Used for auto-finding S11
+        files.
+    begin_time : datetime, optional
+        The time at which the data begins. Used for auto-finding S11 files.
+    s11_file_pattern : str, optional
+        The format-pattern used to search for the S11 files in ``s11_path``. This can be
+        used to limit the search to a specific time.
+    ignore_s11_files : list, optional
+        A list of S11 files to ignore in the search.
+    antenna_s11_n_terms : int, optional
+        The number of terms to use in the antenna S11 model
+    """
     # If we get four files, make sure they exist and pass them back
     if s11_path is None and ant_s11_object is None:
         raise ValueError("Must provide either s11_path or ant_s11_object.")
@@ -253,10 +280,7 @@ def get_labcal(
         except Exception:
             pass
     if not isinstance(calobs, Calibrator):
-        try:
-            calobs = Calibrator.from_calfile(calobs)
-        except CalFileReadError:
-            calobs = Calibrator.from_old_calfile(calobs)
+        calobs = Calibrator.from_calfile(calobs)
 
     if ant_s11_object is not None:
         if not isinstance(ant_s11_object, AntennaS11):

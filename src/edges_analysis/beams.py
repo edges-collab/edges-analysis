@@ -36,7 +36,25 @@ REFERENCE_TIME = apt.Time("2014-01-01T09:39:42", location=const.edges_location)
 
 @attrs.define(kw_only=True)
 class Beam:
-    """A beam model object."""
+    """A beam model object.
+
+    Attributes
+    ----------
+    beam
+        The beam model, as a function of frequency, elevation, and azimuth.
+    frequency
+        The frequencies at which the beam is defined.
+    elevation
+        The elevation angles at which the beam is defined.
+    azimuth
+        The azimuth angles at which the beam is defined.
+    simulator
+        The simulator used to generate the beam.
+    instrument
+        The instrument for which the beam is defined.
+    raw_file
+        The path to the raw file from which the beam was read.
+    """
 
     beam: np.ndarray = attrs.field()
     frequency: tp.FreqType = attrs.field(validator=vld_unit("frequency"))
@@ -117,7 +135,15 @@ class Beam:
 
     @classmethod
     def from_wipld(cls, path: tp.PathLike, az_antenna_axis: float = 0) -> Beam:
-        """Read a WIPL-D beam."""
+        """Read a WIPL-D beam.
+
+        Parameters
+        ----------
+        path
+            The path to the file.
+        az_antenna_axis
+            The azimuth of the primary antenna axis, in degrees.
+        """
         with Path(path).open("r") as fn:
             file_length = 0
             number_of_frequencies = 0
@@ -229,14 +255,6 @@ class Beam:
             The path to the file.
         az_antenna_axis
             The azimuth of the primary antenna axis, in degrees.
-
-        Returns
-        -------
-        beam_maps
-            A ``(Nfreq, Nel, Naz)`` array giving values of the beam. Note that elevation
-            and azimuth are always in 1-degree increments.
-        freq
-            The frequencies at which the beam is defined.
         """
         filename = Path(path)
 
@@ -421,13 +439,19 @@ class Beam:
     @classmethod
     def get_beam_path(cls, band: str, kind: str | None = None) -> Path:
         """Get a standard path to a beam file."""
-        pth = BEAM_PATH / band / "default.txt" if not kind else kind + ".txt"
+        pth = BEAM_PATH / band / "default.txt" if not kind else f"{kind}.txt"
         if not pth.exists():
             raise FileNotFoundError(f"No beam exists for band={band}.")
         return pth
 
     def select_freqs(self, indx: tp.Sequence[int]) -> Beam:
-        """Select a subset of frequencies."""
+        """Select a subset of frequencies.
+
+        Parameters
+        ----------
+        indx
+            The indices of the frequencies to select.
+        """
         if not hasattr(indx, "__len__"):
             indx = [indx]
 
@@ -452,6 +476,10 @@ class Beam:
         ----------
         freq
             Frequencies to interpolate to.
+        model
+            The model to use for interpolation.
+        fit_kwargs
+            Keyword arguments to pass to the model fit.
 
         Returns
         -------
@@ -482,9 +510,14 @@ class Beam:
         self, model: mdl.Model = mdl.Polynomial(n_terms=12), **fit_kwargs
     ) -> Beam:
         """
-        Smoothes the beam within its same set of frequencies.
+        Return a new beam, smoothed over the frequency axis, but without decimation.
 
+        Parameters
         ----------
+        model
+            The model to use for smoothing.
+        fit_kwargs
+            Keyword arguments to pass to the model fit.
 
         Returns
         -------
@@ -511,7 +544,7 @@ class Beam:
         )
 
     @staticmethod
-    def shift_beam_maps(az_antenna_axis: float, beam_maps: np.ndarray):
+    def shift_beam_maps(az_antenna_axis: float, beam_maps: np.ndarray) -> np.ndarray:
         """Rotate beam maps around an axis.
 
         Parameters
@@ -666,7 +699,30 @@ class Beam:
 @hickleable()
 @attrs.define(slots=False)
 class BeamFactor:
-    """A non-interpolated beam factor."""
+    """A non-interpolated beam factor.
+
+    This class holds the attributes necessary to compute beam factors at particular
+    LSTs and frequencies, namely the antenna temperature (beam-weighted integral of the
+    sky) and the same at a particular reference frequency. We hold these separately
+    to enable computing the beam factor in different ways from these basic quantities.
+
+    Attributes
+    ----------
+    frequencies: np.ndarray
+        The frequencies at which the beam-weighted sky integrals are defined.
+    lsts: np.ndarray
+        The LSTs at which the beam-weighted sky integrals are defined.
+    reference_frequency: float
+        The reference frequency.
+    antenna_temp: np.ndarray
+        The beam-weighted sky integrals at each frequency and LST.
+    antenna_temp_ref: np.ndarray
+        The beam-weighted sky integrals at the reference frequency and each LST.
+    loss_fraction: np.ndarray
+        The fraction of the sky signal lost below the horizon.
+    meta
+        A dictionary of metadata.
+    """
 
     frequencies: np.ndarray = attrs.field(converter=np.asarray)
     lsts: np.ndarray = attrs.field(converter=np.asarray)
@@ -1154,7 +1210,7 @@ def antenna_beam_factor(
     location: apc.EarthLocation = const.edges_location,
     sky_at_reference_frequency: bool = True,
     use_astropy_azel: bool = True,
-):
+) -> BeamFactor:
     """
     Calculate the antenna beam factor.
 
@@ -1276,7 +1332,7 @@ def antenna_beam_factor(
         # Loss fraction
         loss_fraction[lst_idx, freq_idx] = 1 - np.nansum(bm) / npix_no_nan
 
-    out = BeamFactor(
+    return BeamFactor(
         frequencies=beam.frequency.to_value("MHz").astype(float),
         lsts=np.array(lsts).astype(float),
         antenna_temp=(
@@ -1302,5 +1358,3 @@ def antenna_beam_factor(
             "rotation_from_north": float(90),
         },
     )
-
-    return out

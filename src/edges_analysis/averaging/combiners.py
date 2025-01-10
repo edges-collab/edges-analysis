@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import logging
 import warnings
+from pathlib import Path
+from typing import Any
 
 import numpy as np
 from pygsdata import GSData, gsregister
 
-from .lstbin import NsamplesStrategy, get_weights_from_strategy
+from .utils import NsamplesStrategy, get_weights_from_strategy
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +28,30 @@ def average_multiple_objects(
     useful when each file represents a single night's worth of data, and the time axis
     represents different LSTs. However, the function is agnostic to the details
     of what each object represents.
+
+    Parameters
+    ----------
+    objs : GSData
+        The GSData objects to average together.
+    nsamples_strategy : NsamplesStrategy
+        The strategy to use when considering the weights with which to combine the
+        objects. See the documentation for
+        :class:`~edges_analysis.averaging.lstbin.NsamplesStrategy` for more information.
+    use_resids : bool, optional
+        If True, the residuals will be averaged and added to the average model. If
+        False, the residuals will be ignored. If None, the residuals will be used if
+        they are present in all objects, and otherwise ignored.
+
+    Returns
+    -------
+    GSData
+        The averaged GSData object.
+
+    Raises
+    ------
+    ValueError
+        If the objects do not all have the same shape, or if use_resids is True and one
+        or more of the objects has no residuals.
     """
     if any(obj.data.shape != objs[0].data.shape for obj in objs[1:]):
         raise ValueError("All objects must have the same shape to average them.")
@@ -56,7 +82,7 @@ def average_multiple_objects(
 
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore")
-            tot_model /= nobj
+            tot_model /= nobj[..., None]
 
         final_data = tot_model + residuals
     else:
@@ -72,15 +98,32 @@ def average_multiple_objects(
     )
 
 
-def average_files_pairwise(*files, **kwargs) -> GSData:
+def average_files_pairwise(*files: str | Path, **kwargs: Any) -> GSData:
     """Average multiple files together using their flagged weights.
 
     This has better memory management than lst_average, as it only ever reads two
     files at once.
+
+    Parameters
+    ----------
+    files : str or Path
+        The files to average together.
+    **kwargs
+        Additional keyword arguments to pass to the :func:`average_multiple_objects`
+        function.
+
+    Returns
+    -------
+    GSData
+        The averaged GSData object.
+
+    See Also
+    --------
+    average_multiple_objects : The function that actually does the averaging.
     """
     obj = GSData.from_file(files[0])
 
-    for i, fl in enumerate(files, start=1):
+    for i, fl in enumerate(files[1:]):
         new = GSData.from_file(fl)
         try:
             obj = average_multiple_objects(obj, new, **kwargs)

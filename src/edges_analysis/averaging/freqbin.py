@@ -1,4 +1,4 @@
-"""Functions for binning GSData objects in frequency."""
+"""Functions for binning and decimating GSData objects in frequency."""
 
 from __future__ import annotations
 
@@ -15,12 +15,43 @@ from . import averaging as avg
 @gsregister("reduce")
 def freq_bin(
     data: GSData,
-    resolution: int | un.Quantity[un.MHz],
+    bins: np.ndarray | un.Quantity | int | float | None = None,
     model: mdl.Model | None = None,
     debias: bool | None = None,
-):
-    """Bin on frequency axis."""
-    bins = avg.get_bin_edges(data.freqs, resolution)
+) -> GSData:
+    """
+    Bin a GSData object over the frequency/channel axis.
+
+    Parameters
+    ----------
+    data
+        The input GSData object to be binned.
+    bins
+        The bin *edges* (lower inclusive, upper not inclusive). If an ``int``, simply
+        use ``bins`` coords per bin, starting from the first bin. If a float or
+        Quantity, use equi-spaced bin edges, starting from the start of coords, and
+        ending past the end of coords. If an array, assumed to be the bin edges.
+        If not provided, assume a single bin encompassing all the data.
+    model
+        A model to be used for debiasing, by default None.
+    debias
+        Whether to debias the data using the provided model or residuals, by default
+        None.
+
+    Returns
+    -------
+    GSData
+        The binned and decimated GSData object.
+
+    Notes
+    -----
+    If the data object has residuals, they will be set appropriately on the returned
+    object. Furthermore, the frequencies of the returned object will be the mean of the
+    frequencies in each bin, and therefore may not be regular. Finally, flags will only
+    be maintained if they have no frquency axis (though flags will be utilized
+    appropriately in the averaging process).
+    """
+    bins = avg.get_bin_edges(data.freqs, bins)
     bins = [
         (data.freqs >= b[0]) & (data.freqs <= b[1]) for b in zip(bins[:-1], bins[1:])
     ]
@@ -62,20 +93,23 @@ def gauss_smooth(
     use_residuals: bool | None = None,
     nsmooth: int = 4,
     use_nsamples: bool = False,
-) -> np.ndarray:
-    """Smooth data with a Gaussian function, and reduce the size of the array.
+) -> GSData:
+    """Smooth data with a Gaussian function, and optionally decimate.
 
     Parameters
     ----------
     data
-        The :class:`GSData` object to smooth.
+        The :class:`GSData` object over which to smooth.
     size
         The size of the Gaussian smoothing kernel. The ultimate size of the kernel will
-        be ``nsmooth*size``. The final array will be decimated by a factor of ``size``.
+        be ``nsmooth*size``. The final array will be decimated by a factor of ``size``,
+        if the ``decimate`` option is set.
+        Thus, to maintain the same number of samples, set ``size`` to unity and
+        ``nsmooth`` larger.
     decimate
         Whether to decimate the array by a factor of ``size``.
     decimate_at
-        The index at which to start decimating the array. If ``None``, this will be
+        The first index to *keep* when decimating. If ``None``, this will be
         ``size//2``.
     flag_threshold
         The threshold of flagged samples to flag a channel. Set to 0.25 to flag in the
@@ -91,6 +125,24 @@ def gauss_smooth(
     use_residuals
         Whether to smooth the residuals to a model fit instead of the spectrum
         itself. By default, this is ``True`` if a model is present in the data.
+    nsmooth
+        The ratio of the size of the smoothing kernel (in pixels) to the decimation
+        length (i.e. ``size``).
+    use_nsamples
+        Whether to weight the data by nsamples when performing the smoothing kernel
+        convolution. Note that even if this is set to ``False``, the Nsamples in the
+        output will be the kernel-weighted sum of the input samples to each resulting
+        channel.
+
+    Returns
+    -------
+    GSData
+        The smoothed and potentially decimated GSData object.
+
+    Raises
+    ------
+    ValueError
+        If the residuals are to be smoothed and are not present in the data.
     """
     if use_residuals is None:
         use_residuals = data.residuals is not None
