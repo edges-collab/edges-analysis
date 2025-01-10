@@ -1,4 +1,5 @@
 """Tests for the combiners module."""
+
 import numpy as np
 import pytest
 from edges_analysis.averaging import combiners, lstbin

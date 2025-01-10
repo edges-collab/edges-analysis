@@ -1,4 +1,5 @@
 """Test the lstmodel module."""
+
 import numpy as np
 from edges_analysis.filters import lst_model
 from edges_cal import modelling as mdl

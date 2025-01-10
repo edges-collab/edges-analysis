@@ -1,4 +1,5 @@
 """Functions for grouping GSData objects together."""
+
 from pygsdata import GSData, gsregister
 from pygsdata.concat import concat
 

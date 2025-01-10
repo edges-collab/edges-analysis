@@ -1,4 +1,5 @@
 """Tests of the lstbin module."""
+
 import numpy as np
 import pytest
 from astropy import units as un

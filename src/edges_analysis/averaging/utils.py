@@ -1,4 +1,5 @@
 """Utility functions and classes for averaging operations."""
+
 from enum import Enum
 
 import numpy as np
