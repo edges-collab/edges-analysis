@@ -2,10 +2,11 @@
 
 import numpy as np
 import pytest
-from edges_analysis.averaging import combiners, lstbin
-from edges_analysis.datamodel import add_model
 from edges_cal import modelling as mdl
 from pygsdata import GSData
+
+from edges_analysis.averaging import combiners, lstbin
+from edges_analysis.datamodel import add_model
 
 
 class TestAverageMultipleObjects:

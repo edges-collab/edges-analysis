@@ -1,15 +1,15 @@
 """Sub-package specifically for averaging routines to be applied to field data."""
 
 __all__ = [
+    "NsamplesStrategy",
     "average_files_pairwise",
     "average_multiple_objects",
+    "average_over_times",
     "bin_data",
     "freq_bin",
     "gauss_smooth",
-    "average_over_times",
     "get_lst_bins",
     "lst_bin",
-    "NsamplesStrategy",
 ]
 
 from .averaging import bin_data

@@ -11,13 +11,14 @@ import pytest
 from astropy import units as un
 from astropy.time import Time
 from click.testing import CliRunner
+from edges_cal import modelling as mdl
+from pygsdata import GSData
+
 from edges_analysis import const
 from edges_analysis.averaging import lstbin
 from edges_analysis.calibration.calibrate import dicke_calibration
 from edges_analysis.config import config
 from edges_analysis.datamodel import add_model
-from edges_cal import modelling as mdl
-from pygsdata import GSData
 
 from . import DATA_PATH
 from .mock_gsdata import create_mock_edges_data

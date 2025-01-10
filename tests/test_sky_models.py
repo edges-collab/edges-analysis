@@ -4,9 +4,10 @@ import numpy as np
 from astropy import coordinates as apc
 from astropy import units as u
 from astropy.time import Time
+from read_acq import _coordinates as crda
+
 from edges_analysis import const
 from edges_analysis import sky_models as sm
-from read_acq import _coordinates as crda
 
 
 def test_haslam_accuracy():

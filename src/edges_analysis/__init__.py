@@ -14,12 +14,12 @@ __all__ = [
     "averaging",
     "beams",
     "calibration",
+    "cfg",
     "coordinates",
     "filters",
+    "groupdays",
     "sky_models",
     "tools",
-    "cfg",
-    "groupdays",
 ]
 
 from . import (

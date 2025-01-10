@@ -289,6 +289,6 @@ intersphinx_mapping = {
     "sklearn": ("https://scikit-learn.org/stable/", None),
     "pandas": ("https://pandas.pydata.org/pandas-docs/stable/", None),
     "scipy": (" https://docs.scipy.org/doc/scipy/", None),
-    "edges-io": ("https://edges-io.readthedocs.io/en/latest/"),
-    "edges-cal": ("https://edges-cal.readthedocs.io/en/latest/"),
+    "edges-io": ("https://edges-io.readthedocs.io/en/latest/", None),
+    "edges-cal": ("https://edges-cal.readthedocs.io/en/latest/", None),
 }

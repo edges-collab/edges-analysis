@@ -92,6 +92,10 @@ norecursedirs = [
 ]
 testpaths = "tests"
 
+[tool.ruff]
+exclude = [
+  "*.ipynb",  # for now
+]
 
 [tool.ruff.lint]
 extend-select = [
@@ -127,6 +131,7 @@ ignore = [
     "B008",     # do not performa function call in argument defaults
     "PTH207",   # allow glob.glob() because when we use it, it's necessary
     "A003",     # class attribute shadowing builtins
+    "RUF009",   # don;e perform function call in dataclass defaults
 ]
 
 [tool.ruff.lint.per-file-ignores]

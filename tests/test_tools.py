@@ -1,6 +1,7 @@
 """Test the tools module."""
 
 import numpy as np
+
 from edges_analysis import tools
 
 

@@ -3,8 +3,9 @@
 import numpy as np
 import pytest
 from astropy import units as un
-from edges_analysis.averaging.lstbin import average_over_times, get_lst_bins, lst_bin
 from pygsdata import GSData
+
+from edges_analysis.averaging.lstbin import average_over_times, get_lst_bins, lst_bin
 
 
 def test_averaging_over_times(gsd_ones: GSData):

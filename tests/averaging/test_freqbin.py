@@ -1,12 +1,13 @@
 """Test the freqbin module."""
 
 import numpy as np
-from edges_analysis.averaging import freqbin
 from pygsdata import GSFlag
+
+from edges_analysis.averaging import freqbin
 
 
 def test_freq_bin_direct(gsd_ones):
-    new = freqbin.freq_bin(gsd_ones, resolution=2, debias=False)
+    new = freqbin.freq_bin(gsd_ones, bins=2, debias=False)
     assert len(new.freqs) == len(gsd_ones.freqs) // 2
 
 

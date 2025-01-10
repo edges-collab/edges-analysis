@@ -1,9 +1,10 @@
 """Test the lstmodel module."""
 
 import numpy as np
-from edges_analysis.filters import lst_model
 from edges_cal import modelling as mdl
 from pygsdata import GSData
+
+from edges_analysis.filters import lst_model
 
 
 def run_filter_check(data: GSData, fnc: callable, **kwargs):

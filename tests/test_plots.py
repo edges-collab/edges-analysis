@@ -1,9 +1,10 @@
 """Test the plots module."""
 
 import pytest
-from edges_analysis import plots
 from edges_cal.modelling import LinLog
 from pygsdata import GSData
+
+from edges_analysis import plots
 
 
 def test_plot_time_average_bad_attribute(mock):

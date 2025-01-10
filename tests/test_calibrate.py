@@ -5,8 +5,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 from astropy import units as un
-from edges_analysis.calibration import calibrate
 from pygsdata import GSData
+
+from edges_analysis.calibration import calibrate
 
 
 def test_approximate_temperature(gsd_ones: GSData):

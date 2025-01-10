@@ -127,7 +127,7 @@ def _get_closest_s11_time(
         "jd": r"(?P<jd>\d\d\d)",
         "h": r"(?P<hour>\d\d)",
     }
-    dct = {d: v for d, v in dct.items() if "{%s}" % d in s11_file_pattern}
+    dct = {d: v for d, v in dct.items() if f"{{{d}}}" in s11_file_pattern}
 
     if "d" not in dct and "jd" not in dct:
         raise ValueError("s11_file_pattern must contain a tag {d} or {jd}.")
@@ -184,9 +184,9 @@ def _get_closest_s11_time(
     # Gets a representative closest time file
     closest = [fl for i, fl in enumerate(files) if i in indx]
 
-    assert (
-        len(closest) == 4
-    ), f"There need to be four input S1P files of the same time, got {closest}."
+    assert len(closest) == 4, (
+        f"There need to be four input S1P files of the same time, got {closest}."
+    )
     return sorted(closest)
 
 
@@ -227,9 +227,9 @@ def get_s11_paths(
         )
     # The path *must* have an {input} tag in it which we can search on
     fls = glob.glob(str(s11_path).format(input="?"))
-    assert (
-        len(fls) == 4
-    ), f"There are not exactly four files matching {s11_path}. Found: {fls}."
+    assert len(fls) == 4, (
+        f"There are not exactly four files matching {s11_path}. Found: {fls}."
+    )
 
     return sorted(Path(fl) for fl in fls)
 
@@ -452,7 +452,7 @@ def apply_beam_correction(
     oversample_factor: int = 5,
     resample_beam_lsts: bool = True,
     use_beam_factor: bool = False,
-    beam_file: str | Path = None,
+    beam_file: str | Path | None = None,
 ) -> GSData:
     """Apply beam correction to the data.
 
@@ -525,7 +525,7 @@ def apply_beam_correction(
         bf = np.loadtxt(beam_file)
         new_data *= bf[:, 3]
         if resids is not None:
-            resids[:, :, i] *= bf
+            resids *= bf
     else:
         for i, (lst0, lst1) in enumerate(data.lst_ranges[:, 0, :]):
             new = beam.between_lsts(lst0.hour, lst1.hour)

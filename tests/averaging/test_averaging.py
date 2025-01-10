@@ -5,6 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 from astropy import units as un
+
 from edges_analysis.averaging import averaging
 from edges_analysis.averaging.averaging import bin_data
 
@@ -416,14 +417,16 @@ class TestWeightedVariance:
 class TestBinArray:
     @pytest.mark.parametrize("axis", [0, 1, 2, -1])
     def test_full_average_3d(self, axis):
-        data = np.random.random(size=(3, 4, 5))
+        rng = np.random.default_rng()
+        data = rng.random(size=(3, 4, 5))
         res, _, _ = bin_data(data, axis=axis)
         np.testing.assert_array_almost_equal(
             res, np.mean(data, axis=axis, keepdims=True)
         )
 
     def test_weights_uniform(self):
-        data = np.random.random(size=(3, 4, 5))
+        rng = np.random.default_rng()
+        data = rng.random(size=(3, 4, 5))
         weights = np.ones_like(data)
         res1, w1, _ = bin_data(data, weights=weights)
         res2, w2, _ = bin_data(data, weights=weights * 2)
