@@ -16,7 +16,7 @@ authors = [
     {name="Steven Murray", email="steven.murray@sns.it"},
 ]
 license = {text="MIT"}
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
@@ -96,6 +96,8 @@ testpaths = "tests"
 exclude = [
   "*.ipynb",  # for now
 ]
+preview = true
+
 
 [tool.ruff.lint]
 extend-select = [
