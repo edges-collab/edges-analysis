@@ -31,6 +31,7 @@ def join_struct_arrays(arrays):
     """Join a list of structured numpy arrays (make new columns)."""
     dtype = functools.reduce(operator.iadd, (a.dtype.descr for a in arrays), [])
     out = np.empty(len(arrays[0]), dtype=dtype)
+
     for a in arrays:
         for name in a.dtype.names:
             out[name] = a[name]

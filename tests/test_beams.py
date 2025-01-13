@@ -7,10 +7,11 @@ from pathlib import Path
 import numpy as np
 import pytest
 from astropy import units as u
+from edges_cal import modelling as mdl
+
 from edges_analysis import beams, const
 from edges_analysis.calibration import loss
 from edges_analysis.sky_models import ConstantIndex, Haslam408, Haslam408AllNoh
-from edges_cal import modelling as mdl
 
 
 def test_beam_from_feko():
@@ -145,8 +146,8 @@ def test_interp_methods():
 
 
 def test_beam_solid_angle():
-    beam = beams.Beam.from_ideal(delta_el=0.1, delta_az=0.1)
-    assert np.allclose(
+    beam = beams.Beam.from_ideal(f_low=50, f_high=60, delta_el=0.1, delta_az=0.1)
+    np.testing.assert_allclose(
         beam.get_beam_solid_angle(), 2 * np.pi, rtol=1e-3
     )  # half the sky
 
@@ -288,14 +289,14 @@ def test_beamfactor_get():
         lsts=np.linspace(3, 7, 5),
         reference_frequency=75.0,
         antenna_temp=np.array([poly(parameters=[i * 100, 2, 3, 4]) for i in range(5)]),
-        antenna_temp_ref=np.array(
-            [poly(parameters=[i * 100, 2.5, 3, 4]) for i in range(5)]
-        ),
+        antenna_temp_ref=np.array([
+            poly(parameters=[i * 100, 2.5, 3, 4]) for i in range(5)
+        ]),
     )
 
-    _bf = bf.get_beam_factor(poly.model, freq)
+    bf_ = bf.get_beam_factor(poly.model, freq)
 
-    assert np.allclose(_bf[:, 25], 1.0)
+    assert np.allclose(bf_[:, 25], 1.0)
 
     meanbf = bf.get_mean_beam_factor(poly.model, freq)
     assert np.isclose(meanbf[25], 1.0)
@@ -319,7 +320,7 @@ def test_beam_factor_alan_azel():
         "beam_smoothing": False,
         "interp_kind": "nearest",
         "freq_progress": False,
-        "location": const.KNOWN_LOCATIONS["alan-edges"],
+        "location": const.KNOWN_TELESCOPES["edges-low-alan"].location,
         "sky_at_reference_frequency": False,
         "use_astropy_azel": True,
     }

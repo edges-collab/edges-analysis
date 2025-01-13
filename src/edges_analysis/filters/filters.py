@@ -4,26 +4,25 @@ from __future__ import annotations
 
 import functools
 import logging
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import Callable
+from typing import Literal
 
 import hickle
 import numpy as np
-import yaml
 from astropy import units as u
 from astropy.time import Time
 from attrs import define
 from edges_cal import modelling as mdl
-from edges_cal import types as tp
 from edges_cal import xrfi as rfi
 from edges_cal.xrfi import ModelFilterInfoContainer, model_filter
+from edges_io import types as tp
+from pygsdata import GSData, GSFlag, gsregister
+from pygsdata.select import _mask_times
 
 from .. import tools
 from ..averaging import averaging
-from ..data import DATA_PATH
 from ..datamodel import add_model
-from ..gsdata import GSData, GSFlag, gsregister
 
 logger = logging.getLogger(__name__)
 
@@ -42,16 +41,16 @@ class _GSDataFilter:
         self,
         data: Sequence[tp.PathLike | GSData],
         *,
-        write: bool | None = None,
+        write: bool = False,
         flag_id: str | None = None,
         **kwargs,
     ) -> GSData | Sequence[GSData]:
         # Read all the data, in case they haven't been turned into objects yet.
         # And check that everything is the right type.
-        if isinstance(data, (Path, str)):
+        if isinstance(data, Path | str):
             data = GSData.from_file(data)
 
-        if self.multi_data and isinstance(data, (GSData, Path, str)):
+        if self.multi_data and isinstance(data, GSData | Path | str):
             data = [data if isinstance(data, GSData) else GSData.from_file(data)]
         elif not self.multi_data and not isinstance(data, GSData):
             raise TypeError(
@@ -66,13 +65,8 @@ class _GSDataFilter:
             )
 
             if np.all(flags.flags):
-                if data.in_lst:
-                    name = data.filename
-                else:
-                    name = data.get_initial_yearday(hours=True)
-
                 logger.warning(
-                    f"{name} was fully flagged during {self.func.__name__} filter"
+                    f"{data.name} was fully flagged during {self.func.__name__} filter"
                 )
             else:
                 sz = flags.flags.size / 100
@@ -80,12 +74,7 @@ class _GSDataFilter:
                 tot = np.sum(data.flagged_nsamples == 0)
                 totsz = data.complete_flags.size
 
-                if not data.in_lst:
-                    rep = data.get_initial_yearday(hours=True)
-                elif data.filename:
-                    rep = data.filename
-                else:
-                    rep = "unknown"
+                rep = data.get_initial_yearday(hours=True)
 
                 logger.info(
                     f"'{rep}': "
@@ -100,7 +89,8 @@ class _GSDataFilter:
 
         if self.multi_data:
             data = [
-                per_file_processing(d, out_flg) for d, out_flg in zip(data, this_flag)
+                per_file_processing(d, out_flg)
+                for d, out_flg in zip(data, this_flag, strict=False)
             ]
         else:
             data = per_file_processing(data, this_flag)
@@ -204,61 +194,6 @@ def chunked_iterative_model_filter(
     return out_flags, resids, std, infos
 
 
-def explicit_filter(times, bad, ret_times=False):
-    """
-    Explicitly filter out certain times.
-
-    Parameters
-    ----------
-    times : array-like
-        The input times. This can be either a recarray, a list of tuples, a list
-        of ints, or a 2D array of ints. The columns of the recarray (or the entries
-        of the tuples) should correspond to `year`, 'day` and `hour`. The last two
-        are not required, eg. 2-tuples will be interpreted as ``(year, hour)``, and a
-        list of ints will be interpreted as just years.
-    bad : str or array-like
-        Like `times`, but specifying the bad entries. Need not have the same columns
-        as `times`. If any bad exists within a given time frame, it will be considered
-        bad. Likewise, if bad has higher scope than times, then it will also be bad.
-        Eg.: ``times = [2018], bad=[(2018, 125)]``, times will be considered bad.
-        Also, ``times=[(2018, 125)], bad=[2018]``, times will be considered bad.
-        If a str, reads the bad times from a properly configured YAML file.
-    ret_times : bool, optional
-        If True, return the good times as well as the indices of such in original array.
-
-    Returns
-    -------
-    keep :
-        indices marking which times are not bad if inplace=False.
-    times :
-        Only if `ret_times=True`. An array of the times that are good.
-    """
-    if isinstance(bad, (str, Path)):
-        with Path(bad).open("r") as fl:
-            bad = yaml.load(fl, Loader=yaml.FullLoader)["bad_days"]
-
-    try:
-        nt = len(times[0])
-    except AttributeError:
-        nt = 1
-
-    try:
-        nb = len(bad[0])
-    except AttributeError:
-        nb = 1
-
-    assert nt in {1, 2, 3}, "times must be an array of 1,2 or 3-tuples"
-    assert nb in {1, 2, 3}, "bad must be an array of 1,2 or 3-tuples"
-
-    if nt < nb:
-        bad = {b[:nt] for b in bad}
-        nb = nt
-
-    keep = [t[:nb] not in bad for t in times]
-
-    return (keep, times[keep]) if ret_times else keep
-
-
 @gsregister("filter")
 @gsdata_filter()
 def aux_filter(
@@ -285,7 +220,7 @@ def aux_filter(
     minima = minima or {}
     maxima = maxima or {}
 
-    flags = np.zeros(len(data.time_array), dtype=bool)
+    flags = np.zeros(data.ntimes, dtype=bool)
 
     def filt(condition, message, flags):
         nflags = np.sum(flags)
@@ -300,7 +235,7 @@ def aux_filter(
             logger.info(f"{nnew}/{len(flags) - nflags} times flagged due to {message}")
 
     for k, v in minima.items():
-        if k not in data.auxiliary_measurements:
+        if k not in data.auxiliary_measurements.keys():  # noqa: SIM118
             raise ValueError(
                 f"{k} not in data.auxiliary_measurements. "
                 f"Allowed: {data.auxiliary_measurements.keys()}"
@@ -308,7 +243,7 @@ def aux_filter(
         filt(data.auxiliary_measurements[k] < v, f"{k} minimum", flags)
 
     for k, v in maxima.items():
-        if k not in data.auxiliary_measurements:
+        if k not in data.auxiliary_measurements.keys():  # noqa: SIM118
             raise ValueError(
                 f"{k} not in data.auxiliary_measurements. "
                 f"Allowed: {data.auxiliary_measurements.keys()}"
@@ -347,7 +282,7 @@ def moon_filter(
     elevation_range: tuple[float, float],
 ) -> np.ndarray:
     """
-    Perform a filter based on sun position.
+    Perform a filter based on moon position.
 
     Parameters
     ----------
@@ -378,20 +313,44 @@ class _RFIFilterFactory:
         *,
         n_threads: int = 1,
         freq_range: tuple[float, float] = (40, 200),
+        nsamples_strategy: Literal[
+            "flagged-nsamples",
+            "flags-only",
+            "flagged-nsamples-uniform",
+            "nsamples-only",
+        ] = "flagged-nsamples",
         **kwargs,
     ):
-        mask = (data.freq_array.to_value("MHz") >= freq_range[0]) & (
-            data.freq_array.to_value("MHz") <= freq_range[1]
+        mask = (data.freqs.to_value("MHz") >= freq_range[0]) & (
+            data.freqs.to_value("MHz") <= freq_range[1]
         )
 
         flags = data.complete_flags
 
+        if nsamples_strategy == "flagged-nsamples":
+            wgt = data.nsamples
+            flg = data.complete_flags
+        elif nsamples_strategy == "flags-only":
+            flg = data.complete_flags
+            wgt = np.ones_like(data.data)
+        elif nsamples_strategy == "flagged-nsamples-uniform":
+            flg = (data.flagged_nsamples == 0).astype(float)
+            wgt = np.ones_like(data.data)
+        elif nsamples_strategy == "nsamples-only":
+            wgt = data.nsamples
+            flg = np.zeros_like(data.complete_flags)
+        else:
+            raise ValueError(
+                f"Invalid nsamples_strategy: {nsamples_strategy}. Must be one of "
+                "'flagged-nsamples', 'flags-only', 'flagged-nsamples-uniform' or "
+                "'nsamples-only'"
+            )
         out_flags = tools.run_xrfi(
             method=self.method,
             spectrum=data.data[..., mask],
-            freq=data.freq_array[mask].to_value("MHz"),
-            flags=flags[..., mask],
-            weights=data.nsamples[..., mask],
+            freq=data.freqs[mask].to_value("MHz"),
+            flags=flg,
+            weights=wgt,
             n_threads=n_threads,
             **kwargs,
         )
@@ -429,38 +388,33 @@ def apply_flags(*, data: GSData, flags: tp.PathLike | GSFlag):
 
 @gsregister("filter")
 @gsdata_filter()
-def rfi_explicit_filter(*, data: GSData, file: tp.PathLike | None = None):
-    """Filter explicit channels of RFI."""
-    if file is None:
-        file = DATA_PATH / "known_rfi_channels.yaml"
-
-    return GSFlag(
-        flags=rfi.xrfi_explicit(
-            data.freq_array,
-            rfi_file=file,
-        ),
-        axes=("freq",),
-    )
-
-
-@gsregister("filter")
-@gsdata_filter()
 def flag_frequency_ranges(
     *, data: GSData, freq_ranges: list[tuple[float, float]], invert: bool = False
 ):
-    """Flag frequency ranges."""
+    """Flag explicit frequency ranges.
+
+    Parameters
+    ----------
+    data
+        The data to flag.
+    freq_ranges
+        A list of tuples, each containing the start and end of a frequency range to flag
+        in MHz.
+    invert
+        If True, invert the flagging (i.e. only *keep* the data inside the ranges
+        given).
+    """
     if invert:
         flags = np.ones(data.nfreqs, dtype=bool)
     else:
         flags = np.zeros(data.nfreqs, dtype=bool)
 
-    fmhz = data.freq_array.to_value("MHz")
+    fmhz = data.freqs.to_value("MHz")
     for fmin, fmax in freq_ranges:
         if invert:
             flags[(fmhz >= fmin) & (fmhz < fmax)] = False
         else:
-            flags |= fmhz >= fmin
-            flags |= fmhz < fmax
+            flags |= (fmhz >= fmin) & (fmhz < fmax)
 
     return GSFlag(
         flags=flags,
@@ -475,7 +429,7 @@ def negative_power_filter(*, data: GSData):
 
     These integrations obviously have some weird stuff going on.
     """
-    flags = np.array([np.any(data.data[slc] <= 0) for slc in data.time_iter()])
+    flags = np.any(data.data < 0, axis=(0, 1, 3))
 
     return GSFlag(flags=flags, axes=("time",))
 
@@ -488,7 +442,7 @@ def _peak_power_filter(
     mean_freq_range: tuple[float, float] | None = None,
 ):
     """
-    Filter out whole integrations that have high power > 80 MHz.
+    Filter out whole integrations that have high power in a given frequency range.
 
     Parameters
     ----------
@@ -514,11 +468,11 @@ def _peak_power_filter(
             f"value, got {mean_freq_range}"
         )
 
-    freqs = data.freq_array.to_value("MHz")
+    freqs = data.freqs.to_value("MHz")
     mask = (freqs > peak_freq_range[0]) & (freqs <= peak_freq_range[1])
 
     if not np.any(mask):
-        return np.zeros(data.ntimes, dtype=bool)
+        return np.zeros(shape=(data.nloads, data.npols, data.ntimes), dtype=bool)
 
     spec = data.data[..., mask]
     peak_power = spec.max(axis=-1)
@@ -581,7 +535,7 @@ def peak_power_filter(
             "load",
             "pol",
             "time",
-        ),
+        )[-flags.ndim :],
     )
 
 
@@ -628,19 +582,18 @@ def peak_orbcomm_filter(
 def maxfm_filter(*, data: GSData, threshold: float = 200):
     """Filter data based on max FM power.
 
-    This takes power of the spectrum between 80 MHz and 120 MHz(the fm range).
-    In that range, it checks each frequency bin to the estimated values using the
-    mean from the side bins. It then takes the max of all the all values that exceeded
-    its expected value (from mean).
-    Compares the max exceeded power with the threshold and if it is greater
-    than the threshold given, the integration will be flagged.
+    This function focuses on data between 88-120 MHz. In that range, it detrends the
+    data using a simple convolution kernel with weights [-0.5, 1., -0.5], such that a
+    flat spectrum would be de-trended perfectly to zero. The maximum absolute value of
+    the detrended spectrum is then compared to the threshold, and the entire integration
+    is flagged if the max FM power is greater than the given threshold.
     """
-    freqs = data.freq_array.to_value("MHz")
+    freqs = data.freqs.to_value("MHz")
     fm_freq = (freqs >= 88) & (freqs <= 120)
     # freq mask between 80 and 120 MHz for the FM range
 
     if not np.any(fm_freq):
-        return GSData(flags=np.zeros(data.ntimes, dtype=bool), axes=("time",))
+        return GSFlag(flags=np.zeros(data.ntimes, dtype=bool), axes=("time",))
 
     fm_power = data.data[..., fm_freq]
 
@@ -673,11 +626,11 @@ def rmsf_filter(
     Then rms is calculated from the mean that is eatimated
     using the standard deviation times initmodel.
     """
-    freqs = data.freq_array.to_value("MHz")
+    freqs = data.freqs.to_value("MHz")
     freq_mask = (freqs >= freq_range[0]) & (freqs <= freq_range[1])
 
     if not np.any(freq_mask):
-        return np.zeros(data.ntimes, dtype=bool)
+        return GSFlag(np.zeros(data.ntimes, dtype=bool), axes=("time",))
 
     if data.data_unit == "uncalibrated":
         spec = (data.data * tload) + tcal
@@ -688,7 +641,7 @@ def rmsf_filter(
             "Unsupported data_unit for rmsf_filter. "
             "Need uncalibrated or uncalibrated_temp"
         )
-    freq = data.freq_array.value[freq_mask]
+    freq = data.freqs.value[freq_mask]
     init_model = (freq / 75.0) ** -2.5
 
     spec = spec[..., freq_mask]
@@ -720,19 +673,15 @@ def filter_150mhz(*, data: GSData, threshold: float):
     157 MHz (which is expected to be cleaner). If this ratio (RMS to mean) is greater
     than 200 times the threshold given, the integration will be flagged.
     """
-    if data.freq_array.max() < 157 * u.MHz:
+    if data.freqs.max() < 157 * u.MHz:
         return GSFlag(flags=np.zeros(data.ntimes, dtype=bool), axes=("time",))
 
-    freq_mask = (data.freq_array >= 152.75 * u.MHz) & (
-        data.freq_array <= 154.25 * u.MHz
-    )
+    freq_mask = (data.freqs >= 152.75 * u.MHz) & (data.freqs <= 154.25 * u.MHz)
     mean = np.mean(data.data[..., freq_mask], axis=-1)
-    rms = np.sqrt(np.mean((data.data[..., freq_mask] - mean) ** 2))
+    rms = np.sqrt(np.mean((data.data[..., freq_mask].T - mean.T) ** 2)).T
 
-    freq_mask2 = (data.freq_array >= 156.25 * u.MHz) & (
-        data.freq_array <= 157.75 * u.MHz
-    )
-    av = np.mean(data.spectrum[..., freq_mask2], axis=-1)
+    freq_mask2 = (data.freqs >= 156.25 * u.MHz) & (data.freqs <= 157.75 * u.MHz)
+    av = np.mean(data.data[..., freq_mask2], axis=-1)
     d = 200.0 * np.sqrt(rms) / av
 
     return GSFlag(
@@ -754,18 +703,35 @@ def power_percent_filter(
     min_threshold: float = -0.7,
     max_threshold: float = 3,
 ):
-    """Filter data based on the power above 100 MHz seen in swpos 0.
+    """Filter data based on the ratio of power in a band compared to entire dataset.
 
-    Calculates the percentage of power between 100 and 200 MHz
-    & when the switch is in position 0.
-    And flags integrations if the percentage is above or below the given threshold.
+    This filter computes the sum of power from the input connected to the antenna
+    within a given band, and finds the ratio within that band compared to the entired
+    dataset. If that ratio is outside the thresholds given for a given timestamp, then
+    the entired integration is flagged.
+
+    Note: this is a very bespoke filter. Thresholds that make sense will depend on
+    both the ``freq_range`` given, and the frequency range of the data itself. In this
+    regard, it is very flexible, but care must be taken to set the parameters
+    appropriately.
+
+    Parameters
+    ----------
+    data : GSData
+        The data to be flagged.
+    freq_range : tuple[float, float]
+        The frequency range of the power to be summed in the numerator, in MHz.
+    min_threshold : float
+        Threshold of the ratio below which the integration will be flagged.
+    max_threshold : float
+        Threshold of the ratio above which the integration will be flagged.
     """
     if data.data_unit != "power" or data.nloads != 3 or "ant" not in data.loads:
         raise ValueError("Cannot perform power percent filter on non-power data!")
 
     p0 = data.data[data.loads.index("ant")]
 
-    freqs = data.freq_array.to_value("MHz")
+    freqs = data.freqs.to_value("MHz")
     mask = (freqs > freq_range[0]) & (freqs <= freq_range[1])
 
     if not np.any(mask):
@@ -783,47 +749,79 @@ def power_percent_filter(
 
 @gsregister("filter")
 @gsdata_filter()
-def object_rms_filter(
+def rms_filter(
     data: GSData,
-    rms_threshold: float,
-    f_low: float = 0.0,
-    f_high: float = np.inf,
-    weighted: bool = False,
-    flagged: bool = True,
+    threshold: float,
+    freq_range: float = (0.0, np.inf),
+    nsamples_strategy: Literal[
+        "flagged-nsamples",
+        "flags-only",
+        "flagged-nsamples-uniform",
+        "nsamples-only",
+    ] = "flagged-nsamples",
     model: mdl.Model | None = None,
 ) -> bool:
-    """Filter integrations based on the rms of the residuals."""
-    if data.ntimes > 1:
-        raise ValueError(
-            "The object_rms_filter is meant to be performed on lst-averaged data"
-        )
+    """Filter integrations based on the rms of the residuals.
 
-    data = flag_frequency_ranges(
-        data=data, freq_ranges=[(f_low, f_high)], invert=True, write=False
-    )
+    Parameters
+    ----------
+    data : GSData
+        The data to be filtered.
+    threshold
+        The threshold at which to flag integrations.
+    freq_range : float, optional
+        The frequency range to use in calculating the RMS.
+    nsamples_strategy : str, optional
+        The strategy to use when defining the weights of each sample. Defaults to
+        'flagged-nsamples'. The choices are:
+        - 'flagged-nsamples': Use the flagged nsamples (i.e. set nsamples at flagged
+            data to zero, otherwise use nsamples)
+        - 'flags-only': Use the flags only (i.e. set nsamples at flagged data to
+            zero, otherwise use 1)
+        - 'flagged-nsamples-uniform': Use the flagged nsamples (i.e. set nsamples at
+            flagged data to zero, and keep zero-samples as zero, otherwise use 1)
+        - 'nsamples-only': Use the nsamples only (don't set nsamples at flagged
+            data to zero)
+    model : Model, optional
+        A model to be used to fit each integration. Not required if a model
+        already exists on the data.
+    """
+    if (
+        freq_range[0] * u.MHz > data.freqs.min()
+        or freq_range[1] * u.MHz < data.freqs.max()
+    ):
+        data = flag_frequency_ranges(data=data, freq_ranges=[freq_range], invert=True)
 
     if data.residuals is None:
         if model is None:
-            raise ValueError(
-                "Cannot perform object rms filter without residuals or a model."
-            )
-        data = add_model(data=data, model=model)
-    if weighted:
-        rms = np.sqrt(
-            averaging.weighted_mean(
-                data=data.residuals**2, weights=data.flagged_nsamples
-            )[0]
-        )
-    elif flagged:
-        flags = data.flagged_nsamples == 0
-        rms = np.sqrt(np.mean(data.residuals[~flags] ** 2))
-    else:
-        rms = np.sqrt(np.mean(data.residuals**2))
+            raise ValueError("Cannot perform rms_filter without residuals or a model.")
+        data = add_model(data=data, model=model, nsamples_strategy=nsamples_strategy)
 
-    logger.info(f"RMS for {data.name}: {rms:.2f} mK")
+    shp = (-1, data.nfreqs)
+    if nsamples_strategy == "flagged-nsamples":
+        w = data.flagged_nsamples.reshape(shp)
+    elif nsamples_strategy == "flags-only":
+        w = (~data.complete_flags.reshape(shp)).astype(float)
+    elif nsamples_strategy == "flagged-nsamples-uniform":
+        w = (data.flagged_nsamples > 0).astype(float).reshape(shp)
+    elif nsamples_strategy == "nsamples-only":
+        w = data.nsamples.reshape(shp)
+    else:
+        raise ValueError(f"Invalid nsamples_strategy: {nsamples_strategy}")
+
+    rms = np.sqrt(
+        averaging.weighted_mean(
+            data=data.residuals.reshape(shp) ** 2, weights=w, axis=-1
+        )[0]
+    )
+
     return GSFlag(
-        flags=np.array([rms > rms_threshold]),
-        axes=("time",),
+        flags=(rms > threshold).reshape(data.data.shape[:-1]),
+        axes=(
+            "load",
+            "pol",
+            "time",
+        ),
     )
 
 
@@ -843,7 +841,6 @@ def explicit_day_filter(
         it is interpreted as ``(year, month, day)``. If an int, it is interpreted as a
         Julian day.
     """
-    day_flags = np.zeros_like(flag_days)
     for i, day in enumerate(flag_days):
         if hasattr(day, "__len__"):
             if len(day) == 2:
@@ -855,10 +852,21 @@ def explicit_day_filter(
             else:
                 raise ValueError("Day must be a 2-tuple, 3-tuple, Time or an int.")
 
-            day_flags[i] = int(t.jd)  # t.value
+            flag_days[i] = int(t.jd)
         elif isinstance(day, Time):
             flag_days[i] = int(day.jd)
 
-    thist = data.times[:, 0].jd.astype(int)
-    flags = np.isin(thist, flag_days)
-    return GSFlag(flags=flags, axes=("time",))
+    if not all(isinstance(day, int) for day in flag_days):
+        raise ValueError("All entries in flag_days must be integers.")
+
+    return GSFlag(
+        flags=np.any(np.isin(data.times.jd.astype(int), flag_days), axis=-1),
+        axes=("time",),
+    )
+
+
+@gsregister("reduce")
+def prune_flagged_integrations(data: GSData, **kwargs) -> GSData:
+    """Remove integrations that are flagged for all freq-pol-loads."""
+    flg = np.all(data.complete_flags, axis=(0, 1, 3))
+    return _mask_times(data, ~flg)
