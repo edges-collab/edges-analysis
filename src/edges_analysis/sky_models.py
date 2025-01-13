@@ -49,9 +49,9 @@ class GaussianIndex(IndexModel):
 
     def get_index(
         self,
-        lat: None | np.ndarray = None,
-        lon: None | np.ndarray = None,
-        sky_model: None | SkyModel = None,
+        lat: np.ndarray | None = None,
+        lon: np.ndarray | None = None,
+        sky_model: SkyModel | None = None,
     ) -> np.ndarray:
         """Generate the index at a given sky location."""
         if lat is None:
@@ -153,7 +153,7 @@ class SkyModel:
 
     @pixel_res.validator
     def _check_pixel_res(self, attribute, value):
-        if isinstance(value, (float, int)):
+        if isinstance(value, float | int):
             return
         if value.shape != self.temperature.shape:
             raise ValueError("pixel_res must have same shape as temperature")

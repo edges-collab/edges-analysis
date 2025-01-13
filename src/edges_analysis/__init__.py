@@ -14,15 +14,22 @@ __all__ = [
     "averaging",
     "beams",
     "calibration",
+    "cfg",
     "coordinates",
     "filters",
+    "groupdays",
     "sky_models",
     "tools",
-    "GSData",
-    "gsregister",
-    "cfg",
 ]
 
-from . import averaging, beams, calibration, coordinates, filters, sky_models, tools
+from . import (
+    averaging,
+    beams,
+    calibration,
+    coordinates,
+    filters,
+    groupdays,
+    sky_models,
+    tools,
+)
 from .config import config as cfg
-from .gsdata import GSData, gsregister

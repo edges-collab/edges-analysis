@@ -2,21 +2,33 @@
 
 from astropy import coordinates as apc
 from astropy import units as apu
+from pygsdata import KNOWN_TELESCOPES, Telescope
 
-edges_lat_deg = -26.714778
-edges_lon_deg = 116.605528
-devon_island_lat_deg = 75.433
-devon_island_lon_deg = -89.81
-edges_location = apc.EarthLocation(
-    lat=edges_lat_deg * apu.deg, lon=edges_lon_deg * apu.deg
+KNOWN_TELESCOPES["edges-low-alan"] = Telescope(
+    name="edges-low-alan",
+    location=apc.EarthLocation(lat=-26.7 * apu.deg, lon=116.5 * apu.deg),
+    pols=("xx",),
+    integration_time=13.0 * apu.s,
+    x_orientation=0.0 * apu.deg,
 )
+
+KNOWN_TELESCOPES["edges3-devon"] = Telescope(
+    name="edges3-devon",
+    location=apc.EarthLocation(lat=75.433 * apu.deg, lon=-89.81 * apu.deg),
+    pols=("xx",),
+    integration_time=13.0 * apu.s,
+    x_orientation=0.0 * apu.deg,
+)
+
+KNOWN_TELESCOPES["edges3"] = Telescope(
+    name="edges3",
+    location=apc.EarthLocation(lat=-26.7 * apu.deg, lon=116.5 * apu.deg),
+    pols=("xx",),
+    integration_time=13.0 * apu.s,
+    x_orientation=0.0 * apu.deg,
+)
+
+
 galactic_centre_lst = 17 + (45 / 60) + (40.04 / (60 * 60))
 absolute_zero = (0 * apu.deg_C).to(apu.K, equivalencies=apu.temperature()).value
-
-KNOWN_LOCATIONS = {
-    "edges": edges_location,
-    "alan-edges": apc.EarthLocation(lat=-26.7 * apu.deg, lon=116.5 * apu.deg),
-    "devon-island": apc.EarthLocation(
-        lat=devon_island_lat_deg * apu.deg, lon=devon_island_lon_deg * apu.deg
-    ),
-}
+edges_location = KNOWN_TELESCOPES["edges-low"].location

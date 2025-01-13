@@ -1,18 +1,13 @@
 API Reference
 =============
 
-The GSData Interface
---------------------
+Extensions to the GSData Interface
+----------------------------------
 .. autosummary::
     :toctree: _autosummary
     :template: module.rst
 
-    edges_analysis.gsdata.gsdata
-    edges_analysis.gsdata.datamodel
-    edges_analysis.gsdata.gsflag
-    edges_analysis.gsdata.history
-    edges_analysis.gsdata.select
-
+    edges_analysis.datamodel
 
 High Level Methods
 ------------------
@@ -73,6 +68,7 @@ interface.
     :template: module.rst
 
     edges_analysis.averaging.averaging
+    edges_analysis.averaging.utils
     edges_analysis.calibration.labcal
     edges_analysis.calibration.loss
     edges_analysis.calibration.s11
@@ -96,11 +92,4 @@ Package Config and Utilities
     edges_analysis.config
     edges_analysis.tools
     edges_analysis.coordinates
-
-Developer Documentation
------------------------
-.. autosummary::
-    :toctree: _autosummary
-    :template: module.rst
-
-    edges_analysis._workflow
+    edges_analysis.groupdays
