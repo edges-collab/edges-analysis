@@ -28,7 +28,7 @@ def run_filter_check(data: GSData, fnc: callable, **kwargs):
     else:
         print(len(new_data))
         print(len(data))
-        for nd, d in zip(new_data, data):
+        for nd, d in zip(new_data, data, strict=False):
             assert nd.data.shape == d.data.shape
             assert fnc.__name__ in nd.flags
             assert len(nd.flags) - len(d.flags) == 1
@@ -45,13 +45,11 @@ class TestAuxFilter:
     def test_aux_data_with_loads(self, mock_power: GSData):
         mock = mock_power.update(
             auxiliary_measurements={
-                "ambient_hum": np.array(
-                    [
-                        np.linspace(10, 90, mock_power.ntimes),
-                        np.linspace(50, 150, mock_power.ntimes),
-                        np.linspace(10, 90, mock_power.ntimes),
-                    ]
-                ).T
+                "ambient_hum": np.array([
+                    np.linspace(10, 90, mock_power.ntimes),
+                    np.linspace(50, 150, mock_power.ntimes),
+                    np.linspace(10, 90, mock_power.ntimes),
+                ]).T
             }
         )
         data = filters.aux_filter(mock, maxima={"ambient_hum": 100})

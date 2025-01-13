@@ -47,9 +47,9 @@ class TestAverageFilesPairwise:
         for i, d in enumerate(mock_season):
             d.write_gsh5(tmp_path / f"tmp.{i}.gsh5")
 
-        newread = combiners.average_files_pairwise(
-            *[tmp_path / f"tmp.{i}.gsh5" for i in range(len(mock_season))]
-        )
+        newread = combiners.average_files_pairwise(*[
+            tmp_path / f"tmp.{i}.gsh5" for i in range(len(mock_season))
+        ])
         new = combiners.average_multiple_objects(*mock_season)
 
         np.testing.assert_array_almost_equal(newread.nsamples, new.nsamples)

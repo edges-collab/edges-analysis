@@ -111,26 +111,22 @@ def average_over_times(
         residuals=mean_resids[:, :, None, :] if use_resids else None,
         times=np.atleast_2d(np.mean(data.times, axis=0)),
         time_ranges=Time(
-            np.array(
+            np.array([
                 [
-                    [
-                        data.time_ranges.jd.min(axis=(0, 2)),
-                        data.time_ranges.jd.max(axis=(0, 2)),
-                    ]
+                    data.time_ranges.jd.min(axis=(0, 2)),
+                    data.time_ranges.jd.max(axis=(0, 2)),
                 ]
-            ).transpose((0, 2, 1)),
+            ]).transpose((0, 2, 1)),
             format="jd",
         ),
         lsts=Longitude(np.atleast_2d(np.mean(data.lsts.hour, axis=0)) * un.hour),
         lst_ranges=Longitude(
-            np.array(
+            np.array([
                 [
-                    [
-                        data.lst_ranges.hour.min(axis=(0, 2)),
-                        data.lst_ranges.hour.max(axis=(0, 2)),
-                    ]
+                    data.lst_ranges.hour.min(axis=(0, 2)),
+                    data.lst_ranges.hour.max(axis=(0, 2)),
                 ]
-            ).transpose((0, 2, 1))
+            ]).transpose((0, 2, 1))
             * un.hour
         ),
         effective_integration_time=np.mean(data.effective_integration_time, axis=2)[
@@ -208,7 +204,7 @@ def lst_bin(
     for iload in range(data.nloads):
         bbins = [
             (b[0] <= lsts[:, iload]) & (lsts[:, iload] < b[1])
-            for b in zip(bins[:-1], bins[1:])
+            for b in zip(bins[:-1], bins[1:], strict=False)
         ]
 
         spec[iload], nsmpls[iload], r = bin_data(
@@ -223,7 +219,8 @@ def lst_bin(
             resids[iload] = r
 
     lst_ranges = np.tile(
-        np.array(list(zip(bins[:-1], bins[1:])))[:, None], (1, data.nloads, 1)
+        np.array(list(zip(bins[:-1], bins[1:], strict=False)))[:, None],
+        (1, data.nloads, 1),
     )
     lst_ranges = Longitude(lst_ranges * un.hour)
 

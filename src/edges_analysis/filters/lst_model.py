@@ -250,7 +250,7 @@ class FrequencyAggregator(metaclass=abc.ABCMeta):
         # Get the aggregated metrics for all input files.
         metric = np.empty(n_gha_total)
         count = 0
-        for n_gha, datafile in zip(n_ghas, data):
+        for n_gha, datafile in zip(n_ghas, data, strict=False):
             metric[count : count + n_gha] = self.aggregate_file(datafile)
             count += n_gha
 

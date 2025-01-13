@@ -164,13 +164,11 @@ class Beam:
                 file_length - number_of_frequencies
             ) / number_of_frequencies
 
-            output = np.zeros(
-                (
-                    int(number_of_frequencies),
-                    int(rows_per_frequency),
-                    int(number_of_columns),
-                )
-            )
+            output = np.zeros((
+                int(number_of_frequencies),
+                int(rows_per_frequency),
+                int(number_of_columns),
+            ))
 
         frequencies = np.array(frequencies_list)
 
@@ -567,7 +565,7 @@ class Beam:
         elif az_antenna_axis > 0:
             index = az_antenna_axis
             bm1 = beam_maps[:, :, 0:(-index)]
-            bm2 = beam_maps[:, :, (360 - index) : :]
+            bm2 = beam_maps[:, :, (360 - index) :]
             return np.append(bm2, bm1, axis=2)
         else:
             return beam_maps

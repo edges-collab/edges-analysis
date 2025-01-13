@@ -51,16 +51,14 @@ def integration_test_data() -> Path:
     if repo.exists():
         run(["git", "-C", str(repo), "pull"])
     else:
-        run(
-            [
-                "git",
-                "clone",
-                "https://github.com/edges-collab/edges-analysis-test-data",
-                str(repo),
-                "--depth",
-                "1",
-            ]
-        )
+        run([
+            "git",
+            "clone",
+            "https://github.com/edges-collab/edges-analysis-test-data",
+            str(repo),
+            "--depth",
+            "1",
+        ])
     return repo
 
 
