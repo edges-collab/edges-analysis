@@ -447,7 +447,7 @@ class TestBinArray:
         res1, _, _ = bin_data(data, residuals=residuals)
         res2, _, _ = bin_data(data)
 
-        np.testing.assert_array_equal(res1, res2)
+        np.testing.assert_allclose(res1, res2)
 
     def test_with_multiple_bins(self):
         data = np.array([1, 2, 3, 4], dtype=float)

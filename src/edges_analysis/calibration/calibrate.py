@@ -87,7 +87,7 @@ def _get_closest_s11_time(
     time: datetime,
     s11_file_pattern: str = "{y}_{jd}_{h}_*_input{input}.s1p",
     ignore_files=None,
-):
+) -> list[Path]:
     """From a given filename pattern, within a directory, find file closest to time.
 
     Parameters
@@ -112,6 +112,10 @@ def _get_closest_s11_time(
     """
     if isinstance(time, Time):
         time = time.to_datetime()
+
+    if isinstance(ignore_files, str):
+        ignore_files = [ignore_files]
+
     # Replace the suffix dot with a literal dot for regex
     s11_file_pattern = s11_file_pattern.replace(".", r"\.")
 
@@ -184,17 +188,18 @@ def _get_closest_s11_time(
     # Gets a representative closest time file
     closest = [fl for i, fl in enumerate(files) if i in indx]
 
-    assert len(closest) == 4, (
-        f"There need to be four input S1P files of the same time, got {closest}."
-    )
+    if len(closest) != 4:
+        raise FileNotFoundError(
+            f"There need to be four input S1P files of the same time, got {closest}."
+        )
     return sorted(closest)
 
 
 def get_s11_paths(
     s11_path: str | Path | tuple | list,
-    band: str,
-    begin_time: datetime,
-    s11_file_pattern: str,
+    band: str | None = None,
+    begin_time: datetime | None = None,
+    s11_file_pattern: str = "{y}_{jd}_{h}_*_input{input}.s1p",
     ignore_files: list[str] | None = None,
 ):
     """Given an s11_path, return list of paths for each of the inputs."""
@@ -212,7 +217,10 @@ def get_s11_paths(
             fls.append(p)
 
         return fls
-    if Path(s11_path).is_file() and (not s11_path.endswith("s1p")):
+
+    s11_path = Path(s11_path).expanduser()
+
+    if s11_path.is_file() and s11_path.suffix != ".s1p":
         return [s11_path]
     # Otherwise it must be a path.
     s11_path = Path(s11_path).expanduser()
@@ -225,11 +233,12 @@ def get_s11_paths(
         return _get_closest_s11_time(
             s11_path, begin_time, s11_file_pattern, ignore_files=ignore_files
         )
-    # The path *must* have an {input} tag in it which we can search on
-    fls = glob.glob(str(s11_path).format(input="?"))
-    assert len(fls) == 4, (
-        f"There are not exactly four files matching {s11_path}. Found: {fls}."
-    )
+    # The path *must* have an {load} tag in it which we can search on
+    fls = glob.glob(str(s11_path).format(load="?"))
+    if len(fls) != 4:
+        raise FileNotFoundError(
+            f"There are not exactly four files matching {s11_path}. Found: {fls}."
+        )
 
     return sorted(Path(fl) for fl in fls)
 
@@ -444,6 +453,47 @@ def apply_loss_correction(
 
 
 @gsregister("calibrate")
+def apply_beam_factor_directly(data: GSData, beam_file: str | Path) -> GSData:
+    """Apply a beam correction factor from a file directly to the data.
+
+    This function multiplies the data by the beam correction factor
+    from the provided beamfile. It handles data with a single load and updates the data
+    unit to "temperature".
+
+    Parameters
+    ----------
+    data
+        The GSData object containing the data to correct.
+    beamfile
+        The path to the beamfile containing the correction factors. The correction
+        factors should be in the fourth column of the csv file, and should have a size
+        equal to the number of frequencies in the data.
+
+    Returns
+    -------
+    data
+        A new GSData object with the corrected data and residuals.
+
+    Raises
+    ------
+    NotImplementedError
+        If the data contains more than one load.
+    """
+    if len(data.loads) > 1:
+        raise NotImplementedError(
+            "Can only apply beam correction to data with a single load"
+        )
+
+    new_data = data.data.copy()
+    resids = data.residuals.copy() if data.residuals is not None else None
+    bf = np.loadtxt(beam_file)
+    new_data *= bf[:, 3]
+    if resids is not None:
+        resids *= bf[:, 3]
+    return data.update(data=new_data, residuals=resids, data_unit="temperature")
+
+
+@gsregister("calibrate")
 def apply_beam_correction(
     data: GSData,
     beam: str | Path | beams.BeamFactor,
@@ -451,8 +501,6 @@ def apply_beam_correction(
     integrate_before_ratio: bool = True,
     oversample_factor: int = 5,
     resample_beam_lsts: bool = True,
-    use_beam_factor: bool = False,
-    beam_file: str | Path | None = None,
 ) -> GSData:
     """Apply beam correction to the data.
 
@@ -521,25 +569,20 @@ def apply_beam_correction(
     new_data = data.data.copy()
 
     resids = data.residuals.copy() if data.residuals is not None else None
-    if use_beam_factor:
-        bf = np.loadtxt(beam_file)
-        new_data *= bf[:, 3]
-        if resids is not None:
-            resids *= bf
-    else:
-        for i, (lst0, lst1) in enumerate(data.lst_ranges[:, 0, :]):
-            new = beam.between_lsts(lst0.hour, lst1.hour)
-            if integrate_before_ratio:
-                bf = new.get_integrated_beam_factor(
-                    model=freq_model, freqs=data.freqs.to_value("MHz")
-                )
-            else:
-                bf = new.get_mean_beam_factor(
-                    model=freq_model, freqs=data.freqs.to_value("MHz")
-                )
 
-            new_data[:, :, i] /= bf
-            if resids is not None:
-                resids[:, :, i] /= bf
+    for i, (lst0, lst1) in enumerate(data.lst_ranges[:, 0, :]):
+        new = beam.between_lsts(lst0.hour, lst1.hour)
+        if integrate_before_ratio:
+            bf = new.get_integrated_beam_factor(
+                model=freq_model, freqs=data.freqs.to_value("MHz")
+            )
+        else:
+            bf = new.get_mean_beam_factor(
+                model=freq_model, freqs=data.freqs.to_value("MHz")
+            )
+
+        new_data[:, :, i] /= bf
+        if resids is not None:
+            resids[:, :, i] /= bf
 
     return data.update(data=new_data, residuals=resids, data_unit="temperature")

@@ -139,9 +139,7 @@ def gsd_ones_power():
 
 @pytest.fixture(scope="session")
 def mock() -> GSData:
-    data = create_mock_edges_data(add_noise=True)
-    print(data.ntimes, data.data.shape)
-    return data
+    return create_mock_edges_data(add_noise=True)
 
 
 @pytest.fixture(scope="session")
