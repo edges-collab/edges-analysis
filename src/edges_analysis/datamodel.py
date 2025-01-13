@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Literal
 
 import h5py
 import numpy as np
@@ -15,9 +16,9 @@ try:
 except ImportError:
     from typing_extensions import Self
 
-from .gsdata.attrs import npfield
-from .gsdata.gsdata import GSData
-from .gsdata.register import gsregister
+from pygsdata import GSData
+from pygsdata.attrs import npfield
+from pygsdata.register import gsregister
 
 logger = logging.getLogger(__name__)
 
@@ -62,10 +63,10 @@ class GSDataLinearModel:
         d = gsdata.data.reshape((-1, gsdata.nfreqs))
         p = self.parameters.reshape((-1, self.nparams))
 
-        model = self.model.at(x=gsdata.freq_array.to_value("MHz"))
+        model = self.model.at(x=gsdata.freqs.to_value("MHz"))
 
         resids = np.zeros_like(d)
-        for i, (dd, pp) in enumerate(zip(d, p)):
+        for i, (dd, pp) in enumerate(zip(d, p, strict=False)):
             resids[i] = dd - model(parameters=pp)
 
         resids.shape = gsdata.data.shape
@@ -76,27 +77,70 @@ class GSDataLinearModel:
         d = gsdata.residuals.reshape((-1, gsdata.nfreqs))
         p = self.parameters.reshape((-1, self.nparams))
 
-        model = self.model.at(x=gsdata.freq_array.to_value("MHz"))
+        model = self.model.at(x=gsdata.freqs.to_value("MHz"))
 
         spectra = np.zeros_like(d)
-        for i, (dd, pp) in enumerate(zip(d, p)):
+        for i, (dd, pp) in enumerate(zip(d, p, strict=False)):
             spectra[i] = dd + model(parameters=pp)
 
         spectra.shape = gsdata.data.shape
         return spectra
 
     @classmethod
-    def from_gsdata(cls, model: mdl.Model, gsdata: GSData, **fit_kwargs) -> Self:
-        """Create a GSDataModel from a GSData object."""
-        d = gsdata.data.reshape((-1, gsdata.nfreqs))
-        w = gsdata.flagged_nsamples.reshape((-1, gsdata.nfreqs))
+    def from_gsdata(
+        cls,
+        model: mdl.Model,
+        gsdata: GSData,
+        nsamples_strategy: Literal[
+            "flagged-nsamples",
+            "flags-only",
+            "flagged-nsamples-uniform",
+            "nsamples-only",
+        ] = "flagged-nsamples",
+        **fit_kwargs,
+    ) -> Self:
+        """Create a GSDataModel from a GSData object.
 
-        xmodel = model.at(x=gsdata.freq_array.to_value("MHz"))
+        Parameters
+        ----------
+        model
+            The model to use. Applied separately to each time, load and pol.
+        gsdata : GSData object
+            The GSData object to fit to.
+        nsamples_strategy : str, optional
+            The strategy to use when defining the weights of each sample. Defaults to
+            'flagged-nsamples'. The choices are:
+            - 'flagged-nsamples': Use the flagged nsamples (i.e. set nsamples at flagged
+               data to zero, otherwise use nsamples)
+            - 'flags-only': Use the flags only (i.e. set nsamples at flagged data to
+               zero, otherwise use 1)
+            - 'flagged-nsamples-uniform': Use the flagged nsamples (i.e. set nsamples at
+               flagged data to zero, and keep zero-samples as zero, otherwise use 1)
+            - 'nsamples-only': Use the nsamples only (don't set nsamples at flagged
+               data to zero)
+        """
+        shp = (-1, gsdata.nfreqs)
+        d = gsdata.data.reshape(shp)
+        if nsamples_strategy == "flagged-nsamples":
+            w = gsdata.flagged_nsamples.reshape(shp)
+        elif nsamples_strategy == "flags-only":
+            w = (~gsdata.complete_flags.reshape(shp)).astype(float)
+        elif nsamples_strategy == "flagged-nsamples-uniform":
+            w = (gsdata.flagged_nsamples > 0).astype(float).reshape(shp)
+        elif nsamples_strategy == "nsamples-only":
+            w = gsdata.nsamples.reshape(shp)
+        else:
+            raise ValueError(
+                f"Invalid nsamples_strategy: {nsamples_strategy}. Must be one of "
+                "'flagged-nsamples', 'flags-only', 'flagged-nsamples-uniform' or "
+                "'nsamples-only'"
+            )
+        xmodel = model.at(x=gsdata.freqs.to_value("MHz"))
 
         params = np.zeros((gsdata.nloads * gsdata.npols * gsdata.ntimes, model.n_terms))
 
         try:
-            for i, (dd, ww) in enumerate(zip(d, w)):
+            for i, (dd, ww) in enumerate(zip(d, w, strict=False)):
                 params[i] = xmodel.fit(
                     ydata=dd, weights=ww, **fit_kwargs
                 ).model_parameters
@@ -129,14 +173,44 @@ class GSDataLinearModel:
 
 @gsregister("supplement")
 def add_model(
-    data: GSData, *, model: mdl.Model, append_to_file: bool | None = None
+    data: GSData,
+    *,
+    model: mdl.Model,
+    append_to_file: bool = False,
+    nsamples_strategy: Literal[
+        "flagged-nsamples",
+        "flags-only",
+        "flagged-nsamples-uniform",
+        "nsamples-only",
+    ] = "flagged-nsamples",
 ) -> GSData:
-    """Return a new GSData instance which contains a data model."""
-    data_model = GSDataLinearModel.from_gsdata(model, data)
-    new = data.update(residuals=data_model.get_residuals(data))
+    """Return a new GSData instance which contains a data model.
 
-    if append_to_file is None:
-        append_to_file = new.filename is not None and new._file_appendable
+    Parameters
+    ----------
+    data
+        The GSData instance to add the model to.
+    model
+        The model to add/fit.
+    append_to_file
+        Whether to directly add the model residuals to the file that is attached to the
+        GSData object. DON'T DO THIS.
+    nsamples_strategy
+        The strategy to use when defining the weights of each sample. Defaults to
+        'flagged-nsamples'. The choices are:
+        - 'flagged-nsamples': Use the flagged nsamples (i.e. set nsamples at flagged
+            data to zero, otherwise use nsamples)
+        - 'flags-only': Use the flags only (i.e. set nsamples at flagged data to
+            zero, otherwise use 1)
+        - 'flagged-nsamples-uniform': Use the flagged nsamples (i.e. set nsamples at
+            flagged data to zero, and keep zero-samples as zero, otherwise use 1)
+        - 'nsamples-only': Use the nsamples only (don't set nsamples at flagged
+            data to zero)
+    """
+    data_model = GSDataLinearModel.from_gsdata(
+        model, data, nsamples_strategy=nsamples_strategy
+    )
+    new = data.update(residuals=data_model.get_residuals(data))
 
     if append_to_file:
         if not new._file_appendable or new.filename is None:

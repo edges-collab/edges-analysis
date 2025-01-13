@@ -1,8 +1,7 @@
 steps:
   - function: convert
     params:
-      telescope_name: "EDGES-low2"
-      telescope_location: "alan-edges"
+      telescope: "edges-low-alan"
 
   - function: select_freqs
     params:

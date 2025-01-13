@@ -1,17 +1,16 @@
-"""Module providing routines for calibration of field data."""
+"""Module providing a class that contains relevant lab-based calibration information."""
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from functools import cached_property
 from pathlib import Path
-from typing import Callable
 
 import attr
 import numpy as np
 from edges_cal import CalibrationObservation, Calibrator, s11
-from edges_cal import receiver_calibration_func as rcf
-from edges_cal import types as tp
+from edges_cal import noise_waves as nw
+from edges_io import types as tp
 
 from .s11 import AntennaS11
 
@@ -37,6 +36,7 @@ class LabCalibration:
         cls,
         calobs: Calibrator | CalibrationObservation,
         s11_files: tp.PathLike | Sequence[tp.PathLike],
+        with_model_delay: bool = True,
         **kwargs,
     ):
         """Generate LabCalibration object from files.
@@ -67,7 +67,7 @@ class LabCalibration:
                 **kwargs,
             )
         else:
-            if not isinstance(s11_files, (str, Path)):
+            if not isinstance(s11_files, str | Path):
                 s11_files = s11_files[0]
 
             ant_s11 = AntennaS11.from_single_file(
@@ -77,6 +77,9 @@ class LabCalibration:
                 internal_switch=calobs.internal_switch,
                 **kwargs,
             )
+
+        if with_model_delay:
+            ant_s11 = ant_s11.with_model_delay()
 
         return cls(
             calobs=calobs,
@@ -113,7 +116,7 @@ class LabCalibration:
 
         if ant_s11 is None:
             ant_s11 = self.antenna_s11_model(freq)
-        return rcf.get_K(lna, ant_s11)
+        return nw.get_K(lna, ant_s11)
 
     def get_linear_coefficients(
         self, freq: np.ndarray | None = None, ant_s11: np.ndarray | None = None
@@ -123,7 +126,7 @@ class LabCalibration:
             freq = self.calobs.freq.freq
 
         coeffs = self.get_gamma_coeffs(freq, ant_s11=ant_s11)
-        a, b = rcf.get_linear_coefficients_from_K(
+        a, b = nw.get_linear_coefficients_from_K(
             coeffs,
             self.calobs.C1(freq),
             self.calobs.C2(freq),
