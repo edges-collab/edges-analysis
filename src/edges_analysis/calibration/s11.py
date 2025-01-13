@@ -1,14 +1,14 @@
-"""Corrections for S11 measurements."""
+"""Module defining an AntennaS11 object."""
 
 from __future__ import annotations
 
 from collections.abc import Sequence
 
 import attr
+import hickle
 import numpy as np
 from astropy import units as u
 from edges_cal import modelling as mdl
-from edges_cal import types as tp
 from edges_cal.s11 import (
     InternalSwitch,
     LoadPlusSwitchS11,
@@ -17,6 +17,7 @@ from edges_cal.s11 import (
     VNAReading,
 )
 from edges_cal.tools import FrequencyRange
+from edges_io import types as tp
 from hickleable import hickleable
 
 
@@ -29,7 +30,7 @@ class AntennaS11(LoadS11):
     _default_nterms = 10
     _model_type_default = mdl.Polynomial
 
-    model_delay: tp.Time = attr.ib(170 * u.ns)
+    model_delay: tp.Time = attr.ib(default=0 * u.ns)
 
     @classmethod
     def from_s1p_files(
@@ -43,9 +44,9 @@ class AntennaS11(LoadS11):
         """Generate from a list of four S1P files."""
         files = sorted(files)
         assert len(files) == 4
-        standards = StandardsReadings(
-            *[VNAReading.from_s1p(fl, f_low=f_low, f_high=f_high) for fl in files[:3]]
-        )
+        standards = StandardsReadings(*[
+            VNAReading.from_s1p(fl, f_low=f_low, f_high=f_high) for fl in files[:3]
+        ])
         external = VNAReading.from_s1p(files[-1], f_low=f_low, f_high=f_high)
 
         # Note that here the
@@ -87,3 +88,9 @@ class AntennaS11(LoadS11):
             internal_switch=internal_switch,
             **kwargs,
         )
+
+    @classmethod
+    def from_file(cls, fname):
+        """Read AntennaS11 from HDF5 file."""
+        # For now, just hickle load, but let's change that later...
+        return hickle.load(fname)

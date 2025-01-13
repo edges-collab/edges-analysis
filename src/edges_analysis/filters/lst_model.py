@@ -12,12 +12,12 @@ import numpy as np
 import yaml
 from astropy import units as un
 from attrs import define, field
-from edges_cal import types as tp
 from edges_cal.modelling import FourierDay, LinLog, Model
+from edges_io import types as tp
+from pygsdata import GSData, GSFlag, gsregister
 
 from ..data import DATA_PATH
 from ..datamodel import add_model
-from ..gsdata import GSData, GSFlag, gsregister
 from .filters import chunked_iterative_model_filter, gsdata_filter
 
 logger = logging.getLogger(__name__)
@@ -250,7 +250,7 @@ class FrequencyAggregator(metaclass=abc.ABCMeta):
         # Get the aggregated metrics for all input files.
         metric = np.empty(n_gha_total)
         count = 0
-        for n_gha, datafile in zip(n_ghas, data):
+        for n_gha, datafile in zip(n_ghas, data, strict=False):
             metric[count : count + n_gha] = self.aggregate_file(datafile)
             count += n_gha
 
@@ -283,7 +283,7 @@ def get_gha_model_filter(
     """Obtain a filtering object from a given set of representative data.
 
     The algorithm here is to first intrinsically flag the input data, then fit a model
-    to it over GHA, which can be used to flag further files. The initial intrinsice
+    to it over GHA, which can be used to flag further files. The initial intrinsic
     flagging is *by default* done with the same model that will be applied to other
     data, but it can be done at a more fine-grained level, fitting to small chunks of
     GHA at a time with a lower-order model.
@@ -334,7 +334,7 @@ def get_gha_model_filter(
     if detrend_std_model is None:
         detrend_std_model = std_model
 
-    flags, resid, std, flag_info = chunked_iterative_model_filter(
+    flags, _resid, std, flag_info = chunked_iterative_model_filter(
         x=gha,
         data=metric,
         init_flags=init_flags,
@@ -385,7 +385,7 @@ class RMSAggregator(FrequencyAggregator):
         data = add_model(data, model=self.model)
 
         mask = data.nsamples[0, 0] > 0
-        r = data.resids[0, 0].copy()
+        r = data.residuals[0, 0].copy()
         r = np.where(mask, r, np.nan)
         return np.sqrt(np.nanmean(r**2, axis=-1))
 
@@ -423,7 +423,7 @@ class TotalPowerAggregator(FrequencyAggregator):
         if data.data_unit not in ("temperature", "model_residuals"):
             raise ValueError("Can only run total power aggregator on temperature data.")
 
-        freqs = data.freq_array.to_value("MHz")
+        freqs = data.freqs.to_value("MHz")
         freq_mask = (freqs >= self.band[0]) & (freqs < self.band[1])
 
         weights = np.sum(data.nsamples[0, 0, :, freq_mask].T, axis=-1)
@@ -479,7 +479,7 @@ def apply_gha_model_filter(
                     "".join(f"{k}:{v!r}" for k, v in kwargs.items())
                     + ":".join(str(d) for d in data[:n_files])
                 )
-                out_file = Path(f"GHAModel_{aggregator!s}{hsh}")
+                out_file = Path(f"GHAModel_{hsh}")
             else:
                 out_file = Path(out_file)
 
