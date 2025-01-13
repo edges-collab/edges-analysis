@@ -73,7 +73,7 @@ def average_multiple_objects(
 
     if use_resids:
         residuals = np.nansum(
-            [obj.residuals * w for obj, w in zip(objs, weights)], axis=0
+            [obj.residuals * w for obj, w in zip(objs, weights, strict=False)], axis=0
         )
 
         residuals[wtot > 0] /= wtot[wtot > 0]
@@ -86,7 +86,9 @@ def average_multiple_objects(
 
         final_data = tot_model + residuals
     else:
-        final_data = np.nansum([obj.data * w for obj, w in zip(objs, weights)], axis=0)
+        final_data = np.nansum(
+            [obj.data * w for obj, w in zip(objs, weights, strict=False)], axis=0
+        )
         final_data[wtot > 0] /= wtot[wtot > 0]
         residuals = None
 

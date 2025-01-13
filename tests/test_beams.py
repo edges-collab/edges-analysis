@@ -289,14 +289,14 @@ def test_beamfactor_get():
         lsts=np.linspace(3, 7, 5),
         reference_frequency=75.0,
         antenna_temp=np.array([poly(parameters=[i * 100, 2, 3, 4]) for i in range(5)]),
-        antenna_temp_ref=np.array(
-            [poly(parameters=[i * 100, 2.5, 3, 4]) for i in range(5)]
-        ),
+        antenna_temp_ref=np.array([
+            poly(parameters=[i * 100, 2.5, 3, 4]) for i in range(5)
+        ]),
     )
 
-    _bf = bf.get_beam_factor(poly.model, freq)
+    bf_ = bf.get_beam_factor(poly.model, freq)
 
-    assert np.allclose(_bf[:, 25], 1.0)
+    assert np.allclose(bf_[:, 25], 1.0)
 
     meanbf = bf.get_mean_beam_factor(poly.model, freq)
     assert np.isclose(meanbf[25], 1.0)

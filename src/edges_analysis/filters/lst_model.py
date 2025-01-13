@@ -250,7 +250,7 @@ class FrequencyAggregator(metaclass=abc.ABCMeta):
         # Get the aggregated metrics for all input files.
         metric = np.empty(n_gha_total)
         count = 0
-        for n_gha, datafile in zip(n_ghas, data):
+        for n_gha, datafile in zip(n_ghas, data, strict=False):
             metric[count : count + n_gha] = self.aggregate_file(datafile)
             count += n_gha
 
@@ -334,7 +334,7 @@ def get_gha_model_filter(
     if detrend_std_model is None:
         detrend_std_model = std_model
 
-    flags, resid, std, flag_info = chunked_iterative_model_filter(
+    flags, _resid, std, flag_info = chunked_iterative_model_filter(
         x=gha,
         data=metric,
         init_flags=init_flags,

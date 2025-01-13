@@ -156,7 +156,7 @@ class TestGetClosestS11Time:
         assert out == sorted(find_these_files)
 
     def test_value_errors(self, tmp_path):
-        d, find_these_files = self._setup_dir(tmp_path)
+        d, _find_these_files = self._setup_dir(tmp_path)
 
         with pytest.raises(ValueError, match="s11_file_pattern must contain"):
             calibrate._get_closest_s11_time(

@@ -288,7 +288,7 @@ class TestWeightedSum:
         weights = np.array([1, 2, 3, 4])
 
         with pytest.raises(
-            ValueError, match="data and weights must have the same shape."
+            ValueError, match="data and weights must have the same shape"
         ):
             averaging.weighted_sum(data, weights)
 

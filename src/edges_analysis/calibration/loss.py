@@ -39,7 +39,7 @@ def low2_balun_connector_loss(
         balun = attrs.evolve(balun, eps0=8.854e-12 * un.F / un.m)
 
     # Get the antenna s11
-    if isinstance(ants11, (str, Path)):
+    if isinstance(ants11, str | Path):
         ants11 = hickle.load(ants11).s11_model(freq)
     elif isinstance(ants11, LoadS11):
         ants11 = ants11.s11_model(freq)
@@ -159,7 +159,7 @@ def ground_loss(
 def antenna_loss(
     freq: np.ndarray,
     filename: str | Path | bool,
-    band: None | str = None,
+    band: str | None = None,
     configuration: str = "",
 ):
     """

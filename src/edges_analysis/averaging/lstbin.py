@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 import logging
 import warnings
 
@@ -90,10 +91,10 @@ def average_over_times(
     if use_resids and data.residuals is None:
         raise ValueError("Cannot average residuals without a model.")
 
-    w, _n = get_weights_from_strategy(data, nsamples_strategy)
+    w, n = get_weights_from_strategy(data, nsamples_strategy)
 
     ntot = np.sum(w, axis=-2)
-    nsamples_tot = np.sum(_n, axis=-2)
+    nsamples_tot = np.sum(n, axis=-2)
 
     if use_resids:
         sum_resids = np.sum(data.residuals * w, axis=-2)
@@ -111,26 +112,22 @@ def average_over_times(
         residuals=mean_resids[:, :, None, :] if use_resids else None,
         times=np.atleast_2d(np.mean(data.times, axis=0)),
         time_ranges=Time(
-            np.array(
+            np.array([
                 [
-                    [
-                        data.time_ranges.jd.min(axis=(0, 2)),
-                        data.time_ranges.jd.max(axis=(0, 2)),
-                    ]
+                    data.time_ranges.jd.min(axis=(0, 2)),
+                    data.time_ranges.jd.max(axis=(0, 2)),
                 ]
-            ).transpose((0, 2, 1)),
+            ]).transpose((0, 2, 1)),
             format="jd",
         ),
         lsts=Longitude(np.atleast_2d(np.mean(data.lsts.hour, axis=0)) * un.hour),
         lst_ranges=Longitude(
-            np.array(
+            np.array([
                 [
-                    [
-                        data.lst_ranges.hour.min(axis=(0, 2)),
-                        data.lst_ranges.hour.max(axis=(0, 2)),
-                    ]
+                    data.lst_ranges.hour.min(axis=(0, 2)),
+                    data.lst_ranges.hour.max(axis=(0, 2)),
                 ]
-            ).transpose((0, 2, 1))
+            ]).transpose((0, 2, 1))
             * un.hour
         ),
         effective_integration_time=np.mean(data.effective_integration_time, axis=2)[
@@ -208,7 +205,7 @@ def lst_bin(
     for iload in range(data.nloads):
         bbins = [
             (b[0] <= lsts[:, iload]) & (lsts[:, iload] < b[1])
-            for b in zip(bins[:-1], bins[1:])
+            for b in itertools.pairwise(bins)
         ]
 
         spec[iload], nsmpls[iload], r = bin_data(
@@ -223,7 +220,7 @@ def lst_bin(
             resids[iload] = r
 
     lst_ranges = np.tile(
-        np.array(list(zip(bins[:-1], bins[1:])))[:, None], (1, data.nloads, 1)
+        np.array(list(itertools.pairwise(bins)))[:, None], (1, data.nloads, 1)
     )
     lst_ranges = Longitude(lst_ranges * un.hour)
 

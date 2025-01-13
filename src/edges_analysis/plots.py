@@ -53,9 +53,9 @@ def plot_time_average(
         averages on the same axis.
     """
     if ax is not None:
-        fig = ax.figure
+        pass
     else:
-        fig, ax = plt.subplots(1, 1)
+        _fig, ax = plt.subplots(1, 1)
 
     if lst_min > 0 or lst_max < 24:
         data = select_lsts(data, lst_range=(lst_min, lst_max))
@@ -110,7 +110,7 @@ def plot_daily_residuals(
         The matplotlib Axes on which the plot is made.
     """
     if ax is None:
-        fig, ax = plt.subplots(1, 1)
+        _fig, ax = plt.subplots(1, 1)
 
     for i, data in enumerate(objs):
         if data.residuals is None and model is None:

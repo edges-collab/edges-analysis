@@ -66,7 +66,7 @@ class GSDataLinearModel:
         model = self.model.at(x=gsdata.freqs.to_value("MHz"))
 
         resids = np.zeros_like(d)
-        for i, (dd, pp) in enumerate(zip(d, p)):
+        for i, (dd, pp) in enumerate(zip(d, p, strict=False)):
             resids[i] = dd - model(parameters=pp)
 
         resids.shape = gsdata.data.shape
@@ -80,7 +80,7 @@ class GSDataLinearModel:
         model = self.model.at(x=gsdata.freqs.to_value("MHz"))
 
         spectra = np.zeros_like(d)
-        for i, (dd, pp) in enumerate(zip(d, p)):
+        for i, (dd, pp) in enumerate(zip(d, p, strict=False)):
             spectra[i] = dd + model(parameters=pp)
 
         spectra.shape = gsdata.data.shape
@@ -140,7 +140,7 @@ class GSDataLinearModel:
         params = np.zeros((gsdata.nloads * gsdata.npols * gsdata.ntimes, model.n_terms))
 
         try:
-            for i, (dd, ww) in enumerate(zip(d, w)):
+            for i, (dd, ww) in enumerate(zip(d, w, strict=False)):
                 params[i] = xmodel.fit(
                     ydata=dd, weights=ww, **fit_kwargs
                 ).model_parameters

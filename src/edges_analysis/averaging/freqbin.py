@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import itertools
+
 import edges_cal.modelling as mdl
 import numpy as np
 from astropy import units as un
@@ -53,7 +55,7 @@ def freq_bin(
     """
     bins = avg.get_bin_edges(data.freqs, bins)
     bins = [
-        (data.freqs >= b[0]) & (data.freqs <= b[1]) for b in zip(bins[:-1], bins[1:])
+        (data.freqs >= b[0]) & (data.freqs <= b[1]) for b in itertools.pairwise(bins)
     ]
 
     if debias is None:
@@ -184,8 +186,8 @@ def gauss_smooth(
             nsamples[inflags] = 0
         else:
             window = np.ones(maintain_flags)
-            _flags = convolve1d((~inflags).astype(int), window, mode="constant", cval=0)
-            nsamples[_flags == 0] = 0
+            flags = convolve1d((~inflags).astype(int), window, mode="constant", cval=0)
+            nsamples[flags == 0] = 0
 
     nsamples = nsamples[..., decimate_at::decimate]
 
@@ -197,9 +199,9 @@ def gauss_smooth(
 
     if not use_nsamples:
         # We have to still get the proper nsamples for the output.
-        _nsamples = convolve1d(data.flagged_nsamples, window, mode="constant", cval=0)
-        _nsamples[_nsamples == 0] = 0
-        nsamples = _nsamples[..., decimate_at::decimate]
+        nsamples_ = convolve1d(data.flagged_nsamples, window, mode="constant", cval=0)
+        nsamples_[nsamples_ == 0] = 0
+        nsamples = nsamples_[..., decimate_at::decimate]
 
     models = data.model[..., decimate_at::decimate] if use_residuals else 0
 

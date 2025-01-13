@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from functools import cached_property
 from pathlib import Path
-from typing import Callable
 
 import attr
 import numpy as np
@@ -68,7 +67,7 @@ class LabCalibration:
                 **kwargs,
             )
         else:
-            if not isinstance(s11_files, (str, Path)):
+            if not isinstance(s11_files, str | Path):
                 s11_files = s11_files[0]
 
             ant_s11 = AntennaS11.from_single_file(

@@ -204,7 +204,7 @@ def get_s11_paths(
 ):
     """Given an s11_path, return list of paths for each of the inputs."""
     # If we get four files, make sure they exist and pass them back
-    if isinstance(s11_path, (tuple, list)):
+    if isinstance(s11_path, tuple | list):
         if len(s11_path) != 4:
             raise ValueError(
                 "If passing explicit paths to S11 inputs, length must be 4."
@@ -540,7 +540,7 @@ def apply_beam_correction(
     resample_beam_lsts
         Whether to resample LSTs before averaging (by ``oversample_factor``).
     """
-    if isinstance(beam, (str, Path)):
+    if isinstance(beam, str | Path):
         beam = hickle.load(beam)
 
     if len(data.loads) > 1:

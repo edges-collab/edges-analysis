@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import functools
 import logging
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import Callable, Literal
+from typing import Literal
 
 import hickle
 import numpy as np
@@ -47,10 +47,10 @@ class _GSDataFilter:
     ) -> GSData | Sequence[GSData]:
         # Read all the data, in case they haven't been turned into objects yet.
         # And check that everything is the right type.
-        if isinstance(data, (Path, str)):
+        if isinstance(data, Path | str):
             data = GSData.from_file(data)
 
-        if self.multi_data and isinstance(data, (GSData, Path, str)):
+        if self.multi_data and isinstance(data, GSData | Path | str):
             data = [data if isinstance(data, GSData) else GSData.from_file(data)]
         elif not self.multi_data and not isinstance(data, GSData):
             raise TypeError(
@@ -89,7 +89,8 @@ class _GSDataFilter:
 
         if self.multi_data:
             data = [
-                per_file_processing(d, out_flg) for d, out_flg in zip(data, this_flag)
+                per_file_processing(d, out_flg)
+                for d, out_flg in zip(data, this_flag, strict=False)
             ]
         else:
             data = per_file_processing(data, this_flag)
