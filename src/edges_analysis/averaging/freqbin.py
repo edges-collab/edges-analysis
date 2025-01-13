@@ -55,7 +55,8 @@ def freq_bin(
     """
     bins = avg.get_bin_edges(data.freqs, bins)
     bins = [
-        (data.freqs >= b[0]) & (data.freqs <= b[1]) for b in itertools.pairwise(bins)
+        (data.freqs >= b[0]) & (data.freqs <= b[1])
+        for b in itertools.pairwise(bins, strict=False)
     ]
 
     if debias is None:
