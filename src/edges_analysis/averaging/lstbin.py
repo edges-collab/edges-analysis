@@ -148,6 +148,7 @@ def lst_bin(
     model: mdl.Model | None = None,
     in_gha: bool = False,
     use_model_residuals: bool | None = None,
+    reference_time: float | Time | str = "min",
 ):
     """Average data within bins of LST.
 
@@ -170,6 +171,13 @@ def lst_bin(
         Whether to use the model residuals to de-bias the mean in each bin. If
         True, either `model` must be provided, or `residuals` must be specified on the
         GSData object.
+    reference_time
+        The JD at which to reference the LSTs to in the output. The JDs of the output
+        will be exactly at the centre of each LST bin, but the _day_ to which they are
+        referenced will be set by the `reference_time` (all will be within 24 hours of
+        this time). This can be a float (JD), an astropy Time, or one of 'min', 'max',
+        'mean' or 'closest' (default). Options 'min', 'max' and 'mean' will use the
+        corresponding min/max/mean time in the data object to set the reference time.
 
     Returns
     -------
@@ -241,9 +249,19 @@ def lst_bin(
     else:
         intg_time = data._effective_integration_time
 
+    # Determine a reference time. The output GSDatawill still need to have "times" in JD
+    # which should be exactly at the centre of each LST bin. However, the choice of
+    # which JD each LST bin should correspond to is somewhat arbitrary.
+    if reference_time == "min":
+        reference_time = data.times.min()
+    elif reference_time == "max":
+        reference_time = data.times.max()
+    elif reference_time == "mean":
+        reference_time = data.times.mean()
+
     times = lsts_to_times(
         np.where(lstbins < lstbins[0, 0], lstbins + 2 * np.pi * un.rad, lstbins),
-        ref_time=data.times.min(),
+        ref_time=reference_time,
         location=data.telescope.location,
     )
     time_ranges = lsts_to_times(
