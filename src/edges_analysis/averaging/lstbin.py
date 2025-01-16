@@ -148,7 +148,7 @@ def lst_bin(
     model: mdl.Model | None = None,
     in_gha: bool = False,
     use_model_residuals: bool | None = None,
-    reference_time: float | Time | str = "min",
+    reference_time: float | Time | str = "mean",
 ):
     """Average data within bins of LST.
 
