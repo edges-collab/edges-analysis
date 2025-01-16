@@ -270,7 +270,7 @@ def lst_bin(
             lst_ranges + 2 * np.pi * un.rad,
             lst_ranges,
         ),
-        ref_time=data.times.min(),
+        ref_time=reference_time,
         location=data.telescope.location,
     )
 
