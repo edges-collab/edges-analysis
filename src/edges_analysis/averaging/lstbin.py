@@ -145,8 +145,8 @@ def average_over_times(
         lst_ranges=Longitude(
             np.array([
                 [
-                    lst_ranges[ww, :, 0].min(axis=0).hour,
-                    lst_ranges[ww, :, 1].max(axis=0).hour,
+                    lst_ranges[ww, :, 0].min(axis=0),
+                    lst_ranges[ww, :, 1].max(axis=0),
                 ]
             ]).transpose((0, 2, 1))
             * un.hourangle
