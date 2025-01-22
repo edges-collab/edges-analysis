@@ -124,14 +124,17 @@ def average_over_times(
         format="jd",
     )
 
-    # To get the best LST representing the data use the reference
+    # Wrap the LSTs into +-12 hours of the reference LST.
+    # Note that we de-unit the quantities to do the wrapping
+    # because astropy does weird things when trying to wrap
+    # a Longitude/Angle
     lsts = data.lsts.hour.copy()
     lsts[lsts <= reference_lst.hour - 12] += 24
     lsts[lsts > reference_lst.hour + 12] -= 24
 
-    lst_ranges = data.lst_ranges.copy()
-    lst_ranges[lst_ranges <= reference_lst - 12 * un.hourangle] += 24 * un.hourangle
-    lst_ranges[lst_ranges > reference_lst + 12 * un.hourangle] -= 24 * un.hourangle
+    lst_ranges = data.lst_ranges.hour.copy()
+    lst_ranges[lst_ranges <= reference_lst.hour - 12] += 24
+    lst_ranges[lst_ranges > reference_lst.hour + 12] -= 24
 
     return data.update(
         data=new_data[:, :, None, :],
