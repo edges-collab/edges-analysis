@@ -501,6 +501,7 @@ def apply_beam_correction(
     integrate_before_ratio: bool = True,
     oversample_factor: int = 5,
     resample_beam_lsts: bool = True,
+    lsts: np.ndarray | None = None,
 ) -> GSData:
     """Apply beam correction to the data.
 
@@ -539,6 +540,9 @@ def apply_beam_correction(
         the data LSTs are regular). This is only used if ``resample_beam_lsts`` is True.
     resample_beam_lsts
         Whether to resample LSTs before averaging (by ``oversample_factor``).
+    lsts
+        If given, resample to these LSTs exactly, instead of tryin to use the
+        LST ranges in the data with oversample_factor.
     """
     if isinstance(beam, str | Path):
         beam = hickle.load(beam)
@@ -554,17 +558,20 @@ def apply_beam_correction(
         )
 
     if resample_beam_lsts:
-        new_beam_lsts = []
-        for lst0, lst1 in data.lst_ranges[:, 0, :]:
-            lst1 = lst1.hour
-            if lst1 < lst0.hour:
-                lst1 = lst1 + 24
+        if lsts is not None:
+            beam = beam.at_lsts(lsts)
+        else:
+            new_beam_lsts = []
+            for lst0, lst1 in data.lst_ranges[:, 0, :]:
+                lst1 = lst1.hour
+                if lst1 < lst0.hour:
+                    lst1 = lst1 + 24
 
-            new_beam_lsts.append(
-                np.linspace(lst0.hour, lst1, oversample_factor + 1)[:-1]
-            )
-        new_beam_lsts = np.concatenate(new_beam_lsts)
-        beam = beam.at_lsts(new_beam_lsts)
+                new_beam_lsts.append(
+                    np.linspace(lst0.hour, lst1, oversample_factor + 1)[:-1]
+                )
+            new_beam_lsts = np.concatenate(new_beam_lsts)
+            beam = beam.at_lsts(new_beam_lsts)
 
     new_data = data.data.copy()
 
