@@ -502,6 +502,7 @@ def apply_beam_correction(
     oversample_factor: int = 5,
     resample_beam_lsts: bool = True,
     lsts: np.ndarray | None = None,
+    cut_to_data_lsts: bool = True,
 ) -> GSData:
     """Apply beam correction to the data.
 
@@ -541,8 +542,13 @@ def apply_beam_correction(
     resample_beam_lsts
         Whether to resample LSTs before averaging (by ``oversample_factor``).
     lsts
-        If given, resample to these LSTs exactly, instead of tryin to use the
+        If given, resample to these LSTs exactly, instead of trying to use the
         LST ranges in the data with oversample_factor.
+    cut_to_data_lsts
+        If True, cut the LSTs at which the beam is sampled to lie within the
+        LST ranges of the data in each LST bin. Only set this to False if you have
+        a single LST bin in the data and you know precisely the LSTs at which you
+        want to sample the beam.
     """
     if isinstance(beam, str | Path):
         beam = hickle.load(beam)
@@ -561,6 +567,7 @@ def apply_beam_correction(
         if lsts is not None:
             beam = beam.at_lsts(lsts)
         else:
+            cut_to_data_lsts = True
             new_beam_lsts = []
             for lst0, lst1 in data.lst_ranges[:, 0, :]:
                 lst1 = lst1.hour
@@ -578,7 +585,7 @@ def apply_beam_correction(
     resids = data.residuals.copy() if data.residuals is not None else None
 
     for i, (lst0, lst1) in enumerate(data.lst_ranges[:, 0, :]):
-        new = beam.between_lsts(lst0.hour, lst1.hour)
+        new = beam.between_lsts(lst0.hour, lst1.hour) if cut_to_data_lsts else beam
         if integrate_before_ratio:
             bf = new.get_integrated_beam_factor(
                 model=freq_model, freqs=data.freqs.to_value("MHz")
