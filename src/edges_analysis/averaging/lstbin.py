@@ -67,6 +67,7 @@ def get_lst_bins(
 def average_over_times(
     data: GSData,
     nsamples_strategy: NsamplesStrategy = NsamplesStrategy.FLAGGED_NSAMPLES,
+    reference_lst: Longitude = Longitude(12 * un.hour),
     use_resids: bool | None = None,
     fill_value: float = 0.0,
 ) -> GSData:
@@ -79,6 +80,9 @@ def average_over_times(
     nsamples_strategy
         The strategy to use when defining the weights of each sample. See
         :class:`~edges_analysis.averaging.NsamplesStrategy` for more information.
+    reference_lst
+        An LST set as the central LST when finding the new mean LST. All LSTs will
+        be wrapped within 12 hours of this reference before taking the mean.
     use_resids : bool, optional
         Whether to average the residuals and add them back to the mean model, or simply
         average the data directly.
@@ -107,28 +111,45 @@ def average_over_times(
 
     new_data[np.isnan(new_data)] = fill_value
 
+    # The new time will be the mean unflagged time
+    ww = np.any(w > 0, axis=(0, 1, 3))
+    times = Time(np.atleast_2d(np.mean(data.times.jd[ww], axis=0)), format="jd")
+    time_ranges = Time(
+        np.array([
+            [
+                data.time_ranges.jd[ww].min(axis=(0, 2)),
+                data.time_ranges.jd[ww].max(axis=(0, 2)),
+            ]
+        ]).transpose((0, 2, 1)),
+        format="jd",
+    )
+
+    # Wrap the LSTs into +-12 hours of the reference LST.
+    # Note that we de-unit the quantities to do the wrapping
+    # because astropy does weird things when trying to wrap
+    # a Longitude/Angle
+    lsts = data.lsts.hour.copy()
+    lsts[lsts <= reference_lst.hour - 12] += 24
+    lsts[lsts > reference_lst.hour + 12] -= 24
+
+    lst_ranges = data.lst_ranges.hour.copy()
+    lst_ranges[lst_ranges <= reference_lst.hour - 12] += 24
+    lst_ranges[lst_ranges > reference_lst.hour + 12] -= 24
+
     return data.update(
         data=new_data[:, :, None, :],
         residuals=mean_resids[:, :, None, :] if use_resids else None,
-        times=np.atleast_2d(np.mean(data.times, axis=0)),
-        time_ranges=Time(
-            np.array([
-                [
-                    data.time_ranges.jd.min(axis=(0, 2)),
-                    data.time_ranges.jd.max(axis=(0, 2)),
-                ]
-            ]).transpose((0, 2, 1)),
-            format="jd",
-        ),
-        lsts=Longitude(np.atleast_2d(np.mean(data.lsts.hour, axis=0)) * un.hour),
+        times=times,
+        time_ranges=time_ranges,
+        lsts=Longitude(np.atleast_2d(np.mean(lsts[ww], axis=0)) * un.hourangle),
         lst_ranges=Longitude(
             np.array([
                 [
-                    data.lst_ranges.hour.min(axis=(0, 2)),
-                    data.lst_ranges.hour.max(axis=(0, 2)),
+                    lst_ranges[ww, :, 0].min(axis=0),
+                    lst_ranges[ww, :, 1].max(axis=0),
                 ]
             ]).transpose((0, 2, 1))
-            * un.hour
+            * un.hourangle
         ),
         effective_integration_time=np.mean(data.effective_integration_time, axis=2)[
             :, :, None
@@ -148,6 +169,7 @@ def lst_bin(
     model: mdl.Model | None = None,
     in_gha: bool = False,
     use_model_residuals: bool | None = None,
+    reference_time: float | Time | str = "mean",
 ):
     """Average data within bins of LST.
 
@@ -170,6 +192,13 @@ def lst_bin(
         Whether to use the model residuals to de-bias the mean in each bin. If
         True, either `model` must be provided, or `residuals` must be specified on the
         GSData object.
+    reference_time
+        The JD at which to reference the LSTs to in the output. The JDs of the output
+        will be exactly at the centre of each LST bin, but the _day_ to which they are
+        referenced will be set by the `reference_time` (all will be within 24 hours of
+        this time). This can be a float (JD), an astropy Time, or one of 'min', 'max',
+        'mean' or 'closest' (default). Options 'min', 'max' and 'mean' will use the
+        corresponding min/max/mean time in the data object to set the reference time.
 
     Returns
     -------
@@ -241,9 +270,19 @@ def lst_bin(
     else:
         intg_time = data._effective_integration_time
 
+    # Determine a reference time. The output GSDatawill still need to have "times" in JD
+    # which should be exactly at the centre of each LST bin. However, the choice of
+    # which JD each LST bin should correspond to is somewhat arbitrary.
+    if reference_time == "min":
+        reference_time = data.times.min()
+    elif reference_time == "max":
+        reference_time = data.times.max()
+    elif reference_time == "mean":
+        reference_time = data.times.mean()
+
     times = lsts_to_times(
         np.where(lstbins < lstbins[0, 0], lstbins + 2 * np.pi * un.rad, lstbins),
-        ref_time=data.times.min(),
+        ref_time=reference_time,
         location=data.telescope.location,
     )
     time_ranges = lsts_to_times(
@@ -252,7 +291,7 @@ def lst_bin(
             lst_ranges + 2 * np.pi * un.rad,
             lst_ranges,
         ),
-        ref_time=data.times.min(),
+        ref_time=reference_time,
         location=data.telescope.location,
     )
 
