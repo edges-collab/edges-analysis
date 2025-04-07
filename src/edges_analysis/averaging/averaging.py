@@ -70,7 +70,7 @@ def get_binned_weights(
         x = x[mask]
         weights = weights[..., mask]
 
-    out = np.zeros(weights.shape[:-1] + (len(bins) - 1,))
+    out = np.zeros((*weights.shape[:-1], len(bins) - 1))
 
     indices = np.digitize(x, bins) - 1
 
