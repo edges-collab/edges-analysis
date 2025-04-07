@@ -65,7 +65,7 @@ def run_xrfi(
         # then we collapse to 2D and recursively run xrfi_pipe. That will trigger
         # the *next* clause, which will do parallel mapping over the first axis.
         orig_shape = spectrum.shape
-        new_shape = (-1,) + orig_shape[2:]
+        new_shape = (-1, *orig_shape[2:])
         flags = run_xrfi(
             spectrum=spectrum.reshape(new_shape),
             weights=weights.reshape(new_shape),
