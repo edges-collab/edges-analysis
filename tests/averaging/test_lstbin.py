@@ -1,17 +1,13 @@
 """Tests of the lstbin module."""
 
+import attrs
 import numpy as np
 import pytest
 from astropy import units as un
 from pygsdata import GSData
 
 from edges_analysis.averaging.lstbin import average_over_times, get_lst_bins, lst_bin
-
-
-def test_averaging_over_times(gsd_ones: GSData):
-    """Testr that averaging over times doesn't error out."""
-    new = average_over_times(gsd_ones)
-    assert np.all(new.data == 1.0)
+from edges_analysis.averaging.utils import NsamplesStrategy
 
 
 class TestGetLSTBins:
@@ -58,3 +54,27 @@ class TestLSTBin:
         data = lst_bin(new)
         manual = np.mean(new.data, axis=2)
         assert not np.allclose(data.data[:, :, 0], manual)
+
+
+class TestAverageOverTimes:
+    def test_all_ones(self, gsd_ones: GSData):
+        """Testr that averaging over times doesn't error out."""
+        new = average_over_times(gsd_ones)
+        assert np.all(new.data == 1.0)
+
+    @pytest.mark.parametrize(
+        "nsamples_strategy",
+        [
+            NsamplesStrategy.FLAGGED_NSAMPLES,
+            NsamplesStrategy.FLAGS_ONLY,
+            NsamplesStrategy.FLAGGED_NSAMPLES_UNIFORM,
+            NsamplesStrategy.NSAMPLES_ONLY,
+        ],
+    )
+    def test_with_nans(self, gsd_ones: GSData, nsamples_strategy: NsamplesStrategy):
+        """Test that averaging over times doesn't error out with nans."""
+        new = attrs.evolve(gsd_ones, data=gsd_ones.data.copy())
+
+        new.data[0, 0, 0] = np.nan
+        new = average_over_times(new, nsamples_strategy=nsamples_strategy)
+        assert np.all(new.data == 1.0)
