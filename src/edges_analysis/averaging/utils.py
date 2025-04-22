@@ -39,6 +39,8 @@ def get_weights_from_strategy(
     data: GSData, strategy: NsamplesStrategy
 ) -> tuple[np.ndarray, np.ndarray]:
     """Compute weights and nsamples used for a particular strategy."""
+    nans = np.isnan(data.data)
+
     if strategy == NsamplesStrategy.FLAGGED_NSAMPLES:
         w = data.flagged_nsamples
         n = w
@@ -56,4 +58,4 @@ def get_weights_from_strategy(
             f"Invalid nsamples_strategy: {strategy}. "
             f"Must be a member of {NsamplesStrategy}"
         )
-    return w, n
+    return np.where(nans, 0, w), np.where(nans, 0, n)

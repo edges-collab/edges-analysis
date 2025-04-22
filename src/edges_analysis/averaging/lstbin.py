@@ -101,12 +101,12 @@ def average_over_times(
     nsamples_tot = np.sum(n, axis=-2)
 
     if use_resids:
-        sum_resids = np.sum(data.residuals * w, axis=-2)
+        sum_resids = np.nansum(data.residuals * w, axis=-2)
         mean_resids = sum_resids / ntot
-        mean_model = np.mean(data.model, axis=-2)
+        mean_model = np.nanmean(data.model, axis=-2)
         new_data = mean_model + mean_resids
     else:
-        sum_data = np.sum(data.data * w, axis=-2)
+        sum_data = np.nansum(data.data * w, axis=-2)
         new_data = sum_data / ntot
 
     new_data[np.isnan(new_data)] = fill_value

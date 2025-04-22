@@ -49,6 +49,7 @@ dependencies = [
     "astropy-healpix",
     "typing_extensions",
     "frozendict",
+    "jupyter_core"
 ]
 dynamic = ["version"]
 
