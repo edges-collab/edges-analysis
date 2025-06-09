@@ -12,6 +12,14 @@ KNOWN_TELESCOPES["edges-low-alan"] = Telescope(
     x_orientation=0.0 * apu.deg,
 )
 
+KNOWN_TELESCOPES["edges-low"] = Telescope(
+    name="edges-low",
+    location=apc.EarthLocation(lat=-26.714778 * apu.deg, lon=116.605528 * apu.deg),
+    pols=("xx",),
+    integration_time=13.0 * apu.s,
+    x_orientation=0.0 * apu.deg,
+)
+
 KNOWN_TELESCOPES["edges3-devon"] = Telescope(
     name="edges3-devon",
     location=apc.EarthLocation(lat=75.433 * apu.deg, lon=-89.81 * apu.deg),
