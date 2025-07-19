@@ -6,8 +6,8 @@ import pytest
 from astropy import units as un
 from pygsdata import GSData
 
-from edges_analysis.averaging.lstbin import average_over_times, get_lst_bins, lst_bin
-from edges_analysis.averaging.utils import NsamplesStrategy
+from edges.averaging.lstbin import average_over_times, get_lst_bins, lst_bin
+from edges.averaging.utils import NsamplesStrategy
 
 
 class TestGetLSTBins:
@@ -34,7 +34,9 @@ class TestLSTBin:
         np.testing.assert_array_almost_equal(data.data[:, :, 0], manual)
 
     def test_bad_inputs(self, mock: GSData):
-        with pytest.raises(ValueError, match="Cannot bin with models without a model"):
+        with pytest.raises(
+            ValueError, match="Cannot bin with models without residuals"
+        ):
             lst_bin(mock, use_model_residuals=True)
 
         rng = np.random.default_rng()

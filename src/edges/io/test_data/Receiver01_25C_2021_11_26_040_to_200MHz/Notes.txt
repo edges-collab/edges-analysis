@@ -1,0 +1,2 @@
+This is an example calibration observation with all necessary files (but where each file has a minimum
+amount of data in it, to make it small).

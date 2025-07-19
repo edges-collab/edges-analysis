@@ -1,106 +1,47 @@
-"""Pytest configuration for the edges-analysis package."""
-
-from __future__ import annotations
-
 from pathlib import Path
-from subprocess import run
 
-import matplotlib as mpl
 import numpy as np
 import pytest
 from astropy import units as un
 from astropy.time import Time
-from click.testing import CliRunner
-from edges_cal import modelling as mdl
 from pygsdata import GSData
 
-from edges_analysis import const
-from edges_analysis.averaging import lstbin
-from edges_analysis.calibration.calibrate import dicke_calibration
-from edges_analysis.config import config
-from edges_analysis.datamodel import add_model
-
-from . import DATA_PATH
-from .mock_gsdata import create_mock_edges_data
-
-runner = CliRunner()
-
-
-def invoke(cmd, args, **kwargs):
-    result = runner.invoke(cmd, args, **kwargs)
-    print(result.output)
-    if result.exit_code > 0:
-        raise result.exc_info[1]
-
-    return result
+from edges import const
+from edges import modelling as mdl
+from edges.analysis.calibration.calibrate import dicke_calibration
+from edges.analysis.datamodel import add_model
+from edges.averaging import lstbin
+from edges.cal import CalibrationObservation
+from edges.io import calobsdef
+from edges.testing import create_mock_edges_data
 
 
 @pytest.fixture(scope="session", autouse=True)
-def _set_mpl_backend():
-    """Set the matplotlib backend for faster tests."""
-    mpl.use("pdf")
+def cal_data_path() -> Path:
+    """Path to test data."""
+    return Path(__file__).parent / "cal/data"
 
 
 @pytest.fixture(scope="session")
-def integration_test_data() -> Path:
-    tmp_path = Path(
-        "/tmp/edges-analysis-pytest"
-    )  # tmp_path_factory.mktemp("integration-data", numbered=False)
-    repo = tmp_path / "edges-analysis-test-data"
+def cal_data(cal_data_path: Path) -> Path:
+    return cal_data_path / "Receiver01_25C_2019_11_26_040_to_200MHz"
 
-    if repo.exists():
-        run(["git", "-C", str(repo), "pull"])
-    else:
-        run([
-            "git",
-            "clone",
-            "https://github.com/edges-collab/edges-analysis-test-data",
-            str(repo),
-            "--depth",
-            "1",
-        ])
-    return repo
+
+@pytest.fixture(scope="session", autouse=True)
+def tmpdir(tmp_path_factory) -> Path:
+    return tmp_path_factory.mktemp("edges")
 
 
 @pytest.fixture(scope="session")
-def edges_config(tmp_path_factory):
-    new_path = tmp_path_factory.mktemp("edges-levels")
-
-    old_paths = config["paths"]
-    new_paths = {**old_paths, "field_products": new_path}
-
-    with config.use(paths=new_paths) as cfg:
-        yield cfg
+def caldef(cal_data: Path):
+    return calobsdef.CalObsDefEDGES2.from_standard_layout(cal_data)
 
 
 @pytest.fixture(scope="session")
-def settings() -> Path:
-    return Path(__file__).parent / "settings"
-
-
-@pytest.fixture(scope="session")
-def beam_settings() -> Path:
-    return Path(__file__).parent / "data"
-
-
-@pytest.fixture(scope="session")
-def workflow_dir(tmp_path_factory) -> Path:
-    return tmp_path_factory.mktemp("integration-workflow")
-
-
-@pytest.fixture(scope="session")
-def calpath(integration_test_data: Path) -> Path:
-    return DATA_PATH / "specal.h5"  # "calfile_v0_hickled.h5"
-
-
-@pytest.fixture(scope="session")
-def s11path(integration_test_data: Path) -> Path:
-    return DATA_PATH / "2015_ants11_modelled_redone.h5"
-
-
-@pytest.fixture(scope="session")
-def beamfile(integration_test_data: Path) -> Path:
-    return integration_test_data / "alan_beam_factor.h5"
+def calobs(caldef: calobsdef.CalObsDefEDGES2):
+    return CalibrationObservation.from_caldef2(
+        caldef, f_low=50 * un.MHz, f_high=100 * un.MHz
+    )
 
 
 @pytest.fixture(scope="session")

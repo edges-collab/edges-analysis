@@ -1,0 +1,2 @@
+This mock "observation" is supposed to be wrong, but automatically fixable in a number
+of ways.

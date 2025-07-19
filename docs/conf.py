@@ -39,36 +39,6 @@ extensions = [
     "sphinx_click",
 ]
 
-# autodoc_mock_imports = [
-#     "edges_io",
-#     'edges_io.h5',
-#     'edges_io.auxiliary',
-#     'edges_cal',
-#     'edges_cal.modelling',
-#     'edges_cal.xrfi',
-#     'edges_cal.s11_correction',
-#     'numpy',
-#     'scipy',
-#     'scipy.interpolate',
-#     'astropy',
-#     'astropy.coordinates',
-#     'astropy.utils.data',
-#     'astropy.io',
-#     'astropy.time',
-#     'yaml',
-#     'h5py',
-#     'tqdm',
-#     'p_tqdm',
-#     'bidict',
-#     'methodtools',
-#     'lru_cache',
-#     'matplotlib',
-#     'matplotlib.pyplot'
-# ]
-
-# for thing in autodoc_mock_imports:
-#     sys.modules[thing] = mock.Mock()
-
 autosectionlabel_prefix_document = True
 
 autosummary_generate = True
@@ -175,7 +145,7 @@ if not on_rtd:  # only set the theme if we're building docs locally
 # The name for this set of Sphinx documents.  If None, it defaults to
 # "<project> v<release> documentation".
 try:
-    from edges_analysis import __version__ as version
+    from edges import __version__ as version
 except ImportError:
     pass
 else:
@@ -240,7 +210,7 @@ html_static_path = ["_static"]
 # html_file_suffix = None
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = "edges_analysis-doc"
+htmlhelp_basename = "edges-doc"
 
 
 # -- Options for LaTeX output --------------------------------------------------

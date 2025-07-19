@@ -2,11 +2,9 @@
 
 import numpy as np
 import pytest
-from edges_cal import modelling as mdl
 from pygsdata import GSData
 
-from edges_analysis.averaging import combiners, lstbin
-from edges_analysis.datamodel import add_model
+from edges.averaging import combiners, lstbin
 
 
 class TestAverageMultipleObjects:
@@ -22,9 +20,7 @@ class TestAverageMultipleObjects:
         assert new.data.shape == mock_season[0].data.shape
 
     def test_use_resids(self, mock_season: list[GSData]):
-        linlog = mdl.LinLog(n_terms=5)
-        modelled = [add_model(d, model=linlog) for d in mock_season]
-
+        modelled = [d.update(residuals=np.zeros_like(d.data)) for d in mock_season]
         new = combiners.average_multiple_objects(*modelled, use_resids=True)
         new2 = combiners.average_multiple_objects(
             *modelled

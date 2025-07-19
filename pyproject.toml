@@ -14,6 +14,8 @@ description = "Functionality for processing EDGES field data"
 readme = "README.rst"
 authors = [
     {name="Steven Murray", email="steven.murray@sns.it"},
+    {name="Nivedita Mahesh", email="nmahesh4@asu.edu"},
+    {name="Akshatha Vydula", email="avydula@asu.edu"}
 ]
 license = {text="MIT"}
 requires-python = ">=3.10"
@@ -28,14 +30,13 @@ classifiers = [
     "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: Implementation :: CPython",
 ]
+
 dependencies = [
-    "numpy",
+    "numpy>=2.0",
     "scipy",
     "matplotlib",
-    "astropy",
+    "astropy>=5.0",
     "pygsdata",
-    "edges-io>=4.0.0",
-    "edges-cal>=6.0.0",
     "healpy",
     "h5py",
     "tqdm",
@@ -49,7 +50,16 @@ dependencies = [
     "astropy-healpix",
     "typing_extensions",
     "frozendict",
-    "jupyter_core"
+    "jupyter_core",
+    'read-acq',
+    'bidict',
+    'pyyaml',
+    "dill",
+    "hickle",
+    "hickleable>=0.2.4",
+    "statsmodels",
+    'cattrs'
+
 ]
 dynamic = ["version"]
 
@@ -72,12 +82,24 @@ docs = [
   "numpydoc",
   "sphinx_rtd_theme",
   "sphinx_click",
-  "ipython"
+  "ipython",
+  "myst-parser",
+  "furo",
+]
+report = [
+  "papermill", "jupyter", "beautifultable"
+]
+all = [
+  "edges-analysis[report]"
 ]
 dev = [
-  "edges-analysis[testing,docs]",
+  "edges-analysis[testing,docs,report]",
   "pre-commit"
 ]
+
+[project.scripts]
+edges = "edges.cli:main"
+
 
 
 [tool.pytest.ini_options]
@@ -85,7 +107,7 @@ dev = [
 # Specify command line options as you would do when invoking py.test directly.
 # e.g. --cov-report html (or xml) for html/xml output or --junitxml junit.xml
 # in order to write a coverage file that can be read by Jenkins.
-addopts = "--verbose --durations=25 --cov edges_analysis"
+addopts = "--verbose --durations=25 --cov edges"
 norecursedirs = [
     "dist",
     "build",
@@ -98,7 +120,8 @@ exclude = [
   "*.ipynb",  # for now
 ]
 preview = true
-
+line-length=88
+target-version="py312"
 
 [tool.ruff.lint]
 extend-select = [
@@ -127,6 +150,9 @@ extend-select = [
   "PERF", # performance
   # "FURB", # refurb
   "RUF",  # ruff-specific rules
+  "RET",  # return statements
+  "RSE",  # exception raises
+  "TRY201", # verbose raise
 ]
 ignore = [
     "DTZ007",   # use %z in strptime
@@ -135,6 +161,16 @@ ignore = [
     "PTH207",   # allow glob.glob() because when we use it, it's necessary
     "A003",     # class attribute shadowing builtins
     "RUF009",   # don;e perform function call in dataclass defaults
+    "N806",  # Variable name should be lower case. We have some single-letter variables that make more sense to be caps.
+    "D401",  # First line should be in imperative mood -- cached_properties don't fit this bill.
+    "D101",  # Missing docstring in public class -- my docstrings are in the __init__ which seems to fail this ?
+    "N815",
+    "N807",  # Allow method names to start and end with __
+    "RUF012", # mutable class attributes annotation
+    # The rest should be un-commented when possible...
+    "PTH123",
+    "PT011",
+    "A005",  # module name shadows builtin
 ]
 
 [tool.ruff.lint.per-file-ignores]
@@ -148,16 +184,37 @@ ignore = [
 "docs/conf.py" = [
     "A",  # conf.py can shadow builtins
     "ERA",
+    "DTZ",
 ]
-"src/edges_analysis/calibration/loss.py" = [
+"src/edges/analysis/calibration/loss.py" = [
   "N806",  # upper-case variables because it's more mathy
 ]
-"src/edges_analysis/config.py" = [
+"src/edges/analysis/config.py" = [
   "PTH111",  # here we want to use strings
 ]
+
+"src/edges/cal/spectra.py" = [
+    "N802",
+]
+"src/edges/cal/calobs.py" = [
+    "N802",
+]
+"src/edges/cal/reflection_coefficient.py" = [
+    "A002",
+]
+"src/*/__init__.py" = [
+    "F401", "E402",
+]
+"src/edges_/cal/alanmode.py" = [
+    "N803",
+]
+"**/*.ipynb" = [
+    "T201", "DTZ", "D", "PTH119", "ERA"
+]
+
 [tool.ruff.lint.pydocstyle]
 convention = 'numpy'
 property-decorators = ["pytest.fixture"]
 
 [tool.ruff.lint.mccabe]
-max-complexity = 18
+max-complexity = 21

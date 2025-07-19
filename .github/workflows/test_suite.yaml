@@ -36,7 +36,7 @@ jobs:
           pip install .[dev]
       - name: Run Tests
         run: |
-          python -m pytest --cov edges_analysis --cov-report xml:./coverage.xml
+          python -m pytest --cov edges --cov-report xml:./coverage.xml
       - uses: codecov/codecov-action@v5
         if: matrix.os == 'ubuntu-latest' && success()
         with:

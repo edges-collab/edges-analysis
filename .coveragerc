@@ -1,9 +1,7 @@
 # .coveragerc to control coverage.py
 [run]
 branch = True
-source = edges_analysis
-omit =
-    src/edges_analysis/simulation/*
+source = edges
 
 [paths]
 source =

@@ -1,19 +1,18 @@
 
 Library Usage
 -------------
-The library is split into subpackages for performing different kinds of data processing:
-eg. ``calibration``, ``filters``, and ``averaging``. There are also submodules for
-calculating beam corrections, sky models, and other useful functions such as plotting.
+The library is split into subpackages for different steps of the calibration and analysis
+pipeline for the EDGES telescope. At a high level, it is split into the `io`, `cal`
+`analysis` subpackages, while these are further split into sub-packages that support
+different analysis components.
+There are also submodules for calculating beam corrections, sky models, and other useful
+functions such as plotting.
 The primary data object that all functionality is built around is the
-:class:`edges_analysis.gsdata.GSData` object. This object stores all relevant data from
+:class:`pygsdata.GSData` object. This object stores all relevant data from
 a global-signal measurement, and has useful methods for accessing parts of the data,
 as well as reading/writing the data to standard formats (including HDF5 and ACQ).
 
-.. note:: The GSData object is a severe departure from our previous framework, in which
-    each processing step had its own data format and required parameters. The GSData
-    object is light-weight, and can represent any stage of the data formatting.
-
-All processing functions in ``edges-analysis`` operate on the ``GSData`` object.
+All processing functions in ``edges`` operate on the ``GSData`` object.
 The ``GSData`` object is considered to be immutable. This means that functions that
 process the object return a *new* object with updated data. This makes reasoning about
 the code much simpler, and makes it easier to write code that is reusable.
@@ -26,7 +25,7 @@ Reading/Writing Data
 ~~~~~~~~~~~~~~~~~~~~
 To read in data as a GSData object, simply use the ``from_file`` method::
 
-    from edges_analysis import GSData
+    from pygsdata import GSData
     data = GSData.from_file('data.acq', telescope_name="EDGES-low")
 
 Notice that we passed the telescope name, which is a piece of (optional) metadata that
@@ -66,19 +65,19 @@ The history can be updated by supplying a dictionary with at least a message::
         history={"message": "Multiplied by 3"}
     )
 
-In actual fact, the history object that is added is a :class:`edges_analysis.gsdata.Stamp`
+In actual fact, the history object that is added is a :class:`pygsdata.Stamp`
 object, which is a lightweight object that can be easily serialized to YAML, and adds
 a default timestamp and set of code versions to the history. You can use one of these
 directly if you wish::
 
-    from edges_analysis import Stamp
+    from pygsdata import Stamp
     data = data.update(
         data=data.data * 3,
         data_unit="uncalibrated",
         history=Stamp(message="Multiplied by 3", timestamp=datetime.now())
     )
 
-If you write a function that updates a GSData object, it is better to include the
+If you write a function that updates a ``GSData`` object, it is better to include the
 function name and the parameters it uses in the history::
 
     def multiply_by_3(data, data_unit):
@@ -96,7 +95,7 @@ to do it, as we shall see now.
 Using the Register
 ~~~~~~~~~~~~~~~~~~
 There is a decorator defined that makes writing new functions that update GSData objects
-simpler, called :func:`edges_analysis.gsdata.gsregister`.
+simpler, called :func:`pygsdata.gsdata.gsregister`.
 This decorator does a few things: it registers the function into a global dictionary,
 ``GSDATA_PROCESSORS``, and it adds the function to the ``history`` of the object.
 *Using* registered functions is simple: just call the function with the object as the
@@ -104,7 +103,7 @@ first argument, and any other parameters as keyword arguments. Since most
 internally-defined functions have already been registered, you can use them out of the
 box. For example::
 
-    from edges_analysis.averaging import freq_bin
+    from edges.analysis.averaging import freq_bin
     data = freq_bin(data, resolution=8)
 
 The returned ``data`` object has a different data-shape (it has 1/8th of the frequency
@@ -126,7 +125,7 @@ rich library to pretty-print the history::
 Adding your own registered processor is simple -- just use the decorator over a function
 with the correct signature::
 
-    from edges_analysis.gsdata import gsregister, GSData
+    from pygsdata import gsregister, GSData
 
     @gsregister("filter")
     def filter_every_nth_channel(data: GSData, *, n: int=1) -> GSData:
@@ -151,10 +150,10 @@ described below.
 
 Making Plots
 ~~~~~~~~~~~~
-The :mod:`edges_analysis.plots` module contains functions that can be used to make plots
+The :mod:`pygsdata.plots` module contains functions that can be used to make plots
 from a GSData object. For example, let's say we have a GSData file::
 
-    from edges_analysis import GSData, plots
+    from pygsdata import GSData, plots
     data = GSData.from_file('2015_202_00.gsh5')
 
     # Plot a flagged waterfall of the data (whether it's residuals or spectra)
