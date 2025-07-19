@@ -6,8 +6,8 @@ import numpy as np
 import pytest
 from astropy import units as un
 
-from edges_analysis.averaging import averaging
-from edges_analysis.averaging.averaging import bin_data
+from edges.averaging import averaging
+from edges.averaging.averaging import bin_data
 
 
 class TestGetBinnedWeights:
@@ -414,7 +414,7 @@ class TestWeightedVariance:
         np.testing.assert_equal(variance, variance1)
 
 
-class TestBinArray:
+class TestBinData:
     @pytest.mark.parametrize("axis", [0, 1, 2, -1])
     def test_full_average_3d(self, axis):
         rng = np.random.default_rng()
@@ -454,3 +454,23 @@ class TestBinArray:
         bins = [slice(0, 2), slice(2, 4)]
         res1, _, _ = bin_data(data, bins=bins)
         np.testing.assert_array_equal(res1, [1.5, 3.5])
+
+
+class TestBinArrayUnweighted:
+    def test_bin_array_simple_1d(self):
+        x = np.array([1, 1, 2, 2, 3, 3])
+        out = averaging.bin_array_unweighted(x, 2)
+        assert np.all(out == np.array([1, 2, 3]))
+
+    def test_bin_array_remainder(self):
+        x = np.array([1, 1, 2, 2, 3, 3, 4])
+        out = averaging.bin_array_unweighted(x, 2)
+        assert np.all(out == np.array([1, 2, 3]))
+
+    def test_bin_array_2d(self):
+        x = np.array([
+            [1, 1, 2, 2, 3, 3, 4],
+            [4, 4, 5, 5, 6, 6, 7],
+        ])
+        out = averaging.bin_array_unweighted(x, 2)
+        assert np.all(out == np.array([[1, 2, 3], [4, 5, 6]]))

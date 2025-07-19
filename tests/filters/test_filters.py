@@ -2,21 +2,16 @@
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
 import numpy as np
 import pytest
 from astropy import units as un
-from edges_cal import modelling as mdl
 from pygsdata import GSData, GSFlag
 from pygsdata.concat import concat
 from pygsdata.select import select_freqs
 
-from edges_analysis.filters import filters
-
-sys.path.append(str(Path(__file__).parent.parent))
-from mock_gsdata import create_mock_edges_data
+from edges import modelling as mdl
+from edges.filters import filters
+from edges.testing import create_mock_edges_data
 
 
 def run_filter_check(data: GSData, fnc: callable, **kwargs):

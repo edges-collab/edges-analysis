@@ -7,7 +7,20 @@ Extensions to the GSData Interface
     :toctree: _autosummary
     :template: module.rst
 
-    edges_analysis.datamodel
+    edges.analysis.datamodel
+
+I/O Subpackage
+--------------
+.. autosummary::
+    :toctree: _autosummary
+    :template: module.rst
+
+    edges.io.io
+    edges.io.h5
+    edges.io.auxiliary
+    edges.io.logging
+    edges.io.utils
+
 
 High Level Methods
 ------------------
@@ -20,9 +33,9 @@ Averaging
     :toctree: _autosummary
     :template: module.rst
 
-    edges_analysis.averaging.combiners
-    edges_analysis.averaging.freqbin
-    edges_analysis.averaging.lstbin
+    edges.analysis.averaging.combiners
+    edges.analysis.averaging.freqbin
+    edges.analysis.averaging.lstbin
 
 Calibration
 ~~~~~~~~~~~
@@ -30,7 +43,7 @@ Calibration
     :toctree: _autosummary
     :template: module.rst
 
-    edges_analysis.calibration.calibrate
+    edges.analysis.calibration.calibrate
 
 Filters
 ~~~~~~~
@@ -38,8 +51,8 @@ Filters
     :toctree: _autosummary
     :template: module.rst
 
-    edges_analysis.filters.filters
-    edges_analysis.filters.lst_model
+    edges.filters.filters
+    edges.filters.lst_model
 
 Auxiliary Data
 ~~~~~~~~~~~~~~
@@ -47,7 +60,7 @@ Auxiliary Data
     :toctree: _autosummary
     :template: module.rst
 
-    edges_analysis.aux_data
+    edges.analysis.aux_data
 
 Visualization
 ~~~~~~~~~~~~~
@@ -55,7 +68,7 @@ Visualization
     :toctree: _autosummary
     :template: module.rst
 
-    edges_analysis.plots
+    edges.analysis.plots
 
 
 Lower Level Methods
@@ -67,11 +80,11 @@ interface.
     :toctree: _autosummary
     :template: module.rst
 
-    edges_analysis.averaging.averaging
-    edges_analysis.averaging.utils
-    edges_analysis.calibration.labcal
-    edges_analysis.calibration.loss
-    edges_analysis.calibration.s11
+    edges.analysis.averaging.averaging
+    edges.analysis.averaging.utils
+    edges.analysis.calibration.labcal
+    edges.analysis.calibration.loss
+    edges.analysis.calibration.s11
 
 Sky and Beam Modelling
 ----------------------
@@ -79,8 +92,8 @@ Sky and Beam Modelling
     :toctree: _autosummary
     :template: module.rst
 
-    edges_analysis.sky_models
-    edges_analysis.beams
+    edges.analysis.sky_models
+    edges.analysis.beams
 
 Package Config and Utilities
 ----------------------------
@@ -88,8 +101,8 @@ Package Config and Utilities
     :toctree: _autosummary
     :template: module.rst
 
-    edges_analysis.const
-    edges_analysis.config
-    edges_analysis.tools
-    edges_analysis.coordinates
-    edges_analysis.groupdays
+    edges.analysis.const
+    edges.analysis.config
+    edges.analysis.tools
+    edges.analysis.coordinates
+    edges.analysis.groupdays

@@ -11,6 +11,7 @@ Contents
    Changelog <changelog>
    Usage <usage_overview>
    Tutorials <tutorials>
+   Calibration Observation File Structure <structure>
    API Reference <reference/index>
 
 
