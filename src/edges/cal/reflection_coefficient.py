@@ -96,7 +96,7 @@ class TwoPortNetwork:
     (https://en.wikipedia.org/wiki/Two-port_network#ABCD-parameters).
     """
 
-    x: npt.NDArray[complex] = attrs.field(
+    x: npt.NDArray[np.complex] = attrs.field(
         eq=attrs.cmp_using(eq=np.array_equal),
         converter=np.atleast_3d,
     )
@@ -150,7 +150,7 @@ class TwoPortNetwork:
         return self.x[1, 1]
 
     @cached_property
-    def determinant(self) -> npt.NDArray[float]:
+    def determinant(self) -> npt.NDArray[np.float]:
         """The determinant of the ABCD representation, |AD - BC|."""
         return np.abs(self.A * self.D - self.B * self.C)
 
@@ -354,7 +354,7 @@ class SMatrix:
         return cls(np.array([[s11, s12], [s21, s22]]))
 
     @classmethod
-    def from_transfer_matrix(cls, t: npt.NDArray[complex]):
+    def from_transfer_matrix(cls, t: npt.NDArray[np.complex]):
         """Create an SMatrix from a transfer matrix.
 
         See https://en.wikipedia.org/wiki/Scattering_parameters#Scattering_transfer_parameters.
@@ -424,17 +424,17 @@ class SMatrix:
         return np.allclose(product, np.eye(2))
 
     @property
-    def complex_linear_gain(self) -> npt.NDArray[complex]:
+    def complex_linear_gain(self) -> tp.ComplexArray:
         """The complex linear gain of the network, i.e. S12."""
         return self.s[1, 0]
 
     @property
-    def scalar_linear_gain(self) -> npt.NDArray[float]:
+    def scalar_linear_gain(self) -> tp.FloatArray:
         """The abs value of the linear gain of the network, |S21|."""
         return np.abs(self.complex_linear_gain)
 
     @property
-    def scalar_logarithmic_gain(self) -> npt.NDArray[float]:
+    def scalar_logarithmic_gain(self) -> tp.FloatArray:
         """The scalar gain, |S21|, in decibels."""
         return linear_to_decibels(self.scalar_linear_gain)
 
@@ -779,9 +779,7 @@ class CalkitStandard:
         """The name of the standard. Inferred from the resistance."""
         if np.abs(self.resistance.to_value("ohm")) > 1000:
             return "open"
-        if np.abs(self.resistance.to_value("ohm")) < 1:
-            return "short"
-        return "match"
+        return "short" if np.abs(self.resistance.to_value("ohm")) < 1 else "match"
 
     @classmethod
     def _verify_freq(cls, freq: np.ndarray | units.Quantity):
@@ -1046,11 +1044,7 @@ def path_length_correction_edges3(
     disp = (La + Lb) / L
     R = 2.0 * np.pi * L * disp * np.sqrt(freq)
     L = L * (1.0 + disp / np.sqrt(freq))
-    G = 0
-
-    if diel > 1.2:
-        G = 2.0 * np.pi * C * freq * 2e-4  # // 2e-4 is the loss tangent for teflon
-
+    G = 2.0 * np.pi * C * freq * 2e-4 if diel > 1.2 else 0
     Zcab = np.sqrt((1j * 2 * np.pi * freq * L + R) / (1j * 2 * np.pi * freq * C + G))
     g = np.sqrt((1j * 2 * np.pi * freq * L + R) * (1j * 2 * np.pi * freq * C + G))
 

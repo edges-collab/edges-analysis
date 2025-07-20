@@ -147,26 +147,16 @@ class LoadSpectrum:
 
     Parameters
     ----------
-    freq
-        The frequencies associated with the spectrum.
     q
         The measured power-ratios of the three-position switch averaged over time.
     variance
         The variance of *a single* time-integration as a function of frequency.
-    n_integrations
-        The number of integrations averaged over.
     temp_ave
         The average measured physical temperature of the load while taking spectra.
-    t_load_ns
-        The "assumed" temperature of the load + noise source
-    t_load
-        The "assumed" temperature of the load
-    _metadata
-        A dictionary of metadata items associated with the spectrum.
     """
 
     q: GSData = attrs.field()
-    variance: GSData = attrs.field()
+    variance: GSData | None = attrs.field(default=None)
     temp_ave: float = attrs.field()
     _metadata: dict[str, Any] = attrs.field(factory=dict)
 
@@ -180,6 +170,9 @@ class LoadSpectrum:
 
     @variance.validator
     def _var_vld(self, att, val):
+        if val is None:
+            return
+        
         if val.data.shape != self.q.data.shape:
             raise ValueError("variance must be an array with the same shape as q.data")
 

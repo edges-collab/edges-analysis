@@ -37,7 +37,7 @@ dependencies = [
     "matplotlib",
     "astropy>=5.0",
     "pygsdata",
-    "healpy",
+    "astropy-healpix",
     "h5py",
     "tqdm",
     "rich>=9.0",

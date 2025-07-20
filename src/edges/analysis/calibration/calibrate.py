@@ -17,32 +17,12 @@ from ... import types as tp
 from ...cal import (
     Calibrator,
 )
-from ...cal.s11 import AntennaS11
+from ...cal.s11 import S11Model
 from ...config import config
 from ...sim import beams
 from ...sim.beams import BeamFactor
 from .. import coordinates as coords
 from .labcal import LabCalibration
-
-
-@gsregister("calibrate")
-def approximate_temperature(data: GSData, *, tload: float, tns: float):
-    """Convert an uncalibrated object to an uncalibrated_temp object.
-
-    This uses a guess for T0 and T1 that provides an approximate temperature spectrum.
-    One does not need this step to perform actual calibration, and if actual calibration
-    is done following applying this function, you will need to provide the same tload
-    and tns as used here.
-    """
-    if data.data_unit != "uncalibrated":
-        raise ValueError(
-            "data_unit must be 'uncalibrated' to calculate approximate temperature"
-        )
-    return data.update(
-        data=data.data * tns + tload,
-        data_unit="uncalibrated_temp",
-        residuals=data.residuals * tns if data.residuals is not None else None,
-    )
 
 
 def get_default_s11_directory(band: str) -> Path:
@@ -214,7 +194,7 @@ def get_s11_paths(
 def get_labcal(
     calobs: Calibrator | tp.PathLike,
     s11_path: tp.PathLike | tuple | list | None = None,
-    ant_s11_object: str | Path | AntennaS11 | None = None,
+    ant_s11_object: str | Path | S11Model | None = None,
     band: str | None = None,
     begin_time: datetime | None = None,
     s11_file_pattern: str | None = None,
@@ -253,8 +233,8 @@ def get_labcal(
         calobs = Calibrator.from_calfile(calobs)
 
     if ant_s11_object is not None:
-        if not isinstance(ant_s11_object, AntennaS11):
-            ants11 = AntennaS11.from_file(ant_s11_object)
+        if not isinstance(ant_s11_object, S11Model()):
+            ants11 = S11Model.from_file(ant_s11_object)
         else:
             ants11 = ant_s11_object
         return LabCalibration(

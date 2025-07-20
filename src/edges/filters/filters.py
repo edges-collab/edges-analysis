@@ -18,7 +18,6 @@ from pygsdata.select import _mask_times
 
 from .. import modelling as mdl
 from .. import types as tp
-from ..analysis.datamodel import add_model
 from ..averaging import averaging
 from ..filters import xrfi as rfi
 from ..filters.xrfi import ModelFilterInfoContainer, model_filter
@@ -786,6 +785,8 @@ def rms_filter(
         A model to be used to fit each integration. Not required if a model
         already exists on the data.
     """
+    from ..analysis.datamodel import add_model
+
     if (
         freq_range[0] * u.MHz > data.freqs.min()
         or freq_range[1] * u.MHz < data.freqs.max()

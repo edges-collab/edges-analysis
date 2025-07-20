@@ -8,7 +8,7 @@ from pygsdata import GSData
 
 from edges import const
 from edges import modelling as mdl
-from edges.analysis.calibration.calibrate import dicke_calibration
+from edges.cal.dicke import dicke_calibration
 from edges.analysis.datamodel import add_model
 from edges.averaging import lstbin
 from edges.cal import CalibrationObservation
@@ -16,11 +16,24 @@ from edges.io import calobsdef
 from edges.testing import create_mock_edges_data
 
 
-@pytest.fixture(scope="session", autouse=True)
-def cal_data_path() -> Path:
-    """Path to test data."""
-    return Path(__file__).parent / "cal/data"
+@pytest.fixture(scope='session')
+def testdata_path() -> Path:
+    return Path(__file__).parent / 'data'
 
+@pytest.fixture(scope="session", autouse=True)
+def cal_data_path(testdata_path: Path) -> Path:
+    """Path to test data."""
+    return testdata_path / "cal"
+
+@pytest.fixture(scope="session", autouse=True)
+def anl_data_path(testdata_path: Path) -> Path:
+    """Path to test data."""
+    return testdata_path / "analysis"
+
+@pytest.fixture(scope="session", autouse=True)
+def sim_data_path(testdata_path: Path) -> Path:
+    """Path to test data."""
+    return testdata_path / "sim"
 
 @pytest.fixture(scope="session")
 def cal_data(cal_data_path: Path) -> Path:

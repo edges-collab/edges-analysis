@@ -13,7 +13,7 @@ from astropy import units as u
 
 from .. import modelling as mdl
 from .. import types as tp
-from ..analysis.data import BEAM_PATH
+from edges.data import BEAM_PATH
 from ..config import config
 from ..io.serialization import hickleable
 from ..units import vld_unit

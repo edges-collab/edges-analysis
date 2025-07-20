@@ -7,7 +7,7 @@ from click.testing import CliRunner
 from edges.cal.cli import compare, report, run
 
 
-def test_run(data_path: Path, tmpdir: Path):
+def test_run(cal_data_path: Path, tmpdir: Path):
     runner = CliRunner()
     outdir = tmpdir / "cli-out"
     if not outdir.exists():
@@ -15,8 +15,8 @@ def test_run(data_path: Path, tmpdir: Path):
     result = runner.invoke(
         run,
         [
-            str(data_path / "settings.yaml"),
-            str(data_path / "Receiver01_25C_2019_11_26_040_to_200MHz"),
+            str(cal_data_path / "settings.yaml"),
+            str(cal_data_path / "Receiver01_25C_2019_11_26_040_to_200MHz"),
             "--out",
             str(outdir),
             "--global-config",
@@ -35,7 +35,7 @@ def test_run(data_path: Path, tmpdir: Path):
     assert result.exit_code == 0
 
 
-def test_report(data_path: Path, tmpdir: Path):
+def test_report(cal_data_path: Path, tmpdir: Path):
     runner = CliRunner()
     outdir = tmpdir / "cli-out"
     if not outdir.exists():
@@ -44,8 +44,8 @@ def test_report(data_path: Path, tmpdir: Path):
     result = runner.invoke(
         report,
         [
-            str(data_path / "settings.yaml"),
-            str(data_path / "Receiver01_25C_2019_11_26_040_to_200MHz"),
+            str(cal_data_path / "settings.yaml"),
+            str(cal_data_path / "Receiver01_25C_2019_11_26_040_to_200MHz"),
             "--out",
             str(outdir),
             "--global-config",
@@ -64,7 +64,7 @@ def test_report(data_path: Path, tmpdir: Path):
     assert result.exit_code == 0
 
 
-def test_compare(data_path: Path, tmpdir: Path):
+def test_compare(cal_data_path: Path, tmpdir: Path):
     runner = CliRunner()
     outdir = tmpdir / "cli-out"
     if not outdir.exists():
@@ -73,10 +73,10 @@ def test_compare(data_path: Path, tmpdir: Path):
     result = runner.invoke(
         compare,
         [
-            str(data_path / "settings.yaml"),
-            str(data_path / "Receiver01_25C_2019_11_26_040_to_200MHz"),
-            str(data_path / "settings.yaml"),
-            str(data_path / "Receiver01_25C_2019_11_26_040_to_200MHz"),
+            str(cal_data_path / "settings.yaml"),
+            str(cal_data_path / "Receiver01_25C_2019_11_26_040_to_200MHz"),
+            str(cal_data_path / "settings.yaml"),
+            str(cal_data_path / "Receiver01_25C_2019_11_26_040_to_200MHz"),
             "--out",
             str(outdir),
             "--global-config",

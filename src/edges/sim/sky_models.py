@@ -10,10 +10,10 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from pathlib import Path
+import warnings
 
 import astropy_healpix as ahp
 import attrs
-import healpy as hp
 import numpy as np
 from astropy import coordinates as apc
 from astropy.coordinates import Galactic
@@ -211,10 +211,12 @@ class SkyModel:
 
         # Downgrade the data quality to max_res to improve performance, if desired.
         if nside > max_nside:
-            hp.ud_grade(temp_map, nside_out=max_nside, order_in=ordering.upper())
+            warnings.warn("Ignoring max_nside because astropy-healpix doesn't support ud_grade")
+            
         if nside < min_nside:
-            hp.ud_grade(temp_map, nside_out=min_nside, order_in=ordering.upper())
+            warnings.warn("Ignoring min_nside because astropy-healpix doesn't support ud_grade")
 
+            
         return cls(
             frequency=frequency,
             temperature=temp_map,

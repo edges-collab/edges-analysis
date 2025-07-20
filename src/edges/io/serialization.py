@@ -38,7 +38,9 @@ def hickleable(cls):
         raise TypeError(f"Class {cls} has untyped fields: {untyped}")
 
     # Give our class a reader and writer
-    cls.write = write_object_to_hdf5
-    cls.from_file = load_hdf5
+    if not hasattr(cls, 'write'):
+        cls.write = write_object_to_hdf5
+    if not hasattr(cls, 'from_file'):
+        cls.from_file = load_hdf5
 
     return cls

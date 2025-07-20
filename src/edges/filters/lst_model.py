@@ -17,7 +17,6 @@ from pygsdata import GSData, GSFlag, gsregister
 from edges.modelling import FourierDay, LinLog, Model
 
 from .. import types as tp
-from ..analysis.datamodel import add_model
 from . import DATA_PATH
 from .filters import chunked_iterative_model_filter, gsdata_filter
 
@@ -380,6 +379,8 @@ class RMSAggregator(FrequencyAggregator):
 
     def aggregate_file(self, data: GSData) -> np.ndarray:
         """Compute the RMS over frequency for each integration in a file."""
+        from ..analysis.datamodel import add_model
+
         if data.data_unit not in ("temperature", "model_residuals"):
             raise ValueError("Can only run total power aggregator on temperature data.")
 

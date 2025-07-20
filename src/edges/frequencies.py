@@ -9,7 +9,7 @@ from . import types as tp
 def edges_raw_freqs(
     f_low: tp.FreqType = 0 * units.MHz,
     f_high: tp.FreqType = np.inf * units.MHz,
-) -> tp.FreqType:
+) -> units.Quantity[units.MHz]:
     """Get the raw frequency array of the EDGES spectrometer.
 
     Parameters
@@ -59,5 +59,5 @@ def edges_freq_mask(low: tp.FreqType, high: tp.FreqType) -> NDArray[np.bool]:
 
 
 @units.quantity_input
-def clip_freqs(freq: tp.FreqType, low: tp.FreqType, high: tp.FreqType) -> tp.FreqType:
+def clip_freqs(freq: tp.FreqType, low: tp.FreqType, high: tp.FreqType) -> units.Quantity[units.MHz]:
     return freq[(freq >= low) & (freq <= high)]

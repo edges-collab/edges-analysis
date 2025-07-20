@@ -16,18 +16,14 @@ from rich.console import Console
 from traitlets.config import Config
 
 from ..cal import calobs as cc
-from ..cal.alanmode import (
-    acqplot7amoon,
+from ..alanmode import (
+    acqplot7amoon, 
     read_spec_txt,
     write_modelled_s11s,
     write_spec_txt,
     write_specal,
-)
-from ..cal.alanmode import (
     alancal as acal,
-)
-from ..cal.alanmode import (
-    alancal2 as acal2,
+    alancal2 as acal2
 )
 from ..cal.calobs import CalibrationObservation
 from ..config import config

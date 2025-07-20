@@ -208,8 +208,8 @@ def sky_convolution_generator(
 def simulate_spectra(
     beam: Beam,
     ground_loss: np.ndarray | None = None,
-    f_low: [None, float] = 0,
-    f_high: [None, float] = np.inf,
+    f_low: float | None = 0,
+    f_high: float | None = np.inf,
     normalize_beam: bool = True,
     sky_model: sky_models.SkyModel = sky_models.Haslam408(),
     index_model: sky_models.IndexModel = sky_models.ConstantIndex(),
