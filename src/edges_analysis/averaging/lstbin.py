@@ -135,7 +135,10 @@ def average_over_times(
     lst_ranges = data.lst_ranges.hour.copy()
     lst_ranges[lst_ranges <= reference_lst.hour - 12] += 24
     lst_ranges[lst_ranges > reference_lst.hour + 12] -= 24
-
+    
+    new_aux = {key: np.nanmean(data.auxiliary_measurements[key]) for key in data.auxiliary_measurements.keys()}
+        
+    
     return data.update(
         data=new_data[:, :, None, :],
         residuals=mean_resids[:, :, None, :] if use_resids else None,
@@ -156,7 +159,7 @@ def average_over_times(
         ],
         nsamples=nsamples_tot[:, :, None],
         flags={},
-        auxiliary_measurements=None,
+        auxiliary_measurements=new_aux,
     )
 
 
