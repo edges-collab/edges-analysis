@@ -141,7 +141,8 @@ def average_over_times(
             key: np.array([np.nanmean(data.auxiliary_measurements[key])])
             for key in data.auxiliary_measurements.keys()
         }
-
+    else:
+        new_aux = None
     return data.update(
         data=new_data[:, :, None, :],
         residuals=mean_resids[:, :, None, :] if use_resids else None,
