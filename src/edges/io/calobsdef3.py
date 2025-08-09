@@ -110,6 +110,24 @@ class CalkitEdges3(Calkit):
         hour: int | str = "first",
         allow_closest_s11_within: int = 5,
     ) -> Self:
+        """
+        Create a CalkitEdges3 object from a standard directory layout.
+
+        Parameters
+        ----------
+        root_dir
+            The root directory to search in
+        load
+            The name of the load for which the calkit observations were taken.
+        year
+            The year of observation.
+        day
+            The day of observation
+        hour
+            The hour of observation, or "first" for automaic search.
+        allow_closest_s11_within
+            The number of surrounding days to search for S11.
+        """
         files = get_s1p_files(
             load=load,
             year=year,
@@ -145,12 +163,12 @@ def get_spectrum_files(
 @attrs.define(frozen=True, kw_only=True)
 class LoadDefEDGES3:
     name: str = attrs.field()
-    
+
     s11: LoadS11 = attrs.field()
     spectra: list[Path] = attrs.field(converter=_list_of_path)
     templog: Path | None = attrs.field(
-        converter=attrs.converters.optional(Path), 
-        validator=attrs.validators.optional(_vld_path_exists)
+        converter=attrs.converters.optional(Path),
+        validator=attrs.validators.optional(_vld_path_exists),
     )
 
     @classmethod
@@ -166,6 +184,49 @@ class LoadDefEDGES3:
         allow_closest_s11_within: int = 5,
         specfmt: Literal["acq", "gsh5"] = "acq",
     ) -> Self:
+        """
+        Create a LoadDefEDGES3 instance from a standard directory layout.
+
+        This method locates and loads all required calibration and observation files
+        for the specified date and configuration.
+
+        Parameters
+        ----------
+        root : PathLike
+            The root directory containing the data.
+        loadname
+            The name of the load to gather files for.
+        year : int
+            The year of the observation.
+        day : int
+            The day of the year for the observation.
+        s11_year : int or None, optional
+            The year to use for S11 calibration files. Defaults to `year` if not
+            provided.
+        s11_day : int or None, optional
+            The day to use for S11 calibration files. Defaults to `day` if not provided.
+        s11_hour : int or str, optional
+            The hour to use for S11 calibration files, or "first"/"last" for automatic
+            selection.
+        allow_closest_s11_within : int, optional
+            Maximum number of days to search for the closest S11 file.
+        specfmt : {'acq', 'gsh5'}, optional
+            The file format for spectrum files.
+
+        Returns
+        -------
+        LoadDefEDGES3
+            A LoadDefEDGES3 instance with all loads and receiver S11 populated.
+
+        Raises
+        ------
+        AssertionError
+            If the root directory does not exist.
+        FileNotFoundError
+            If required files are not found.
+        OSError
+            If multiple files are found where only one is expected.
+        """
         if s11_year is None:
             s11_year = year
         if s11_day is None:
@@ -186,14 +247,12 @@ class LoadDefEDGES3:
         # Now get spectra
         fl = get_spectrum_files(loadname, root=root, year=year, day=day, fmt=specfmt)
 
-        templog=root / "temperature_logger/temperature.log"
+        templog = root / "temperature_logger/temperature.log"
         if not templog.exists():
             # It's OK, sometimes you just want to pass you own temperatures.
             templog = None
-            
-        return cls(
-            s11=s11, spectra=[fl], templog=templog, name=loadname
-        )
+
+        return cls(s11=s11, spectra=[fl], templog=templog, name=loadname)
 
 
 @attrs.define(frozen=True, kw_only=True)
@@ -207,6 +266,7 @@ class CalObsDefEDGES3:
 
     @property
     def loads(self) -> dict[str, LoadDefEDGES3]:
+        """A dictionary of all loads."""
         return {
             "open": self.open,
             "short": self.short,
@@ -226,6 +286,47 @@ class CalObsDefEDGES3:
         allow_closest_s11_within: int = 5,
         specfmt: Literal["acq", "gsh5"] = "acq",
     ) -> Self:
+        """
+        Create a CalObsDefEDGES3 instance from the standard directory layout.
+
+        This method locates and loads all required calibration and observation files
+        for the specified date and configuration.
+
+        Parameters
+        ----------
+        rootdir
+            The root directory containing the data.
+        year
+            The year of the observation.
+        day : int
+            The day of the year for the observation.
+        s11_year : int or None, optional
+            The year to use for S11 calibration files. Defaults to `year` if not
+            provided.
+        s11_day : int or None, optional
+            The day to use for S11 calibration files. Defaults to `day` if not provided.
+        s11_hour : int or str, optional
+            The hour to use for S11 calibration files, or "first"/"last" for automatic
+            selection.
+        allow_closest_s11_within : int, optional
+            Maximum number of days to search for the closest S11 file.
+        specfmt : {'acq', 'gsh5'}, optional
+            The file format for spectrum files.
+
+        Returns
+        -------
+        CalObsDefEDGES3
+            A CalObsDefEDGES3 instance with all loads and receiver S11 populated.
+
+        Raises
+        ------
+        AssertionError
+            If the root directory does not exist.
+        FileNotFoundError
+            If required files are not found.
+        OSError
+            If multiple files are found where only one is expected.
+        """
         if s11_year is None:
             s11_year = year
         if s11_day is None:

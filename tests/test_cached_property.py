@@ -1,3 +1,5 @@
+"""Tests of the cached_property module."""
+
 import pytest
 
 from edges import cached_property as cp

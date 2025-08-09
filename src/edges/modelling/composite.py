@@ -60,20 +60,20 @@ class CompositeModel:
         """The read-only list of parameters of all sub-models."""
         if any(m.parameters is None for m in self.models.values()):
             return None
-        
+
         return np.concatenate(tuple(m.parameters for m in self.models.values()))
 
     @cached_property
     def _index_map(self):
-        _index_map = {}
+        index_map = {}
 
         indx = 0
         for name, model in self.models.items():
             for i in range(model.n_terms):
-                _index_map[indx] = (name, i)
+                index_map[indx] = (name, i)
                 indx += 1
 
-        return _index_map
+        return index_map
 
     def __getitem__(self, item):
         """Get sub-models as if they were top-level attributes."""
@@ -110,7 +110,7 @@ class CompositeModel:
 
         if parameters is None:
             raise ValueError("Cannot evaluate a model without providing parameters!")
-        
+
         p = parameters if len(parameters) == model.n_terms else parameters[indx]
         return model(x=x, parameters=p, with_scaler=with_scaler)
 

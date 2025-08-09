@@ -66,10 +66,10 @@ over a set of data. To use it, do
 
     $ edges cal run --help
 
-Multiple options exist, but the only ones required are `CONFIG` and
-`PATH`. The first should point to a YAML configuration for the run, and
-the second should point to a directory in which exists `S11`,
-`Resistance` and `Spectra` folders. Thus::
+Multiple options exist, but the only ones required are ``CONFIG`` and
+``PATH``. The first should point to a YAML configuration for the run, and
+the second should point to a directory in which exists ``S11``,
+``Resistance`` and ``Spectra`` folders. Thus::
 
     $ edges cal run ~/config.yaml .
 

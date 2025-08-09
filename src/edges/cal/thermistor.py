@@ -1,3 +1,5 @@
+"""Functions for working with data from a thermistor."""
+
 from collections.abc import Sequence
 from typing import Self
 
@@ -51,10 +53,10 @@ def get_temperature_thermistor(
         The temperature for each `resistance` given.
     """
     # Steinhart-Hart coefficients
-    _coeffs = {"oven_industries_TR136_170": [1.03514e-3, 2.33825e-4, 7.92467e-8]}
+    coeffs_ = {"oven_industries_TR136_170": [1.03514e-3, 2.33825e-4, 7.92467e-8]}
 
     if isinstance(coeffs, str):
-        coeffs = _coeffs[coeffs]
+        coeffs = coeffs_[coeffs]
 
     assert len(coeffs) == 3
 

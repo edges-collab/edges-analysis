@@ -1,9 +1,13 @@
+"""Classes for dealing with measurements from 'calkits'."""
+
+from typing import Self
 
 import attrs
-from edges.io import SParams, calobsdef
-from typing import Self
-from edges import types as tp
 import numpy as np
+
+from edges import types as tp
+from edges.io import SParams, calobsdef
+
 
 @attrs.define
 class StandardsReadings:

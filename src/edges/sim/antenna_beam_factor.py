@@ -1,3 +1,5 @@
+"""Functions for computing the antenna beam factor."""
+
 from typing import Literal
 
 import astropy.coordinates as apc
@@ -161,8 +163,6 @@ def compute_antenna_beam_factor(
         # Loss fraction
         loss_fraction[lst_idx, freq_idx] = 1 - np.nansum(bm) / npix_no_nan
 
-    print("NORM BEAM?", normalize_beam)
-    print("ANTENNA_TEMP: ", antenna_temperature_above_horizon.min())
     return BeamFactor(
         frequencies=beam.frequency.to_value("MHz").astype(float),
         lsts=np.array(lsts).astype(float),

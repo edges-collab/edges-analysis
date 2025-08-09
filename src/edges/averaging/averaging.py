@@ -413,4 +413,4 @@ def bin_array_unweighted(x: np.ndarray, size: int = 1) -> np.ndarray:
 
     n = x.shape[-1]
     nn = size * (n // size)
-    return np.nanmean(x[..., :nn].reshape(x.shape[:-1] + (-1, size)), axis=-1)
+    return np.nanmean(x[..., :nn].reshape((*x.shape[:-1], -1, size)), axis=-1)

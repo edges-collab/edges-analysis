@@ -64,25 +64,42 @@ class CalkitEdges2(Calkit):
         allow_other: bool = True,
         prefix: str = "",
     ) -> Self:
-        direc = Path(direc)
-        _open = direc / f"{prefix}Open{repeat_num:02}.s1p"
+        """
+        Create a CalkitEdges2 object from a standard directory layout.
 
-        if not _open.exists():
+        Parameters
+        ----------
+        direc
+            The directory to search.
+        repeat_num
+            The repeat num to use.
+        allow_other
+            Whether to allow other repeat numbers if the one specified is not found.
+        prefix
+            A prefix for the files. Sometimes this is necessary to find, e.g.
+            External<load>.s1p
+        """
+        direc = Path(direc)
+        open_ = direc / f"{prefix}Open{repeat_num:02}.s1p"
+
+        if not open_.exists():
             if allow_other:
-                _open = next(direc.glob("{prefix}Open*.s1p"))
+                open_ = next(direc.glob(f"{prefix}Open*.s1p"))
 
                 warnings.warn(
-                    f"Could not find {prefix}Open{repeat_num:02} in {direc}, using {_open.name}"
+                    f"Could not find {prefix}Open{repeat_num:02} in {direc}, using"
+                    f" {open_.name}",
+                    stacklevel=2,
                 )
             else:
                 raise OSError(f"Could not find {prefix}Open{repeat_num:02} in {direc}")
 
-        _rep_num = _open.stem[-2:]
+        rep_num = open_.stem[-2:]
 
         return cls(
-            open=direc / f"{prefix}Open{_rep_num}.s1p",
-            short=direc / f"{prefix}Short{_rep_num}.s1p",
-            match=direc / f"{prefix}Match{_rep_num}.s1p",
+            open=direc / f"{prefix}Open{rep_num}.s1p",
+            short=direc / f"{prefix}Short{rep_num}.s1p",
+            match=direc / f"{prefix}Match{rep_num}.s1p",
         )
 
 
@@ -110,6 +127,22 @@ class LoadDefEDGES2:
         rep_num: int = 1,
         sparams_file: Path | None = None,
     ) -> Self:
+        """Createa a LoadDefEDGES2 object from a standard directory layout.
+
+        Parameters
+        ----------
+        root
+            The root directory of the observation.
+        loadname
+            The name of the load to search for.
+        run_num
+            The run number to search for.
+        rep_num
+            The repeat number to search for.
+        sparams_file
+            An optional file containing S-parameters of the load device (e.g. the
+            semi-rigid cable for a hot load).
+        """
         root = Path(root)
         assert root.exists()
 
@@ -124,8 +157,8 @@ class LoadDefEDGES2:
 
         s11dir = root / "S11" / f"{loadname}{run_num:02}"
         clk = CalkitEdges2.from_standard_layout(s11dir, rep_num)
-        _repnum = clk.open.stem[-2:]
-        s11 = LoadS11(calkit=clk, external=s11dir / f"External{_repnum}.s1p")
+        repnum = clk.open.stem[-2:]
+        s11 = LoadS11(calkit=clk, external=s11dir / f"External{repnum}.s1p")
 
         # By default, the hot load uses a semi-rigid cable S-parameter file.
         if loadname == "hot_load" and sparams_file is None:
@@ -155,6 +188,8 @@ class ReceiverS11:
     def external(self) -> Path:
         """Alias for the 'device' measurement."""
         return self.device
+
+
 @attrs.define(frozen=True, kw_only=True)
 class CalObsDefEDGES2:
     open: LoadDefEDGES2 = attrs.field()
@@ -173,6 +208,7 @@ class CalObsDefEDGES2:
 
     @property
     def loads(self) -> dict[str, LoadDefEDGES2]:
+        """A dictionary of the loads."""
         return {
             "open": self.open,
             "short": self.short,
@@ -189,6 +225,23 @@ class CalObsDefEDGES2:
         receiver_female_resistance: units.Quantity[units.ohm] | None = None,
         male_resistance: units.Quantity[units.ohm] | None = None,
     ) -> Self:
+        """
+        Create a CalObsDefEDGES2 object from a standard directory layout.
+
+        Parameters
+        ----------
+        rootdir
+            The root directory of the observation.
+        run_num
+            The run number to search for (often there is only one run).
+        repeat_num
+            The repeat number to search for (generally, repeats are taken closer
+            together than "runs").
+        receiver_female_resistance
+            The resistance of the receiver.
+        male_resistance
+            The male resistance.
+        """
         rootdir = Path(rootdir)
         if not rootdir.exists():
             raise FileNotFoundError(f"rootdir {rootdir} does not exist")
@@ -204,7 +257,8 @@ class CalObsDefEDGES2:
             # Try any run num:
             rcvdir = next((rootdir / "S11").glob("ReceiverReading*"))
             warnings.warn(
-                f"Could not find ReceiverReading{run_num:02}, using {rcvdir.name}"
+                f"Could not find ReceiverReading{run_num:02}, using {rcvdir.name}",
+                stacklevel=2,
             )
 
         run_num = int(rcvdir.stem[-2:])
@@ -220,7 +274,8 @@ class CalObsDefEDGES2:
             # Try any run num:
             swstate = next((rootdir / "S11").glob("SwitchingState*"))
             warnings.warn(
-                f"Could not find SwitchingState{run_num:02}, using {swstate.name}"
+                f"Could not find SwitchingState{run_num:02}, using {swstate.name}",
+                stacklevel=2,
             )
 
         sw_calkit = CalkitEdges2.from_standard_layout(swstate, repeat_num)
@@ -233,7 +288,7 @@ class CalObsDefEDGES2:
         )
 
         # Now, get the Loads
-        _open = LoadDefEDGES2.from_standard_layout(
+        open_ = LoadDefEDGES2.from_standard_layout(
             rootdir, "LongCableOpen", run_num=run_num, rep_num=repeat_num
         )
         short = LoadDefEDGES2.from_standard_layout(
@@ -247,24 +302,25 @@ class CalObsDefEDGES2:
         )
 
         # Try getting the female receiver resistance from a definition.yaml
-        if receiver_female_resistance is None or male_resistance is None:
-            if (defn := rootdir / "definition.yaml").exists():
-                with defn.open("r") as fl:
-                    dd = yaml.safe_load(fl)
+        if (receiver_female_resistance is None or male_resistance is None) and (
+            (defn := rootdir / "definition.yaml").exists()
+        ):
+            with defn.open("r") as fl:
+                dd = yaml.safe_load(fl)
 
-                    if receiver_female_resistance is None:
-                        receiver_female_resistance = (
-                            dd.get("measurements", {})
-                            .get("resistance_f", {})
-                            .get(run_num, 50 * units.ohm)
-                        )
+                if receiver_female_resistance is None:
+                    receiver_female_resistance = (
+                        dd.get("measurements", {})
+                        .get("resistance_f", {})
+                        .get(run_num, 50 * units.ohm)
+                    )
 
-                    if male_resistance is None:
-                        male_resistance = (
-                            dd.get("measurements", {})
-                            .get("resistance_m", {})
-                            .get(run_num, 50 * units.ohm)
-                        )
+                if male_resistance is None:
+                    male_resistance = (
+                        dd.get("measurements", {})
+                        .get("resistance_m", {})
+                        .get(run_num, 50 * units.ohm)
+                    )
 
         if male_resistance is None:
             male_resistance = 50 * units.ohm
@@ -272,7 +328,7 @@ class CalObsDefEDGES2:
             receiver_female_resistance = 50 * units.ohm
 
         return cls(
-            open=_open,
+            open=open_,
             short=short,
             hot_load=hotload,
             ambient=ambient,

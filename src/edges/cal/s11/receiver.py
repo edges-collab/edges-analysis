@@ -1,15 +1,19 @@
+"""Functions for creating CalibratedS11 objects from receiver data."""
+
+from collections.abc import Sequence
 
 import numpy as np
 from astropy import units as un
-from .. import reflection_coefficient as rc
+from astropy.constants import c as speed_of_light
+
+from edges import types as tp
 
 from ...io import calobsdef
-from ..s11 import StandardsReadings, CalibratedS11
 from ...io.vna import SParams
-from astropy.constants import c as speed_of_light
-from edges import types as tp
-from typing import Self, Sequence    
-    
+from .. import reflection_coefficient as rc
+from ..s11 import CalibratedS11, StandardsReadings
+
+
 def correct_receiver_for_extra_cable(
     s11_in: tp.ComplexArray,
     freq: tp.FreqType,
@@ -17,6 +21,21 @@ def correct_receiver_for_extra_cable(
     cable_loss_percent: float = 0.0,
     cable_dielectric_percent: float = 0.0,
 ) -> tp.ComplexArray:
+    """Correct the receiver S11 measurements to include an extra short cable length.
+
+    Parameters
+    ----------
+    s11_in
+        The un-corrected S11.
+    freq
+        The frequencies of the un-corrected S11.
+    cable_length
+        The length of the extra cable to be corrected for.
+    cable_loss_percent
+        The overall loss of the cable.
+    cable_dielectric_percent
+        The dielectric of the cable, as a percent.
+    """
     _, s11, s12 = rc.path_length_correction_edges3(
         freq=freq,
         delay=cable_length / speed_of_light,
@@ -28,8 +47,8 @@ def correct_receiver_for_extra_cable(
 
     if cable_length > 0.0:
         return rc.gamma_embed(smatrix, s11_in)
-    else:
-        return rc.gamma_de_embed(s11_in, smatrix)
+    return rc.gamma_de_embed(s11_in, smatrix)
+
 
 # Constructor Methods
 def get_receiver_s11model_from_filespec(
@@ -68,9 +87,7 @@ def get_receiver_s11model_from_filespec(
     s11s = []
     for dv in pathspec:
         standards = StandardsReadings.from_io(dv.calkit, f_low=f_low, f_high=f_high)
-        receiver_reading = SParams.from_s1p_file(
-            dv.device, f_low=f_low, f_high=f_high
-        )
+        receiver_reading = SParams.from_s1p_file(dv.device, f_low=f_low, f_high=f_high)
         freq = standards.freq
 
         smatrix = rc.SMatrix.from_calkit_and_vna(calkit, standards)
@@ -78,7 +95,11 @@ def get_receiver_s11model_from_filespec(
 
         if cable_length != 0 * un.m:
             calibrated_s11 = correct_receiver_for_extra_cable(
-                s11_in=calibrated_s11, freq=freq, cable_length=cable_length, cable_dielectric_percent=cable_dielectric_percent, cable_loss_percent=cable_loss_percent
+                s11_in=calibrated_s11,
+                freq=freq,
+                cable_length=cable_length,
+                cable_dielectric_percent=cable_dielectric_percent,
+                cable_loss_percent=cable_loss_percent,
             )
 
         s11s.append(calibrated_s11)

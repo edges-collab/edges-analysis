@@ -23,12 +23,13 @@ from ..cached_property import cached_property, safe_property
 from ..io import calobsdef, calobsdef3
 from ..io.serialization import hickleable
 from . import loss
-from .s11 import CalibratedS11
 from . import noise_waves as rcf
 from . import reflection_coefficient as rc
-from .loss import LossFunctionGivenSparams
-from .load_data import Load
 from .calibrator import Calibrator
+from .load_data import Load
+from .loss import LossFunctionGivenSparams
+from .s11 import CalibratedS11
+
 
 @hickleable
 @attrs.define(slots=False)
@@ -55,7 +56,7 @@ class CalibrationObservation:
     loads: dict[str, Load] = attrs.field()
     receiver: CalibratedS11 = attrs.field()
     _raw_receiver: CalibratedS11 | None = attrs.field(default=None)
-    
+
     def __attrs_post_init__(self):
         """Set the loads as attributes directly."""
         for k, v in self.loads.items():
@@ -132,12 +133,10 @@ class CalibrationObservation:
                 caldef.hot_load.sparams_file, f_low=f_low, f_high=f_high
             )
 
-
             loss_models["hot_load"] = LossFunctionGivenSparams(hot_load_cable_sparams)
 
-        
         return cls._from_caldef(
-            caldef=caldef, 
+            caldef=caldef,
             freq_bin_size=freq_bin_size,
             spectrum_kwargs=spectrum_kwargs,
             s11_kwargs=s11_kwargs,
@@ -146,7 +145,7 @@ class CalibrationObservation:
             f_high=f_high,
             receiver_kwargs=receiver_kwargs,
             restrict_s11_model_freqs=restrict_s11_model_freqs,
-            loss_models=loss_models,            
+            loss_models=loss_models,
         )
 
     @classmethod
@@ -214,20 +213,20 @@ class CalibrationObservation:
             loss_models["hot_load"] = loss.get_cable_loss_model("UT-141C-SP")
 
         receiver_kwargs = receiver_kwargs or {}
-        
+
         default_rcv_kw = {
-            'calkit': rc.get_calkit(
+            "calkit": rc.get_calkit(
                 rc.AGILENT_ALAN,
                 resistance_of_match=49.962 * un.Ohm,
             ),
             "cable_length": 4.26 * un.imperial.inch,
-            "cable_loss_percent":-91.5 * un.percent,
+            "cable_loss_percent": -91.5 * un.percent,
             "cable_dielectric_percent": -1.24 * un.percent,
         }
         receiver_kwargs = default_rcv_kw | receiver_kwargs
-        
+
         return cls._from_caldef(
-            caldef=caldef, 
+            caldef=caldef,
             freq_bin_size=freq_bin_size,
             spectrum_kwargs=spectrum_kwargs,
             s11_kwargs=s11_kwargs,
@@ -235,9 +234,8 @@ class CalibrationObservation:
             f_high=f_high,
             receiver_kwargs=receiver_kwargs,
             restrict_s11_model_freqs=restrict_s11_model_freqs,
-            loss_models=loss_models,            
+            loss_models=loss_models,
         )
-
 
     @classmethod
     def _from_caldef(
@@ -315,21 +313,23 @@ class CalibrationObservation:
         f_low = f_low.to("MHz", copy=False)
         f_high = f_high.to("MHz", copy=False)
 
-        rcv_model_params = receiver_kwargs.pop("model_params", S11ModelParams.from_receiver_defaults())
+        rcv_model_params = receiver_kwargs.pop(
+            "model_params", S11ModelParams.from_receiver_defaults()
+        )
         raw_receiver = CalibratedS11.from_receiver_filespec(
             pathspec=caldef.receiver_s11,
             f_low=f_low if restrict_s11_model_freqs else 0 * un.MHz,
             f_high=f_high if restrict_s11_model_freqs else np.inf * un.MHz,
             **receiver_kwargs,
         )
-        
+
         if "default" not in spectrum_kwargs:
             spectrum_kwargs["default"] = {}
 
         if "freq_bin_size" not in spectrum_kwargs["default"]:
             spectrum_kwargs["default"]["freq_bin_size"] = freq_bin_size
 
-        def get_load(name, ambient_temperature=298*un.K):
+        def get_load(name, ambient_temperature=298 * un.K):
             return Load.from_caldef(
                 caldef=caldef,
                 load_name=name,
@@ -346,10 +346,11 @@ class CalibrationObservation:
             )
 
         amb = get_load("ambient")
-        loads = {'ambient': amb}
-        
+        loads = {"ambient": amb}
+
         loads |= {
-            src: get_load(src, ambient_temperature=amb.temp_ave) for src in ('hot_load', 'open', 'short')
+            src: get_load(src, ambient_temperature=amb.temp_ave)
+            for src in ("hot_load", "open", "short")
         }
 
         # Smooth the receiver s11
@@ -357,13 +358,16 @@ class CalibrationObservation:
 
         # Smooth the loss models, if necessary:
         for name, loss_model in loss_models.items():
-            if isinstance(loss_model, LossFunctionGivenSparams) and loss_model.sparams.freqs.size != amb.freqs.size:
+            if (
+                isinstance(loss_model, LossFunctionGivenSparams)
+                and loss_model.sparams.freqs.size != amb.freqs.size
+            ):
                 loss_models[name] = attrs.evolve(
-                    loss_model, 
+                    loss_model,
                     sparams=loss_model.sparams.smoothed(
-                        params=S11ModelParams.from_hot_load_cable_defaults(), 
-                        freqs=amb.freqs
-                    )
+                        params=S11ModelParams.from_hot_load_cable_defaults(),
+                        freqs=amb.freqs,
+                    ),
                 )
 
         return cls(
@@ -372,30 +376,6 @@ class CalibrationObservation:
             raw_receiver=raw_receiver,
             **kwargs,
         )
-
-    # def with_load_calkit(self, calkit, loads: Sequence[str] | None = None):
-    #     """Return a new observation with loads having given calkit."""
-    #     if loads is None:
-    #         loads = self.load_names
-    #     elif isinstance(loads, str):
-    #         loads = [loads]
-
-    #     loads = {
-    #         name: load.with_calkit(calkit) if name in loads else load
-    #         for name, load in self.loads.items()
-    #     }
-
-    #     return attr.evolve(self, loads=loads)
-
-    # @safe_property
-    # def t_load(self) -> float:
-    #     """Assumed temperature of the load."""
-    #     return self.loads[next(iter(self.loads.keys()))].t_load
-
-    # @safe_property
-    # def t_load_ns(self) -> float:
-    #     """Assumed temperature of the load + noise source."""
-    #     return self.loads[next(iter(self.loads.keys()))].t_load_ns
 
     @cached_property
     def freqs(self) -> tp.FreqType:
@@ -408,16 +388,13 @@ class CalibrationObservation:
         return tuple(self.loads.keys())
 
     def averaged_spectrum(self, load: Load, t_load_ns: float, t_load: float):
+        """Compute a quick guess at the calibrated spectrum of a given load."""
         return load.spectrum.q.data.squeeze() * t_load_ns + t_load
-
 
     @cached_property
     def load_s11_models(self):
         """Dictionary of S11 correction models, one for each source."""
-        return {
-            name: source.s11.s11
-            for name, source in self.loads.items()
-        }
+        return {name: source.s11.s11 for name, source in self.loads.items()}
 
     @cached_property
     def source_thermistor_temps(self) -> dict[str, tp.TemperatureType]:
@@ -438,23 +415,27 @@ class CalibrationObservation:
             )
         return load
 
-    def get_K(self,) -> dict[str, tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]]:
+    def get_K(
+        self,
+    ) -> dict[str, tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]]:
         """Get the source-S11-dependent factors of Monsalve (2017) Eq. 7."""
         gamma_ants = {name: load.s11.s11 for name, load in self.loads.items()}
-        
+
         lna_s11 = self.receiver.s11
         return {
             name: rcf.get_K(gamma_rec=lna_s11, gamma_ant=gamma_ant)
             for name, gamma_ant in gamma_ants.items()
         }
 
-    def get_calibration_residuals(self, calibrator: Calibrator) -> dict[str, tp.FloatArray]:
+    def get_calibration_residuals(
+        self, calibrator: Calibrator
+    ) -> dict[str, tp.FloatArray]:
         """Get the residuals of calibrated spectra to the known temperatures."""
         return {
             name: calibrator.calibrate_load(load) - load.temp_ave
             for name, load in self.loads.items()
         }
-    
+
     def get_rms(self, calibrator: Calibrator, smooth: int = 4):
         """Return a dict of RMS values for each source.
 
@@ -463,7 +444,6 @@ class CalibrationObservation:
         smooth : int
             The number of bins over which to smooth residuals before taking the RMS.
         """
-        
         resids = self.get_calibration_residuals(calibrator)
         out = {}
         for name, res in resids.items():
@@ -471,7 +451,6 @@ class CalibrationObservation:
                 res = convolve(res, Gaussian1DKernel(stddev=smooth), boundary="extend")
             out[name] = np.sqrt(np.nanmean(res**2))
         return out
-
 
     def clone(self, **kwargs):
         """Clone the instance, updating some parameters.
@@ -482,12 +461,12 @@ class CalibrationObservation:
             All parameters to be updated.
         """
         return attrs.evolve(self, **kwargs)
-    
+
     @property
     def receiver_s11(self) -> CalibratedS11:
         """The S11 of the receiver."""
         return self.receiver.s11
-    
+
     def inject(
         self,
         receiver: np.ndarray = None,
@@ -502,36 +481,40 @@ class CalibrationObservation:
         :class:`CalibrationObservation`
             A new observation object with the injected models.
         """
-        fq = self.freqs.to_value("MHz")
+        self.freqs.to_value("MHz")
 
         kw = {}
         if receiver is not None:
             receiver = CalibratedS11(s11=receiver, freqs=self.freqs)
-            kw['receiver'] = receiver
-            
-        if source_s11s is not None or averaged_q is not None or thermistor_temp_ave is not None:
+            kw["receiver"] = receiver
+
+        if (
+            source_s11s is not None
+            or averaged_q is not None
+            or thermistor_temp_ave is not None
+        ):
             newloads = copy.deepcopy(self.loads)  # make a copy
-            
-            
+
             if source_s11s is not None:
                 for name, s in source_s11s.items():
                     newloads[name] = attrs.evolve(
-                        newloads[name], 
-                        s11=CalibratedS11(freqs=self.freqs, s11=s)
+                        newloads[name], s11=CalibratedS11(freqs=self.freqs, s11=s)
                     )
-
 
             if averaged_q is not None or thermistor_temp_ave is not None:
                 for name, s in averaged_q.items():
                     newloads[name] = attrs.evolve(
                         newloads[name],
-                        spectrum = attrs.evolve(
+                        spectrum=attrs.evolve(
                             newloads[name].spectrum,
-                            q = newloads[name].spectrum.q.update(data=s[None, None, None]),
-                            temp_ave=thermistor_temp_ave.get(name, newloads[name].temp_ave)
-                        )
+                            q=newloads[name].spectrum.q.update(
+                                data=s[None, None, None]
+                            ),
+                            temp_ave=thermistor_temp_ave.get(
+                                name, newloads[name].temp_ave
+                            ),
+                        ),
                     )
-            
-            kw['loads'] = newloads
-        return self.clone(**kw)
 
+            kw["loads"] = newloads
+        return self.clone(**kw)

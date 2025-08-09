@@ -1,3 +1,9 @@
+"""A sub-package for reading and writing EDGES data formats.
+
+The package also contains a number of methods for finding data that are generally
+laid out in a certain way on disk.
+"""
+
 from importlib.metadata import PackageNotFoundError, version
 
 try:

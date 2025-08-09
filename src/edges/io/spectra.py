@@ -1,4 +1,4 @@
-""" "Functions for reading lists of spectrum files."""
+"""Functions for reading lists of spectrum files."""
 
 from collections.abc import Sequence
 from pathlib import Path
@@ -10,6 +10,7 @@ from ..const import KNOWN_TELESCOPES
 
 
 def read_spectra(files: Sequence[Path]) -> GSData:
+    """Read common spectrum file formats."""
     fmt = files[0].suffix
 
     if fmt in (".h5", ".gsh5"):

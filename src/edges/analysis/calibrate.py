@@ -46,10 +46,7 @@ def apply_noise_wave_calibration(
     if data.data_unit not in ("uncalibrated", "uncalibrated_temp"):
         raise ValueError("Data must be uncalibrated to apply calibration!")
 
-    if (
-        data.data_unit == "uncalibrated_temp"
-        and (tload is None or tns is None)
-    ):
+    if data.data_unit == "uncalibrated_temp" and (tload is None or tns is None):
         raise ValueError(
             "You need to supply tload and tns if data_unit is uncalibrated_temp"
         )
@@ -69,7 +66,9 @@ def apply_noise_wave_calibration(
             if data.data_unit == "uncalibrated_temp"
             else data.model
         )
-        resids = new_data - calibrator.calibrate_q(qmodel, ant_s11=antenna_s11.s11, freq=data.freqs)
+        resids = new_data - calibrator.calibrate_q(
+            qmodel, ant_s11=antenna_s11.s11, freq=data.freqs
+        )
     else:
         resids = None
 

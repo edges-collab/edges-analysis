@@ -1,7 +1,8 @@
-from edges.cal.s11.antenna import _get_closest_s11_time, get_antenna_s11_paths
-from astropy.time import Time
-from datetime import datetime
 import pytest
+from astropy.time import Time
+
+from edges.cal.s11.antenna import _get_closest_s11_time, get_antenna_s11_paths
+
 
 class TestGetClosestS11Time:
     """Tests of the _get_closest_s11_time method."""
@@ -32,7 +33,7 @@ class TestGetClosestS11Time:
             time=Time("2015:312:00:00"),
             fileglob="*.s1p",
             dateformat="%Y_%j_%H",
-            date_slice=slice(0,11),
+            date_slice=slice(0, 11),
         )
         assert out == sorted(find_these_files)
 
@@ -43,7 +44,7 @@ class TestGetClosestS11Time:
             time=Time("2015:312:00:00"),
             fileglob="*.s1p",
             dateformat="%Y_%j_%H",
-            date_slice=slice(0,11),
+            date_slice=slice(0, 11),
         )
         assert len(out) == 4
         assert out == sorted(find_these_files)
@@ -55,7 +56,7 @@ class TestGetClosestS11Time:
                 time=Time("2015:312:00:00"),
                 fileglob="*.s1p",
                 dateformat="%Y_%j_%H",
-                date_slice=slice(0,11),
+                date_slice=slice(0, 11),
             )
 
     def test_wrong_number_of_files(self, tmp_path):
@@ -70,7 +71,7 @@ class TestGetClosestS11Time:
                 fileglob="*.s1p",
                 time=Time("2015:312:00:00"),
                 dateformat="%Y_%j_%H",
-                date_slice=slice(0,11),
+                date_slice=slice(0, 11),
             )
 
     def test_include_files_that_dont_match(self, tmp_path):
@@ -82,7 +83,7 @@ class TestGetClosestS11Time:
             fileglob="*.s1p",
             time=Time("2015:312:00:00"),
             dateformat="%Y_%j_%H",
-            date_slice=slice(0,11),
+            date_slice=slice(0, 11),
         )
         assert out == sorted(find_these_files)
 
@@ -95,7 +96,7 @@ class TestGetClosestS11Time:
             fileglob="*.s1p",
             time=Time("2015:312:00:00"),
             dateformat="%Y_%j_%H",
-            date_slice=slice(0,11),
+            date_slice=slice(0, 11),
             ignore_files="2015_001",
         )
         assert out == sorted(find_these_files)
@@ -103,6 +104,7 @@ class TestGetClosestS11Time:
 
 class TestGetS11Paths:
     """Tests of the get_s11_paths method."""
+
     def _setup_dir(self, tmp_path, year: int = 2015):
         d = tmp_path / "s11"
         if not d.exists():
@@ -150,7 +152,7 @@ class TestGetS11Paths:
             time=Time("2015:312:00:00"),
             fileglob="*.s1p",
             dateformat="%Y_%j_%H",
-            date_slice=slice(0,11),
+            date_slice=slice(0, 11),
         )
         assert out == sorted(find_these_files)
 

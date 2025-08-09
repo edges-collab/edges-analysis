@@ -11,12 +11,15 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from edges.alanmode.cli import amode
-from edges import alanmode as am
 
-@pytest.fixture(scope='module')
+from edges import alanmode as am
+from edges.alanmode.cli import amode
+
+
+@pytest.fixture(scope="module")
 def alandata(alanmode_data_path: Path) -> Path:
     return alanmode_data_path / "edges3-2022-316-alan"
+
 
 @pytest.fixture(scope="module")
 def edges3_2022_316(tmp_path_factory, alanmode_data_path):
@@ -28,7 +31,7 @@ def edges3_2022_316(tmp_path_factory, alanmode_data_path):
         datadir = alanmode_data_path / "edges3-data-for-alan-comparison"
 
     on_enterprise = "/data5/" in str(datadir)
-    
+
     if not on_enterprise:
         avg_spec_files = sorted(datadir.glob("sp*.txt"))
         for fl in avg_spec_files:
@@ -66,7 +69,6 @@ def edges3_2022_316(tmp_path_factory, alanmode_data_path):
     return out
 
 
-
 @pytest.mark.parametrize("load", am.LOADMAP.keys())
 def test_spectra(edges3_2022_316: Path, load, alandata: Path):
     # Test the raw spectra
@@ -85,16 +87,16 @@ def test_spectra(edges3_2022_316: Path, load, alandata: Path):
 @pytest.mark.parametrize("load", [*list(am.LOADMAP.keys()), "lna"])
 def test_unmodelled_s11(edges3_2022_316: Path, load, alandata: Path):
     # Test the calibrated (unmodelled) S11s
-    
+
     s11freq, alans11 = am.read_s11_csv(f"{alandata}/s11{load}.csv")
-    key = 'lna' if load=='lna' else am.LOADMAP[load]
+    key = "lna" if load == "lna" else am.LOADMAP[load]
     ourfreq, ours11 = am.read_s11_csv(f"{edges3_2022_316}/s11{key}.csv")
 
-    # Need to mask the C-code frequencies, because they get written out before 
+    # Need to mask the C-code frequencies, because they get written out before
     # being cut to wfstart-wfstop, whereas we only have access to the raw s11
     # *after* this cut in python.
-    mask = (s11freq>=ourfreq.min()) & (s11freq <= ourfreq.max())
-    
+    mask = (s11freq >= ourfreq.min()) & (s11freq <= ourfreq.max())
+
     np.testing.assert_allclose(s11freq[mask], ourfreq)
     np.testing.assert_allclose(alans11[mask].real, ours11.real, atol=1e-10)
     np.testing.assert_allclose(alans11[mask].imag, ours11.imag, atol=1e-10)
@@ -102,17 +104,17 @@ def test_unmodelled_s11(edges3_2022_316: Path, load, alandata: Path):
 
 def test_modelled_s11(edges3_2022_316, alandata: Path):
     # Test modelled S11s
-    _alans11m = np.genfromtxt(f"{alandata}/s11_modelled.txt", comments="#", names=True)
-    _ours11m = np.genfromtxt(
+    alans11m = np.genfromtxt(f"{alandata}/s11_modelled.txt", comments="#", names=True)
+    ours11m = np.genfromtxt(
         f"{edges3_2022_316}/s11_modelled.txt", comments="#", names=True
     )
 
-    for k in _alans11m.dtype.names:
+    for k in alans11m.dtype.names:
         print(f"Modelled S11 {k}")
 
         # We clip the ends here, because they are slightly extrapolated in the default
         # case.
-        np.testing.assert_allclose(_alans11m[k], _ours11m[k], atol=4e-9, rtol=0)
+        np.testing.assert_allclose(alans11m[k], ours11m[k], atol=4e-9, rtol=0)
 
 
 def test_specal(edges3_2022_316: Path, alandata: Path):
@@ -125,4 +127,3 @@ def test_specal(edges3_2022_316: Path, alandata: Path):
     np.testing.assert_allclose(ours.Tunc, alan.Tunc, atol=1.1e-6)
     np.testing.assert_allclose(ours.Tcos, alan.Tcos, atol=2e-5)
     np.testing.assert_allclose(ours.Tsin, alan.Tsin, atol=1.4e-5)
-    

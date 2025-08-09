@@ -1,15 +1,15 @@
+"""Functions for creating CalibratedS11 objects from calibration load data."""
+
 import numpy as np
-from typing import Self
-
-from edges.cal.s11.s11model import S11ModelParams
-
-from . import StandardsReadings, InternalSwitch
-
-from .base import CalibratedS11, CalibratedSParams
-from .. import reflection_coefficient as rc
-from edges.io import CalObsDefEDGES2, LoadS11, CalObsDefEDGES3, SwitchingState, SParams
-from edges import types as tp
 from astropy import units as un
+
+from edges import types as tp
+from edges.cal.s11.s11model import S11ModelParams
+from edges.io import CalObsDefEDGES2, CalObsDefEDGES3, LoadS11, SParams, SwitchingState
+
+from .. import reflection_coefficient as rc
+from . import InternalSwitch, StandardsReadings
+from .base import CalibratedS11, CalibratedSParams
 
 
 def calibrate_loads11_with_switch(
@@ -33,6 +33,7 @@ def calibrate_loads11_with_switch(
         s11=np.mean(s11s, axis=0),
     )
 
+
 def get_loads11_from_load_and_switch(
     loaddef: LoadS11,
     switchdef: SwitchingState | None = None,
@@ -42,12 +43,18 @@ def get_loads11_from_load_and_switch(
     f_low: tp.FreqType = 0 * un.MHz,
     f_high: tp.FreqType = np.inf * un.MHz,
 ) -> CalibratedS11:
-    """Instantiate from an :class:`edges.io.io.S11Dir` object."""
+    """Compute a calibrated S11 of a calibration load given its files and switch.
+
+    The internal switch must be corrected for (since it is a different pathway
+    than the VNA used to take the measurements of the calibration load).
+    """
     internal_switch_kwargs = internal_switch_kwargs or {}
     internal_switch_kwargs["f_low"] = f_low
     internal_switch_kwargs["f_high"] = f_high
-    internal_switch_model_params = internal_switch_kwargs.pop("model_params", S11ModelParams.from_internal_switch_defaults())
-    
+    internal_switch_model_params = internal_switch_kwargs.pop(
+        "model_params", S11ModelParams.from_internal_switch_defaults()
+    )
+
     load_kw = load_kw or {}
     load_kw["f_low"] = f_low
     load_kw["f_high"] = f_high
@@ -81,18 +88,18 @@ def get_loads11_from_load_and_switch(
         )
     return CalibratedS11(s11=loads11, freqs=freq)
 
+
 def get_loads11_from_edges2_loaddef(
     caldef: CalObsDefEDGES2, load: str, **kwargs
 ) -> CalibratedS11:
+    """Calculate the calibrated S11 of a calibration load given a datafile spec."""
     return get_loads11_from_load_and_switch(
         loaddef=getattr(caldef, load).s11, switchdef=caldef.switching_state, **kwargs
     )
 
+
 def get_loads11_from_edges3_loaddef(
-    caldef: CalObsDefEDGES3,
-    load: str,
-    calkit: rc.Calkit = rc.AGILENT_ALAN,
-    **kwargs
+    caldef: CalObsDefEDGES3, load: str, calkit: rc.Calkit = rc.AGILENT_ALAN, **kwargs
 ) -> CalibratedS11:
     """Create a LoadS11 object from the EDGES-3 CalibrationObservation."""
     return get_loads11_from_load_and_switch(

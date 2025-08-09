@@ -3,17 +3,19 @@
 from __future__ import annotations
 
 import re
-import warnings
-from datetime import UTC, date, datetime, timedelta, time
+from datetime import datetime, time, timedelta
 from pathlib import Path
-from astropy.time import Time
-import numpy as np
+
 from astropy import units as un
 from astropy.table import QTable
+from astropy.time import Time
 
-_time_format = r"(?P<year>\d{4}):(?P<day>\d{3}):(?P<hour>\d{2}):(?P<minute>\d{2}):(?P<second>\d{2})  "
+_time_format = (
+    r"(?P<year>\d{4}):(?P<day>\d{3}):(?P<hour>\d{2}):"
+    r"(?P<minute>\d{2}):(?P<second>\d{2})"
+)
 
-_NEW_WEATHER_PATTERN = re.compile(    
+_NEW_WEATHER_PATTERN = re.compile(
     r"rack_temp  (?P<rack_temp>\d{3}.\d{2}) Kelvin, "
     r"ambient_temp  (?P<ambient_temp>\d{3}.\d{2}) Kelvin, "
     r"ambient_hum  (?P<ambient_hum>[\d\- ]{3}.\d{2}) percent, "
@@ -34,15 +36,16 @@ _THERMLOG_PATTERN = re.compile(
 )
 
 _UNITS = {
-    'rack_temp': un.K,
-    'ambient_temp': un.K,
-    'ambient_hum': un.percent,
-    'frontend_temp': un.K,
-    'lna_temp': un.K,
-    'temp_set': un.deg_C,
-    'receiver_temp': un.deg_C,
-    'power_percent': un.percent
+    "rack_temp": un.K,
+    "ambient_temp": un.K,
+    "ambient_hum": un.percent,
+    "frontend_temp": un.K,
+    "lna_temp": un.K,
+    "temp_set": un.deg_C,
+    "receiver_temp": un.deg_C,
+    "power_percent": un.percent,
 }
+
 
 def _parse_lines(text, pattern):
     for match in pattern.finditer(text):
@@ -54,6 +57,7 @@ def _parse_lines(text, pattern):
                 dct[k] = float(v)
         yield dct
 
+
 def _get_end_time(
     start_time: Time,
     n_hours: int | None = None,
@@ -61,8 +65,8 @@ def _get_end_time(
     if n_hours is None:
         # End time is the first second of the next day.
         return datetime.combine(start_time.datetime + timedelta(days=1), time.min)
-    else:
-        return start_time.datetime + timedelta(hours=n_hours)            
+    return start_time.datetime + timedelta(hours=n_hours)
+
 
 def _read_aux_file(
     aux_file: str | Path,
@@ -109,19 +113,16 @@ def _read_aux_file(
     """
     aux_file = Path(aux_file)
     with aux_file.open("r") as fl:
-        for pattern in (
-            _NEW_WEATHER_PATTERN, _OLD_WEATHER_PATTERN, _THERMLOG_PATTERN
-        ):
-            
+        for pattern in (_NEW_WEATHER_PATTERN, _OLD_WEATHER_PATTERN, _THERMLOG_PATTERN):
             if pattern.search(fl.readline()) is not None:
                 break
         else:
-            raise ValueError(f"No patterns matched the first line of the aux file {aux_file}")
+            raise ValueError(
+                f"No patterns matched the first line of the aux file {aux_file}"
+            )
 
     if end is None:
-        end = Time(_get_end_time(
-            start_time=start, n_hours=n_hours
-        ))
+        end = Time(_get_end_time(start_time=start, n_hours=n_hours))
 
     auxdata = []
     with aux_file.open("r") as fl:
@@ -132,19 +133,19 @@ def _read_aux_file(
                 continue
             if t > end:
                 break
-            
+
             matches = re.search(pattern, line)
             dct = matches.groupdict()
-            auxdata.append(dct | {'time': t})
-            
+            auxdata.append(dct | {"time": t})
+
     auxdata = QTable(rows=auxdata)
     for col in auxdata.columns:
-        if col == 'time':
+        if col == "time":
             continue
-        else:
-            auxdata[col] = auxdata[col].astype(float) * _UNITS[col]
-        
+        auxdata[col] = auxdata[col].astype(float) * _UNITS[col]
+
     return auxdata
+
 
 def read_weather_file(
     weather_file: str | Path,
@@ -152,6 +153,7 @@ def read_weather_file(
     n_hours: int | None = None,
     end: Time | None = None,
 ):
+    """Read a standard weather file."""
     return _read_aux_file(
         aux_file=weather_file,
         start=start,
@@ -207,6 +209,7 @@ def read_thermlog_file(
         n_hours=n_hours,
         end=end,
     )
+
 
 def read_auxiliary_data(
     weather_file: str | Path,

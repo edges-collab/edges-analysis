@@ -176,9 +176,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*.py" = [
-    "D103",  # ignore missing docstring in tests
-    "D102",  # same here but for methods
-    "D101",
+    "D1",
     "DTZ",   # ignore datetime in tests
     "T",     # print statements
 ]

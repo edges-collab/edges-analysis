@@ -1,3 +1,5 @@
+"""Simulation functions for ideal sky observations."""
+
 from typing import Literal
 
 import astropy.coordinates as apc
@@ -189,7 +191,6 @@ def sky_convolution_generator(
                 beam_above_horizon *= ground_gain[freq_idx] / solid_angle
 
             antenna_temperature_above_horizon = beam_above_horizon * sky_map
-            print(np.nanmin(sky_map), np.nanmax(sky_map))
             yield (
                 lst_idx,
                 freq_idx,

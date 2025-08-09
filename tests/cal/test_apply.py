@@ -1,7 +1,9 @@
-from pygsdata import GSData
-import pytest
-from edges.cal import apply
 import numpy as np
+import pytest
+from pygsdata import GSData
+
+from edges.cal import apply
+
 
 def test_approximate_temperature(gsd_ones: GSData):
     # mock gsdata

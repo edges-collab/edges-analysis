@@ -91,7 +91,8 @@ def _get_loss_from_datafile(
             )
             if not filename.exists():
                 warnings.warn(
-                    f"Ground loss file {filename} does not exist. Returning ones."
+                    f"Ground loss file {filename} does not exist. Returning ones.",
+                    stacklevel=2,
                 )
                 return np.ones(freq.shape)
         else:

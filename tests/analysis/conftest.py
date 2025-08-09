@@ -58,9 +58,11 @@ def settings() -> Path:
 def workflow_dir(tmp_path_factory) -> Path:
     return tmp_path_factory.mktemp("integration-workflow")
 
-@pytest.fixture(scope='session')
+
+@pytest.fixture(scope="session")
 def anl_data_path(testdata_path) -> Path:
-    return testdata_path / 'analysis'
+    return testdata_path / "analysis"
+
 
 @pytest.fixture(scope="session")
 def calpath(anl_data_path: Path) -> Path:

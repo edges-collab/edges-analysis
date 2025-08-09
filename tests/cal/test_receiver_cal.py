@@ -1,5 +1,7 @@
-from edges.cal.receiver_cal import perform_term_sweep
 from edges.cal import Calibrator
+from edges.cal.receiver_cal import perform_term_sweep
+
+
 def test_term_sweep(calobs):
     calobs_opt = perform_term_sweep(
         calobs,

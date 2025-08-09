@@ -1,24 +1,26 @@
 """Functions for writing/reading to/from file formats used in the C pipeline."""
-from bidict import bidict
+
 import numpy as np
-from pygsdata import GSData, Stamp, History, GSFlag
-from ..cal import Calibrator, CalibrationObservation
 from astropy import units as un
-from edges.cal.loss import LossFunctionGivenSparams
-from .. import types as tp
 from astropy.time import Time
+from bidict import bidict
+from pygsdata import GSData, GSFlag, History, Stamp
+
+from edges.cal.loss import LossFunctionGivenSparams
+
+from .. import types as tp
+from ..cal import CalibrationObservation, Calibrator
 from ..const import KNOWN_TELESCOPES
 
 # A bi-directional mapping between load-names as used in the C code
 # vs load names in the python code.
-LOADMAP = bidict(
-    {
-        "amb": "ambient",
-        "hot": "hot_load",
-        "open": "open",
-        "short": "short"
-    }
-)
+LOADMAP = bidict({
+    "amb": "ambient",
+    "hot": "hot_load",
+    "open": "open",
+    "short": "short",
+})
+
 
 def read_raul_s11_format(fname: tp.PathLike) -> dict[str, np.ndarray]:
     """
@@ -51,7 +53,7 @@ def read_raul_s11_format(fname: tp.PathLike) -> dict[str, np.ndarray]:
     )
 
     out = {
-        "freq": s11["freq"]*un.MHz,
+        "freq": s11["freq"] * un.MHz,
     }
     for name in s11.dtype.names:
         if "_" not in name:
@@ -72,22 +74,24 @@ def read_s11_csv(fname) -> tuple[np.ndarray, np.ndarray]:
         s11 = data[:, 1] + data[:, 2] * 1j
     return freq, s11
 
+
 def write_s11_csv(freq, s11, fname):
+    """Write a standard S11 CSV file."""
     # write out the CSV file
     with fname.open("w") as fl:
         fl.write("BEGIN\n")
-        for freq, s11 in zip(freq, s11, strict=False):
+        for freq_, s11_ in zip(freq, s11, strict=False):
             fl.write(
-                f"{freq.to_value('MHz'):1.16e},{s11.real:1.16e},{s11.imag:1.16e}\n"
+                f"{freq_.to_value('MHz'):1.16e},{s11_.real:1.16e},{s11_.imag:1.16e}\n"
             )
         fl.write("END")
 
 
 def read_spec_txt(
-    fname: tp.PathLike, 
+    fname: tp.PathLike,
     time: Time | None = None,
-    telescope: str = 'edges-low',
-    name: str = ""
+    telescope: str = "edges-low",
+    name: str = "",
 ) -> GSData:
     """Read an averaged-spectrum file, like the ones output by acqplot7amoon."""
     out = np.genfromtxt(
@@ -101,26 +105,23 @@ def read_spec_txt(
 
     if time is None:
         time = Time.now()
-        
+
     return GSData(
         telescope=KNOWN_TELESCOPES.get(telescope),
-        data = out['spectra'][None, None, None, :],
-        freqs = out['freq']*un.MHz,
-        times = time + np.zeros((1, 1)) * un.second,
-        effective_integration_time = 13.0 * un.second,
-        nsamples = out['weight'][None, None, None, :] * n,
-        flags = {'flags': GSFlag(~(out['weight'].astype(bool)), axes=('freq',))},
-        history = History([Stamp(f'read from {fname}')]),
-        data_unit='uncalibrated_temp',
-        name=name
+        data=out["spectra"][None, None, None, :],
+        freqs=out["freq"] * un.MHz,
+        times=time + np.zeros((1, 1)) * un.second,
+        effective_integration_time=13.0 * un.second,
+        nsamples=out["weight"][None, None, None, :] * n,
+        flags={"flags": GSFlag(~(out["weight"].astype(bool)), axes=("freq",))},
+        history=History([Stamp(f"read from {fname}")]),
+        data_unit="uncalibrated_temp",
+        name=name,
     )
 
 
 def write_spec_txt(
-    freq: np.ndarray | tp.FreqType, 
-    n: int | float, 
-    spec: np.ndarray, 
-    fname: tp.PathLike
+    freq: np.ndarray | tp.FreqType, n: int | float, spec: np.ndarray, fname: tp.PathLike
 ):
     """Write an averaged-spectrum file, like spe_<load>r.txt files from edges2k.c."""
     if hasattr(freq, "unit"):
@@ -133,13 +134,13 @@ def write_spec_txt(
             else:
                 fl.write(f"{f:12.6f} {sp:12.6f} {1:4.0f}\n")
 
+
 def write_spec_txt_gsd(gsd: GSData, fname: tp.PathLike):
+    """Write a standard spe.txt file given a GSData object."""
     write_spec_txt(
-        freq=gsd.freqs,
-        n = np.mean(gsd.nsamples),
-        spec=gsd.data[0,0,0],
-        fname=fname
+        freq=gsd.freqs, n=np.mean(gsd.nsamples), spec=gsd.data[0, 0, 0], fname=fname
     )
+
 
 def read_specal(fname: tp.PathLike, t_load: float, t_load_ns: float) -> Calibrator:
     """Read a specal file, like the ones output by edges3(k)."""
@@ -158,18 +159,19 @@ def read_specal(fname: tp.PathLike, t_load: float, t_load_ns: float) -> Calibrat
         ],
         usecols=(1, 3, 4, 6, 8, 10, 12, 14, 16),
     )
-    mask = data['weight']>0
+    mask = data["weight"] > 0
     data = data[mask]
-    
+
     return Calibrator(
-        freqs = data['freq'] * un.MHz,
-        Tsca = t_load_ns * data['C1'],
-        Toff = t_load - data['C2'],
-        Tunc = data['Tunc'],
-        Tcos = data['Tcos'],
-        Tsin = data['Tsin'],
-        receiver_s11 = data['s11lna_real'] + 1j * data['s11lna_imag'],
+        freqs=data["freq"] * un.MHz,
+        Tsca=t_load_ns * data["C1"],
+        Toff=t_load - data["C2"],
+        Tunc=data["Tunc"],
+        Tcos=data["Tcos"],
+        Tsin=data["Tsin"],
+        receiver_s11=data["s11lna_real"] + 1j * data["s11lna_imag"],
     )
+
 
 def read_specal_iter(fname: tp.PathLike) -> np.ndarray:
     """
@@ -210,7 +212,13 @@ def read_alan_calibrated_temp(fname: tp.PathLike) -> np.ndarray:
     )
 
 
-def write_specal(calibrator: Calibrator, outfile: tp.PathLike, t_load: float, t_load_ns: float, precision="10.6f"):
+def write_specal(
+    calibrator: Calibrator,
+    outfile: tp.PathLike,
+    t_load: float,
+    t_load_ns: float,
+    precision="10.6f",
+):
     """Write a specal file in the same format as those output by the C-code edges3.c."""
     sca = calibrator.Tsca / t_load_ns
     ofs = t_load - calibrator.Toff
@@ -218,9 +226,9 @@ def write_specal(calibrator: Calibrator, outfile: tp.PathLike, t_load: float, t_
     tlnac = calibrator.Tcos
     tlnas = calibrator.Tsin
     lna = calibrator.receiver_s11
-    
+
     with open(outfile, "w") as fl:
-        for i in range(calibrator.freqs.size):        
+        for i in range(calibrator.freqs.size):
             fl.write(
                 f"freq {calibrator.freqs[i].to_value('MHz'):{precision}} "
                 f"s11lna {lna[i].real:{precision}} {lna[i].imag:{precision}} "
@@ -230,7 +238,9 @@ def write_specal(calibrator: Calibrator, outfile: tp.PathLike, t_load: float, t_
             )
 
 
-def write_modelled_s11s(calobs: CalibrationObservation, fname: tp.PathLike, hot_loss_model = None):
+def write_modelled_s11s(
+    calobs: CalibrationObservation, fname: tp.PathLike, hot_loss_model=None
+):
     """Write all modelled S11's in a calobs object to file, in the same format as C.
 
     If a HotLoadCorrection exists, also write the rigid cable S-parameters, as
@@ -303,8 +313,8 @@ def write_modelled_s11s(calobs: CalibrationObservation, fname: tp.PathLike, hot_
 def read_spe_file(
     filename: tp.PathLike,
     time: Time = Time.now(),
-    telescope: str = 'edges-low',
-    name: str = ""
+    telescope: str = "edges-low",
+    name: str = "",
 ):
     """Read Alan's spectrum files with formats like those of spe0.txt."""
     out = np.genfromtxt(
@@ -312,17 +322,17 @@ def read_spe_file(
         usecols=(1, 3, 6, 9, 12),
         names=("freq", "tant", "model", "resid", "weight"),
     )
-    
+
     return GSData(
         telescope=KNOWN_TELESCOPES.get(telescope),
-        data = out['tant'][None, None, None, :],
-        freqs = out['freq']*un.MHz,
-        times = [[time]],
-        effective_integration_time = 13.0 * un.second,
-        nsamples = out['weight'][None, None, None, :],
-        residuals=out['resid'][None, None, None],
-        flags = {'flags': ~(out['weight'].astype(bool))},
-        history = History([Stamp(f'read from {filename}')]),
-        data_unit='temperature',
-        name=name
+        data=out["tant"][None, None, None, :],
+        freqs=out["freq"] * un.MHz,
+        times=[[time]],
+        effective_integration_time=13.0 * un.second,
+        nsamples=out["weight"][None, None, None, :],
+        residuals=out["resid"][None, None, None],
+        flags={"flags": ~(out["weight"].astype(bool))},
+        history=History([Stamp(f"read from {filename}")]),
+        data_unit="temperature",
+        name=name,
     )

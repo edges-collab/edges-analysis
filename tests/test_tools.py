@@ -1,6 +1,10 @@
-from edges import tools
-import pytest
+"""Tests of the tools module."""
+
 import numpy as np
+import pytest
+
+from edges import tools
+
 
 def test_dct_to_list():
     """Ensure simple dictionary is dealt with correctly."""

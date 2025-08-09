@@ -68,12 +68,12 @@ def test_simple_fit():
 
 
 def test_weighted_fit():
-    np.random.seed(1234)
+    rng = np.random.default_rng(1234)
     four = mdl.Fourier(parameters=[1, 2, 3])
     model = four.at(x=np.linspace(50, 100, 10))
 
     sigmas = np.abs(model() / 100)
-    data = model() + np.random.normal(scale=sigmas)
+    data = model() + rng.normal(scale=sigmas)
 
     fit = mdl.ModelFit(model, ydata=data, weights=1 / sigmas)
 
@@ -270,7 +270,8 @@ def test_complex_at():
     cmplx = mdl.ComplexRealImagModel(real=rl, imag=rl)
     cmplx_fixed = cmplx.at(x=x)
 
-    y = np.random.random(size=10) + 1j * np.random.random(size=10)
+    rng = np.random.default_rng()
+    y = rng.random(size=10) + 1j * rng.random(size=10)
 
     fit1 = cmplx.fit(y, xdata=x)
     fit2 = cmplx_fixed.fit(y)

@@ -1,3 +1,5 @@
+"""A module that provides high-level functions for filtering using multiple threads."""
+
 import logging
 import warnings
 from collections import defaultdict

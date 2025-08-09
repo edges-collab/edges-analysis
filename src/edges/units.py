@@ -1,3 +1,6 @@
+"""Functions for dealing with units and quantities."""
+
+import warnings
 from collections.abc import Callable
 from typing import Any
 

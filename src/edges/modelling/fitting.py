@@ -232,7 +232,8 @@ class ModelFit:
 
     def get_sample(self, size: int | tuple[int] = 1):
         """Generate a random sample from the posterior distribution."""
-        return np.random.multivariate_normal(
+        rng = np.random.default_rng()
+        return rng.multivariate_normal(
             mean=self.model_parameters, cov=self.parameter_covariance, size=size
         )
 

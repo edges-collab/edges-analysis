@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import contextlib
 import copy
-import os
 import warnings
 from pathlib import Path
 from typing import ClassVar
@@ -28,11 +27,11 @@ class Config(dict):
         "paths": {
             "raw_field_data": "",
             "raw_lab_data": "",
-            "lab_products": os.path.expanduser("~/edges-calibrations"),
-            "field_products": os.path.expanduser("~/edges-field-levels"),
-            "beams": os.path.expanduser("~/edges-beams"),
-            "antenna": os.path.expanduser("~/edges-antenna-meta"),
-            "sky_models": os.path.expanduser("~/edges-sky-models"),
+            "lab_products": Path("~/edges-calibrations").expanduser(),
+            "field_products": Path("~/edges-field-levels").expanduser(),
+            "beams": Path("~/edges-beams").expanduser(),
+            "antenna": Path("~/edges-antenna-meta").expanduser(),
+            "sky_models": Path("~/edges-sky-models").expanduser(),
         },
     }
 

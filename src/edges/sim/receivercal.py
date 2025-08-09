@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 import numpy as np
-from .. import modelling as mdl
-from ..cal import noise_waves
-from ..cal import CalibrationObservation, Calibrator, Load
-from .. import types as tp
 from astropy import units as un
+
+from .. import modelling as mdl
+from .. import types as tp
+from ..cal import Calibrator, Load, noise_waves
+
 
 def simulate_q(
     *,
@@ -61,12 +64,13 @@ def simulate_q(
         t_sin=t_sin,
     )
 
-    return (load_temp - b*un.K) / (a*un.K)
-    
+    return (load_temp - b * un.K) / (a * un.K)
 
 
 def simulate_q_from_calibrator(
-    load: Load, calibrator: Calibrator, scale_model: callable | None=None,
+    load: Load,
+    calibrator: Calibrator,
+    scale_model: callable | None = None,
 ) -> np.ndarray:
     """Simulate the observed 3-position switch ratio, Q, from noise-wave solutions.
 
@@ -104,10 +108,10 @@ def simulate_qant_from_calibrator(
     calibrator: Calibrator,
     ant_s11: np.ndarray,
     ant_temp: np.ndarray,
-    scale_model: callable | None =None,
-    loss: np.ndarray | float=1,
-    t_amb: float =296,
-    bm_corr: float | np.ndarray =1,
+    scale_model: callable | None = None,
+    loss: np.ndarray | float = 1,
+    t_amb: float = 296,
+    bm_corr: float | np.ndarray = 1,
 ) -> np.ndarray:
     """Simulate antenna Q from a calibration observation.
 
@@ -132,7 +136,7 @@ def simulate_qant_from_calibrator(
     ant_temp = loss * ant_temp * bm_corr + (1 - loss) * t_amb
 
     lna_s11 = calibrator.receiver_s11
-    
+
     return simulate_q(
         load_s11=ant_s11,
         receiver_s11=lna_s11,
@@ -141,7 +145,7 @@ def simulate_qant_from_calibrator(
         t_off=calibrator.Toff,
         t_unc=calibrator.Tunc,
         t_cos=calibrator.Tcos,
-        t_sin=calibrator.Tsin
+        t_sin=calibrator.Tsin,
     )
 
 
@@ -159,12 +163,12 @@ def get_data_from_calobs(
     data = []
     for src in srcs:
         load = loads[src]
-        _tns = calobs.Tsca if tns is None else tns(x=calobs.freqs)
+        scale = calobs.Tsca if tns is None else tns(x=calobs.freqs)
         q = (
             simulate_q_from_calibrator(calobs, load=src)
             if sim
             else load.spectrum.averaged_Q
         )
         c = calobs.get_K()[src][0]
-        data.append(_tns * q - c * load.temp_ave)
+        data.append(scale * q - c * load.temp_ave)
     return np.concatenate(tuple(data))

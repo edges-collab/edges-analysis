@@ -22,8 +22,9 @@ def calobs(smallcal: calobsdef3.CalObsDefEDGES3) -> CalibrationObservation:
         smallcal,
         f_low=50 * un.MHz,
         f_high=100 * un.MHz,
-        spectrum_kwargs={"default": {"allow_closest_time": True, 
-                                     'temperature': 300.0*un.K}},
+        spectrum_kwargs={
+            "default": {"allow_closest_time": True, "temperature": 300.0 * un.K}
+        },
     )
 
 

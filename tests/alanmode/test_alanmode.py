@@ -14,19 +14,20 @@ from edges.frequencies import edges_raw_freqs
 
 
 def test_read_write_spec_loop(alanmode_data_path: Path, tmpdir: Path):
-    spamb = am.read_spec_txt(alanmode_data_path / "edges3-data-for-alan-comparison/spambient.txt")
+    spamb = am.read_spec_txt(
+        alanmode_data_path / "edges3-data-for-alan-comparison/spambient.txt"
+    )
 
     am.write_spec_txt(
-        spamb.freqs, 
-        n=int(np.mean(spamb.nsamples)), 
-        spec=spamb.data.squeeze(), 
-        fname=tmpdir / "spamb.txt"
+        spamb.freqs,
+        n=int(np.mean(spamb.nsamples)),
+        spec=spamb.data.squeeze(),
+        fname=tmpdir / "spamb.txt",
     )
     spamb2 = am.read_spec_txt(tmpdir / "spamb.txt")
     np.testing.assert_allclose(spamb.freqs, spamb2.freqs)
     np.testing.assert_allclose(spamb.data, spamb2.data)
     np.testing.assert_allclose(spamb.nsamples, spamb2.nsamples)
-
 
 
 NTIME = 24
@@ -81,7 +82,7 @@ class TestACQPlot7AMoon:
         )
 
         assert meanspec.nfreqs == FREQS.size
-        assert meanspec.nsamples.max() ==  1     
+        assert meanspec.nsamples.max() == 1
         np.testing.assert_allclose(meanspec.data, 1300)
 
     def test_unity_delaystart(self, unity_acq):
@@ -96,7 +97,7 @@ class TestACQPlot7AMoon:
         )
 
         assert meanspec.nfreqs == FREQS.size
-        assert meanspec.nsamples.max() == NTIME -1
+        assert meanspec.nsamples.max() == NTIME - 1
         np.testing.assert_allclose(meanspec.data, 1300)
 
     def test_unity_smooth(self, unity_acq):
@@ -110,7 +111,7 @@ class TestACQPlot7AMoon:
         )
 
         assert meanspec.nfreqs == FREQS.size // 8
-        assert np.isclose(meanspec.nsamples.mean(), NTIME * 8,  rtol=0.08)
+        assert np.isclose(meanspec.nsamples.mean(), NTIME * 8, rtol=0.08)
         np.testing.assert_allclose(meanspec.data, 1300)
 
 

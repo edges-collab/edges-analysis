@@ -5,22 +5,19 @@ from __future__ import annotations
 import functools
 import logging
 import operator
-from hashlib import md5
-
-import numpy as np
-
-logger = logging.getLogger(__name__)
-
 from collections.abc import Sequence
+from hashlib import md5
 from itertools import product
 
-# try:
-# except ImportError:
+import numpy as np
 from numpy import typing as npt
 from scipy.interpolate import InterpolatedUnivariateSpline as Spline
 
+logger = logging.getLogger(__name__)
+
 
 def stable_hash(x) -> str:
+    """A simple hash function to string."""
     return md5(str(x).encode()).hexdigest()
 
 

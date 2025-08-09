@@ -8,9 +8,9 @@ control to us to interpolate how we wish.
 from __future__ import annotations
 
 import logging
+import warnings
 from abc import ABC, abstractmethod
 from pathlib import Path
-import warnings
 
 import astropy_healpix as ahp
 import attrs
@@ -211,12 +211,17 @@ class SkyModel:
 
         # Downgrade the data quality to max_res to improve performance, if desired.
         if nside > max_nside:
-            warnings.warn("Ignoring max_nside because astropy-healpix doesn't support ud_grade")
-            
-        if nside < min_nside:
-            warnings.warn("Ignoring min_nside because astropy-healpix doesn't support ud_grade")
+            warnings.warn(
+                "Ignoring max_nside because astropy-healpix doesn't support ud_grade",
+                stacklevel=2,
+            )
 
-            
+        if nside < min_nside:
+            warnings.warn(
+                "Ignoring min_nside because astropy-healpix doesn't support ud_grade",
+                stacklevel=2,
+            )
+
         return cls(
             frequency=frequency,
             temperature=temp_map,
@@ -259,9 +264,11 @@ class SkyModel:
             * (2 * np.pi / 1024.0)
             * np.cos(glat.flatten() * np.pi / 180.0),
         )
-        
+
     @classmethod
-    def uniform_healpix(cls, frequency: float, temperature: float = 1000.0, nside: int=32):
+    def uniform_healpix(
+        cls, frequency: float, temperature: float = 1000.0, nside: int = 32
+    ):
         """Create a uniform sky model."""
         hp = ahp.HEALPix(nside=nside, order="nested", frame=Galactic())
         coords = hp.healpix_to_skycoord(np.arange(hp.npix))
@@ -270,7 +277,7 @@ class SkyModel:
             frequency=frequency,
             temperature=temperature * np.ones(len(coords)),
             coords=coords,
-            name='uniform',
+            name="uniform",
             healpix=hp,
         )
 

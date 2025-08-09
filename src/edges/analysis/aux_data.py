@@ -7,13 +7,13 @@ import time
 from pathlib import Path
 
 import numpy as np
+from astropy.table import QTable
+from astropy.time import Time
 from pygsdata import GSData, gsregister
 
 from .. import types as tp
-from ..io.auxiliary import read_thermlog_file, read_weather_file
 from ..config import config
-from astropy.table import QTable
-from astropy.time import Time
+from ..io.auxiliary import read_thermlog_file, read_weather_file
 
 logger = logging.getLogger(__name__)
 
@@ -28,15 +28,16 @@ def _interpolate_times(thing: QTable, times: Time) -> QTable:
     seconds = (times - t0).to_value("s")
     interpolated = {}
 
-    thing_seconds = (thing['time'] - t0).to_value("s")
+    thing_seconds = (thing["time"] - t0).to_value("s")
 
     for col in thing.colnames:
-        if col == 'time':
+        if col == "time":
             continue
-        
+
         interpolated[col] = np.interp(seconds, thing_seconds, thing[col])
 
     return QTable(interpolated)
+
 
 @gsregister("supplement")
 def add_weather_data(data: GSData, weather_file: tp.PathLike | None = None) -> GSData:
@@ -153,5 +154,5 @@ def add_thermlog_data(
     logger.info(f"Took {time.time() - t} sec to interpolate thermlog data.")
 
     return data.update(
-        auxiliary_measurements= data.auxiliary_measurements | interpolated
+        auxiliary_measurements=data.auxiliary_measurements | interpolated
     )

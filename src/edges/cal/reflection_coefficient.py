@@ -27,9 +27,9 @@ import numpy as np
 import numpy.typing as npt
 from astropy import units
 from astropy.constants import c as speed_of_light
+from pygsdata.attrs import npfield
 from scipy.optimize import minimize
 from scipy.signal.windows import blackmanharris
-from pygsdata.attrs import npfield
 
 from .. import modelling as mdl
 from .. import types as tp
@@ -97,7 +97,7 @@ class TwoPortNetwork:
     (https://en.wikipedia.org/wiki/Two-port_network#ABCD-parameters).
     """
 
-    x: npt.NDArray[np.complex] = npfield(
+    x: npt.NDArray[complex] = npfield(
         possible_ndims=(3,),
         dtype=complex,
         converter=np.atleast_3d,
@@ -107,14 +107,13 @@ class TwoPortNetwork:
     def _x_vld(self, att, val):
         if val.shape[:2] != (2, 2):
             raise ValueError("Matrix must have shape (2, 2, Nfreq).")
-        
+
     @classmethod
     def from_zmatrix(cls, z: npt.NDArray) -> Self:
         """Create a TwoPortNetwork from a Z-matrix."""
         z = np.atleast_3d(z)
         nf = z.shape[-1]
         detz = z[0, 0] * z[1, 1] - z[0, 1] * z[1, 0]
-        print(z.shape)
         return cls(1 / z[1, 0] * np.array([[z[0, 0], detz], [np.ones(nf), z[1, 1]]]))
 
     @classmethod
@@ -123,7 +122,9 @@ class TwoPortNetwork:
         z = np.atleast_3d(z)
         nf = z.shape[-1]
         detz = z[0, 0] * z[1, 1] - z[0, 1] * z[1, 0]
-        return cls(1 / z[1, 0] * np.array([[-z[1, 1], -np.ones(nf)], [-detz, -z[0, 0]]]))
+        return cls(
+            1 / z[1, 0] * np.array([[-z[1, 1], -np.ones(nf)], [-detz, -z[0, 0]]])
+        )
 
     @classmethod
     def from_abcd(cls, abcd, inverse: bool = False):
@@ -151,7 +152,7 @@ class TwoPortNetwork:
         return self.x[1, 1]
 
     @cached_property
-    def determinant(self) -> npt.NDArray[np.float]:
+    def determinant(self) -> npt.NDArray[float]:
         """The determinant of the ABCD representation, |AD - BC|."""
         return self.A * self.D - self.B * self.C
 
@@ -181,7 +182,7 @@ class TwoPortNetwork:
 
     def add_in_series(self, other: Self) -> Self:
         """Combine two TwoPortNetworks together in series."""
-        self._check_add_args(other)        
+        self._check_add_args(other)
         z = self.zmatrix + other.zmatrix
         return TwoPortNetwork.from_zmatrix(z)
 
@@ -209,7 +210,10 @@ class TwoPortNetwork:
     def zmatrix(self):
         """Return the Z-matrix (impedance parameters) of the network."""
         nf = self.B.shape[-1]
-        return (1 / self.C) * np.array([[self.A, self.determinant], [np.ones(nf), self.D]])
+        return (1 / self.C) * np.array([
+            [self.A, self.determinant],
+            [np.ones(nf), self.D],
+        ])
 
     @property
     def impedance_matrix(self):
@@ -223,7 +227,10 @@ class TwoPortNetwork:
         This is the inverse of the z-matrix.
         """
         nf = self.B.shape[-1]
-        return (1 / self.B) * np.array([[self.D, -self.determinant], [-np.ones(nf), self.A]])
+        return (1 / self.B) * np.array([
+            [self.D, -self.determinant],
+            [-np.ones(nf), self.A],
+        ])
 
     @property
     def admittance_matrix(self):
@@ -236,13 +243,18 @@ class TwoPortNetwork:
         z = np.atleast_3d(z)
         nf = z.shape[-1]
         detz = z[0, 0] * z[1, 1] - z[0, 1] * z[1, 0]
-        return cls(1 / z[1, 0] * np.array([[-detz, -z[0, 0]], [-z[1, 1], -np.ones(nf)]]))
+        return cls(
+            1 / z[1, 0] * np.array([[-detz, -z[0, 0]], [-z[1, 1], -np.ones(nf)]])
+        )
 
     @property
     def hmatrix(self):
         """Return the H-matrix (hybrid parameters) of the network."""
         nf = self.B.shape[-1]
-        return (1 / self.D) * np.array([[self.B, self.determinant], [-np.ones(nf), self.C]])
+        return (1 / self.D) * np.array([
+            [self.B, self.determinant],
+            [-np.ones(nf), self.C],
+        ])
 
     @property
     def hybrid_matrix(self):
@@ -301,10 +313,12 @@ class TwoPortNetwork:
 
         cgl = np.cosh(gl)
         sgl = np.sinh(gl)
-        return cls(np.array([
-            [cgl, line.characteristic_impedance * sgl],
-            [(1 / line.characteristic_impedance) * sgl, cgl],
-        ]))
+        return cls(
+            np.array([
+                [cgl, line.characteristic_impedance * sgl],
+                [(1 / line.characteristic_impedance) * sgl, cgl],
+            ])
+        )
 
 
 @attrs.define(frozen=True, kw_only=False, slots=False)
@@ -356,7 +370,7 @@ class SMatrix:
         return cls(np.array([[s11, s12], [s21, s22]]))
 
     @classmethod
-    def from_transfer_matrix(cls, t: npt.NDArray[np.complex]):
+    def from_transfer_matrix(cls, t: npt.NDArray[complex]):
         """Create an SMatrix from a transfer matrix.
 
         See https://en.wikipedia.org/wiki/Scattering_parameters#Scattering_transfer_parameters.
@@ -422,7 +436,9 @@ class SMatrix:
 
         See https://en.wikipedia.org/wiki/Scattering_parameters#Lossless_networks
         """
-        product = np.matmul(self.s.transpose((2, 0, 1)), self.s.transpose((2, 1, 0)).conj())
+        product = np.matmul(
+            self.s.transpose((2, 0, 1)), self.s.transpose((2, 1, 0)).conj()
+        )
         return np.allclose(product, np.eye(2))
 
     @property

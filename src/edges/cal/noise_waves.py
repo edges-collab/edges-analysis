@@ -7,11 +7,11 @@ from functools import cached_property
 
 import attrs
 import numpy as np
-
-from .. import types as tp
-from .. import modelling as mdl
-from ..tools import ComplexSpline
 from astropy import units as un
+
+from .. import modelling as mdl
+from .. import types as tp
+
 
 def get_F(gamma_rec: np.ndarray, gamma_ant: np.ndarray) -> np.ndarray:  # noqa: N802
     """Get the F parameter for a given receiver and antenna.
@@ -192,7 +192,7 @@ class NoiseWaveLinearModelFit:
         """
         if freq is None:
             freq = self.freq
-            
+
         ph = np.exp(1j * 2 * np.pi * freq * self.delay * 1e6)
 
         tcos = self.model.model.models["cos"](x=freq, with_scaler=False)
@@ -212,7 +212,7 @@ class NoiseWaveLinearModelFit:
         """
         if freq is None:
             freq = self.freq
-            
+
         ph = np.exp(1j * 2 * np.pi * freq * self.delay * 1e6)
 
         tcos = self.model.model.models["cos"](x=freq, with_scaler=False)
@@ -284,8 +284,7 @@ class NoiseWaveLinearModel:
     def unc_kfactor(self, freq):
         """Compute the scaler to the Tunc basis function."""
         return np.concatenate([
-            get_K(self.gamma_rec, gamma)[1]
-            for gamma in self.gamma_src.values()
+            get_K(self.gamma_rec, gamma)[1] for gamma in self.gamma_src.values()
         ])
 
     def fit(
@@ -320,10 +319,7 @@ class NoiseWaveLinearModel:
             models={"unc": unc_model, "cos": cos_model, "sin": sin_model}
         )
 
-        K0 = {
-            k: get_K(self.gamma_rec, self.gamma_src[k])[0]
-            for k in self.gamma_src
-        }
+        K0 = {k: get_K(self.gamma_rec, self.gamma_src[k])[0] for k in self.gamma_src}
 
         data = np.concatenate([
             spectrum[k] - temp_thermistor[k] * K0[k] for k in self.gamma_src
@@ -369,7 +365,7 @@ def get_calibration_quantities_iterative(
         The PSD ratios, Q, of the calibration sources, as a dictionary with the source
         names as keys.
     source_s11s
-        A dictionary with the same keys as `source_q`, containing callable S11 models 
+        A dictionary with the same keys as `source_q`, containing callable S11 models
         for each calibration source.
     source_true_temps
         A dictionary with the same keys as `source_q`, containing the true temperature
@@ -383,7 +379,7 @@ def get_calibration_quantities_iterative(
     wterms : int
         Number of polynonmial temrs for the T_i
     t_load_guess
-        An initial guess for the internal dicke-switch load temperature, used to 
+        An initial guess for the internal dicke-switch load temperature, used to
         initialize the iterative algorithm.
     t_load_ns_guess
         An initial guess for the internal dicke-switch load+noise-sourc temperature,
@@ -405,20 +401,20 @@ def get_calibration_quantities_iterative(
     return_early
         Whether to return from the iterative loop early if the RMS of the residuals
         stops decreasing.
-        
+
     Yields
     ------
     t_sca_model
-        A fitted polynomial model for the temperature scale (approximately, the 
+        A fitted polynomial model for the temperature scale (approximately, the
         true internal load+noise-source temperature, but with corrections from
         internal path-lengths).
     t_off_model
         A fitted polynomial model for the temperature offset (approximately, the
         true internal load temperature, but with corrections from internal path-lengths)
     nwp
-        A fitted model for the noise-wave parameters. The values of each of the 
+        A fitted model for the noise-wave parameters. The values of each of the
         noise-wave temperatures can be accessed via e.g. `nwp.get_tunc()`.
-        
+
     Notes
     -----
     To achieve the same results as the legacy C pipeline, the `hot_load_loss` parameter
@@ -426,16 +422,15 @@ def get_calibration_quantities_iterative(
     mathematical difference that arises if you do it the other way. Furthermore, the
     `smooth_scale_offset_within_loop` parameter should be set to False.
     """
-    # Convert all temperatures to K and remove the units to make the iterative 
+    # Convert all temperatures to K and remove the units to make the iterative
     # algorithm fast and not have to worry about units.
     t_load_guess = t_load_guess.to_value("K")
     t_load_ns_guess = t_load_ns_guess.to_value("K")
     source_true_temps = {k: v.to_value("K") for k, v in source_true_temps.items()}
     freqs = freqs.to_value("MHz")
-    
-    # Get approximate temperatures    
-    
-    
+
+    # Get approximate temperatures
+
     mask = np.all([np.isfinite(temp) for temp in source_q.values()], axis=0)
 
     fmask = freqs[mask]
@@ -447,7 +442,7 @@ def get_calibration_quantities_iterative(
     temp_ant_hot = source_true_temps["hot_load"]
     receiver_s11 = receiver_s11[mask]
     source_s11s = {k: v[mask] for k, v in source_s11s.items()}
-    
+
     # The denominator of each term in Eq. 7
     G = 1 - np.abs(receiver_s11) ** 2
 
@@ -477,7 +472,7 @@ def get_calibration_quantities_iterative(
     )
 
     # Get initial guess of the calibrated temperatures.
-    temp_cal_iter = {k: v*t_load_ns_guess + t_load_guess for k, v in source_q.items()}
+    temp_cal_iter = {k: v * t_load_ns_guess + t_load_guess for k, v in source_q.items()}
 
     # Initial values for breaking early.
     sca_off_chisq = np.inf
@@ -500,7 +495,9 @@ def get_calibration_quantities_iterative(
             ) / hot_load_loss
 
         # Updating scale and offset
-        sca_new = (temp_ant_hot - source_true_temps["ambient"]) / (thot_iter - tamb_iter)
+        sca_new = (temp_ant_hot - source_true_temps["ambient"]) / (
+            thot_iter - tamb_iter
+        )
         off_new = tamb_iter - source_true_temps["ambient"]
 
         sca *= sca_new
@@ -561,17 +558,16 @@ def get_calibration_quantities_iterative(
 
         cable_chisq = best.rms
 
-        t_sca_model = p_sca.with_params(np.array(p_sca.parameters)*t_load_ns_guess)
+        t_sca_model = p_sca.with_params(np.array(p_sca.parameters) * t_load_ns_guess)
         t_off_model = p_off.with_params(
-            np.array([t_load_guess] + [0]*(p_off.n_terms-1)) - np.array(p_off.parameters)
+            np.array([t_load_guess] + [0] * (p_off.n_terms - 1))
+            - np.array(p_off.parameters)
         )
 
         yield (t_sca_model, t_off_model, best)
 
 
-def get_linear_coefficients(
-    gamma_ant, gamma_rec, t_sca, t_off, t_unc, t_cos, t_sin
-):
+def get_linear_coefficients(gamma_ant, gamma_rec, t_sca, t_off, t_unc, t_cos, t_sin):
     """
     Use Monsalve (2017) Eq. 7 to determine a and b, such that T = aT* + b.
 
@@ -582,7 +578,7 @@ def get_linear_coefficients(
     gamma_rec : array_like
         S11 of the receiver.
     sca,off : array_like
-        Scale and offset calibration parameters (i.e. Tsca and Toff). These are in the 
+        Scale and offset calibration parameters (i.e. Tsca and Toff). These are in the
         form of arrays over frequency (i.e. it is not the polynomial coefficients).
     t_unc, t_cos, t_sin : array_like
         Noise-wave calibration parameters (uncorrelated, cosine, sine). These are in the
@@ -613,8 +609,6 @@ def get_linear_coefficients_from_K(  # noqa: N802
     """
     # Noise wave contribution
     noise_wave_terms = t_unc * k[1] + t_cos * k[2] + t_sin * k[3]
-    print("sca/nw: ", np.all(np.isfinite(t_sca/k[0])), np.all(np.isfinite((t_off-noise_wave_terms)/k[0])))
-    print("k0: ", k[0])
     return t_sca / k[0], (t_off - noise_wave_terms) / k[0]
 
 
@@ -743,34 +737,6 @@ class NoiseWaves:
         """Get a new noise wave model with fitted parameters."""
         fit = self.linear_model.fit(ydata=data, weights=weights, **kwargs)
         return attrs.evolve(self, parameters=fit.model_parameters)
-
-    # def with_params_from_calobs(self, calobs, cterms=None, wterms=None) -> NoiseWaves:
-    #     """Get a new noise wave model with parameters fitted using standard methods."""
-    #     cterms = cterms or calobs.cterms
-    #     wterms = wterms or calobs.wterms
-
-    #     def modify(thing, n):
-    #         if isinstance(thing, np.ndarray):
-    #             thing = thing.tolist()
-    #         elif isinstance(thing, tuple):
-    #             thing = list(thing)
-
-    #         if len(thing) < n:
-    #             return thing + [0] * (n - len(thing))
-    #         if len(thing) > n:
-    #             return thing[:n]
-    #         return thing
-
-    #     tu = modify(calobs.cal_coefficient_models["NW"].model.parameters, wterms)
-    #     tc = modify(calobs.cal_coefficient_models["NW"].model.parameters, wterms)
-    #     ts = modify(calobs.cal_coefficient_models["NW"].model.parameters, wterms)
-
-    #     if self.with_tload:
-    #         c2 = -np.asarray(calobs.cal_coefficient_models["C2"].parameters)
-    #         c2[0] += calobs.t_load
-    #         c2 = modify(c2, cterms)
-
-    #     return attrs.evolve(self, parameters=tu + tc + ts + c2)
 
     @classmethod
     def from_calobs(

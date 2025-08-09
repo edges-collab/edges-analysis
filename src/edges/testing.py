@@ -32,6 +32,7 @@ def create_mock_edges_data(
     add_noise: bool = False,
     as_power: bool = False,
 ) -> GSData:
+    """Create mock GSData objects."""
     dt = dt.to(un.day)
     freqs = edges_raw_freqs(f_low=flow, f_high=fhigh)
     times = Time(

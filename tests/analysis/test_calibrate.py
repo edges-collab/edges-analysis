@@ -1,32 +1,26 @@
 """Test the calibration module."""
 
-from datetime import datetime
-from pathlib import Path
-
 import numpy as np
 import pytest
 from astropy import units as un
-from astropy.time import Time
 from pygsdata import GSData
 
 from edges import modelling as mdl
 from edges.analysis import calibrate
-from edges.cal.s11 import antenna
+from edges.cal import Calibrator, apply
 from edges.cal.s11.base import CalibratedS11
 from edges.sim.beams import BeamFactor
-from edges.cal import Calibrator, apply
+
 
 def get_ideal_s11model(freqs):
-    
-    return CalibratedS11(
-        s11=np.zeros(freqs.size, dtype=complex),
-        freqs=freqs
-    )
+    return CalibratedS11(s11=np.zeros(freqs.size, dtype=complex), freqs=freqs)
+
+
 class TestApplyNoiseWaveCalibration:
     def test_bad_inputs(
-        self, 
-        gsd_ones: GSData, 
-        gsd_ones_power: GSData, 
+        self,
+        gsd_ones: GSData,
+        gsd_ones_power: GSData,
         calibrator: Calibrator,
     ):
         data = gsd_ones.update(data_unit="temperature")
@@ -58,24 +52,26 @@ class TestApplyNoiseWaveCalibration:
 
     @pytest.mark.filterwarnings("ignore:loader 'b'!edges.cal")
     def test_equality_uncal_vs_uncaltemp(
-        self, gsd_ones: GSData, calibrator: Calibrator,
+        self,
+        gsd_ones: GSData,
+        calibrator: Calibrator,
     ):
         s11 = get_ideal_s11model(freqs=gsd_ones.freqs)
-        
+
         data = gsd_ones.update(data_unit="uncalibrated")
         new = calibrate.apply_noise_wave_calibration(
             data, calibrator=calibrator, antenna_s11=s11
         )
 
         data_temp = apply.approximate_temperature(
-            data, tload=300*un.K, tns=1000*un.K
+            data, tload=300 * un.K, tns=1000 * un.K
         )
         new2 = calibrate.apply_noise_wave_calibration(
             data_temp,
-            calibrator=calibrator, 
+            calibrator=calibrator,
             antenna_s11=s11,
             tload=300 * un.K,
-            tns=1000*un.K,
+            tns=1000 * un.K,
         )
 
         assert np.all(new.data == new2.data)

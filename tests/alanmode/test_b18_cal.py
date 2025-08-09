@@ -10,7 +10,6 @@ directly.
 """
 
 import shutil
-import traceback
 from pathlib import Path
 
 import numpy as np
@@ -18,17 +17,21 @@ import pandas as pd
 import pytest
 
 from edges.alanmode import read_specal
-from edges.alanmode.cli import alancal_edges2, AlanCalOpts
-from edges.alanmode.alanmode import Edges2CalobsParams, ACQPlot7aMoonParams, EdgesScriptParams
-from edges import alanmode as amode
+from edges.alanmode.alanmode import (
+    ACQPlot7aMoonParams,
+    Edges2CalobsParams,
+    EdgesScriptParams,
+)
+from edges.alanmode.cli import AlanCalOpts, alancal_edges2
+
 
 @pytest.fixture(scope="module")
 def b18cal(tmpdir, testdata_path):
     tmpdir = tmpdir / "outputs"
     tmpdir.mkdir()
 
-    DATA = testdata_path / 'alanmode' / 'b18_cal_test'
-    
+    DATA = testdata_path / "alanmode" / "b18_cal_test"
+
     # Put the averaged spectrum files into the working directory.
     specfiles = DATA.glob("sp*.txt")
     for fl in specfiles:
@@ -37,25 +40,26 @@ def b18cal(tmpdir, testdata_path):
     # Note that all the ACQs here point to their original names, but they are not
     # actually used in this test.
     defparams = Edges2CalobsParams(
-        s11_path=DATA / "s11_calibration_low_band_LNA25degC_2015-09-16-12-30-29_simulator2_long.txt",
+        s11_path=DATA
+        / "s11_calibration_low_band_LNA25degC_2015-09-16-12-30-29_simulator2_long.txt",
         ambient_acqs=[
             DATA / "Ambient_01_2015_245_02_00_00_lab.acq",
-            DATA / "Ambient_01_2015_246_02_00_00_lab.acq"
+            DATA / "Ambient_01_2015_246_02_00_00_lab.acq",
         ],
-        hotload_acqs = [
+        hotload_acqs=[
             DATA / "HotLoad_01_2015_246_04_00_00_lab.acq",
-            DATA/ "HotLoad_01_2015_247_00_00_00_lab.acq",
+            DATA / "HotLoad_01_2015_247_00_00_00_lab.acq",
         ],
-        open_acqs = [
+        open_acqs=[
             DATA / "LongCableOpen_01_2015_243_14_00_00_lab.acq",
             DATA / "LongCableOpen_01_2015_244_00_00_00_lab.acq",
             DATA / "LongCableOpen_01_2015_245_00_00_00_lab.acq",
         ],
-        short_acqs = [
+        short_acqs=[
             DATA / "LongCableShorted_01_2015_241_00_00_00_lab.acq",
             DATA / "LongCableShorted_01_2015_242_00_00_00_lab.acq",
             DATA / "LongCableShorted_01_2015_243_00_00_00_lab.acq",
-        ]
+        ],
     )
     acqparams = ACQPlot7aMoonParams(
         fstart=40.0,
@@ -78,36 +82,35 @@ def b18cal(tmpdir, testdata_path):
         nfit3=11,
         lna_poly=0,
     )
-    
+
     alancal_edges2(
         data=defparams,
-        opts = AlanCalOpts(
+        opts=AlanCalOpts(
             avg=acqparams,
-            cal=calparams, 
+            cal=calparams,
             plot=False,
-            out=tmpdir, 
+            out=tmpdir,
             redo_spectra=False,
-            redo_cal=True
-        )
+            redo_cal=True,
+        ),
     )
-
 
     return tmpdir
 
 
 @pytest.fixture(scope="module")
 def mask(testdata_path):
-    DATA = testdata_path / 'alanmode' / 'b18_cal_test'
+    DATA = testdata_path / "alanmode" / "b18_cal_test"
 
     alancalfreq, _ = read_s11m(DATA / "s11_modelled_alan.txt")
     return (alancalfreq >= 50.0) & (alancalfreq <= 100.0)
 
 
 def read_s11m(pth) -> tuple[np.ndarray, pd.DataFrame]:
-    _s11m = np.genfromtxt(pth, comments="#", names=True)
+    raw_s11m = np.genfromtxt(pth, comments="#", names=True)
     s11m = {}
-    freq = _s11m["freq"]
-    for name in _s11m.dtype.names:
+    freq = raw_s11m["freq"]
+    for name in raw_s11m.dtype.names:
         if name == "freq":
             continue
 
@@ -116,17 +119,17 @@ def read_s11m(pth) -> tuple[np.ndarray, pd.DataFrame]:
         load = "_".join(bits[:-1])
 
         if load not in s11m:
-            s11m[load] = np.zeros(len(_s11m), dtype=complex)
+            s11m[load] = np.zeros(len(raw_s11m), dtype=complex)
         if cmp == "real":
-            s11m[load] += _s11m[name]
+            s11m[load] += raw_s11m[name]
         else:
-            s11m[load] += _s11m[name] * 1j
+            s11m[load] += raw_s11m[name] * 1j
 
     return freq, pd.DataFrame(s11m)
 
 
 def test_s11_modelled(b18cal: Path, mask, testdata_path):
-    DATA = testdata_path / 'alanmode' / 'b18_cal_test'
+    DATA = testdata_path / "alanmode" / "b18_cal_test"
 
     alancalfreq, alan = read_s11m(DATA / "s11_modelled_alan.txt")
     calfreq, ours = read_s11m(b18cal / "s11_modelled.txt")
@@ -140,7 +143,7 @@ def test_s11_modelled(b18cal: Path, mask, testdata_path):
 
 
 def test_hot_load_loss(b18cal: Path, mask, testdata_path):
-    DATA = testdata_path / 'alanmode' / 'b18_cal_test'
+    DATA = testdata_path / "alanmode" / "b18_cal_test"
 
     alans = np.genfromtxt(DATA / "hot_load_loss.txt")
     ours = np.genfromtxt(b18cal / "hot_load_loss.txt")
@@ -148,14 +151,15 @@ def test_hot_load_loss(b18cal: Path, mask, testdata_path):
 
 
 def test_calcoeffs(b18cal: Path, mask, testdata_path):
-    DATA = testdata_path / 'alanmode' / 'b18_cal_test'
+    DATA = testdata_path / "alanmode" / "b18_cal_test"
 
     ours = read_specal(b18cal / "specal.txt", t_load=300.0, t_load_ns=1000.0)
     alan = read_specal(DATA / "specal_alan.txt", t_load=300.0, t_load_ns=1000.0)
 
-    np.testing.assert_allclose(ours.Tsca, alan.Tsca, atol=1.1e-3)  # since we mutliply by tcal=1000, use 1e-3
+    np.testing.assert_allclose(
+        ours.Tsca, alan.Tsca, atol=1.1e-3
+    )  # since we mutliply by tcal=1000, use 1e-3
     np.testing.assert_allclose(ours.Toff, alan.Toff, atol=1.1e-6)
     np.testing.assert_allclose(ours.Tunc, alan.Tunc, atol=1.1e-6)
     np.testing.assert_allclose(ours.Tcos, alan.Tcos, atol=1.1e-6)
     np.testing.assert_allclose(ours.Tsin, alan.Tsin, atol=1.1e-6)
-    

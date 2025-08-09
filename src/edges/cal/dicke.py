@@ -1,3 +1,5 @@
+"""Functions for dicke-switch calibration."""
+
 import numpy as np
 from pygsdata import GSData, gsregister
 

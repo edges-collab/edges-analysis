@@ -3,12 +3,15 @@
 This can be used to compute the loss through the cable.
 """
 
-from edges.cal.s11.base import CalibratedSParams
-from ... import types as tp
 import numpy as np
 from astropy import units as un
+
+from edges.cal.s11.base import CalibratedSParams
+
 from ... import get_data_path
+from ... import types as tp
 from ...frequencies import get_mask
+
 
 def read_semi_rigid_cable_sparams_file(
     path: tp.PathLike = ":semi_rigid_s_parameters_WITH_HEADER.txt",
@@ -40,9 +43,4 @@ def read_semi_rigid_cable_sparams_file(
             data[:, 4] + 1j * data[:, 5],
         ]).T
 
-    return CalibratedSParams(
-        freqs=freq,
-        s11=data[:, 0],
-        s12=data[:, 1],
-        s22=data[:, 2]
-    )
+    return CalibratedSParams(freqs=freq, s11=data[:, 0], s12=data[:, 1], s22=data[:, 2])

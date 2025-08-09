@@ -14,9 +14,9 @@ from . import ee
 from . import reflection_coefficient as rc
 from .s11 import CalibratedSParams
 
+
 def compute_cable_loss_from_scattering_params(
-    input_s11: npt.NDArray[complex], 
-    smatrix: rc.SMatrix | CalibratedSParams
+    input_s11: npt.NDArray[complex], smatrix: rc.SMatrix | CalibratedSParams
 ) -> npt.NDArray[float]:
     """Compute loss from a cable, given the S-params of the cable, and input S11.
 
@@ -39,10 +39,8 @@ def compute_cable_loss_from_scattering_params(
     s21 = smatrix.s21
     s22 = smatrix.s22
 
-    print("INPUT S11: ", input_s11[0])
     T = rc.gamma_de_embed(input_s11, smatrix)
-    print("ALL THE STUFF: ", T[0], s12[0], s21[0], s22[0])
-    
+
     return (
         np.abs(s12 * s21)
         * (1 - np.abs(T) ** 2)
@@ -107,8 +105,11 @@ class LossFunctionGivenSparams:
     (2017), Eq. 8+9.
 
     """
-    sparams: CalibratedSParams = attrs.field(validator=attrs.validators.instance_of(CalibratedSParams))
-    
+
+    sparams: CalibratedSParams = attrs.field(
+        validator=attrs.validators.instance_of(CalibratedSParams)
+    )
+
     def __call__(self, freq: tp.FreqType, hot_load_s11: np.ndarray) -> np.ndarray:
         """
         Calculate the power gain.
@@ -125,7 +126,11 @@ class LossFunctionGivenSparams:
         gain : np.ndarray
             The power gain as a function of frequency.
         """
-        if (self.sparams.freqs.size != hot_load_s11.size):
-            raise ValueError("Given hot_load_s11 doesn't have the same size as the S-params.")
-        
-        return compute_cable_loss_from_scattering_params(hot_load_s11, self.sparams.smatrix)
+        if self.sparams.freqs.size != hot_load_s11.size:
+            raise ValueError(
+                "Given hot_load_s11 doesn't have the same size as the S-params."
+            )
+
+        return compute_cable_loss_from_scattering_params(
+            hot_load_s11, self.sparams.smatrix
+        )

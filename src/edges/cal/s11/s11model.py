@@ -1,20 +1,17 @@
 """A class for setting parameters to model raw S11 measurements."""
 
 from __future__ import annotations
-from re import U
-from typing import Self
+
 import logging
+from typing import Self
 
 import attrs
-import matplotlib.pyplot as plt
 import numpy as np
 from astropy import units as un
 from scipy.interpolate import InterpolatedUnivariateSpline as Spline
 
 from edges.modelling.models import Polynomial
 from edges.modelling.xtransforms import UnitTransform
-
-from .base import CalibratedS11
 
 from ... import types as tp
 from ...io.serialization import hickleable
@@ -23,20 +20,21 @@ from ...modelling import (
     ComplexRealImagModel,
     Fourier,
     Model,
-    XTransform,
-    IdentityTransform
 )
 from .. import reflection_coefficient as rc
+from .base import CalibratedS11
 
 logger = logging.getLogger(__name__)
+
 
 @hickleable
 @attrs.define(kw_only=True, frozen=True)
 class S11ModelParams:
-    """
-    A class holding parameters required to model an S11.
-    """
-    model: Model = attrs.field(default=Fourier(n_terms=55, transform=UnitTransform(range=(0, 1))))
+    """A class holding parameters required to model an S11."""
+
+    model: Model = attrs.field(
+        default=Fourier(n_terms=55, transform=UnitTransform(range=(0, 1)))
+    )
     complex_model_type: type[ComplexMagPhaseModel] | type[ComplexRealImagModel] = (
         attrs.field(default=ComplexMagPhaseModel)
     )
@@ -44,16 +42,18 @@ class S11ModelParams:
     model_delay: tp.TimeType = attrs.field(default=0 * un.s)
     set_transform_range: bool = attrs.field(default=True, converter=bool)
     use_spline: bool = attrs.field(default=False)
-    fit_method: str = attrs.field(default='lstsq')
-    
+    fit_method: str = attrs.field(default="lstsq")
+
     def clone(self, **kwargs):
         """Clone with new parameters."""
         return attrs.evolve(self, **kwargs)
 
     @classmethod
-    def from_calibration_load_defaults(cls, name: str, find_model_delay: bool = True, **kwargs) -> Self:
+    def from_calibration_load_defaults(
+        cls, name: str, find_model_delay: bool = True, **kwargs
+    ) -> Self:
         """Generate a default S11ModelParams from a calibration load name.
-        
+
         This just sets the default number of terms.
         """
         default_nterms = {
@@ -64,75 +64,87 @@ class S11ModelParams:
         }
         n_terms = default_nterms.get(name, 37)
 
-        model = kwargs.pop("model", Fourier(n_terms=n_terms, transform=UnitTransform(range=(0, 1))))
-        
-        return cls(
-            model=model,
-            find_model_delay=find_model_delay,
-            **kwargs
+        model = kwargs.pop(
+            "model", Fourier(n_terms=n_terms, transform=UnitTransform(range=(0, 1)))
         )
-    
+
+        return cls(model=model, find_model_delay=find_model_delay, **kwargs)
+
     @classmethod
     def from_receiver_defaults(cls, find_model_delay: bool = True, **kwargs) -> Self:
         """Generate a default S11ModelParams for a receiver."""
-        model = kwargs.pop("model", Fourier(n_terms=37, transform=UnitTransform(range=(0, 1))))
-
-        return cls(
-            model=model,
-            find_model_delay=find_model_delay,
-            **kwargs
+        model = kwargs.pop(
+            "model", Fourier(n_terms=37, transform=UnitTransform(range=(0, 1)))
         )
 
+        return cls(model=model, find_model_delay=find_model_delay, **kwargs)
+
     @classmethod
-    def from_hot_load_cable_defaults(cls,**kwargs)  -> Self:
+    def from_hot_load_cable_defaults(cls, **kwargs) -> Self:
         """Generate a default S11ModelParams for a hot load cable."""
-        model = kwargs.pop("model", Polynomial(n_terms=21, transform=UnitTransform(range=(0, 1))))
-        
+        model = kwargs.pop(
+            "model", Polynomial(n_terms=21, transform=UnitTransform(range=(0, 1)))
+        )
+
         return cls(
             model=model,
             complex_model_type=ComplexRealImagModel,
             set_transform_range=True,
-            **kwargs
-        )
-
-    @classmethod
-    def from_hot_load_cable_defaults(cls,**kwargs)  -> Self:
-        """Generate a default S11ModelParams for a hot load cable."""
-        model = kwargs.pop("model", Polynomial(n_terms=21))
-
-        return cls(
-            model=model,
-            **kwargs
+            **kwargs,
         )
 
     @classmethod
     def from_internal_switch_defaults(cls, **kwargs) -> Self:
         """Generate a default S11ModelParams for an internal switch."""
-        model = kwargs.pop("model", Polynomial(
-            n_terms=7,
-            transform=UnitTransform(range=(0,1)),
-        ))
+        model = kwargs.pop(
+            "model",
+            Polynomial(
+                n_terms=7,
+                transform=UnitTransform(range=(0, 1)),
+            ),
+        )
 
         return cls(
             model=model,
             complex_model_type=kwargs.pop("complex_model_type", ComplexRealImagModel),
             find_model_delay=kwargs.pop("find_model_delay", False),
             set_transform_range=True,
-            **kwargs
+            **kwargs,
         )
-        
+
+
 def new_s11_modelled(
     raw_s11: np.ndarray | CalibratedS11,
     params: S11ModelParams,
     new_freqs: tp.FreqType | None = None,
     freqs: tp.FreqType | None = None,
 ) -> CalibratedS11:
+    """Create a new CalibratedS11 that has been smoothed/modelled.
+
+    Parameters
+    ----------
+    raw_s11
+        The input CalibratedS11 object.
+    params
+        The set of parameters defining the model used to smooth/interpolate.
+    new_freqs
+        Optional new frequencies onto which to interpolate. If not given, retain
+        the same set of frequencies.
+    freqs
+        The frequencies associated with raw_s11. Only required if `raw_s11` is an
+        array rather than a CalibratedS11.
+
+    Returns
+    -------
+    modelled_s11
+        A new CalibratedS11 object that has been smoothed.
+    """
     if not isinstance(raw_s11, CalibratedS11):
         raw_s11 = CalibratedS11(s11=raw_s11, freqs=freqs)
-    
+
     if new_freqs is None:
         new_freqs = raw_s11.freqs
-            
+
     model = get_s11_model(
         params,
         raw_s11=raw_s11,
@@ -145,17 +157,20 @@ def new_s11_modelled(
         s11=model(new_freqs),
         freqs=new_freqs,
     )
-    
-    
+
+
 @attrs.define
 class DelayedS11Model:
     cmodel: ComplexMagPhaseModel | ComplexRealImagModel = attrs.field()
     delay: tp.TimeType = attrs.field(default=0 * un.s)
-    
+
     def __call__(self, freq: tp.FreqType) -> np.ndarray:
         """Evaluate the model at a given frequency."""
-        return self.cmodel(freq.to_value("MHz")) * np.exp(-1j * 2 * np.pi * (self.delay * freq).to_value(""))
-    
+        return self.cmodel(freq.to_value("MHz")) * np.exp(
+            -1j * 2 * np.pi * (self.delay * freq).to_value("")
+        )
+
+
 def get_s11_model(
     params: S11ModelParams,
     raw_s11: CalibratedS11,
@@ -184,14 +199,18 @@ def get_s11_model(
         if params.complex_model_type == ComplexRealImagModel:
             splrl = Spline(raw_s11.freqs.to_value("MHz"), np.real(raw_s11.s11))
             splim = Spline(raw_s11.freqs.to_value("MHz"), np.imag(raw_s11.s11))
-            return lambda freq: splrl(freq.to_value("MHz")) + splim(freq.to_value("MHz"))*1j
-        else:
-            splmag = Spline(raw_s11.freqs.to_value("MHz"), np.abs(raw_s11.s11))
-            splph = Spline(raw_s11.freqs.to_value("MHz"), np.angle(raw_s11.s11))
-            return lambda freq: splmag(freq.to_value("MHz")) * np.exp(1j * splph(freq.to_value("MHz")))
+            return (
+                lambda freq: splrl(freq.to_value("MHz"))
+                + splim(freq.to_value("MHz")) * 1j
+            )
+        splmag = Spline(raw_s11.freqs.to_value("MHz"), np.abs(raw_s11.s11))
+        splph = Spline(raw_s11.freqs.to_value("MHz"), np.angle(raw_s11.s11))
+        return lambda freq: splmag(freq.to_value("MHz")) * np.exp(
+            1j * splph(freq.to_value("MHz"))
+        )
 
     transform = params.model.xtransform
-    model = params.model 
+    model = params.model
     if params.set_transform_range:
         if hasattr(transform, "range"):
             transform = attrs.evolve(
@@ -221,12 +240,10 @@ def get_s11_model(
         delay = rc.get_delay(raw_s11.freqs, raw_s11.s11)
     else:
         delay = params.model_delay
-        
+
     cmodel = cmodel.fit(
-        ydata=raw_s11.s11
-        * np.exp(2 * np.pi * 1j * delay * raw_s11.freqs).to_value(""),
+        ydata=raw_s11.s11 * np.exp(2 * np.pi * 1j * delay * raw_s11.freqs).to_value(""),
         method=params.fit_method,
     )
 
     return DelayedS11Model(cmodel=cmodel, delay=delay)
-

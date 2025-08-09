@@ -2,34 +2,37 @@
 
 from __future__ import annotations
 
+import contextlib
 import inspect
+import logging
 from pathlib import Path
-from typing import Any
 
 import attrs
-import h5py
 import numpy as np
 from astropy import units as un
 from astropy.time import Time
 from numpy.typing import NDArray
 from pygsdata import GSData
+from pygsdata.attrs import npfield
 from pygsdata.select import select_freqs, select_times
 
-from edges.io.calobsdef3 import LoadDefEDGES3
-
+from .. import __version__
 from .. import types as tp
 from ..averaging import freqbin, lstbin
-from ..config import config
-from ..io import get_mean_temperature, read_temperature_log, LoadDefEDGES3, LoadDefEDGES2
+from ..io import (
+    LoadDefEDGES2,
+    LoadDefEDGES3,
+    get_mean_temperature,
+    read_temperature_log,
+)
 from ..io.serialization import hickleable
 from ..io.spectra import read_spectra
-from ..logging import logger
 from ..tools import stable_hash
-from .. import __version__
 from .dicke import dicke_calibration
 from .thermistor import IgnoreTimesType, ThermistorReadings, ignore_ntimes
-from pygsdata.attrs import npfield
-from astropy import units as un
+
+logger = logging.getLogger(__name__)
+
 
 def flag_data_outside_temperature_range(
     temperature_range: tp.TemperatureType
@@ -40,7 +43,7 @@ def flag_data_outside_temperature_range(
     """Get a mask that flags data outside a temperature range."""
     thermistor_temp = thermistor.get_physical_temperature()
     thermistor_times = thermistor.data["times"]
-    
+
     # Cut on temperature.
     if isinstance(temperature_range, un.Quantity):
         median = np.median(thermistor_temp)
@@ -101,10 +104,8 @@ def get_ave_and_var_spec(
 
     spec_timestamps = data.times[:, time_coordinate_swpos]  # jd
 
-    try:
-        base_time, time_coordinate_swpos = time_coordinate_swpos
-    except Exception:
-        base_time = time_coordinate_swpos
+    with contextlib.suppress(Exception):
+        _base_time, time_coordinate_swpos = time_coordinate_swpos
 
     ignore_ninteg = ignore_ntimes(spec_timestamps, ignore_times)
 
@@ -161,7 +162,11 @@ class LoadSpectrum:
     q: GSData = attrs.field()
     variance: GSData | None = attrs.field(default=None)
     temp_ave: tp.TemperatureType = npfield(
-        possible_ndims=(0, 1,), unit=un.K,
+        possible_ndims=(
+            0,
+            1,
+        ),
+        unit=un.K,
     )
 
     @q.validator
@@ -176,7 +181,7 @@ class LoadSpectrum:
     def _var_vld(self, att, val):
         if val is None:
             return
-        
+
         if val.data.shape != self.q.data.shape:
             raise ValueError("variance must be the same shape as q")
 
@@ -184,7 +189,7 @@ class LoadSpectrum:
     def freqs(self) -> tp.FreqType:
         """The frequencies at which the spectrum is measured."""
         return self.q.freqs
-    
+
     @classmethod
     def from_loaddef(
         cls,
@@ -195,7 +200,9 @@ class LoadSpectrum:
         f_range_keep: tuple[tp.FreqType, tp.FreqType] | None = None,
         freq_bin_size=1,
         ignore_times: IgnoreTimesType = 5.0 * un.percent,
-        temperature_range: tp.TemperatureType | tuple[tp.TemperatureType, tp.TemperatureType] | None = None,
+        temperature_range: tp.TemperatureType
+        | tuple[tp.TemperatureType, tp.TemperatureType]
+        | None = None,
         frequency_smoothing: str = "bin",
         time_coordinate_swpos: int = 0,
         invalidate_cache: bool = False,
@@ -278,7 +285,8 @@ class LoadSpectrum:
                 temperature = np.nanmean(thermistor.get_physical_temperature())
             elif loaddef.templog is None:
                 raise ValueError(
-                    f"templog doesn't exist, and no source temperature passed for {loaddef.name}"
+                    f"templog doesn't exist, and no source temperature passed for"
+                    f"{loaddef.name}"
                 )
             else:
                 start = data.times.min()
@@ -317,7 +325,9 @@ class LoadSpectrum:
         return attrs.evolve(
             self,
             q=select_freqs(self.q, freq_range=(f_low, f_high)),
-            variance=select_freqs(self.variance, freq_range=(f_low, f_high)) if self.variance is not None else None,
+            variance=select_freqs(self.variance, freq_range=(f_low, f_high))
+            if self.variance is not None
+            else None,
         )
 
     @property

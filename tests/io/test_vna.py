@@ -1,6 +1,7 @@
 from pathlib import Path
-import pytest
+
 import numpy as np
+import pytest
 from astropy import units as un
 
 from edges.io.vna import SParams
@@ -34,13 +35,7 @@ def test_s2p_read(datadir: Path):
 
 def test_bad_s11_input_to_vna():
     with pytest.raises(ValueError, match="s-parameters must be complex"):
-        SParams(
-            freq=np.linspace(50, 100, 100) * un.MHz, 
-            s11=np.linspace(0, 1, 100)
-        )
+        SParams(freq=np.linspace(50, 100, 100) * un.MHz, s11=np.linspace(0, 1, 100))
 
     with pytest.raises(ValueError, match="Shape of s11 does not match"):
-        SParams(
-            freq=np.linspace(50, 100, 100) * un.MHz, 
-            s11=np.linspace(0, 1, 70) + 0j
-        )
+        SParams(freq=np.linspace(50, 100, 100) * un.MHz, s11=np.linspace(0, 1, 70) + 0j)

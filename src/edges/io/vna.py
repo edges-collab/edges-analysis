@@ -23,7 +23,8 @@ def _get_s1p_kind(path: Path) -> tuple[np.ndarray, str]:
         flag = None
         lines = d.readlines()
         if lines[0].startswith("BEGIN") and lines[1].strip() in ["DB", "MA", "RI"]:
-            # This is a format that has a BEGIN line, then a FLAG line, then data then END
+            # This is a format that has a BEGIN line, then a FLAG line, then data
+            # then END
             flag = lines[1].strip()
             comment_rows = 2
             footer_lines = 1
@@ -138,12 +139,12 @@ class SParams:
     def _check_dims(self, attribute, value):
         if value is None:
             return
-        
+
         if value.shape != self.freq.shape:
             raise ValueError(
                 f"Shape of {attribute.name} does not match shape of frequency"
             )
-            
+
         if not np.iscomplexobj(value):
             raise ValueError("s-parameters must be complex")
 

@@ -12,9 +12,10 @@ import edges.sim
 from edges import const
 from edges import modelling as mdl
 from edges.sim import beams
-from edges.sim.sky_models import ConstantIndex, StepIndex, Haslam408AllNoh, SkyModel
+from edges.sim.sky_models import ConstantIndex, Haslam408AllNoh, SkyModel, StepIndex
 
-@pytest.fixture(scope='module')
+
+@pytest.fixture(scope="module")
 def beam() -> beams.Beam:
     return beams.Beam.from_file("low")
 
@@ -92,12 +93,11 @@ def test_antenna_beam_factor(beam):
         f_high=56 * u.MHz,
         lsts=np.arange(0, 24, 6),
         sky_model=SkyModel.uniform_healpix(frequency=75.0, nside=4),
-        index_model = StepIndex(),
+        index_model=StepIndex(),
         use_astropy_azel=False,
         beam_smoothing=False,
     )
     assert isinstance(abf, beams.BeamFactor)
-
 
 
 def test_interp_methods(beam):

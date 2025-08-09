@@ -4,10 +4,11 @@ from collections import deque
 
 import numpy as np
 import pytest
+from astropy import units as un
 
 from edges import modelling as mdl
-from edges.cal import noise_waves as nw, Calibrator
-from astropy import units as un
+from edges.cal import Calibrator
+from edges.cal import noise_waves as nw
 
 N = 500
 FREQ = np.linspace(50, 100, N)
@@ -84,12 +85,12 @@ def test_fit_perfect_receiver(
     }
 
     temp = {
-        "ambient": 300*un.K, 
-        "hot_load": 1000*un.K, 
-        "short": 300*un.K, 
-        "open": 300*un.K
+        "ambient": 300 * un.K,
+        "hot_load": 1000 * un.K,
+        "short": 300 * un.K,
+        "open": 300 * un.K,
     }
-    
+
     calibrator = Calibrator(
         freqs=FREQ,
         Tsca=true_sca * 1000,
@@ -97,19 +98,20 @@ def test_fit_perfect_receiver(
         Tcos=true_t_cos,
         Tsin=true_t_sin,
         Tunc=true_t_unc,
-        receiver_s11=gamma_rec(FREQ)
+        receiver_s11=gamma_rec(FREQ),
     )
-    
+
     Q = {
         k: calibrator.decalibrate(
             temp=temp[k],
             ant_s11=gamma_ant[k],
-        ) for k in temp
+        )
+        for k in temp
     }
     print({name: np.where(~np.isfinite(q)) for name, q in Q.items()})
     result = deque(
         nw.get_calibration_quantities_iterative(
-            freqs=FREQ*un.MHz,
+            freqs=FREQ * un.MHz,
             source_q=Q,
             receiver_s11=gamma_rec(FREQ),
             source_s11s=gamma_ant,
@@ -136,9 +138,13 @@ def test_noise_waves(calobs):
     assert isinstance(nwm.linear_model.model, mdl.CompositeModel)
 
     assert "ambient" in nwm.src_names
-    with pytest.raises(ValueError, match='Cannot evaluate a model without providing parameters'):
+    with pytest.raises(
+        ValueError, match="Cannot evaluate a model without providing parameters"
+    ):
         nwm.get_noise_wave("tunc", src="ambient")
-    with pytest.raises(ValueError, match='You must supply parameters to evaluate the model'):
+    with pytest.raises(
+        ValueError, match="You must supply parameters to evaluate the model"
+    ):
         nwm.get_full_model("hot_load")
 
     nok = nwm.get_linear_model(with_k=False)

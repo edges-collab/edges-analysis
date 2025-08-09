@@ -3,40 +3,42 @@
 from __future__ import annotations
 
 import logging
-from typing import Annotated
 import warnings
 from pathlib import Path
-from attr import dataclass
-from cyclopts import Parameter
-from pygsdata import GSData
-import attrs
-from astropy.time import Time
+from typing import Annotated
 
+import attrs
 import numpy as np
 from astropy import units as un
+from astropy.time import Time
+from cyclopts import Parameter
+from pygsdata import GSData
 from pygsdata.select import select_freqs, select_times
 from read_acq.gsdata import read_acq_to_gsdata
 
 from edges.cal.s11.base import CalibratedSParams
-from edges.io.calobsdef import CalObsDefEDGES2, CalkitEdges2, LoadDefEDGES2
-from edges.io.calobsdef3 import CalObsDefEDGES3, get_s1p_files
+from edges.frequencies import get_mask
+from edges.io.calobsdef3 import CalObsDefEDGES3
 
 from .. import modelling as mdl
+from .. import types as tp
 from ..averaging.freqbin import gauss_smooth
 from ..averaging.lstbin import average_over_times
-from ..io.vna import SParams
 from ..cal import reflection_coefficient as rc
+from ..cal.apply import approximate_temperature
 from ..cal.calobs import CalibrationObservation, Calibrator, Load
 from ..cal.dicke import dicke_calibration
-from ..cal.loss import LossFunctionGivenSparams, get_cable_loss_model, get_loss_model_from_file
+from ..cal.loss import (
+    LossFunctionGivenSparams,
+    get_cable_loss_model,
+    get_loss_model_from_file,
+)
+from ..cal.receiver_cal import get_calcoeffs_iterative
 from ..cal.s11 import CalibratedS11, StandardsReadings
-from ..cal.spectra import LoadSpectrum
 from ..cal.s11.receiver import correct_receiver_for_extra_cable
 from ..cal.s11.s11model import S11ModelParams
-from ..cal.apply import approximate_temperature
-from edges.frequencies import get_mask
-from ..cal.receiver_cal import get_calcoeffs_iterative
-
+from ..cal.spectra import LoadSpectrum
+from ..io.vna import SParams
 from . import alanio
 
 logger = logging.getLogger(__name__)
@@ -46,21 +48,21 @@ SOURCES = ["ambient", "hot_load", "open", "short"]
 
 def reads1p1(
     res: float,
-    Tfopen: str,
-    Tfshort: str,
-    Tfload: str,
-    Tfant: str,
+    s11_file_open: str,
+    s11_file_short: str,
+    s11_file_load: str,
+    s11_file_ant: str,
     loadps: float = 33.0,
     openps: float = 33.0,
     shortps: float = 33.0,
 ):
     """Reads the s1p1 file and returns the data."""
     standards = StandardsReadings(
-        open=SParams.from_s1p_file(Tfopen),
-        short=SParams.from_s1p_file(Tfshort),
-        match=SParams.from_s1p_file(Tfload),
+        open=SParams.from_s1p_file(s11_file_open),
+        short=SParams.from_s1p_file(s11_file_short),
+        match=SParams.from_s1p_file(s11_file_load),
     )
-    load = SParams.from_s1p_file(Tfant)
+    load = SParams.from_s1p_file(s11_file_ant)
     freq = standards.freq
 
     calkit = rc.get_calkit(rc.AGILENT_ALAN, resistance_of_match=res * un.ohm)
@@ -76,9 +78,11 @@ def reads1p1(
 
 
 def corrcsv(
-    freq: np.ndarray | tp.FreqType, 
-    s11: np.ndarray, 
-    cablen: float, cabdiel: float, cabloss: float
+    freq: np.ndarray | tp.FreqType,
+    s11: np.ndarray,
+    cablen: float,
+    cabdiel: float,
+    cabloss: float,
 ):
     """Corrects the S11 data (LNA) for cable effects.
 
@@ -97,14 +101,18 @@ def corrcsv(
     cabloss : float
         The cable loss, as a percent.
     """
-    if not hasattr(freq, 'unit'):
-        freq  = freq*un.MHz
-        
+    if not hasattr(freq, "unit"):
+        freq = freq * un.MHz
+
     cable_length = (cablen * un.imperial.inch).to("m")
     return correct_receiver_for_extra_cable(
-        s11_in=s11, freq=freq, cable_length=cable_length,
-        cable_loss_percent=cabloss, cable_dielectric_percent=cabdiel
+        s11_in=s11,
+        freq=freq,
+        cable_length=cable_length,
+        cable_loss_percent=cabloss,
+        cable_dielectric_percent=cabdiel,
     )
+
 
 @attrs.define(kw_only=True, frozen=True)
 class ACQPlot7aMoonParams:
@@ -126,36 +134,52 @@ class ACQPlot7aMoonParams:
     delaystart: int = 0
 
     def __attrs_post_init__(self):
-        if any(p is not None for p in (self.pfit, self.rfi, self.peakpwr, self.minpwr, self.pkpwrm, self.maxrmsf, self.maxfm)):
+        """Warn if any non-implemented parameters are given."""
+        if any(
+            p is not None
+            for p in (
+                self.pfit,
+                self.rfi,
+                self.peakpwr,
+                self.minpwr,
+                self.pkpwrm,
+                self.maxrmsf,
+                self.maxfm,
+            )
+        ):
             warnings.warn(
                 "pfit, rfi, peakpwr, minpwr, pkpwrm, maxrmsf, and maxfm are not yet "
-                "implemented. This is almost certainly OK for calibration purposes, as no "
-                "calibration load data is typically filtered out by these parameters.",
+                "implemented. This is almost certainly OK for calibration purposes, as "
+                "no calibration load data is typically filtered out by these "
+                "parameters.",
                 stacklevel=2,
             )
-        
+
+
 def acqplot7amoon(
-    acqfile: str | Path,
-    params: ACQPlot7aMoonParams = ACQPlot7aMoonParams(),
-    **kwargs
+    acqfile: str | Path, params: ACQPlot7aMoonParams = ACQPlot7aMoonParams(), **kwargs
 ) -> GSData:
     """A function that does what the acqplot7amoon C-code does."""
     if kwargs:
         params = ACQPlot7aMoonParams(**kwargs)
-        
+
     data = read_acq_to_gsdata(acqfile, telescope="edges-low")
 
     if params.tstart > 0 or params.tstop < 23:
         # Note that tstop=23 includes all possible hours since we have <=
         hours = np.array([x.hour for x in data.times[:, 0].datetime])
-        data = select_times(data, indx=(hours >= params.tstart) & (hours <= params.tstop))
+        data = select_times(
+            data, indx=(hours >= params.tstart) & (hours <= params.tstop)
+        )
 
     if params.delaystart > 0:
         secs = (data.times - data.times.min()).sec
         idx = np.all(secs > params.delaystart, axis=1)
         data = select_times(data, indx=idx)
 
-    data = select_freqs(data, freq_range=(params.fstart * un.MHz, params.fstop * un.MHz))
+    data = select_freqs(
+        data, freq_range=(params.fstart * un.MHz, params.fstop * un.MHz)
+    )
     q = dicke_calibration(data)
 
     if params.smooth > 0:
@@ -164,9 +188,10 @@ def acqplot7amoon(
     q = average_over_times(q)
     return approximate_temperature(data=q, tload=params.tload, tns=params.tcal)
 
+
 @attrs.define(kw_only=True, frozen=True)
 class EdgesScriptParams:
-    Lh: Annotated[int, Parameter(name=('Lh',))] = -1
+    Lh: Annotated[int, Parameter(name=("Lh",))] = -1
     wfstart: float = 50
     wfstop: float = 190
     tcold: float = 306.5
@@ -180,7 +205,6 @@ class EdgesScriptParams:
     tcal: float = 1000.0
     nter: int = 8
     mfit: int | None = None
-    #smooth: int | None = None
     lmode: int | None = None
     tant: float | None = None
     ldb: float | None = None
@@ -188,15 +212,18 @@ class EdgesScriptParams:
     delaylna: float | None = None
     nfit4: int | None = None
     lna_poly: int = -1
-    
+
     @tcab.default
     def _tcab_default(self) -> float:
         return self.tcold
-    
+
     def __attrs_post_init__(self):
-        # Some of the parameters are defined, but not yet implemented,
-        # so we warn/error here. We do this explicitly because it serves as a
-        # reminder to implement them in the future as necessary
+        """Warn if non-implemented parameters are given.
+
+        Some of the parameters are defined, but not yet implemented,
+        so we warn/error here. We do this explicitly because it serves as a
+        reminder to implement them in the future as necessary
+        """
         if self.mfit is not None or self.tant is not None:
             warnings.warn(
                 "mfit, smooth and tant are not used in this function, because "
@@ -205,11 +232,15 @@ class EdgesScriptParams:
                 stacklevel=2,
             )
 
-        if any(p is not None for p in (self.lmode, self.ldb, self.adb, self.delaylna, self.nfit4)):
+        if any(
+            p is not None
+            for p in (self.lmode, self.ldb, self.adb, self.delaylna, self.nfit4)
+        ):
             raise NotImplementedError(
                 "lmode, ldb, adb, delaylna, and nfit4 are not yet implemented."
             )
-            
+
+
 def _get_specs(
     spcold: GSData,
     sphot: GSData,
@@ -226,20 +257,27 @@ def _get_specs(
         strict=False,
     ):
         specs[name] = LoadSpectrum(
-            q=approximate_temperature(spec, tload=params.tload, tns=params.tcal, reverse=True),
+            q=approximate_temperature(
+                spec, tload=params.tload, tns=params.tcal, reverse=True
+            ),
             temp_ave=temp * un.K,
         )
-        specs[name] = specs[name].between_freqs(params.wfstart * un.MHz, params.wfstop * un.MHz)
+        specs[name] = specs[name].between_freqs(
+            params.wfstart * un.MHz, params.wfstop * un.MHz
+        )
     return specs
+
 
 def _get_load_s11s(
     params: EdgesScriptParams,
-    s11cold, s11hot, s11open, s11short,
+    s11cold,
+    s11hot,
+    s11open,
+    s11short,
     s11mask: np.ndarray,
     s11freq: tp.FreqType,
     spec_freqs: tp.FreqType,
 ) -> tuple[dict[str, CalibratedS11], S11ModelParams, dict[str, CalibratedS11]]:
-
     raw_s11s = {
         name: CalibratedS11(
             s11=s11[s11mask],
@@ -252,14 +290,14 @@ def _get_load_s11s(
 
     mdltype = mdl.Fourier if params.nfit2 > 16 else mdl.Polynomial
     s11_modelling_params = S11ModelParams(
-        model = mdltype(
+        model=mdltype(
             n_terms=params.nfit2,
-            transform = (
+            transform=(
                 mdl.ZerotooneTransform(range=(1, 2))
                 if params.nfit2 > 16
                 else mdl.Log10Transform(scale=1)
             ),
-            period=1.5
+            period=1.5,
         ),
         complex_model_type=mdl.ComplexRealImagModel,
         set_transform_range=True,
@@ -271,38 +309,42 @@ def _get_load_s11s(
         name: s11.smoothed(params=s11_modelling_params, freqs=spec_freqs)
         for name, s11 in raw_s11s.items()
     }
-    
+
     return raw_s11s, s11_modelling_params, s11_models
 
-def _get_receiver_s11(
-    params: EdgesScriptParams,
-    s11lna, s11mask, s11freq, spec_fq
-):
+
+def _get_receiver_s11(params: EdgesScriptParams, s11lna, s11mask, s11freq, spec_fq):
     mt = mdl.Fourier if (params.nfit3 > 16 or params.lna_poly == 0) else mdl.Polynomial
 
     raw_receiver = CalibratedS11(
         s11=s11lna[s11mask],
         freqs=s11freq,
     )
-    model_transform=(
+    model_transform = (
         mdl.ZerotooneTransform(range=(1, 2))
         if mt == mdl.Fourier
         else mdl.Log10Transform(scale=120)
     )
-    model_kwargs={"period": 1.5} if mt == mdl.Fourier else {}
+    model_kwargs = {"period": 1.5} if mt == mdl.Fourier else {}
     receiver_model = S11ModelParams(
-        model = mt(n_terms=params.nfit3, transform=model_transform, **model_kwargs),
+        model=mt(n_terms=params.nfit3, transform=model_transform, **model_kwargs),
         complex_model_type=mdl.ComplexRealImagModel,
         set_transform_range=True,
         fit_method="alan-qrd",
-        find_model_delay=True
+        find_model_delay=True,
     )
     receiver = raw_receiver.smoothed(receiver_model, freqs=spec_fq)
     return raw_receiver, receiver_model, receiver
 
+
 def _get_hotload_loss(
     params: EdgesScriptParams,
-    s11rig, s12rig, s22rig, s11mask, s11freq, spec_fq,
+    s11rig,
+    s12rig,
+    s22rig,
+    s11mask,
+    s11freq,
+    spec_fq,
 ) -> callable | None:
     if params.Lh == -1:
         hot_loss_model = get_cable_loss_model("UT-141C-SP")
@@ -326,25 +368,24 @@ def _get_hotload_loss(
             mdlopts["period"] = 1.5
 
         hlc_model_params = S11ModelParams(
-            model=mdltype(**mdlopts), set_transform_range=False,
+            model=mdltype(**mdlopts),
+            set_transform_range=False,
             complex_model_type=mdl.ComplexRealImagModel,
             fit_method="lstsq",
         )
 
         hot_load_cable_s11 = CalibratedSParams(
             s11=s11rig,
-            s12=s12rig,   
+            s12=s12rig,
             s22=s22rig,
             freqs=s11freq,
-        ).smoothed(
-            params=hlc_model_params, freqs=spec_fq
-        )
-        # Here we do something a little bogus. Alan fits the smoothing model 
+        ).smoothed(params=hlc_model_params, freqs=spec_fq)
+        # Here we do something a little bogus. Alan fits the smoothing model
         # to the product s12*s21, which is what s12rig represents. So that's
         # why we passed s12rig as s12 above (instead of passing sqrt(s12rig)).
         # Now, we need to take the sqrt of s12 so have the right values.
         hot_load_cable_s11 = attrs.evolve(
-            hot_load_cable_s11, 
+            hot_load_cable_s11,
             s12=np.sqrt(hot_load_cable_s11.s12),
             s21=np.sqrt(hot_load_cable_s11.s12),
         )
@@ -353,8 +394,9 @@ def _get_hotload_loss(
         hot_loss_model = get_loss_model_from_file(params.Lh)
     else:
         hot_loss_model = None
-        
+
     return hot_loss_model
+
 
 def edges(
     spcold: GSData,
@@ -373,8 +415,7 @@ def edges(
     s11rig: np.ndarray | None = None,
     s12rig: np.ndarray | None = None,
     s22rig: np.ndarray | None = None,
-    
-    **kwargs
+    **kwargs,
 ) -> tuple[CalibrationObservation, Calibrator]:
     """A function that does what the edges3.c and edges2k.c C-code do.
 
@@ -386,9 +427,11 @@ def edges(
 
     # First set up the S11 models
     specs = _get_specs(spcold, sphot, spopen, spshort, params)
-    spec_fq = specs['ambient'].freqs
-    
-    s11mask = get_mask(s11freq, low=params.wfstart * un.MHz, high=params.wfstop * un.MHz)
+    spec_fq = specs["ambient"].freqs
+
+    s11mask = get_mask(
+        s11freq, low=params.wfstart * un.MHz, high=params.wfstop * un.MHz
+    )
     s11freq = s11freq[s11mask]
 
     raw_load_s11s, s11_model_params, load_s11s = _get_load_s11s(
@@ -397,7 +440,7 @@ def edges(
     raw_receiver, receiver_model_params, receiver = _get_receiver_s11(
         params, s11lna, s11mask, s11freq, spec_fq=spec_fq
     )
-    
+
     hot_loss_model = _get_hotload_loss(
         params, s11rig, s12rig, s22rig, s11mask, s11freq, spec_fq
     )
@@ -407,7 +450,9 @@ def edges(
             spectrum=specs[name],
             s11=load_s11s[name],
             raw_s11=raw_load_s11s[name],
-            loss=hot_loss_model(spec_fq, load_s11s[name].s11) if name=='hot_load' and hot_loss_model else np.ones(spec_fq.size),
+            loss=hot_loss_model(spec_fq, load_s11s[name].s11)
+            if name == "hot_load" and hot_loss_model
+            else np.ones(spec_fq.size),
             ambient_temperature=params.tcold * un.K,
         )
         for name in specs
@@ -417,7 +462,7 @@ def edges(
         loads=loads, receiver=receiver, raw_receiver=raw_receiver
     )
     calibrator = get_calcoeffs_iterative(
-        calobs, 
+        calobs,
         cterms=params.cfit,
         wterms=params.wfit,
         apply_loss_to_true_temp=False,
@@ -427,9 +472,10 @@ def edges(
         fit_method="alan-qrd",
         scale_offset_poly_spacing=0.5,
         t_load_guess=tload,
-        t_load_ns_guess=tcal
+        t_load_ns_guess=tcal,
     )
     return calobs, calibrator, s11_model_params, receiver_model_params, hot_loss_model
+
 
 def _average_spectra(
     specfiles: dict[str, list[Path]],
@@ -443,8 +489,7 @@ def _average_spectra(
     spectra = {}
     for load, files in specfiles.items():
         outfile = out / f"sp{load}.txt"
-        print("REDO?", redo_spectra, "EXISTS?", outfile.exists(), outfile)
-        if (redo_spectra or not outfile.exists()):
+        if redo_spectra or not outfile.exists():
             if len(files) == 0:
                 raise ValueError(f"{load} has no spectrum files!")
 
@@ -461,8 +506,8 @@ def _average_spectra(
 
         spectra[load] = alanio.read_spec_txt(
             outfile,
-            time = spectra[load].times[0,0] if load in spectra else Time.now(),
-            telescope = telescope,
+            time=spectra[load].times[0, 0] if load in spectra else Time.now(),
+            telescope=telescope,
             name=load,
         )
 
@@ -474,60 +519,61 @@ class Edges3CalobsParams:
     specyear: int
     specday: int
     datadir: Path = Path("/data5/edges/data/EDGES3_data/MRO/")
-    match_resistance: Annotated[float, Parameter(name=('res',))]=49.8
-    calkit_delays: Annotated[float, Parameter(name=('ps',))]=33
+    match_resistance: Annotated[float, Parameter(name=("res",))] = 49.8
+    calkit_delays: Annotated[float, Parameter(name=("ps",))] = 33
     load_delay: float = attrs.field()
-    open_delay: float  = attrs.field()
+    open_delay: float = attrs.field()
     short_delay: float = attrs.field()
-    lna_cable_length: Annotated[float, Parameter(name=('cablen',))]=4.26,
-    lna_cable_loss: Annotated[float, Parameter(name=('cabloss',))]=-91.5,
-    lna_cable_dielectric: Annotated[float, Parameter(name=('cabdiel',))] =-1.24
+    lna_cable_length: Annotated[float, Parameter(name=("cablen",))] = (4.26,)
+    lna_cable_loss: Annotated[float, Parameter(name=("cabloss",))] = (-91.5,)
+    lna_cable_dielectric: Annotated[float, Parameter(name=("cabdiel",))] = -1.24
     s11date: str
-    
+
     @load_delay.default
     def _load_delay_default(self):
         return self.calkit_delays
-    
+
     @open_delay.default
     def _open_delay_default(self):
         return self.calkit_delays
-    
+
     @short_delay.default
     def _short_delay_default(self):
         return self.calkit_delays
-    
+
     def get_caldef(self) -> CalObsDefEDGES3:
+        """Get a calibration file definition."""
         return CalObsDefEDGES3.from_standard_layout(
             rootdir=self.datadir,
             year=self.specyear,
             day=self.specday,
-            s11_year=int(self.s11date.split('_')[0]) if self.s11date else None,
-            s11_day=int(self.s11date.split('_')[1]) if self.s11date else None,
-            s11_hour=int(self.s11date.split('_')[2]) if self.s11date else None,            
+            s11_year=int(self.s11date.split("_")[0]) if self.s11date else None,
+            s11_day=int(self.s11date.split("_")[1]) if self.s11date else None,
+            s11_hour=int(self.s11date.split("_")[2]) if self.s11date else None,
         )
-        
+
     def get_raw_s11s(self):
+        """Read all the raw S11 information."""
         caldef = self.get_caldef()
-                    
+
         raws11s = {}
-        for load in list(caldef.loads.keys()) + ['receiver_s11']:
+        for load in [*list(caldef.loads.keys()), "receiver_s11"]:
             if load in caldef.loads:
                 s11def = caldef.loads[load].s11
             else:
                 s11def = caldef.receiver_s11
-                
-            #fstem = f"{s11date}_lna" if load == "lna" else s11date
+
             s11freq, raws11s[load] = reads1p1(
-                Tfopen=s11def.calkit.open,
-                Tfshort=s11def.calkit.short,
-                Tfload=s11def.calkit.match,
-                Tfant=s11def.external,
+                s11_file_open=s11def.calkit.open,
+                s11_file_short=s11def.calkit.short,
+                s11_file_load=s11def.calkit.match,
+                s11_file_ant=s11def.external,
                 res=self.match_resistance,
                 loadps=self.load_delay,
                 openps=self.open_delay,
                 shortps=self.short_delay,
             )
-                
+
             if load == "receiver_s11":
                 # Correction for path length
                 raws11s[load] = corrcsv(
@@ -541,13 +587,18 @@ class Edges3CalobsParams:
             # Update the precision of the raws11s because we need to match the
             # C-code which writes to file and reads it back in.
             np.round(s11freq, decimals=16, out=s11freq)
-            raws11s[load] = np.round(raws11s[load].real, decimals=16) + np.round(raws11s[load].imag, decimals=16)*1j
+            raws11s[load] = (
+                np.round(raws11s[load].real, decimals=16)
+                + np.round(raws11s[load].imag, decimals=16) * 1j
+            )
         return s11freq, raws11s
-    
+
     def get_spectrum_files(self) -> dict[str, list[Path]]:
+        """Return a dictionary of all associated spectrum files."""
         caldef = self.get_caldef()
         return {name: load.spectra for name, load in caldef.loads.items()}
-    
+
+
 @attrs.define(kw_only=True, frozen=True)
 class Edges2CalobsParams:
     s11_path: Path
@@ -557,25 +608,28 @@ class Edges2CalobsParams:
     short_acqs: list[Path]
 
     def get_raw_s11s(self):
+        """Read all the raw S11 information."""
         s11s = alanio.read_raul_s11_format(self.s11_path)
         s11freq = s11s.pop("freq") << un.MHz
         s11s = {alanio.LOADMAP.get(load, load): val for load, val in s11s.items()}
-        
+
         return s11freq, s11s
-    
+
     def get_spectrum_files(self):
+        """Return a dictionary of all associated spectrum files."""
         return {
-            'ambient': self.ambient_acqs,
-            'hot_load': self.hotload_acqs,
-            'open': self.open_acqs,
-            'short': self.short_acqs
+            "ambient": self.ambient_acqs,
+            "hot_load": self.hotload_acqs,
+            "open": self.open_acqs,
+            "short": self.short_acqs,
         }
-        
+
+
 def alancal(
     defparams: Edges3CalobsParams | Edges2CalobsParams,
-    out: Path = Path("."),
-    redo_spectra: bool=False,
-    redo_cal: bool=True,
+    out: Path = Path(),
+    redo_spectra: bool = False,
+    redo_cal: bool = True,
     acqparams: ACQPlot7aMoonParams = ACQPlot7aMoonParams(),
     calparams: EdgesScriptParams = EdgesScriptParams(),
 ):
@@ -592,7 +646,7 @@ def alancal(
     Parameters
     ----------
     defparams
-        Parameters that define where to find files and how to read/calibrate the 
+        Parameters that define where to find files and how to read/calibrate the
         raw S11s. This is different between EDGES3 and EDGES2.
     out
         A directory where outputs can be written.
@@ -610,7 +664,7 @@ def alancal(
     s11freq, raws11s = defparams.get_raw_s11s()
     specfiles = defparams.get_spectrum_files()
 
-    if 'receiver_s11' in raws11s:
+    if "receiver_s11" in raws11s:
         lna = raws11s.pop("receiver_s11")
     else:
         lna = raws11s.pop("lna")
@@ -628,7 +682,9 @@ def alancal(
         tstart=acqparams.tstart,
         tstop=acqparams.tstop,
         delaystart=acqparams.delaystart,
-        telescope='edges3' if isinstance(defparams, Edges3CalobsParams) else 'edges-low',
+        telescope="edges3"
+        if isinstance(defparams, Edges3CalobsParams)
+        else "edges-low",
     )
 
     # Now do the calibration
@@ -655,117 +711,3 @@ def alancal(
         tcal=acqparams.tcal * un.K,
         tload=acqparams.tload * un.K,
     )
-
-
-# def alancal2(
-#     s11_path: Path,
-#     ambient_acqs: list[Path],
-#     hotload_acqs: list[Path],
-#     open_acqs: list[Path],
-#     short_acqs: list[Path],
-#     out: Path,
-#     redo_spectra: bool = True,
-#     redo_cal: bool = True,
-#     fstart: float = 40.0,
-#     fstop: float = 110.0,
-#     smooth: int = 8,
-#     tload: float = 300.0,
-#     tcal: float = 1000.0,
-#     Lh: int = -2,
-#     wfstart: float = 50.0,
-#     wfstop: float = 100.0,
-#     tcold: float = 296.0,
-#     thot: float = 399.0,
-#     tcab: float | None = None,
-#     cfit: int = 6,
-#     wfit: int = 5,
-#     nfit3: int = 11,
-#     nfit2: int = 27,
-#     avg_spectra_path: Path | None = None,
-#     lna_poly: int = 0,
-#     tstart: float = 0,
-#     tstop: float = 23,
-#     delaystart: float = 7200,
-# ) -> CalibrationObservation:
-#     """Run a calibration in as close a manner to Alan's code as possible.
-
-#     This exists mostly for being able to compare to Alan's memos etc in an easy way. It
-#     is much less flexible than using the library directly, and is not recommended for
-#     general use.
-
-#     This is supposed to emulate one of Alan's C-shell scripts, usually called "docal",
-#     and thus it runs a complete calibration, not just a single part. However, you can
-#     turn off parts of the calibration by setting the appropriate flags to False.
-
-#     Parameters
-#     ----------
-#     s11date
-#         A date-string of the form 2022_319_04 (if doing EDGES-3 cal) or a full path
-#         to a file containing all calibrated S11s (if doing EDGES-2 cal).
-#     specyear
-#         The year the spectra were taken in, if doing EDGES-3 cal. Otherwise, zero.
-#     specday
-#         The day the spectra were taken on, if doing EDGES-3 cal. Otherwise, zero.
-#     """
-#     s11s = alanio.read_raul_s11_format(s11_path)
-#     s11freq = s11s.pop("freq") << un.MHz
-#     raws11s = s11s
-#     lna = raws11s.pop("lna")
-
-#     # Now average the spectra
-#     specfiles = {
-#         "amb": [Path(fl) for fl in ambient_acqs],
-#         "hot": [Path(fl) for fl in hotload_acqs],
-#         "short": [Path(fl) for fl in short_acqs],
-#         "open": [Path(fl) for fl in open_acqs],
-#     }
-#     spectra = _average_spectra(
-#         specfiles,
-#         out,
-#         redo_spectra,
-#         avg_spectra_path,
-#         fstart=fstart,
-#         fstop=fstop,
-#         smooth=smooth,
-#         tload=tload,
-#         tcal=tcal,
-#         tstart=tstart,
-#         tstop=tstop,
-#         delaystart=delaystart,
-#         telescope='edges-low'
-#     )
-
-#     # Now do the calibration
-#     outfile = out / "specal.txt"
-#     if not redo_cal and outfile.exists():
-#         return None
-
-#     logger.info("Performing calibration")
-#     return edges(
-#         spfreq=spectra['amb'].freqs,
-#         spcold=spectra["amb"].data.squeeze(),
-#         sphot=spectra["hot"].data.squeeze(),
-#         spopen=spectra["open"].data.squeeze(),
-#         spshort=spectra["short"].data.squeeze(),
-#         s11freq=s11freq,
-#         s11cold=raws11s["amb"],
-#         s11hot=raws11s["hot"],
-#         s11open=raws11s["open"],
-#         s11short=raws11s["short"],
-#         s11lna=lna,
-#         Lh=Lh,
-#         wfstart=wfstart,
-#         wfstop=wfstop,
-#         tcold=tcold,
-#         thot=thot,
-#         tcab=tcab,
-#         cfit=cfit,
-#         wfit=wfit,
-#         nfit3=nfit3,
-#         nfit2=nfit2,
-#         tload=tload,
-#         tcal=tcal,
-#         lna_poly=lna_poly,
-
-#     )
-

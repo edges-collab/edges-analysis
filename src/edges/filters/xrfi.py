@@ -745,6 +745,7 @@ def _flag_a_window(
     d = spectrum[window].copy()
     fit_kwargs = fit_kwargs or {}
 
+    rng = np.random.default_rng()
     while counter < max_iter and flags_changed > 0:
         w = np.where(new_flags, 0, weights[window])
 
@@ -760,7 +761,7 @@ def _flag_a_window(
         # Computation of STD for initial section using the median statistic
         if std_estimator == 0:
             r_choice_std = [
-                np.std(np.random.choice(resids[mask], len(resids[mask]) // 2))
+                np.std(rng.choice(resids[mask], len(resids[mask]) // 2))
                 for _ in range(n_bootstrap)
             ]
             r_std = np.median(r_choice_std)
@@ -874,7 +875,9 @@ def model_filter(
     fit_kwargs = fit_kwargs or {}
 
     threshold = threshold or (
-        min_threshold + 5 * decrement_threshold if decrement_threshold else min_threshold
+        min_threshold + 5 * decrement_threshold
+        if decrement_threshold
+        else min_threshold
     )
     if not decrement_threshold:
         min_threshold = threshold
@@ -1355,7 +1358,7 @@ def xrfi_model_sliding_rms_single_pass(
     *,
     freq: np.ndarray,
     model: mdl.mdl.Model = mdl.Polynomial(n_terms=3),
-    flags: np.ndarray | None =None,
+    flags: np.ndarray | None = None,
     weights: np.ndarray | None = None,
     window_frac: int = 16,
     min_window_size: int = 10,
@@ -1443,12 +1446,10 @@ def xrfi_model_sliding_rms_single_pass(
         size = np.sum(weights[rng])
         av = np.sum(fit.residual[rng] * weights[rng]) / size
 
-        rms[i] = np.sqrt(
-            np.sum((fit.residual[rng] - av) ** 2 * weights[rng]) / size
-        )
+        rms[i] = np.sqrt(np.sum((fit.residual[rng] - av) ** 2 * weights[rng]) / size)
         avs[i] = av
-        if i==14:
-            print(av, rms[i], fit.residual[i])
+        if i == 14:
+            pass
         # Now while *INSIDE* the loop over frequencies, apply new flags.
         nsig = fit.residual[i] / (threshold * rms[i])
 
@@ -1460,7 +1461,7 @@ def xrfi_model_sliding_rms_single_pass(
                     if nsig > mult and i + nbins < n and i - nbins >= 0:
                         weights[i - nbins : i + nbins + 1] = 0
 
-    return weights==0
+    return weights == 0
 
 
 xrfi_model_sliding_rms_single_pass.ndim = (1,)
@@ -1548,7 +1549,9 @@ def _apply_watershed(
     return watershed_flags
 
 
-def visualise_model_info(info: ModelFilterInfo | ModelFilterInfoContainer, n: int = 0, fig=None, ax=None):
+def visualise_model_info(
+    info: ModelFilterInfo | ModelFilterInfoContainer, n: int = 0, fig=None, ax=None
+):
     """
     Make a nice visualisation of the info output from :func:`xrfi_model`.
 

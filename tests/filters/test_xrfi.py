@@ -8,8 +8,9 @@ import pytest
 import yaml
 from pytest_cases import fixture_ref as fxref
 from pytest_cases import parametrize
-from edges.modelling import EdgesPoly
+
 from edges.filters import xrfi
+from edges.modelling import EdgesPoly
 
 NFREQ = 1000
 
@@ -38,9 +39,8 @@ def sky_linpoly_1d(freq):
 
 
 def thermal_noise(spec, scale=1, seed=None):
-    if seed:
-        np.random.seed(seed)
-    return np.random.normal(0, spec / scale)
+    rng = np.random.default_rng(seed)
+    return rng.normal(0, spec / scale)
 
 
 @pytest.fixture(scope="module")
@@ -65,8 +65,8 @@ def rfi_regular_leaky():
 @pytest.fixture(scope="module")
 def rfi_random_1d():
     a = np.zeros(NFREQ)
-    np.random.seed(12345)
-    a[np.random.randint(0, len(a), 40)] = 1
+    rng = np.random.default_rng(12345)
+    a[rng.randint(0, len(a), 40)] = 1
     return a
 
 
@@ -467,11 +467,13 @@ class TestXRFIExplicit:
         assert not flags[0]
         assert flags[350]
 
+
 class TestXRFIModelSlidingRMSSinglePass:
     """Test the single-pass sliding RMS model.
-    
+
     This is the algorithm most similar to Alan's C-code.
     """
+
     @parametrize(
         "sky_model", [fxref(sky_flat_1d), fxref(sky_pl_1d), fxref(sky_linpoly_1d)]
     )
@@ -480,21 +482,20 @@ class TestXRFIModelSlidingRMSSinglePass:
     )
     @pytest.mark.parametrize("scale", [1000, 100])
     def test_on_simple_data(self, sky_model, rfi_model, scale, freq, plt):
-        sky, std, noise, rfi = make_sky(sky_model, rfi_model, scale)
+        sky, *_ = make_sky(sky_model, rfi_model, scale)
 
         true_flags = rfi_model > 0
         flags = xrfi.xrfi_model_sliding_rms_single_pass(
-            sky, 
-            freq=freq, 
+            sky,
+            freq=freq,
             model=EdgesPoly(n_terms=5),
             threshold=3.5,
         )
-        
+
         wrong = np.where(true_flags != flags)[0]
 
         assert len(wrong) == 0
 
-    
 
 @pytest.fixture(scope="module")
 def model_info(sky_pl_1d, rfi_random_1d, freq):
@@ -538,7 +539,7 @@ def test_model_info_container(model_info: xrfi.ModelFilterInfo, tmpdir: Path):
 
 class TestVisualiseModelInfo:
     def test_visualise_model_info(self, sky_linpoly_1d, rfi_random_1d, freq, plt):
-        sky, std, noise, rfi = make_sky(sky_linpoly_1d, rfi_random_1d)
+        sky, *_ = make_sky(sky_linpoly_1d, rfi_random_1d)
 
         _, info = xrfi.xrfi_model(sky, freq=freq, watershed=1, threshold=6)
 

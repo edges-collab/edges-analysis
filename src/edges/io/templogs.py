@@ -14,6 +14,7 @@ from astropy.time import Time
 
 
 def read_temperature_log_entry(lines: list[str]) -> dict[str, Any]:
+    """Read a single entry from a thermistor log file."""
     if len(lines) != 10:
         raise ValueError("Expected 10 lines for a temperature log entry")
 
@@ -21,13 +22,13 @@ def read_temperature_log_entry(lines: list[str]) -> dict[str, Any]:
     year, day, hour = (int(x) for x in lines[0].split("_"))
 
     # second line is the time
-    _, _, _, timestamp, _, _year = lines[1].split(" ")
+    _, _, _, timestamp, _, year2 = lines[1].split(" ")
 
     hh, mm, ss = (int(x) for x in timestamp.split(":"))
 
-    if year != int(_year):
+    if year != int(year2):
         raise ValueError(
-            f"Year mismatch in temperature log entry. Got {year} and {_year}"
+            f"Year mismatch in temperature log entry. Got {year} and {year2}"
         )
     if hour != hh:
         raise ValueError(f"Hour mismatch in temperature log entry. Got {hour} and {hh}")
@@ -107,7 +108,8 @@ def get_mean_temperature(
 
         if not np.any(mask):
             raise ValueError(
-                f"No data found between {start_time} and {end_time} in temperature table"
+                f"No data found between {start_time} and {end_time} in temperature "
+                f"table"
             )
 
         temperature_table = temperature_table[mask]

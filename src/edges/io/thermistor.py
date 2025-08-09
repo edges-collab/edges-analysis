@@ -1,3 +1,5 @@
+"""Functions for reading thermistor files."""
+
 from io import StringIO
 from pathlib import Path
 
@@ -10,6 +12,7 @@ from .. import types as tp
 
 
 def read_new_style_csv(path: tp.PathLike) -> QTable:
+    """Read a new-style CSV file as a thermistor."""
     data = np.genfromtxt(
         path,
         skip_header=1,
@@ -44,7 +47,7 @@ def read_new_style_csv(path: tp.PathLike) -> QTable:
     qtable = {
         "times": datetimes,
     }
-    _u = {
+    units_dict = {
         "voltage": units.volt,
         "resistance": units.ohm,
         "temp": units.deg_C,
@@ -53,7 +56,7 @@ def read_new_style_csv(path: tp.PathLike) -> QTable:
     for name in data.dtype.names:
         if name in ("date", "time"):
             continue
-        qtable[name] = data[name] * _u[name.split("_")[-1]]
+        qtable[name] = data[name] * units_dict[name.split("_")[-1]]
     return QTable(qtable)
 
 
@@ -86,6 +89,7 @@ def _read_old_style_csv_header(path: tp.PathLike) -> tuple[dict, int]:
 
 
 def read_old_style_csv(path: tp.PathLike) -> QTable:
+    """Read an old=style thermistor CSV."""
     # Weirdly, some old-style files use KOhm, and some just use Ohm.
 
     # These files have bad encoding, which we can ignore. This means we have to
@@ -142,6 +146,7 @@ def read_old_style_csv(path: tp.PathLike) -> QTable:
 
 
 def read_thermistor_csv(path: tp.PathLike) -> QTable:
+    """Read a CSV as a thermistor object."""
     with Path(path).open("r", errors="ignore") as fl:
         if fl.readline().startswith("FLUKE"):
             return read_old_style_csv(path)

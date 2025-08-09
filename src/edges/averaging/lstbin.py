@@ -285,7 +285,7 @@ def lst_bin(
         location=data.telescope.location,
     )
 
-    data = data.update(
+    return data.update(
         data=spec,
         residuals=resids,
         nsamples=nsmpls,
@@ -297,4 +297,3 @@ def lst_bin(
         auxiliary_measurements=None,
         effective_integration_time=intg_time,
     )
-    return data

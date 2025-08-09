@@ -2,8 +2,8 @@
 Library Usage
 -------------
 The library is split into subpackages for different steps of the calibration and analysis
-pipeline for the EDGES telescope. At a high level, it is split into the `io`, `cal`
-`analysis` subpackages, while these are further split into sub-packages that support
+pipeline for the EDGES telescope. At a high level, it is split into the ``io``, ``cal``
+``analysis`` subpackages, while these are further split into sub-packages that support
 different analysis components.
 There are also submodules for calculating beam corrections, sky models, and other useful
 functions such as plotting.

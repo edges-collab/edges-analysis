@@ -1,4 +1,6 @@
+"""Functions and classes for dealing with S11 measurements and models."""
+
+from .base import CalibratedS11, CalibratedSParams
 from .calkit_standards import StandardsReadings
 from .internal_switch import InternalSwitch
-from .base import CalibratedS11, CalibratedSParams
-from .s11model import S11ModelParams, new_s11_modelled, get_s11_model
+from .s11model import S11ModelParams, get_s11_model, new_s11_modelled

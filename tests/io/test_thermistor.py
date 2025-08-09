@@ -24,9 +24,9 @@ class TestOldStyleRead:
 
 class TestNewStyleRead:
     def test_read_new(self, datadir: Path):
-        fl = (
-            datadir
-            / "Receiver01_25C_2019_11_26_040_to_200MHz/Resistance/Ambient_01_2019_329_16_02_35_lab.csv"
+        fl = datadir / (
+            "Receiver01_25C_2019_11_26_040_to_200MHz/Resistance/"
+            "Ambient_01_2019_329_16_02_35_lab.csv"
         )
         data = thermistor.read_new_style_csv(fl)
         assert len(data) == 9

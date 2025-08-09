@@ -1,8 +1,12 @@
 import numpy as np
+from astropy import units as un
 
 from edges.cal import CalibrationObservation, Calibrator
-from edges.sim.receivercal import simulate_q_from_calibrator, simulate_qant_from_calibrator
-from astropy import units as un
+from edges.sim.receivercal import (
+    simulate_q_from_calibrator,
+    simulate_qant_from_calibrator,
+)
+
 
 def test_simulate_q(calobs: CalibrationObservation, calibrator):
     q = simulate_q_from_calibrator(calobs.open, calibrator)

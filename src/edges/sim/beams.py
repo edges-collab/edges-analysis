@@ -11,13 +11,13 @@ import numpy as np
 import scipy.interpolate as spi
 from astropy import units as u
 
+from edges.data import BEAM_PATH
+
 from .. import modelling as mdl
 from .. import types as tp
-from edges.data import BEAM_PATH
 from ..config import config
 from ..io.serialization import hickleable
 from ..units import vld_unit
-import time
 
 logger = logging.getLogger(__name__)
 
@@ -243,7 +243,6 @@ class Beam:
             The azimuth of the primary antenna axis, in degrees.
         """
         filename = Path(path)
-        t0 = time.time()
         data = np.loadtxt(str(filename), usecols=list(range(2, 93)))
         frequency = []
         with filename.open("r") as fl:

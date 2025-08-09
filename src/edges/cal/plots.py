@@ -5,19 +5,23 @@ from __future__ import annotations
 import matplotlib.pyplot as plt
 import numpy as np
 
-from edges.cal.s11.s11model import S11ModelParams
-
-from .calobs import CalibrationObservation
-from .calibrator import Calibrator
-from .load_data import Load
-from .spectra import LoadSpectrum
 from edges.averaging.averaging import bin_array_unweighted
-from edges.cal import LoadSpectrum
+
+from .calibrator import Calibrator
+from .calobs import CalibrationObservation
+from .load_data import Load
+from .s11 import CalibratedS11, S11ModelParams
+from .spectra import LoadSpectrum
+
 
 def plot_raw_spectrum(
-    spectrum: np.ndarray | LoadSpectrum, 
-    freq: np.ndarray | None=None, 
-    fig=None, ax=None, xlabel: bool=True, ylabel: bool=True, **kwargs
+    spectrum: np.ndarray | LoadSpectrum,
+    freq: np.ndarray | None = None,
+    fig=None,
+    ax=None,
+    xlabel: bool = True,
+    ylabel: bool = True,
+    **kwargs,
 ):
     """
     Make a plot of the averaged uncalibrated spectrum associated with this load.
@@ -54,10 +58,8 @@ def plot_raw_spectrum(
     if xlabel:
         ax.set_xlabel("Frequency [MHz]")
 
-def plot_raw_spectra(
-    calobs: CalibrationObservation, 
-    fig=None, ax=None
-) -> plt.Figure:
+
+def plot_raw_spectra(calobs: CalibrationObservation, fig=None, ax=None) -> plt.Figure:
     """
     Plot raw uncalibrated spectra for all calibrator sources.
 
@@ -79,7 +81,7 @@ def plot_raw_spectra(
         )
 
     for i, (name, load) in enumerate(calobs.loads.items()):
-        ax[i].plot(load.freqs, load.averaged_Q)
+        ax[i].plot(load.freqs, load.averaged_q)
         ax[i].set_ylabel("$Q$")
         ax[i].set_title(name)
         ax[i].grid(True)
@@ -87,10 +89,11 @@ def plot_raw_spectra(
 
     return fig
 
+
 def plot_s11_residual(
     raw_s11: CalibratedS11,
     s11_model_params: S11ModelParams,
-    load_name: str | None= None,
+    load_name: str | None = None,
     fig=None,
     ax=None,
     color_abs="C0",
@@ -121,7 +124,7 @@ def plot_s11_residual(
     ax[-1].set_xlabel("Frequency [MHz]")
 
     modelled = raw_s11.smoothed(s11_model_params)
-    
+
     fq = raw_s11.freqs
 
     ax[0].plot(fq, 20 * np.log10(np.abs(modelled.s11)), color=color_abs, label=label)
@@ -156,11 +159,12 @@ def plot_s11_residual(
 
     return fig
 
+
 def plot_s11_models(
-    calobs: CalibrationObservation, 
+    calobs: CalibrationObservation,
     s11_model_params: S11ModelParams,
     receiver_model_params: S11ModelParams,
-    **kwargs
+    **kwargs,
 ):
     """
     Plot residuals of S11 models for all sources.
@@ -170,7 +174,7 @@ def plot_s11_models(
     dict:
         Each entry has a key of the source name, and the value is a matplotlib fig.
     """
-    fig, ax = plt.subplots(
+    _fig, ax = plt.subplots(
         4,
         len(calobs.loads) + 1,
         figsize=((len(calobs.loads) + 1) * 4, 6),
@@ -180,10 +184,23 @@ def plot_s11_models(
     )
 
     for i, (name, source) in enumerate(calobs.loads.items()):
-        plot_s11_residual(source._raw_s11, s11_model_params=s11_model_params, load_name=name, ax=ax[:, i], title=False, **kwargs)
+        plot_s11_residual(
+            source._raw_s11,
+            s11_model_params=s11_model_params,
+            load_name=name,
+            ax=ax[:, i],
+            title=False,
+            **kwargs,
+        )
         ax[0, i].set_title(name)
 
-    plot_s11_residual(calobs._raw_receiver, s11_model_params=receiver_model_params, ax=ax[:, -1], title=False, **kwargs)
+    plot_s11_residual(
+        calobs._raw_receiver,
+        s11_model_params=receiver_model_params,
+        ax=ax[:, -1],
+        title=False,
+        **kwargs,
+    )
     ax[0, -1].set_title("Receiver")
     return ax
 
@@ -272,9 +289,12 @@ def plot_calibrated_temp(
 
 
 def plot_calibrated_temps(
-    calobs: CalibrationObservation, 
+    calobs: CalibrationObservation,
     calibrator: Calibrator,
-    bins: int = 64, fig=None, ax=None, **kwargs
+    bins: int = 64,
+    fig=None,
+    ax=None,
+    **kwargs,
 ):
     """
     Plot all calibrated temperatures in a single figure.
@@ -313,11 +333,7 @@ def plot_calibrated_temps(
     return fig
 
 
-def plot_cal_coefficients(
-    calibrator: Calibrator, 
-    fig=None, 
-    ax=None
-):
+def plot_cal_coefficients(calibrator: Calibrator, fig=None, ax=None):
     """
     Make a plot of the calibration coefficents, Tsca, Tof, Tunc, Tcos and Tsin.
 
