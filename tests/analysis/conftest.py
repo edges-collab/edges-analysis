@@ -7,22 +7,8 @@ from subprocess import run
 
 import matplotlib as mpl
 import pytest
-from click.testing import CliRunner
 
 from edges.config import config
-
-from . import DATA_PATH
-
-runner = CliRunner()
-
-
-def invoke(cmd, args, **kwargs):
-    result = runner.invoke(cmd, args, **kwargs)
-    print(result.output)
-    if result.exit_code > 0:
-        raise result.exc_info[1]
-
-    return result
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -72,15 +58,18 @@ def settings() -> Path:
 def workflow_dir(tmp_path_factory) -> Path:
     return tmp_path_factory.mktemp("integration-workflow")
 
+@pytest.fixture(scope='session')
+def anl_data_path(testdata_path) -> Path:
+    return testdata_path / 'analysis'
 
 @pytest.fixture(scope="session")
-def calpath(integration_test_data: Path) -> Path:
-    return DATA_PATH / "specal.h5"  # "calfile_v0_hickled.h5"
+def calpath(anl_data_path: Path) -> Path:
+    return anl_data_path / "specal.h5"  # "calfile_v0_hickled.h5"
 
 
 @pytest.fixture(scope="session")
-def s11path(integration_test_data: Path) -> Path:
-    return DATA_PATH / "2015_ants11_modelled_redone.h5"
+def s11path(anl_data_path: Path) -> Path:
+    return anl_data_path / "2015_ants11_modelled_redone.h5"
 
 
 @pytest.fixture(scope="session")

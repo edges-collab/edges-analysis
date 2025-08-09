@@ -15,11 +15,11 @@ from .simulate import sky_convolution_generator
 
 def compute_antenna_beam_factor(
     beam: Beam,
+    sky_model: sky_models.SkyModel,
     ground_loss: np.ndarray | None = None,
     f_low: tp.FreqType = 0 * u.MHz,
     f_high: tp.FreqType = np.inf * u.MHz,
     normalize_beam: bool = True,
-    sky_model: sky_models.SkyModel = sky_models.Haslam408(),
     index_model: sky_models.IndexModel = sky_models.GaussianIndex(),
     lsts: np.ndarray | None = None,
     reference_frequency: tp.FreqType | None = None,
@@ -34,7 +34,7 @@ def compute_antenna_beam_factor(
         "pchip",
         "spline",
         "sphere-spline",
-    ] = "sphere-spline",
+    ] = "cubic",
     lst_progress: bool = True,
     freq_progress: bool = True,
     location: apc.EarthLocation = const.edges_location,
@@ -161,6 +161,8 @@ def compute_antenna_beam_factor(
         # Loss fraction
         loss_fraction[lst_idx, freq_idx] = 1 - np.nansum(bm) / npix_no_nan
 
+    print("NORM BEAM?", normalize_beam)
+    print("ANTENNA_TEMP: ", antenna_temperature_above_horizon.min())
     return BeamFactor(
         frequencies=beam.frequency.to_value("MHz").astype(float),
         lsts=np.array(lsts).astype(float),

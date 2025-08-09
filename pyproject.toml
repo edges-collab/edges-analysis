@@ -58,7 +58,8 @@ dependencies = [
     "hickle",
     "hickleable>=0.2.4",
     "statsmodels",
-    'cattrs'
+    'cattrs',
+    'cyclopts'
 
 ]
 dynamic = ["version"]
@@ -98,7 +99,7 @@ dev = [
 ]
 
 [project.scripts]
-edges = "edges.cli:main"
+edges = "edges.cli:app"
 
 
 

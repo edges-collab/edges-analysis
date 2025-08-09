@@ -7,129 +7,100 @@ docal_316test script with both the fittp-fix and pi-fix turned ON.
 """
 
 import shutil
-import traceback
 from pathlib import Path
 
 import numpy as np
 import pytest
-from click.testing import CliRunner
+from edges.alanmode.cli import amode
+from edges import alanmode as am
 
-from edges.cal import alanmode as am
-from edges.cal.cli import alancal
-
-DATA_PATH = Path(__file__).parent / "data"
-
-datadir = Path("/data5/edges/data/EDGES3_data/MRO")
-if not datadir.exists():
-    # We're not on enterprise, so we can only do the S11 stuff.
-    datadir = DATA_PATH / "edges3-data-for-alan-comparison"
-
-loads = ["amb", "hot", "open", "short"]
-alandata = DATA_PATH / "edges3-2022-316-alan"
-
+@pytest.fixture(scope='module')
+def alandata(alanmode_data_path: Path) -> Path:
+    return alanmode_data_path / "edges3-2022-316-alan"
 
 @pytest.fixture(scope="module")
-def edges3_2022_316(data_path, tmp_path_factory):
+def edges3_2022_316(tmp_path_factory, alanmode_data_path):
     out = tmp_path_factory.mktemp("day316")
 
-    runner = CliRunner()
-    on_enterprise = "/data5/" in str(datadir)
+    datadir = Path("/data5/edges/data/EDGES3_data/MRO")
+    if not datadir.exists():
+        # We're not on enterprise, so we can only do the S11 stuff.
+        datadir = alanmode_data_path / "edges3-data-for-alan-comparison"
 
+    on_enterprise = "/data5/" in str(datadir)
+    
     if not on_enterprise:
         avg_spec_files = sorted(datadir.glob("sp*.txt"))
         for fl in avg_spec_files:
             shutil.copy(fl, out / fl.name)
 
-    args = [
-        "2022_319_14",
-        "2022",
-        "316",
-        "--out",
-        str(out.absolute()),
-        "-res",
-        "49.8",
-        "-ps",
-        "33",
-        "-cablen",
-        "4.26",
-        "-cabloss",
-        "-91.5",
-        "-cabdiel",
-        "-1.24",
-        "-fstart",
-        "48",
-        "-fstop",
-        "198",
-        "-smooth",
-        "8",
-        "-tload",
-        "300",
-        "-tcal",
-        "1000",
-        "-Lh",
-        "-1",
-        "-wfstart",
-        "50.0",
-        "-wfstop",
-        "190.0",
-        "-tcold",
-        "306.5",
-        "-thot",
-        393.22,
-        "-tcab",
-        "306.5",
-        "-cfit",
-        "7",
-        "-wfit",
-        "7",
-        "-nfit3",
-        "10",
-        "-nfit2",
-        "27",
-        "--no-plot",
-        "--datadir",
-        str(datadir),
-    ]
-
-    result = runner.invoke(alancal, args)
-
-    if result.exit_code:
-        print(result.exception)
-        print(traceback.print_exception(*result.exc_info))
-
-    print(result.output)
-    assert result.exit_code == 0
-
+    amode(
+        "cal-edges3 "
+        f"--out '{out.absolute()}' "
+        f"--data.datadir '{datadir}' "
+        "--data.s11date 2022_319_14 "
+        "--data.specyear 2022 "
+        "--data.specday 316 "
+        "--data.res 49.8 "
+        "--data.ps 33 "
+        "--data.cablen 4.26 "
+        "--data.cabloss -91.5 "
+        "--data.cabdiel -1.24 "
+        "--avg.fstart 48 "
+        "--avg.fstop 198 "
+        "--avg.smooth 8 "
+        "--avg.tload 300 "
+        "--avg.tcal 1000 "
+        "--cal.Lh -1 "
+        "--cal.wfstart 50.0 "
+        "--cal.wfstop 190.0 "
+        "--cal.tcold 306.5 "
+        "--cal.thot 393.22 "
+        "--cal.tcab 306.5 "
+        "--cal.cfit 7 "
+        "--cal.wfit 7 "
+        "--cal.nfit3 10 "
+        "--cal.nfit2 27 "
+        "--no-plot "
+    )
     return out
 
 
-@pytest.mark.parametrize("load", loads)
-def test_spectra(edges3_2022_316: Path, load):
+
+@pytest.mark.parametrize("load", am.LOADMAP.keys())
+def test_spectra(edges3_2022_316: Path, load, alandata: Path):
     # Test the raw spectra
-    data, _ = am.read_spec_txt(f"{alandata}/sp{load}.txt")
-    spfreq = data["freq"]
-    alanspec = data["spectra"]
-    data, _ = am.read_spec_txt(f"{edges3_2022_316}/sp{load}.txt")
-    ourspec = data["spectra"]
-    np.testing.assert_allclose(spfreq, data["freq"])
+    data = am.read_spec_txt(f"{alandata}/sp{load}.txt")
+    spfreq = data.freqs
+    alanspec = data.data
+    data = am.read_spec_txt(f"{edges3_2022_316}/sp{am.LOADMAP[load]}.txt")
+    ourspec = data.data
+    np.testing.assert_allclose(spfreq, data.freqs)
 
     # We don't currently get the very edges of the smoothing correct, but it doesn't
     # matter because we never use the very edges anyway. We test within these edges.
     np.testing.assert_allclose(alanspec[20:-20], ourspec[20:-20], atol=1e-6)
 
 
-@pytest.mark.parametrize("load", [*loads, "lna"])
-def test_unmodelled_s11(edges3_2022_316: Path, load):
+@pytest.mark.parametrize("load", [*list(am.LOADMAP.keys()), "lna"])
+def test_unmodelled_s11(edges3_2022_316: Path, load, alandata: Path):
     # Test the calibrated (unmodelled) S11s
+    
     s11freq, alans11 = am.read_s11_csv(f"{alandata}/s11{load}.csv")
-    ourfreq, ours11 = am.read_s11_csv(f"{edges3_2022_316}/s11{load}.csv")
+    key = 'lna' if load=='lna' else am.LOADMAP[load]
+    ourfreq, ours11 = am.read_s11_csv(f"{edges3_2022_316}/s11{key}.csv")
 
-    np.testing.assert_allclose(s11freq, ourfreq)
-    np.testing.assert_allclose(alans11.real, ours11.real, atol=1e-10)
-    np.testing.assert_allclose(alans11.imag, ours11.imag, atol=1e-10)
+    # Need to mask the C-code frequencies, because they get written out before 
+    # being cut to wfstart-wfstop, whereas we only have access to the raw s11
+    # *after* this cut in python.
+    mask = (s11freq>=ourfreq.min()) & (s11freq <= ourfreq.max())
+    
+    np.testing.assert_allclose(s11freq[mask], ourfreq)
+    np.testing.assert_allclose(alans11[mask].real, ours11.real, atol=1e-10)
+    np.testing.assert_allclose(alans11[mask].imag, ours11.imag, atol=1e-10)
 
 
-def test_modelled_s11(edges3_2022_316):
+def test_modelled_s11(edges3_2022_316, alandata: Path):
     # Test modelled S11s
     _alans11m = np.genfromtxt(f"{alandata}/s11_modelled.txt", comments="#", names=True)
     _ours11m = np.genfromtxt(
@@ -144,14 +115,14 @@ def test_modelled_s11(edges3_2022_316):
         np.testing.assert_allclose(_alans11m[k], _ours11m[k], atol=4e-9, rtol=0)
 
 
-def test_specal(edges3_2022_316: Path):
+def test_specal(edges3_2022_316: Path, alandata: Path):
     # Test final calibration
-    acal = am.read_specal(f"{alandata}/specal.txt")
-    ourcal = am.read_specal(f"{edges3_2022_316}/specal.txt")
+    alan = am.read_specal(f"{alandata}/specal.txt", t_load=300, t_load_ns=1000)
+    ours = am.read_specal(f"{edges3_2022_316}/specal.txt", t_load=300, t_load_ns=1000)
 
-    np.testing.assert_allclose(acal["freq"], ourcal["freq"])
-    np.testing.assert_allclose(acal["C1"], ourcal["C1"], atol=2e-6)
-    np.testing.assert_allclose(acal["C2"], ourcal["C2"], atol=4e-5)
-    np.testing.assert_allclose(acal["Tunc"], ourcal["Tunc"], atol=1e-5)
-    np.testing.assert_allclose(acal["Tcos"], ourcal["Tcos"], atol=2e-5)
-    np.testing.assert_allclose(acal["Tsin"], ourcal["Tsin"], atol=2e-5)
+    np.testing.assert_allclose(ours.Tsca, alan.Tsca, atol=2e-3)
+    np.testing.assert_allclose(ours.Toff, alan.Toff, atol=4e-5)
+    np.testing.assert_allclose(ours.Tunc, alan.Tunc, atol=1.1e-6)
+    np.testing.assert_allclose(ours.Tcos, alan.Tcos, atol=2e-5)
+    np.testing.assert_allclose(ours.Tsin, alan.Tsin, atol=1.4e-5)
+    

@@ -11,8 +11,9 @@ from pygsdata import GSData, gsregister
 
 from .. import types as tp
 from ..io.auxiliary import read_thermlog_file, read_weather_file
-from .config import config
-from .coordinates import dt_from_jd, get_jd
+from ..config import config
+from astropy.table import QTable
+from astropy.time import Time
 
 logger = logging.getLogger(__name__)
 
@@ -21,31 +22,21 @@ class WeatherError(ValueError):
     """Error for weather data issues."""
 
 
-def _interpolate_times(thing, times):
-    seconds = (times - times[0]).to_value("s")
+def _interpolate_times(thing: QTable, times: Time) -> QTable:
+    t0 = times[0]
+
+    seconds = (times - t0).to_value("s")
     interpolated = {}
 
-    t0 = times[0].to_datetime()
-    thing_seconds = [
-        (
-            dt_from_jd(x["year"], int(x["day"]), x["hour"], x["minute"], x["second"])
-            - t0
-        ).total_seconds()
-        for x in thing
-    ]
+    thing_seconds = (thing['time'] - t0).to_value("s")
 
-    for name, (kind, _) in thing.dtype.fields.items():
-        if kind.kind == "i":
+    for col in thing.colnames:
+        if col == 'time':
             continue
+        
+        interpolated[col] = np.interp(seconds, thing_seconds, thing[col])
 
-        interpolated[name] = np.interp(seconds, thing_seconds, thing[name])
-
-        # Convert to celsius
-        if name.endswith("_temp") and np.any(interpolated[name] > 273.15):
-            interpolated[name] -= 273.15
-
-    return interpolated
-
+    return QTable(interpolated)
 
 @gsregister("supplement")
 def add_weather_data(data: GSData, weather_file: tp.PathLike | None = None) -> GSData:
@@ -65,8 +56,8 @@ def add_weather_data(data: GSData, weather_file: tp.PathLike | None = None) -> G
         file (if not an absolute path).
     """
     times = data.times[..., data.loads.index("ant")]
-    start = min(times).to_datetime()
-    end = max(times).to_datetime()
+    start = min(times)
+    end = max(times)
 
     pth = Path(config["paths"]["raw_field_data"])
     if weather_file is not None:
@@ -82,10 +73,8 @@ def add_weather_data(data: GSData, weather_file: tp.PathLike | None = None) -> G
     # overlap).
     weather = read_weather_file(
         weather_file,
-        year=start.year,
-        day=get_jd(start),
-        hour=start.hour,
-        end_time=(end.year, get_jd(end), end.hour, end.minute + 1),
+        start=start,
+        end=end,
     )
 
     if len(weather) == 0:
@@ -103,7 +92,7 @@ def add_weather_data(data: GSData, weather_file: tp.PathLike | None = None) -> G
 
     logger.info(f"Took {time.time() - t} sec to interpolate weather data.")
     return data.update(
-        auxiliary_measurements={**data.auxiliary_measurements, **interpolated}
+        auxiliary_measurements=data.auxiliary_measurements | interpolated
     )
 
 
@@ -130,8 +119,8 @@ def add_thermlog_data(
         file (if not an absolute path).
     """
     times = data.times[..., data.loads.index("ant")]
-    start = min(times).to_datetime()
-    end = max(times).to_datetime()
+    start = min(times)
+    end = max(times)
 
     pth = Path(config["paths"]["raw_field_data"])
     if thermlog_file is not None:
@@ -145,10 +134,8 @@ def add_thermlog_data(
     # overlap).
     thermlog = read_thermlog_file(
         thermlog_file,
-        year=start.year,
-        day=get_jd(start),
-        hour=start.hour,
-        end_time=(end.year, get_jd(end), end.hour, end.minute + 1),
+        start=start,
+        end=end,
     )
 
     if len(thermlog) == 0:
@@ -166,5 +153,5 @@ def add_thermlog_data(
     logger.info(f"Took {time.time() - t} sec to interpolate thermlog data.")
 
     return data.update(
-        auxiliary_measurements={**data.auxiliary_measurements, **interpolated}
+        auxiliary_measurements= data.auxiliary_measurements | interpolated
     )

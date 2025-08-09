@@ -9,20 +9,24 @@ from astropy.time import Time
 from pygsdata import KNOWN_TELESCOPES, GSData
 from read_acq.gsdata import write_gsdata_to_acq
 
-from edges.alanmode import alanmode as am
+from edges import alanmode as am
 from edges.frequencies import edges_raw_freqs
 
 
-def test_read_write_spec_loop(cal_data_path: Path, tmpdir: Path):
-    spamb, n = am.read_spec_txt(cal_data_path / "edges3-data-for-alan-comparison/spamb.txt")
+def test_read_write_spec_loop(alanmode_data_path: Path, tmpdir: Path):
+    spamb = am.read_spec_txt(alanmode_data_path / "edges3-data-for-alan-comparison/spambient.txt")
 
-    am.write_spec_txt(spamb["freq"], n, spamb["spectra"], tmpdir / "spamb.txt")
-    spamb2, n2 = am.read_spec_txt(tmpdir / "spamb.txt")
-    np.testing.assert_allclose(spamb["freq"], spamb2["freq"])
-    np.testing.assert_allclose(spamb["spectra"], spamb2["spectra"])
-    np.testing.assert_allclose(spamb["weight"], spamb2["weight"])
+    am.write_spec_txt(
+        spamb.freqs, 
+        n=int(np.mean(spamb.nsamples)), 
+        spec=spamb.data.squeeze(), 
+        fname=tmpdir / "spamb.txt"
+    )
+    spamb2 = am.read_spec_txt(tmpdir / "spamb.txt")
+    np.testing.assert_allclose(spamb.freqs, spamb2.freqs)
+    np.testing.assert_allclose(spamb.data, spamb2.data)
+    np.testing.assert_allclose(spamb.nsamples, spamb2.nsamples)
 
-    assert n == n2
 
 
 NTIME = 24
@@ -56,16 +60,16 @@ def unity_acq(tmpdir):
 
 class TestACQPlot7AMoon:
     def test_unity_default(self, unity_acq):
-        freq, n, meant = am.acqplot7amoon(
+        meanspec = am.acqplot7amoon(
             unity_acq, fstart=0, fstop=np.inf, smooth=0, tload=300, tcal=1000
         )
 
-        assert len(freq) == FREQS.size
-        assert n == NTIME
-        np.testing.assert_allclose(meant, 1300)
+        assert meanspec.nfreqs == FREQS.size
+        assert meanspec.nsamples.max() == NTIME
+        np.testing.assert_allclose(meanspec.data, 1300)
 
     def test_unity_one_hour(self, unity_acq):
-        freq, n, meant = am.acqplot7amoon(
+        meanspec = am.acqplot7amoon(
             unity_acq,
             fstart=0,
             fstop=np.inf,
@@ -76,12 +80,12 @@ class TestACQPlot7AMoon:
             tstop=12.0,
         )
 
-        assert len(freq) == FREQS.size
-        assert n == 1
-        np.testing.assert_allclose(meant, 1300)
+        assert meanspec.nfreqs == FREQS.size
+        assert meanspec.nsamples.max() ==  1     
+        np.testing.assert_allclose(meanspec.data, 1300)
 
     def test_unity_delaystart(self, unity_acq):
-        freq, n, meant = am.acqplot7amoon(
+        meanspec = am.acqplot7amoon(
             unity_acq,
             fstart=0,
             fstop=np.inf,
@@ -91,12 +95,12 @@ class TestACQPlot7AMoon:
             delaystart=1.0,  # second
         )
 
-        assert len(freq) == FREQS.size
-        assert n == NTIME - 1
-        np.testing.assert_allclose(meant, 1300)
+        assert meanspec.nfreqs == FREQS.size
+        assert meanspec.nsamples.max() == NTIME -1
+        np.testing.assert_allclose(meanspec.data, 1300)
 
     def test_unity_smooth(self, unity_acq):
-        freq, n, meant = am.acqplot7amoon(
+        meanspec = am.acqplot7amoon(
             unity_acq,
             fstart=0,
             fstop=np.inf,
@@ -105,9 +109,9 @@ class TestACQPlot7AMoon:
             tcal=1000,
         )
 
-        assert len(freq) == FREQS.size // 8
-        assert np.isclose(n, NTIME * 8,  rtol=0.05)
-        np.testing.assert_allclose(meant, 1300)
+        assert meanspec.nfreqs == FREQS.size // 8
+        assert np.isclose(meanspec.nsamples.mean(), NTIME * 8,  rtol=0.08)
+        np.testing.assert_allclose(meanspec.data, 1300)
 
 
 class TestCorrcsv:

@@ -1,10 +1,12 @@
 """A package for analysing EDGES field data."""
 
 __all__ = [
-    "calibration",
-    "coordinates",
+    "calibrate",
     "datamodel",
     "groupdays",
+    "loss",
+    "aux_data",
+    "plots",
 ]
 
-from . import calibration, coordinates, datamodel, groupdays
+from . import calibrate, datamodel, groupdays, loss, aux_data, plots

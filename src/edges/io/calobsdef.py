@@ -151,7 +151,10 @@ class ReceiverS11:
     calkit: Calkit = attrs.field(validator=attrs.validators.instance_of(Calkit))
     device: Path = attrs.field(converter=Path, validator=_vld_path_exists)
 
-
+    @property
+    def external(self) -> Path:
+        """Alias for the 'device' measurement."""
+        return self.device
 @attrs.define(frozen=True, kw_only=True)
 class CalObsDefEDGES2:
     open: LoadDefEDGES2 = attrs.field()

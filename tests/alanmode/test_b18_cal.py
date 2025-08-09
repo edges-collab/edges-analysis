@@ -16,22 +16,19 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pytest
-from astropy import units as un
-from click.testing import CliRunner
 
-from edges.cal.alanmode import read_specal, read_specal_as_calibrator
-from edges.cal.cli import alancal2
-
-DATA = Path(__file__).parent / "data" / "b18_cal_test"
-
+from edges.alanmode import read_specal
+from edges.alanmode.cli import alancal_edges2, AlanCalOpts
+from edges.alanmode.alanmode import Edges2CalobsParams, ACQPlot7aMoonParams, EdgesScriptParams
+from edges import alanmode as amode
 
 @pytest.fixture(scope="module")
-def b18cal(tmpdir):
+def b18cal(tmpdir, testdata_path):
     tmpdir = tmpdir / "outputs"
     tmpdir.mkdir()
 
-    runner = CliRunner()
-
+    DATA = testdata_path / 'alanmode' / 'b18_cal_test'
+    
     # Put the averaged spectrum files into the working directory.
     specfiles = DATA.glob("sp*.txt")
     for fl in specfiles:
@@ -39,68 +36,70 @@ def b18cal(tmpdir):
 
     # Note that all the ACQs here point to their original names, but they are not
     # actually used in this test.
-    result = runner.invoke(
-        alancal2,
-        args=[
-            "--s11-path",
-            f"{DATA}/s11_calibration_low_band_LNA25degC_2015-09-16-12-30-29_simulator2_long.txt",
-            "--ambient-acqs",
-            f"{DATA}/Ambient_01_2015_245_02_00_00_lab.acq",
-            "--ambient-acqs",
-            f"{DATA}/Ambient_01_2015_246_02_00_00_lab.acq",
-            "--hotload-acqs",
-            f"{DATA}/HotLoad_01_2015_246_04_00_00_lab.acq",
-            "--hotload-acqs",
-            f"{DATA}/HotLoad_01_2015_247_00_00_00_lab.acq",
-            "--open-acqs",
-            f"{DATA}/LongCableOpen_01_2015_243_14_00_00_lab.acq",
-            "--open-acqs",
-            f"{DATA}/LongCableOpen_01_2015_244_00_00_00_lab.acq",
-            "--open-acqs",
-            f"{DATA}/LongCableOpen_01_2015_245_00_00_00_lab.acq",
-            "--short-acqs",
-            f"{DATA}/LongCableShorted_01_2015_241_00_00_00_lab.acq",
-            "--short-acqs",
-            f"{DATA}/LongCableShorted_01_2015_242_00_00_00_lab.acq",
-            "--short-acqs",
-            f"{DATA}/LongCableShorted_01_2015_243_00_00_00_lab.acq",
-            "-fstart=40.0",
-            "-fstop=110.0",
-            "-wfstart=50.0",
-            "-wfstop=100.0",
-            "-smooth=8",
-            "-tload=300.0",
-            "-tstart=0",
-            "-tstop=23",
-            "-delaystart=7200",
-            "-Lh=-2",
-            "-tcold=296",
-            "-thot=399",
-            "-cfit=6",
-            "-wfit=5",
-            "-nfit2=27",
-            "-nfit3=11",
-            "--lna-poly=0",
-            "--no-spectra",
-            "--no-plot",
-            "--out",
-            str(tmpdir),
+    defparams = Edges2CalobsParams(
+        s11_path=DATA / "s11_calibration_low_band_LNA25degC_2015-09-16-12-30-29_simulator2_long.txt",
+        ambient_acqs=[
+            DATA / "Ambient_01_2015_245_02_00_00_lab.acq",
+            DATA / "Ambient_01_2015_246_02_00_00_lab.acq"
         ],
+        hotload_acqs = [
+            DATA / "HotLoad_01_2015_246_04_00_00_lab.acq",
+            DATA/ "HotLoad_01_2015_247_00_00_00_lab.acq",
+        ],
+        open_acqs = [
+            DATA / "LongCableOpen_01_2015_243_14_00_00_lab.acq",
+            DATA / "LongCableOpen_01_2015_244_00_00_00_lab.acq",
+            DATA / "LongCableOpen_01_2015_245_00_00_00_lab.acq",
+        ],
+        short_acqs = [
+            DATA / "LongCableShorted_01_2015_241_00_00_00_lab.acq",
+            DATA / "LongCableShorted_01_2015_242_00_00_00_lab.acq",
+            DATA / "LongCableShorted_01_2015_243_00_00_00_lab.acq",
+        ]
+    )
+    acqparams = ACQPlot7aMoonParams(
+        fstart=40.0,
+        fstop=110.0,
+        smooth=8,
+        tload=300.0,
+        tstart=0,
+        tstop=23,
+        delaystart=7200,
+    )
+    calparams = EdgesScriptParams(
+        wfstart=50.0,
+        wfstop=100.0,
+        Lh=-2,
+        tcold=296,
+        thot=399,
+        cfit=6,
+        wfit=5,
+        nfit2=27,
+        nfit3=11,
+        lna_poly=0,
+    )
+    
+    alancal_edges2(
+        data=defparams,
+        opts = AlanCalOpts(
+            avg=acqparams,
+            cal=calparams, 
+            plot=False,
+            out=tmpdir, 
+            redo_spectra=False,
+            redo_cal=True
+        )
     )
 
-    if result.exit_code:
-        print(result.exception)
-        print(traceback.print_exception(*result.exc_info))
-
-    print(result.output)
-    assert result.exit_code == 0
 
     return tmpdir
 
 
 @pytest.fixture(scope="module")
-def mask():
-    alancalfreq, _ = read_s11m(f"{DATA}/s11_modelled_alan.txt")
+def mask(testdata_path):
+    DATA = testdata_path / 'alanmode' / 'b18_cal_test'
+
+    alancalfreq, _ = read_s11m(DATA / "s11_modelled_alan.txt")
     return (alancalfreq >= 50.0) & (alancalfreq <= 100.0)
 
 
@@ -126,48 +125,37 @@ def read_s11m(pth) -> tuple[np.ndarray, pd.DataFrame]:
     return freq, pd.DataFrame(s11m)
 
 
-def test_s11_modelled(b18cal: Path, mask):
-    alancalfreq, alan = read_s11m(f"{DATA}/s11_modelled_alan.txt")
+def test_s11_modelled(b18cal: Path, mask, testdata_path):
+    DATA = testdata_path / 'alanmode' / 'b18_cal_test'
+
+    alancalfreq, alan = read_s11m(DATA / "s11_modelled_alan.txt")
     calfreq, ours = read_s11m(b18cal / "s11_modelled.txt")
 
     assert np.allclose(alancalfreq[mask], calfreq)
     for load in ours:
-        print(load)
+        print(f"Testing {load}")
         np.testing.assert_allclose(
             ours[load].to_numpy(), alan[load].to_numpy()[mask], rtol=0, atol=1e-7
         )
 
 
-def test_hot_load_loss(b18cal: Path, mask):
-    alans = np.genfromtxt(f"{DATA}/hot_load_loss.txt")
-    ours = np.genfromtxt(b18cal / "hot_load_loss.txt")
+def test_hot_load_loss(b18cal: Path, mask, testdata_path):
+    DATA = testdata_path / 'alanmode' / 'b18_cal_test'
 
+    alans = np.genfromtxt(DATA / "hot_load_loss.txt")
+    ours = np.genfromtxt(b18cal / "hot_load_loss.txt")
     np.testing.assert_allclose(ours[:, 1], alans[mask, 1], atol=1e-7, rtol=0)
 
 
-def test_calcoeffs(b18cal: Path, mask):
-    ours = read_specal(b18cal / "specal.txt")
-    alan = read_specal(f"{DATA}/specal_alan.txt")[mask]
+def test_calcoeffs(b18cal: Path, mask, testdata_path):
+    DATA = testdata_path / 'alanmode' / 'b18_cal_test'
 
-    for name in ours.dtype.names:
-        print(name)
-        np.testing.assert_allclose(ours[name], alan[name], rtol=0, atol=1.1e-6)
+    ours = read_specal(b18cal / "specal.txt", t_load=300.0, t_load_ns=1000.0)
+    alan = read_specal(DATA / "specal_alan.txt", t_load=300.0, t_load_ns=1000.0)
 
-
-def test_read_specal_as_calibrator():
-    data = read_specal(DATA / "specal_alan.txt")
-    data = data[data["weight"] > 0]
-    calobs = read_specal_as_calibrator(DATA / "specal_alan.txt", nfit1=51)
-
-    f = data["freq"] * un.MHz
-    np.testing.assert_allclose(calobs.C1(f), data["C1"], atol=1e-4)
-    np.testing.assert_allclose(calobs.C2(f), data["C2"], atol=1e-4)
-    np.testing.assert_allclose(calobs.Tunc(f), data["Tunc"], atol=1e-4)
-    np.testing.assert_allclose(calobs.Tcos(f), data["Tcos"], atol=1e-4)
-    np.testing.assert_allclose(calobs.Tsin(f), data["Tsin"], atol=1e-4)
-    np.testing.assert_allclose(
-        calobs.receiver_s11(f).real, data["s11lna_real"], atol=1e-4
-    )
-    np.testing.assert_allclose(
-        calobs.receiver_s11(f).imag, data["s11lna_imag"], atol=1e-4
-    )
+    np.testing.assert_allclose(ours.Tsca, alan.Tsca, atol=1.1e-3)  # since we mutliply by tcal=1000, use 1e-3
+    np.testing.assert_allclose(ours.Toff, alan.Toff, atol=1.1e-6)
+    np.testing.assert_allclose(ours.Tunc, alan.Tunc, atol=1.1e-6)
+    np.testing.assert_allclose(ours.Tcos, alan.Tcos, atol=1.1e-6)
+    np.testing.assert_allclose(ours.Tsin, alan.Tsin, atol=1.1e-6)
+    

@@ -5,7 +5,7 @@ import attrs
 import numpy as np
 from astropy import units as un
 from astropy.table import QTable
-from astropy.time import Time
+from astropy.time import Time, TimeDelta
 
 from .. import types as tp
 from ..io.serialization import hickleable
@@ -107,7 +107,7 @@ class ThermistorReadings:
             ignore_times
         )
 
-    def get_physical_temperature(self) -> np.ndarray:
+    def get_physical_temperature(self) -> tp.TemperatureType:
         """The associated thermistor temperature in K."""
         return get_temperature_thermistor(self.data["load_resistance"])
 
@@ -125,10 +125,10 @@ class ThermistorReadings:
                 continue
 
             for i, td in enumerate(thermistor_timestamps[indx:], start=indx):
-                if d.datetime - td > timedelta(0) and d.datetime - td <= deltat:
-                    closest.append(i)
-                    break
-                if d.datetime - td > timedelta(0):
+                if d - td >= TimeDelta(0):
+                    if d - td <= deltat:
+                        closest.append(i)
+                        break
                     indx += 1
 
             else:

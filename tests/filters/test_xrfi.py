@@ -8,7 +8,7 @@ import pytest
 import yaml
 from pytest_cases import fixture_ref as fxref
 from pytest_cases import parametrize
-
+from edges.modelling import EdgesPoly
 from edges.filters import xrfi
 
 NFREQ = 1000
@@ -22,7 +22,7 @@ def freq():
 
 @pytest.fixture(scope="module")
 def sky_pl_1d(freq):
-    return 1750 * (freq / 75.0) ** -2.55
+    return 1750 * (freq / 75.0) ** -2.5
 
 
 @pytest.fixture(scope="module")
@@ -467,6 +467,34 @@ class TestXRFIExplicit:
         assert not flags[0]
         assert flags[350]
 
+class TestXRFIModelSlidingRMSSinglePass:
+    """Test the single-pass sliding RMS model.
+    
+    This is the algorithm most similar to Alan's C-code.
+    """
+    @parametrize(
+        "sky_model", [fxref(sky_flat_1d), fxref(sky_pl_1d), fxref(sky_linpoly_1d)]
+    )
+    @parametrize(
+        "rfi_model", [fxref(rfi_null_1d), fxref(rfi_regular_1d), fxref(rfi_random_1d)]
+    )
+    @pytest.mark.parametrize("scale", [1000, 100])
+    def test_on_simple_data(self, sky_model, rfi_model, scale, freq, plt):
+        sky, std, noise, rfi = make_sky(sky_model, rfi_model, scale)
+
+        true_flags = rfi_model > 0
+        flags = xrfi.xrfi_model_sliding_rms_single_pass(
+            sky, 
+            freq=freq, 
+            model=EdgesPoly(n_terms=5),
+            threshold=3.5,
+        )
+        
+        wrong = np.where(true_flags != flags)[0]
+
+        assert len(wrong) == 0
+
+    
 
 @pytest.fixture(scope="module")
 def model_info(sky_pl_1d, rfi_random_1d, freq):
@@ -475,7 +503,7 @@ def model_info(sky_pl_1d, rfi_random_1d, freq):
     return info
 
 
-@pytest.skip("takes too long")
+@pytest.mark.skip("takes too long")
 def test_visualisation(model_info: xrfi.ModelFilterInfo):
     xrfi.visualise_model_info(model_info)
 
@@ -506,3 +534,13 @@ def test_model_info_container(model_info: xrfi.ModelFilterInfo, tmpdir: Path):
         tmpdir / "model_info_container.h5"
     )
     assert np.all(container.total_flags == container2.total_flags)
+
+
+class TestVisualiseModelInfo:
+    def test_visualise_model_info(self, sky_linpoly_1d, rfi_random_1d, freq, plt):
+        sky, std, noise, rfi = make_sky(sky_linpoly_1d, rfi_random_1d)
+
+        _, info = xrfi.xrfi_model(sky, freq=freq, watershed=1, threshold=6)
+
+        fig, ax = plt.subplots(2, 3, figsize=(10, 6))
+        xrfi.visualise_model_info(info, fig=fig, ax=ax)

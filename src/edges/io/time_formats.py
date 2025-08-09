@@ -12,11 +12,11 @@ class TimeISOWithSlashes(TimeISO):
         (
             "date_hms_space",
             "%m/%d/%Y %H:%M:%S",
-            "{month:02d}/{day:02d}/{year:04d} {hour:02d}:{min:02d}:{sec:02d}",
+            "{mon:02d}/{day:02d}/{year:04d} {hour:02d}:{min:02d}:{sec:02d}",
         ),
         (
             "date_hms_colon",
             "%m/%d/%Y:%H:%M:%S",
-            "{month:02d}/{day:02d}/{year:04d}:{hour:02d}:{min:02d}:{sec:02d}",
+            "{mon:02d}/{day:02d}/{year:04d}:{hour:02d}:{min:02d}:{sec:02d}",
         ),
     )

@@ -3,22 +3,22 @@
 from __future__ import annotations
 
 import numpy as np
-
+from .. import modelling as mdl
 from ..cal import noise_waves
-
+from ..cal import CalibrationObservation, Calibrator, Load
+from .. import types as tp
+from astropy import units as un
 
 def simulate_q(
     *,
     load_s11: np.ndarray,
     receiver_s11: np.ndarray,
-    load_temp: float | np.ndarray,
-    scale: np.ndarray,
-    offset: np.ndarray,
+    load_temp: tp.TemperatureType,
+    t_sca: np.ndarray,
+    t_off: np.ndarray,
     t_unc: np.ndarray,
     t_cos: np.ndarray,
     t_sin: np.ndarray,
-    t_load: float = 300.0,
-    t_load_ns: float = 400.0,
 ) -> np.ndarray:
     """Simulate the observed 3-position switch ratio data, Q.
 
@@ -31,10 +31,10 @@ def simulate_q(
         The S11 of the internal LNA.
     load_temp
         The (calibrated) temperature of the input load.
-    scale
-        The scale polynomial (C1)
-    offset : np.ndarray
-        The offset polynomial (C2)
+    t_sca
+        The scaling temperature (i.e. ~T_load+ns)
+    t_off : np.ndarray
+        The offset temperature (i.e. ~T_load)
     t_unc : np.ndarray
         The noise-wave parameter T_uncorrelated
     t_cos : np.ndarray
@@ -54,26 +54,25 @@ def simulate_q(
     a, b = noise_waves.get_linear_coefficients(
         gamma_ant=load_s11,
         gamma_rec=receiver_s11,
-        sca=scale,
-        off=offset,
+        t_sca=t_sca,
+        t_off=t_off,
         t_unc=t_unc,
         t_cos=t_cos,
         t_sin=t_sin,
-        t_load=t_load,
     )
 
-    uncal_temp = (load_temp - b) / a
-    return (uncal_temp - t_load) / t_load_ns
+    return (load_temp - b*un.K) / (a*un.K)
+    
 
 
-def simulate_q_from_calobs(
-    calobs, load: str, scale_model=None, freq=None
+def simulate_q_from_calibrator(
+    load: Load, calibrator: Calibrator, scale_model: callable | None=None,
 ) -> np.ndarray:
     """Simulate the observed 3-position switch ratio, Q, from noise-wave solutions.
 
     Parameters
     ----------
-    calobs : :class:`~edges.cal.cal_coefficients.CalibrationObservation`
+    calibrator
         The calibration observation that contains the solutions.
     load : str
         The load to simulate.
@@ -83,44 +82,32 @@ def simulate_q_from_calobs(
     np.ndarray
         The 3-position switch values.
     """
-    default_freq = freq is None
-    if freq is None:
-        freq = calobs.freq
+    freq = calibrator.freqs
 
-    C1 = scale_model(freq) if scale_model is not None else calobs.C1(freq)
-    try:
-        receiver_s11 = calobs.receiver.s11_model(freq.to_value("MHz"))
-    except AttributeError:
-        receiver_s11 = calobs.receiver_s11(freq)
-
-    if not default_freq:
-        temp_ave = calobs.loads[load].get_temp_with_loss(freq)
-    else:
-        temp_ave = calobs.loads[load].temp_ave
+    t_sca = scale_model(freq) if scale_model is not None else calibrator.Tsca
+    receiver_s11 = calibrator.receiver_s11
+    temp_ave = load.temp_ave
 
     return simulate_q(
-        load_s11=calobs.loads[load].reflections.s11_model(freq.to_value("MHz")),
+        load_s11=load.s11.s11,
         receiver_s11=receiver_s11,
         load_temp=temp_ave,
-        scale=C1,
-        offset=calobs.C2(freq),
-        t_unc=calobs.Tunc(freq),
-        t_cos=calobs.Tcos(freq),
-        t_sin=calobs.Tsin(freq),
-        t_load=calobs.t_load,
-        t_load_ns=calobs.t_load_ns,
+        t_sca=t_sca,
+        t_off=calibrator.Toff,
+        t_unc=calibrator.Tunc,
+        t_cos=calibrator.Tcos,
+        t_sin=calibrator.Tsin,
     )
 
 
-def simulate_qant_from_calobs(
-    calobs,
+def simulate_qant_from_calibrator(
+    calibrator: Calibrator,
     ant_s11: np.ndarray,
     ant_temp: np.ndarray,
-    scale_model=None,
-    freq=None,
-    loss=1,
-    t_amb=296,
-    bm_corr=1,
+    scale_model: callable | None =None,
+    loss: np.ndarray | float=1,
+    t_amb: float =296,
+    bm_corr: float | np.ndarray =1,
 ) -> np.ndarray:
     """Simulate antenna Q from a calibration observation.
 
@@ -138,29 +125,23 @@ def simulate_qant_from_calobs(
     np.ndarray
         The simulated 3-position switch ratio, Q.
     """
-    if freq is None:
-        freq = calobs.freq
+    freq = calibrator.freqs
 
-    scale = scale_model(freq) if scale_model is not None else calobs.C1(freq)
+    t_sca = scale_model(freq) if scale_model is not None else calibrator.Tsca
 
     ant_temp = loss * ant_temp * bm_corr + (1 - loss) * t_amb
 
-    lna_s11 = (
-        calobs.receiver_s11(freq)
-        if callable(calobs.receiver_s11)
-        else calobs.receiver.s11_model(freq.to_value("MHz"))
-    )
+    lna_s11 = calibrator.receiver_s11
+    
     return simulate_q(
         load_s11=ant_s11,
         receiver_s11=lna_s11,
         load_temp=ant_temp,
-        scale=scale,
-        offset=calobs.C2(freq),
-        t_unc=calobs.Tunc(freq),
-        t_cos=calobs.Tcos(freq),
-        t_sin=calobs.Tsin(freq),
-        t_load=calobs.t_load,
-        t_load_ns=calobs.t_load_ns,
+        t_sca=t_sca,
+        t_off=calibrator.Toff,
+        t_unc=calibrator.Tunc,
+        t_cos=calibrator.Tcos,
+        t_sin=calibrator.Tsin
     )
 
 
@@ -178,13 +159,9 @@ def get_data_from_calobs(
     data = []
     for src in srcs:
         load = loads[src]
-        if tns is None:
-            _tns = calobs.C1() * calobs.t_load_ns
-        else:
-            _tns = tns(x=calobs.freq)
-
+        _tns = calobs.Tsca if tns is None else tns(x=calobs.freqs)
         q = (
-            simulate_q_from_calobs(calobs, load=src)
+            simulate_q_from_calibrator(calobs, load=src)
             if sim
             else load.spectrum.averaged_Q
         )

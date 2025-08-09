@@ -21,10 +21,10 @@ def approximate_temperature(data: GSData, *, tload: float, tns: float, reverse: 
 
     if reverse:
         udata=(data.data - tload) / tns
-        resid = data.residuals / tns
+        resid = data.residuals / tns if data.residuals is not None else None
     else:
         udata=data.data * tns + tload
-        resid = data.residuals * tns
+        resid = data.residuals * tns  if data.residuals is not None else None
         
     return data.update(
         data=udata,

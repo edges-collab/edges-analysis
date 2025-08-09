@@ -5,7 +5,7 @@ from edges.io import CalObsDefEDGES3, templogs
 
 
 def test_temperature_read(smallcaldef_edges3: CalObsDefEDGES3):
-    temp_table = templogs.read_temperature_log(smallcaldef_edges3.templog)
+    temp_table = templogs.read_temperature_log(smallcaldef_edges3.ambient.templog)
 
     assert "time" in temp_table.columns
     assert "hot_load_temperature" in temp_table.columns
@@ -24,7 +24,7 @@ def test_temperature_read(smallcaldef_edges3: CalObsDefEDGES3):
 
 
 def test_get_mean_temperature(smallcaldef_edges3: CalObsDefEDGES3):
-    temp_table = templogs.read_temperature_log(smallcaldef_edges3.templog)
+    temp_table = templogs.read_temperature_log(smallcaldef_edges3.ambient.templog)
     mean_temp = templogs.get_mean_temperature(temp_table, load="amb")
     assert mean_temp.unit == un.K
     assert mean_temp.value == pytest.approx(300, abs=15)

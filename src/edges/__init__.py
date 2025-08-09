@@ -9,9 +9,16 @@ except PackageNotFoundError:
 finally:
     del version, PackageNotFoundError
 
+__all__ = ["__version__"]
+
 DATA_PATH = Path(__file__).parent / "data"
 
-__all__ = ["__version__"]
+def get_data_path(pth: str | Path) -> Path:
+    """Impute the global data path to a given input in place of a colon."""
+    if isinstance(pth, str):
+        return DATA_PATH / pth[1:] if pth.startswith(":") else Path(pth)
+    return pth
+
 
 from . import types
 from . import tools
@@ -25,3 +32,6 @@ from . import averaging
 from . import sim
 from . import cal
 from . import analysis
+from . import alanmode
+from .io import serialization
+

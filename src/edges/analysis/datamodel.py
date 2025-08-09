@@ -177,7 +177,6 @@ def add_model(
     data: GSData,
     *,
     model: mdl.Model,
-    append_to_file: bool = False,
     nsamples_strategy: Literal[
         "flagged-nsamples",
         "flags-only",
@@ -211,26 +210,4 @@ def add_model(
     data_model = GSDataLinearModel.from_gsdata(
         model, data, nsamples_strategy=nsamples_strategy
     )
-    new = data.update(residuals=data_model.get_residuals(data))
-
-    if append_to_file:
-        if not new._file_appendable or new.filename is None:
-            logger.warning(
-                "Cannot add model residuals to existing file, as it either doesn't "
-                "exist or is out-of-sync with the data in memory. "
-                "Write the data to a new file manually."
-            )
-
-        with h5py.File(new.filename, "a") as fl:
-            if "residuals" in fl:
-                logger.warning(
-                    f"Residuals already exists in {new.filename}, not overwriting."
-                )
-            elif fl["data"].shape != new.residuals.shape:
-                logger.warning(
-                    "File on disk is incompatible with the data model. Write new file."
-                )
-            else:
-                fl["residuals"] = new.residuals
-
-    return new
+    return data.update(residuals=data_model.get_residuals(data))

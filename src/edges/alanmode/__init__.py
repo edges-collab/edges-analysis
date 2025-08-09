@@ -18,6 +18,9 @@ from .alanio import (
     write_modelled_s11s,
     write_spec_txt,
     write_spec_txt_gsd,
-    write_specal
+    write_specal,
+    write_s11_csv,
+    LOADMAP
 )
-from .alanmode import edges, acqplot7amoon, alancal, alancal2
+from .alanmode import edges, acqplot7amoon, alancal, corrcsv
+from . import cli

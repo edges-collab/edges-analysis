@@ -56,8 +56,11 @@ class CompositeModel:
         return sum(m.n_terms for m in self.models.values())
 
     @cached_property
-    def parameters(self) -> np.ndarray:
+    def parameters(self) -> np.ndarray | None:
         """The read-only list of parameters of all sub-models."""
+        if any(m.parameters is None for m in self.models.values()):
+            return None
+        
         return np.concatenate(tuple(m.parameters for m in self.models.values()))
 
     @cached_property
@@ -105,6 +108,9 @@ class CompositeModel:
         if parameters is None:
             parameters = self.parameters
 
+        if parameters is None:
+            raise ValueError("Cannot evaluate a model without providing parameters!")
+        
         p = parameters if len(parameters) == model.n_terms else parameters[indx]
         return model(x=x, parameters=p, with_scaler=with_scaler)
 

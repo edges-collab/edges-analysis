@@ -29,6 +29,7 @@ from astropy import units
 from astropy.constants import c as speed_of_light
 from scipy.optimize import minimize
 from scipy.signal.windows import blackmanharris
+from pygsdata.attrs import npfield
 
 from .. import modelling as mdl
 from .. import types as tp
@@ -96,8 +97,9 @@ class TwoPortNetwork:
     (https://en.wikipedia.org/wiki/Two-port_network#ABCD-parameters).
     """
 
-    x: npt.NDArray[np.complex] = attrs.field(
-        eq=attrs.cmp_using(eq=np.array_equal),
+    x: npt.NDArray[np.complex] = npfield(
+        possible_ndims=(3,),
+        dtype=complex,
         converter=np.atleast_3d,
     )
 
@@ -105,24 +107,23 @@ class TwoPortNetwork:
     def _x_vld(self, att, val):
         if val.shape[:2] != (2, 2):
             raise ValueError("Matrix must have shape (2, 2, Nfreq).")
-
+        
     @classmethod
     def from_zmatrix(cls, z: npt.NDArray) -> Self:
         """Create a TwoPortNetwork from a Z-matrix."""
+        z = np.atleast_3d(z)
+        nf = z.shape[-1]
         detz = z[0, 0] * z[1, 1] - z[0, 1] * z[1, 0]
-        return cls(1 / z[1, 0] * np.array([[z[0, 0], detz], [1, z[1, 1]]]))
+        print(z.shape)
+        return cls(1 / z[1, 0] * np.array([[z[0, 0], detz], [np.ones(nf), z[1, 1]]]))
 
     @classmethod
     def from_ymatrix(cls, z: npt.NDArray) -> Self:
         """Create a TwoPortNetwork from a Y-matrix."""
+        z = np.atleast_3d(z)
+        nf = z.shape[-1]
         detz = z[0, 0] * z[1, 1] - z[0, 1] * z[1, 0]
-        return cls(1 / z[0, 1] * np.array([[-z[1, 1], -1], [-detz, -z[0, 0]]]))
-
-    @classmethod
-    def from_hmatrix(cls, z: npt.NDArray) -> Self:
-        """Create a TwoPortNetwork from a H-matrix."""
-        detz = z[0, 0] * z[1, 1] - z[0, 1] * z[1, 0]
-        return cls(1 / z[1, 0] * np.array([[-detz, -z[0, 0]], [-z[1, 1], -1]]))
+        return cls(1 / z[1, 0] * np.array([[-z[1, 1], -np.ones(nf)], [-detz, -z[0, 0]]]))
 
     @classmethod
     def from_abcd(cls, abcd, inverse: bool = False):
@@ -152,11 +153,11 @@ class TwoPortNetwork:
     @cached_property
     def determinant(self) -> npt.NDArray[np.float]:
         """The determinant of the ABCD representation, |AD - BC|."""
-        return np.abs(self.A * self.D - self.B * self.C)
+        return self.A * self.D - self.B * self.C
 
     def is_reciprocal(self) -> bool:
         """Whether the network is a reciprocal network."""
-        return np.allclose(self.determinant(), 1)
+        return np.allclose(self.determinant, 1)
 
     def is_symmetric(self) -> bool:
         """Whether the network is symmetric."""
@@ -171,54 +172,44 @@ class TwoPortNetwork:
             and np.allclose(self.C.real, 0)
         )
 
-    def add_in_series(self, other: Self) -> Self:
-        """Combine two TwoPortNetworks together in series."""
+    def _check_add_args(self, other: Self):
         if not isinstance(other, TwoPortNetwork):
             raise ValueError("Two matrices must be of the same type.")
 
         if other.x.shape != self.x.shape:
             raise ValueError("Two matrices must have the same dimensions.")
 
+    def add_in_series(self, other: Self) -> Self:
+        """Combine two TwoPortNetworks together in series."""
+        self._check_add_args(other)        
         z = self.zmatrix + other.zmatrix
         return TwoPortNetwork.from_zmatrix(z)
 
     def add_in_parallel(self, other):
         """Combine two TwoPortNetworks together in parallel."""
-        if not isinstance(other, TwoPortNetwork):
-            raise ValueError("Two matrices must be of the same type.")
-
-        if other.x.shape != self.x.shape:
-            raise ValueError("Two matrices must have the same dimensions.")
+        self._check_add_args(other)
 
         y = self.ymatrix * other.ymatrix
         return TwoPortNetwork.from_ymatrix(y)
 
     def add_in_series_parallel(self, other):
         """Combine two TwoPortNetworks together in parallel."""
-        if not isinstance(other, TwoPortNetwork):
-            raise ValueError("Two matrices must be of the same type.")
-
-        if other.x.shape != self.x.shape:
-            raise ValueError("Two matrices must have the same dimensions.")
+        self._check_add_args(other)
 
         h = self.hmatrix * other.hmatrix
         return TwoPortNetwork.from_hmatrix(h)
 
     def cascade_with(self, other: Self) -> Self:
         """Cascade two TwoPortNetworks together."""
-        if not isinstance(other, TwoPortNetwork):
-            raise ValueError("Two matrices must be of the same type.")
-
-        if other.x.shape != self.x.shape:
-            raise ValueError("Two matrices must have the same dimensions.")
-
-        abcd = np.matmul(self.x, other.x)
-        return TwoPortNetwork.from_abcd(abcd)
+        self._check_add_args(other)
+        abcd = np.matmul(other.x.T, self.x.T)
+        return TwoPortNetwork.from_abcd(abcd.T)
 
     @property
     def zmatrix(self):
         """Return the Z-matrix (impedance parameters) of the network."""
-        return (1 / self.C) * np.array([[self.A, self.determinant], [1, self.D]])
+        nf = self.B.shape[-1]
+        return (1 / self.C) * np.array([[self.A, self.determinant], [np.ones(nf), self.D]])
 
     @property
     def impedance_matrix(self):
@@ -231,17 +222,27 @@ class TwoPortNetwork:
 
         This is the inverse of the z-matrix.
         """
-        return (1 / self.B) * np.array([[self.D, -self.determinant], [-1, self.A]])
+        nf = self.B.shape[-1]
+        return (1 / self.B) * np.array([[self.D, -self.determinant], [-np.ones(nf), self.A]])
 
     @property
     def admittance_matrix(self):
         """Alias of ymatrix."""
         return self.ymatrix
 
+    @classmethod
+    def from_hmatrix(cls, z: npt.NDArray) -> Self:
+        """Create a TwoPortNetwork from a H-matrix."""
+        z = np.atleast_3d(z)
+        nf = z.shape[-1]
+        detz = z[0, 0] * z[1, 1] - z[0, 1] * z[1, 0]
+        return cls(1 / z[1, 0] * np.array([[-detz, -z[0, 0]], [-z[1, 1], -np.ones(nf)]]))
+
     @property
     def hmatrix(self):
         """Return the H-matrix (hybrid parameters) of the network."""
-        return (1 / self.D) * np.array([[self.B, self.determinant], [-1, self.C]])
+        nf = self.B.shape[-1]
+        return (1 / self.D) * np.array([[self.B, self.determinant], [-np.ones(nf), self.C]])
 
     @property
     def hybrid_matrix(self):
@@ -300,10 +301,10 @@ class TwoPortNetwork:
 
         cgl = np.cosh(gl)
         sgl = np.sinh(gl)
-        return np.array([
+        return cls(np.array([
             [cgl, line.characteristic_impedance * sgl],
             [(1 / line.characteristic_impedance) * sgl, cgl],
-        ])
+        ]))
 
 
 @attrs.define(frozen=True, kw_only=False, slots=False)
@@ -316,8 +317,9 @@ class SMatrix:
     See also https://en.wikipedia.org/wiki/Two-port_network#Interrelation_of_parameters
     """
 
-    s: npt.NDarray[complex] = attrs.field(
-        eq=attrs.cmp_using(eq=np.array_equal),
+    s: npt.NDarray[complex] = npfield(
+        possible_ndims=(3,),
+        dtype=complex,
         converter=np.atleast_3d,
     )
 
@@ -420,7 +422,7 @@ class SMatrix:
 
         See https://en.wikipedia.org/wiki/Scattering_parameters#Lossless_networks
         """
-        product = np.matmul(self.s.T.conj(), self.s.transpose((2, 0, 1)))
+        product = np.matmul(self.s.transpose((2, 0, 1)), self.s.transpose((2, 1, 0)).conj())
         return np.allclose(product, np.eye(2))
 
     @property
@@ -465,16 +467,6 @@ class SMatrix:
     def reverse_isolation(self):
         """The reverse isolation, 1/|S12|, in decibels."""
         return np.abs(self.reverse_gain)
-
-    @property
-    def reflection_coefficient_in(self):
-        """The reflection coefficient of the network input, S11."""
-        return self.s[0, 0]
-
-    @property
-    def reflection_coefficient_out(self):
-        """The reflection coefficient of the network output, S22."""
-        return self.s[1, 1]
 
     @property
     def s11(self):

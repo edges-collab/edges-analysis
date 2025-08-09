@@ -10,14 +10,14 @@ import numpy as np
 import numpy.typing as npt
 from astropy import units as un
 
-from ...cal import ee, loss
-from ...cal.s11 import S11Model
-from ...config import config
+from ..cal import ee, loss
+from ..cal.s11 import CalibratedS11
+from ..config import config
 
 
 def low2_balun_connector_loss(
     freq: un.Quantity[un.MHz],
-    ants11: np.ndarray | S11Model | str | Path,
+    ants11: np.ndarray | CalibratedS11 | str | Path,
     use_approx_eps0: bool = True,
 ) -> npt.NDArray:
     """Obtain the balun and connector loss for the low-2 instrument on-site at MRO.
@@ -39,9 +39,9 @@ def low2_balun_connector_loss(
 
     # Get the antenna s11
     if isinstance(ants11, str | Path):
-        ants11 = S11Model.from_file(ants11).s11_model(freq)
-    elif isinstance(ants11, S11Model):
-        ants11 = ants11.s11_model(freq)
+        ants11 = CalibratedS11.from_file(ants11).s11
+    elif isinstance(ants11, CalibratedS11):
+        ants11 = ants11.s11
 
     try:
         ants11 = np.asarray(ants11)
@@ -93,7 +93,7 @@ def _get_loss_from_datafile(
                 warnings.warn(
                     f"Ground loss file {filename} does not exist. Returning ones."
                 )
-                return np.ones_like(freq)
+                return np.ones(freq.shape)
         else:
             # Find the file in the standard directory structure
             filename = (

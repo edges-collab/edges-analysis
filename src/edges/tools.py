@@ -106,3 +106,9 @@ def slice_along_axis(x: np.ndarray, idx: np.ndarray | slice, axis: int = -1):
     if from_end:
         return x[Ellipsis, idx, *explicit_inds_slice]
     return x[*explicit_inds_slice, idx]
+
+
+def _tuplify(x):
+    if not hasattr(x, "__len__"):
+        return (int(x), int(x), int(x))
+    return tuple(int(xx) for xx in x)

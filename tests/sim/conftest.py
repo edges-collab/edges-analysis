@@ -4,11 +4,7 @@ import pytest
 
 
 @pytest.fixture(scope="session")
-def sim_data_path() -> Path:
+def sim_data_path(testdata_path: Path) -> Path:
     """Path to simulation data."""
-    return Path(__file__).parent / "data"
+    return testdata_path / 'sim'
 
-
-@pytest.fixture(scope="session")
-def beam_settings() -> Path:
-    return Path(__file__).parent / "data"

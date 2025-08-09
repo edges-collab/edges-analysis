@@ -4,13 +4,16 @@ from __future__ import annotations
 
 import re
 import warnings
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta, time
 from pathlib import Path
-
+from astropy.time import Time
 import numpy as np
+from astropy import units as un
+from astropy.table import QTable
 
-_NEW_WEATHER_PATTERN = re.compile(
-    r"(?P<year>\d{4}):(?P<day>\d{3}):(?P<hour>\d{2}):(?P<minute>\d{2}):(?P<second>\d{2})  "
+_time_format = r"(?P<year>\d{4}):(?P<day>\d{3}):(?P<hour>\d{2}):(?P<minute>\d{2}):(?P<second>\d{2})  "
+
+_NEW_WEATHER_PATTERN = re.compile(    
     r"rack_temp  (?P<rack_temp>\d{3}.\d{2}) Kelvin, "
     r"ambient_temp  (?P<ambient_temp>\d{3}.\d{2}) Kelvin, "
     r"ambient_hum  (?P<ambient_hum>[\d\- ]{3}.\d{2}) percent, "
@@ -19,19 +22,27 @@ _NEW_WEATHER_PATTERN = re.compile(
 )
 
 _OLD_WEATHER_PATTERN = re.compile(
-    r"(?P<year>\d{4}):(?P<day>\d{3}):(?P<hour>\d{2}):(?P<minute>\d{2}):(?P<second>\d{2})  "
     r"rack_temp  (?P<rack_temp>\d{3}.\d{2}) Kelvin, "
     r"ambient_temp  (?P<ambient_temp>\d{3}.\d{2}) Kelvin, "
     r"ambient_hum  (?P<ambient_hum>[\d\- ]{3}.\d{2}) percent, "
 )
 
 _THERMLOG_PATTERN = re.compile(
-    r"(?P<year>\d{4}):(?P<day>\d{3}):(?P<hour>\d{2}):(?P<minute>\d{2}):(?P<second>\d{2})  "
     r"temp_set (?P<temp_set>[\d\- ]+.\d{2}) deg_C "
     r"tmp (?P<receiver_temp>[\d\- ]+.\d{2}) deg_C "
     r"pwr (?P<power_percent>[\d\- ]+.\d{2}) percent"
 )
 
+_UNITS = {
+    'rack_temp': un.K,
+    'ambient_temp': un.K,
+    'ambient_hum': un.percent,
+    'frontend_temp': un.K,
+    'lna_temp': un.K,
+    'temp_set': un.deg_C,
+    'receiver_temp': un.deg_C,
+    'power_percent': un.percent
+}
 
 def _parse_lines(text, pattern):
     for match in pattern.finditer(text):
@@ -43,96 +54,21 @@ def _parse_lines(text, pattern):
                 dct[k] = float(v)
         yield dct
 
-
-def _get_chunk_pos_and_size(
-    fname: str | Path,
-    start_time: tuple[int, int, int, int],
-    end_time: tuple[int, int, int, int] | None = None,
+def _get_end_time(
+    start_time: Time,
     n_hours: int | None = None,
-):
-    """Get the chunk and position size for a given time range in a file.
-
-    Parameters
-    ----------
-    fname : path
-        File to read.
-    start_time : tuple
-        Tuple of (year, day, hour, minute) at which to start reading data.
-    end_time : tuple
-        Tuple of (year, day, hour, minute) at which to end reading data. This is exclusive,
-        so that if `start_time` is (2020, 1, 0, 0) and `end_time` is (2020, 2, 0, 0),
-        you get a whole day. The default is to get the *rest of* the day.
-
-    Returns
-    -------
-    int :
-        Starting position in file.
-    nlines :
-        Number of lines required to read for this chunk.
-
-    """
-    if end_time is None:
-        if n_hours is None:
-            end_time = f"{start_time[0]:04}:{start_time[1] + 1:03}:00:00"
-        else:
-            first_day = datetime(
-                start_time[0],
-                1,
-                1,
-                hour=start_time[2],
-                minute=start_time[3],
-                tzinfo=UTC,
-            )
-            dt = first_day + timedelta(days=start_time[1])
-            end = dt + timedelta(hours=n_hours)
-            jd = (end - first_day).days
-            end_time = f"{end.year:04}:{jd:03}:{end.hour:02}:{end.minute:02}"
+) -> datetime:
+    if n_hours is None:
+        # End time is the first second of the next day.
+        return datetime.combine(start_time.datetime + timedelta(days=1), time.min)
     else:
-        end_time = (
-            f"{end_time[0]:04}:{end_time[1]:03}:{end_time[2]:02}:{end_time[3]:02}"
-        )
+        return start_time.datetime + timedelta(hours=n_hours)            
 
-    start_time = (
-        f"{start_time[0]:04}:{start_time[1]:03}:{start_time[2]:02}:{start_time[3]:02}"
-    )
-
-    fname = Path(fname)
-    line = "0000:000:00:00"
-    with fname.open("r") as fl:
-        # Get our starting position in the file.
-        while line and line[:14] < start_time:
-            line = fl.readline()
-
-        # Got to the end of the file without finding our year/day
-        if not line:
-            raise ValueError(
-                f"The file provided [{fname}]does not contain the year/day desired "
-                f"[{start_time[0]}/{start_time[1]}]."
-            )
-
-        # First line is current position, minus one line (which is the line length
-        # plus a newline character).
-        start_pos = fl.tell() - len(line)
-
-        # Get the number of lines in this day.
-        n_lines = 1
-        while line and line[:14] < end_time:
-            line = fl.readline()
-            n_lines += 1
-
-        end_pos = fl.tell() - len(line)
-
-    return start_pos, n_lines - 1, end_pos - start_pos
-
-
-def read_weather_file(
-    weather_file: str | Path,
-    year: int,
-    day: int,
-    hour: int = 0,
-    minute: int = 0,
+def _read_aux_file(
+    aux_file: str | Path,
+    start: Time,
     n_hours: int | None = None,
-    end_time: tuple[int, int, int, int] | None = None,
+    end: Time | None = None,
 ):
     """Read (a chunk of) the weather file maintained by the on-site (MRO) monitoring.
 
@@ -171,75 +107,64 @@ def read_weather_file(
         * ``lna_temp``: temperature of the LNA (K).
 
     """
-    weather_file = Path(weather_file)
-    with weather_file.open("r") as fl:
-        if _NEW_WEATHER_PATTERN.match(fl.readline()) is not None:
-            pattern = _NEW_WEATHER_PATTERN
+    aux_file = Path(aux_file)
+    with aux_file.open("r") as fl:
+        for pattern in (
+            _NEW_WEATHER_PATTERN, _OLD_WEATHER_PATTERN, _THERMLOG_PATTERN
+        ):
+            
+            if pattern.search(fl.readline()) is not None:
+                break
         else:
-            pattern = _OLD_WEATHER_PATTERN
+            raise ValueError(f"No patterns matched the first line of the aux file {aux_file}")
 
-    start_line, n_lines, nchar = _get_chunk_pos_and_size(
-        weather_file, (year, day, hour, minute), end_time=end_time, n_hours=n_hours
-    )
-    dtype = [
-        ("year", int),
-        ("day", int),
-        ("hour", int),
-        ("minute", int),
-        ("second", int),
-        ("rack_temp", float),
-        ("ambient_temp", float),
-        ("ambient_hum", float),
-        ("frontend_temp", float),
-        ("lna_temp", float),
-    ]
+    if end is None:
+        end = Time(_get_end_time(
+            start_time=start, n_hours=n_hours
+        ))
 
-    weather = np.zeros(n_lines, dtype)
-
-    with weather_file.open("r") as fl:
+    auxdata = []
+    with aux_file.open("r") as fl:
         # Go back to the starting position of the day, and read in each line of the day.
-        fl.seek(start_line)
+        for line in fl:
+            t = Time.strptime(line[:17], "%Y:%j:%H:%M:%S")
+            if t < start:
+                continue
+            if t > end:
+                break
+            
+            matches = re.search(pattern, line)
+            dct = matches.groupdict()
+            auxdata.append(dct | {'time': t})
+            
+    auxdata = QTable(rows=auxdata)
+    for col in auxdata.columns:
+        if col == 'time':
+            continue
+        else:
+            auxdata[col] = auxdata[col].astype(float) * _UNITS[col]
+        
+    return auxdata
 
-        matches = _parse_lines(fl.read(nchar), pattern)
-
-        i = -1
-        for i, match in enumerate(matches):
-            w = (
-                match["year"],
-                match["day"],
-                match["hour"],
-                match["minute"],
-                match["second"],
-                match["rack_temp"],
-                match["ambient_temp"],
-                match["ambient_hum"],
-            )
-
-            if pattern == _NEW_WEATHER_PATTERN:
-                w = (*w, match["frontend_temp"], match["lna_temp"])
-            else:
-                w = (*w, np.nan, np.nan)
-
-            weather[i] = w
-
-        if i < len(weather) - 1:
-            warnings.warn(
-                f"Only {i + 1}/{n_lines} lines of {weather_file} were able to be parsed.",
-                stacklevel=2,
-            )
-            weather = weather[: i + 1]
-
-    return weather
+def read_weather_file(
+    weather_file: str | Path,
+    start: Time,
+    n_hours: int | None = None,
+    end: Time | None = None,
+):
+    return _read_aux_file(
+        aux_file=weather_file,
+        start=start,
+        n_hours=n_hours,
+        end=end,
+    )
 
 
 def read_thermlog_file(
     filename: str | Path,
-    year: int,
-    day: int,
-    hour: int = 0,
-    minute: int = 0,
+    start: Time,
     n_hours: int | None = None,
-    end_time: tuple[int, int, int, int] | None = None,
+    end: Time | None = None,
 ):
     """Read (a chunk of) the thermlog file maintained by the on-site (MRO) monitoring.
 
@@ -276,60 +201,19 @@ def read_thermlog_file(
         * ``power_percent``: power of something (%)
 
     """
-    start_line, n_lines, nchar = _get_chunk_pos_and_size(
-        filename, (year, day, hour, minute), end_time=end_time, n_hours=n_hours
+    return _read_aux_file(
+        aux_file=filename,
+        start=start,
+        n_hours=n_hours,
+        end=end,
     )
-
-    therm = np.zeros(
-        n_lines,
-        dtype=[
-            ("year", int),
-            ("day", int),
-            ("hour", int),
-            ("minute", int),
-            ("second", int),
-            ("temp_set", float),
-            ("receiver_temp", float),
-            ("power_percent", float),
-        ],
-    )
-
-    with Path(filename).open("r") as fl:
-        fl.seek(start_line)
-
-        matches = _parse_lines(fl.read(nchar), _THERMLOG_PATTERN)
-
-        i = -1
-        for i, match in enumerate(matches):
-            therm[i] = (
-                match["year"],
-                match["day"],
-                match["hour"],
-                match["minute"],
-                match["second"],
-                match["temp_set"],
-                match["receiver_temp"],
-                match["power_percent"],
-            )
-        if i < len(therm) - 1:
-            warnings.warn(
-                f"Only {i + 1}/{n_lines} lines of {filename} were able to be parsed.",
-                stacklevel=2,
-            )
-            therm = therm[: i + 1]
-
-    return therm
-
 
 def read_auxiliary_data(
     weather_file: str | Path,
     thermlog_file: str | Path,
-    year: int,
-    day: int,
-    hour: int = 0,
-    minute: int = 0,
+    start: Time,
     n_hours: int | None = None,
-    end_time: tuple[int, int, int, int] | None = None,
+    end: Time | None = None,
 ):
     """Read both weather and thermlog files for a given time range.
 
@@ -363,21 +247,15 @@ def read_auxiliary_data(
     """
     weather = read_weather_file(
         weather_file,
-        year,
-        day,
-        hour=hour,
-        minute=minute,
+        start,
         n_hours=n_hours,
-        end_time=end_time,
+        end=end,
     )
     thermlog = read_thermlog_file(
         thermlog_file,
-        year,
-        day,
-        hour=hour,
-        minute=minute,
+        start,
         n_hours=n_hours,
-        end_time=end_time,
+        end=end,
     )
 
     return weather, thermlog

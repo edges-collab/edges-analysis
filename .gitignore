@@ -53,3 +53,4 @@ pip-wheel-metadata/
 .ipynb_checkpoints/
 
 /GHAModel_*
+plots/

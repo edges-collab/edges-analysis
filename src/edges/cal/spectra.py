@@ -15,18 +15,21 @@ from numpy.typing import NDArray
 from pygsdata import GSData
 from pygsdata.select import select_freqs, select_times
 
+from edges.io.calobsdef3 import LoadDefEDGES3
+
 from .. import types as tp
 from ..averaging import freqbin, lstbin
 from ..config import config
-from ..io import calobsdef, get_mean_temperature, read_temperature_log
+from ..io import get_mean_temperature, read_temperature_log, LoadDefEDGES3, LoadDefEDGES2
 from ..io.serialization import hickleable
 from ..io.spectra import read_spectra
 from ..logging import logger
 from ..tools import stable_hash
-from . import __version__
+from .. import __version__
 from .dicke import dicke_calibration
 from .thermistor import IgnoreTimesType, ThermistorReadings, ignore_ntimes
-
+from pygsdata.attrs import npfield
+from astropy import units as un
 
 def flag_data_outside_temperature_range(
     temperature_range: tp.TemperatureType
@@ -37,9 +40,9 @@ def flag_data_outside_temperature_range(
     """Get a mask that flags data outside a temperature range."""
     thermistor_temp = thermistor.get_physical_temperature()
     thermistor_times = thermistor.data["times"]
-
+    
     # Cut on temperature.
-    if not hasattr(temperature_range, "__len__"):
+    if isinstance(temperature_range, un.Quantity):
         median = np.median(thermistor_temp)
         temp_range = (
             median - temperature_range / 2,
@@ -50,7 +53,7 @@ def flag_data_outside_temperature_range(
 
     temp_mask = np.zeros(len(spec_times), dtype=bool)
     for i, c in enumerate(thermistor.get_thermistor_indices(spec_times)):
-        if c is None:
+        if c is None or np.isnan(c):
             temp_mask[i] = False
         else:
             temp_mask[i] = (thermistor_temp[c] >= temp_range[0]) & (
@@ -157,8 +160,9 @@ class LoadSpectrum:
 
     q: GSData = attrs.field()
     variance: GSData | None = attrs.field(default=None)
-    temp_ave: float = attrs.field()
-    _metadata: dict[str, Any] = attrs.field(factory=dict)
+    temp_ave: tp.TemperatureType = npfield(
+        possible_ndims=(0, 1,), unit=un.K,
+    )
 
     @q.validator
     def _q_vld(self, att, val):
@@ -174,41 +178,30 @@ class LoadSpectrum:
             return
         
         if val.data.shape != self.q.data.shape:
-            raise ValueError("variance must be an array with the same shape as q.data")
+            raise ValueError("variance must be the same shape as q")
 
-    @classmethod
-    def from_h5(cls, path: str | Path):
-        """Read the contents of a .h5 file into a LoadSpectrum."""
-        q = GSData.from_file(path, group="q")
-        variance = GSData.from_file(path, group="variance")
-
-        with h5py.File(path, "r") as fl:
-            temp_ave = fl.attrs["temp_ave"]
-
-        return cls(q=q, variance=variance, temp_ave=temp_ave)
-
-    def write_h5(self, path: str | Path):
-        self.q.write_gsh5(path, group="/q")
-        self.variance.write_gsh5(path, group="/variance")
-        with h5py.File(path, "a") as fl:
-            fl.attrs["temp_ave"] = self.temp_ave
-
+    @property
+    def freqs(self) -> tp.FreqType:
+        """The frequencies at which the spectrum is measured."""
+        return self.q.freqs
+    
     @classmethod
     def from_loaddef(
         cls,
-        loaddef: calobsdef.LoadDefEDGES2,
+        loaddef: LoadDefEDGES2 | LoadDefEDGES3,
         # load_name: str,
         f_low=40.0 * un.MHz,
         f_high=np.inf * un.MHz,
         f_range_keep: tuple[tp.FreqType, tp.FreqType] | None = None,
         freq_bin_size=1,
         ignore_times: IgnoreTimesType = 5.0 * un.percent,
-        temperature_range: float | tuple[float, float] | None = None,
+        temperature_range: tp.TemperatureType | tuple[tp.TemperatureType, tp.TemperatureType] | None = None,
         frequency_smoothing: str = "bin",
         time_coordinate_swpos: int = 0,
         invalidate_cache: bool = False,
+        cache_dir: Path | None = None,
         temperature: tp.TemperatureType | None = None,
-        **kwargs,
+        allow_closest_time: bool = True,
     ):
         """Instantiate the class from a given load name and directory.
 
@@ -235,30 +228,28 @@ class LoadSpectrum:
         -------
         :class:`LoadSpectrum`.
         """
-        cache_dir = config["cal"]["cache-dir"]
-        if not invalidate_cache:
+        if cache_dir is not None:
+            cache_dir = Path(cache_dir)
+
             sig = inspect.signature(cls.from_loaddef)
             lc = locals()
             defining_dict = {
                 p: lc[p] for p in sig.parameters if p not in ["cls", "caldef"]
             }
-            defining_dict["spec"] = loaddef.spectra
-            defining_dict["res"] = loaddef.thermistor
+            defining_dict["files"] = loaddef
 
             hsh = stable_hash((
                 *tuple(defining_dict.values()),
                 __version__.split(".")[0],
             ))
 
-            if cache_dir is not None:
-                cache_dir = Path(cache_dir)
-                fname = cache_dir / f"{loaddef.name}_{hsh}.gsh5"
+            fname = cache_dir / f"{loaddef.name}_{hsh}.gsh5"
 
-                if fname.exists():
-                    logger.info(
-                        f"Reading in previously-created integrated {loaddef.name} spectra..."
-                    )
-                    return cls.from_h5(fname)
+        if not invalidate_cache and cache_dir is not None and fname.exists():
+            logger.info(
+                f"Reading in previously-created integrated {loaddef.name} spectra..."
+            )
+            return cls.from_file(fname)
 
         data: GSData = read_spectra(loaddef.spectra)
 
@@ -285,6 +276,10 @@ class LoadSpectrum:
         if temperature is None:
             if thermistor is not None:
                 temperature = np.nanmean(thermistor.get_physical_temperature())
+            elif loaddef.templog is None:
+                raise ValueError(
+                    f"templog doesn't exist, and no source temperature passed for {loaddef.name}"
+                )
             else:
                 start = data.times.min()
                 end = data.times.max()
@@ -305,17 +300,6 @@ class LoadSpectrum:
             q=meanq,
             variance=varq,
             temp_ave=temperature,
-            # metadata={
-            #     "spectra_path": spec[0].path,
-            #     "resistance_path": res.path,
-            #     "freq_bin_size": freq_bin_size,
-            #     "pre_smooth_freq_range": (f_low, f_high),
-            #     "ignore_times_percent": ignore_times_percent,
-            #     "temperature_range": temperature_range,
-            #     "hash": hsh,
-            #     "frequency_smoothing": frequency_smoothing,
-            # },
-            # **kwargs,
         )
 
         if f_range_keep is not None:
@@ -324,117 +308,16 @@ class LoadSpectrum:
         if cache_dir is not None:
             if not cache_dir.exists():
                 cache_dir.mkdir(parents=True)
-            out.write_h5(fname)
+            out.write(fname)
 
         return out
-
-    # @classmethod
-    # def from_edges3(
-    #     cls,
-    #     loaddef: calobsdef3.LoadDefEDGES3,
-    #     f_low=40.0 * un.MHz,
-    #     f_high=np.inf * un.MHz,
-    #     f_range_keep: tuple[tp.FreqType, tp.FreqType] | None = None,
-    #     freq_bin_size=1,
-    #     frequency_smoothing: str = "bin",
-    #     temperature: float | None = None,
-    #     allow_closest_time: bool = False,
-    #     cache_dir: str | Path | None = None,
-    #     invalidate_cache: bool = False,
-    #     **kwargs,
-    # ):
-    #     """Instantiate the class from a given load name and directory.
-
-    #     Parameters
-    #     ----------
-    #     freqeuncy_smoothing
-    #         How to average frequency bins together. Default is to merely bin them
-    #         directly. Other options are 'gauss' to do Gaussian filtering (this is the
-    #         same as Alan's C pipeline).
-    #     ignore_times_percent
-    #         The fraction of readings to ignore at the start of the observation. If
-    #         greater than 100, will be interpreted as being a number of seconds to
-    #         ignore.
-    #     allow_closest_time
-    #         If True, allow the closest time in the temperature table that corresponds
-    #         to the range of times in the spectra to be used if none are within the
-    #         range.
-    #     kwargs :
-    #         All other arguments to :class:`LoadSpectrum`.
-
-    #     Returns
-    #     -------
-    #     :class:`LoadSpectrum`.
-    #     """
-    #     if not invalidate_cache:
-    #         sig = inspect.signature(cls.from_edges3)
-    #         lc = locals()
-    #         defining_dict = {
-    #             p: lc[p] for p in sig.parameters if p not in ["cls", "invalidate_cache"]
-    #         }
-    #         hsh = stable_hash(
-    #             (*tuple(defining_dict.values()), __version__.split(".")[0])
-    #         )
-
-    #         cache_dir = cache_dir or config["cal"]["cache-dir"]
-    #         if cache_dir is not None:
-    #             cache_dir = Path(cache_dir)
-    #             fname = cache_dir / f"{load_name}_{hsh}.h5"
-
-    #             if fname.exists():
-    #                 logger.info(f"Reading in cached integrated {load_name} spectra...")
-    #                 return cls.from_h5(fname)
-
-    #     spec: GSData = loaddef.get_spectra(load_name).get_data()
-    #     mean, variance = get_ave_and_var_spec(
-    #         data = spec,
-    #         load_name=load_name,
-    #         frequency_smoothing=frequency_smoothing,
-    #         f_low=f_low, f_high=f_high,
-    #         freq_bin_size=freq_bin_size,
-    #     )
-
-    #     if temperature is None:
-    #         start = spec.times.min()
-    #         end = spec.times.max()
-    #         table = loaddef.get_temperature_table()
-
-    #         if (
-    #             not np.any((table["time"] >= start) & (table["time"] <= end))
-    #             and allow_closest_time
-    #         ):
-    #             start = table["time"][np.argmin(np.abs(table["time"] - start))]
-    #             end = table["time"][np.argmin(np.abs(table["time"] - end))]
-
-    #         temperature = calobsdef3.get_mean_temperature(
-    #             table,
-    #             load=load_name,
-    #             start_time=start,
-    #             end_time=end,
-    #         ).to_value("K")
-
-    #     out = cls(
-    #         q = mean,
-    #         variance=variance,
-    #         temp_ave = temperature,
-    #     )
-
-    #     if f_range_keep is not None:
-    #         out = out.between_freqs(*f_range_keep)
-
-    #     if cache_dir is not None:
-    #         if not cache_dir.exists():
-    #             cache_dir.mkdir(parents=True)
-    #         out.write_h5(fname)
-
-    #     return out
 
     def between_freqs(self, f_low: tp.FreqType, f_high: tp.FreqType = np.inf * un.MHz):
         """Return a new LoadSpectrum that is masked between new frequencies."""
         return attrs.evolve(
             self,
             q=select_freqs(self.q, freq_range=(f_low, f_high)),
-            variance=select_freqs(self.variance, freq_range=(f_low, f_high)),
+            variance=select_freqs(self.variance, freq_range=(f_low, f_high)) if self.variance is not None else None,
         )
 
     @property
@@ -453,13 +336,3 @@ class LoadSpectrum:
     def variance_Q(self) -> np.ndarray:
         """Variance of Q across time (see averaged_Q)."""
         return self.variance.data[0, 0, 0]
-
-    # @property
-    # def averaged_spectrum(self) -> np.ndarray:
-    #     """T* = T_noise * Q  + T_load."""
-    #     return self.averaged_Q * self.t_load_ns + self.t_load
-
-    # @property
-    # def variance_spectrum(self) -> np.ndarray:
-    #     """Variance of uncalibrated spectrum across time (see averaged_spectrum)."""
-    #     return self.variance_Q * self.t_load_ns**2

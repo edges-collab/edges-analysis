@@ -21,8 +21,6 @@ def run_filter_check(data: GSData, fnc: callable, **kwargs):
         assert fnc.__name__ in new_data.flags
         assert len(new_data.flags) - len(data.flags) == 1
     else:
-        print(len(new_data))
-        print(len(data))
         for nd, d in zip(new_data, data, strict=False):
             assert nd.data.shape == d.data.shape
             assert fnc.__name__ in nd.flags

@@ -11,7 +11,7 @@ import h5py
 from ..tools import ComplexSpline, Spline
 from .noise_waves import get_linear_coefficients
 from edges.modelling import Model, CompositeModel
-from .s11 import S11Model
+from .s11 import CalibratedS11
 from .load_data import Load
 
 class CalFileReadError(Exception):
@@ -20,35 +20,33 @@ class CalFileReadError(Exception):
 @hickleable
 @attrs.define(kw_only=True, frozen=True)
 class Calibrator:
-    freq: tp.FreqType = attrs.field()
+    freqs: tp.FreqType = attrs.field(eq=attrs.cmp_using(eq=np.allclose))
 
-    C1: tp.FloatArray = attrs.field()
-    C2: tp.FloatArray = attrs.field()
-    Tunc: tp.FloatArray = attrs.field()
-    Tcos: tp.FloatArray = attrs.field()
-    Tsin: tp.FloatArray = attrs.field()
+    Tsca: tp.FloatArray = attrs.field(eq=attrs.cmp_using(eq=np.allclose))
+    Toff: tp.FloatArray = attrs.field(eq=attrs.cmp_using(eq=np.allclose))
+    Tunc: tp.FloatArray = attrs.field(eq=attrs.cmp_using(eq=np.allclose))
+    Tcos: tp.FloatArray = attrs.field(eq=attrs.cmp_using(eq=np.allclose))
+    Tsin: tp.FloatArray = attrs.field(eq=attrs.cmp_using(eq=np.allclose))
     
-    receiver_s11: tp.ComplexArray = attrs.field()
-
-    t_load: float = attrs.field(default=300)
-    t_load_ns: float = attrs.field(default=350)
-
+    receiver_s11: tp.ComplexArray = attrs.field(eq=attrs.cmp_using(eq=np.allclose))
+    unit: un.Unit = attrs.field(default=un.K)
+    
     def get_modelled(
         self, 
-        thing: Literal['C1', 'C2', 'Tunc', 'Tcos', 'Tsin'],
+        thing: Literal['Tsca', 'Toff', 'Tunc', 'Tcos', 'Tsin'],
         freq: tp.FreqType,
         model: Callable | Model | None = None,
     ) -> np.ndarray:
         """Evaluate a quantity at particular frequencies."""
         if not hasattr(self, thing):
-            raise ValueError(f"thing must be one of C1, C2, Tunc, Tcos, Tsin or receiver_s11, got {thing}")
+            raise ValueError(f"thing must be one of Tsca, Toff, Tunc, Tcos, Tsin or receiver_s11, got {thing}")
         
-        fqin = self.freq.to_value("MHz")
+        fqin = self.freqs.to_value("MHz")
         fqout = freq.to_value("MHz")
         this = getattr(self, thing)
         
         if model is None:
-            model = partial(ComplexSpline, k=3) if np.iscomplex(this) else partial(Spline, k=3)
+            model = partial(ComplexSpline, k=3) if np.iscomplexobj(this) else partial(Spline, k=3)
         
         if isinstance(model, Model):
             if thing == 'receiver_s11':
@@ -75,134 +73,171 @@ class Calibrator:
     
     def get_linear_coefficients(
         self, 
-        ant_s11: S11Model | tp.ComplexArray,
-        freq: tp.FreqType | None = None, 
+        ant_s11: CalibratedS11 | tp.ComplexArray,
+        freqs: tp.FreqType | None = None, 
         models: dict[str, Callable | Model | None] | None = None
     ):
+        """Return the frequency-dependent linear coefficients required to calibrate.
+        
+        The returned coefficients a and b are such that 
+        
+        T_cal = a*Q + b
+        """
         if models is None:
             models = {}
             
-        if freq is None:
-            freq = self.freq
-            
-            if isinstance(ant_s11, S11Model):
-                ant_s11 = ant_s11.s11_model(freq)
-        
-            c1 = self.C1
-            c2 = self.C2
+        if freqs is None or (
+            len(freqs)==len(self.freqs) and  np.allclose(freqs, self.freqs)
+        ):
+            freqs = self.freqs
+                    
+            tsca = self.Tsca
+            toff = self.Toff
             tunc = self.Tunc
             tcos = self.Tcos
             tsin = self.Tsin
             rcv  = self.receiver_s11
         else:
-            c1 = self.get_modelled('C1', freq, model=models.get("C1"))
-            c2 = self.get_modelled('C1', freq, model=models.get("C2"))
-            tunc = self.get_modelled('C1', freq, model=models.get("Tunc"))
-            tcos = self.get_modelled('C1', freq, model=models.get("Tcos"))
-            tsin = self.get_modelled('C1', freq, model=models.get("Tsin"))
-            rcv = self.get_modelled('C1', freq, model=models.get("receiver_s11"))
+            tsca = self.get_modelled('Tsca', freqs, model=models.get("Tsca"))
+            toff = self.get_modelled('Toff', freqs, model=models.get("Toff"))
+            tunc = self.get_modelled('Tunc', freqs, model=models.get("Tunc"))
+            tcos = self.get_modelled('Tcos', freqs, model=models.get("Tcos"))
+            tsin = self.get_modelled('Tsin', freqs, model=models.get("Tsin"))
+            rcv = self.get_modelled('receiver_s11', freqs, model=models.get("receiver_s11"))
             
-        if len(ant_s11) != len(freq):
+        if isinstance(ant_s11, CalibratedS11):
+            if ant_s11.s11.size != freqs.size or not np.allclose(ant_s11.freqs, freqs):
+                ant_s11 = ant_s11.smoothed(freqs=freqs).s11
+                
+        elif len(ant_s11) != len(freqs):
             raise ValueError("ant_s11 was given as an array, but does not have the same shape as the frequencies!")
        
-        return get_linear_coefficients(
+        a, b = get_linear_coefficients(
             gamma_ant=ant_s11,
             gamma_rec=rcv,
-            sca =c1,
-            off = c2,
+            t_sca = tsca,
+            t_off = toff,
             t_unc=tunc,
             t_cos=tcos,
             t_sin=tsin,
-            t_load=self.t_load,
         )
-
+        a <<= self.unit
+        b <<= self.unit
+        return a, b
+    
     def calibrate_load(
         self,
         load: Load,
         models: dict[str, Callable | Model | None] | None = None
     ) -> tp.TemperatureType:
-        return self.calibrate_q(load.averaged_Q, ant_s11=load.s11_model, models=models)
+        """Calibrate a :class:`Load` object, returning the calibrated temperature."""
+        return self.calibrate_q(
+            load.averaged_Q, 
+            ant_s11=load.s11.s11, 
+            freqs=load.freqs,
+            models=models
+        )
     
-    def calibrate_temp(
+    def calibrate_q(
         self, 
-        temp: tp.TemperatureType, 
-        ant_s11: S11Model | tp.ComplexArray,
-        freq: tp.FreqType | None = None,
+        q: np.ndarray,
+        ant_s11: CalibratedS11 | tp.ComplexArray,
+        freqs: tp.FreqType | None = None,
         models: dict[str, Callable | Model | None] | None= None
     ) -> tp.TemperatureType:
         """
-        Calibrate given uncalibrated spectrum.
+        Calibrate power-ratio measurements.
 
         Parameters
         ----------
-        freq : np.ndarray
-            The frequencies at which to calibrate
-        temp :  np.ndarray
-            The temperatures to calibrate (in K).
-        ant_s11 : np.ndarray
+        q
+            The power-ratio measurements.            
+        ant_s11
             The antenna S11 for the load.
-
+        freqs
+            The frequencies at which to calibrate
+        models
+            A dictionary of models to use to interpolate the calibration
+            coefficients. If None, interpolate with splines.
+            
         Returns
         -------
         temp : np.ndarray
             The calibrated temperature.
         """
-        a, b = self.get_linear_coefficients(freq=freq, ant_s11=ant_s11, models=models)
-        return temp * a + b
+        a, b = self.get_linear_coefficients(freqs=freqs, ant_s11=ant_s11, models=models)
+        return q * a + b
 
-    def decalibrate_temp(
-        self, temp: tp.TemperatureType, 
-        ant_s11: S11Model | tp.ComplexArray, freq: tp.FreqType | None = None, models: dict[str, Callable | Model | None] | None = None) -> tp.TemperatureType:
+    def decalibrate(
+        self, 
+        temp: tp.TemperatureType, 
+        ant_s11: CalibratedS11 | tp.ComplexArray, 
+        freqs: tp.FreqType | None = None, 
+        models: dict[str, Callable | Model | None] | None = None
+    ) -> tp.TemperatureType:
         """
         De-calibrate given calibrated spectrum.
 
         Parameters
         ----------
-        freq : np.ndarray
-            The frequencies at which to calibrate
-        temp :  np.ndarray
-            The temperatures to calibrate (in K).
-        ant_s11 : np.ndarray
+        temp
+            The spectrum to decalibrate (in K)
+        ant_s11
             The antenna S11 for the load.
-
+        freqs
+            The frequencies at which to calibrate
+        models
+            A dictionary of models to use to interpolate the calibration
+            coefficients. If None, interpolate with splines.
+            
         Returns
         -------
-        temp : np.ndarray
-            The calibrated temperature.
+        q
+            The uncalibrated power-ratio.
 
         Notes
         -----
-        Using this and then :meth:`calibrate_temp` immediately should be an identity
+        Using this and then :meth:`calibrate_q` immediately should be an identity
         operation.
         """
-        a, b = self.get_linear_coefficients(freq=freq, ant_s11=ant_s11, models=models)
+        a, b = self.get_linear_coefficients(freqs=freqs, ant_s11=ant_s11, models=models)
         return (temp - b) / a
 
-    def calibrate_q(
+    def calibrate_approximate_temperature(
         self, 
-        q: tp.TemperatureType, 
-        ant_s11: S11Model | tp.ComplexArray,
-        freq: tp.FreqType | None = None,
+        temp: tp.FloatArray, 
+        t_load: float, 
+        t_load_ns: float,
+        ant_s11: CalibratedS11 | tp.ComplexArray,
+        freqs: tp.FreqType | None = None,
         models: dict[str, Callable | Model | None]  | None = None
     ) -> tp.TemperatureType:
         """
-        Calibrate given power ratio spectrum.
+        Calibrate "approximate" temperatures, Tapprox = t_load_ns*Q + t_load
 
         Parameters
         ----------
-        freq : np.ndarray
-            The frequencies at which to calibrate
-        q :  np.ndarray
-            The power ratio to calibrate.
-        ant_s11 : np.ndarray
+        temp
+            The approximate temperature to calibrate.
+        t_load
+            The "guess" of the load temperature
+        t_load_ns
+            The guess of the load+noise-source temperature.
+        ant_s11
             The antenna S11 for the load.
-
+        freqs
+            The frequencies at which to calibrate
+        models
+            A dictionary of models to use to interpolate the calibration
+            coefficients. If None, interpolate with splines.
+        
         Returns
         -------
         temp : np.ndarray
             The calibrated temperature.
         """
-        uncal_temp = self.t_load_ns * q + self.t_load
-
-        return self.calibrate_temp(freq, uncal_temp, ant_s11, models=models)
+        q = (temp - t_load)/t_load_ns
+        return self.calibrate_q(
+            freqs=freqs, q=q, ant_s11=ant_s11, models=models
+        )
 

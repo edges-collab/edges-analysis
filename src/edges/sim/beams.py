@@ -17,6 +17,7 @@ from edges.data import BEAM_PATH
 from ..config import config
 from ..io.serialization import hickleable
 from ..units import vld_unit
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -216,7 +217,7 @@ class Beam:
         )
 
     @classmethod
-    def from_ideal(cls, delta_f=2, f_low=40, f_high=200, delta_az=1, delta_el=1):
+    def uniform(cls, delta_f=2, f_low=40, f_high=200, delta_az=1, delta_el=1):
         """Create an ideal beam that is completely unity."""
         freq = np.arange(f_low, f_high, delta_f)
         az = np.arange(0, 360, delta_az)
@@ -242,8 +243,8 @@ class Beam:
             The azimuth of the primary antenna axis, in degrees.
         """
         filename = Path(path)
-
-        data = np.genfromtxt(str(filename))
+        t0 = time.time()
+        data = np.loadtxt(str(filename), usecols=list(range(2, 93)))
         frequency = []
         with filename.open("r") as fl:
             for line in fl:
@@ -255,7 +256,7 @@ class Beam:
         # Loading data and convert to linear representation
         beam_maps = np.zeros((len(frequency), 91, 360))
         for i in range(len(frequency)):
-            beam_maps[i] = (10 ** (data[(i * 360) : ((i + 1) * 360), 2::] / 10)).T
+            beam_maps[i] = (10 ** (data[(i * 360) : ((i + 1) * 360)] / 10)).T
 
         # Shifting beam relative to true AZ (referenced at due North)
         # Due to angle of orientation of excited antenna panels relative to due North
@@ -617,7 +618,7 @@ class Beam:
             "pchip",
             "spline",
             "sphere-spline",
-        ] = "sphere-spline",
+        ] = "linear",
     ) -> callable[[np.ndarray, np.ndarray], np.ndarray]:
         """Return a callable function that interpolates the beam.
 

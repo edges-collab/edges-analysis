@@ -96,9 +96,10 @@ def read_s1p(
     f = d[:, 0] * un.Hz
 
     # Restrict to frequency range.
-    d = d[get_mask(f, f_low, f_high)]
+    mask = get_mask(f, f_low, f_high)
+    d = d[mask]
 
-    table = QTable({"frequency": f * un.Hz})
+    table = QTable({"frequency": f[mask]})
 
     if flag == "DB":
         table["s11"] = 10 ** (d[:, 1] / 20) * (
@@ -125,25 +126,31 @@ def read_s1p(
 @attrs.define
 class SParams:
     freq: tp.FreqType = attrs.field()
-    s11: np.ndarray | None = attrs.field()
-    s12: np.ndarray | None = attrs.field()
-    s21: np.ndarray | None = attrs.field()
-    s22: np.ndarray | None = attrs.field()
+    s11: np.ndarray | None = attrs.field(default=None)
+    s12: np.ndarray | None = attrs.field(default=None)
+    s21: np.ndarray | None = attrs.field(default=None)
+    s22: np.ndarray | None = attrs.field(default=None)
 
     @s11.validator
     @s12.validator
     @s21.validator
     @s22.validator
     def _check_dims(self, attribute, value):
-        if value is not None and value.shape != self.freq.shape:
+        if value is None:
+            return
+        
+        if value.shape != self.freq.shape:
             raise ValueError(
                 f"Shape of {attribute.name} does not match shape of frequency"
             )
+            
+        if not np.iscomplexobj(value):
+            raise ValueError("s-parameters must be complex")
 
     @freq.validator
     def _check_freq(self, attribute, value):
         if not value.unit.is_equivalent(un.Hz):
-            raise ValueError("Frequency must be in units of Hz")
+            raise ValueError(f"Frequency must be in units of Hz, got {value.unit}")
 
         if value.ndim != 1:
             raise ValueError("Frequency must be 1D")
@@ -176,5 +183,5 @@ class SParams:
         f_high: tp.FreqType = np.inf * un.MHz,
     ):
         """Read an S1P file."""
-        table = read_s1p(path)
-        return cls.from_table(table, f_low, f_high)
+        table = read_s1p(path, f_low, f_high)
+        return cls.from_table(table)

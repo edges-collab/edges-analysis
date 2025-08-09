@@ -3,8 +3,8 @@ import numpy as np
 from astropy import units as un
 from .. import reflection_coefficient as rc
 
-from ...io import calobsdef, calobsdef3
-from ..s11 import StandardsReadings, S11Model
+from ...io import calobsdef
+from ..s11 import StandardsReadings, CalibratedS11
 from ...io.vna import SParams
 from astropy.constants import c as speed_of_light
 from edges import types as tp
@@ -17,7 +17,7 @@ def correct_receiver_for_extra_cable(
     cable_loss_percent: float = 0.0,
     cable_dielectric_percent: float = 0.0,
 ) -> tp.ComplexArray:
-    s11, s12 = rc.path_length_correction_edges3(
+    _, s11, s12 = rc.path_length_correction_edges3(
         freq=freq,
         delay=cable_length / speed_of_light,
         gamma_in=0,
@@ -29,10 +29,9 @@ def correct_receiver_for_extra_cable(
     if cable_length > 0.0:
         return rc.gamma_embed(smatrix, s11_in)
     else:
-        return rc.gamma_de_embed(smatrix, s11_in)
+        return rc.gamma_de_embed(s11_in, smatrix)
 
 # Constructor Methods
-@classmethod
 def get_receiver_s11model_from_filespec(
     pathspec: calobsdef.ReceiverS11 | Sequence[calobsdef.ReceiverS11],
     calkit: rc.Calkit = rc.AGILENT_85033E,
@@ -42,8 +41,7 @@ def get_receiver_s11model_from_filespec(
     cable_length: tp.LengthType = 0.0 * un.cm,
     cable_loss_percent: float = 0.0,
     cable_dielectric_percent: float = 0.0,
-    **kwargs,
-) -> S11Model:
+) -> CalibratedS11:
     """
     Create an instance from a given path.
 
@@ -55,8 +53,6 @@ def get_receiver_s11model_from_filespec(
         The run to use for the LNA (default latest available).
     run_num_switch : int
         The run to use for the switching state (default lastest available).
-    kwargs
-        All other arguments passed through to :class:`S11Model`.
 
     Returns
     -------
@@ -87,28 +83,4 @@ def get_receiver_s11model_from_filespec(
 
         s11s.append(calibrated_s11)
 
-    metadata = {"pathspecs": pathspec, "calkit": calkit}
-
-    return S11Model(
-        raw_s11=np.mean(s11s, axis=0), freq=freq, metadata=metadata, **kwargs
-    )
-
-# @classmethod
-# def get_receiver_s11model_from_edges3_files(
-#     obs: calobsdef3.ReceiverS11,
-#     calkit: rc.Calkit = rc.AGILENT_ALAN,
-#     f_low=0.0 * un.MHz,
-#     f_high=np.inf * un.MHz,
-#     **kwargs,
-# ) -> S11Model:
-#     """Create a Receiver object from the EDGES-3 receiver."""
-#     standards = StandardsReadings.from_io(obs.calkit, f_low=f_low, f_high=f_high)
-#     receiver_reading = SParams.from_s1p_file(obs.device, f_low=f_low, f_high=f_high)
-
-#     freq = standards.freq
-#     smatrix = rc.SMatrix.from_calkit_and_vna(calkit, standards)
-#     calibrated_s11 = rc.gamma_de_embed(receiver_reading.s11, smatrix)
-
-
-
-#     return S11Model(raw_s11=calibrated_s11_raw, freq=freq, **kwargs)
+    return CalibratedS11(s11=np.mean(s11s, axis=0), freqs=freq)

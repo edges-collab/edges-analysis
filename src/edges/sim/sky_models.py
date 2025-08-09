@@ -157,7 +157,7 @@ class SkyModel:
             return
         if value.shape != self.temperature.shape:
             raise ValueError("pixel_res must have same shape as temperature")
-        if not value.dtype == float:
+        if value.dtype != float:
             raise ValueError("pixel_res must be float dtype")
 
     def at_freq(
@@ -258,6 +258,20 @@ class SkyModel:
             pixel_res=(np.pi / 512.0)
             * (2 * np.pi / 1024.0)
             * np.cos(glat.flatten() * np.pi / 180.0),
+        )
+        
+    @classmethod
+    def uniform_healpix(cls, frequency: float, temperature: float = 1000.0, nside: int=32):
+        """Create a uniform sky model."""
+        hp = ahp.HEALPix(nside=nside, order="nested", frame=Galactic())
+        coords = hp.healpix_to_skycoord(np.arange(hp.npix))
+
+        return cls(
+            frequency=frequency,
+            temperature=temperature * np.ones(len(coords)),
+            coords=coords,
+            name='uniform',
+            healpix=hp,
         )
 
 

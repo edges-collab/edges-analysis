@@ -4,11 +4,9 @@ import hickle
 import numpy as np
 import pytest
 from astropy import units as un
-
-from edges.analysis.calibration import loss
-
-from . import DATA_PATH
-
+from pathlib import Path
+from edges.analysis import loss
+from edges.cal.s11.base import CalibratedS11
 
 def test_no_band():
     with pytest.raises(ValueError, match="you must provide 'band'"):
@@ -27,11 +25,19 @@ class TestLow2BalunConnectorLoss:
 
         assert bcloss.shape == fq.shape
 
-    def test_other_s11_inputs(self):
-        fq = np.linspace(50, 100, 51) * un.MHz
-        s11file = DATA_PATH / "2015_ants11_modelled_redone.h5"
-        bcloss = loss.low2_balun_connector_loss(fq, ants11=s11file)
+    def test_other_s11_inputs(self, tmp_path: Path):
+        
+        s11 = CalibratedS11(
+            freqs=np.linspace(50, 100, 100)*un.MHz, 
+            s11=np.zeros(100, dtype=complex)
+        )
+        fq = np.linspace(50, 100, 100) * un.MHz
+        
+        # S11Model object
+        bcloss = loss.low2_balun_connector_loss(fq, ants11=s11)
         assert bcloss.shape == fq.shape
 
-        bcloss2 = loss.low2_balun_connector_loss(fq, hickle.load(s11file))
+        # Hickled file
+        s11.write(tmp_path / 'tmp-ant.h5')
+        bcloss2 = loss.low2_balun_connector_loss(fq, tmp_path / 'tmp-ant.h5')
         assert np.allclose(bcloss, bcloss2)

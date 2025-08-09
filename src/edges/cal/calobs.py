@@ -8,36 +8,25 @@ a one-stop interface for everything related to calibration.
 from __future__ import annotations
 
 import copy
-import warnings
-from collections import deque
-from collections.abc import Callable, Sequence
-from functools import partial
-from pathlib import Path
-from types import SimpleNamespace
 from typing import Any, Self
 
 import attrs
-import h5py
-import hickle
 import numpy as np
 from astropy import units as un
 from astropy.convolution import Gaussian1DKernel, convolve
-from astropy.io.misc import yaml as ayaml
-from matplotlib import pyplot as plt
-from scipy.interpolate import InterpolatedUnivariateSpline as Spline
+
+from edges.cal.s11.base import CalibratedSParams
+from edges.cal.s11.s11model import S11ModelParams
 
 from .. import types as tp
-from ..averaging.averaging import bin_array_unweighted
 from ..cached_property import cached_property, safe_property
 from ..io import calobsdef, calobsdef3
 from ..io.serialization import hickleable
-from ..logging import logger
-from ..tools import ComplexSpline
 from . import loss
-from .s11 import S11Model
+from .s11 import CalibratedS11
 from . import noise_waves as rcf
 from . import reflection_coefficient as rc
-from .loss import HotLoadCorrection
+from .loss import LossFunctionGivenSparams
 from .load_data import Load
 from .calibrator import Calibrator
 
@@ -59,24 +48,14 @@ class CalibrationObservation:
         dictionary of load names to Loads
     receiver
         The object defining the reflection coefficient of the receiver.
-    cterms
-        The number of polynomial terms used for the scaling/offset functions
-    wterms
-        The number of polynomial terms used for the noise-wave parameters.
     metadata
         Metadata associated with the data.
     """
 
     loads: dict[str, Load] = attrs.field()
-    receiver: S11Model = attrs.field()
+    receiver: CalibratedS11 = attrs.field()
+    _raw_receiver: CalibratedS11 | None = attrs.field(default=None)
     
-    _metadata: dict[str, Any] = attrs.field(factory=dict, kw_only=True)
-
-    @property
-    def metadata(self):
-        """Metadata associated with the object."""
-        return self._metadata
-
     def __attrs_post_init__(self):
         """Set the loads as attributes directly."""
         for k, v in self.loads.items():
@@ -96,7 +75,6 @@ class CalibrationObservation:
         receiver_kwargs: dict[str, Any] | None = None,
         restrict_s11_model_freqs: bool = True,
         loss_models: dict[str, callable] | None = None,
-        **kwargs,
     ) -> Self:
         """Create the object from an edges-io observation.
 
@@ -142,17 +120,22 @@ class CalibrationObservation:
             range, but the S11 models themselves can be fit over a broader set of
             frequencies.
         """
-        loss_models = loss_models or {}
-        if "hot_load" not in loss_models and caldef.hot_load.sparams_file is not None:
-            loss_models["hot_load"] = HotLoadCorrection.from_file(
-                f_low=f_low, f_high=f_high, path=caldef.hot_load.sparams_file
-            )
-
+        receiver_kwargs = receiver_kwargs or {}
         if "calkit" not in receiver_kwargs:
             receiver_kwargs["calkit"] = rc.get_calkit(
                 rc.AGILENT_85033E, resistance_of_match=caldef.receiver_female_resistance
             )
 
+        loss_models = loss_models or {}
+        if "hot_load" not in loss_models and caldef.hot_load.sparams_file is not None:
+            hot_load_cable_sparams = CalibratedSParams.from_hot_load_semi_rigid(
+                caldef.hot_load.sparams_file, f_low=f_low, f_high=f_high
+            )
+
+
+            loss_models["hot_load"] = LossFunctionGivenSparams(hot_load_cable_sparams)
+
+        
         return cls._from_caldef(
             caldef=caldef, 
             freq_bin_size=freq_bin_size,
@@ -230,14 +213,16 @@ class CalibrationObservation:
         if "hot_load" not in loss_models:
             loss_models["hot_load"] = loss.get_cable_loss_model("UT-141C-SP")
 
+        receiver_kwargs = receiver_kwargs or {}
+        
         default_rcv_kw = {
             'calkit': rc.get_calkit(
                 rc.AGILENT_ALAN,
                 resistance_of_match=49.962 * un.Ohm,
             ),
             "cable_length": 4.26 * un.imperial.inch,
-            "cable_loss":-91.5 * un.percent,
-            "cable_dielectric": -1.24 * un.percent,
+            "cable_loss_percent":-91.5 * un.percent,
+            "cable_dielectric_percent": -1.24 * un.percent,
         }
         receiver_kwargs = default_rcv_kw | receiver_kwargs
         
@@ -330,20 +315,21 @@ class CalibrationObservation:
         f_low = f_low.to("MHz", copy=False)
         f_high = f_high.to("MHz", copy=False)
 
-        receiver = S11Model.from_receiver_filespec(
-            obs=caldef.receiver_s11,
+        rcv_model_params = receiver_kwargs.pop("model_params", S11ModelParams.from_receiver_defaults())
+        raw_receiver = CalibratedS11.from_receiver_filespec(
+            pathspec=caldef.receiver_s11,
             f_low=f_low if restrict_s11_model_freqs else 0 * un.MHz,
             f_high=f_high if restrict_s11_model_freqs else np.inf * un.MHz,
             **receiver_kwargs,
-        ).with_model_delay()
-
+        )
+        
         if "default" not in spectrum_kwargs:
             spectrum_kwargs["default"] = {}
 
         if "freq_bin_size" not in spectrum_kwargs["default"]:
             spectrum_kwargs["default"]["freq_bin_size"] = freq_bin_size
 
-        def get_load(name, ambient_temperature=None):
+        def get_load(name, ambient_temperature=298*un.K):
             return Load.from_caldef(
                 caldef=caldef,
                 load_name=name,
@@ -362,13 +348,28 @@ class CalibrationObservation:
         amb = get_load("ambient")
         loads = {'ambient': amb}
         
-        loads = {
+        loads |= {
             src: get_load(src, ambient_temperature=amb.temp_ave) for src in ('hot_load', 'open', 'short')
         }
+
+        # Smooth the receiver s11
+        receiver = raw_receiver.smoothed(rcv_model_params, freqs=amb.freqs)
+
+        # Smooth the loss models, if necessary:
+        for name, loss_model in loss_models.items():
+            if isinstance(loss_model, LossFunctionGivenSparams) and loss_model.sparams.freqs.size != amb.freqs.size:
+                loss_models[name] = attrs.evolve(
+                    loss_model, 
+                    sparams=loss_model.sparams.smoothed(
+                        params=S11ModelParams.from_hot_load_cable_defaults(), 
+                        freqs=amb.freqs
+                    )
+                )
 
         return cls(
             loads=loads,
             receiver=receiver,
+            raw_receiver=raw_receiver,
             **kwargs,
         )
 
@@ -397,53 +398,31 @@ class CalibrationObservation:
     #     return self.loads[next(iter(self.loads.keys()))].t_load_ns
 
     @cached_property
-    def freq(self) -> tp.FreqType:
+    def freqs(self) -> tp.FreqType:
         """The frequencies at which spectra were measured."""
-        return self.loads[next(iter(self.loads.keys()))].freq
-
-    # @safe_property
-    # def internal_switch(self):
-    #     """The S11 object representing the internal switch."""
-    #     return self.loads[self.load_names[0]].reflections.internal_switch
+        return self.loads[next(iter(self.loads.keys()))].freqs
 
     @safe_property
     def load_names(self) -> tuple[str]:
         """Names of the loads."""
         return tuple(self.loads.keys())
 
-    def averaged_spectrum(self, load: Load):
-        return load.spectrum.q.data.squeeze() * self.t_load_ns + self.t_load
+    def averaged_spectrum(self, load: Load, t_load_ns: float, t_load: float):
+        return load.spectrum.q.data.squeeze() * t_load_ns + t_load
 
 
     @cached_property
     def load_s11_models(self):
         """Dictionary of S11 correction models, one for each source."""
-        try:
-            return dict(self._injected_source_s11s)
-        except (TypeError, AttributeError):
-            return {
-                name: source.s11_model(self.freq.to_value("MHz"))
-                for name, source in self.loads.items()
-            }
+        return {
+            name: source.s11.s11
+            for name, source in self.loads.items()
+        }
 
     @cached_property
-    def source_thermistor_temps(self) -> dict[str, float | np.ndarray]:
+    def source_thermistor_temps(self) -> dict[str, tp.TemperatureType]:
         """Dictionary of input source thermistor temperatures."""
-        if (
-            hasattr(self, "_injected_source_temps")
-            and self._injected_source_temps is not None
-        ):
-            return self._injected_source_temps
         return {k: source.temp_ave for k, source in self.loads.items()}
-
-
-    @cached_property
-    def receiver_s11(self):
-        """The corrected S11 of the LNA evaluated at the data frequencies."""
-        if hasattr(self, "_injected_lna_s11") and self._injected_lna_s11 is not None:
-            return self._injected_lna_s11
-        return self.receiver.s11_model(self.freq.to_value("MHz"))
-
 
     def _load_str_to_load(self, load: Load | str):
         if isinstance(load, str):
@@ -459,20 +438,11 @@ class CalibrationObservation:
             )
         return load
 
-    def get_K(
-        self, freq: tp.FreqType | None = None
-    ) -> dict[str, tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]]:
+    def get_K(self,) -> dict[str, tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]]:
         """Get the source-S11-dependent factors of Monsalve (2017) Eq. 7."""
-        if freq is None:
-            freq = self.freq
-            gamma_ants = self.load_s11_models
-        else:
-            gamma_ants = {
-                name: source.s11_model(freq.to_value("MHz"))
-                for name, source in self.loads.items()
-            }
-
-        lna_s11 = self.receiver.s11_model(freq.to_value("MHz"))
+        gamma_ants = {name: load.s11.s11 for name, load in self.loads.items()}
+        
+        lna_s11 = self.receiver.s11
         return {
             name: rcf.get_K(gamma_rec=lna_s11, gamma_ant=gamma_ant)
             for name, gamma_ant in gamma_ants.items()
@@ -481,7 +451,7 @@ class CalibrationObservation:
     def get_calibration_residuals(self, calibrator: Calibrator) -> dict[str, tp.FloatArray]:
         """Get the residuals of calibrated spectra to the known temperatures."""
         return {
-            name: calibrator.calibrate_Load(load) - load.temp_ave
+            name: calibrator.calibrate_load(load) - load.temp_ave
             for name, load in self.loads.items()
         }
     
@@ -513,148 +483,55 @@ class CalibrationObservation:
         """
         return attrs.evolve(self, **kwargs)
     
+    @property
+    def receiver_s11(self) -> CalibratedS11:
+        """The S11 of the receiver."""
+        return self.receiver.s11
+    
     def inject(
         self,
-        lna_s11: np.ndarray = None,
+        receiver: np.ndarray = None,
         source_s11s: dict[str, np.ndarray] | None = None,
-        c1: np.ndarray = None,
-        c2: np.ndarray = None,
-        t_unc: np.ndarray = None,
-        t_cos: np.ndarray = None,
-        t_sin: np.ndarray = None,
-        averaged_spectra: dict[str, np.ndarray] | None = None,
+        averaged_q: dict[str, np.ndarray] | None = None,
         thermistor_temp_ave: dict[str, np.ndarray] | None = None,
     ) -> Self:
         """Make a new :class:`CalibrationObservation` based on this, with injections.
-
-        Parameters
-        ----------
-        lna_s11
-            The LNA S11 as a function of frequency to inject.
-        source_s11s
-            Dictionary of ``{source: S11}`` for each source to inject.
-        c1
-            Scaling parameter as a function of frequency to inject.
-        c2 : [type], optional
-            Offset parameter to inject as a function of frequency.
-        t_unc
-            Uncorrelated temperature to inject (as function of frequency)
-        t_cos
-            Correlated temperature to inject (as function of frequency)
-        t_sin
-            Correlated temperature to inject (as function of frequency)
-        averaged_spectra
-            Dictionary of ``{source: spectrum}`` for each source to inject.
 
         Returns
         -------
         :class:`CalibrationObservation`
             A new observation object with the injected models.
         """
-        new = self.clone()
-        f = new.freq.to_value("MHz")
-        if lna_s11 is not None:
-            new._injected_lna_s11 = lna_s11
-            new.receiver = SimpleNamespace(s11_model=ComplexSpline(f, lna_s11))
+        fq = self.freqs.to_value("MHz")
 
-        if source_s11s is not None:
-            new._injected_source_s11s = source_s11s
-            new.loads = copy.deepcopy(self.loads)  # make a copy
-            for name, s in source_s11s.items():
-                new.loads[name].reflections = SimpleNamespace(
-                    s11_model=ComplexSpline(f, s)
-                )
-
-        new._injected_c1 = c1
-        new._injected_c2 = c2
-        new._injected_t_unc = t_unc
-        new._injected_t_cos = t_cos
-        new._injected_t_sin = t_sin
-        new._injected_averaged_spectra = averaged_spectra
-        new._injected_source_temps = thermistor_temp_ave
-
-        return new
-
-    @classmethod
-    def from_yaml(cls, config: tp.PathLike | dict, obs_path: tp.PathLike | None = None):
-        """Create the calibration observation from a YAML configuration."""
-        if not isinstance(config, dict):
-            with open(config) as yml:
-                config = ayaml.load(yml)
-
-        iokw = config.pop("data", {})
-
-        if not obs_path:
-            obs_path = iokw.pop("path")
-
-        from_def = iokw.pop("compile_from_def", False)
-
-        if from_def:
-            io_obs = calobsdef.CalibrationObservation.from_def(obs_path, **iokw)
-        else:
-            io_obs = calobsdef.CalibrationObservation(obs_path, **iokw)
-
-        return cls.from_edges2_caldef(io_obs, **config)
+        kw = {}
+        if receiver is not None:
+            receiver = CalibratedS11(s11=receiver, freqs=self.freqs)
+            kw['receiver'] = receiver
+            
+        if source_s11s is not None or averaged_q is not None or thermistor_temp_ave is not None:
+            newloads = copy.deepcopy(self.loads)  # make a copy
+            
+            
+            if source_s11s is not None:
+                for name, s in source_s11s.items():
+                    newloads[name] = attrs.evolve(
+                        newloads[name], 
+                        s11=CalibratedS11(freqs=self.freqs, s11=s)
+                    )
 
 
-def perform_term_sweep(
-    calobs: CalibrationObservation,
-    delta_rms_thresh: float = 0,
-    max_cterms: int = 15,
-    max_wterms: int = 15,
-) -> CalibrationObservation:
-    """For a given calibration definition, perform a sweep over number of terms.
+            if averaged_q is not None or thermistor_temp_ave is not None:
+                for name, s in averaged_q.items():
+                    newloads[name] = attrs.evolve(
+                        newloads[name],
+                        spectrum = attrs.evolve(
+                            newloads[name].spectrum,
+                            q = newloads[name].spectrum.q.update(data=s[None, None, None]),
+                            temp_ave=thermistor_temp_ave.get(name, newloads[name].temp_ave)
+                        )
+                    )
+            
+            kw['loads'] = newloads
+        return self.clone(**kw)
 
-    Parameters
-    ----------
-    calobs: :class:`CalibrationObservation` instance
-        The definition calibration class. The `cterms` and `wterms` in this instance
-        should define the *lowest* values of the parameters to sweep over.
-    delta_rms_thresh : float
-        The threshold in change in RMS between one set of parameters and the next that
-        will define where to cut off. If zero, will run all sets of parameters up to
-        the maximum terms specified.
-    max_cterms : int
-        The maximum number of cterms to trial.
-    max_wterms : int
-        The maximum number of wterms to trial.
-    """
-    cterms = range(calobs.cterms, max_cterms)
-    wterms = range(calobs.wterms, max_wterms)
-
-    winner = np.zeros(len(cterms), dtype=int)
-    rms = np.ones((len(cterms), len(wterms))) * np.inf
-
-    for i, c in enumerate(cterms):
-        for j, w in enumerate(wterms):
-            clb = calobs.clone(cterms=c, wterms=w)
-
-            res = clb.get_load_residuals()
-            dof = sum(len(r) for r in res.values()) - c - w
-
-            rms[i, j] = np.sqrt(
-                sum(np.nansum(np.square(x)) for x in res.values()) / dof
-            )
-
-            logger.info(f"Nc = {c:02}, Nw = {w:02}; RMS/dof = {rms[i, j]:1.3e}")
-
-            # If we've decreased by more than the threshold, this wterms becomes
-            # the new winner (for this number of cterms)
-            if j > 0 and rms[i, j] >= rms[i, j - 1] - delta_rms_thresh:
-                winner[i] = j - 1
-                break
-
-        if i > 0 and rms[i, winner[i]] >= rms[i - 1, winner[i - 1]] - delta_rms_thresh:
-            break
-
-    logger.info(
-        f"Best parameters found for Nc={cterms[i - 1]}, "
-        f"Nw={wterms[winner[i - 1]]}, "
-        f"with RMS = {rms[i - 1, winner[i - 1]]}."
-    )
-
-    best = np.unravel_index(np.argmin(rms), rms.shape)
-    return calobs.clone(
-        cterms=cterms[best[0]],
-        wterms=cterms[best[1]],
-    )

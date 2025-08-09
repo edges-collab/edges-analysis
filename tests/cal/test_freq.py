@@ -13,7 +13,7 @@ def test_edges_freq():
 
 
 def test_edges_freq_limited():
-    freq = edges_raw_freqs(low=50.0 * u.MHz, high=100.0 * u.MHz)
+    freq = edges_raw_freqs(f_low=50.0 * u.MHz, f_high=100.0 * u.MHz)
     assert freq.size == 8193
     assert freq.min() == 50.0 * u.MHz
     assert freq.max() == 100.0 * u.MHz

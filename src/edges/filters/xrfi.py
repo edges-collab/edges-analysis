@@ -874,9 +874,7 @@ def model_filter(
     fit_kwargs = fit_kwargs or {}
 
     threshold = threshold or (
-        min_threshold
-        if not decrement_threshold
-        else min_threshold + 5 * decrement_threshold
+        min_threshold + 5 * decrement_threshold if decrement_threshold else min_threshold
     )
     if not decrement_threshold:
         min_threshold = threshold
@@ -1352,20 +1350,18 @@ def xrfi_model(
 xrfi_model.ndim = (1,)
 
 
-def xrfi_model_nonlinear_window(
+def xrfi_model_sliding_rms_single_pass(
     spectrum: np.ndarray,
     *,
     freq: np.ndarray,
-    model: mdl.mdl.Model,
-    flags=None,
+    model: mdl.mdl.Model = mdl.Polynomial(n_terms=3),
+    flags: np.ndarray | None =None,
+    weights: np.ndarray | None = None,
     window_frac: int = 16,
     min_window_size: int = 10,
-    max_iter: int = 100,
     threshold: float = 2.5,
     watershed: dict | None = None,
-    reflag_thresh: float = 1.01,
     fit_kwargs: dict | None = None,
-    weights: np.ndarray | None,
 ):
     """
     Flag RFI using a model fit and a sliding RMS window.
@@ -1410,15 +1406,6 @@ def xrfi_model_nonlinear_window(
         should be the number of channels to flag on either side of the flagged channel
         for that threshold. For example, ``{3: 2}`` would flag 2 channels on either
         side of any channel that is 3*threshold standard deviations away from zero.
-    reflag_thresh : float, optional
-        The basic algorithm has "memory", i.e. if a channel is flagged in one iteration,
-        it will remain flagged for all following iterations, even if it is no longer
-        an outlier for the updated model. This parameter allows you to re-consider a
-        flag on a later iteration, if it was originally flagged at less than
-        ``reflag_thresh`` times the threshold. This can improve conformity to the
-        results of Bowman+2018, because the model fits are very slightly different
-        between the codes used, but it is very difficult to predict exactly how
-        the parameter will affect the results.
     fit_kwargs : dict, optional
         Any additional keyword arguments to pass to the model fit. Use the key "method"
         with value "alan-qrd" for the closest match to the Bowman+2018 code.
@@ -1441,96 +1428,42 @@ def xrfi_model_nonlinear_window(
     if weights is None:
         weights = (~flags).astype(int)
     else:
+        weights = weights.copy()
         weights[flags] = 0.0
-
-    orig_weights = weights.copy()
 
     n = len(spectrum)
     m = max(n // window_frac, min_window_size)
-    prev_n_flags = 0
 
-    n_flags_changed_list = []
-    total_flags_list = []
-    model_list = []
-    std_list = []
-    flags_list = []
-    potential_reflags = set()
+    fit = fmod.fit(ydata=spectrum, weights=weights, **fit_kwargs)
 
-    for it in range(max_iter):
-        # TODO: pass through fit_kwargs
-        fit = fmod.fit(ydata=spectrum, weights=weights, **fit_kwargs)
+    rms = np.zeros(n)
+    avs = np.zeros(n)
+    for i in range(n):
+        rng = slice(max(i - m, 0), min(n, i + m + 1))
+        size = np.sum(weights[rng])
+        av = np.sum(fit.residual[rng] * weights[rng]) / size
 
-        model_list.append(fit.fit.model)
+        rms[i] = np.sqrt(
+            np.sum((fit.residual[rng] - av) ** 2 * weights[rng]) / size
+        )
+        avs[i] = av
+        if i==14:
+            print(av, rms[i], fit.residual[i])
+        # Now while *INSIDE* the loop over frequencies, apply new flags.
+        nsig = fit.residual[i] / (threshold * rms[i])
 
-        rms = np.zeros(n)
-        avs = np.zeros(n)
-        for i in range(n):
-            rng = slice(max(i - m, 0), min(n, i + m + 1))
-            size = np.sum(weights[rng])
-            av = np.sum(fit.residual[rng] * weights[rng]) / size
+        if nsig > 1:
+            weights[i] = 0
 
-            rms[i] = np.sqrt(
-                np.sum((fit.residual[rng] - av) ** 2 * weights[rng]) / size
-            )
-            avs[i] = av
+            if watershed:
+                for mult, nbins in watershed.items():
+                    if nsig > mult and i + nbins < n and i - nbins >= 0:
+                        weights[i - nbins : i + nbins + 1] = 0
 
-            # Now while *INSIDE* the loop over frequencies, apply new flags.
-            nsig = fit.residual[i] / (threshold * rms[i])
-
-            # If this channel was previously flagged, but only *just*,
-            # give it a chance to get un-flagged. This is useful when
-            # trying to reproduce Alan's results, because the model fit
-            # on the first iteration is much harder to get the same as Alan.
-            if i in potential_reflags and nsig <= 1:
-                weights[i] = 1  # unflag
-
-                if watershed:
-                    for mult, nbins in watershed.items():
-                        if mult < reflag_thresh and i + nbins < n and i - nbins >= 0:
-                            weights[i - nbins : i + nbins + 1] = orig_weights[
-                                i - nbins : i + nbins + 1
-                            ]
-                potential_reflags.remove(i)
-
-            if nsig > 1:
-                weights[i] = 0
-
-                if nsig < reflag_thresh and it < 2:
-                    potential_reflags.add(i)
-
-                if watershed:
-                    for mult, nbins in watershed.items():
-                        if nsig > mult and i + nbins < n and i - nbins >= 0:
-                            weights[i - nbins : i + nbins + 1] = 0
-        n_flags = np.sum(weights == 0)
-        std_list.append(rms)
-        n_flags_changed_list.append(n_flags - prev_n_flags)
-        total_flags_list.append(n_flags)
-        flags_list.append(~(weights.astype(bool)))
-
-        if n_flags <= prev_n_flags:
-            break
-
-        prev_n_flags = n_flags
-
-    return (
-        ~(weights.astype(bool)),
-        ModelFilterInfo(
-            n_flags_changed=n_flags_changed_list,
-            total_flags=total_flags_list,
-            models=model_list,
-            n_iters=it,
-            res_models=[],
-            thresholds=[threshold] * it,
-            stds=std_list,
-            x=freq,
-            data=spectrum,
-            flags=flags_list,
-        ),
-    )
+    return weights==0
 
 
-xrfi_model_nonlinear_window.ndim = (1,)
+xrfi_model_sliding_rms_single_pass.ndim = (1,)
 
 
 def xrfi_watershed(
@@ -1615,7 +1548,7 @@ def _apply_watershed(
     return watershed_flags
 
 
-def visualise_model_info(info: ModelFilterInfo | ModelFilterInfoContainer, n: int = 0):
+def visualise_model_info(info: ModelFilterInfo | ModelFilterInfoContainer, n: int = 0, fig=None, ax=None):
     """
     Make a nice visualisation of the info output from :func:`xrfi_model`.
 
@@ -1627,7 +1560,8 @@ def visualise_model_info(info: ModelFilterInfo | ModelFilterInfoContainer, n: in
         The number of iterations to plot. Default is to plot them all. Negative numbers
         will plot the last n, and positive will plot the first n.
     """
-    _fig, ax = plt.subplots(2, 3, figsize=(10, 6))
+    if fig is None or ax is None:
+        _fig, ax = plt.subplots(2, 3, figsize=(10, 6))
 
     ax[0, 0].plot(info.data, label="Data", color="k")
 

@@ -12,17 +12,14 @@ class StandardsReadings:
     match: SParams = attrs.field(validator=attrs.validators.instance_of(SParams))
 
     @short.validator
-    def _short_vld(self, att, val):
-        if np.any(val.freq != self.open.freq):
-            raise ValueError(
-                "short standard does not have same frequencies as open standard!"
-            )
-
     @match.validator
-    def _match_vld(self, att, val):
+    def _vld(self, att, val):
+        if val.freq.size != self.open.freq.size:
+            raise ValueError(f"{att.name} standard does not have same frequencies")
+
         if np.any(val.freq != self.open.freq):
             raise ValueError(
-                "match standard does not have same frequencies as open standard!"
+                f"{att.name} standard does not have same frequencies as open standard!"
             )
 
     @property
@@ -32,12 +29,7 @@ class StandardsReadings:
 
     @classmethod
     def from_io(cls, paths: calobsdef.Calkit, **kwargs) -> Self:
-        """Instantiate from a given edges-io object.
-
-        Parameters
-        ----------
-        device
-            The device for which the standards were measured.
+        """Instantiate from a given Calkit I/O object.
 
         Other Parameters
         ----------------

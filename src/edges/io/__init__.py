@@ -28,7 +28,7 @@ __all__ = [
     "read_thermlog_file",
     "read_weather_file",
 ]
-
+from . import time_formats
 from .auxiliary import read_auxiliary_data, read_thermlog_file, read_weather_file
 from .calobsdef import Calkit, CalObsDefEDGES2, LoadDefEDGES2, LoadS11, SwitchingState
 from .calobsdef3 import CalObsDefEDGES3, LoadDefEDGES3

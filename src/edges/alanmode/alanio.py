@@ -1,12 +1,24 @@
 """Functions for writing/reading to/from file formats used in the C pipeline."""
+from bidict import bidict
 import numpy as np
-from pygsdata import GSData, Stamp, History
+from pygsdata import GSData, Stamp, History, GSFlag
 from ..cal import Calibrator, CalibrationObservation
 from astropy import units as un
-from edges.cal.loss import HotLoadCorrection
+from edges.cal.loss import LossFunctionGivenSparams
 from .. import types as tp
 from astropy.time import Time
 from ..const import KNOWN_TELESCOPES
+
+# A bi-directional mapping between load-names as used in the C code
+# vs load names in the python code.
+LOADMAP = bidict(
+    {
+        "amb": "ambient",
+        "hot": "hot_load",
+        "open": "open",
+        "short": "short"
+    }
+)
 
 def read_raul_s11_format(fname: tp.PathLike) -> dict[str, np.ndarray]:
     """
@@ -60,10 +72,20 @@ def read_s11_csv(fname) -> tuple[np.ndarray, np.ndarray]:
         s11 = data[:, 1] + data[:, 2] * 1j
     return freq, s11
 
+def write_s11_csv(freq, s11, fname):
+    # write out the CSV file
+    with fname.open("w") as fl:
+        fl.write("BEGIN\n")
+        for freq, s11 in zip(freq, s11, strict=False):
+            fl.write(
+                f"{freq.to_value('MHz'):1.16e},{s11.real:1.16e},{s11.imag:1.16e}\n"
+            )
+        fl.write("END")
+
 
 def read_spec_txt(
     fname: tp.PathLike, 
-    time: Time = Time.now(),
+    time: Time | None = None,
     telescope: str = 'edges-low',
     name: str = ""
 ) -> GSData:
@@ -77,21 +99,29 @@ def read_spec_txt(
     with open(fname) as fl:
         n = int(fl.readline()[31:].split(" ")[0])
 
+    if time is None:
+        time = Time.now()
+        
     return GSData(
         telescope=KNOWN_TELESCOPES.get(telescope),
         data = out['spectra'][None, None, None, :],
         freqs = out['freq']*un.MHz,
-        times = [[time]],
+        times = time + np.zeros((1, 1)) * un.second,
         effective_integration_time = 13.0 * un.second,
         nsamples = out['weight'][None, None, None, :] * n,
-        flags = {'flags': ~(out['weight'].astype(bool))},
+        flags = {'flags': GSFlag(~(out['weight'].astype(bool)), axes=('freq',))},
         history = History([Stamp(f'read from {fname}')]),
         data_unit='uncalibrated_temp',
         name=name
     )
 
 
-def write_spec_txt(freq: np.ndarray | tp.FreqType, n: int | float, spec: np.ndarray, fname: tp.PathLike):
+def write_spec_txt(
+    freq: np.ndarray | tp.FreqType, 
+    n: int | float, 
+    spec: np.ndarray, 
+    fname: tp.PathLike
+):
     """Write an averaged-spectrum file, like spe_<load>r.txt files from edges2k.c."""
     if hasattr(freq, "unit"):
         freq = freq.to_value("MHz")
@@ -99,7 +129,7 @@ def write_spec_txt(freq: np.ndarray | tp.FreqType, n: int | float, spec: np.ndar
     with open(fname, "w") as fl:
         for i, (f, sp) in enumerate(zip(freq, spec, strict=False)):
             if i == 0:
-                fl.write(f"{f:12.6f} {sp:12.6f} {1:4.0f} {n} // temp.acq\n")
+                fl.write(f"{f:12.6f} {sp:12.6f} {1:4.0f} {n:d} // temp.acq\n")
             else:
                 fl.write(f"{f:12.6f} {sp:12.6f} {1:4.0f}\n")
 
@@ -132,15 +162,13 @@ def read_specal(fname: tp.PathLike, t_load: float, t_load_ns: float) -> Calibrat
     data = data[mask]
     
     return Calibrator(
-        freq = data['freq'] * un.MHz,
-        C1 = data['C1'],
-        C2 = data['C2'],
+        freqs = data['freq'] * un.MHz,
+        Tsca = t_load_ns * data['C1'],
+        Toff = t_load - data['C2'],
         Tunc = data['Tunc'],
         Tcos = data['Tcos'],
         Tsin = data['Tsin'],
         receiver_s11 = data['s11lna_real'] + 1j * data['s11lna_imag'],
-        t_load=t_load,
-        t_load_ns = t_load_ns
     )
 
 def read_specal_iter(fname: tp.PathLike) -> np.ndarray:
@@ -182,19 +210,19 @@ def read_alan_calibrated_temp(fname: tp.PathLike) -> np.ndarray:
     )
 
 
-def write_specal(calibrator: Calibrator, outfile: tp.PathLike, precision="10.6f"):
+def write_specal(calibrator: Calibrator, outfile: tp.PathLike, t_load: float, t_load_ns: float, precision="10.6f"):
     """Write a specal file in the same format as those output by the C-code edges3.c."""
-    sca = calibrator.C1
-    ofs = calibrator.C2
+    sca = calibrator.Tsca / t_load_ns
+    ofs = t_load - calibrator.Toff
     tlnau = calibrator.Tunc
     tlnac = calibrator.Tcos
     tlnas = calibrator.Tsin
     lna = calibrator.receiver_s11
     
     with open(outfile, "w") as fl:
-        for i in range(calibrator.freq.size):        
+        for i in range(calibrator.freqs.size):        
             fl.write(
-                f"freq {calibrator.freq[i].to_value('MHz'):{precision}} "
+                f"freq {calibrator.freqs[i].to_value('MHz'):{precision}} "
                 f"s11lna {lna[i].real:{precision}} {lna[i].imag:{precision}} "
                 f"sca {sca[i]:{precision}} ofs {ofs[i]:{precision}} "
                 f"tlnau {tlnau[i]:{precision}} tlnac {tlnac[i]:{precision}} "
@@ -202,20 +230,19 @@ def write_specal(calibrator: Calibrator, outfile: tp.PathLike, precision="10.6f"
             )
 
 
-def write_modelled_s11s(calobs: CalibrationObservation, fname: tp.PathLike):
+def write_modelled_s11s(calobs: CalibrationObservation, fname: tp.PathLike, hot_loss_model = None):
     """Write all modelled S11's in a calobs object to file, in the same format as C.
 
     If a HotLoadCorrection exists, also write the rigid cable S-parameters, as
     edges2k.c does, otherwise assume the edges3.c format.
     """
-    s11m = {name: load.s11_model(calobs.freq) for name, load in calobs.loads.items()}
-    lna = calobs.receiver_s11
-    if isinstance(calobs.hot_load._loss_model, HotLoadCorrection):
-        f = calobs.freq.to_value("MHz")
+    s11m = {name: load.s11.s11 for name, load in calobs.loads.items()}
+    lna = calobs.receiver.s11
+    if isinstance(hot_loss_model, LossFunctionGivenSparams):
         s11m |= {
-            "rig_s11": calobs.hot_load._loss_model.s11_model(f),
-            "rig_s12": calobs.hot_load._loss_model.s12s21_model(f),
-            "rig_s22": calobs.hot_load._loss_model.s22_model(f),
+            "rig_s11": hot_loss_model.sparams.s11,
+            "rig_s12": hot_loss_model.sparams.s12**2,
+            "rig_s22": hot_loss_model.sparams.s22,
         }
 
     with open(fname, "w") as fl:
@@ -227,7 +254,7 @@ def write_modelled_s11s(calobs: CalibrationObservation, fname: tp.PathLike):
             )
             for i, (f, amb, hot, op, sh, rigs11, rigs12, rigs22) in enumerate(
                 zip(
-                    calobs.freq.to_value("MHz"),
+                    calobs.freqs.to_value("MHz"),
                     s11m["ambient"],
                     s11m["hot_load"],
                     s11m["open"],
@@ -256,7 +283,7 @@ def write_modelled_s11s(calobs: CalibrationObservation, fname: tp.PathLike):
             )
             for i, (f, amb, hot, op, sh) in enumerate(
                 zip(
-                    calobs.freq.to_value("MHz"),
+                    calobs.freqs.to_value("MHz"),
                     s11m["ambient"],
                     s11m["hot_load"],
                     s11m["open"],

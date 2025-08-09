@@ -5,25 +5,27 @@ from __future__ import annotations
 import matplotlib.pyplot as plt
 import numpy as np
 
+from edges.cal.s11.s11model import S11ModelParams
+
 from .calobs import CalibrationObservation
 from .calibrator import Calibrator
 from .load_data import Load
 from .spectra import LoadSpectrum
-from astropy.table import QTable
-from .thermistor import get_temperature_thermistor
 from edges.averaging.averaging import bin_array_unweighted
-
+from edges.cal import LoadSpectrum
 
 def plot_raw_spectrum(
-    spectrum, freq=None, fig=None, ax=None, xlabel=True, ylabel=True, **kwargs
+    spectrum: np.ndarray | LoadSpectrum, 
+    freq: np.ndarray | None=None, 
+    fig=None, ax=None, xlabel: bool=True, ylabel: bool=True, **kwargs
 ):
     """
     Make a plot of the averaged uncalibrated spectrum associated with this load.
 
     Parameters
     ----------
-    thermistor : bool
-        Whether to plot the thermistor temperature on the same axis.
+    spectrum
+        The LoadSpectrum object to plot.
     fig : Figure
         Optionally, pass a matplotlib figure handle which will be used to plot.
     ax : Axis
@@ -36,8 +38,8 @@ def plot_raw_spectrum(
         All other arguments are passed to `plt.subplots()`.
     """
     if isinstance(spectrum, LoadSpectrum):
-        freq = spectrum.freq
-        spectrum = spectrum.averaged_spectrum
+        freq = spectrum.freqs
+        spectrum = spectrum.q.data.squeeze()
     else:
         assert freq is not None
 
@@ -51,52 +53,6 @@ def plot_raw_spectrum(
     ax.grid(True)
     if xlabel:
         ax.set_xlabel("Frequency [MHz]")
-
-
-def plot_resistance_measurements(
-    resistance: QTable,
-    quantity="thermistor_temp",
-    ax=None,
-    xlabel="Time",
-) -> plt.Axes:
-    """Plot thermistor measurements against time.
-
-    Parameters
-    ----------
-    resistance
-        Either a structured array, dictionary of standard arrays, or Resistance object
-        from which such data can be read.
-    quantity
-        The quantity in the array to plot. Must be one of the keys in the dict (or names
-        of the array columns), or if `thermistor_temp`, it will be automatically
-        calculated from the given input.
-    ax
-        The axis to make the plot on.
-    xlabel
-        The xlabel to set.
-
-    Returns
-    -------
-    ax
-        The axis on which the plot was made.
-    """
-    if ax is None:
-        _fig, ax = plt.subplots(1, 1)
-
-    try:
-        out = resistance[quantity]
-    except (KeyError, ValueError):
-        if quantity == "thermistor_temp":
-            out = get_temperature_thermistor(resistance["load_resistance"])
-        else:
-            raise
-
-    ax.plot(out)
-
-    if xlabel:
-        ax.set_xlabel(xlabel)
-
-    return ax
 
 def plot_raw_spectra(
     calobs: CalibrationObservation, 
@@ -123,15 +79,89 @@ def plot_raw_spectra(
         )
 
     for i, (name, load) in enumerate(calobs.loads.items()):
-        ax[i].plot(load.freq, calobs.averaged_spectrum(load))
-        ax[i].set_ylabel("$T^*$ [K]")
+        ax[i].plot(load.freqs, load.averaged_Q)
+        ax[i].set_ylabel("$Q$")
         ax[i].set_title(name)
         ax[i].grid(True)
     ax[-1].set_xlabel("Frequency [MHz]")
 
     return fig
 
-def plot_s11_models(calobs: CalibrationObservation, **kwargs):
+def plot_s11_residual(
+    raw_s11: CalibratedS11,
+    s11_model_params: S11ModelParams,
+    load_name: str | None= None,
+    fig=None,
+    ax=None,
+    color_abs="C0",
+    color_diff="g",
+    label=None,
+    title=None,
+    decade_ticks=True,
+    ylabels=True,
+) -> plt.Figure:
+    """
+    Plot the residuals of the S11 model compared to un-smoothed corrected data.
+
+    Returns
+    -------
+    fig :
+        Matplotlib Figure handle.
+    """
+    if ax is None or len(ax) != 4:
+        fig, ax = plt.subplots(
+            4, 1, sharex=True, gridspec_kw={"hspace": 0.05}, facecolor="w"
+        )
+    if fig is None:
+        fig = ax[0].get_figure()
+
+    if decade_ticks:
+        for axx in ax:
+            axx.grid(True)
+    ax[-1].set_xlabel("Frequency [MHz]")
+
+    modelled = raw_s11.smoothed(s11_model_params)
+    
+    fq = raw_s11.freqs
+
+    ax[0].plot(fq, 20 * np.log10(np.abs(modelled.s11)), color=color_abs, label=label)
+    if ylabels:
+        ax[0].set_ylabel(r"$|S_{11}|$")
+
+    ax[1].plot(fq, np.abs(modelled.s11) - np.abs(raw_s11.s11), color_diff)
+    if ylabels:
+        ax[1].set_ylabel(r"$\Delta  |S_{11}|$")
+
+    ax[2].plot(fq, np.unwrap(np.angle(modelled.s11)) * 180 / np.pi, color=color_abs)
+    if ylabels:
+        ax[2].set_ylabel(r"$\angle S_{11}$")
+
+    ax[3].plot(
+        fq,
+        np.unwrap(np.angle(modelled.s11)) - np.unwrap(np.angle(raw_s11.s11)),
+        color_diff,
+    )
+    if ylabels:
+        ax[3].set_ylabel(r"$\Delta \angle S_{11}$")
+
+    lname = load_name or ""
+
+    if title is None:
+        title = f"{lname} Reflection Coefficient Models"
+
+    if title:
+        fig.suptitle(f"{lname} Reflection Coefficient Models", fontsize=14)
+    if label:
+        ax[0].legend()
+
+    return fig
+
+def plot_s11_models(
+    calobs: CalibrationObservation, 
+    s11_model_params: S11ModelParams,
+    receiver_model_params: S11ModelParams,
+    **kwargs
+):
     """
     Plot residuals of S11 models for all sources.
 
@@ -150,10 +180,10 @@ def plot_s11_models(calobs: CalibrationObservation, **kwargs):
     )
 
     for i, (name, source) in enumerate(calobs.loads.items()):
-        source.reflections.plot_residuals(ax=ax[:, i], title=False, **kwargs)
+        plot_s11_residual(source._raw_s11, s11_model_params=s11_model_params, load_name=name, ax=ax[:, i], title=False, **kwargs)
         ax[0, i].set_title(name)
 
-    calobs.receiver.plot_residuals(ax=ax[:, -1], title=False, **kwargs)
+    plot_s11_residual(calobs._raw_receiver, s11_model_params=receiver_model_params, ax=ax[:, -1], title=False, **kwargs)
     ax[0, -1].set_title("Receiver")
     return ax
 
@@ -167,10 +197,6 @@ def plot_calibrated_temp(
     ax=None,
     xlabel=True,
     ylabel=True,
-    label: str = "",
-    as_residuals: bool = False,
-    load_in_title: bool = False,
-    rms_in_label: bool = True,
 ):
     """
     Make a plot of calibrated temperature for a given source.
@@ -204,10 +230,10 @@ def plot_calibrated_temp(
     temp_calibrated = calibrator.calibrate_load(load)
     if bins > 0:
         freq_ave_cal = bin_array_unweighted(temp_calibrated, size=bins)
-        f = bin_array_unweighted(calobs.freq.to_value("MHz"), size=bins)
+        f = bin_array_unweighted(calobs.freqs.to_value("MHz"), size=bins)
     else:
         freq_ave_cal = temp_calibrated
-        f = calobs.freq.to_value("MHz")
+        f = calobs.freqs.to_value("MHz")
 
     freq_ave_cal[np.isinf(freq_ave_cal)] = np.nan
 
@@ -221,17 +247,17 @@ def plot_calibrated_temp(
 
     temp_ave = calobs.source_thermistor_temps.get(load.load_name, load.temp_ave)
 
-    if np.isscalar(temp_ave):
-        temp_ave = np.ones(calobs.freq.size) * temp_ave
+    if temp_ave.isscalar:
+        temp_ave = np.ones(calobs.freqs.size) * temp_ave
 
     ax.plot(
-        calobs.freq,
+        calobs.freqs,
         temp_ave,
         color="C2",
         label="Average thermistor temp",
     )
 
-    ax.set_ylim([np.nanmin(freq_ave_cal), np.nanmax(freq_ave_cal)])
+    ax.set_ylim([np.nanmin(freq_ave_cal).value, np.nanmax(freq_ave_cal).value])
     if xlabel:
         ax.set_xlabel("Frequency [MHz]")
 
@@ -274,8 +300,9 @@ def plot_calibrated_temps(
 
     for i, source in enumerate(calobs.loads):
         plot_calibrated_temp(
-            source,
+            calobs=calobs,
             calibrator=calibrator,
+            load=source,
             bins=bins,
             fig=fig,
             ax=ax[i],
@@ -292,7 +319,7 @@ def plot_cal_coefficients(
     ax=None
 ):
     """
-    Make a plot of the calibration models, C1, C2, Tunc, Tcos and Tsin.
+    Make a plot of the calibration coefficents, Tsca, Tof, Tunc, Tcos and Tsin.
 
     Parameters
     ----------
@@ -314,9 +341,9 @@ def plot_cal_coefficients(
         r"$T_{\rm sin}$ [K]",
     ]
     for i, (kind, label) in enumerate(
-        zip(["C1", "C2", "Tunc", "Tcos", "Tsin"], labels, strict=False)
+        zip(["Tsca", "Toff", "Tunc", "Tcos", "Tsin"], labels, strict=False)
     ):
-        ax[i].plot(calibrator.freq, getattr(calibrator, kind)())
+        ax[i].plot(calibrator.freqs, getattr(calibrator, kind))
         ax[i].set_ylabel(label, fontsize=13)
         ax[i].grid()
         plt.ticklabel_format(useOffset=False)

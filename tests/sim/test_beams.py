@@ -12,12 +12,14 @@ import edges.sim
 from edges import const
 from edges import modelling as mdl
 from edges.sim import beams
-from edges.sim.sky_models import ConstantIndex, Haslam408, Haslam408AllNoh
+from edges.sim.sky_models import ConstantIndex, StepIndex, Haslam408AllNoh, SkyModel
+
+@pytest.fixture(scope='module')
+def beam() -> beams.Beam:
+    return beams.Beam.from_file("low")
 
 
-def test_beam_from_feko():
-    beam = beams.Beam.from_file("low")
-
+def test_beam_from_feko(beam):
     assert beam.frequency.min() == 40.0 * u.MHz
     assert beam.frequency.max() == 100.0 * u.MHz
 
@@ -28,9 +30,9 @@ def test_beam_from_feko():
     assert beam2.frequency.max() <= 70 * u.MHz
 
 
-def test_beam_from_raw_feko(sim_data_path: Path, beam_settings: Path):
+def test_beam_from_raw_feko(sim_data_path: Path):
     beam = beams.Beam.from_feko_raw(
-        beam_settings / "lowband_dielectric1-new-90orient_simple",
+        sim_data_path / "lowband_dielectric1-new-90orient_simple",
         ext="txt",
         f_low=40 * u.MHz,
         f_high=48 * u.MHz,
@@ -49,9 +51,7 @@ def test_beam_from_raw_feko(sim_data_path: Path, beam_settings: Path):
     assert (beam2.frequency == beam.frequency).all()
 
 
-def test_feko_interp():
-    beam = beams.Beam.from_file("low")
-
+def test_feko_interp(beam):
     beam2 = beam.at_freq(np.linspace(50, 60, 5) * u.MHz)
     assert (beam2.frequency == np.linspace(50, 60, 5) * u.MHz).all()
 
@@ -79,43 +79,28 @@ def test_feko_interp():
 
 
 def test_uniform_beam():
-    beam = beams.Beam.from_ideal()
+    beam = beams.Beam.uniform()
     assert np.allclose(beam.beam, 1)
     az, el = np.meshgrid(beam.azimuth, beam.elevation[:-1])
     assert np.allclose(beam.angular_interpolator(0)(az, el), 1)
 
 
-def test_antenna_beam_factor():
-    beam = beams.Beam.from_file("low")
+def test_antenna_beam_factor(beam):
     abf = edges.sim.compute_antenna_beam_factor(
         beam=beam,
         f_low=50 * u.MHz,
         f_high=56 * u.MHz,
         lsts=np.arange(0, 24, 6),
-        sky_model=Haslam408(max_nside=4),
+        sky_model=SkyModel.uniform_healpix(frequency=75.0, nside=4),
+        index_model = StepIndex(),
         use_astropy_azel=False,
+        beam_smoothing=False,
     )
     assert isinstance(abf, beams.BeamFactor)
 
 
-# def test_ground_loss_from_beam(beam_settings: Path):
-#     beam = beams.Beam.from_feko_raw(
-#         beam_settings / "lowband_dielectric1-new-90orient_simple",
-#         "txt",
-#         40,
-#         48,
-#         5,
-#         181,
-#         361,
-#     )
 
-#     loss_fraction = 1 - loss.ground_loss(filename=None, beam=beam, freq=beam.frequency)
-#     assert loss_fraction.max() < 1
-
-
-def test_interp_methods():
-    beam = beams.Beam.from_file("low")
-
+def test_interp_methods(beam):
     sphere = beam.angular_interpolator(0, "sphere-spline")
     cubic = beam.angular_interpolator(0, "linear")
 
@@ -132,7 +117,7 @@ def test_interp_methods():
 
 
 def test_beam_solid_angle():
-    beam = beams.Beam.from_ideal(f_low=50, f_high=60, delta_el=0.1, delta_az=0.1)
+    beam = beams.Beam.uniform(f_low=50, f_high=60, delta_el=0.1, delta_az=0.1)
     np.testing.assert_allclose(
         beam.get_beam_solid_angle(), 2 * np.pi, rtol=1e-3
     )  # half the sky
@@ -292,9 +277,9 @@ def test_beamfactor_get():
     assert np.allclose(intgbf, intgbf2)
 
 
-def test_beam_factor_alan_azel():
+def test_beam_factor_alan_azel(beam):
     defaults = {
-        "beam": beams.Beam.from_file("low"),
+        "beam": beam,
         "f_low": 40 * u.MHz,
         "f_high": 100 * u.MHz,
         "lsts": [12.0],

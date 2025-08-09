@@ -450,7 +450,7 @@ def apply_gha_model_filter(
     n_files: int = 0,
     use_intrinsic_flags: bool = True,
     out_file: tp.PathLike | None = None,
-    write_info: bool = True,
+    write_info: bool = False,
     **kwargs,
 ) -> list[np.ndarray[bool]]:
     """Apply a GHA-based model filter to a set of data files.

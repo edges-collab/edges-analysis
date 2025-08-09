@@ -3,30 +3,101 @@
 This includes ways to read/write them to HDF5 files.
 """
 
-from typing import Any
+from datetime import datetime
+from typing import Any, TypeVar
 
 import attrs
 import cattrs
 import h5py
 import hickle
+import numpy as np
+from astropy.units import Quantity
+from astropy.time import Time
+from astropy.coordinates import EarthLocation, Longitude
 
 from .. import types as tp
+
+
+
+T = TypeVar("T")
+
+converter = cattrs.Converter()
+
+@converter.register_structure_hook
+def ndarray_hook(val: Any, _) -> np.ndarray:
+    print("IN NDARRAY HOOK", val, type(val), len(val))
+    return np.asarray(val)
+
+@converter.register_unstructure_hook
+def ndarray_unstructure_hook(val: np.ndarray) -> np.ndarray:
+    return val
+
+@converter.register_structure_hook
+def _astropy_quantity_hook(val: dict[str, Any], _) -> Quantity:
+    """Convert an astropy quantity to a numpy array."""
+    return Quantity(
+        val["value"],
+        unit=val["unit"],
+        dtype=val.get("dtype"),
+    )
+@converter.register_unstructure_hook
+def _astropy_quantity_unstructure_hook(val: Quantity) -> dict[str, Any]:
+    """Convert an astropy quantity to a numpy array."""
+    return {
+        "value": val.value,
+        "unit": str(val.unit),
+        "dtype": val.dtype.str if val.dtype else None,
+    }
+
+@converter.register_structure_hook
+def _astropy_time_hook(val: np.ndarray, _) -> Time:
+    """Convert an astropy quantity to a numpy array."""
+    return Time(
+        val, format='jd',
+    )
+    
+@converter.register_unstructure_hook
+def _astropy_time_unstructure_hook(val: Time) -> np.ndarray:
+    """Convert an astropy quantity to a numpy array."""
+    return val.jd
+
+@converter.register_structure_hook
+def _datetime_hook(val: str, _) -> datetime:
+    """Convert a datetime to string."""
+    return datetime.fromisoformat(val)
+    
+@converter.register_unstructure_hook
+def _datetime_unstructure_hook(val: datetime) -> str:
+    """Convert a str to datetime."""
+    return val.isoformat()
+
+@converter.register_structure_hook
+def _location_hook(val: np.ndarray, _) -> EarthLocation:
+    """Convert a datetime to string."""
+    return EarthLocation(lat=val[0], lon=val[1], height=val[2])
+    
+@converter.register_unstructure_hook
+def _location_unstructure_hook(val: EarthLocation) -> list[Quantity]:
+    """Convert a str to datetime."""
+    return [val.lat, val.lon, val.height]
+
+
 
 
 def write_object_to_hdf5(obj: Any, path: tp.PathLike | h5py.Group):
     if not isinstance(path, h5py.Group):
         path = h5py.File(path, "w")
 
-    dct = cattrs.unstructure(obj)
+    dct = converter.unstructure(obj)
     hickle.dump(dct, path)
 
 
 def load_hdf5(struc, path: tp.PathLike | h5py.Group):
     data = hickle.load(path)
-    cattrs.structure(data, struc)
+    return converter.structure(data, struc)
 
 
-def hickleable(cls):
+def hickleable(cls: T) -> T:
     """Render an attrs-defined class recursively hickleable."""
     # First, check whether all of the attributes have types
     if not attrs.has(cls):
@@ -41,6 +112,6 @@ def hickleable(cls):
     if not hasattr(cls, 'write'):
         cls.write = write_object_to_hdf5
     if not hasattr(cls, 'from_file'):
-        cls.from_file = load_hdf5
+        cls.from_file = classmethod(load_hdf5)
 
     return cls

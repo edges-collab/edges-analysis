@@ -10,33 +10,32 @@ from astropy.time import Time
 from pygsdata import GSData
 
 from edges import modelling as mdl
-from edges.analysis.calibration import calibrate
+from edges.analysis import calibrate
+from edges.cal.s11 import antenna
+from edges.cal.s11.base import CalibratedS11
 from edges.sim.beams import BeamFactor
+from edges.cal import Calibrator, apply
 
-
-def test_approximate_temperature(gsd_ones: GSData):
-    # mock gsdata
-    data = gsd_ones.update(data_unit="uncalibrated")
-
-    new = calibrate.approximate_temperature(data, tload=300, tns=1000)
-    assert new.data_unit == "uncalibrated_temp"
-    assert not np.any(new.data == data.data)
-
-    new = data.update(data_unit="temperature")
-    with pytest.raises(ValueError, match="data_unit must be 'uncalibrated'"):
-        calibrate.approximate_temperature(new, tload=300, tns=1000)
-
-
+def get_ideal_s11model(freqs):
+    
+    return CalibratedS11(
+        s11=np.zeros(freqs.size, dtype=complex),
+        freqs=freqs
+    )
 class TestApplyNoiseWaveCalibration:
     def test_bad_inputs(
-        self, gsd_ones: GSData, gsd_ones_power: GSData, calpath: Path, s11path: Path
+        self, 
+        gsd_ones: GSData, 
+        gsd_ones_power: GSData, 
+        calibrator: Calibrator,
     ):
         data = gsd_ones.update(data_unit="temperature")
+        s11 = get_ideal_s11model(data.freqs)
         with pytest.raises(
             ValueError, match="Data must be uncalibrated to apply calibration!"
         ):
             calibrate.apply_noise_wave_calibration(
-                data, calobs=calpath, band="low", s11_path=s11path
+                data, calibrator=calibrator, antenna_s11=s11
             )
 
         data = gsd_ones.update(data_unit="uncalibrated_temp")
@@ -45,7 +44,7 @@ class TestApplyNoiseWaveCalibration:
             match="You need to supply tload and tns if data_unit is uncalibrated_temp",
         ):
             calibrate.apply_noise_wave_calibration(
-                data, calobs=calpath, band="low", s11_path=s11path
+                data, calibrator=calibrator, antenna_s11=s11
             )
 
         data = gsd_ones_power.update(data_unit="uncalibrated")
@@ -54,26 +53,29 @@ class TestApplyNoiseWaveCalibration:
             match="Can only apply noise-wave calibration to single load data!",
         ):
             calibrate.apply_noise_wave_calibration(
-                data, calobs=calpath, band="low", s11_path=s11path
+                data, calibrator=calibrator, antenna_s11=s11
             )
 
     @pytest.mark.filterwarnings("ignore:loader 'b'!edges.cal")
     def test_equality_uncal_vs_uncaltemp(
-        self, gsd_ones: GSData, calpath: Path, s11path: Path
+        self, gsd_ones: GSData, calibrator: Calibrator,
     ):
+        s11 = get_ideal_s11model(freqs=gsd_ones.freqs)
+        
         data = gsd_ones.update(data_unit="uncalibrated")
         new = calibrate.apply_noise_wave_calibration(
-            data, calobs=calpath, band="low", ant_s11_object=s11path
+            data, calibrator=calibrator, antenna_s11=s11
         )
 
-        data_temp = calibrate.approximate_temperature(data, tload=300, tns=1000)
+        data_temp = apply.approximate_temperature(
+            data, tload=300*un.K, tns=1000*un.K
+        )
         new2 = calibrate.apply_noise_wave_calibration(
             data_temp,
-            calobs=calpath,
-            band="low",
-            ant_s11_object=s11path,
-            tload=300,
-            tns=1000,
+            calibrator=calibrator, 
+            antenna_s11=s11,
+            tload=300 * un.K,
+            tns=1000*un.K,
         )
 
         assert np.all(new.data == new2.data)
@@ -104,205 +106,6 @@ class TestApplyLossCorrection:
         with pytest.raises(ValueError, match="Data must be temperature"):
             calibrate.apply_loss_correction(
                 mock_power, ambient_temp=300 * un.K, loss=loss
-            )
-
-
-class TestGetClosestS11Time:
-    """Tests of the _get_closest_s11_time method."""
-
-    def _setup_dir(self, tmp_path, year: int = 2015):
-        d = tmp_path / "s11"
-        if not d.exists():
-            d.mkdir()
-
-        # Create a few empty files
-        find_these_files = [
-            (d / f"{year}_312_00_0.s1p"),
-            (d / f"{year}_312_00_1.s1p"),
-            (d / f"{year}_312_00_2.s1p"),
-            (d / f"{year}_312_00_3.s1p"),
-        ]
-        for fl in find_these_files:
-            fl.touch()
-
-        return d, find_these_files
-
-    def test_happy_path(self, tmp_path):
-        d, find_these_files = self._setup_dir(tmp_path)
-
-        # Find these files
-        out = calibrate._get_closest_s11_time(
-            d,
-            datetime(year=2015, month=1, day=1),
-            s11_file_pattern="{y}_{jd}_{h}_{input}.s1p",
-        )
-        assert out == sorted(find_these_files)
-
-        # Add some more files
-        self._setup_dir(tmp_path, year=2011)
-        out = calibrate._get_closest_s11_time(
-            d,
-            datetime(year=2015, month=1, day=1),
-            s11_file_pattern="{y}_{jd}_{h}_{input}.s1p",
-        )
-        assert out == sorted(find_these_files)
-
-        # If the time object is a Time object...
-        out = calibrate._get_closest_s11_time(
-            d,
-            Time(datetime(year=2015, month=1, day=1)),
-            s11_file_pattern="{y}_{jd}_{h}_{input}.s1p",
-        )
-        assert out == sorted(find_these_files)
-
-    def test_value_errors(self, tmp_path):
-        d, _find_these_files = self._setup_dir(tmp_path)
-
-        with pytest.raises(ValueError, match="s11_file_pattern must contain"):
-            calibrate._get_closest_s11_time(
-                d,
-                datetime(year=2015, month=1, day=1),
-                s11_file_pattern="{y}_{h}{input}.s1p",
-            )
-
-        with pytest.raises(ValueError, match="s11_file_pattern must not contain both"):
-            calibrate._get_closest_s11_time(
-                d,
-                datetime(year=2015, month=1, day=1),
-                s11_file_pattern="{y}_{jd}{d}_{h}_{input}.s1p",
-            )
-
-    def test_no_files_exist(self, tmp_path):
-        tmp_path / "s11"
-        with pytest.raises(FileNotFoundError, match="No files found"):
-            calibrate._get_closest_s11_time(
-                tmp_path,
-                datetime(year=2015, month=1, day=1),
-                s11_file_pattern="{y}_{jd}_{h}_{input}.s1p",
-            )
-
-    def test_wrong_number_of_files(self, tmp_path):
-        d, find_these_files = self._setup_dir(tmp_path)
-        find_these_files[-1].unlink()
-
-        with pytest.raises(
-            FileNotFoundError, match="There need to be four input S1P files"
-        ):
-            calibrate._get_closest_s11_time(
-                d,
-                datetime(year=2015, month=1, day=1),
-                s11_file_pattern="{y}_{jd}_{h}_{input}.s1p",
-            )
-
-    def test_include_files_that_dont_match(self, tmp_path):
-        d, find_these_files = self._setup_dir(tmp_path)
-        (d / "unmatching.s1p").touch()
-
-        out = calibrate._get_closest_s11_time(
-            d,
-            datetime(year=2015, month=1, day=1),
-            s11_file_pattern="{y}_{jd}_{h}_{input}.s1p",
-        )
-        assert out == sorted(find_these_files)
-
-    def test_ignore_file(self, tmp_path):
-        d, find_these_files = self._setup_dir(tmp_path)
-        (d / "2015_001_00_0.s1p").touch()
-
-        out = calibrate._get_closest_s11_time(
-            d,
-            datetime(year=2015, month=1, day=1),
-            s11_file_pattern="{y}_{jd}_{h}_{input}.s1p",
-            ignore_files="2015_001",
-        )
-        assert out == sorted(find_these_files)
-
-    def test_use_month_day(self, tmp_path):
-        d = tmp_path / "s11"
-        d.mkdir()
-
-        # Create a few empty files
-        find_these_files = [
-            (d / "2015_01_01_00_0.s1p"),
-            (d / "2015_01_01_00_1.s1p"),
-            (d / "2015_01_01_00_2.s1p"),
-            (d / "2015_01_01_00_3.s1p"),
-        ]
-        for fl in find_these_files:
-            fl.touch()
-
-        out = calibrate._get_closest_s11_time(
-            d,
-            datetime(year=2015, month=1, day=1),
-            s11_file_pattern="{y}_{m}_{d}_{h}_{input}.s1p",
-        )
-        assert out == sorted(find_these_files)
-
-
-class TestGetS11Paths:
-    """Tests of the get_s11_paths method."""
-
-    def test_with_sequence(self, tmp_path):
-        d = tmp_path / "s11"
-        d.mkdir()
-
-        paths = []
-        for i in range(4):
-            paths.append(d / f"{i}.s1p")
-            paths[-1].touch()
-
-        out = calibrate.get_s11_paths(paths)
-        assert out == paths
-
-        with pytest.raises(ValueError, match="length must be 4"):
-            calibrate.get_s11_paths(paths[:-1])
-
-    def test_single_file(self, tmp_path):
-        fl = tmp_path / "file.csv"
-        fl.touch()
-        out = calibrate.get_s11_paths(fl)
-        assert out == [fl]
-
-    def test_get_closest_time(self, tmp_path):
-        d = tmp_path / "s11"
-        if not d.exists():
-            d.mkdir()
-
-        # Create a few empty files
-        find_these_files = [d / f"2015_312_00_{i}.s1p" for i in range(4)]
-        for fl in find_these_files:
-            fl.touch()
-
-        # Find these files
-        out = calibrate.get_s11_paths(
-            d,
-            begin_time=datetime(year=2015, month=1, day=1),
-            s11_file_pattern="{y}_{jd}_{h}_{input}.s1p",
-        )
-        assert out == sorted(find_these_files)
-
-    def test_find_directly(self, tmp_path):
-        d = tmp_path / "s11"
-        if not d.exists():
-            d.mkdir()
-
-        # Create a few empty files
-        find_these_files = [d / f"2015_312_00_{i}.s1p" for i in range(4)]
-        for fl in find_these_files:
-            fl.touch()
-
-        # Find these files
-        out = calibrate.get_s11_paths(
-            f"{d}/2015_312_00_{{load}}.s1p",
-            begin_time=datetime(year=2015, month=1, day=1),
-        )
-        assert out == sorted(find_these_files)
-
-        find_these_files[-1].unlink()
-        with pytest.raises(FileNotFoundError, match="There are not exactly four"):
-            calibrate.get_s11_paths(
-                f"{d}/2015_312_00_{{load}}.s1p",
-                begin_time=datetime(year=2015, month=1, day=1),
             )
 
 

@@ -8,9 +8,10 @@ from functools import cached_property
 import attrs
 import numpy as np
 
+from .. import types as tp
 from .. import modelling as mdl
 from ..tools import ComplexSpline
-
+from astropy import units as un
 
 def get_F(gamma_rec: np.ndarray, gamma_ant: np.ndarray) -> np.ndarray:  # noqa: N802
     """Get the F parameter for a given receiver and antenna.
@@ -155,8 +156,8 @@ def power_ratio(
 @attrs.define(slots=False)
 class NoiseWaveLinearModelFit:
     freq: np.ndarray = attrs.field()
-    gamma_rec: callable = attrs.field()
-    gamma_src: dict[str, callable] = attrs.field()
+    gamma_rec: np.ndarray = attrs.field()
+    gamma_src: dict[str, np.ndarray] = attrs.field()
     modelfit: mdl.CompositeModel = attrs.field()
     delay: float = attrs.field(default=0.0)
 
@@ -165,7 +166,7 @@ class NoiseWaveLinearModelFit:
         """The model, with assigned parameters from best-fit."""
         return self.modelfit.fit
 
-    def get_tunc(self, freq: np.ndarray | None, full_term=False):
+    def get_tunc(self, freq: tp.FreqType | None = None, full_term=False):
         r"""Compute the model for Tunc(freq).
 
         If `full_term` is True, return the full term, i.e.
@@ -177,10 +178,9 @@ class NoiseWaveLinearModelFit:
         """
         if freq is None:
             freq = self.freq
-
         return self.model.model.models["unc"](x=freq, with_scaler=False)
 
-    def get_tcos(self, freq: np.ndarray | None, full_term=False):
+    def get_tcos(self, freq: tp.FreqType | None = None, full_term=False):
         r"""Compute the model for Tcos(freq).
 
         If `full_term` is True, return the full term, i.e.
@@ -192,7 +192,7 @@ class NoiseWaveLinearModelFit:
         """
         if freq is None:
             freq = self.freq
-
+            
         ph = np.exp(1j * 2 * np.pi * freq * self.delay * 1e6)
 
         tcos = self.model.model.models["cos"](x=freq, with_scaler=False)
@@ -200,19 +200,19 @@ class NoiseWaveLinearModelFit:
 
         return tcos * ph.real + tsin * ph.imag
 
-    def get_tsin(self, freq: np.ndarray | None, full_term=False):
-        r"""Compute the model for Tcos(freq).
+    def get_tsin(self, freq: tp.FreqType | None = None, full_term=False):
+        r"""Compute the model for Tsin(freq).
 
         If `full_term` is True, return the full term, i.e.
 
-        .. math:: Tcos \frac{|Gamma_{\rm ant}| |F| \cos\alpha}{1 - |Gamma_{\rm rcv}|^2}
+        .. math:: Tsin \frac{|Gamma_{\rm ant}| |F| \sin\alpha}{1 - |Gamma_{\rm rcv}|^2}
 
-        otherwise just return Tcos itself. This is not implemented yet (it's a little
+        otherwise just return Tsin itself. This is not implemented yet (it's a little
         trickier because it depends on which source you want it for).
         """
         if freq is None:
             freq = self.freq
-
+            
         ph = np.exp(1j * 2 * np.pi * freq * self.delay * 1e6)
 
         tcos = self.model.model.models["cos"](x=freq, with_scaler=False)
@@ -250,8 +250,8 @@ class NoiseWaveLinearModel:
     """
 
     freq: np.ndarray = attrs.field()
-    gamma_rec: callable = attrs.field()
-    gamma_src: dict[str, callable] = attrs.field()
+    gamma_rec: np.ndarray = attrs.field()
+    gamma_src: dict[str, np.ndarray] = attrs.field()
     model_type: mdl.Model = attrs.field(default=mdl.Polynomial)
     n_terms: int = attrs.field(default=5)
     delay: float = attrs.field(default=0.0)
@@ -264,7 +264,7 @@ class NoiseWaveLinearModel:
 
         out = []
         for gamma in self.gamma_src.values():
-            K = get_K(self.gamma_rec(freq), gamma(freq))
+            K = get_K(self.gamma_rec, gamma)
             out.append(K[2] * ph.real - K[3] * ph.imag)
 
         return np.concatenate(out)
@@ -276,17 +276,15 @@ class NoiseWaveLinearModel:
 
         out = []
         for gamma in self.gamma_src.values():
-            K = get_K(self.gamma_rec(freq), gamma(freq))
+            K = get_K(self.gamma_rec, gamma)
 
             out.append(K[2] * ph.imag + K[3] * ph.real)
         return np.concatenate(out)
 
     def unc_kfactor(self, freq):
         """Compute the scaler to the Tunc basis function."""
-        freq = freq[: len(freq) // len(self.gamma_src)]
-
         return np.concatenate([
-            get_K(self.gamma_rec(freq), gamma(freq))[1]
+            get_K(self.gamma_rec, gamma)[1]
             for gamma in self.gamma_src.values()
         ])
 
@@ -323,7 +321,7 @@ class NoiseWaveLinearModel:
         )
 
         K0 = {
-            k: get_K(self.gamma_rec(self.freq), self.gamma_src[k](self.freq))[0]
+            k: get_K(self.gamma_rec, self.gamma_src[k])[0]
             for k in self.gamma_src
         }
 
@@ -341,14 +339,15 @@ class NoiseWaveLinearModel:
 
 
 def get_calibration_quantities_iterative(
-    freq: np.ndarray,
-    temp_raw: dict,
-    gamma_rec: callable,
-    gamma_ant: dict[str, callable],
-    temp_ant: dict[str, np.ndarray | float],
+    freqs: tp.FreqType,
+    source_q: dict,
+    source_s11s: dict[str, np.ndarray],
+    source_true_temps: dict[str, tp.TemperatureType],
+    receiver_s11: np.ndarray,
     cterms: int,
     wterms: int,
-    temp_amb_internal: float = 300,
+    t_load_guess: tp.TemperatureType = 300 * un.K,
+    t_load_ns_guess: tp.TemperatureType = 1000.0 * un.K,
     niter: int = 4,
     hot_load_loss: np.ndarray | None = None,
     smooth_scale_offset_within_loop: bool = True,
@@ -364,28 +363,31 @@ def get_calibration_quantities_iterative(
 
     Parameters
     ----------
-    f_norm : array_like
-        Normalized frequencies (arbitrarily normalised, but standard assumption is
-        that the centre is zero, and the scale is such that the range is (-1, 1))
-    temp_raw : dict
-        Dictionary of antenna uncalibrated temperatures, with keys
-        'ambient', 'hot_load, 'short' and 'open'. Each value is an array with the same
-        length as f_norm.
-    gamma_rec : float array
-        Receiver S11 as a function of frequency.
-    gamma_ant : dict
-        Dictionary of antenna S11, with keys 'ambient', 'hot_load, 'short'
-        and 'open'. Each value is an array with the same length as f_norm.
-    temp_ant : dict
-        Dictionary like `gamma_ant`, except that the values are modelled/smoothed
-        thermistor temperatures for each source load.
+    freqs
+        The frequencies at which the data is specified.
+    source_q
+        The PSD ratios, Q, of the calibration sources, as a dictionary with the source
+        names as keys.
+    source_s11s
+        A dictionary with the same keys as `source_q`, containing callable S11 models 
+        for each calibration source.
+    source_true_temps
+        A dictionary with the same keys as `source_q`, containing the true temperature
+        of each calibration source, to which to calibrate the `source_q`. These must
+        be astropy temperature Quantities, but may be scalar or arrays. If an array,
+        must be the same length as freqs.
+    receiver_s11
+        Receiver S11 as a function of frequency (callable).
     cterms : int
         Number of polynomial terms for the C_i
     wterms : int
         Number of polynonmial temrs for the T_i
-    temp_amb_internal : float
-        The ambient internal temperature, interpreted as T_L.
-        Note: this must be the same as the T_L used to generate T*.
+    t_load_guess
+        An initial guess for the internal dicke-switch load temperature, used to 
+        initialize the iterative algorithm.
+    t_load_ns_guess
+        An initial guess for the internal dicke-switch load+noise-sourc temperature,
+        used to initialize the iterative algorithm.
     niter : int
         The number of iterations to perform.
     hot_load_loss : array_like, optional
@@ -400,13 +402,23 @@ def get_calibration_quantities_iterative(
     poly_spacing
         Spacing between polynomial term powers for scale and offset. Default of 1.0 is
         for a standard polynomial basis set. Alan's C code use 0.5 for the scale/offset.
-
-    Returns
-    -------
-    sca, off, tu, tc, ts
-        Fitted Models for each of the Scale (C_1), Offset (C_2), and noise-wave
-        temperatures for uncorrelated, cos and sin components.
-
+    return_early
+        Whether to return from the iterative loop early if the RMS of the residuals
+        stops decreasing.
+        
+    Yields
+    ------
+    t_sca_model
+        A fitted polynomial model for the temperature scale (approximately, the 
+        true internal load+noise-source temperature, but with corrections from
+        internal path-lengths).
+    t_off_model
+        A fitted polynomial model for the temperature offset (approximately, the
+        true internal load temperature, but with corrections from internal path-lengths)
+    nwp
+        A fitted model for the noise-wave parameters. The values of each of the 
+        noise-wave temperatures can be accessed via e.g. `nwp.get_tunc()`.
+        
     Notes
     -----
     To achieve the same results as the legacy C pipeline, the `hot_load_loss` parameter
@@ -414,22 +426,34 @@ def get_calibration_quantities_iterative(
     mathematical difference that arises if you do it the other way. Furthermore, the
     `smooth_scale_offset_within_loop` parameter should be set to False.
     """
-    mask = np.all([np.isfinite(temp) for temp in temp_raw.values()], axis=0)
+    # Convert all temperatures to K and remove the units to make the iterative 
+    # algorithm fast and not have to worry about units.
+    t_load_guess = t_load_guess.to_value("K")
+    t_load_ns_guess = t_load_ns_guess.to_value("K")
+    source_true_temps = {k: v.to_value("K") for k, v in source_true_temps.items()}
+    freqs = freqs.to_value("MHz")
+    
+    # Get approximate temperatures    
+    
+    
+    mask = np.all([np.isfinite(temp) for temp in source_q.values()], axis=0)
 
-    fmask = freq[mask]
-    temp_raw = {key: value[mask] for key, value in temp_raw.items()}
-    temp_ant = {
+    fmask = freqs[mask]
+    source_q = {key: value[mask] for key, value in source_q.items()}
+    source_true_temps = {
         key: (value[mask] if hasattr(value, "__len__") else value)
-        for key, value in temp_ant.items()
+        for key, value in source_true_temps.items()
     }
-    temp_ant_hot = temp_ant["hot_load"]
-
+    temp_ant_hot = source_true_temps["hot_load"]
+    receiver_s11 = receiver_s11[mask]
+    source_s11s = {k: v[mask] for k, v in source_s11s.items()}
+    
     # The denominator of each term in Eq. 7
-    G = 1 - np.abs(gamma_rec(fmask)) ** 2
+    G = 1 - np.abs(receiver_s11) ** 2
 
     K1, K2, K3, K4 = {}, {}, {}, {}
-    for k, gamma_a in gamma_ant.items():
-        K1[k], K2[k], K3[k], K4[k] = get_K(gamma_rec(fmask), gamma_a(fmask), gain=G)
+    for k, gamma_a in source_s11s.items():
+        K1[k], K2[k], K3[k], K4[k] = get_K(receiver_s11, gamma_a, gain=G)
 
     # Initialize arrays
     nf = len(fmask)
@@ -444,7 +468,7 @@ def get_calibration_quantities_iterative(
         np.zeros(nf),
     )
 
-    tr = mdl.ScaleTransform(scale=freq[len(freq) // 2])
+    tr = mdl.ScaleTransform(scale=freqs[len(freqs) // 2])
     sca_mdl = mdl.Polynomial(n_terms=cterms, transform=tr, spacing=poly_spacing).at(
         x=fmask
     )
@@ -452,7 +476,8 @@ def get_calibration_quantities_iterative(
         x=fmask
     )
 
-    temp_cal_iter = dict(temp_raw)  # copy
+    # Get initial guess of the calibrated temperatures.
+    temp_cal_iter = {k: v*t_load_ns_guess + t_load_guess for k, v in source_q.items()}
 
     # Initial values for breaking early.
     sca_off_chisq = np.inf
@@ -471,12 +496,12 @@ def get_calibration_quantities_iterative(
         # Step 2: scale and offset
         if hot_load_loss is not None:
             thot_iter = (
-                thot_iter - temp_ant["ambient"] * (1 - hot_load_loss)
+                thot_iter - source_true_temps["ambient"] * (1 - hot_load_loss)
             ) / hot_load_loss
 
         # Updating scale and offset
-        sca_new = (temp_ant_hot - temp_ant["ambient"]) / (thot_iter - tamb_iter)
-        off_new = tamb_iter - temp_ant["ambient"]
+        sca_new = (temp_ant_hot - source_true_temps["ambient"]) / (thot_iter - tamb_iter)
+        off_new = tamb_iter - source_true_temps["ambient"]
 
         sca *= sca_new
         off += off_new
@@ -491,18 +516,18 @@ def get_calibration_quantities_iterative(
 
         # Step 3: corrected "uncalibrated spectrum" of cable
         temp_cal_iter = {
-            k: (v - temp_amb_internal) * sca + temp_amb_internal - off
-            for k, v in temp_raw.items()
+            k: v * t_load_ns_guess * sca + t_load_guess - off
+            for k, v in source_q.items()
         }
 
         new_sca_off_chisq = (
             (temp_cal_iter["hot_load"] - temp_ant_hot) ** 2
-            + (temp_cal_iter["ambient"] - temp_ant["ambient"]) ** 2
+            + (temp_cal_iter["ambient"] - source_true_temps["ambient"]) ** 2
         ).sum()
 
         # Return early if the chi^2 is not improving.
         if new_sca_off_chisq >= sca_off_chisq and return_early:
-            return p_sca, p_off, best
+            return
 
         sca_off_chisq = new_sca_off_chisq
 
@@ -512,15 +537,15 @@ def get_calibration_quantities_iterative(
             srcs = ["open", "short"]
             nwm = NoiseWaveLinearModel(
                 freq=fmask,
-                gamma_rec=gamma_rec,
-                gamma_src={k: gamma_ant[k] for k in srcs},
+                gamma_rec=receiver_s11,
+                gamma_src={k: source_s11s[k] for k in srcs},
                 model_type=mdl.Polynomial,
                 n_terms=wterms,
                 delay=delay,
             )
             nwmfit = nwm.fit(
                 {k: temp_cal_iter[k] for k in srcs},
-                {k: temp_ant[k] for k in srcs},
+                {k: source_true_temps[k] for k in srcs},
                 method=fit_method,
             )
             if best is None or nwmfit.rms < best.rms:
@@ -532,15 +557,20 @@ def get_calibration_quantities_iterative(
 
         # Return early if the chi^2 is not improving.
         if best.rms >= cable_chisq and return_early:
-            return p_sca, p_off, best
+            return
 
         cable_chisq = best.rms
 
-        yield (p_sca, p_off, best)
+        t_sca_model = p_sca.with_params(np.array(p_sca.parameters)*t_load_ns_guess)
+        t_off_model = p_off.with_params(
+            np.array([t_load_guess] + [0]*(p_off.n_terms-1)) - np.array(p_off.parameters)
+        )
+
+        yield (t_sca_model, t_off_model, best)
 
 
 def get_linear_coefficients(
-    gamma_ant, gamma_rec, sca, off, t_unc, t_cos, t_sin, t_load=300
+    gamma_ant, gamma_rec, t_sca, t_off, t_unc, t_cos, t_sin
 ):
     """
     Use Monsalve (2017) Eq. 7 to determine a and b, such that T = aT* + b.
@@ -552,22 +582,18 @@ def get_linear_coefficients(
     gamma_rec : array_like
         S11 of the receiver.
     sca,off : array_like
-        Scale and offset calibration parameters (i.e. C1 and C2). These are in the form
-        of arrays over frequency (i.e. it is not the polynomial coefficients).
+        Scale and offset calibration parameters (i.e. Tsca and Toff). These are in the 
+        form of arrays over frequency (i.e. it is not the polynomial coefficients).
     t_unc, t_cos, t_sin : array_like
         Noise-wave calibration parameters (uncorrelated, cosine, sine). These are in the
         form of arrays over frequency (i.e. not the polynomial coefficients).
-    t_load : float, optional
-        The nominal temperature of the internal ambient load. This *must match* the
-        value used to derive the calibration parameters in the first place.
     """
     K = get_K(gamma_rec, gamma_ant)
-
-    return get_linear_coefficients_from_K(K, sca, off, t_unc, t_cos, t_sin, t_load)
+    return get_linear_coefficients_from_K(K, t_sca, t_off, t_unc, t_cos, t_sin)
 
 
 def get_linear_coefficients_from_K(  # noqa: N802
-    k, sca, off, t_unc, t_cos, t_sin, t_load=300
+    k, t_sca, t_off, t_unc, t_cos, t_sin
 ):
     """Calculate linear coefficients a and b from noise-wave parameters K0-4.
 
@@ -576,7 +602,7 @@ def get_linear_coefficients_from_K(  # noqa: N802
     k : np.ndarray
         Shape (4, nfreq) array with each of the K-coefficients.
     sca,off : array_like
-        Scale and offset calibration parameters (i.e. C1 and C2). These are in the form
+        Scale and offset calibration temperatures. These are in the form
         of arrays over frequency (i.e. it is not the polynomial coefficients).
     t_unc, t_cos, t_sin : array_like
         Noise-wave calibration parameters (uncorrelated, cosine, sine). These are in the
@@ -587,68 +613,9 @@ def get_linear_coefficients_from_K(  # noqa: N802
     """
     # Noise wave contribution
     noise_wave_terms = t_unc * k[1] + t_cos * k[2] + t_sin * k[3]
-    return sca / k[0], (t_load - off - noise_wave_terms - t_load * sca) / k[0]
-
-
-def calibrated_antenna_temperature(
-    temp_raw, gamma_ant, gamma_rec, sca, off, t_unc, t_cos, t_sin, t_load=300
-):
-    """
-    Use M17 Eq. 7 to determine calibrated temperature from an uncalibrated temperature.
-
-    Parameters
-    ----------
-    temp_raw : array_like
-        The raw (uncalibrated) temperature spectrum, T*.
-    gamma_ant : array_like
-        S11 of the antenna/load.
-    gamma_rec : array_like
-        S11 of the receiver.
-    sca,off : array_like
-        Scale and offset calibration parameters (i.e. C1 and C2). These are in the form
-        of arrays over frequency (i.e. it is not the polynomial coefficients).
-    t_unc, t_cos, t_sin : array_like
-        Noise-wave calibration parameters (uncorrelated, cosine, sine). These are in the
-        form of arrays over frequency (i.e. not the polynomial coefficients).
-    t_load : float, optional
-        The nominal temperature of the internal ambient load. This *must match* the
-        value used to derive the calibration parameters in the first place.
-    """
-    a, b = get_linear_coefficients(
-        gamma_ant, gamma_rec, sca, off, t_unc, t_cos, t_sin, t_load
-    )
-
-    return temp_raw * a + b
-
-
-def decalibrate_antenna_temperature(
-    temp, gamma_ant, gamma_rec, sca, off, t_unc, t_cos, t_sin, t_load=300
-):
-    """
-    Use M17 Eq. 7 to determine uncalibrated temperature from a calibrated temperature.
-
-    Parameters
-    ----------
-    temp : array_like
-        The true (or calibrated) temperature spectrum.
-    gamma_ant : array_like
-        S11 of the antenna/load.
-    gamma_rec : array_like
-        S11 of the receiver.
-    sca,off : array_like
-        Scale and offset calibration parameters (i.e. C1 and C2). These are in the form
-        of arrays over frequency (i.e. it is not the polynomial coefficients).
-    t_unc, t_cos, t_sin : array_like
-        Noise-wave calibration parameters (uncorrelated, cosine, sine). These are in the
-        form of arrays over frequency (i.e. not the polynomial coefficients).
-    t_load : float, optional
-        The nominal temperature of the internal ambient load. This *must match* the
-        value used to derive the calibration parameters in the first place.
-    """
-    a, b = get_linear_coefficients(
-        gamma_ant, gamma_rec, sca, off, t_unc, t_cos, t_sin, t_load
-    )
-    return (temp - b) / a
+    print("sca/nw: ", np.all(np.isfinite(t_sca/k[0])), np.all(np.isfinite((t_off-noise_wave_terms)/k[0])))
+    print("k0: ", k[0])
+    return t_sca / k[0], (t_off - noise_wave_terms) / k[0]
 
 
 @attrs.define(frozen=True, kw_only=True, slots=False)
@@ -687,14 +654,10 @@ class NoiseWaves:
         with_k
             Whether to use the K matrix as an "extra basis" in the linear model.
         """
-        gamma_rec_func = ComplexSpline(x=self.freq, y=self.gamma_rec)
-        gamma_src_func = {
-            k: ComplexSpline(x=self.freq, y=v) for k, v in self.gamma_src.items()
-        }
         nwlm = NoiseWaveLinearModel(
             freq=self.freq,
-            gamma_rec=gamma_rec_func,
-            gamma_src=gamma_src_func,
+            gamma_rec=self.gamma_rec,
+            gamma_src=self.gamma_src,
             model_type=mdl.Polynomial,
             n_terms=self.w_terms,
             delay=0.0,  # TODO: make this a parameter?
@@ -781,40 +744,40 @@ class NoiseWaves:
         fit = self.linear_model.fit(ydata=data, weights=weights, **kwargs)
         return attrs.evolve(self, parameters=fit.model_parameters)
 
-    def with_params_from_calobs(self, calobs, cterms=None, wterms=None) -> NoiseWaves:
-        """Get a new noise wave model with parameters fitted using standard methods."""
-        cterms = cterms or calobs.cterms
-        wterms = wterms or calobs.wterms
+    # def with_params_from_calobs(self, calobs, cterms=None, wterms=None) -> NoiseWaves:
+    #     """Get a new noise wave model with parameters fitted using standard methods."""
+    #     cterms = cterms or calobs.cterms
+    #     wterms = wterms or calobs.wterms
 
-        def modify(thing, n):
-            if isinstance(thing, np.ndarray):
-                thing = thing.tolist()
-            elif isinstance(thing, tuple):
-                thing = list(thing)
+    #     def modify(thing, n):
+    #         if isinstance(thing, np.ndarray):
+    #             thing = thing.tolist()
+    #         elif isinstance(thing, tuple):
+    #             thing = list(thing)
 
-            if len(thing) < n:
-                return thing + [0] * (n - len(thing))
-            if len(thing) > n:
-                return thing[:n]
-            return thing
+    #         if len(thing) < n:
+    #             return thing + [0] * (n - len(thing))
+    #         if len(thing) > n:
+    #             return thing[:n]
+    #         return thing
 
-        tu = modify(calobs.cal_coefficient_models["NW"].model.parameters, wterms)
-        tc = modify(calobs.cal_coefficient_models["NW"].model.parameters, wterms)
-        ts = modify(calobs.cal_coefficient_models["NW"].model.parameters, wterms)
+    #     tu = modify(calobs.cal_coefficient_models["NW"].model.parameters, wterms)
+    #     tc = modify(calobs.cal_coefficient_models["NW"].model.parameters, wterms)
+    #     ts = modify(calobs.cal_coefficient_models["NW"].model.parameters, wterms)
 
-        if self.with_tload:
-            c2 = -np.asarray(calobs.cal_coefficient_models["C2"].parameters)
-            c2[0] += calobs.t_load
-            c2 = modify(c2, cterms)
+    #     if self.with_tload:
+    #         c2 = -np.asarray(calobs.cal_coefficient_models["C2"].parameters)
+    #         c2[0] += calobs.t_load
+    #         c2 = modify(c2, cterms)
 
-        return attrs.evolve(self, parameters=tu + tc + ts + c2)
+    #     return attrs.evolve(self, parameters=tu + tc + ts + c2)
 
     @classmethod
     def from_calobs(
         cls,
         calobs,
-        cterms=None,
-        wterms=None,
+        cterms: int,
+        wterms: int,
         sources=None,
         with_tload: bool = True,
         loads: dict | None = None,
@@ -826,24 +789,20 @@ class NoiseWaves:
 
             loads = {src: load for src, load in calobs.loads.items() if src in sources}
 
-        freq = calobs.freq.to_value("MHz")
+        freq = calobs.freqs.to_value("MHz")
 
-        gamma_src = {name: source.s11_model(freq) for name, source in loads.items()}
+        gamma_src = {name: source.s11.s11 for name, source in loads.items()}
 
-        try:
-            lna_s11 = calobs.receiver.s11_model(freq)
-        except AttributeError:
-            lna_s11 = calobs.receiver_s11(freq)
+        lna_s11 = calobs.receiver.s11
 
-        nw_model = cls(
+        return cls(
             freq=freq,
             gamma_src=gamma_src,
             gamma_rec=lna_s11,
-            c_terms=cterms or calobs.cterms,
-            w_terms=wterms or calobs.wterms,
+            c_terms=cterms,
+            w_terms=wterms,
             with_tload=with_tload,
         )
-        return nw_model.with_params_from_calobs(calobs, cterms=cterms, wterms=wterms)
 
     def __call__(self, **kwargs) -> np.ndarray:
         """Call the underlying linear model."""

@@ -189,7 +189,7 @@ def sky_convolution_generator(
                 beam_above_horizon *= ground_gain[freq_idx] / solid_angle
 
             antenna_temperature_above_horizon = beam_above_horizon * sky_map
-
+            print(np.nanmin(sky_map), np.nanmax(sky_map))
             yield (
                 lst_idx,
                 freq_idx,
@@ -207,11 +207,11 @@ def sky_convolution_generator(
 
 def simulate_spectra(
     beam: Beam,
+    sky_model: sky_models.SkyModel,
     ground_loss: np.ndarray | None = None,
     f_low: float | None = 0,
     f_high: float | None = np.inf,
     normalize_beam: bool = True,
-    sky_model: sky_models.SkyModel = sky_models.Haslam408(),
     index_model: sky_models.IndexModel = sky_models.ConstantIndex(),
     lsts: np.ndarray = None,
     beam_smoothing: bool = True,

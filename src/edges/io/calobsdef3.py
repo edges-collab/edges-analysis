@@ -144,9 +144,14 @@ def get_spectrum_files(
 
 @attrs.define(frozen=True, kw_only=True)
 class LoadDefEDGES3:
+    name: str = attrs.field()
+    
     s11: LoadS11 = attrs.field()
     spectra: list[Path] = attrs.field(converter=_list_of_path)
-    templog: Path = attrs.field(converter=Path, validator=_vld_path_exists)
+    templog: Path | None = attrs.field(
+        converter=attrs.converters.optional(Path), 
+        validator=attrs.validators.optional(_vld_path_exists)
+    )
 
     @classmethod
     def from_standard_layout(
@@ -181,8 +186,13 @@ class LoadDefEDGES3:
         # Now get spectra
         fl = get_spectrum_files(loadname, root=root, year=year, day=day, fmt=specfmt)
 
+        templog=root / "temperature_logger/temperature.log"
+        if not templog.exists():
+            # It's OK, sometimes you just want to pass you own temperatures.
+            templog = None
+            
         return cls(
-            s11=s11, spectra=[fl], templog=root / "temperature_logger/temperature.log"
+            s11=s11, spectra=[fl], templog=templog, name=loadname
         )
 
 
@@ -223,9 +233,6 @@ class CalObsDefEDGES3:
 
         rootdir = Path(rootdir)
         assert rootdir.exists()
-
-        # Check the basic validity of this observation directory
-        assert (rootdir / "mro").exists()
 
         # Get the ReceiverS11
         rcv_calkit = CalkitEdges3.from_standard_layout(
