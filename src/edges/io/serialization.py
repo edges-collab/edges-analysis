@@ -108,7 +108,7 @@ def load_hdf5(struc, path: tp.PathLike | h5py.Group):
     return converter.structure(data, struc)
 
 
-def hickleable[T](cls: T) -> T:
+def hickleable(cls: T) -> T:
     """Render an attrs-defined class recursively hickleable."""
     # First, check whether all of the attributes have types
     if not attrs.has(cls):

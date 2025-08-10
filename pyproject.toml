@@ -18,7 +18,7 @@ authors = [
     {name="Akshatha Vydula", email="avydula@asu.edu"}
 ]
 license = {text="MIT"}
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
@@ -122,7 +122,7 @@ exclude = [
 ]
 preview = true
 line-length=88
-target-version="py312"
+target-version="py311"
 
 [tool.ruff.lint]
 extend-select = [
