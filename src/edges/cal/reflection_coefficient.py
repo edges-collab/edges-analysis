@@ -355,7 +355,7 @@ class SMatrix:
         ----------
         s11 : array_like
             S11 parameter.
-        s12 : array_like, o
+        s12 : array_like
             S12 parameter.
         s21 : array_like, optional
             S21 parameter. If not provided, assumed to be equal to s12.
@@ -448,12 +448,12 @@ class SMatrix:
 
     @property
     def scalar_linear_gain(self) -> tp.FloatArray:
-        """The abs value of the linear gain of the network, |S21|."""
+        """The abs value of the linear gain of the network, ``|S21|``."""
         return np.abs(self.complex_linear_gain)
 
     @property
     def scalar_logarithmic_gain(self) -> tp.FloatArray:
-        """The scalar gain, |S21|, in decibels."""
+        """The scalar gain, ``|S21|``, in decibels."""
         return linear_to_decibels(self.scalar_linear_gain)
 
     @property
@@ -466,22 +466,22 @@ class SMatrix:
 
     @property
     def input_return_loss(self):
-        """The loss, 1/|S11| in decibels."""
+        """The loss, ``1/|S11|`` in decibels."""
         return -linear_to_decibels(self.s[0, 0])
 
     @property
     def output_return_loss(self):
-        """The output loss, 1/|S22|, in decibels."""
+        """The output loss, ``1/|S22|``, in decibels."""
         return -linear_to_decibels(self.s[1, 1])
 
     @property
     def reverse_gain(self):
-        """The reverse gain, S|12|, in decibels."""
+        """The reverse gain, ``S|12|``, in decibels."""
         return linear_to_decibels(self.s[0, 1])
 
     @property
     def reverse_isolation(self):
-        """The reverse isolation, 1/|S12|, in decibels."""
+        """The reverse isolation, ``1/|S12|``, in decibels."""
         return np.abs(self.reverse_gain)
 
     @property
@@ -580,19 +580,21 @@ def gamma_de_embed(
     See Eq. 2 of Monsalve et al., 2016 or
     https://en.wikipedia.org/wiki/Scattering_parameters#S-parameters_in_amplifier_design
 
+    Notes
+    -----
     This function gives the intrinsic reflection coefficient of the load attached to a
     2-port network, given the reflection coefficient observed at the reference plane
-    of the input port of the network.
+    of the input port of the network::
 
-    ____________________________o___o
-           |             |         |Z|
-    PORT 1 |   NETWORK   |  PORT 2 |Z| <LOAD, Gamma_L>
-           |             |         |Z|
-    _______|_____________|_________|o|
-          ^
-          |
-         REF.
-         PLANE
+        ____________________________o___o
+            |             |         |Z|
+        PORT 1 |   NETWORK   |  PORT 2 |Z| <LOAD, Gamma_L>
+            |             |         |Z|
+        _______|_____________|_________|o|
+            ^
+            |
+            REF.
+            PLANE
 
     Parameters
     ----------
@@ -626,20 +628,22 @@ def gamma_embed(
     See Eq. 2 of Monsalve et al., 2016 or
     https://en.wikipedia.org/wiki/Scattering_parameters#S-parameters_in_amplifier_design
 
+    Notes
+    -----
     This function gives the reflection coefficient observed at the reference plane
     of the input port of the 2-port network, given the intrinsic reflection coefficient
-    of the DUT / load attached to the output of the 2-port network.
+    of the DUT / load attached to the output of the 2-port network::
 
 
-    ____________________________o___o
-           |             |         |Z|
-    PORT 1 |   NETWORK   |  PORT 2 |Z| <LOAD, Gamma_L>
-           |             |         |Z|
-    _______|_____________|_________|o|
-          ^
-          |
-         REF.
-         PLANE
+        ____________________________o___o
+            |             |         |Z|
+        PORT 1 |   NETWORK   |  PORT 2 |Z| <LOAD, Gamma_L>
+            |             |         |Z|
+        _______|_____________|_________|o|
+            ^
+            |
+            REF.
+            PLANE
 
 
     Parameters

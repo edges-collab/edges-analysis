@@ -66,7 +66,9 @@ def rfi_regular_leaky():
 def rfi_random_1d():
     a = np.zeros(NFREQ)
     rng = np.random.default_rng(12345)
-    a[rng.randint(0, len(a), 40)] = 1
+    rfipos = rng.integers(0, len(a), 40, dtype=int)
+    print(rfipos)
+    a[rfipos] = 1
     return a
 
 
@@ -75,8 +77,12 @@ def rfi_null_1d():
     return np.zeros(NFREQ)
 
 
-def print_wrongness(wrong, std, info, noise, true_flags, sky, rfi):
+def print_wrongness(
+    wrong, std, info: xrfi.ModelFilterInfo, noise, true_flags, sky, rfi
+):
     if len(wrong) > 0:
+        print("Number of iterations: ", info.n_iters)
+
         print("Indices of WRONG flags:")
         print(100 + wrong)
         print("RFI false positive(0)/negative(1): ")
@@ -84,7 +90,10 @@ def print_wrongness(wrong, std, info, noise, true_flags, sky, rfi):
         print("Corrupted sky at wrong flags: ")
         print(sky[wrong])
         print("Std. dev away from model at wrong flags: ")
-        print((sky[wrong] - sky[wrong]) / std[wrong])
+        print((sky[wrong] - info.models[-1](info.x)[wrong]) / std[wrong])
+        print("Zscore wrong flags: ")
+        print((sky[wrong] - info.models[-1](info.x)[wrong]) / info.stds[-1][wrong])
+
         print("Std. dev of noise away from model at wrong flags: ")
         print(noise[wrong] / std[wrong])
         print("Std dev of RFI away from model at wrong flags: ")
@@ -227,19 +236,29 @@ class TestXRFIModel:
 
     @parametrize("rfi_model", [fxref(rfi_random_1d), fxref(rfi_regular_1d)])
     @pytest.mark.parametrize("std_estimator", ["medfilt", "std", "mad", "sliding_rms"])
-    def test_std_estimator(self, sky_flat_1d, rfi_model, std_estimator, freq):
+    def test_std_estimator(self, sky_flat_1d, rfi_model, std_estimator, freq, plt):
         if std_estimator == "sliding_rms" and rfi_model[50] == 0:
             pytest.skip("sliding_rms doesn't work well for unrealistic random RFI")
 
-        sky, std, noise, rfi = make_sky(sky_flat_1d, rfi_model, scale=1000)
+        print("RFI MODEL: ", rfi_model)
+        sky, std, noise, rfi = make_sky(sky_flat_1d, rfi_model, scale=1000, rfi_amp=300)
 
         true_flags = rfi_model > 0
-        flags, info = xrfi.xrfi_model(sky, freq=freq, std_estimator=std_estimator)
+        true_flags2 = rfi > 0
+        assert np.all(true_flags == true_flags2)
+        flags, info = xrfi.xrfi_model(
+            sky, freq=freq, std_estimator=std_estimator, threshold=4
+        )
 
+        print("Number of flags: ", np.sum(flags))
+        print("# False Positives: ", np.sum(flags & ~true_flags))
+        print("# False Negatives: ", np.sum(~flags & true_flags))
         wrong = np.where(true_flags != flags)[0]
 
         print_wrongness(wrong, std, info, noise, true_flags, sky, rfi)
 
+        fig, ax = plt.subplots(2, 3, figsize=(10, 6))
+        xrfi.visualise_model_info(info, fig=fig, ax=ax)
         assert len(wrong) == 0
 
     def test_bad_std_estimator(self, sky_flat_1d, rfi_random_1d, freq):
@@ -433,7 +452,9 @@ class TestModelSweep:
         assert np.all(flags == flags2)
 
 
-def make_sky(sky_model, rfi_model=np.zeros(NFREQ), scale=1000, rfi_amp=200):
+def make_sky(sky_model, rfi_model=None, scale=1000, rfi_amp=200):
+    if rfi_model is None:
+        rfi_model = np.zeros_like(sky_model)
     std = sky_model / scale
     amp = std.max() * rfi_amp
     noise = thermal_noise(sky_model, scale=scale, seed=1010)
@@ -489,8 +510,11 @@ class TestXRFIModelSlidingRMSSinglePass:
             sky,
             freq=freq,
             model=EdgesPoly(n_terms=5),
-            threshold=3.5,
+            threshold=3.6,
         )
+
+        print("False Negatives: ", np.sum(true_flags & (~flags)))
+        print("False Positives: ", np.sum(flags & (~true_flags)))
 
         wrong = np.where(true_flags != flags)[0]
 

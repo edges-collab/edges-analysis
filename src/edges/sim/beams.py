@@ -577,8 +577,7 @@ class Beam:
 
             # Use a beam file in the standard directory.
             return (
-                Path(config["paths"]["beams"]).expanduser()
-                / f"{band}/simulations/{simulator}/{str(path)[1:]}"
+                config.beams / f"{band}/simulations/{simulator}/{str(path)[1:]}"
             ).absolute()
         return Path(path).absolute()
 

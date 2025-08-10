@@ -112,13 +112,13 @@ class GSDataLinearModel:
             The strategy to use when defining the weights of each sample. Defaults to
             'flagged-nsamples'. The choices are:
             - 'flagged-nsamples': Use the flagged nsamples (i.e. set nsamples at flagged
-               data to zero, otherwise use nsamples)
+            data to zero, otherwise use nsamples)
             - 'flags-only': Use the flags only (i.e. set nsamples at flagged data to
-               zero, otherwise use 1)
+            zero, otherwise use 1)
             - 'flagged-nsamples-uniform': Use the flagged nsamples (i.e. set nsamples at
-               flagged data to zero, and keep zero-samples as zero, otherwise use 1)
+            flagged data to zero, and keep zero-samples as zero, otherwise use 1)
             - 'nsamples-only': Use the nsamples only (don't set nsamples at flagged
-               data to zero)
+            data to zero)
         """
         shp = (-1, gsdata.nfreqs)
         d = gsdata.data.reshape(shp)

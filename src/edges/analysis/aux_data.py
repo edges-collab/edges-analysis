@@ -60,7 +60,7 @@ def add_weather_data(data: GSData, weather_file: tp.PathLike | None = None) -> G
     start = min(times)
     end = max(times)
 
-    pth = Path(config["paths"]["raw_field_data"])
+    pth = config.raw_field_data
     if weather_file is not None:
         weather_file = Path(weather_file)
         if not weather_file.exists() and not weather_file.is_absolute():

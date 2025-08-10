@@ -15,4 +15,4 @@ class TestLoad:
 
         assert load.load_name == "hot_load"
         mask = ~np.isnan(load.averaged_q)
-        assert np.all(load.averaged_q[mask] == load.spectrum.averaged_Q[mask])
+        assert np.all(load.averaged_q[mask] == load.spectrum.averaged_q[mask])

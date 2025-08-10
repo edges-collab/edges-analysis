@@ -60,14 +60,14 @@ class TestLoadSpectrum:
                 getattr(caldef, load), f_high=100 * un.MHz, f_low=50 * un.MHz
             )
 
-            print(spec.averaged_Q.shape)
-            print(np.where(np.isnan(spec.averaged_Q)))
+            print(spec.averaged_q.shape)
+            print(np.where(np.isnan(spec.averaged_q)))
 
-            mask = ~np.isnan(spec.averaged_Q)
+            mask = ~np.isnan(spec.averaged_q)
             assert np.sum(~mask) < 100
-            assert spec.averaged_Q.ndim == 1
+            assert spec.averaged_q.ndim == 1
 
-            assert np.all(~np.isnan(spec.variance_Q[mask]))
+            assert np.all(~np.isnan(spec.variance_q[mask]))
             assert ~np.isinf(spec.temp_ave)
             assert ~np.isnan(spec.temp_ave)
 
@@ -89,10 +89,10 @@ class TestLoadSpectrum:
 
         # gauss smooth has one more value because the way it bins is like Alan's code,
         # which starts at index 0, rather than in the middle of the bin.
-        assert len(spec.averaged_Q) - 1 == len(spec2.averaged_Q)
-        mask = (~np.isnan(spec.averaged_Q[:-1])) & (~np.isnan(spec2.averaged_Q))
+        assert len(spec.averaged_q) - 1 == len(spec2.averaged_q)
+        mask = (~np.isnan(spec.averaged_q[:-1])) & (~np.isnan(spec2.averaged_q))
         np.testing.assert_allclose(
-            spec.averaged_Q[:-1][mask], spec2.averaged_Q[mask], atol=1e-2, rtol=0.1
+            spec.averaged_q[:-1][mask], spec2.averaged_q[mask], atol=1e-2, rtol=0.1
         )
 
     def test_equality(self, caldef: CalObsDefEDGES2):

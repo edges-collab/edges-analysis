@@ -167,7 +167,7 @@ def get_data_from_calobs(
         q = (
             simulate_q_from_calibrator(calobs, load=src)
             if sim
-            else load.spectrum.averaged_Q
+            else load.spectrum.averaged_q
         )
         c = calobs.get_K()[src][0]
         data.append(scale * q - c * load.temp_ave)

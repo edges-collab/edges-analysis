@@ -15,7 +15,7 @@ def test_cal_uncal_round_trip(calobs: CalibrationObservation, calibrator: Calibr
     a, b = calibrator.get_linear_coefficients(
         freqs=calobs.freqs, ant_s11=calobs.open.s11.s11
     )
-    q = calobs.open.averaged_Q
+    q = calobs.open.averaged_q
 
     np.testing.assert_allclose((q * a + b - b) / a, q, atol=3e-5)
 
@@ -24,7 +24,7 @@ def test_cal_uncal_round_trip(calobs: CalibrationObservation, calibrator: Calibr
         tcal,
         ant_s11=calobs.open.s11.s11,
     )
-    np.testing.assert_allclose(decal, calobs.open.averaged_Q, atol=3e-5)
+    np.testing.assert_allclose(decal, calobs.open.averaged_q, atol=3e-5)
 
     new_tcal = calibrator.calibrate_q(
         decal,

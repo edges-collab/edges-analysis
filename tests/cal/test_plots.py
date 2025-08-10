@@ -14,7 +14,7 @@ class TestPlotRawSpectrum:
     @pytest.mark.parametrize("ylabel", [True, False])
     def test_plot_raw_spectrum_array(self, calobs, xlabel, ylabel):
         plots.plot_raw_spectrum(
-            calobs.ambient.averaged_Q, freq=calobs.freqs, xlabel=xlabel, ylabel=ylabel
+            calobs.ambient.averaged_q, freq=calobs.freqs, xlabel=xlabel, ylabel=ylabel
         )
 
 
@@ -34,7 +34,7 @@ class TestPlotS11Residual:
     def setup_class(self):
         rng = np.random.default_rng()
         self.s11 = CalibratedS11(
-            s11=np.exp(rng.uniform(100) * 1j),
+            s11=np.exp(rng.uniform(size=100) * 1j),
             freqs=np.linspace(100, 200, 100) * un.MHz,
         )
         self.s11_model_params = S11ModelParams()

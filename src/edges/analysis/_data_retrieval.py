@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import requests
 
 from .config import config
@@ -33,9 +31,7 @@ def retrieve_beam(band, configuration=""):
     fname = "builtin"
     if configuration:
         fname += f"_{configuration}.txt"
-    abspath = (
-        Path(config["paths"]["beams"]).expanduser() / f"{band}/simulations/feko" / fname
-    )
+    abspath = config.beams / f"{band}/simulations/feko" / fname
 
     if not abspath.exists():
         # Get it from gdrive

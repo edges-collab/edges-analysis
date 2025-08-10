@@ -1028,7 +1028,7 @@ def model_filter(
 
         std_list.append(model_std)
 
-        zscore = np.abs(res) / model_std
+        zscore = res / model_std
 
         # If we're not accumulating, we just take these flags (along with the fully
         # original flags).
@@ -1564,7 +1564,7 @@ def visualise_model_info(
         will plot the last n, and positive will plot the first n.
     """
     if fig is None or ax is None:
-        _fig, ax = plt.subplots(2, 3, figsize=(10, 6))
+        fig, ax = plt.subplots(2, 3, figsize=(10, 6))
 
     ax[0, 0].plot(info.data, label="Data", color="k")
 

@@ -331,7 +331,7 @@ class LoadSpectrum:
         )
 
     @property
-    def averaged_Q(self) -> np.ndarray:
+    def averaged_q(self) -> np.ndarray:
         """Ratio of powers averaged over time.
 
         Notes
@@ -344,5 +344,5 @@ class LoadSpectrum:
 
     @property
     def variance_Q(self) -> np.ndarray:
-        """Variance of Q across time (see averaged_Q)."""
+        """Variance of Q across time (see averaged_q)."""
         return self.variance.data[0, 0, 0]
