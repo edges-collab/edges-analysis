@@ -8,7 +8,6 @@ The idea is that here all the parameter names and defaults are the same as in th
 C-code, with functions available that replicate entire C-programs.
 """
 
-from . import cli
 from .alanio import (
     LOADMAP,
     read_alan_calibrated_temp,
