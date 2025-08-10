@@ -170,11 +170,10 @@ class ModelFit:
         rcond = y.size * np.finfo(y.dtype).eps
 
         # Determine the norms of the design matrix columns.
-        scl = np.sqrt(np.square(van).sum())
+        scl = np.sqrt(np.square(van.T).sum(axis=0))
 
         # Solve the least squares problem.
-        c = np.linalg.lstsq((van.T / scl), y.T, rcond)[0] / scl
-        return (c.T / scl).T
+        return np.linalg.lstsq((van.T / scl), y.T, rcond)[0] / scl
 
     @cached_property
     def model_parameters(self):
