@@ -173,7 +173,8 @@ class ModelFit:
         scl = np.sqrt(np.square(van).sum())
 
         # Solve the least squares problem.
-        return np.linalg.lstsq((van.T / scl), y.T, rcond)[0] / scl
+        c = np.linalg.lstsq((van.T / scl), y.T, rcond)[0] / scl
+        return (c.T / scl).T
 
     @cached_property
     def model_parameters(self):
