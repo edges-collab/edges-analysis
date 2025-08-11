@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import warnings
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -17,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 @gsregister("gather")
 def average_multiple_objects(
-    *objs: tuple[GSData],
+    *objs: Sequence[GSData],
     nsamples_strategy: NsamplesStrategy = NsamplesStrategy.FLAGGED_NSAMPLES,
     use_resids: bool | None = None,
 ) -> GSData:
