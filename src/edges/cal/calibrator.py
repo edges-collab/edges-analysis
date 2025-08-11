@@ -15,7 +15,7 @@ from edges.modelling import CompositeModel, Model
 from ..tools import ComplexSpline, Spline
 from .load_data import Load
 from .noise_waves import get_linear_coefficients
-from .s11 import CalibratedS11
+from .s11 import CalibratedS11, S11ModelParams
 
 
 class CalFileReadError(Exception):
@@ -86,6 +86,7 @@ class Calibrator:
         ant_s11: CalibratedS11 | tp.ComplexArray,
         freqs: tp.FreqType | None = None,
         models: dict[str, Callable | Model | None] | None = None,
+        s11_model_params: S11ModelParams = S11ModelParams(),
     ):
         """Return the frequency-dependent linear coefficients required to calibrate.
 
@@ -119,7 +120,9 @@ class Calibrator:
 
         if isinstance(ant_s11, CalibratedS11):
             if ant_s11.s11.size != freqs.size or not np.allclose(ant_s11.freqs, freqs):
-                ant_s11 = ant_s11.smoothed(freqs=freqs).s11
+                ant_s11 = ant_s11.smoothed(
+                    params=s11_model_params or S11ModelParams(), freqs=freqs
+                ).s11
 
         elif len(ant_s11) != len(freqs):
             raise ValueError(

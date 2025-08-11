@@ -138,7 +138,10 @@ def write_spec_txt(
 def write_spec_txt_gsd(gsd: GSData, fname: tp.PathLike):
     """Write a standard spe.txt file given a GSData object."""
     write_spec_txt(
-        freq=gsd.freqs, n=np.mean(gsd.nsamples), spec=gsd.data[0, 0, 0], fname=fname
+        freq=gsd.freqs,
+        n=int(np.mean(gsd.nsamples)),
+        spec=gsd.data[0, 0, 0],
+        fname=fname,
     )
 
 
