@@ -119,7 +119,9 @@ def sky_convolution_generator(
     beam_above_horizon = np.full(sky_model.coords.shape, np.nan)
     interpolators = {}
 
-    for lst_idx, time in tqdm(enumerate(times), unit="LST", disable=not lst_progress):
+    for lst_idx, time in tqdm(
+        enumerate(times), unit="LST", disable=not lst_progress, total=len(times)
+    ):
         # Transform Galactic coordinates of Sky Model to Local coordinates
         if use_astropy_azel:
             altaz = sky_model.coords.transform_to(

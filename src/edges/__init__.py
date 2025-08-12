@@ -29,6 +29,7 @@ from . import (
     averaging,
     cal,
     filters,
+    inference,
     io,
     modelling,
     sim,

@@ -72,7 +72,9 @@ def apply_noise_wave_calibration(
     else:
         resids = None
 
-    return data.update(data=new_data, data_unit="temperature", residuals=resids)
+    return data.update(
+        data=new_data.to_value("K"), data_unit="temperature", residuals=resids
+    )
 
 
 @gsregister("calibrate")

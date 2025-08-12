@@ -714,7 +714,7 @@ class BeamFactor:
     antenna_temp: np.ndarray = attrs.field(converter=np.asarray)
     antenna_temp_ref: np.ndarray = attrs.field(converter=np.asarray)
     loss_fraction: np.ndarray | None = attrs.field(default=None)
-    meta: dict[str, tp.Any] = attrs.field(factory=dict, converter=dict)
+    meta: dict = attrs.field(factory=dict, converter=dict)
 
     @property
     def nfreq(self) -> int:
