@@ -16,4 +16,4 @@ from .averaging import bin_data
 from .combiners import average_files_pairwise, average_multiple_objects
 from .freqbin import freq_bin, gauss_smooth
 from .lstbin import average_over_times, get_lst_bins, lst_bin
-from .utils import NsamplesStrategy
+from .utils import NsamplesStrategy, get_weights_from_strategy

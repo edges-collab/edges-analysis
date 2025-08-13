@@ -110,12 +110,14 @@ def run_xrfi(
             def fnc(i):
                 if np.any(weights[i] > 0):
                     return rfi(spectrum[i], freq=freq, weights=weights[i], **kwargs)[0]
+
                 return np.ones_like(spectrum[i], dtype=bool)
 
             m = map
 
-        results = m(fnc, range(len(spectrum)))
-        flags = np.array(list(results))
+        results = list(m(fnc, range(len(spectrum))))
+
+        flags = np.array(results)
 
         warnings.showwarning = old
 

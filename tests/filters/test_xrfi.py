@@ -489,7 +489,7 @@ class TestXRFIExplicit:
         assert flags[350]
 
 
-class TestXRFIModelSlidingRMSSinglePass:
+class TestXRFIModelNonlinearWindow:
     """Test the single-pass sliding RMS model.
 
     This is the algorithm most similar to Alan's C-code.
@@ -506,7 +506,7 @@ class TestXRFIModelSlidingRMSSinglePass:
         sky, *_ = make_sky(sky_model, rfi_model, scale)
 
         true_flags = rfi_model > 0
-        flags = xrfi.xrfi_model_sliding_rms_single_pass(
+        flags = xrfi.xrfi_model_nonlinear_window(
             sky,
             freq=freq,
             model=EdgesPoly(n_terms=5),

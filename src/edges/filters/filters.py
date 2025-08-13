@@ -18,7 +18,7 @@ from pygsdata.select import _mask_times
 
 from .. import modelling as mdl
 from .. import types as tp
-from ..averaging import averaging
+from ..averaging import NsamplesStrategy, averaging, get_weights_from_strategy
 from ..filters import xrfi as rfi
 from ..filters.xrfi import ModelFilterInfoContainer, model_filter
 from .runners import run_xrfi
@@ -348,8 +348,8 @@ class _RFIFilterFactory:
             method=self.method,
             spectrum=data.data[..., mask],
             freq=data.freqs[mask].to_value("MHz"),
-            flags=flg,
-            weights=wgt,
+            flags=flg[..., mask],
+            weights=wgt[..., mask],
             n_threads=n_threads,
             **kwargs,
         )
@@ -370,7 +370,7 @@ rfi_model_sweep_filter = gsregister("filter")(
 rfi_watershed_filter = gsregister("filter")(
     gsdata_filter()(_RFIFilterFactory("watershed"))
 )
-rfi_model_nonlinear_window_filter = gsregister("filter")(
+rfi_model_nonlinear_window = gsregister("filter")(
     gsdata_filter()(_RFIFilterFactory("model_nonlinear_window"))
 )
 
@@ -752,36 +752,22 @@ def rms_filter(
     data: GSData,
     threshold: float,
     freq_range: float = (0.0, np.inf),
-    nsamples_strategy: Literal[
-        "flagged-nsamples",
-        "flags-only",
-        "flagged-nsamples-uniform",
-        "nsamples-only",
-    ] = "flagged-nsamples",
+    nsamples_strategy: NsamplesStrategy = NsamplesStrategy.FLAGGED_NSAMPLES,
     model: mdl.Model | None = None,
 ) -> bool:
     """Filter integrations based on the rms of the residuals.
 
     Parameters
     ----------
-    data : GSData
+    data
         The data to be filtered.
     threshold
         The threshold at which to flag integrations.
-    freq_range : float, optional
+    freq_range
         The frequency range to use in calculating the RMS.
-    nsamples_strategy : str, optional
-        The strategy to use when defining the weights of each sample. Defaults to
-        'flagged-nsamples'. The choices are:
-        - 'flagged-nsamples': Use the flagged nsamples (i.e. set nsamples at flagged
-            data to zero, otherwise use nsamples)
-        - 'flags-only': Use the flags only (i.e. set nsamples at flagged data to
-            zero, otherwise use 1)
-        - 'flagged-nsamples-uniform': Use the flagged nsamples (i.e. set nsamples at
-            flagged data to zero, and keep zero-samples as zero, otherwise use 1)
-        - 'nsamples-only': Use the nsamples only (don't set nsamples at flagged
-            data to zero)
-    model : Model, optional
+    nsamples_strategy
+        The strategy to use to infer weights for computing RMS.
+    model
         A model to be used to fit each integration. Not required if a model
         already exists on the data.
     """
@@ -799,20 +785,11 @@ def rms_filter(
         data = add_model(data=data, model=model, nsamples_strategy=nsamples_strategy)
 
     shp = (-1, data.nfreqs)
-    if nsamples_strategy == "flagged-nsamples":
-        w = data.flagged_nsamples.reshape(shp)
-    elif nsamples_strategy == "flags-only":
-        w = (~data.complete_flags.reshape(shp)).astype(float)
-    elif nsamples_strategy == "flagged-nsamples-uniform":
-        w = (data.flagged_nsamples > 0).astype(float).reshape(shp)
-    elif nsamples_strategy == "nsamples-only":
-        w = data.nsamples.reshape(shp)
-    else:
-        raise ValueError(f"Invalid nsamples_strategy: {nsamples_strategy}")
+    w = get_weights_from_strategy(data, nsamples_strategy)[0]
 
     rms = np.sqrt(
         averaging.weighted_mean(
-            data=data.residuals.reshape(shp) ** 2, weights=w, axis=-1
+            data=data.residuals.reshape(shp) ** 2, weights=w.reshape(shp), axis=-1
         )[0]
     )
 
@@ -823,6 +800,21 @@ def rms_filter(
             "pol",
             "time",
         ),
+    )
+
+
+@gsdata_filter()
+def rms_rfi_filter(
+    data: GSData,
+    threshold: float = 3.0,
+    nsamples_strategy: NsamplesStrategy = NsamplesStrategy.FLAGGED_NSAMPLES,
+) -> GSFlag:
+    """Flag specific channel-integrations via their outlier-ness compared to RMS."""
+    w = get_weights_from_strategy(data, nsamples_strategy)[0]
+
+    rms = np.sqrt(np.average(np.square(data.residuals), weights=w, axis=-1))[..., None]
+    return GSFlag(
+        flags=data.residuals > rms * threshold, axes=("load", "pol", "time", "freq")
     )
 
 
