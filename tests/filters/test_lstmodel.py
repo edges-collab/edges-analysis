@@ -26,7 +26,6 @@ def test_tp_filter(mock_with_model):
     run_filter_check(
         [mock_with_model],
         lst_model.total_power_filter,
-        write=False,
         metric_model=mdl.FourierDay(n_terms=3),
         std_model=mdl.FourierDay(n_terms=3),
         init_flag_threshold=np.inf,

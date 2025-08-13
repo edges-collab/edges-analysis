@@ -59,7 +59,8 @@ dependencies = [
     "hickleable>=0.2.4",
     "statsmodels",
     'cattrs',
-    'cyclopts'
+    'cyclopts',
+    'yabf',
 
 ]
 dynamic = ["version"]
