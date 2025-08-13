@@ -11,6 +11,7 @@ from pytest_cases import parametrize
 
 from edges.filters import xrfi
 from edges.modelling import EdgesPoly, ScaleTransform
+from matplotlib import pyplot as plt
 
 NFREQ = 1000
 
@@ -238,7 +239,7 @@ class TestXRFIModel:
 
     @parametrize("rfi_model", [fxref(rfi_random_1d), fxref(rfi_regular_1d)])
     @pytest.mark.parametrize("std_estimator", ["medfilt", "std", "mad", "sliding_rms"])
-    def test_std_estimator(self, sky_flat_1d, rfi_model, std_estimator, freq, plt):
+    def test_std_estimator(self, sky_flat_1d, rfi_model, std_estimator, freq):
         if std_estimator == "sliding_rms" and rfi_model[50] == 0:
             pytest.skip("sliding_rms doesn't work well for unrealistic random RFI")
 
@@ -259,8 +260,6 @@ class TestXRFIModel:
 
         print_wrongness(wrong, std, info, noise, true_flags, sky, rfi)
 
-        fig, ax = plt.subplots(2, 3, figsize=(10, 6))
-        xrfi.visualise_model_info(info, fig=fig, ax=ax)
         assert len(wrong) == 0
 
     def test_bad_std_estimator(self, sky_flat_1d, rfi_random_1d, freq):
@@ -504,7 +503,7 @@ class TestXRFIModelNonlinearWindow:
         "rfi_model", [fxref(rfi_null_1d), fxref(rfi_regular_1d), fxref(rfi_random_1d)]
     )
     @pytest.mark.parametrize("scale", [1000, 100])
-    def test_on_simple_data(self, sky_model, rfi_model, scale, freq, plt):
+    def test_on_simple_data(self, sky_model, rfi_model, scale, freq):
         sky, *_ = make_sky(sky_model, rfi_model, scale)
 
         true_flags = rfi_model > 0
@@ -523,8 +522,6 @@ class TestXRFIModelNonlinearWindow:
         wrong = np.where(true_flags != flags)[0]
 
         print(sky)
-        plt.plot(sky)
-        plt.plot(info.models[-1](info.x), label="Model")
 
         assert len(wrong) == 0
 
@@ -570,10 +567,9 @@ def test_model_info_container(model_info: xrfi.ModelFilterInfo, tmpdir: Path):
 
 
 class TestVisualiseModelInfo:
-    def test_visualise_model_info(self, sky_linpoly_1d, rfi_random_1d, freq, plt):
+    def test_visualise_model_info(self, sky_linpoly_1d, rfi_random_1d, freq):
         sky, *_ = make_sky(sky_linpoly_1d, rfi_random_1d)
 
         _, info = xrfi.xrfi_model(sky, freq=freq, watershed=1, threshold=6)
 
-        fig, ax = plt.subplots(2, 3, figsize=(10, 6))
-        xrfi.visualise_model_info(info, fig=fig, ax=ax)
+        xrfi.visualise_model_info(info)

@@ -365,6 +365,7 @@ class CalObsDefEDGES3:
             "day": day,
             "specfmt": specfmt,
         }
+        print("KW: ", kw)
 
         loads = {
             LOADMAP[load]: LoadDefEDGES3.from_standard_layout(loadname=load, **kw)
