@@ -97,12 +97,7 @@ def _get_loss_from_datafile(
                 return np.ones(freq.shape)
         else:
             # Find the file in the standard directory structure
-            filename = (
-                Path(config["paths"]["antenna"])
-                / instrument
-                / "loss"
-                / str(filename)[1:]
-            )
+            filename = config.antenna / instrument / "loss" / str(filename)[1:]
     else:
         filename = Path(filename)
 

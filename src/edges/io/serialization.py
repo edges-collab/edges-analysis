@@ -12,6 +12,7 @@ import h5py
 import hickle
 import numpy as np
 from astropy.coordinates import EarthLocation
+from astropy.table import QTable
 from astropy.time import Time
 from astropy.units import Quantity
 
@@ -91,6 +92,18 @@ def _location_hook(val: np.ndarray, _) -> EarthLocation:
 def _location_unstructure_hook(val: EarthLocation) -> list[Quantity]:
     """Convert a str to datetime."""
     return [val.lat, val.lon, val.height]
+
+
+@converter.register_structure_hook
+def _qtable_hook(val: np.ndarray, _) -> QTable:
+    """Convert a datetime to string."""
+    return QTable(data=val)
+
+
+@converter.register_unstructure_hook
+def _qtable_unstructure_hook(val: QTable) -> dict[str, np.ndarray]:
+    """Convert a str to datetime."""
+    return {col: val[col] for col in val.columns}
 
 
 def write_object_to_hdf5(obj: Any, path: tp.PathLike | h5py.Group):

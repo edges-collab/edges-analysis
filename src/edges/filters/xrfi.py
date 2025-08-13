@@ -1366,7 +1366,7 @@ def xrfi_model_nonlinear_window(
     watershed: dict | None = None,
     reflag_thresh: float = 1.01,
     fit_kwargs: dict | None = None,
-    weights: np.ndarray | None,
+    weights: np.ndarray | None = None,
 ):
     """
     Flag RFI using a model fit and a sliding RMS window.
@@ -1439,10 +1439,7 @@ def xrfi_model_nonlinear_window(
     if flags is None:
         flags = np.zeros(len(spectrum), dtype=bool)
 
-    if weights is None:
-        weights = (~flags).astype(int)
-    else:
-        weights[flags] = 0.0
+    weights = (~flags).astype(int) if weights is None else np.where(flags, 0, weights)
 
     orig_weights = weights.copy()
 

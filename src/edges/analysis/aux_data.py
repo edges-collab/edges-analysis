@@ -61,8 +61,13 @@ def add_weather_data(data: GSData, weather_file: tp.PathLike | None = None) -> G
     end = max(times)
 
     pth = config.raw_field_data
+    if (pth is None and weather_file is None) or not Path(weather_file).exists():
+        raise ValueError(
+            "weather file not given, but not configuration set to specify where "
+            "raw data is"
+        )
+
     if weather_file is not None:
-        weather_file = Path(weather_file)
         if not weather_file.exists() and not weather_file.is_absolute():
             weather_file = pth / weather_file
     elif (start.year, start.day) <= (2017, 329):
@@ -123,13 +128,17 @@ def add_thermlog_data(
     start = min(times)
     end = max(times)
 
-    pth = Path(config["paths"]["raw_field_data"])
-    if thermlog_file is not None:
-        thermlog_file = Path(thermlog_file)
-        if not thermlog_file.exists() and not thermlog_file.is_absolute():
-            thermlog_file = pth / thermlog_file
-    else:
+    pth = config.raw_field_data
+    if (pth is None and thermlog_file is None) or not Path(thermlog_file).exists():
+        raise ValueError(
+            "thermlog file not given, but not configuration set to specify where "
+            "raw data is"
+        )
+
+    if thermlog_file is None:
         thermlog_file = pth / f"thermlog_{band}.txt"
+    elif not thermlog_file.exists() and not thermlog_file.is_absolute():
+        thermlog_file = pth / thermlog_file
 
     # Get all aux data covering our times, up to the next minute (so we have some
     # overlap).

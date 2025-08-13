@@ -30,11 +30,6 @@ def test_write_and_load(cfg, tmpdir):
     assert cfg == cfg2
 
 
-def test_getitem_bad():
-    with pytest.raises(KeyError, match="The key hobnob does not exist"):
-        config["hobnob"]
-
-
 def test_cant_use_nonexistent(cfg):
     with pytest.raises(KeyError, match="Cannot use bad in config"):  # noqa: SIM117
         with cfg.use(bad="bad"):

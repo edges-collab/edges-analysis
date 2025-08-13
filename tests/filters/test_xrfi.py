@@ -10,7 +10,7 @@ from pytest_cases import fixture_ref as fxref
 from pytest_cases import parametrize
 
 from edges.filters import xrfi
-from edges.modelling import EdgesPoly
+from edges.modelling import EdgesPoly, ScaleTransform
 
 NFREQ = 1000
 
@@ -33,9 +33,12 @@ def sky_flat_1d():
 
 @pytest.fixture(scope="module")
 def sky_linpoly_1d(freq):
-    p = np.poly1d([1750, 0, 3, -2, 7, 5][::-1])
-    f = np.linspace(-1, 1, len(freq))
-    return (freq / 75.0) ** -2.55 * p(f)
+    p = EdgesPoly(
+        parameters=[1750, 0, 3, -2, 7, 5],
+        transform=ScaleTransform(scale=75.0),
+    )
+    f = np.linspace(50, 100, len(freq))
+    return p(x=f)
 
 
 def thermal_noise(spec, scale=1, seed=None):
@@ -67,7 +70,6 @@ def rfi_random_1d():
     a = np.zeros(NFREQ)
     rng = np.random.default_rng(12345)
     rfipos = rng.integers(0, len(a), 40, dtype=int)
-    print(rfipos)
     a[rfipos] = 1
     return a
 
@@ -506,17 +508,23 @@ class TestXRFIModelNonlinearWindow:
         sky, *_ = make_sky(sky_model, rfi_model, scale)
 
         true_flags = rfi_model > 0
-        flags = xrfi.xrfi_model_nonlinear_window(
+        flags, info = xrfi.xrfi_model_nonlinear_window(
             sky,
             freq=freq,
-            model=EdgesPoly(n_terms=5),
-            threshold=3.6,
+            model=EdgesPoly(n_terms=6),
+            threshold=3.5,
+            max_iter=15,
+            reflag_thresh=1,
         )
 
         print("False Negatives: ", np.sum(true_flags & (~flags)))
         print("False Positives: ", np.sum(flags & (~true_flags)))
 
         wrong = np.where(true_flags != flags)[0]
+
+        print(sky)
+        plt.plot(sky)
+        plt.plot(info.models[-1](info.x), label="Model")
 
         assert len(wrong) == 0
 

@@ -343,6 +343,6 @@ class LoadSpectrum:
         return self.q.data[0, 0, 0]
 
     @property
-    def variance_Q(self) -> np.ndarray:
+    def variance_q(self) -> np.ndarray:
         """Variance of Q across time (see averaged_q)."""
         return self.variance.data[0, 0, 0]

@@ -10,6 +10,7 @@ from pygsdata.concat import concat
 from pygsdata.select import select_freqs
 
 from edges import modelling as mdl
+from edges.averaging.utils import NsamplesStrategy
 from edges.filters import filters
 from edges.testing import create_mock_edges_data
 
@@ -284,7 +285,12 @@ class TestRMSFilter:
 
     @pytest.mark.parametrize(
         "strategy",
-        ["flagged-nsamples", "flags-only", "flagged-nsamples-uniform", "nsamples-only"],
+        [
+            NsamplesStrategy.FLAGGED_NSAMPLES,
+            NsamplesStrategy.NSAMPLES_ONLY,
+            NsamplesStrategy.FLAGGED_NSAMPLES_UNIFORM,
+            NsamplesStrategy.FLAGS_ONLY,
+        ],
     )
     def test_nsamples_strategy(self, mock: GSData, strategy: str):
         # since there are no flags in the mock data, each of the strategies

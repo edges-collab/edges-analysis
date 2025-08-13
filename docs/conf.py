@@ -10,7 +10,6 @@ serve to show the default.
 """
 
 
-
 import os
 import sys
 from pathlib import Path

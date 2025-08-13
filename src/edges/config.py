@@ -42,20 +42,16 @@ class Config:
         default=Path(dirs.user_cache_dir) / "sky-models", converter=Path
     )
 
-    def __getitem__(self, item: str):
-        """Return the value of the specified item."""
-        if item in attrs.fields_dict(self.__class__):
-            return getattr(self, item)
-        raise KeyError(f"The key {item} does not exist in Config")
-
     @contextlib.contextmanager
     def use(self, **kwargs):
         """Context manager for using certain configuration options for a set time."""
+        avail = list(attrs.fields_dict(self.__class__).keys())
+
         for k in kwargs:
-            if k not in self:
+            if k not in avail:
                 raise KeyError(
                     f"Cannot use {k} in config, as it doesn't exist. "
-                    f"Available keys: {list(self.keys())}."
+                    f"Available keys: {avail}."
                 )
         backup = copy.deepcopy(self)
         for k, v in kwargs.items():
@@ -64,7 +60,7 @@ class Config:
         yield self
 
         for k in kwargs:
-            setattr(self, k, backup[k])
+            setattr(self, k, getattr(backup, k))
 
     def write(self, fname=None):
         """Write current configuration to file to make it permanent."""
