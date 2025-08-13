@@ -141,7 +141,6 @@ def average_over_times(
         }
     else:
         new_aux = None
-
     return data.update(
         data=new_data[:, :, None, :],
         residuals=mean_resids[:, :, None, :] if use_resids else None,
