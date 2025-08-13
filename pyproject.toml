@@ -36,7 +36,7 @@ dependencies = [
     "scipy",
     "matplotlib",
     "astropy>=5.0",
-    "pygsdata",
+    "pygsdata>=0.2.2",
     "astropy-healpix",
     "h5py",
     "tqdm",
@@ -59,7 +59,8 @@ dependencies = [
     "hickleable>=0.2.4",
     "statsmodels",
     'cattrs',
-    'cyclopts'
+    'cyclopts',
+    'yabf',
 
 ]
 dynamic = ["version"]

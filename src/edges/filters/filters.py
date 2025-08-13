@@ -5,7 +5,6 @@ from __future__ import annotations
 import functools
 import logging
 from collections.abc import Callable, Sequence
-from pathlib import Path
 from typing import Literal
 
 import hickle
@@ -38,19 +37,15 @@ class _GSDataFilter:
 
     def __call__(
         self,
-        data: Sequence[tp.PathLike | GSData],
+        data: Sequence[GSData],
         *,
-        write: bool = False,
         flag_id: str | None = None,
         **kwargs,
     ) -> GSData | Sequence[GSData]:
         # Read all the data, in case they haven't been turned into objects yet.
         # And check that everything is the right type.
-        if isinstance(data, Path | str):
-            data = GSData.from_file(data)
-
-        if self.multi_data and isinstance(data, GSData | Path | str):
-            data = [data if isinstance(data, GSData) else GSData.from_file(data)]
+        if self.multi_data and isinstance(data, GSData):
+            data = [data]
         elif not self.multi_data and not isinstance(data, GSData):
             raise TypeError(
                 f"'{self.func.__name__}' only accepts single GSData objects as data."
@@ -59,9 +54,7 @@ class _GSDataFilter:
         def per_file_processing(data: GSData, flags: GSFlag):
             old = np.sum(data.flagged_nsamples == 0)
 
-            data = data.add_flags(
-                flag_id or self.func.__name__, flags, append_to_file=write
-            )
+            data = data.add_flags(flag_id or self.func.__name__, flags)
 
             if np.all(flags.flags):
                 logger.warning(
@@ -97,8 +90,7 @@ class _GSDataFilter:
         return data
 
 
-@define
-class gsdata_filter:  # noqa: N801
+def gsdata_filter(multi_data: bool = False):
     """A decorator to register a filtering function as a potential filter.
 
     Any function that is wrapped by :func:`gsdata_filter` must implement the following
@@ -124,11 +116,64 @@ class gsdata_filter:  # noqa: N801
         each independently.
     """
 
-    multi_data: bool = False
+    def inner(func: Callable) -> Callable:
+        @functools.wraps(func)
+        def wrapper(
+            data: GSData | Sequence[GSData],
+            *,
+            flag_id: str | None = None,
+            **kwargs,
+        ) -> GSData | Sequence[GSData]:
+            # Read all the data, in case they haven't been turned into objects yet.
+            # And check that everything is the right type.
+            if multi_data and isinstance(data, GSData):
+                data = [data]
+            elif not multi_data and not isinstance(data, GSData):
+                raise TypeError(
+                    f"'{func.__name__}' only accepts single GSData objects as data."
+                )
 
-    def __call__(self, func: Callable) -> Callable:
-        """Wrap the function in a GSDataFilter instance."""
-        return _GSDataFilter(func, self.multi_data)
+            def per_file_processing(data: GSData, flags: GSFlag):
+                old = np.sum(data.flagged_nsamples == 0)
+
+                data = data.add_flags(flag_id or func.__name__, flags)
+
+                if np.all(flags.flags):
+                    logger.warning(
+                        f"{data.name} was fully flagged during {func.__name__} filter"
+                    )
+                else:
+                    sz = flags.flags.size / 100
+                    new = np.sum(flags.flags)
+                    tot = np.sum(data.flagged_nsamples == 0)
+                    totsz = data.complete_flags.size
+
+                    rep = data.get_initial_yearday(hours=True)
+
+                    logger.info(
+                        f"'{rep}': "
+                        f"{old / totsz:.2f} + {new / sz:.2f} → "
+                        f"{tot / totsz:.2f}% [bold]<+{(tot - old) / totsz:.2f}%>[/] "
+                        f"flagged after [blue]{func.__name__}[/]"
+                    )
+
+                return data
+
+            this_flag = func(data=data, **kwargs)
+
+            if multi_data:
+                data = [
+                    per_file_processing(d, out_flg)
+                    for d, out_flg in zip(data, this_flag, strict=False)
+                ]
+            else:
+                data = per_file_processing(data, this_flag)
+
+            return data
+
+        return wrapper
+
+    return inner
 
 
 def chunked_iterative_model_filter(
