@@ -6,6 +6,7 @@
 !.isort.cfg
 !setup.cfg
 *.log
+!temperature.log
 *.pot
 __pycache__/*
 .cache/*
