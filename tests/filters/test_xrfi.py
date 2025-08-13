@@ -11,7 +11,6 @@ from pytest_cases import parametrize
 
 from edges.filters import xrfi
 from edges.modelling import EdgesPoly, ScaleTransform
-from matplotlib import pyplot as plt
 
 NFREQ = 1000
 
