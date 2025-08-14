@@ -20,11 +20,13 @@ __all__ = [
     "TEST_DATA_PATH",
     "CalObsDefEDGES2",
     "CalObsDefEDGES3",
-    "Calkit",
+    "CalkitFileSpec",
+    "CalkitFileSpec",
     "LoadDefEDGES2",
     "LoadDefEDGES3",
     "LoadS11",
     "SParams",
+    "SwitchingState",
     "get_mean_temperature",
     "hickleable",
     "read_auxiliary_data",
@@ -36,7 +38,13 @@ __all__ = [
 ]
 from . import time_formats
 from .auxiliary import read_auxiliary_data, read_thermlog_file, read_weather_file
-from .calobsdef import Calkit, CalObsDefEDGES2, LoadDefEDGES2, LoadS11, SwitchingState
+from .calobsdef import (
+    CalkitFileSpec,
+    CalObsDefEDGES2,
+    LoadDefEDGES2,
+    LoadS11,
+    SwitchingState,
+)
 from .calobsdef3 import CalObsDefEDGES3, LoadDefEDGES3
 from .serialization import hickleable
 from .templogs import get_mean_temperature, read_temperature_log

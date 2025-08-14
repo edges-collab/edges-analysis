@@ -86,7 +86,9 @@ def get_receiver_s11model_from_filespec(
 
     s11s = []
     for dv in pathspec:
-        standards = StandardsReadings.from_io(dv.calkit, f_low=f_low, f_high=f_high)
+        standards = StandardsReadings.from_filespec(
+            dv.calkit, f_low=f_low, f_high=f_high
+        )
         receiver_reading = SParams.from_s1p_file(dv.device, f_low=f_low, f_high=f_high)
         freq = standards.freq
 

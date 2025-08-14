@@ -69,6 +69,8 @@ class DataTransform(metaclass=ABCMeta):
 @hickleable
 @attrs.define(frozen=True, kw_only=True, slots=False)
 class IdentityTransform(DataTransform):
+    """A transform that does nothing."""
+
     def transform(self, x: np.ndarray, data: np.ndarray) -> np.ndarray:
         """Transform the data."""
         return data

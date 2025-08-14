@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import warnings
 from pathlib import Path
+from typing import Self
 
 import attrs
 import numpy as np
@@ -126,6 +127,25 @@ def read_s1p(
 
 @attrs.define
 class SParams:
+    """A class for holding S-parameters.
+
+    All parameters are optional other than freq. The class is simply a flexible
+    container for S-parameter measurements.
+
+    Parameters
+    ----------
+    freq
+        The frequency vector.
+    s11
+        The S11 parameter, same length as freq.
+    s12
+        The S12 parameter, same length as freq.
+    s21
+        The S21 parameter, same length as freq.
+    s22
+        The S22 parameter, same length as freq.
+    """
+
     freq: tp.FreqType = attrs.field()
     s11: np.ndarray | None = attrs.field(default=None)
     s12: np.ndarray | None = attrs.field(default=None)
@@ -182,7 +202,7 @@ class SParams:
         path: str | Path,
         f_low: tp.FreqType = 0 * un.MHz,
         f_high: tp.FreqType = np.inf * un.MHz,
-    ):
+    ) -> Self:
         """Read an S1P file."""
         table = read_s1p(path, f_low, f_high)
         return cls.from_table(table)

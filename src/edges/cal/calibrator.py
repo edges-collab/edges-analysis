@@ -18,13 +18,14 @@ from .noise_waves import get_linear_coefficients
 from .s11 import CalibratedS11, S11ModelParams
 
 
-class CalFileReadError(Exception):
-    pass
-
-
 @hickleable
 @attrs.define(kw_only=True, frozen=True)
 class Calibrator:
+    """A class holding all information required to perform receiver calibration.
+
+    This object makes sense in the context of the noise-wave formalism.
+    """
+
     freqs: tp.FreqType = attrs.field(eq=attrs.cmp_using(eq=np.allclose))
 
     Tsca: tp.FloatArray = attrs.field(eq=attrs.cmp_using(eq=np.allclose))

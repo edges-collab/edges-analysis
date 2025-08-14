@@ -8,13 +8,13 @@ from edges.cal.s11.s11model import S11ModelParams
 from edges.io import CalObsDefEDGES2, CalObsDefEDGES3, LoadS11, SParams, SwitchingState
 
 from .. import reflection_coefficient as rc
-from . import InternalSwitch, StandardsReadings
+from . import StandardsReadings
 from .base import CalibratedS11, CalibratedSParams
 
 
 def calibrate_loads11_with_switch(
     load_s11: np.ndarray,
-    internal_switch: InternalSwitch,
+    internal_switch: CalibratedSParams,
 ) -> CalibratedS11:
     """Generate the LoadS11 from an uncalibrated load and internal switch."""
     if not hasattr(load_s11, "__len__"):
@@ -59,7 +59,9 @@ def get_loads11_from_load_and_switch(
     load_kw["f_low"] = f_low
     load_kw["f_high"] = f_high
 
-    standards = StandardsReadings.from_io(loaddef.calkit, f_low=f_low, f_high=f_high)
+    standards = StandardsReadings.from_filespec(
+        loaddef.calkit, f_low=f_low, f_high=f_high
+    )
     external_match = SParams.from_s1p_file(loaddef.external, f_low=f_low, f_high=f_high)
     freq = standards.freq
 

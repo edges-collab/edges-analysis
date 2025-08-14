@@ -49,15 +49,25 @@ def _vld_path_exists(inst, att, val):
 
 
 @attrs.define(frozen=True, kw_only=True)
-class Calkit:
+class CalkitFileSpec:
+    """File-specification for calkit S11 measurements.
+
+    Parameters
+    ----------
+    match
+        The S11 measurements of the match standard.
+    open
+        The S11 measurements of the open standard.
+    short
+        The S11 measurements of the short standard.
+    """
+
     match: Path = attrs.field(converter=Path, validator=_vld_path_exists)
     open: Path = attrs.field(converter=Path, validator=_vld_path_exists)
     short: Path = attrs.field(converter=Path, validator=_vld_path_exists)
 
-
-class CalkitEdges2(Calkit):
     @classmethod
-    def from_standard_layout(
+    def from_edges2_layout(
         cls,
         direc: tp.PathLike,
         repeat_num: int = 1,
@@ -105,12 +115,41 @@ class CalkitEdges2(Calkit):
 
 @attrs.define()
 class LoadS11:
-    calkit: Calkit = attrs.field(validator=attrs.validators.instance_of(Calkit))
+    """File-specification for the S11 measurements of a calibration load.
+
+    Parameters
+    ----------
+    calkit
+        The calkit measurements of the load.
+    external
+        The external S11 measurement of the load.
+    """
+
+    calkit: CalkitFileSpec = attrs.field(
+        validator=attrs.validators.instance_of(CalkitFileSpec)
+    )
     external: Path = attrs.field(converter=Path, validator=_vld_path_exists)
 
 
 @attrs.define(frozen=True, kw_only=True)
 class LoadDefEDGES2:
+    """File-specification for an EDGES2 calibration load.
+
+    Parameters
+    ----------
+    name
+        The name of the load.
+    thermistor
+        The thermistor measurements of the load.
+    s11
+        The S11 measurements of the load.
+    spectra
+        The spectra measurements of the load.
+    sparams_file
+        This file, if given, contains the S-parameters of the load device (e.g. the
+        semi-rigid cable for a hot load).
+    """
+
     name: str = attrs.field()
 
     thermistor: Path = attrs.field(converter=Path, validator=_vld_path_exists)
@@ -156,7 +195,7 @@ class LoadDefEDGES2:
         spec = list((root / "Spectra").glob(f"{loadname}_{run_num:02}_*.acq"))
 
         s11dir = root / "S11" / f"{loadname}{run_num:02}"
-        clk = CalkitEdges2.from_standard_layout(s11dir, rep_num)
+        clk = CalkitFileSpec.from_edges2_layout(s11dir, rep_num)
         repnum = clk.open.stem[-2:]
         s11 = LoadS11(calkit=clk, external=s11dir / f"External{repnum}.s1p")
 
@@ -175,13 +214,39 @@ class LoadDefEDGES2:
 
 @attrs.define(frozen=True, kw_only=True)
 class SwitchingState:
-    internal: Calkit = attrs.field(validator=attrs.validators.instance_of(Calkit))
-    external: Calkit = attrs.field(validator=attrs.validators.instance_of(Calkit))
+    """File-specification for the switching state measurement.
+
+    Parameters
+    ----------
+    internal
+        The internal calkit measurements of the switching state.
+    external
+        The external calkit measurements of the switching state.
+    """
+
+    internal: CalkitFileSpec = attrs.field(
+        validator=attrs.validators.instance_of(CalkitFileSpec)
+    )
+    external: CalkitFileSpec = attrs.field(
+        validator=attrs.validators.instance_of(CalkitFileSpec)
+    )
 
 
 @attrs.define(frozen=True, kw_only=True)
 class ReceiverS11:
-    calkit: Calkit = attrs.field(validator=attrs.validators.instance_of(Calkit))
+    """File-specification for the receiver S11 measurement.
+
+    Parameters
+    ----------
+    calkit
+        The calkit measurements of the receiver S11.
+    device
+        The external measurements of the receiver S11.
+    """
+
+    calkit: CalkitFileSpec = attrs.field(
+        validator=attrs.validators.instance_of(CalkitFileSpec)
+    )
     device: Path = attrs.field(converter=Path, validator=_vld_path_exists)
 
     @property
@@ -192,6 +257,31 @@ class ReceiverS11:
 
 @attrs.define(frozen=True, kw_only=True)
 class CalObsDefEDGES2:
+    """File-specification for a full calibration observation with EDGES-2.
+
+    Parameters
+    ----------
+    open
+        The open load definition.
+    short
+        The short load definition.
+    ambient
+        The ambient load definition.
+    hot_load
+        The hot load definition.
+    switching_state
+        The switching state definition.
+    receiver_s11
+        The receiver S11 definition.
+    run_num
+        The run number used throughout the files.
+    receiver_female_resistance
+        The female resistance of the receiver, used in calibrating the calkit
+        standards measurements.
+    male_resistance
+        The male resistance.
+    """
+
     open: LoadDefEDGES2 = attrs.field()
     short: LoadDefEDGES2 = attrs.field()
     ambient: LoadDefEDGES2 = attrs.field()
@@ -262,7 +352,7 @@ class CalObsDefEDGES2:
             )
 
         run_num = int(rcvdir.stem[-2:])
-        rcv_calkit = CalkitEdges2.from_standard_layout(rcvdir, repeat_num)
+        rcv_calkit = CalkitFileSpec.from_edges2_layout(rcvdir, repeat_num)
         rcv = ReceiverS11(
             calkit=rcv_calkit,
             device=rcvdir / f"ReceiverReading{rcv_calkit.open.stem[-2:]}.s1p",
@@ -278,11 +368,11 @@ class CalObsDefEDGES2:
                 stacklevel=2,
             )
 
-        sw_calkit = CalkitEdges2.from_standard_layout(swstate, repeat_num)
+        sw_calkit = CalkitFileSpec.from_edges2_layout(swstate, repeat_num)
         repnum = int(sw_calkit.open.stem[-2:])
         swsate = SwitchingState(
             internal=sw_calkit,
-            external=CalkitEdges2.from_standard_layout(
+            external=CalkitFileSpec.from_edges2_layout(
                 swstate, repeat_num=repnum, allow_other=False, prefix="External"
             ),
         )

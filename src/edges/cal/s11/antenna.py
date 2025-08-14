@@ -11,7 +11,7 @@ import numpy as np
 from astropy.time import Time
 
 from edges import types as tp
-from edges.io import Calkit, LoadS11, SwitchingState
+from edges.io import CalkitFileSpec, LoadS11, SwitchingState
 
 from .base import CalibratedS11
 from .cal_loads import get_loads11_from_load_and_switch
@@ -183,7 +183,7 @@ def get_ants11_from_edges2_files(
     """Construct a CalibratedS11 for the antenna measurements."""
     return get_loads11_from_load_and_switch(
         loaddef=LoadS11(
-            calkit=Calkit(open=files[0], short=files[1], match=files[2]),
+            calkit=CalkitFileSpec(open=files[0], short=files[1], match=files[2]),
             external=files[3],
         ),
         switchdef=switchdef,

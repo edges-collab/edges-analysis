@@ -138,6 +138,25 @@ class CalibratedS11:
 @hickleable
 @attrs.define
 class CalibratedSParams:
+    """A class representing calibrated S-parameters.
+
+    This is similar to :class:`CalibratedS11`, except that it includes all four
+    S-parameters instead of just S11.
+
+    Parameters
+    ----------
+    freqs
+        The frequencies of the S-parameters.
+    s11
+        The S11 parameter.
+    s12
+        The S12 parameter.
+    s22
+        The S22 parameter.
+    s21
+        The S21 parameter. By default, this is equal to S12.
+    """
+
     freqs: tp.FreqType = npfield(dtype=float, possible_ndims=(1,), unit=un.MHz)
     s11: np.ndarray = npfield(dtype=complex, possible_ndims=(1,))
     s12: np.ndarray = npfield(dtype=complex, possible_ndims=(1,))
@@ -149,7 +168,7 @@ class CalibratedSParams:
         return self.s12
 
     def smoothed(self, params, freqs: tp.FreqType | None = None):
-        """Return a new InternalSwitch, smoothed and interpolated onto new frequencies.
+        """Return a new CalibratedSparams, smoothed and interpolated to new frequencies.
 
         Parameters
         ----------

@@ -21,7 +21,7 @@ from .. import types as tp
 logger = logging.getLogger(__name__)
 
 
-class NoDataError(Exception):
+class _NoDataError(Exception):
     pass
 
 
@@ -712,7 +712,7 @@ def xrfi_model_sweep(
             params.append(p)
             iters.append(n)
             flags[window.min() + pixel] |= new_flags[pixel]
-        except NoDataError:
+        except _NoDataError:
             std.append(None)
 
         window += 1
@@ -754,7 +754,7 @@ def _flag_a_window(
         if np.sum(mask) > model.n_terms:
             fit = model.fit(ydata=d, weights=w, **fit_kwargs)
         else:
-            raise NoDataError
+            raise _NoDataError
 
         resids = fit.residual
 

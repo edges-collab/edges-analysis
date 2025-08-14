@@ -32,7 +32,7 @@ from .s11 import CalibratedS11
 
 
 @hickleable
-@attrs.define(slots=False)
+@attrs.define(slots=False, kw_only=True, frozen=True)
 class CalibrationObservation:
     """
     A composite object representing a full Calibration Observation.
@@ -57,10 +57,25 @@ class CalibrationObservation:
     receiver: CalibratedS11 = attrs.field()
     _raw_receiver: CalibratedS11 | None = attrs.field(default=None)
 
-    def __attrs_post_init__(self):
-        """Set the loads as attributes directly."""
-        for k, v in self.loads.items():
-            setattr(self, k, v)
+    @property
+    def ambient(self) -> Load:
+        """The ambient load."""
+        return self.loads["ambient"]
+
+    @property
+    def hot_load(self) -> Load:
+        """The hot load."""
+        return self.loads["hot_load"]
+
+    @property
+    def open(self) -> Load:
+        """The open load."""
+        return self.loads["open"]
+
+    @property
+    def short(self) -> Load:
+        """The short load."""
+        return self.loads["short"]
 
     @classmethod
     def from_edges2_caldef(
@@ -97,7 +112,7 @@ class CalibrationObservation:
             objects. See its documentation for relevant parameters. Parameters specified
             here are used for _all_ calibrator sources.
         internal_switch_kwargs
-            Keyword arguments used to instantiate the :class:`~s11.InternalSwitch`
+            Keyword arguments used to instantiate the :class:`~s11.CalibratedSParams`
             objects. See its documentation for relevant parameters. The same internal
             switch is used to calibrate the S11 for each input source.
         f_low : float
@@ -180,7 +195,7 @@ class CalibrationObservation:
             objects. See its documentation for relevant parameters. Parameters specified
             here are used for _all_ calibrator sources.
         internal_switch_kwargs
-            Keyword arguments used to instantiate the :class:`~s11.InternalSwitch`
+            Keyword arguments used to instantiate the :class:`~s11.CalibratedSParams`
             objects. See its documentation for relevant parameters. The same internal
             switch is used to calibrate the S11 for each input source.
         f_low : float
@@ -270,7 +285,7 @@ class CalibrationObservation:
             objects. See its documentation for relevant parameters. Parameters specified
             here are used for _all_ calibrator sources.
         internal_switch_kwargs
-            Keyword arguments used to instantiate the :class:`~s11.InternalSwitch`
+            Keyword arguments used to instantiate the :class:`~s11.CalibratedSParams`
             objects. See its documentation for relevant parameters. The same internal
             switch is used to calibrate the S11 for each input source.
         f_low : float

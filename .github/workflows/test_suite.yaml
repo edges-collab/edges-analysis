@@ -3,7 +3,6 @@ name: Tests
 # Test on all pushes, except when the push is literally just a tag (because we
 # tag automatically via CI, and therefore there's no extra code in that push).
 on:
-  push:
   pull_request:
 
 

@@ -155,6 +155,22 @@ def power_ratio(
 
 @attrs.define(slots=False)
 class NoiseWaveLinearModelFit:
+    """A class representing a fit of the :class:NoiseWaveLinearModel` to data.
+
+    Parameters
+    ----------
+    freq
+        The frequencies at which the fit was performed.
+    gamma_rec
+        The S11 of the receiver used in the fit.
+    gamma_src
+        The S11s of the calibration sources used in the fit.
+    modelfit
+        The composite model defining the model that was fit to the data.
+    delay
+        The delay corrected for in the fit.
+    """
+
     freq: np.ndarray = attrs.field()
     gamma_rec: np.ndarray = attrs.field()
     gamma_src: dict[str, np.ndarray] = attrs.field()

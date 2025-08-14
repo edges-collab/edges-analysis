@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import warnings
 from pathlib import Path
 from typing import Annotated
 
@@ -116,50 +115,54 @@ def corrcsv(
 
 @attrs.define(kw_only=True, frozen=True)
 class ACQPlot7aMoonParams:
+    """Parameters for the ACQPlot7aMoon spectrum reading and averaging script.
+
+    Parameters
+    ----------
+    fstart
+        The starting frequency for the spectrum.
+    fstop
+        The stopping frequency for the spectrum.
+    smooth
+        The number of frequency bins to smooth and downsamples by.
+    tload
+        A guess at the internal load temperature, acting as a starting point
+        for iterative calibration fitting, but also is applied to "kind of" calibrate
+        the data before finding RFI.
+    tcal
+        Similar to ``tload``, but for the internal load + noise source.
+    tstart
+        The starting hour (in gha) for reading spectrum integrations.
+    tstop
+        The ending hour (in gha) for reading spectrum integrations.
+    delaystart
+        The number of seconds to delay before including spectra from the files.
+        Can be useful to ignore beginning of files as the system may still be
+        warming up.
+    """
+
     fstart: float = 50.0
     fstop: float = 100.0
     smooth: int = 8
     tload: float = 300.0
     tcal: float = 1000.0
-    pfit: int | None = None
-    rfi: float | None = None
-    peakpwr: float | None = None
-    minpwr: float | None = None
-    pkpwrm: float | None = None
-    maxrmsf: float | None = None
-    maxfm: float | None = None
-    nrfi: int = 0
     tstart: int = 0
     tstop: int = 23
     delaystart: int = 0
-
-    def __attrs_post_init__(self):
-        """Warn if any non-implemented parameters are given."""
-        if any(
-            p is not None
-            for p in (
-                self.pfit,
-                self.rfi,
-                self.peakpwr,
-                self.minpwr,
-                self.pkpwrm,
-                self.maxrmsf,
-                self.maxfm,
-            )
-        ):
-            warnings.warn(
-                "pfit, rfi, peakpwr, minpwr, pkpwrm, maxrmsf, and maxfm are not yet "
-                "implemented. This is almost certainly OK for calibration purposes, as "
-                "no calibration load data is typically filtered out by these "
-                "parameters.",
-                stacklevel=2,
-            )
 
 
 def acqplot7amoon(
     acqfile: str | Path, params: ACQPlot7aMoonParams = ACQPlot7aMoonParams(), **kwargs
 ) -> GSData:
-    """A function that does what the acqplot7amoon C-code does."""
+    """A function that does what the acqplot7amoon C-code does.
+
+    Parameters
+    ----------
+    acqfile
+        The path to the ACQ file to process.
+    params
+        The parameters for the ACQPlot7aMoon function.
+    """
     if kwargs:
         params = ACQPlot7aMoonParams(**kwargs)
 
@@ -191,6 +194,45 @@ def acqplot7amoon(
 
 @attrs.define(kw_only=True, frozen=True)
 class EdgesScriptParams:
+    """Parameters for the edges script.
+
+    These are parameters for the script traditionally called either edges2k.c
+    or edges3.c.
+
+    Parameters
+    ----------
+    Lh
+        The mode in which to calculate the loss function.
+    wfstart
+        The lowest frequency included for fitting the calibration functions.
+    wfstop
+        The highest frequency included for fitting the calibration functions.
+    tcold
+        The "true" temperature of the ambient load.
+    thot
+        The "true" temperature of the hot load.
+    tcab
+        The "true" temperature of the long-cable calibration loads. By default,
+        the same as tcold.
+    cfit
+        The number of polynomial terms to use for fitting the scale and offset
+        calibration temperatures (i.e. Tload and Tlns)
+    wfit
+        The number of polynomial terms to use for fitting the noise-wave calibration
+        temperatures.
+    nfit3
+        The number of terms used to model the receiver S11.
+    nfit2
+        The number of terms used to model the load S11s.
+    nter
+        The number of iterations to perform when fitting the noise-wave
+        calibration temperatures.
+    lna_poly
+        Whether the receiver S11 should be modeled as a polynomial. 0 for False,
+        anything else will determine the model based on `nfit3`. If `nfit3` is greater
+        than 16, a Fourier model will be used, otherwise a Polynomial model.
+    """
+
     Lh: Annotated[int, Parameter(name=("Lh",))] = -1
     wfstart: float = 50
     wfstop: float = 190
@@ -201,44 +243,12 @@ class EdgesScriptParams:
     wfit: int = 7
     nfit3: int = 10
     nfit2: int = 27
-    tload: float = 300
-    tcal: float = 1000.0
     nter: int = 8
-    mfit: int | None = None
-    lmode: int | None = None
-    tant: float | None = None
-    ldb: float | None = None
-    adb: float | None = None
-    delaylna: float | None = None
-    nfit4: int | None = None
     lna_poly: int = -1
 
     @tcab.default
     def _tcab_default(self) -> float:
         return self.tcold
-
-    def __attrs_post_init__(self):
-        """Warn if non-implemented parameters are given.
-
-        Some of the parameters are defined, but not yet implemented,
-        so we warn/error here. We do this explicitly because it serves as a
-        reminder to implement them in the future as necessary
-        """
-        if self.mfit is not None or self.tant is not None:
-            warnings.warn(
-                "mfit, smooth and tant are not used in this function, because "
-                "they are only used for making output plots in the C-code."
-                "They can be used in higher-level scripts instead. Continuing...",
-                stacklevel=2,
-            )
-
-        if any(
-            p is not None
-            for p in (self.lmode, self.ldb, self.adb, self.delaylna, self.nfit4)
-        ):
-            raise NotImplementedError(
-                "lmode, ldb, adb, delaylna, and nfit4 are not yet implemented."
-            )
 
 
 def _get_specs(
@@ -247,6 +257,8 @@ def _get_specs(
     spopen: GSData,
     spshort: GSData,
     params: EdgesScriptParams,
+    tload: tp.TemperatureType,
+    tcal: tp.TemperatureType,
 ) -> dict[str, LoadSpectrum]:
     specs = {}
 
@@ -258,7 +270,7 @@ def _get_specs(
     ):
         specs[name] = LoadSpectrum(
             q=approximate_temperature(
-                spec, tload=params.tload, tns=params.tcal, reverse=True
+                spec, tload=tload.to_value("K"), tns=tcal.to_value("K"), reverse=True
             ),
             temp_ave=temp * un.K,
         )
@@ -421,12 +433,33 @@ def edges(
 
     The primary purpose of this function is to model the input S11's, and then
     determine the noise-wave parameters.
+
+    Parameters
+    ----------
+    spcold, sphot, spopen, spshort
+        The time-averaged spectra for the ambient (cold), hot_load, open, and short
+        loads respectively.
+    s11freq
+        The frequencies at which the S11 data is sampled.
+    s11hot, s11cold, s11lna, s11open, s11short
+        The S11 measurements for the hot, ambient, LNA, open, and short loads
+        respectively.
+    tload
+        A guess of the internal load temperature, used as the initial guess for the
+        optimization. **MUST MATCH** tload used to generate the time-averaged spectra.
+    tcal
+        Like tload, but for the internal load + noise source.
+    params
+        An object defining the parameters used in determining the calibration.
+    s11rig, s12rig, s22rig
+        The S11, S12, and S22 measurements for the semi-rigid cable respectively.
+        Optional -- generally required for EDGES-2.
     """
     if kwargs:
         params = EdgesScriptParams(**kwargs)
 
     # First set up the S11 models
-    specs = _get_specs(spcold, sphot, spopen, spshort, params)
+    specs = _get_specs(spcold, sphot, spopen, spshort, params, tload, tcal)
     spec_fq = specs["ambient"].freqs
 
     s11mask = get_mask(
@@ -516,8 +549,47 @@ def _average_spectra(
 
 @attrs.define(kw_only=True, frozen=True)
 class Edges3CalobsParams:
+    """
+    Parameters defining the calibration observation data for EDGES 3.
+
+    Parameters
+    ----------
+    specyear
+        The year of the spectrum data.
+    specday
+        The day of the spectrum data.
+    s11date
+        The date of the S11 measurement in the format YYYY_DDD_HH.
+    datadir
+        The root directory of the observation data.
+    match_resistance
+        The measured impedance of the "match" calkit standard. Used to calibrate
+        the Receiver s11.
+    calkit_delays
+        The delays of the three calkit standards. To set each individually, use
+        the ``load_delay``, ``open_delay``, and ``short_delay`` parameters.
+    lna_cable_length
+    load_delay
+        The delay of the "load" calkit stsandard. By default the same as
+        ``calkit_delays``.
+    open_delay
+        The delay of the "open" calkit standard. By default the same as
+        ``calkit_delays``.
+    short_delay
+        The delay of the "short" calkit standard. By default the same as
+        ``calkit_delays``.
+    lna_cable_length
+        The length of the cable joining the receiver to the VNA in inches.
+    lna_cable_loss
+        The loss of the cable joining the receiver to the VNA in percent.
+    lna_cable_dielectric
+        The dielectric constant of the cable joining the receiver to the VNA
+        in percent.
+    """
+
     specyear: int
     specday: int
+    s11date: str
     datadir: Path = Path("/data5/edges/data/EDGES3_data/MRO/")
     match_resistance: Annotated[float, Parameter(name=("res",))] = 49.8
     calkit_delays: Annotated[float, Parameter(name=("ps",))] = 33
@@ -527,7 +599,6 @@ class Edges3CalobsParams:
     lna_cable_length: Annotated[float, Parameter(name=("cablen",))] = (4.26,)
     lna_cable_loss: Annotated[float, Parameter(name=("cabloss",))] = (-91.5,)
     lna_cable_dielectric: Annotated[float, Parameter(name=("cabdiel",))] = -1.24
-    s11date: str
 
     @load_delay.default
     def _load_delay_default(self):
@@ -601,6 +672,23 @@ class Edges3CalobsParams:
 
 @attrs.define(kw_only=True, frozen=True)
 class Edges2CalobsParams:
+    """Parameters defining the calibration observation data for EDGES 2.
+
+    Parameters
+    ----------
+    s11_path
+        The path to the S11 measurement file. Currently, this file must be a single,
+        precalibrated file in Raul's legacy output format (CSV).
+    ambient_acqs
+        A list of paths to the ambient acq spectra files.
+    hotload_acqs
+        A list of paths to the hot load acq spectra files.
+    open_acqs
+        A list of paths to the open acq spectra files.
+    short_acqs
+        A list of paths to the short acq spectra files.
+    """
+
     s11_path: Path
     ambient_acqs: list[Path]
     hotload_acqs: list[Path]

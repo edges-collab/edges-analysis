@@ -9,7 +9,34 @@ from edges.modelling import FixedLinearModel
 
 
 class SemiLinearFit:
-    def __init__(self, fg: FixedLinearModel, eor: Component, spectrum, sigma):
+    """A class for performing a fit to sky data composed of a 21cm and FG component.
+
+    In this model, the FG component is assumed to be a linear model, while the
+    21cm component is modeled as a non-linear function. The linear component is
+    fixed via analytic marginalization.
+
+    Parameters
+    ----------
+    fg
+        The foreground model -- a linear model fixed to some set of frequency
+        coordinates (only the coordinates are fixed, not the parameters).
+    eor
+        The 21cm model -- a non-linear model that is fit via non-linear optimization.
+    spectrum
+        The sky data to fit to.
+    sigma
+        Either a 1D array with the same shape as the spectrum, or a float indicating
+        a constant noise level for all frequencies.
+
+    """
+
+    def __init__(
+        self,
+        fg: FixedLinearModel,
+        eor: Component,
+        spectrum: np.ndarray,
+        sigma: np.ndarray | float,
+    ):
         """Perform a quick fit to data with a sum of linear and non-linear models.
 
         Useful for fitting foregrounds and EoR at the same time, where the EoR model is

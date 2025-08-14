@@ -10,7 +10,13 @@ import attrs
 from bidict import bidict
 
 from .. import types as tp
-from .calobsdef import Calkit, LoadS11, ReceiverS11, _list_of_path, _vld_path_exists
+from .calobsdef import (
+    CalkitFileSpec,
+    LoadS11,
+    ReceiverS11,
+    _list_of_path,
+    _vld_path_exists,
+)
 
 S11LoadName = Literal["amb", "ant", "hot", "open", "short", "lna"]
 SpecLoadName = Literal["amb", "ant", "hot", "open", "short"]
@@ -99,45 +105,46 @@ def get_s1p_files(
     return files
 
 
-class CalkitEdges3(Calkit):
-    @classmethod
-    def from_standard_layout(
-        cls,
-        root_dir: Path | str,
-        load: S11LoadName,
-        year: int,
-        day: int,
-        hour: int | str = "first",
-        allow_closest_s11_within: int = 5,
-    ) -> Self:
-        """
-        Create a CalkitEdges3 object from a standard directory layout.
+def from_edges3_layout(
+    cls,
+    root_dir: Path | str,
+    load: S11LoadName,
+    year: int,
+    day: int,
+    hour: int | str = "first",
+    allow_closest_s11_within: int = 5,
+) -> Self:
+    """
+    Create a CalkitEdges3 object from a standard directory layout.
 
-        Parameters
-        ----------
-        root_dir
-            The root directory to search in
-        load
-            The name of the load for which the calkit observations were taken.
-        year
-            The year of observation.
-        day
-            The day of observation
-        hour
-            The hour of observation, or "first" for automaic search.
-        allow_closest_s11_within
-            The number of surrounding days to search for S11.
-        """
-        files = get_s1p_files(
-            load=load,
-            year=year,
-            day=day,
-            root_dir=root_dir,
-            hour=hour,
-            allow_closest_s11_within=allow_closest_s11_within,
-        )
-        del files["input"]
-        return cls(**files)
+    Parameters
+    ----------
+    root_dir
+        The root directory to search in
+    load
+        The name of the load for which the calkit observations were taken.
+    year
+        The year of observation.
+    day
+        The day of observation
+    hour
+        The hour of observation, or "first" for automaic search.
+    allow_closest_s11_within
+        The number of surrounding days to search for S11.
+    """
+    files = get_s1p_files(
+        load=load,
+        year=year,
+        day=day,
+        root_dir=root_dir,
+        hour=hour,
+        allow_closest_s11_within=allow_closest_s11_within,
+    )
+    del files["input"]
+    return cls(**files)
+
+
+CalkitFileSpec.from_edges3_layout = classmethod(from_edges3_layout)
 
 
 def get_spectrum_files(
@@ -162,6 +169,20 @@ def get_spectrum_files(
 
 @attrs.define(frozen=True, kw_only=True)
 class LoadDefEDGES3:
+    """File-specification for an EDGES-3 Calibration Load.
+
+    Parameters
+    ----------
+    name
+        The name of the load.
+    s11
+        The S11 measurement files.
+    spectra
+        The spectrum measurement files.
+    templog
+        The temperature logger file.
+    """
+
     name: str = attrs.field()
 
     s11: LoadS11 = attrs.field()
@@ -233,7 +254,7 @@ class LoadDefEDGES3:
             s11_day = day
 
         # First Get the S11s
-        calkit = CalkitEdges3.from_standard_layout(
+        calkit = CalkitFileSpec.from_edges3_layout(
             root_dir=root,
             load=loadname,
             year=s11_year,
@@ -257,6 +278,29 @@ class LoadDefEDGES3:
 
 @attrs.define(frozen=True, kw_only=True)
 class CalObsDefEDGES3:
+    """A class for holding calibration observation definitions for EDGES3.
+
+    This class holds specifications for where all the data required for the EDGES-3
+    receiver calibration is located on disk. That is, it holds only paths to files,
+    rather than actual data.
+
+    It is convenient in that it also has methods for finding this files in standard
+    situations.
+
+    Parameters
+    ----------
+    open
+        The loading definition for the open load.
+    short
+        The loading definition for the short load.
+    ambient
+        The loading definition for the ambient load.
+    hot_load
+        The loading definition for the hot load.
+    receiver
+        The definition for the Receiver S11.
+    """
+
     open: LoadDefEDGES3 = attrs.field()
     short: LoadDefEDGES3 = attrs.field()
     ambient: LoadDefEDGES3 = attrs.field()
@@ -336,7 +380,7 @@ class CalObsDefEDGES3:
         assert rootdir.exists()
 
         # Get the ReceiverS11
-        rcv_calkit = CalkitEdges3.from_standard_layout(
+        rcv_calkit = CalkitFileSpec.from_edges3_layout(
             rootdir,
             load="lna",
             year=s11_year,

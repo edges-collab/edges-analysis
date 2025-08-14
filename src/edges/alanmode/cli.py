@@ -112,6 +112,8 @@ def _make_plots(
 
 @dataclass
 class AlanCalOpts:
+    """CLI options for the Alan calibration mode."""
+
     avg: ACQPlot7aMoonParams = ACQPlot7aMoonParams()
     cal: EdgesScriptParams = EdgesScriptParams()
 

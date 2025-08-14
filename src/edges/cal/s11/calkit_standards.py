@@ -11,6 +11,20 @@ from edges.io import SParams, calobsdef
 
 @attrs.define
 class StandardsReadings:
+    """A class representing the full set of calkit measurements.
+
+    This includes the open, short, and match standards.
+
+    Parameters
+    ----------
+    open
+        The open standard S-parameters.
+    short
+        The short standard S-parameters.
+    match
+        The match standard S-parameters.
+    """
+
     open: SParams = attrs.field(validator=attrs.validators.instance_of(SParams))
     short: SParams = attrs.field(validator=attrs.validators.instance_of(SParams))
     match: SParams = attrs.field(validator=attrs.validators.instance_of(SParams))
@@ -32,7 +46,7 @@ class StandardsReadings:
         return self.open.freq
 
     @classmethod
-    def from_io(cls, paths: calobsdef.Calkit, **kwargs) -> Self:
+    def from_filespec(cls, paths: calobsdef.CalkitFileSpec, **kwargs) -> Self:
         """Instantiate from a given Calkit I/O object.
 
         Other Parameters

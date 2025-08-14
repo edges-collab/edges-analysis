@@ -14,10 +14,6 @@ from platformdirs import PlatformDirs
 dirs = PlatformDirs("edges", "edges-collab")
 
 
-class ConfigurationError(Exception):
-    pass
-
-
 @attrs.define(frozen=False, kw_only=True)
 class Config:
     """Simple over-ride of dict that adds a context manager.

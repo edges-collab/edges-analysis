@@ -161,6 +161,8 @@ def new_s11_modelled(
 
 @attrs.define
 class DelayedS11Model:
+    """An S11 callable model that accounts for a delay in the complex values."""
+
     cmodel: ComplexMagPhaseModel | ComplexRealImagModel = attrs.field()
     delay: tp.TimeType = attrs.field(default=0 * un.s)
 

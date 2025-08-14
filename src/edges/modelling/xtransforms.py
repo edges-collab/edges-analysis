@@ -29,6 +29,8 @@ def _transform_yaml_representer(
 @hickleable
 @attrs.define(frozen=True, kw_only=True, slots=False)
 class XTransform(metaclass=ABCMeta):
+    """Abstract base class for all coordinate transforms."""
+
     _models = {}
 
     def __init_subclass__(cls, is_meta=False, **kwargs):
@@ -61,6 +63,8 @@ class XTransform(metaclass=ABCMeta):
 @hickleable
 @attrs.define(frozen=True, kw_only=True, slots=False)
 class IdentityTransform(XTransform):
+    """A transform that does nothing."""
+
     def transform(self, x: np.ndarray) -> np.ndarray:
         """Transform the coordinates."""
         return x
@@ -69,6 +73,15 @@ class IdentityTransform(XTransform):
 @hickleable
 @attrs.define(frozen=True, kw_only=True, slots=False)
 class ScaleTransform(XTransform):
+    """A transform that scales the coordinates by a single factor.
+
+    Parameters
+    ----------
+    scale
+        The scale factor to apply to the coordinates. The resulting coordinates
+        will be ``original/scale``.
+    """
+
     scale: float = attrs.field(converter=float)
 
     def transform(self, x: np.ndarray) -> np.ndarray:
@@ -84,6 +97,19 @@ def tuple_converter(x):
 @hickleable
 @attrs.define(frozen=True, kw_only=True, slots=False)
 class CentreTransform(XTransform):
+    """A transform that shifts the coordinates to a new centre point.
+
+    The new coordinates will be centered at the mid-point of ``range`` plus
+    ``centre``.
+
+    Parameters
+    ----------
+    range
+        The range of the input coordinates.
+    centre
+        The new centre point for the coordinates.
+    """
+
     range: tuple[float, float] = attrs.field(converter=tuple_converter)
     centre: float = attrs.field(default=0.0, converter=float)
 
@@ -95,6 +121,14 @@ class CentreTransform(XTransform):
 @hickleable
 @attrs.define(frozen=True, kw_only=True, slots=False)
 class ShiftTransform(XTransform):
+    """A transform that shifts the coordinates by a fixed amount.
+
+    Parameters
+    ----------
+    shift
+        The amount to shift the coordinates by.
+    """
+
     shift: float = attrs.field(converter=float, default=0.0)
 
     def transform(self, x: np.ndarray) -> np.ndarray:
@@ -105,7 +139,14 @@ class ShiftTransform(XTransform):
 @hickleable
 @attrs.define(frozen=True, kw_only=True, slots=False)
 class UnitTransform(XTransform):
-    """A transform that takes the input range down to -1 to 1."""
+    """A transform that takes the input range down to -1 to 1.
+
+    Parameters
+    ----------
+    range
+        The range that is rescaled to (-1, 1). This need not be the range of the
+        actual data, so that the final coordinates may extend past (-1, 1).
+    """
 
     range: tuple[float, float] = attrs.field(converter=tuple_converter)
 
@@ -121,7 +162,10 @@ class UnitTransform(XTransform):
 @hickleable
 @attrs.define(frozen=True, kw_only=True, slots=False)
 class LogTransform(XTransform):
-    """A transform that takes the logarithm of the input."""
+    """A transform that takes the logarithm of the input.
+
+    The final coordinates will be ``log(original / scale)``.
+    """
 
     scale: float = attrs.field(default=1.0)
 
@@ -133,7 +177,10 @@ class LogTransform(XTransform):
 @hickleable
 @attrs.define(frozen=True, kw_only=True, slots=False)
 class Log10Transform(LogTransform):
-    """A transform that takes the base10 logarithm of the input."""
+    """A transform that takes the base10 logarithm of the input.
+
+    The final coordinates will be ``log10(original / scale)``.
+    """
 
     def transform(self, x: np.ndarray) -> np.ndarray:
         """Transform the coordinates."""
@@ -143,7 +190,10 @@ class Log10Transform(LogTransform):
 @hickleable
 @attrs.define(frozen=True, kw_only=True, slots=False)
 class ZerotooneTransform(UnitTransform):
-    """A transform that takes an input range down to (0,1)."""
+    """A transform that takes an input range down to (0,1).
+
+    Like :class:`UnitTransform`, but rescales to (0, 1).
+    """
 
     def transform(self, x: np.ndarray) -> np.ndarray:
         """Transform the coordinates."""

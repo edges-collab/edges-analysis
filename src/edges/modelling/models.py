@@ -136,6 +136,8 @@ class EdgesPoly(Polynomial):
 @hickleable
 @attrs.define(frozen=True, kw_only=True)
 class LinLog(Foreground):
+    """LinLog foreground mmodel."""
+
     beta: float = attrs.field(default=-2.5, converter=float)
 
     @property

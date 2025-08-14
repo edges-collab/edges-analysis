@@ -165,7 +165,6 @@ ignore = [
     "RUF009",   # don;e perform function call in dataclass defaults
     "N806",  # Variable name should be lower case. We have some single-letter variables that make more sense to be caps.
     "D401",  # First line should be in imperative mood -- cached_properties don't fit this bill.
-    "D101",  # Missing docstring in public class -- my docstrings are in the __init__ which seems to fail this ?
     "N815",
     "N807",  # Allow method names to start and end with __
     "RUF012", # mutable class attributes annotation

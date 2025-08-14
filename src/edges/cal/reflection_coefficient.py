@@ -910,6 +910,12 @@ class CalkitStandard:
 @hickleable
 @attrs.define(slots=False, frozen=True)
 class Calkit:
+    """A class holding all calkit standards.
+
+    This is not a class to merely hold Calkit data, but instead to hold electrical
+    engineering definitions of calkit standard models.
+    """
+
     open: CalkitStandard = attrs.field()
     short: CalkitStandard = attrs.field()
     match: CalkitStandard = attrs.field()
