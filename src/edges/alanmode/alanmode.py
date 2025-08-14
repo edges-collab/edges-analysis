@@ -469,7 +469,7 @@ def edges(
         smooth_scale_offset_within_loop=False,
         ncal_iter=params.nter,
         cable_delay_sweep=np.arange(0, -1e-8, -1e-9),  # hard-coded in the C code.
-        fit_method="alan-qrd",
+        fit_method="lstsq",  # "alan-qrd",
         scale_offset_poly_spacing=0.5,
         t_load_guess=tload,
         t_load_ns_guess=tcal,

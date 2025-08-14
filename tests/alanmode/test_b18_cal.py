@@ -157,7 +157,7 @@ def test_calcoeffs(b18cal: Path, mask, testdata_path):
     alan = read_specal(DATA / "specal_alan.txt", t_load=300.0, t_load_ns=1000.0)
 
     np.testing.assert_allclose(
-        ours.Tsca, alan.Tsca, atol=1.1e-3
+        ours.Tsca, alan.Tsca, rtol=3e-6
     )  # since we mutliply by tcal=1000, use 1e-3
     np.testing.assert_allclose(ours.Toff, alan.Toff, atol=1.1e-6)
     np.testing.assert_allclose(ours.Tunc, alan.Tunc, atol=1.1e-6)

@@ -122,7 +122,7 @@ def test_specal(edges3_2022_316: Path, alandata: Path):
     alan = am.read_specal(f"{alandata}/specal.txt", t_load=300, t_load_ns=1000)
     ours = am.read_specal(f"{edges3_2022_316}/specal.txt", t_load=300, t_load_ns=1000)
 
-    np.testing.assert_allclose(ours.Tsca, alan.Tsca, atol=2e-3)
+    np.testing.assert_allclose(ours.Tsca, alan.Tsca, rtol=3e-6)
     np.testing.assert_allclose(ours.Toff, alan.Toff, atol=4e-5)
     np.testing.assert_allclose(ours.Tunc, alan.Tunc, atol=1.1e-6)
     np.testing.assert_allclose(ours.Tcos, alan.Tcos, atol=2e-5)

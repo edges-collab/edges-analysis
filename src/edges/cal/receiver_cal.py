@@ -77,43 +77,6 @@ def get_calcoeffs_iterative(
         source_true_temps["hot_load"] = calobs.hot_load.spectrum.temp_ave
         loss = calobs.hot_load.loss
 
-    for name, load in calobs.loads.items():
-        print(name)
-        print(
-            "   SOURCE Q: ",
-            source_q[name][:3],
-            source_q[name][-3:],
-            np.mean(source_q[name]),
-        )
-        print(
-            "   SOURCE S11: ",
-            load.s11.s11[:3],
-            load.s11.s11[-3:],
-            np.mean(load.s11.s11),
-        )
-        print(
-            "   SOURCE TEMP: ",
-            source_true_temps[name],
-            source_true_temps[name],
-            np.mean(source_true_temps[name]),
-        )
-
-    print(
-        "RECEIVER S11: ",
-        calobs.receiver.s11[:3],
-        calobs.receiver.s11[-3:],
-        np.mean(calobs.receiver.s11),
-    )
-    print("HOT LOAD LOSS: ", loss[:3], loss[-3:], np.mean(loss))
-    print("CTERMS: ", cterms)
-    print("WTERMS: ", wterms)
-    print("t_load_guess: ", t_load_guess)
-    print("t_load_ns_guess: ", t_load_ns_guess)
-    print("smooth_scale_offset_within_loop: ", smooth_scale_offset_within_loop)
-    print("delays_to_fit: ", cable_delay_sweep)
-    print("niter", ncal_iter)
-    print("poly_spacing: ", scale_offset_poly_spacing)
-    print("fit_method", fit_method)
     scale, off, nwp = deque(
         _get_cc_iterative(
             calobs.freqs,
@@ -136,12 +99,6 @@ def get_calcoeffs_iterative(
     ).pop()
 
     fqs = calobs.freqs.to_value("MHz")
-
-    print("Tsca: ", scale(fqs)[:3], scale(fqs)[-3:], np.mean(scale(fqs)))
-    print("Toff: ", off(fqs)[:3], off(fqs)[-3:], np.mean(off(fqs)))
-    print("Tunc: ", nwp.get_tunc(fqs)[:3], nwp.get_tunc(fqs)[-3:], np.mean(nwp.get_tunc(fqs)))
-    print("Tcos: ", nwp.get_tcos(fqs)[:3], nwp.get_tcos(fqs)[-3:], np.mean(nwp.get_tcos(fqs)))
-    print("Tsin: ", nwp.get_tsin(fqs)[:3], nwp.get_tsin(fqs)[-3:], np.mean(nwp.get_tsin(fqs)))
 
     return Calibrator(
         freqs=calobs.freqs,
