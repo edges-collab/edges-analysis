@@ -506,7 +506,7 @@ class TestXRFIModelNonlinearWindow:
         sky, *_ = make_sky(sky_model, rfi_model, scale)
 
         true_flags = rfi_model > 0
-        flags, info = xrfi.xrfi_model_nonlinear_window(
+        flags, _ = xrfi.xrfi_model_nonlinear_window(
             sky,
             freq=freq,
             model=EdgesPoly(n_terms=6),
