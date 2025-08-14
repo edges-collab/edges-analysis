@@ -255,7 +255,7 @@ class CalObsDefEDGES2:
         rcvdir = rootdir / "S11" / f"ReceiverReading{run_num:02}"
         if not rcvdir.exists():
             # Try any run num:
-            rcvdir = next((rootdir / "S11").glob("ReceiverReading*"))
+            rcvdir = sorted((rootdir / "S11").glob("ReceiverReading*"))[0]
             warnings.warn(
                 f"Could not find ReceiverReading{run_num:02}, using {rcvdir.name}",
                 stacklevel=2,
