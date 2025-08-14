@@ -139,9 +139,24 @@ def get_calcoeffs_iterative(
 
     print("Tsca: ", scale(fqs)[:3], scale(fqs)[-3:], np.mean(scale(fqs)))
     print("Toff: ", off(fqs)[:3], off(fqs)[-3:], np.mean(off(fqs)))
-    print("Tunc: ", nwp.get_tunc(fqs)[:3], nwp.get_tunc(fqs)[-3:], np.mean(nwp.get_tunc(fqs)))
-    print("Tcos: ", nwp.get_tcos(fqs)[:3], nwp.get_tcos(fqs)[-3:], np.mean(nwp.get_tcos(fqs)))
-    print("Tsin: ", nwp.get_tsin(fqs)[:3], nwp.get_tsin(fqs)[-3:], np.mean(nwp.get_tsin(fqs)))
+    print(
+        "Tunc: ",
+        nwp.get_tunc(fqs)[:3],
+        nwp.get_tunc(fqs)[-3:],
+        np.mean(nwp.get_tunc(fqs)),
+    )
+    print(
+        "Tcos: ",
+        nwp.get_tcos(fqs)[:3],
+        nwp.get_tcos(fqs)[-3:],
+        np.mean(nwp.get_tcos(fqs)),
+    )
+    print(
+        "Tsin: ",
+        nwp.get_tsin(fqs)[:3],
+        nwp.get_tsin(fqs)[-3:],
+        np.mean(nwp.get_tsin(fqs)),
+    )
 
     return Calibrator(
         freqs=calobs.freqs,
