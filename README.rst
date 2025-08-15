@@ -11,47 +11,56 @@ edges-analysis
 .. image:: https://img.shields.io/badge/code%20style-black-000000.svg
   :target: https://github.com/psf/black
 
-**Code for analysing EDGES field data.**
+**Analysis and Calibration Code for the EDGES experiment**
 
-``edges-analysis`` has methods for averaging, filtering and calibrating EDGES data
-from the field. It also includes classes for describing the products of these analysis
-steps. The primary goal of the code is to allow the analysis to be fully reproducible,
-efficient, and clear.
-
-.. note:: This code originated from Raul Monsalve's private repo.
-          The original code before modification is tagged as ``original_version``.
+``edges-analysis`` has methods for I/O, receiver calibration, averaging, filtering and
+calibrating EDGES data. The primary goal of the code is to allow the analysis to be
+fully reproducible, efficient, and clear.
 
 Features
 ========
 
 ``edges-analysis`` includes the following features:
 
-* A well-defined class-based interface to generic single-dish data for global-signal
-  measurements.
-* Full tracking of input metadata across all analysis steps.
-* Compact command-line interface for running each step.
-* Beam models
-* Loss models
-* Various filters that are able to flag out potentially bad data.
-* Sky Models
-
-
-
-Installation
-============
-
-This package can be installed with ``pip`` either by cloning the repo first, or directly
-from github::
-
-    git clone https://github.com/edges-collab/edges-analysis
-    cd edges-analysis
-    pip install [-e] .
-
-or::
-
-    pip install git+git://github.com/edges-collab/edges-analysis.git
+* Methods for reading/writiing EDGES-specific datasets/data products.
+* A full set of methods for receiver calibration, applicable to *most*
+  current global 21cm experiments (based on Dicke-switch calibration +
+  the noise-wave formalism).
+* Many algorithms/routines for flagging bad data, including RFI, outliers
+  in time/frequency, poor auxiliary data etc.
+* A full-featured interface for linear modelling and fitting.
+* Algorithms for consistent averaging of data over nights/times/frequencies,
+  either in specified bins or complete averaging of the dataset.
+* Works with ``pygsdata`` objects for a consistent interface all the way through
+  an analysis pipeline, including maintenance of metadata about the operations
+  applied to particular data (and propagation of metadata like the number
+  of averaged samples).
+* Simulation algorithms, including beam models and sky models.
 
 Documentation
 =============
 
 Documentation is hosted on `ReadTheDocs <https://edges-analysis.readthedocs.org>`_.
+
+
+Installation
+============
+
+This package can be installed with ``pip``::
+
+   pip install edges-analysis
+
+If you want all the extras (for development etc), use the ``[dev]`` extra, like so::
+
+  pip install edges-analysis[dev]
+
+
+You can also install directly from github. Either cloning first::
+
+    git clone https://github.com/edges-collab/edges-analysis
+    cd edges-analysis
+    pip install [-e] .
+
+or directly::
+
+    pip install git+git://github.com/edges-collab/edges-analysis.git

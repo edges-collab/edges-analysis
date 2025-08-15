@@ -1,0 +1,46 @@
+Notes: Receiver\#1
+
+THIS IS MEANT TO BE A MINIMAL *CALIBRATABLE* DATASET FOR TESTING.
+
+Order of Measurements: (8031B5 Male Cal Kit used for all measurements
+unless noted otherwise )
+
+1.  Loosen and Tighten all connectors for back-end B and Added 3dbB
+    attenuator
+
+2.  FastSpec Measurements with edges.ini file
+
+3.  installed new capacitors on Digitizer board due to loose/damage
+    components
+
+4.  AmbientLoad\_Fastspec2
+
+5.  HotLoad
+
+6.  SwitchingState01 (50.1713Ohms Maury/Male)
+
+7.  ReceiverReading01 (50.0045 Female)
+
+8.  LongcableShorted
+
+9.  LongCableOpen
+
+10. AntSim2
+
+11. SwitchingState02 (50.1729 Ohms Maury/Male)
+
+12. ReceiverReading02 (50.0097 Female)
+
+13. AntSim3
+
+14. AntSim4
+
+-   Back-end-B: (+3B)
+-   Power: 0dBm
+-   bandwidth: 100 Hz
+-   Max Frequency: 200MHz
+-   Min Frequency: 40MHz
+-   AVG: 10 traces
+-   Points: 641
+-   Frequency Step (MHz): 0.250
+-   Notice 1C change when taking S11 measurements

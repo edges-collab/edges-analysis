@@ -1,0 +1,1 @@
+This is an example *partial* calibration observation with only some loads.

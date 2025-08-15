@@ -1,22 +1,16 @@
 """Test the filters module."""
 
-from __future__ import annotations
-
-import sys
-from pathlib import Path
-
 import numpy as np
 import pytest
 from astropy import units as un
-from edges_cal import modelling as mdl
 from pygsdata import GSData, GSFlag
 from pygsdata.concat import concat
 from pygsdata.select import select_freqs
 
-from edges_analysis.filters import filters
-
-sys.path.append(str(Path(__file__).parent.parent))
-from mock_gsdata import create_mock_edges_data
+from edges import modelling as mdl
+from edges.averaging.utils import NsamplesStrategy
+from edges.filters import filters
+from edges.testing import create_mock_edges_data
 
 
 def run_filter_check(data: GSData, fnc: callable, **kwargs):
@@ -26,8 +20,6 @@ def run_filter_check(data: GSData, fnc: callable, **kwargs):
         assert fnc.__name__ in new_data.flags
         assert len(new_data.flags) - len(data.flags) == 1
     else:
-        print(len(new_data))
-        print(len(data))
         for nd, d in zip(new_data, data, strict=False):
             assert nd.data.shape == d.data.shape
             assert fnc.__name__ in nd.flags
@@ -291,7 +283,12 @@ class TestRMSFilter:
 
     @pytest.mark.parametrize(
         "strategy",
-        ["flagged-nsamples", "flags-only", "flagged-nsamples-uniform", "nsamples-only"],
+        [
+            NsamplesStrategy.FLAGGED_NSAMPLES,
+            NsamplesStrategy.NSAMPLES_ONLY,
+            NsamplesStrategy.FLAGGED_NSAMPLES_UNIFORM,
+            NsamplesStrategy.FLAGS_ONLY,
+        ],
     )
     def test_nsamples_strategy(self, mock: GSData, strategy: str):
         # since there are no flags in the mock data, each of the strategies
