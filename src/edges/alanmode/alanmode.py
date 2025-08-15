@@ -427,7 +427,9 @@ def edges(
     s12rig: np.ndarray | None = None,
     s22rig: np.ndarray | None = None,
     **kwargs,
-) -> tuple[CalibrationObservation, Calibrator]:
+) -> tuple[
+    CalibrationObservation, Calibrator, S11ModelParams, S11ModelParams, Callable | None
+]:
     """A function that does what the edges3.c and edges2k.c C-code do.
 
     The primary purpose of this function is to model the input S11's, and then
@@ -453,6 +455,20 @@ def edges(
     s11rig, s12rig, s22rig
         The S11, S12, and S22 measurements for the semi-rigid cable respectively.
         Optional -- generally required for EDGES-2.
+
+    Returns
+    -------
+    calobs
+        The CalibrationObservation that holds all the data relevant for performing
+        the receiver calibration.
+    calibrator
+        The final calibration solutions.
+    s11_model_params
+        The parameters used to create models of the load S11s.
+    receiver_model_params
+        The parameters used to create models of the receiver S11.
+    hot_loss_model
+        The model used to account for losses in the hot load.
     """
     if kwargs:
         params = EdgesScriptParams(**kwargs)
@@ -719,7 +735,9 @@ def alancal(
     redo_cal: bool = True,
     acqparams: ACQPlot7aMoonParams = ACQPlot7aMoonParams(),
     calparams: EdgesScriptParams = EdgesScriptParams(),
-):
+) -> tuple[
+    CalibrationObservation, Calibrator, S11ModelParams, S11ModelParams, Callable | None
+]:
     """Run a calibration in as close a manner to Alan's code as possible.
 
     This exists mostly for being able to compare to Alan's memos etc in an easy way. It
@@ -745,6 +763,20 @@ def alancal(
         Parameters governing how to average the spectrum files.
     calparams
         Parameters governing how to model S11s and perform the calibration.
+
+    Returns
+    -------
+    calobs
+        The CalibrationObservation that holds all the data relevant for performing
+        the receiver calibration.
+    calibrator
+        The final calibration solutions.
+    s11_model_params
+        The parameters used to create models of the load S11s.
+    receiver_model_params
+        The parameters used to create models of the receiver S11.
+    hot_loss_model
+        The model used to account for losses in the hot load.
     """
     out = Path(out)
 

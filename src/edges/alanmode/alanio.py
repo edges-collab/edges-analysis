@@ -1,7 +1,10 @@
 """Functions for writing/reading to/from file formats used in the C pipeline."""
 
+from pathlib import Path
+
 import numpy as np
 from astropy import units as un
+from astropy.table import QTable
 from astropy.time import Time
 from bidict import bidict
 from pygsdata import GSData, GSFlag, History, Stamp
@@ -311,6 +314,27 @@ def write_modelled_s11s(
                     f"{sh.real} {sh.imag} "
                     f"{lna[i].real} {lna[i].imag}\n"
                 )
+
+
+def read_modelled_s11s(pth: Path) -> QTable:
+    """Read modelled S11s from a csv file."""
+    raw_s11m = np.genfromtxt(pth, comments="#", names=True)
+    s11m = {}
+    freq = raw_s11m["freq"]
+    for name in raw_s11m.dtype.names:
+        if name == "freq":
+            s11m["freqs"] = freq * un.MHz
+
+        bits = name.split("_")
+        cmp = bits[-1]
+        load = LOADMAP["_".join(bits[:-1])]
+
+        if load not in s11m:
+            s11m[load] = np.zeros(len(raw_s11m), dtype=complex)
+
+        s11m[load] += raw_s11m[name] if cmp == "real" else raw_s11m[name] * 1j
+
+    return QTable(s11m)
 
 
 def read_spe_file(
