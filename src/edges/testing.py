@@ -53,7 +53,7 @@ def create_mock_edges_data(
 
     if as_power:
         p1 = np.ones_like(data)
-        p2 = np.ones_like(data)
+        p2 = np.ones_like(data) * 100
         data = np.concatenate((data, p1, p2), axis=0)
         times = Time(
             np.hstack((

@@ -127,7 +127,7 @@ class ThermistorReadings:
                 continue
 
             for i, td in enumerate(thermistor_timestamps[indx:], start=indx):
-                if d - td >= TimeDelta(0):
+                if d - td >= TimeDelta(0 * un.s):
                     if d - td <= deltat:
                         closest.append(i)
                         break

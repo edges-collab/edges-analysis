@@ -1,7 +1,5 @@
 """Module defining EDGES-specific reading functions for weather and auxiliary data."""
 
-from __future__ import annotations
-
 import re
 from datetime import datetime, time, timedelta
 from pathlib import Path

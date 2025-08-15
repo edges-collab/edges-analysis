@@ -1,7 +1,5 @@
 """Classes representing S11 and full S-parameter measurements."""
 
-from __future__ import annotations
-
 from collections.abc import Sequence
 from typing import Self
 

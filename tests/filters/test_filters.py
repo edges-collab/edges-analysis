@@ -1,7 +1,5 @@
 """Test the filters module."""
 
-from __future__ import annotations
-
 import numpy as np
 import pytest
 from astropy import units as un

@@ -1,7 +1,5 @@
 """Pytest configuration for the edges-analysis package."""
 
-from __future__ import annotations
-
 from pathlib import Path
 from subprocess import run
 

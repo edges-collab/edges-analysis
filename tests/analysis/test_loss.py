@@ -19,7 +19,7 @@ class TestLow2BalunConnectorLoss:
     @pytest.mark.parametrize("use_approx_eps0", [True, False])
     def test_happy_path(self, use_approx_eps0):
         fq = np.linspace(50, 100, 51) * un.MHz
-        ants11 = np.ones(51)
+        ants11 = np.ones(51) / 2
 
         bcloss = loss.low2_balun_connector_loss(
             fq, ants11, use_approx_eps0=use_approx_eps0

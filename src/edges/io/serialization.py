@@ -8,6 +8,7 @@ from typing import Any, TypeVar
 
 import attrs
 import cattrs
+import cattrs.strategies
 import h5py
 import hickle
 import numpy as np
@@ -95,13 +96,13 @@ def _location_unstructure_hook(val: EarthLocation) -> list[Quantity]:
 
 
 @converter.register_structure_hook
-def _qtable_hook(val: np.ndarray, _) -> QTable:
+def _qtable_hook(val: dict[str, np.ndarray | Quantity], _) -> QTable:
     """Convert a datetime to string."""
     return QTable(data=val)
 
 
 @converter.register_unstructure_hook
-def _qtable_unstructure_hook(val: QTable) -> dict[str, np.ndarray]:
+def _qtable_unstructure_hook(val: QTable) -> dict[str, np.ndarray | Quantity]:
     """Convert a str to datetime."""
     return {col: val[col] for col in val.columns}
 
@@ -112,6 +113,7 @@ def write_object_to_hdf5(obj: Any, path: tp.PathLike | h5py.Group):
         path = h5py.File(path, "w")
 
     dct = converter.unstructure(obj)
+
     hickle.dump(dct, path)
 
 
@@ -119,6 +121,45 @@ def load_hdf5(struc, path: tp.PathLike | h5py.Group):
     """Load an HDF5 file as a given type."""
     data = hickle.load(path)
     return converter.structure(data, struc)
+
+
+def _structure_to_hickleable(cls, data: dict, conv):
+    """Convert a structure to a hickleable class."""
+    if not attrs.has(cls):
+        raise TypeError(f"Class {cls.__name__} has not been defined with attrs!")
+
+    clsname = data["__classname__"]
+
+    # Define a recursive function to get ALL subclasses of the class
+    # to which we're trying to structure the data, because
+    # maybe we want to structure to a subclass rather than the parent class.
+    def all_subclasses(cls):
+        return set(cls.__subclasses__()).union([
+            s for c in cls.__subclasses__() for s in all_subclasses(c)
+        ])
+
+    # If the class name saved with the unstructured data does not match this class,
+    # move on to a subclass that _does_ match.
+    if clsname != cls.__name__:
+        allsubs = all_subclasses(cls)
+        return conv.structure(
+            data, next(kls for kls in allsubs if kls.__name__ == clsname)
+        )
+
+    # Otherwise, if we match this class, do a direct structuring of each field.
+    fields_dict = attrs.fields_dict(cls)
+
+    dd = {
+        fields_dict[k].alias: conv.structure(data[k], fields_dict[k].type)
+        for k in fields_dict
+    }
+    return cls(**dd)
+
+
+def _unstructure_hickleable(obj, conv) -> dict:
+    dct = conv.unstructure(attrs.asdict(obj, recurse=False))
+    dct["__classname__"] = obj.__class__.__name__
+    return dct
 
 
 def hickleable(cls: T) -> T:
@@ -138,4 +179,12 @@ def hickleable(cls: T) -> T:
     if not hasattr(cls, "from_file"):
         cls.from_file = classmethod(load_hdf5)
 
+    # Give our attrs/hickleable class a _structure and _unstructure method.
+    # These will be used to hickle the class.
+    cls._structure = classmethod(_structure_to_hickleable)
+    cls._unstructure = _unstructure_hickleable
+
     return cls
+
+
+cattrs.strategies.use_class_methods(converter, "_structure", "_unstructure")

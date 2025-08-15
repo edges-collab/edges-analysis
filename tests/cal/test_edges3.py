@@ -18,14 +18,15 @@ def smallcal() -> calobsdef3.CalObsDefEDGES3:
 
 @pytest.fixture(scope="module")
 def calobs(smallcal: calobsdef3.CalObsDefEDGES3) -> CalibrationObservation:
-    return CalibrationObservation.from_edges3_caldef(
-        smallcal,
-        f_low=50 * un.MHz,
-        f_high=100 * un.MHz,
-        spectrum_kwargs={
-            "default": {"allow_closest_time": True, "temperature": 300.0 * un.K}
-        },
-    )
+    with pytest.warns(UserWarning, match="has no value"):
+        return CalibrationObservation.from_edges3_caldef(
+            smallcal,
+            f_low=50 * un.MHz,
+            f_high=100 * un.MHz,
+            spectrum_kwargs={
+                "default": {"allow_closest_time": True, "temperature": 300.0 * un.K}
+            },
+        )
 
 
 def test_calobs_creation(calobs):

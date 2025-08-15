@@ -1,7 +1,5 @@
 """Test the averaging module."""
 
-from __future__ import annotations
-
 import numpy as np
 import pytest
 from astropy import units as un
@@ -326,7 +324,10 @@ class TestWeightedMean:
 
         # Test with infinite weight
         weights[1] = np.inf
-        result, result_weights = averaging.weighted_mean(data, weights)
+        with pytest.warns(
+            RuntimeWarning, match="invalid value encountered in scalar divide"
+        ):
+            result, result_weights = averaging.weighted_mean(data, weights)
 
         assert np.isnan(result)
         assert np.isinf(result_weights)

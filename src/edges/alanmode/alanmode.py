@@ -1,8 +1,7 @@
 """Functions that run the calibration in a style similar to the C-code."""
 
-from __future__ import annotations
-
 import logging
+from collections.abc import Callable
 from pathlib import Path
 from typing import Annotated
 
@@ -357,7 +356,7 @@ def _get_hotload_loss(
     s11mask,
     s11freq,
     spec_fq,
-) -> callable | None:
+) -> Callable | None:
     if params.Lh == -1:
         hot_loss_model = get_cable_loss_model("UT-141C-SP")
     elif params.Lh == -2:

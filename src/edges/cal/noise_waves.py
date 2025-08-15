@@ -1,9 +1,8 @@
 """Functions for calibrating the receiver."""
 
-from __future__ import annotations
-
 from collections.abc import Generator, Sequence
 from functools import cached_property
+from typing import Self
 
 import attrs
 import numpy as np
@@ -749,7 +748,7 @@ class NoiseWaves:
 
     def get_fitted(
         self, data: np.ndarray, weights: np.ndarray | None = None, **kwargs
-    ) -> NoiseWaves:
+    ) -> Self:
         """Get a new noise wave model with fitted parameters."""
         fit = self.linear_model.fit(ydata=data, weights=weights, **kwargs)
         return attrs.evolve(self, parameters=fit.model_parameters)
@@ -763,7 +762,7 @@ class NoiseWaves:
         sources=None,
         with_tload: bool = True,
         loads: dict | None = None,
-    ) -> NoiseWaves:
+    ) -> Self:
         """Initialize a noise wave model from a calibration observation."""
         if loads is None:
             if sources is None:

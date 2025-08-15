@@ -5,12 +5,11 @@ The models here are preferably *not* interpolated over frequency, as that gives 
 control to us to interpolate how we wish.
 """
 
-from __future__ import annotations
-
 import logging
 import warnings
 from abc import ABC, abstractmethod
 from pathlib import Path
+from typing import Self, Union
 
 import astropy_healpix as ahp
 import attrs
@@ -51,7 +50,7 @@ class GaussianIndex(IndexModel):
         self,
         lat: np.ndarray | None = None,
         lon: np.ndarray | None = None,
-        sky_model: SkyModel | None = None,
+        sky_model: Union["SkyModel", None] = None,
     ) -> np.ndarray:
         """Generate the index at a given sky location."""
         if lat is None:
@@ -72,9 +71,9 @@ class StepIndex(IndexModel):
 
     def get_index(
         self,
-        lat: [None, np.ndarray] = None,
-        lon: [None, np.ndarray] = None,
-        sky_model: [None, SkyModel] = None,
+        lat: np.ndarray | None = None,
+        lon: np.ndarray | None = None,
+        sky_model: Union["SkyModel", None] = None,
     ) -> np.ndarray:
         """Generate the spectral index at a given sky location."""
         if lat is None:
@@ -94,9 +93,9 @@ class ConstantIndex(IndexModel):
 
     def get_index(
         self,
-        lat: [None, np.ndarray] = None,
-        lon: [None, np.ndarray] = None,
-        sky_model: [None, SkyModel] = None,
+        lat: np.ndarray | None = None,
+        lon: np.ndarray | None = None,
+        sky_model: Union["SkyModel", None] = None,
     ) -> np.ndarray:
         """Generate the spectral index at a given sky location."""
         return np.ones_like(lat) * self.index
@@ -197,7 +196,7 @@ class SkyModel:
         header_hdu: int = 1,
         data_name="TEMPERATURE",
         name: str = "SkyModel",
-    ) -> SkyModel:
+    ) -> Self:
         """Load a sky model from the LAMBDA website."""
         fname = download_file(url, cache=True)
 
@@ -238,7 +237,7 @@ class SkyModel:
         axes=("lat", "lon"),
         frame=Galactic(),
         name: str | None = None,
-    ) -> SkyModel:
+    ) -> Self:
         """Load a sky model from a lat-lon grid file."""
         temperature = np.genfromtxt(fname)
         if name is None:

@@ -5,8 +5,6 @@ This module contains wrappers around lower-level functions in other modules, pro
 a one-stop interface for everything related to calibration.
 """
 
-from __future__ import annotations
-
 import copy
 from typing import Any, Self
 
@@ -166,7 +164,7 @@ class CalibrationObservation:
     @classmethod
     def from_edges3_caldef(
         cls,
-        caldef: calobsdef3.CalkitEdges3,
+        caldef: calobsdef3.CalObsDefEDGES3,
         *,
         freq_bin_size: int = 1,
         spectrum_kwargs: dict[str, dict[str, Any]] | None = None,

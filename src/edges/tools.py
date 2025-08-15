@@ -1,7 +1,5 @@
 """Various utility functions."""
 
-from __future__ import annotations
-
 import functools
 import logging
 import operator
@@ -21,12 +19,12 @@ def stable_hash(x) -> str:
     return md5(str(x).encode()).hexdigest()
 
 
-def linear_to_decibels(x: npt.NDarray) -> npt.NDArray[float]:
+def linear_to_decibels(x: npt.NDArray) -> npt.NDArray[float]:
     """Convert a linear number to decibels."""
     return 20 * np.log10(np.abs(x))
 
 
-def decibels_to_linear(x: npt.NDarray) -> npt.NDArray[float]:
+def decibels_to_linear(x: npt.NDArray) -> npt.NDArray[float]:
     """Convert a number in decibels to linear."""
     return 10 ** (x / 20)
 

@@ -1,7 +1,5 @@
 """Functions for doing LST binning on GSData objects."""
 
-from __future__ import annotations
-
 import itertools
 import logging
 import warnings

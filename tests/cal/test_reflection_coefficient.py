@@ -257,22 +257,22 @@ class TestTwoPortNetwork:
         assert combined == expected
 
     def test_add_in_parallel(self):
-        network1 = rc.TwoPortNetwork.from_ymatrix([[1, 0], [0, 1]])
-        network2 = rc.TwoPortNetwork.from_ymatrix([[1, 0], [0, 1 + 0.1j]])
+        network1 = rc.TwoPortNetwork.from_ymatrix([[1, 1], [1, 1]])
+        network2 = rc.TwoPortNetwork.from_ymatrix([[1, 1], [1, 1 + 0.1j]])
 
         combined = network1.add_in_parallel(network2)
-        not_expected = rc.TwoPortNetwork.from_ymatrix([[1, 0], [0, 1 + 0.1j]])
+        expected = rc.TwoPortNetwork.from_ymatrix([[2, 2], [2, 2 + 0.1j]])
 
-        assert combined != not_expected
+        assert combined == expected
 
     def test_add_in_series_parallel(self):
-        network1 = rc.TwoPortNetwork.from_hmatrix([[1, 0], [0, 1]])
-        network2 = rc.TwoPortNetwork.from_hmatrix([[1, 0], [0, 1 + 0.1j]])
+        network1 = rc.TwoPortNetwork.from_hmatrix([[1, 1], [1, 1]])
+        network2 = rc.TwoPortNetwork.from_hmatrix([[1, 1], [1, 1 + 0.1j]])
 
         combined = network1.add_in_series_parallel(network2)
-        not_expected = rc.TwoPortNetwork.from_hmatrix([[1, 0], [0, 1 + 0.1j]])
+        expected = rc.TwoPortNetwork.from_hmatrix([[2, 2], [2, 2 + 0.1j]])
 
-        assert combined != not_expected
+        assert combined == expected
 
     def test_cascade_with(self):
         network1 = rc.TwoPortNetwork([[1, 0], [0, 1]])

@@ -16,7 +16,7 @@ from edges.io.calobsdef import CalObsDefEDGES2
 class TestFlagDataOutsideTemperatureRange:
     def setup_class(self):
         rng = np.random.default_rng()
-        self.spec_times = Time(np.linspace(2459867, 24598678, 100), format="jd")
+        self.spec_times = Time(np.linspace(2459867, 2459868, 100), format="jd")
         self.therm = ThermistorReadings(
             QTable({
                 "times": self.spec_times,

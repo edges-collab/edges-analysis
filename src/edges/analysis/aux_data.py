@@ -1,7 +1,5 @@
 """Module for dealing with auxiliary data for EDGES observations."""
 
-from __future__ import annotations
-
 import logging
 import time
 from pathlib import Path

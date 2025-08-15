@@ -1,7 +1,5 @@
 """Functions for binning and decimating GSData objects in frequency."""
 
-from __future__ import annotations
-
 import itertools
 
 import numpy as np

@@ -1,10 +1,9 @@
 """Beam models and chromaticity corrections."""
 
-from __future__ import annotations
-
 import logging
+from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Self
 
 import attrs
 import numpy as np
@@ -64,7 +63,7 @@ class Beam:
         phi_min: float = 0,
         phi_max: float = 359,
         phi_resolution: float = 1,
-    ) -> Beam:
+    ) -> Self:
         """
         Create a Beam object from a HFSS file.
 
@@ -122,7 +121,7 @@ class Beam:
         )
 
     @classmethod
-    def from_wipld(cls, path: tp.PathLike, az_antenna_axis: float = 0) -> Beam:
+    def from_wipld(cls, path: tp.PathLike, az_antenna_axis: float = 0) -> Self:
         """Read a WIPL-D beam.
 
         Parameters
@@ -231,7 +230,7 @@ class Beam:
         )
 
     @classmethod
-    def from_feko(cls, path: str | Path, az_antenna_axis: float = 0) -> Beam:
+    def from_feko(cls, path: str | Path, az_antenna_axis: float = 0) -> Self:
         """
         Read a FEKO beam file.
 
@@ -280,7 +279,7 @@ class Beam:
         theta_p: float = 181,
         phi_p: float = 361,
         az_antenna_axis: float = 0,
-    ) -> Beam:
+    ) -> Self:
         """
         Read a CST beam file.
 
@@ -356,7 +355,7 @@ class Beam:
         theta_p: float = 181,
         phi_p: float = 361,
         az_antenna_axis: float = 0,
-    ) -> Beam:
+    ) -> Self:
         """
         Read a FEKO beam file.
 
@@ -424,12 +423,12 @@ class Beam:
     @classmethod
     def get_beam_path(cls, band: str, kind: str | None = None) -> Path:
         """Get a standard path to a beam file."""
-        pth = BEAM_PATH / band / "default.txt" if not kind else f"{kind}.txt"
+        pth = f"{kind}.txt" if kind else BEAM_PATH / band / "default.txt"
         if not pth.exists():
             raise FileNotFoundError(f"No beam exists for band={band}.")
         return pth
 
-    def select_freqs(self, indx: tp.Sequence[int]) -> Beam:
+    def select_freqs(self, indx: Sequence[int]) -> Self:
         """Select a subset of frequencies.
 
         Parameters
@@ -453,7 +452,7 @@ class Beam:
             n_terms=13, transform=mdl.ScaleTransform(scale=75.0)
         ),
         **fit_kwargs,
-    ) -> Beam:
+    ) -> Self:
         """
         Interpolate the beam to a new set of frequencies.
 
@@ -493,7 +492,7 @@ class Beam:
 
     def smoothed(
         self, model: mdl.Model = mdl.Polynomial(n_terms=12), **fit_kwargs
-    ) -> Beam:
+    ) -> Self:
         """
         Return a new beam, smoothed over the frequency axis, but without decimation.
 
@@ -589,7 +588,7 @@ class Beam:
         beam_file: tp.PathLike = ":",
         configuration: str = "default",
         rotation_from_north: float = 90,
-    ) -> Beam:
+    ) -> Self:
         """Read a beam from file."""
         beam_file = cls.resolve_file(beam_file, band, configuration, simulator)
 
@@ -617,7 +616,7 @@ class Beam:
             "spline",
             "sphere-spline",
         ] = "linear",
-    ) -> callable[[np.ndarray, np.ndarray], np.ndarray]:
+    ) -> Callable[[np.ndarray, np.ndarray], np.ndarray]:
         """Return a callable function that interpolates the beam.
 
         The returned function has the signature ``interp(az, el)``, where ``az`` is
@@ -656,8 +655,8 @@ class Beam:
         return lambda az, el: spl(np.array([az, el]).T)
 
     def between_freqs(
-        self, low: tp.FreqType = 0 * u.MHz, high: tp.FreTtype = np.inf * u.MHz
-    ) -> Beam:
+        self, low: tp.FreqType = 0 * u.MHz, high: tp.FreqType = np.inf * u.MHz
+    ) -> Self:
         """Return a new :class:`Beam` object restricted to a given frequency range."""
         mask = (self.frequency >= low) & (self.frequency <= high)
         return attrs.evolve(self, frequency=self.frequency[mask], beam=self.beam[mask])
@@ -788,7 +787,7 @@ class BeamFactor:
                 f"got min of {np.nanmin(value)}"
             )
 
-    def at_lsts(self, lsts: np.ndarray, interp_kind: int | str = "cubic") -> BeamFactor:
+    def at_lsts(self, lsts: np.ndarray, interp_kind: int | str = "cubic") -> Self:
         """Return a new BeamFactor at the given LSTs."""
         d = attrs.asdict(self)
 
@@ -817,7 +816,7 @@ class BeamFactor:
 
         return attrs.evolve(self, lsts=lsts, **out)
 
-    def between_lsts(self, lst0: float, lst1: float) -> BeamFactor:
+    def between_lsts(self, lst0: float, lst1: float) -> Self:
         """Return a new BeamFactor including only LSTs between those given.
 
         Parameters

@@ -3,6 +3,8 @@
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
+from cattrs.strategies import include_subclasses
+
 try:
     __version__ = version("edges-analysis")
 except PackageNotFoundError:

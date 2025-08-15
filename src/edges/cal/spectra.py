@@ -1,7 +1,5 @@
 """Module dealing with calibration spectra and thermistor measurements."""
 
-from __future__ import annotations
-
 import contextlib
 import inspect
 import logging

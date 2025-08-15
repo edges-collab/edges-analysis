@@ -1,8 +1,6 @@
 """Module with routines for simulating calibration datasets."""
 
-from __future__ import annotations
-
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 
 import numpy as np
 from astropy import units as un
@@ -70,7 +68,7 @@ def simulate_q(
 def simulate_q_from_calibrator(
     load: Load,
     calibrator: Calibrator,
-    scale_model: callable | None = None,
+    scale_model: Callable | None = None,
 ) -> np.ndarray:
     """Simulate the observed 3-position switch ratio, Q, from noise-wave solutions.
 
@@ -108,7 +106,7 @@ def simulate_qant_from_calibrator(
     calibrator: Calibrator,
     ant_s11: np.ndarray,
     ant_temp: np.ndarray,
-    scale_model: callable | None = None,
+    scale_model: Callable | None = None,
     loss: np.ndarray | float = 1,
     t_amb: float = 296,
     bm_corr: float | np.ndarray = 1,

@@ -402,7 +402,8 @@ class TestModelSweep:
 
     def test_no_data_error(self):
         # to raise no data error, there must be no data for a whole window
-        spec = np.ones(500)
+        rng = np.random.default_rng(1234)
+        spec = rng.normal(size=500)
         spec[50:150] = np.nan
 
         flags, _info = xrfi.xrfi_model_sweep(spec)
@@ -528,7 +529,7 @@ class TestXRFIModelNonlinearWindow:
 @pytest.fixture(scope="module")
 def model_info(sky_pl_1d, rfi_random_1d, freq):
     sky, _std, _noise, _rfi = make_sky(sky_pl_1d, rfi_random_1d)
-    _flags, info = xrfi.xrfi_model(sky, freq=freq, max_iter=3)
+    _flags, info = xrfi.xrfi_model(sky, freq=freq, max_iter=10)
     return info
 
 

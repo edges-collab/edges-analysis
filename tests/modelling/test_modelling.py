@@ -1,4 +1,3 @@
-import hickle
 import numpy as np
 import pytest
 import yaml
@@ -32,7 +31,7 @@ def test_basis(model: type[mdl.Model]):
 
     assert pl.basis.shape == (3, 10)
     assert pl().shape == (10,)
-    assert pl(x=np.linspace(0, 1, 20)).shape == (20,)
+    assert pl(x=np.linspace(1, 2, 20)).shape == (20,)
 
     pl2 = model(n_terms=4).at(x=x)
     with pytest.raises(ValueError):
@@ -251,15 +250,21 @@ def test_composite_with_n_terms():
     assert not np.allclose(new(x=np.linspace(1, 2, 10)), cmp(x=np.linspace(1, 2, 10)))
 
 
-def test_composite_hickle(tmpdir):
+def test_composite_roundtrip(tmpdir):
     mdl1 = mdl.PhysicalLin(
         parameters=[0, 1, 2, 3, 4], xtransform=mdl.ScaleTransform(scale=1.5)
     )
     mdl2 = mdl.Polynomial(n_terms=5, parameters=[0, 1, 2, 3, 4])
     cmp = mdl.CompositeModel(models={"lin": mdl1, "pl": mdl2})
 
-    hickle.dump(cmp, tmpdir / "cmp.h5")
-    new = hickle.load(tmpdir / "cmp.h5")
+    from edges.io.serialization import converter
+
+    converter.unstructure(mdl1)
+    converter.unstructure(mdl2)
+    converter.unstructure(cmp.data_transform)
+
+    cmp.write(tmpdir / "cmp.h5")
+    new = mdl.CompositeModel.from_file(tmpdir / "cmp.h5")
     assert new == cmp
 
 

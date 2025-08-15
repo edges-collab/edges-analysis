@@ -78,13 +78,14 @@ class TestGetClosestS11Time:
         d, find_these_files = self._setup_dir(tmp_path)
         (d / "unmatching.s1p").touch()
 
-        out = _get_closest_s11_time(
-            d,
-            fileglob="*.s1p",
-            time=Time("2015:312:00:00"),
-            dateformat="%Y_%j_%H",
-            date_slice=slice(0, 11),
-        )
+        with pytest.warns(UserWarning, match="Only 4 of 5 were parseable"):
+            out = _get_closest_s11_time(
+                d,
+                fileglob="*.s1p",
+                time=Time("2015:312:00:00"),
+                dateformat="%Y_%j_%H",
+                date_slice=slice(0, 11),
+            )
         assert out == sorted(find_these_files)
 
     def test_ignore_file(self, tmp_path):

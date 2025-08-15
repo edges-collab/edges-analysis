@@ -1,12 +1,10 @@
 """Functions for excising RFI."""
 
-from __future__ import annotations
-
 import logging
 import warnings
 from dataclasses import dataclass, field
 from functools import cached_property
-from typing import Any, Literal
+from typing import Any, Literal, Self
 
 import h5py
 import numpy as np
@@ -1183,7 +1181,7 @@ class ModelFilterInfoContainer:
 
     models: list[ModelFilterInfo] = field(default_factory=list)
 
-    def append(self, model: ModelFilterInfo) -> ModelFilterInfoContainer:
+    def append(self, model: ModelFilterInfo) -> Self:
         """Create a new object by appending a set of info to the existing."""
         assert isinstance(model, ModelFilterInfo)
         models = [*self.models, model]
@@ -1715,7 +1713,7 @@ def visualise_model_info(
             x,
             np.exp(-(x**2)) / np.sqrt(2 * np.pi),
             color="k",
-            label="Normal Dist." if not i else None,
+            label=None if i else "Normal Dist.",
         )
         ax[1, 2].set_title("Scaled Residuals Distribution")
 

@@ -125,12 +125,13 @@ def mock_with_model(mock) -> GSData:
 
 @pytest.fixture(scope="session")
 def mock_lstbinned(mock: GSData) -> GSData:
-    return lstbin.lst_bin(
-        mock,
-        binsize=0.02,
-        first_edge=mock.lsts.min().hour,
-        max_edge=mock.lsts.max().hour,
-    )
+    with pytest.warns(UserWarning, match="Auxiliary measurements cannot be binned"):
+        return lstbin.lst_bin(
+            mock,
+            binsize=0.02,
+            first_edge=mock.lsts.min().hour,
+            max_edge=mock.lsts.max().hour,
+        )
 
 
 @pytest.fixture(scope="session")

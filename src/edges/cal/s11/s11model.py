@@ -1,8 +1,7 @@
 """A class for setting parameters to model raw S11 measurements."""
 
-from __future__ import annotations
-
 import logging
+from collections.abc import Callable
 from typing import Self
 
 import attrs
@@ -176,7 +175,7 @@ class DelayedS11Model:
 def get_s11_model(
     params: S11ModelParams,
     raw_s11: CalibratedS11,
-) -> callable[tp.FreqType, [np.ndarray]]:
+) -> Callable[[tp.FreqType], np.ndarray]:
     """Generate a callable model for the S11.
 
     This should closely match :meth:`s11_correction`.

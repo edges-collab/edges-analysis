@@ -1,7 +1,5 @@
 """Functions for combining multiple GSData files/objects."""
 
-from __future__ import annotations
-
 import logging
 import warnings
 from collections.abc import Sequence

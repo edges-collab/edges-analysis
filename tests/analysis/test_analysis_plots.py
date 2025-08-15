@@ -42,4 +42,5 @@ def test_plot_daily_residuals(step, request):
             plots.plot_daily_residuals(step)
         plots.plot_daily_residuals(step, model=LinLog(n_terms=5))
     else:
+        print(step[0].data)
         plots.plot_daily_residuals(step)

@@ -10,8 +10,7 @@ They represent basic relations between physical parameters of circuits, as measu
 with internal standards.
 """
 
-from __future__ import annotations
-
+from collections.abc import Callable
 from functools import cached_property
 
 from ..units import unit_converter
@@ -84,668 +83,6 @@ def gamma2impedance(
     return z0 * (1 + gamma) / (1 - gamma)
 
 
-@attrs.define(frozen=True, kw_only=False)
-class TwoPortNetwork:
-    """A matrix-representation of a two-port network.
-
-    This is a matrix representation of a two-port network, defined in terms of
-    voltages and currents at ports (in contrast to the SMatrix representation which
-    is in terms of reflected waves).
-
-    This class allows for the simple conversion between representations of
-    two-port network matrices. The internal representation is the ABCD representation
-    (https://en.wikipedia.org/wiki/Two-port_network#ABCD-parameters).
-    """
-
-    x: npt.NDArray[complex] = npfield(
-        possible_ndims=(3,),
-        dtype=complex,
-        converter=np.atleast_3d,
-    )
-
-    @x.validator
-    def _x_vld(self, att, val):
-        if val.shape[:2] != (2, 2):
-            raise ValueError("Matrix must have shape (2, 2, Nfreq).")
-
-    @classmethod
-    def from_zmatrix(cls, z: npt.NDArray) -> Self:
-        """Create a TwoPortNetwork from a Z-matrix."""
-        z = np.atleast_3d(z)
-        nf = z.shape[-1]
-        detz = z[0, 0] * z[1, 1] - z[0, 1] * z[1, 0]
-        return cls(1 / z[1, 0] * np.array([[z[0, 0], detz], [np.ones(nf), z[1, 1]]]))
-
-    @classmethod
-    def from_ymatrix(cls, z: npt.NDArray) -> Self:
-        """Create a TwoPortNetwork from a Y-matrix."""
-        z = np.atleast_3d(z)
-        nf = z.shape[-1]
-        detz = z[0, 0] * z[1, 1] - z[0, 1] * z[1, 0]
-        return cls(
-            1 / z[1, 0] * np.array([[-z[1, 1], -np.ones(nf)], [-detz, -z[0, 0]]])
-        )
-
-    @classmethod
-    def from_abcd(cls, abcd, inverse: bool = False):
-        """Create a TwoPortNetwork from an ABCD representation."""
-        return cls(np.linalg.inv(abcd.T).T) if inverse else cls(abcd)
-
-    @property
-    def A(self):  # noqa: N802
-        """Return the A parameter."""
-        return self.x[0, 0]
-
-    @property
-    def B(self):  # noqa: N802
-        """Return the B parameter."""
-        return self.x[0, 1]
-
-    @property
-    def C(self):  # noqa: N802
-        """Return the C parameter."""
-        return self.x[1, 0]
-
-    @property
-    def D(self):  # noqa: N802
-        """Return the D parameter."""
-        return self.x[1, 1]
-
-    @cached_property
-    def determinant(self) -> npt.NDArray[float]:
-        """The determinant of the ABCD representation, |AD - BC|."""
-        return self.A * self.D - self.B * self.C
-
-    def is_reciprocal(self) -> bool:
-        """Whether the network is a reciprocal network."""
-        return np.allclose(self.determinant, 1)
-
-    def is_symmetric(self) -> bool:
-        """Whether the network is symmetric."""
-        return np.allclose(self.A, self.D)
-
-    def is_lossless(self) -> bool:
-        """Whether the network is lossless."""
-        return (
-            np.allclose(self.A.imag, 0)
-            and np.allclose(self.D.imag, 0)
-            and np.allclose(self.B.real, 0)
-            and np.allclose(self.C.real, 0)
-        )
-
-    def _check_add_args(self, other: Self):
-        if not isinstance(other, TwoPortNetwork):
-            raise ValueError("Two matrices must be of the same type.")
-
-        if other.x.shape != self.x.shape:
-            raise ValueError("Two matrices must have the same dimensions.")
-
-    def add_in_series(self, other: Self) -> Self:
-        """Combine two TwoPortNetworks together in series."""
-        self._check_add_args(other)
-        z = self.zmatrix + other.zmatrix
-        return TwoPortNetwork.from_zmatrix(z)
-
-    def add_in_parallel(self, other):
-        """Combine two TwoPortNetworks together in parallel."""
-        self._check_add_args(other)
-
-        y = self.ymatrix * other.ymatrix
-        return TwoPortNetwork.from_ymatrix(y)
-
-    def add_in_series_parallel(self, other):
-        """Combine two TwoPortNetworks together in parallel."""
-        self._check_add_args(other)
-
-        h = self.hmatrix * other.hmatrix
-        return TwoPortNetwork.from_hmatrix(h)
-
-    def cascade_with(self, other: Self) -> Self:
-        """Cascade two TwoPortNetworks together."""
-        self._check_add_args(other)
-        abcd = np.matmul(other.x.T, self.x.T)
-        return TwoPortNetwork.from_abcd(abcd.T)
-
-    @property
-    def zmatrix(self):
-        """Return the Z-matrix (impedance parameters) of the network."""
-        nf = self.B.shape[-1]
-        return (1 / self.C) * np.array([
-            [self.A, self.determinant],
-            [np.ones(nf), self.D],
-        ])
-
-    @property
-    def impedance_matrix(self):
-        """Alias of zmatrix."""
-        return self.zmatrix
-
-    @property
-    def ymatrix(self):
-        """Return the Y-matrix (admittance parameters) of the network.
-
-        This is the inverse of the z-matrix.
-        """
-        nf = self.B.shape[-1]
-        return (1 / self.B) * np.array([
-            [self.D, -self.determinant],
-            [-np.ones(nf), self.A],
-        ])
-
-    @property
-    def admittance_matrix(self):
-        """Alias of ymatrix."""
-        return self.ymatrix
-
-    @classmethod
-    def from_hmatrix(cls, z: npt.NDArray) -> Self:
-        """Create a TwoPortNetwork from a H-matrix."""
-        z = np.atleast_3d(z)
-        nf = z.shape[-1]
-        detz = z[0, 0] * z[1, 1] - z[0, 1] * z[1, 0]
-        return cls(
-            1 / z[1, 0] * np.array([[-detz, -z[0, 0]], [-z[1, 1], -np.ones(nf)]])
-        )
-
-    @property
-    def hmatrix(self):
-        """Return the H-matrix (hybrid parameters) of the network."""
-        nf = self.B.shape[-1]
-        return (1 / self.D) * np.array([
-            [self.B, self.determinant],
-            [-np.ones(nf), self.C],
-        ])
-
-    @property
-    def hybrid_matrix(self):
-        """Alias of hmatrix."""
-        return self.hmatrix
-
-    def as_smatrix(
-        self, source_impedance: float, load_impedance: float | None = None
-    ) -> SMatrix:
-        """Convert the TwoPortNetwork to a SMatrix."""
-        if load_impedance is None:
-            load_impedance = source_impedance
-
-        a, b, c, d = self.A, self.B, self.C, self.D
-        zs = source_impedance
-        zl = load_impedance
-        denom = (b + c * zs * zl) + (a * zl + d * zs)
-
-        return SMatrix([
-            [
-                ((b - c * zs * zl) + (a * zl - d * zs)) / denom,
-                2 * zs * self.determinant / denom,
-            ],
-            [
-                2 * zl / denom,
-                ((b - c * zs * zl) - (a * zl - d * zs)) / denom,
-            ],
-        ])
-
-    @classmethod
-    def from_smatrix(cls, s: SMatrix, z0: npt.NDArray) -> TwoPortNetwork:
-        """Compute the network from scattering parameters."""
-        denom = 1 / (2 * s.s21)
-        xx = s.s21 * s.s12
-
-        return cls(
-            denom
-            * np.array([
-                [
-                    (1 + s.s11) * (1 - s.s22) + xx,
-                    z0 * ((1 + s.s11) * (1 + s.s22) - xx),
-                ],
-                [
-                    (1 / z0) * ((1 - s.s11) * (1 - s.s22) - xx),
-                    (1 - s.s11) * (1 + s.s22) + xx,
-                ],
-            ])
-        )
-
-    @classmethod
-    def from_transmission_line(
-        cls, line: ee.TransmissionLine, length: tp.LengthType
-    ) -> TwoPortNetwork:
-        """Get a two-port network representation of a transmission line."""
-        gl = (line.propagation_constant * length).to_value("")
-
-        cgl = np.cosh(gl)
-        sgl = np.sinh(gl)
-        return cls(
-            np.array([
-                [cgl, line.characteristic_impedance * sgl],
-                [(1 / line.characteristic_impedance) * sgl, cgl],
-            ])
-        )
-
-
-@attrs.define(frozen=True, kw_only=False, slots=False)
-class SMatrix:
-    """A scattering matrix for a two-port network.
-
-    This class eases some of the computations performed with S-parameters. Most of the
-    methods are based on https://en.wikipedia.org/wiki/Scattering_parameters.
-
-    See also https://en.wikipedia.org/wiki/Two-port_network#Interrelation_of_parameters
-    """
-
-    s: npt.NDarray[complex] = npfield(
-        possible_ndims=(3,),
-        dtype=complex,
-        converter=np.atleast_3d,
-    )
-
-    @s.validator
-    def _s_vld(self, att, val):
-        if val.shape[:2] != (2, 2):
-            raise ValueError("Scattering matrix must have shape (2, 2, Nfreq).")
-
-    @property
-    def nfreq(self):
-        """The number of frequencies in the S-matrix (the last axis)."""
-        return self.s.shape[-1]
-
-    @classmethod
-    def from_sparams(cls, s11, s12, s21=None, s22=None):
-        """Create a SMatrix from S-parameters.
-
-        Parameters
-        ----------
-        s11 : array_like
-            S11 parameter.
-        s12 : array_like
-            S12 parameter.
-        s21 : array_like, optional
-            S21 parameter. If not provided, assumed to be equal to s12.
-        s22 : array_like, optional
-            S22 parameter. If not provided, assumed to be equal to s11.
-        """
-        if s21 is None:
-            s21 = s12
-        if s22 is None:
-            s22 = s11
-
-        return cls(np.array([[s11, s12], [s21, s22]]))
-
-    @classmethod
-    def from_transfer_matrix(cls, t: npt.NDArray[complex]):
-        """Create an SMatrix from a transfer matrix.
-
-        See https://en.wikipedia.org/wiki/Scattering_parameters#Scattering_transfer_parameters.
-        """
-        detT = t[0, 0] * t[1, 1] - t[0, 1] * t[1, 0]
-
-        return cls(
-            np.array([
-                [t[0, 1] / t[1, 1], detT / t[1, 1]],
-                [1 / t[1, 1], -t[1, 0] / t[1, 1]],
-            ])
-        )
-
-    @cached_property
-    def determinant(self):
-        """The determinant of the SMatrix."""
-        return self.s11 * self.s22 - self.s12 * self.s21
-
-    def as_transfer_matrix(self) -> npt.NDArray:
-        """Return a transfer matrix from the SMatrix.
-
-        See https://en.wikipedia.org/wiki/Scattering_parameters#Scattering_transfer_parameters.
-        Transfer matrices are useful as they are easier to apply to cascading 2-port
-        networks (i.e. to get the total effect of several components linked together).
-        """
-        s = self.s
-
-        return np.array([
-            [-self.determinant / s[1, 0], s[0, 0] / s[1, 0]],
-            [-s[1, 1] / s[1, 0], 1 / s[1, 0]],
-        ])
-
-    def cascade_with(self, other: Self) -> Self:
-        """Return a new TwoPortNetwork from the conjunction of two two-port networks.
-
-        To achieve this, we first convert to Transfer matrices, then perform
-        matrix multiplication, and then convert back to a SMatrix.
-        """
-        if self.s.shape != other.s.shape:
-            raise ValueError("Both SMatrices must have the same shape to add them.")
-
-        t1 = self.as_transfer_matrix()
-        t2 = other.as_transfer_matrix()
-        t = np.matmul(t1.transpose((2, 0, 1)), t2.transpose((2, 0, 1))).transpose((
-            1,
-            2,
-            0,
-        ))
-
-        return SMatrix.from_transfer_matrix(t)
-
-    def is_reciprocal(self) -> bool:
-        """Whether the S-matrix describes a reciprocal network.
-
-        Defined as a network that is passive and symmetric.
-
-        See https://en.wikipedia.org/wiki/Scattering_parameters#Reciprocity
-        """
-        return np.allclose(self.s, self.s.transpose((1, 0, 2)))
-
-    def is_lossless(self):
-        """Whether the S-matrix describes a lossless network.
-
-        See https://en.wikipedia.org/wiki/Scattering_parameters#Lossless_networks
-        """
-        product = np.matmul(
-            self.s.transpose((2, 0, 1)), self.s.transpose((2, 1, 0)).conj()
-        )
-        return np.allclose(product, np.eye(2))
-
-    @property
-    def complex_linear_gain(self) -> tp.ComplexArray:
-        """The complex linear gain of the network, i.e. S12."""
-        return self.s[1, 0]
-
-    @property
-    def scalar_linear_gain(self) -> tp.FloatArray:
-        """The abs value of the linear gain of the network, ``|S21|``."""
-        return np.abs(self.complex_linear_gain)
-
-    @property
-    def scalar_logarithmic_gain(self) -> tp.FloatArray:
-        """The scalar gain, ``|S21|``, in decibels."""
-        return linear_to_decibels(self.scalar_linear_gain)
-
-    @property
-    def insertion_loss(self):
-        """The insertion loss of the network.
-
-        See https://en.wikipedia.org/wiki/Scattering_parameters#Insertion_loss
-        """
-        return -self.scalar_logarithmic_gain
-
-    @property
-    def input_return_loss(self):
-        """The loss, ``1/|S11|`` in decibels."""
-        return -linear_to_decibels(self.s[0, 0])
-
-    @property
-    def output_return_loss(self):
-        """The output loss, ``1/|S22|``, in decibels."""
-        return -linear_to_decibels(self.s[1, 1])
-
-    @property
-    def reverse_gain(self):
-        """The reverse gain, ``S|12|``, in decibels."""
-        return linear_to_decibels(self.s[0, 1])
-
-    @property
-    def reverse_isolation(self):
-        """The reverse isolation, ``1/|S12|``, in decibels."""
-        return np.abs(self.reverse_gain)
-
-    @property
-    def s11(self):
-        """The S11 coefficient of the network."""
-        return self.s[0, 0]
-
-    @property
-    def s21(self):
-        """The S21 coefficient of the network."""
-        return self.s[1, 0]
-
-    @property
-    def s12(self):
-        """The S12 coefficient of the network."""
-        return self.s[0, 1]
-
-    @property
-    def s22(self):
-        """The S22 coefficient of the network."""
-        return self.s[1, 1]
-
-    def voltage_standing_wave_ratio_in(self):
-        """The Voltage Standing Wave Ratio (VSWR) of the network input."""
-        return (1 + np.abs(self.s11)) / (1 - np.abs(self.s11))
-
-    def voltage_standing_wave_ratio_out(self):
-        """The Voltage Standing Wave Ratio (VSWR) of the network output."""
-        return (1 + np.abs(self.s22)) / (1 - np.abs(self.s22))
-
-    @classmethod
-    def from_transmission_line(
-        cls,
-        line: ee.TransmissionLine,
-        length: tp.LengthType | None,
-        load_impedance: tp.ImpedanceType = 50 * units.Ohm,
-    ):
-        """Generate a new SMatrix from a given transmission line object.
-
-        Parameters
-        ----------
-        line
-            The transmission line object to convert to an SMatrix.
-        length
-            The length of the transmission line (only required if not set on the
-            line itself).
-        load_impedance
-            The impedance of a load connected to the network.
-        """
-        Zo = line.characteristic_impedance
-        Zp = load_impedance
-
-        if length is None and line.length is None:
-            raise ValueError("Either length or line.length must be provided.")
-        if length is None:
-            length = line.length
-
-        γ = line.propagation_constant
-        γl = (γ * length).to_value("")
-
-        denom = (Zo**2 + Zp**2) * np.sinh(γl) + 2 * Zo * Zp * np.cosh(γl)
-
-        s11 = s22 = (Zo**2 - Zp**2) * np.sinh(γl) / denom
-        s12 = s21 = 2 * Zo * Zp / denom
-        return cls(np.array([[s11, s12], [s21, s22]]))
-
-    @classmethod
-    def from_calkit_and_vna(cls, calkit: ee.Calkit, standards: s11.StandardsReadings):
-        """Generate an SMatrix from a Calkit definition, and standards measurements.
-
-        Parameters
-        ----------
-        calkit
-            A Calkit object, representing the calkit used to measure the network.
-        standards
-            The measurements of the standard OSL performed with a VNA.
-        """
-        freq = standards.freq
-
-        return get_sparams_from_osl(
-            calkit.open.reflection_coefficient(freq),
-            calkit.short.reflection_coefficient(freq),
-            calkit.match.reflection_coefficient(freq),
-            standards.open.s11,
-            standards.short.s11,
-            standards.match.s11,
-        )
-
-
-def gamma_de_embed(
-    gamma_ref: np.typing.ArrayLike,
-    smatrix: SMatrix,
-) -> np.typing.ArrayLike:
-    """Get the reflection coefficient of load attached to a two-port network.
-
-    See Eq. 2 of Monsalve et al., 2016 or
-    https://en.wikipedia.org/wiki/Scattering_parameters#S-parameters_in_amplifier_design
-
-    Notes
-    -----
-    This function gives the intrinsic reflection coefficient of the load attached to a
-    2-port network, given the reflection coefficient observed at the reference plane
-    of the input port of the network::
-
-        ____________________________o___o
-            |             |         |Z|
-        PORT 1 |   NETWORK   |  PORT 2 |Z| <LOAD, Gamma_L>
-            |             |         |Z|
-        _______|_____________|_________|o|
-            ^
-            |
-            REF.
-            PLANE
-
-    Parameters
-    ----------
-    smatrix
-        The S-matrix of the 2-port network.
-    gamma_ref
-        The reflection coefficient of the device
-        under test (DUT) measured at the reference plane.
-
-    Returns
-    -------
-    gamma
-        The intrinsic reflection coefficient of the DUT (the Load).
-
-    See Also
-    --------
-    gamma_embed
-        The inverse function to this one.
-    """
-    return (gamma_ref - smatrix.s11) / (
-        smatrix.s22 * (gamma_ref - smatrix.s11) + smatrix.s12 * smatrix.s21
-    )
-
-
-def gamma_embed(
-    smatrix: SMatrix,
-    gamma: np.typing.ArrayLike,
-) -> np.typing.ArrayLike:
-    """Obtain intrinsic reflection coefficient of a load attached to a 2-port network.
-
-    See Eq. 2 of Monsalve et al., 2016 or
-    https://en.wikipedia.org/wiki/Scattering_parameters#S-parameters_in_amplifier_design
-
-    Notes
-    -----
-    This function gives the reflection coefficient observed at the reference plane
-    of the input port of the 2-port network, given the intrinsic reflection coefficient
-    of the DUT / load attached to the output of the 2-port network::
-
-
-        ____________________________o___o
-            |             |         |Z|
-        PORT 1 |   NETWORK   |  PORT 2 |Z| <LOAD, Gamma_L>
-            |             |         |Z|
-        _______|_____________|_________|o|
-            ^
-            |
-            REF.
-            PLANE
-
-
-    Parameters
-    ----------
-    smatrix
-        The S-matrix of the two-port networok
-    gamma
-        The intrinsic reflection coefficient of the device
-        under test (DUT/Load)
-
-    Returns
-    -------
-    gamma_ref
-         The reflection coefficient of the DUT measured at the reference plane.
-
-    See Also
-    --------
-    gamma_de_embed
-        The inverse function to this one.
-    """
-    return smatrix.s11 + (smatrix.s12 * smatrix.s21 * gamma / (1 - smatrix.s22 * gamma))
-
-
-def get_sparams_from_osl(
-    gamma_open_intr: np.ndarray | float,
-    gamma_short_intr: np.ndarray | float,
-    gamma_match_intr: np.ndarray | float,
-    gamma_open_meas: np.ndarray,
-    gamma_short_meas: np.ndarray,
-    gamma_match_meas: np.ndarray,
-) -> SMatrix:
-    """Obtain network S-parameters from OSL standards and intrinsic reflections of DUT.
-
-    See Eq. 3 of Monsalve et al., 2016.
-
-    Parameters
-    ----------
-    gamma_open_intr
-        The intrinsic reflection of the open standard
-        (assumed as true) as a function of frequency.
-    gamma_shrt_intr
-        The intrinsic reflection of the short standard
-        (assumed as true) as a function of frequency.
-    gamma_load_intr
-        The intrinsic reflection of the load standard
-        (assumed as true) as a function of frequency.
-    gamma_open_meas
-        The reflection of the open standard
-        measured at port 1 as a function of frequency.
-    gamma_shrt_meas
-        The reflection of the short standard
-        measured at port 1 as a function of frequency.
-    gamma_load_meas
-        The reflection of the load standard
-        measured at port 1 as a function of frequency.
-
-    Returns
-    -------
-    s11
-        The S11 of the network.
-    s12s21
-        The product `S12*S21` of the network
-    s22
-        The S22 of the network.
-    """
-    gamma_open_intr = gamma_open_intr * np.ones_like(gamma_open_meas)
-    gamma_short_intr = gamma_short_intr * np.ones_like(gamma_open_meas)
-    gamma_match_intr = gamma_match_intr * np.ones_like(gamma_open_meas)
-
-    s11 = np.zeros(len(gamma_open_intr)) + 0j  # 0j added to make array complex
-    s12s21 = np.zeros(len(gamma_open_intr)) + 0j
-    s22 = np.zeros(len(gamma_open_intr)) + 0j
-
-    for i in range(len(gamma_open_intr)):
-        b = np.array([gamma_open_meas[i], gamma_short_meas[i], gamma_match_meas[i]])
-        A = np.array([
-            [
-                1,
-                complex(gamma_open_intr[i]),
-                complex(gamma_open_intr[i] * gamma_open_meas[i]),
-            ],
-            [
-                1,
-                complex(gamma_short_intr[i]),
-                complex(gamma_short_intr[i] * gamma_short_meas[i]),
-            ],
-            [
-                1,
-                complex(gamma_match_intr[i]),
-                complex(gamma_match_intr[i] * gamma_match_meas[i]),
-            ],
-        ])
-        x = np.linalg.lstsq(A, b, rcond=None)[0]
-
-        s11[i] = x[0]
-        s12s21[i] = x[1] + x[0] * x[2]
-        s22[i] = x[2]
-
-    s12 = np.sqrt(s12s21)
-    return SMatrix(np.array([[s11, s12], [s12, s22]]))
-
-
 @hickleable
 @attrs.define(frozen=True, slots=False, kw_only=True)
 class CalkitStandard:
@@ -783,8 +120,8 @@ class CalkitStandard:
         converter=unit_converter(units.Gohm / units.s),
     )
 
-    capacitance_model: callable | None = attrs.field(default=None)
-    inductance_model: callable | None = attrs.field(default=None)
+    capacitance_model: Callable | None = attrs.field(default=None)
+    inductance_model: Callable | None = attrs.field(default=None)
 
     @property
     def name(self) -> str:
@@ -1013,6 +350,668 @@ def get_calkit(
     if resistance_of_match is not None:
         match.update(resistance=resistance_of_match)
     return base.clone(short=short, open=open, match=match)
+
+
+@attrs.define(frozen=True, kw_only=False)
+class TwoPortNetwork:
+    """A matrix-representation of a two-port network.
+
+    This is a matrix representation of a two-port network, defined in terms of
+    voltages and currents at ports (in contrast to the SMatrix representation which
+    is in terms of reflected waves).
+
+    This class allows for the simple conversion between representations of
+    two-port network matrices. The internal representation is the ABCD representation
+    (https://en.wikipedia.org/wiki/Two-port_network#ABCD-parameters).
+    """
+
+    x: npt.NDArray[complex] = npfield(
+        possible_ndims=(3,),
+        dtype=complex,
+        converter=np.atleast_3d,
+    )
+
+    @x.validator
+    def _x_vld(self, att, val):
+        if val.shape[:2] != (2, 2):
+            raise ValueError("Matrix must have shape (2, 2, Nfreq).")
+
+    @classmethod
+    def from_zmatrix(cls, z: npt.NDArray) -> Self:
+        """Create a TwoPortNetwork from a Z-matrix."""
+        z = np.atleast_3d(z)
+        nf = z.shape[-1]
+        detz = z[0, 0] * z[1, 1] - z[0, 1] * z[1, 0]
+        return cls(1 / z[1, 0] * np.array([[z[0, 0], detz], [np.ones(nf), z[1, 1]]]))
+
+    @classmethod
+    def from_ymatrix(cls, z: npt.NDArray) -> Self:
+        """Create a TwoPortNetwork from a Y-matrix."""
+        z = np.atleast_3d(z)
+        nf = z.shape[-1]
+        detz = z[0, 0] * z[1, 1] - z[0, 1] * z[1, 0]
+        return cls(
+            1 / z[1, 0] * np.array([[-z[1, 1], -np.ones(nf)], [-detz, -z[0, 0]]])
+        )
+
+    @classmethod
+    def from_abcd(cls, abcd, inverse: bool = False):
+        """Create a TwoPortNetwork from an ABCD representation."""
+        return cls(np.linalg.inv(abcd.T).T) if inverse else cls(abcd)
+
+    @property
+    def A(self):  # noqa: N802
+        """Return the A parameter."""
+        return self.x[0, 0]
+
+    @property
+    def B(self):  # noqa: N802
+        """Return the B parameter."""
+        return self.x[0, 1]
+
+    @property
+    def C(self):  # noqa: N802
+        """Return the C parameter."""
+        return self.x[1, 0]
+
+    @property
+    def D(self):  # noqa: N802
+        """Return the D parameter."""
+        return self.x[1, 1]
+
+    @cached_property
+    def determinant(self) -> npt.NDArray[float]:
+        """The determinant of the ABCD representation, |AD - BC|."""
+        return self.A * self.D - self.B * self.C
+
+    def is_reciprocal(self) -> bool:
+        """Whether the network is a reciprocal network."""
+        return np.allclose(self.determinant, 1)
+
+    def is_symmetric(self) -> bool:
+        """Whether the network is symmetric."""
+        return np.allclose(self.A, self.D)
+
+    def is_lossless(self) -> bool:
+        """Whether the network is lossless."""
+        return (
+            np.allclose(self.A.imag, 0)
+            and np.allclose(self.D.imag, 0)
+            and np.allclose(self.B.real, 0)
+            and np.allclose(self.C.real, 0)
+        )
+
+    def _check_add_args(self, other: Self):
+        if not isinstance(other, TwoPortNetwork):
+            raise ValueError("Two matrices must be of the same type.")
+
+        if other.x.shape != self.x.shape:
+            raise ValueError("Two matrices must have the same dimensions.")
+
+    def add_in_series(self, other: Self) -> Self:
+        """Combine two TwoPortNetworks together in series."""
+        self._check_add_args(other)
+        z = self.zmatrix + other.zmatrix
+        return TwoPortNetwork.from_zmatrix(z)
+
+    def add_in_parallel(self, other):
+        """Combine two TwoPortNetworks together in parallel."""
+        self._check_add_args(other)
+
+        y = self.ymatrix + other.ymatrix
+        return TwoPortNetwork.from_ymatrix(y)
+
+    def add_in_series_parallel(self, other):
+        """Combine two TwoPortNetworks together in parallel."""
+        self._check_add_args(other)
+
+        h = self.hmatrix + other.hmatrix
+        return TwoPortNetwork.from_hmatrix(h)
+
+    def cascade_with(self, other: Self) -> Self:
+        """Cascade two TwoPortNetworks together."""
+        self._check_add_args(other)
+        abcd = np.matmul(other.x.T, self.x.T)
+        return TwoPortNetwork.from_abcd(abcd.T)
+
+    @property
+    def zmatrix(self):
+        """Return the Z-matrix (impedance parameters) of the network."""
+        nf = self.B.shape[-1]
+        return (1 / self.C) * np.array([
+            [self.A, self.determinant],
+            [np.ones(nf), self.D],
+        ])
+
+    @property
+    def impedance_matrix(self):
+        """Alias of zmatrix."""
+        return self.zmatrix
+
+    @property
+    def ymatrix(self):
+        """Return the Y-matrix (admittance parameters) of the network.
+
+        This is the inverse of the z-matrix.
+        """
+        nf = self.B.shape[-1]
+        return (1 / self.B) * np.array([
+            [self.D, -self.determinant],
+            [-np.ones(nf), self.A],
+        ])
+
+    @property
+    def admittance_matrix(self):
+        """Alias of ymatrix."""
+        return self.ymatrix
+
+    @classmethod
+    def from_hmatrix(cls, z: npt.NDArray) -> Self:
+        """Create a TwoPortNetwork from a H-matrix."""
+        z = np.atleast_3d(z)
+        nf = z.shape[-1]
+        detz = z[0, 0] * z[1, 1] - z[0, 1] * z[1, 0]
+        return cls(
+            1 / z[1, 0] * np.array([[-detz, -z[0, 0]], [-z[1, 1], -np.ones(nf)]])
+        )
+
+    @property
+    def hmatrix(self):
+        """Return the H-matrix (hybrid parameters) of the network."""
+        nf = self.B.shape[-1]
+        return (1 / self.D) * np.array([
+            [self.B, self.determinant],
+            [-np.ones(nf), self.C],
+        ])
+
+    @property
+    def hybrid_matrix(self):
+        """Alias of hmatrix."""
+        return self.hmatrix
+
+    def as_smatrix(
+        self, source_impedance: float, load_impedance: float | None = None
+    ) -> "SMatrix":
+        """Convert the TwoPortNetwork to a SMatrix."""
+        if load_impedance is None:
+            load_impedance = source_impedance
+
+        a, b, c, d = self.A, self.B, self.C, self.D
+        zs = source_impedance
+        zl = load_impedance
+        denom = (b + c * zs * zl) + (a * zl + d * zs)
+
+        return SMatrix([
+            [
+                ((b - c * zs * zl) + (a * zl - d * zs)) / denom,
+                2 * zs * self.determinant / denom,
+            ],
+            [
+                2 * zl / denom,
+                ((b - c * zs * zl) - (a * zl - d * zs)) / denom,
+            ],
+        ])
+
+    @classmethod
+    def from_smatrix(cls, s: "SMatrix", z0: npt.NDArray) -> Self:
+        """Compute the network from scattering parameters."""
+        denom = 1 / (2 * s.s21)
+        xx = s.s21 * s.s12
+
+        return cls(
+            denom
+            * np.array([
+                [
+                    (1 + s.s11) * (1 - s.s22) + xx,
+                    z0 * ((1 + s.s11) * (1 + s.s22) - xx),
+                ],
+                [
+                    (1 / z0) * ((1 - s.s11) * (1 - s.s22) - xx),
+                    (1 - s.s11) * (1 + s.s22) + xx,
+                ],
+            ])
+        )
+
+    @classmethod
+    def from_transmission_line(
+        cls, line: ee.TransmissionLine, length: tp.LengthType
+    ) -> Self:
+        """Get a two-port network representation of a transmission line."""
+        gl = (line.propagation_constant * length).to_value("")
+
+        cgl = np.cosh(gl)
+        sgl = np.sinh(gl)
+        return cls(
+            np.array([
+                [cgl, line.characteristic_impedance * sgl],
+                [(1 / line.characteristic_impedance) * sgl, cgl],
+            ])
+        )
+
+
+@attrs.define(frozen=True, kw_only=False, slots=False)
+class SMatrix:
+    """A scattering matrix for a two-port network.
+
+    This class eases some of the computations performed with S-parameters. Most of the
+    methods are based on https://en.wikipedia.org/wiki/Scattering_parameters.
+
+    See also https://en.wikipedia.org/wiki/Two-port_network#Interrelation_of_parameters
+    """
+
+    s: npt.NDArray[complex] = npfield(
+        possible_ndims=(3,),
+        dtype=complex,
+        converter=np.atleast_3d,
+    )
+
+    @s.validator
+    def _s_vld(self, att, val):
+        if val.shape[:2] != (2, 2):
+            raise ValueError("Scattering matrix must have shape (2, 2, Nfreq).")
+
+    @property
+    def nfreq(self):
+        """The number of frequencies in the S-matrix (the last axis)."""
+        return self.s.shape[-1]
+
+    @classmethod
+    def from_sparams(cls, s11, s12, s21=None, s22=None):
+        """Create a SMatrix from S-parameters.
+
+        Parameters
+        ----------
+        s11 : array_like
+            S11 parameter.
+        s12 : array_like
+            S12 parameter.
+        s21 : array_like, optional
+            S21 parameter. If not provided, assumed to be equal to s12.
+        s22 : array_like, optional
+            S22 parameter. If not provided, assumed to be equal to s11.
+        """
+        if s21 is None:
+            s21 = s12
+        if s22 is None:
+            s22 = s11
+
+        return cls(np.array([[s11, s12], [s21, s22]]))
+
+    @classmethod
+    def from_transfer_matrix(cls, t: npt.NDArray[complex]):
+        """Create an SMatrix from a transfer matrix.
+
+        See https://en.wikipedia.org/wiki/Scattering_parameters#Scattering_transfer_parameters.
+        """
+        detT = t[0, 0] * t[1, 1] - t[0, 1] * t[1, 0]
+
+        return cls(
+            np.array([
+                [t[0, 1] / t[1, 1], detT / t[1, 1]],
+                [1 / t[1, 1], -t[1, 0] / t[1, 1]],
+            ])
+        )
+
+    @cached_property
+    def determinant(self):
+        """The determinant of the SMatrix."""
+        return self.s11 * self.s22 - self.s12 * self.s21
+
+    def as_transfer_matrix(self) -> npt.NDArray:
+        """Return a transfer matrix from the SMatrix.
+
+        See https://en.wikipedia.org/wiki/Scattering_parameters#Scattering_transfer_parameters.
+        Transfer matrices are useful as they are easier to apply to cascading 2-port
+        networks (i.e. to get the total effect of several components linked together).
+        """
+        s = self.s
+
+        return np.array([
+            [-self.determinant / s[1, 0], s[0, 0] / s[1, 0]],
+            [-s[1, 1] / s[1, 0], 1 / s[1, 0]],
+        ])
+
+    def cascade_with(self, other: Self) -> Self:
+        """Return a new TwoPortNetwork from the conjunction of two two-port networks.
+
+        To achieve this, we first convert to Transfer matrices, then perform
+        matrix multiplication, and then convert back to a SMatrix.
+        """
+        if self.s.shape != other.s.shape:
+            raise ValueError("Both SMatrices must have the same shape to add them.")
+
+        t1 = self.as_transfer_matrix()
+        t2 = other.as_transfer_matrix()
+        t = np.matmul(t1.transpose((2, 0, 1)), t2.transpose((2, 0, 1))).transpose((
+            1,
+            2,
+            0,
+        ))
+
+        return SMatrix.from_transfer_matrix(t)
+
+    def is_reciprocal(self) -> bool:
+        """Whether the S-matrix describes a reciprocal network.
+
+        Defined as a network that is passive and symmetric.
+
+        See https://en.wikipedia.org/wiki/Scattering_parameters#Reciprocity
+        """
+        return np.allclose(self.s, self.s.transpose((1, 0, 2)))
+
+    def is_lossless(self):
+        """Whether the S-matrix describes a lossless network.
+
+        See https://en.wikipedia.org/wiki/Scattering_parameters#Lossless_networks
+        """
+        product = np.matmul(
+            self.s.transpose((2, 0, 1)), self.s.transpose((2, 1, 0)).conj()
+        )
+        return np.allclose(product, np.eye(2))
+
+    @property
+    def complex_linear_gain(self) -> tp.ComplexArray:
+        """The complex linear gain of the network, i.e. S12."""
+        return self.s[1, 0]
+
+    @property
+    def scalar_linear_gain(self) -> tp.FloatArray:
+        """The abs value of the linear gain of the network, ``|S21|``."""
+        return np.abs(self.complex_linear_gain)
+
+    @property
+    def scalar_logarithmic_gain(self) -> tp.FloatArray:
+        """The scalar gain, ``|S21|``, in decibels."""
+        return linear_to_decibels(self.scalar_linear_gain)
+
+    @property
+    def insertion_loss(self):
+        """The insertion loss of the network.
+
+        See https://en.wikipedia.org/wiki/Scattering_parameters#Insertion_loss
+        """
+        return -self.scalar_logarithmic_gain
+
+    @property
+    def input_return_loss(self):
+        """The loss, ``1/|S11|`` in decibels."""
+        return -linear_to_decibels(self.s[0, 0])
+
+    @property
+    def output_return_loss(self):
+        """The output loss, ``1/|S22|``, in decibels."""
+        return -linear_to_decibels(self.s[1, 1])
+
+    @property
+    def reverse_gain(self):
+        """The reverse gain, ``S|12|``, in decibels."""
+        return linear_to_decibels(self.s[0, 1])
+
+    @property
+    def reverse_isolation(self):
+        """The reverse isolation, ``1/|S12|``, in decibels."""
+        return np.abs(self.reverse_gain)
+
+    @property
+    def s11(self):
+        """The S11 coefficient of the network."""
+        return self.s[0, 0]
+
+    @property
+    def s21(self):
+        """The S21 coefficient of the network."""
+        return self.s[1, 0]
+
+    @property
+    def s12(self):
+        """The S12 coefficient of the network."""
+        return self.s[0, 1]
+
+    @property
+    def s22(self):
+        """The S22 coefficient of the network."""
+        return self.s[1, 1]
+
+    def voltage_standing_wave_ratio_in(self):
+        """The Voltage Standing Wave Ratio (VSWR) of the network input."""
+        return (1 + np.abs(self.s11)) / (1 - np.abs(self.s11))
+
+    def voltage_standing_wave_ratio_out(self):
+        """The Voltage Standing Wave Ratio (VSWR) of the network output."""
+        return (1 + np.abs(self.s22)) / (1 - np.abs(self.s22))
+
+    @classmethod
+    def from_transmission_line(
+        cls,
+        line: ee.TransmissionLine,
+        length: tp.LengthType | None,
+        load_impedance: tp.ImpedanceType = 50 * units.Ohm,
+    ):
+        """Generate a new SMatrix from a given transmission line object.
+
+        Parameters
+        ----------
+        line
+            The transmission line object to convert to an SMatrix.
+        length
+            The length of the transmission line (only required if not set on the
+            line itself).
+        load_impedance
+            The impedance of a load connected to the network.
+        """
+        Zo = line.characteristic_impedance
+        Zp = load_impedance
+
+        if length is None and line.length is None:
+            raise ValueError("Either length or line.length must be provided.")
+        if length is None:
+            length = line.length
+
+        γ = line.propagation_constant
+        γl = (γ * length).to_value("")
+
+        denom = (Zo**2 + Zp**2) * np.sinh(γl) + 2 * Zo * Zp * np.cosh(γl)
+
+        s11 = s22 = (Zo**2 - Zp**2) * np.sinh(γl) / denom
+        s12 = s21 = 2 * Zo * Zp / denom
+        return cls(np.array([[s11, s12], [s21, s22]]))
+
+    @classmethod
+    def from_calkit_and_vna(cls, calkit: Calkit, standards: "StandardsReadings"):  # noqa: F821
+        """Generate an SMatrix from a Calkit definition, and standards measurements.
+
+        Parameters
+        ----------
+        calkit
+            A Calkit object, representing the calkit used to measure the network.
+        standards
+            The measurements of the standard OSL performed with a VNA.
+        """
+        freq = standards.freq
+
+        return get_sparams_from_osl(
+            calkit.open.reflection_coefficient(freq),
+            calkit.short.reflection_coefficient(freq),
+            calkit.match.reflection_coefficient(freq),
+            standards.open.s11,
+            standards.short.s11,
+            standards.match.s11,
+        )
+
+
+def gamma_de_embed(
+    gamma_ref: np.typing.ArrayLike,
+    smatrix: SMatrix,
+) -> np.typing.ArrayLike:
+    """Get the reflection coefficient of load attached to a two-port network.
+
+    See Eq. 2 of Monsalve et al., 2016 or
+    https://en.wikipedia.org/wiki/Scattering_parameters#S-parameters_in_amplifier_design
+
+    Notes
+    -----
+    This function gives the intrinsic reflection coefficient of the load attached to a
+    2-port network, given the reflection coefficient observed at the reference plane
+    of the input port of the network::
+
+        ____________________________o___o
+            |             |         |Z|
+        PORT 1 |   NETWORK   |  PORT 2 |Z| <LOAD, Gamma_L>
+            |             |         |Z|
+        _______|_____________|_________|o|
+            ^
+            |
+            REF.
+            PLANE
+
+    Parameters
+    ----------
+    smatrix
+        The S-matrix of the 2-port network.
+    gamma_ref
+        The reflection coefficient of the device
+        under test (DUT) measured at the reference plane.
+
+    Returns
+    -------
+    gamma
+        The intrinsic reflection coefficient of the DUT (the Load).
+
+    See Also
+    --------
+    gamma_embed
+        The inverse function to this one.
+    """
+    return (gamma_ref - smatrix.s11) / (
+        smatrix.s22 * (gamma_ref - smatrix.s11) + smatrix.s12 * smatrix.s21
+    )
+
+
+def gamma_embed(
+    smatrix: SMatrix,
+    gamma: np.typing.ArrayLike,
+) -> np.typing.ArrayLike:
+    """Obtain intrinsic reflection coefficient of a load attached to a 2-port network.
+
+    See Eq. 2 of Monsalve et al., 2016 or
+    https://en.wikipedia.org/wiki/Scattering_parameters#S-parameters_in_amplifier_design
+
+    Notes
+    -----
+    This function gives the reflection coefficient observed at the reference plane
+    of the input port of the 2-port network, given the intrinsic reflection coefficient
+    of the DUT / load attached to the output of the 2-port network::
+
+
+        ____________________________o___o
+            |             |         |Z|
+        PORT 1 |   NETWORK   |  PORT 2 |Z| <LOAD, Gamma_L>
+            |             |         |Z|
+        _______|_____________|_________|o|
+            ^
+            |
+            REF.
+            PLANE
+
+
+    Parameters
+    ----------
+    smatrix
+        The S-matrix of the two-port networok
+    gamma
+        The intrinsic reflection coefficient of the device
+        under test (DUT/Load)
+
+    Returns
+    -------
+    gamma_ref
+         The reflection coefficient of the DUT measured at the reference plane.
+
+    See Also
+    --------
+    gamma_de_embed
+        The inverse function to this one.
+    """
+    return smatrix.s11 + (smatrix.s12 * smatrix.s21 * gamma / (1 - smatrix.s22 * gamma))
+
+
+def get_sparams_from_osl(
+    gamma_open_intr: np.ndarray | float,
+    gamma_short_intr: np.ndarray | float,
+    gamma_match_intr: np.ndarray | float,
+    gamma_open_meas: np.ndarray,
+    gamma_short_meas: np.ndarray,
+    gamma_match_meas: np.ndarray,
+) -> SMatrix:
+    """Obtain network S-parameters from OSL standards and intrinsic reflections of DUT.
+
+    See Eq. 3 of Monsalve et al., 2016.
+
+    Parameters
+    ----------
+    gamma_open_intr
+        The intrinsic reflection of the open standard
+        (assumed as true) as a function of frequency.
+    gamma_shrt_intr
+        The intrinsic reflection of the short standard
+        (assumed as true) as a function of frequency.
+    gamma_load_intr
+        The intrinsic reflection of the load standard
+        (assumed as true) as a function of frequency.
+    gamma_open_meas
+        The reflection of the open standard
+        measured at port 1 as a function of frequency.
+    gamma_shrt_meas
+        The reflection of the short standard
+        measured at port 1 as a function of frequency.
+    gamma_load_meas
+        The reflection of the load standard
+        measured at port 1 as a function of frequency.
+
+    Returns
+    -------
+    s11
+        The S11 of the network.
+    s12s21
+        The product `S12*S21` of the network
+    s22
+        The S22 of the network.
+    """
+    gamma_open_intr = gamma_open_intr * np.ones_like(gamma_open_meas)
+    gamma_short_intr = gamma_short_intr * np.ones_like(gamma_open_meas)
+    gamma_match_intr = gamma_match_intr * np.ones_like(gamma_open_meas)
+
+    s11 = np.zeros(len(gamma_open_intr)) + 0j  # 0j added to make array complex
+    s12s21 = np.zeros(len(gamma_open_intr)) + 0j
+    s22 = np.zeros(len(gamma_open_intr)) + 0j
+
+    for i in range(len(gamma_open_intr)):
+        b = np.array([gamma_open_meas[i], gamma_short_meas[i], gamma_match_meas[i]])
+        A = np.array([
+            [
+                1,
+                complex(gamma_open_intr[i]),
+                complex(gamma_open_intr[i] * gamma_open_meas[i]),
+            ],
+            [
+                1,
+                complex(gamma_short_intr[i]),
+                complex(gamma_short_intr[i] * gamma_short_meas[i]),
+            ],
+            [
+                1,
+                complex(gamma_match_intr[i]),
+                complex(gamma_match_intr[i] * gamma_match_meas[i]),
+            ],
+        ])
+        x = np.linalg.lstsq(A, b, rcond=None)[0]
+
+        s11[i] = x[0]
+        s12s21[i] = x[1] + x[0] * x[2]
+        s22[i] = x[2]
+
+    s12 = np.sqrt(s12s21)
+    return SMatrix(np.array([[s11, s12], [s12, s22]]))
 
 
 def path_length_correction_edges3(

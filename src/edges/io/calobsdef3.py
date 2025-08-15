@@ -1,7 +1,5 @@
 """Methods for dealing with EDGES-3 files and structures."""
 
-from __future__ import annotations
-
 import contextlib
 from pathlib import Path
 from typing import Literal, Self, get_args

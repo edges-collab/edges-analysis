@@ -1,3 +1,4 @@
+import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 from astropy import units as un
@@ -16,17 +17,20 @@ class TestPlotRawSpectrum:
         plots.plot_raw_spectrum(
             calobs.ambient.averaged_q, freq=calobs.freqs, xlabel=xlabel, ylabel=ylabel
         )
+        plt.close()  # close to conserve memory
 
 
 class TestPlotRawSpectra:
     def test_plot_raw_spectra(self, calobs):
         plots.plot_raw_spectra(calobs)
+        plt.close()  # close to conserve memory
 
     def test_plot_raw_spectra_with_fig_ax(self, calobs):
         import matplotlib.pyplot as plt
 
         fig, ax = plt.subplots(4, 1)
         outfig = plots.plot_raw_spectra(calobs, fig=fig, ax=ax)
+        plt.close(fig)  # close to conserve memory
         assert outfig is fig
 
 
@@ -56,6 +60,7 @@ class TestPlotS11Residual:
             title=title,
             label=label,
         )
+        plt.close()  # close to conserve memory
 
     def test_with_fig_ax(self):
         import matplotlib.pyplot as plt
@@ -74,6 +79,7 @@ class TestPlotS11Models:
             s11_model_params=S11ModelParams(),
             receiver_model_params=S11ModelParams(),
         )
+        plt.close()  # close to conserve memory
 
 
 class TestPlotCalibratedTemp:
@@ -89,9 +95,11 @@ class TestPlotCalibratedTemp:
             xlabel=xlabel,
             ylabel=ylabel,
         )
+        plt.close()  # close to conserve memory
 
     def test_plot_calibrated_temps(self, calobs, calibrator):
         plots.plot_calibrated_temps(calobs, calibrator)
+        plt.close()  # close to conserve memory
 
     def test_plot_calibrated_temps_with_fix_ax(self, calobs, calibrator):
         import matplotlib.pyplot as plt
@@ -105,6 +113,7 @@ class TestPlotCalibratedTemp:
 class TestPlotCalCoefficients:
     def test_plot_cal_coefficients(self, calibrator):
         plots.plot_cal_coefficients(calibrator)
+        plt.close()  # close to conserve memory
 
     def test_plot_cal_coeff_fig_ax(self, calobs, calibrator):
         import matplotlib.pyplot as plt

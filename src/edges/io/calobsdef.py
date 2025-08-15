@@ -5,8 +5,6 @@ calibration observations. It does *not* implement any algorithms/methods on that
 making it easier to separate the algorithms from the data checking/reading.
 """
 
-from __future__ import annotations
-
 import tomllib as toml
 import warnings
 from collections.abc import Sequence

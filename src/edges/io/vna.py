@@ -1,7 +1,5 @@
 """IO routines for VNA readings (S11, S12, S22 etc)."""
 
-from __future__ import annotations
-
 import warnings
 from pathlib import Path
 from typing import Self

@@ -1,7 +1,6 @@
 """Module defining calibration routines for field data in EDGES."""
 
-from __future__ import annotations
-
+from collections.abc import Callable
 from pathlib import Path
 
 import numpy as np
@@ -82,7 +81,7 @@ def apply_loss_correction(
     data: GSData,
     ambient_temp: tp.TemperatureType,
     loss: np.ndarray | None = None,
-    loss_function: callable | None = None,
+    loss_function: Callable | None = None,
     **kwargs,
 ) -> GSData:
     """Apply a loss-correction to data.

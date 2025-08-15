@@ -6,8 +6,6 @@ nights, LST/GHA and frequency. Each of these in fact requires slightly different
 for averaging, in order to make the average unbiased (given flags).
 """
 
-from __future__ import annotations
-
 import contextlib
 
 import numpy as np

@@ -1,11 +1,10 @@
 """Support for filters that compress multiple files along the LST axis."""
 
-from __future__ import annotations
-
 import abc
 import logging
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Self
 
 import h5py
 import numpy as np
@@ -21,6 +20,77 @@ from . import DATA_PATH
 from .filters import chunked_iterative_model_filter, gsdata_filter
 
 logger = logging.getLogger(__name__)
+
+
+@define(frozen=True, kw_only=True)
+class GHAModelFilterInfo:
+    """An object containing the data going into creating a :class:`GHAModelFIlter`.
+
+    This is useful for saving the full information to disk, or as an intermediate object
+    used when determining the model information.
+    """
+
+    gha: np.ndarray
+    metric: np.ndarray
+    std: np.ndarray
+    flags: np.ndarray
+    files: list[tp.PathLike | GSData]
+    indx_map: list[np.ndarray]
+
+    def __attrs_post_init__(self):
+        """Run post-init scripts.
+
+        This just runs validation on all of the inputs after they are set on the class.
+        """
+        self._validate_inputs()
+
+    def _validate_inputs(self) -> bool:
+        assert self.gha.shape == self.metric.shape
+        assert self.gha.shape == self.flags.shape
+        assert self.gha.shape == self.std.shape
+        assert self.gha.ndim == 1
+        assert self.gha.dtype == float
+        assert self.metric.dtype == float
+        assert self.std.dtype == float
+        assert self.flags.dtype == bool
+
+    def get_metric_residuals(
+        self, model_filter: "GHAModelFilter", params: np.ndarray | None = None
+    ) -> np.ndarray:
+        """Get the residuals of the metric to a smooth model fit over all GHA."""
+        return self.metric - model_filter.metric_model(parameters=params)
+
+    def write(self, fname: tp.PathLike):
+        """Write the object to H5 file."""
+        with h5py.File(fname, "w") as fl:
+            fl["gha"] = self.gha
+            fl["metric"] = self.metric
+            fl["std"] = self.std
+            fl["flags"] = self.flags
+
+            for i, idx in enumerate(self.indx_map):
+                fl[f"idx_map_{i}"] = idx
+
+            fl.attrs["files"] = ":".join(str(f) for f in self.files)
+
+    @classmethod
+    def from_file(cls, fname: tp.PathLike):
+        """Create an object from a file."""
+        with h5py.File(fname, "r") as fl:
+            gha = fl["gha"][...]
+            metric = fl["metric"][...]
+            std = fl["std"][...]
+            flags = fl["flags"][...]
+
+            idx_map = [
+                fl[key][...] for key in sorted(fl.keys()) if key.startswith("idx_map")
+            ]
+
+            files = fl.attrs["files"].split(":")
+
+        return GHAModelFilterInfo(
+            gha=gha, metric=metric, std=std, flags=flags, indx_map=idx_map, files=files
+        )
 
 
 @define(frozen=True)
@@ -98,7 +168,7 @@ class GHAModelFilter:
         )
 
     @classmethod
-    def from_file(cls, fname: tp.PathLike) -> GHAModelFilter:
+    def from_file(cls, fname: tp.PathLike) -> Self:
         """Create the class from a h5 file."""
         with h5py.File(fname, "r") as fl:
             metric_model = yaml.load(fl.attrs["metric_model"])
@@ -130,77 +200,6 @@ class GHAModelFilter:
                         meta[k] = yaml.dump(v)
                     else:
                         logger.warning(f"Key '{k}' was unable to be written.")
-
-
-@define(frozen=True, kw_only=True)
-class GHAModelFilterInfo:
-    """An object containing the data going into creating a :class:`GHAModelFIlter`.
-
-    This is useful for saving the full information to disk, or as an intermediate object
-    used when determining the model information.
-    """
-
-    gha: np.ndarray
-    metric: np.ndarray
-    std: np.ndarray
-    flags: np.ndarray
-    files: list[tp.PathLike | GSData]
-    indx_map: list[np.ndarray]
-
-    def __attrs_post_init__(self):
-        """Run post-init scripts.
-
-        This just runs validation on all of the inputs after they are set on the class.
-        """
-        self._validate_inputs()
-
-    def _validate_inputs(self) -> bool:
-        assert self.gha.shape == self.metric.shape
-        assert self.gha.shape == self.flags.shape
-        assert self.gha.shape == self.std.shape
-        assert self.gha.ndim == 1
-        assert self.gha.dtype == float
-        assert self.metric.dtype == float
-        assert self.std.dtype == float
-        assert self.flags.dtype == bool
-
-    def get_metric_residuals(
-        self, model_filter: GHAModelFilter, params: np.ndarray | None = None
-    ) -> np.ndarray:
-        """Get the residuals of the metric to a smooth model fit over all GHA."""
-        return self.metric - model_filter.metric_model(parameters=params)
-
-    def write(self, fname: tp.PathLike):
-        """Write the object to H5 file."""
-        with h5py.File(fname, "w") as fl:
-            fl["gha"] = self.gha
-            fl["metric"] = self.metric
-            fl["std"] = self.std
-            fl["flags"] = self.flags
-
-            for i, idx in enumerate(self.indx_map):
-                fl[f"idx_map_{i}"] = idx
-
-            fl.attrs["files"] = ":".join(str(f) for f in self.files)
-
-    @classmethod
-    def from_file(cls, fname: tp.PathLike):
-        """Create an object from a file."""
-        with h5py.File(fname, "r") as fl:
-            gha = fl["gha"][...]
-            metric = fl["metric"][...]
-            std = fl["std"][...]
-            flags = fl["flags"][...]
-
-            idx_map = [
-                fl[key][...] for key in sorted(fl.keys()) if key.startswith("idx_map")
-            ]
-
-            files = fl.attrs["files"].split(":")
-
-        return GHAModelFilterInfo(
-            gha=gha, metric=metric, std=std, flags=flags, indx_map=idx_map, files=files
-        )
 
 
 @define(frozen=True)

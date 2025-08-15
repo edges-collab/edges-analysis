@@ -1,9 +1,8 @@
 """Module defining x-variable transforms for modelling."""
 
-from __future__ import annotations
-
 from abc import ABCMeta, abstractmethod
 from functools import cached_property
+from typing import Self
 
 import attrs
 import numpy as np
@@ -12,16 +11,12 @@ import yaml
 from ..io.serialization import hickleable
 
 
-def _transform_yaml_constructor(
-    loader: yaml.SafeLoader, node: yaml.nodes.MappingNode
-) -> XTransform:
+def _transform_yaml_constructor(loader: yaml.SafeLoader, node: yaml.nodes.MappingNode):
     mapping = loader.construct_mapping(node, deep=True)
     return XTransform.get(node.tag[1:])(**mapping)
 
 
-def _transform_yaml_representer(
-    dumper: yaml.SafeDumper, tr: XTransform
-) -> yaml.nodes.MappingNode:
+def _transform_yaml_representer(dumper: yaml.SafeDumper, tr) -> yaml.nodes.MappingNode:
     dct = attrs.asdict(tr, recurse=False)
     return dumper.represent_mapping(f"!{tr.__class__.__name__}", dct)
 
@@ -47,7 +42,7 @@ class XTransform(metaclass=ABCMeta):
         """Transform the coordinates."""
 
     @classmethod
-    def get(cls, model: str) -> type[XTransform]:
+    def get(cls, model: str) -> type[Self]:
         """Get a ModelTransform class."""
         return cls._models[model.lower()]
 

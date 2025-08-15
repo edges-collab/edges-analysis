@@ -1,7 +1,5 @@
 """Electrical enginerring equations."""
 
-from __future__ import annotations
-
 from functools import cached_property
 
 import attrs

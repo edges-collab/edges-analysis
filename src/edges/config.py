@@ -1,7 +1,5 @@
 """The global configuration for all of edges-analysis."""
 
-from __future__ import annotations
-
 import contextlib
 import copy
 from pathlib import Path

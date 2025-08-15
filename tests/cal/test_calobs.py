@@ -1,4 +1,3 @@
-import hickle
 import numpy as np
 import pytest
 from astropy import units as un
@@ -95,7 +94,7 @@ class TestCalibrationObservation:
             calobs._load_str_to_load(3)
 
     def test_hickle_roundtrip(self, calobs, tmpdir):
-        hickle.dump(calobs, tmpdir / "tmp_hickle.h5")
-        new = hickle.load(tmpdir / "tmp_hickle.h5")
+        calobs.write(tmpdir / "tmp_hickle.h5")
+        new = CalibrationObservation.from_file(tmpdir / "tmp_hickle.h5")
 
         assert new == calobs
