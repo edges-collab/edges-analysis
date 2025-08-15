@@ -1,5 +1,6 @@
 """Functions for reading thermistor files."""
 
+import contextlib
 from io import StringIO
 from pathlib import Path
 
@@ -107,7 +108,10 @@ def read_old_style_csv(path: tp.PathLike) -> QTable:
 
         # Determine whether the file is in KOhm
 
-        def float_from_kohm(x):
+        def float_from_kohm(x: bytes | str):
+            with contextlib.suppress(AttributeError):
+                x = x.decode("utf-8")
+
             kohm = "KOhm" in x
             y = float(x.split(" ")[0])
             return y * 1000 if kohm else y
