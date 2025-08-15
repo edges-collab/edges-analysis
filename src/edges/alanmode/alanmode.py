@@ -3,7 +3,7 @@
 import logging
 from collections.abc import Callable
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Self
 
 import attrs
 import numpy as np
@@ -149,6 +149,30 @@ class ACQPlot7aMoonParams:
     tstop: int = 23
     delaystart: int = 0
 
+    @classmethod
+    def bowman_2018_defaults(
+        cls,
+        delaystart=7200,
+        smooth=8,
+        fstart=40.0,
+        fstop=110.0,
+        tload=300.0,
+        tcal=1000.0,
+        tstart=0,
+        tstop=23,
+    ):
+        """Construct a set of parameters with defaults matching Bowman+2018."""
+        return cls(
+            delaystart=delaystart,
+            smooth=smooth,
+            fstart=fstart,
+            fstop=fstop,
+            tload=tload,
+            tcal=tcal,
+            tstart=tstart,
+            tstop=tstop,
+        )
+
 
 def acqplot7amoon(
     acqfile: str | Path, params: ACQPlot7aMoonParams = ACQPlot7aMoonParams(), **kwargs
@@ -248,6 +272,36 @@ class EdgesScriptParams:
     @tcab.default
     def _tcab_default(self) -> float:
         return self.tcold
+
+    @classmethod
+    def bowman_2018_defaults(
+        cls,
+        cfit=6,
+        wfit=5,
+        Lh=-2,  # noqa: N803
+        wfstart=50.0,
+        wfstop=100.0,
+        tcold=296,
+        thot=399,
+        nfit2=27,
+        nfit3=11,
+        lna_poly=0,
+        **kwargs,
+    ) -> Self:
+        """Construct a set of parameters with defaults matching Bowman+2018."""
+        return cls(
+            cfit=cfit,
+            wfit=wfit,
+            Lh=Lh,
+            wfstart=wfstart,
+            wfstop=wfstop,
+            tcold=tcold,
+            thot=thot,
+            nfit2=nfit2,
+            nfit3=nfit3,
+            lna_poly=lna_poly,
+            **kwargs,
+        )
 
 
 def _get_specs(
