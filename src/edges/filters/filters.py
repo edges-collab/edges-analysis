@@ -645,7 +645,7 @@ def maxfm_filter(*, data: GSData, threshold: float = 200):
 
     return GSFlag(
         flags=maxfm > threshold,
-        axes=("load", "pol", "time")[-maxfm.ndim :],
+        axes=("load", "pol", "time"),
     )
 
 
@@ -668,6 +668,8 @@ def rmsf_filter(
     Then rms is calculated from the mean that is eatimated
     using the standard deviation times initmodel.
     """
+    # TODO: get rid of this filter and just use the `rms_filter` below as its more
+    #       general.
     freqs = data.freqs.to_value("MHz")
     freq_mask = (freqs >= freq_range[0]) & (freqs <= freq_range[1])
 
@@ -742,7 +744,7 @@ def power_percent_filter(
     *,
     data: GSData,
     freq_range: tuple[float, float] = (100, 200),
-    min_threshold: float = -0.7,
+    min_threshold: float = 0,
     max_threshold: float = 3,
 ):
     """Filter data based on the ratio of power in a band compared to entire dataset.
