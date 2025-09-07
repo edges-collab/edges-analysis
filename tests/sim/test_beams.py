@@ -7,8 +7,9 @@ import pytest
 from astropy import units as u
 
 import edges.sim
+import edges.sim.antenna_beam_factor
 from edges import const
-from edges import modelling as mdl
+from edges import modeling as mdl
 from edges.sim import beams
 from edges.sim.sky_models import ConstantIndex, Haslam408AllNoh, SkyModel, StepIndex
 
@@ -95,7 +96,7 @@ def test_antenna_beam_factor(beam):
         use_astropy_azel=False,
         beam_smoothing=False,
     )
-    assert isinstance(abf, beams.BeamFactor)
+    assert isinstance(abf, edges.sim.antenna_beam_factor.BeamFactor)
 
 
 def test_interp_methods(beam):
@@ -123,7 +124,7 @@ def test_beam_solid_angle():
 
 def test_bad_beamfactor_args():
     with pytest.raises(ValueError, match="Frequencies must be monotonically"):
-        beams.BeamFactor(
+        edges.sim.antenna_beam_factor.BeamFactor(
             frequencies=np.array([1, 10, 2, 7]),
             lsts=np.array([0, 1, 2]),
             reference_frequency=75.0,
@@ -132,7 +133,7 @@ def test_bad_beamfactor_args():
         )
 
     with pytest.raises(ValueError, match="LSTs must be monotonically increasing"):
-        beams.BeamFactor(
+        edges.sim.antenna_beam_factor.BeamFactor(
             frequencies=np.linspace(50, 100, 10),
             lsts=np.array([0, np.pi, 2.0, 2 * np.pi, 0.1]),
             reference_frequency=75.0,
@@ -141,7 +142,7 @@ def test_bad_beamfactor_args():
         )
 
     with pytest.raises(ValueError, match="Reference frequency must be positive"):
-        beams.BeamFactor(
+        edges.sim.antenna_beam_factor.BeamFactor(
             frequencies=np.linspace(50, 100, 10),
             lsts=np.array([0, 1, 2]),
             reference_frequency=-75.0,
@@ -150,7 +151,7 @@ def test_bad_beamfactor_args():
         )
 
     with pytest.raises(ValueError, match="antenna_temp must be a 2D array"):
-        beams.BeamFactor(
+        edges.sim.antenna_beam_factor.BeamFactor(
             frequencies=np.linspace(50, 100, 10),
             lsts=np.array([0, 1, 2]),
             reference_frequency=75.0,
@@ -159,7 +160,7 @@ def test_bad_beamfactor_args():
         )
 
     with pytest.raises(ValueError, match="antenna_temp must have shape"):
-        beams.BeamFactor(
+        edges.sim.antenna_beam_factor.BeamFactor(
             frequencies=np.linspace(50, 100, 10),
             lsts=np.array([0, 1, 2]),
             reference_frequency=75.0,
@@ -168,7 +169,7 @@ def test_bad_beamfactor_args():
         )
 
     with pytest.raises(ValueError, match="Antenna temperature must be positive"):
-        beams.BeamFactor(
+        edges.sim.antenna_beam_factor.BeamFactor(
             frequencies=np.linspace(50, 100, 10),
             lsts=np.array([0, 1, 2]),
             reference_frequency=75.0,
@@ -177,7 +178,7 @@ def test_bad_beamfactor_args():
         )
 
     with pytest.raises(ValueError, match="Reference antenna temperature must be a 1D"):
-        beams.BeamFactor(
+        edges.sim.antenna_beam_factor.BeamFactor(
             frequencies=np.linspace(50, 100, 10),
             lsts=np.array([0, 1, 2]),
             reference_frequency=75.0,
@@ -186,7 +187,7 @@ def test_bad_beamfactor_args():
         )
 
     with pytest.raises(ValueError, match="If Reference antenna temperature is 1D"):
-        beams.BeamFactor(
+        edges.sim.antenna_beam_factor.BeamFactor(
             frequencies=np.linspace(50, 100, 10),
             lsts=np.array([0, 1, 2]),
             reference_frequency=75.0,
@@ -195,7 +196,7 @@ def test_bad_beamfactor_args():
         )
 
     with pytest.raises(ValueError, match="If Reference antenna temperature is 2D"):
-        beams.BeamFactor(
+        edges.sim.antenna_beam_factor.BeamFactor(
             frequencies=np.linspace(50, 100, 10),
             lsts=np.array([0, 1, 2]),
             reference_frequency=75.0,
@@ -204,7 +205,7 @@ def test_bad_beamfactor_args():
         )
 
     with pytest.raises(ValueError, match="Reference antenna temperature must be pos"):
-        beams.BeamFactor(
+        edges.sim.antenna_beam_factor.BeamFactor(
             frequencies=np.linspace(50, 100, 10),
             lsts=np.array([0, 1, 2]),
             reference_frequency=75.0,
@@ -214,7 +215,7 @@ def test_bad_beamfactor_args():
 
 
 def test_beamfactor_at_lsts_null():
-    bf = beams.BeamFactor(
+    bf = edges.sim.antenna_beam_factor.BeamFactor(
         frequencies=np.linspace(50, 100, 10),
         lsts=np.linspace(3, 26, 24),
         reference_frequency=75.0,
@@ -226,7 +227,7 @@ def test_beamfactor_at_lsts_null():
 
 
 def test_beamfactor_between_lsts():
-    bf = beams.BeamFactor(
+    bf = edges.sim.antenna_beam_factor.BeamFactor(
         frequencies=np.linspace(50, 100, 10),
         lsts=np.linspace(3, 26, 24),
         reference_frequency=75.0,
@@ -238,7 +239,7 @@ def test_beamfactor_between_lsts():
 
 
 def test_beamfactor_between_lsts_nodata():
-    bf = beams.BeamFactor(
+    bf = edges.sim.antenna_beam_factor.BeamFactor(
         frequencies=np.linspace(50, 100, 10),
         lsts=np.linspace(3, 7, 24),
         reference_frequency=75.0,
@@ -253,7 +254,7 @@ def test_beamfactor_get():
     freq = np.linspace(50, 100, 51)
     poly = mdl.Polynomial(n_terms=4).at(x=freq)
 
-    bf = beams.BeamFactor(
+    bf = edges.sim.antenna_beam_factor.BeamFactor(
         frequencies=freq,
         lsts=np.linspace(3, 7, 5),
         reference_frequency=75.0,

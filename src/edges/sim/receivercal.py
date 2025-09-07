@@ -5,7 +5,7 @@ from collections.abc import Callable, Sequence
 import numpy as np
 from astropy import units as un
 
-from .. import modelling as mdl
+from .. import modeling as mdl
 from .. import types as tp
 from ..cal import Calibrator, Load, noise_waves
 

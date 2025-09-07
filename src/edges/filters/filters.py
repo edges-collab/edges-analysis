@@ -13,11 +13,11 @@ from attrs import define
 from pygsdata import GSData, GSFlag, gsregister
 from pygsdata.select import _mask_times
 
-from .. import modelling as mdl
+from .. import modeling as mdl
 from .. import types as tp
 from ..averaging import NsamplesStrategy, averaging, get_weights_from_strategy
 from ..filters import xrfi as rfi
-from ..filters.xrfi import ModelFilterInfoContainer, model_filter
+from ..filters.xrfi import ModelFilterInfoContainer, xrfi_iterative
 from .runners import run_xrfi
 
 logger = logging.getLogger(__name__)
@@ -174,7 +174,7 @@ def gsdata_filter(multi_data: bool = False):
     return inner
 
 
-def chunked_iterative_model_filter(
+def chunked_iterative_filter(
     *,
     x: np.ndarray,
     data: np.ndarray,
@@ -221,8 +221,8 @@ def chunked_iterative_model_filter(
     while xmin < x.max():
         mask = (x >= xmin) & (x < xmin + chunk_size)
 
-        out_flags[mask], info = model_filter(
-            x=x[mask],
+        out_flags[mask], info = xrfi_iterative(
+            freqs=x[mask],
             data=data[mask],
             flags=out_flags[mask],
             init_flags=init_flags[mask],
@@ -390,7 +390,7 @@ class _RFIFilterFactory:
         out_flags = run_xrfi(
             method=self.method,
             spectrum=data.data[..., mask],
-            freq=data.freqs[mask].to_value("MHz"),
+            freqs=data.freqs[mask].to_value("MHz"),
             flags=flg[..., mask],
             weights=wgt[..., mask],
             n_threads=n_threads,
@@ -406,10 +406,11 @@ class _RFIFilterFactory:
         )
 
 
-rfi_model_filter = gsregister("filter")(gsdata_filter()(_RFIFilterFactory("model")))
-rfi_model_sweep_filter = gsregister("filter")(
-    gsdata_filter()(_RFIFilterFactory("model_sweep"))
+rfi_model_filter = gsregister("filter")(gsdata_filter()(_RFIFilterFactory("iterative")))
+rfi_iterative_filter = gsregister("filter")(
+    gsdata_filter()(_RFIFilterFactory("iterative"))
 )
+
 rfi_watershed_filter = gsregister("filter")(
     gsdata_filter()(_RFIFilterFactory("watershed"))
 )
@@ -625,10 +626,12 @@ def maxfm_filter(*, data: GSData, threshold: float = 200):
     """Filter data based on max FM power.
 
     This function focuses on data between 88-120 MHz. In that range, it detrends the
-    data using a simple convolution kernel with weights [-0.5, 1., -0.5], such that a
-    flat spectrum would be de-trended perfectly to zero. The maximum absolute value of
-    the detrended spectrum is then compared to the threshold, and the entire integration
-    is flagged if the max FM power is greater than the given threshold.
+    data using a simple convolution kernel with weights [0.5, 0, 0.5], such that a
+    flat spectrum would be de-trended to itself, and a spectrum that is totally flat
+    except for some single-channel spikes results in the channels where the spikes were
+    being the mean value (though surrounding channels will be spiky).
+    The spectrum is flagged if the residual of the original spectrum to the de-trended
+    is larger than the threshold (only positive).
     """
     freqs = data.freqs.to_value("MHz")
     fm_freq = (freqs >= 88) & (freqs <= 120)
@@ -645,7 +648,7 @@ def maxfm_filter(*, data: GSData, threshold: float = 200):
 
     return GSFlag(
         flags=maxfm > threshold,
-        axes=("load", "pol", "time")[-maxfm.ndim :],
+        axes=("load", "pol", "time"),
     )
 
 
@@ -668,6 +671,8 @@ def rmsf_filter(
     Then rms is calculated from the mean that is eatimated
     using the standard deviation times initmodel.
     """
+    # TODO: get rid of this filter and just use the `rms_filter` below as its more
+    #       general.
     freqs = data.freqs.to_value("MHz")
     freq_mask = (freqs >= freq_range[0]) & (freqs <= freq_range[1])
 
@@ -742,7 +747,7 @@ def power_percent_filter(
     *,
     data: GSData,
     freq_range: tuple[float, float] = (100, 200),
-    min_threshold: float = -0.7,
+    min_threshold: float = 0,
     max_threshold: float = 3,
 ):
     """Filter data based on the ratio of power in a band compared to entire dataset.

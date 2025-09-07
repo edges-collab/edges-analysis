@@ -7,14 +7,14 @@ import numpy as np
 from astropy import units as un
 from pygsdata import GSData, gsregister
 
-from .. import modelling as mdl
+from .. import modeling as mdl
 from .. import types as tp
 from ..cal import (
     Calibrator,
 )
 from ..cal.s11 import CalibratedS11
-from ..sim import beams
-from ..sim.beams import BeamFactor
+from ..sim import antenna_beam_factor
+from ..sim.antenna_beam_factor import BeamFactor
 
 
 @gsregister("calibrate")
@@ -171,7 +171,7 @@ def apply_beam_factor_directly(data: GSData, beam_file: str | Path) -> GSData:
 @gsregister("calibrate")
 def apply_beam_correction(
     data: GSData,
-    beam: str | Path | beams.BeamFactor,
+    beam: str | Path | antenna_beam_factor.BeamFactor,
     freq_model: mdl.Model,
     integrate_before_ratio: bool = True,
     oversample_factor: int = 5,

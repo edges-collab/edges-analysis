@@ -30,7 +30,7 @@ from pygsdata.attrs import npfield
 from scipy.optimize import minimize
 from scipy.signal.windows import blackmanharris
 
-from .. import modelling as mdl
+from .. import modeling as mdl
 from .. import types as tp
 from ..io.serialization import hickleable
 from ..tools import linear_to_decibels

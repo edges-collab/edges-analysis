@@ -33,7 +33,7 @@ from . import (
     filters,
     inference,
     io,
-    modelling,
+    modeling,
     sim,
     tools,
     types,

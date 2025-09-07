@@ -4,7 +4,7 @@ import pytest
 from pygsdata import GSData
 
 from edges.analysis import plots
-from edges.modelling import LinLog
+from edges.modeling import LinLog
 
 
 def test_plot_time_average_bad_attribute(mock):

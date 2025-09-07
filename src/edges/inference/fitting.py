@@ -5,7 +5,7 @@ from scipy import stats
 from scipy.optimize import dual_annealing, minimize
 from yabf import Component
 
-from edges.modelling import FixedLinearModel
+from edges.modeling import FixedLinearModel
 
 
 class SemiLinearFit:

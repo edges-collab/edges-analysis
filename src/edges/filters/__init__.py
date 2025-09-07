@@ -9,16 +9,15 @@ __all__ = [
     "filter_150mhz",
     "filters",
     "flag_frequency_ranges",
-    "lst_model",
     "maxfm_filter",
     "moon_filter",
     "negative_power_filter",
     "peak_orbcomm_filter",
     "peak_power_filter",
     "prune_flagged_integrations",
+    "rfi_iterative_filter",
     "rfi_model_filter",
     "rfi_model_nonlinear_window",
-    "rfi_model_sweep_filter",
     "rfi_watershed_filter",
     "rms_filter",
     "rmsf_filter",
@@ -27,7 +26,7 @@ __all__ = [
 
 DATA_PATH = Path(__file__).parent / "data"
 
-from . import filters, lst_model
+from . import filters
 from .filters import (
     apply_flags,
     aux_filter,
@@ -40,9 +39,9 @@ from .filters import (
     peak_orbcomm_filter,
     peak_power_filter,
     prune_flagged_integrations,
+    rfi_iterative_filter,
     rfi_model_filter,
     rfi_model_nonlinear_window,
-    rfi_model_sweep_filter,
     rfi_watershed_filter,
     rms_filter,
     rmsf_filter,

@@ -28,7 +28,7 @@ def run_xrfi(
     *,
     method: str,
     spectrum: np.ndarray,
-    freq: np.ndarray,
+    freqs: np.ndarray,
     weights: np.ndarray | None = None,
     flags: np.ndarray | None = None,
     n_threads: int = cpu_count(),
@@ -55,7 +55,7 @@ def run_xrfi(
         flags = run_xrfi(
             spectrum=spectrum.reshape(new_shape),
             weights=weights.reshape(new_shape),
-            freq=freq,
+            freqs=freqs,
             method=method,
             n_threads=n_threads,
             **kwargs,
@@ -85,7 +85,7 @@ def run_xrfi(
                 wght = np.frombuffer(_globals["weights"]).reshape(_globals["shape"])[i]
 
                 if np.any(wght > 0):
-                    return rfi(spec, freq=freq, weights=wght, **kwargs)[0]
+                    return rfi(spec, freqs=freqs, weights=wght, **kwargs)[0]
                 return np.ones_like(spec, dtype=bool)
 
             shared_spectrum = RawArray("d", spectrum.size)
@@ -109,7 +109,9 @@ def run_xrfi(
 
             def fnc(i):
                 if np.any(weights[i] > 0):
-                    return rfi(spectrum[i], freq=freq, weights=weights[i], **kwargs)[0]
+                    return rfi(spectrum[i], freqs=freqs, weights=weights[i], **kwargs)[
+                        0
+                    ]
 
                 return np.ones_like(spectrum[i], dtype=bool)
 

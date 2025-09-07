@@ -33,6 +33,7 @@ class NsamplesStrategy(Enum):
     FLAGS_ONLY = 1
     FLAGGED_NSAMPLES_UNIFORM = 2
     NSAMPLES_ONLY = 3
+    UNFLAGGED_UNIFORM = 4
 
 
 def get_weights_from_strategy(
@@ -41,18 +42,24 @@ def get_weights_from_strategy(
     """Compute weights and nsamples used for a particular strategy."""
     nans = np.isnan(data.data)
 
+    # n is the nsamples that is propagated through to compute the variance.
+    # for now, we always propagate the true "flagged_nsamples" for simplicity.
+    # In the future, it may be better to adjust it for each strategy such that
+    # the resulting summed nsamples is indicative of the variance of the average,
+    # taking into account which weights are being used. This is a little complicated,
+    # because it depends on assumptions about the distribution of the data.
+    n = data.flagged_nsamples
+
     if strategy == NsamplesStrategy.FLAGGED_NSAMPLES:
         w = data.flagged_nsamples
-        n = w
     elif strategy == NsamplesStrategy.FLAGS_ONLY:
         w = (~data.complete_flags).astype(float)
-        n = data.flagged_nsamples
     elif strategy == NsamplesStrategy.FLAGGED_NSAMPLES_UNIFORM:
         w = (data.flagged_nsamples > 0).astype(float)
-        n = data.flagged_nsamples
     elif strategy == NsamplesStrategy.NSAMPLES_ONLY:
         w = data.nsamples
-        n = w
+    elif strategy == NsamplesStrategy.UNFLAGGED_UNIFORM:
+        w = np.ones_like(data.data)
     else:
         raise ValueError(
             f"Invalid nsamples_strategy: {strategy}. "

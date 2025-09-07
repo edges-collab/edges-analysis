@@ -1,7 +1,7 @@
 """A sub-pckage for simulating EDGES data."""
 
-from .antenna_beam_factor import compute_antenna_beam_factor
-from .beams import Beam, BeamFactor
+from .antenna_beam_factor import BeamFactor, compute_antenna_beam_factor
+from .beams import Beam
 from .receivercal import (
     simulate_q,
     simulate_q_from_calibrator,

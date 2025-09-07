@@ -6,7 +6,7 @@ from astropy import units as apu
 from pygsdata import GSData
 from pygsdata.select import select_lsts
 
-from .. import modelling as mdl
+from .. import modeling as mdl
 from ..averaging import averaging
 from ..averaging.lstbin import average_over_times
 from .datamodel import add_model

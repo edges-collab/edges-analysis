@@ -10,7 +10,7 @@ from astropy import units as un
 
 from edges import types as tp
 from edges.io import hickleable
-from edges.modelling import CompositeModel, Model
+from edges.modeling import CompositeModel, Model
 
 from ..tools import ComplexSpline, Spline
 from .load_data import Load

@@ -3,7 +3,7 @@ import pytest
 from astropy import units as u
 from astropy import units as un
 
-from edges import modelling as mdl
+from edges import modeling as mdl
 from edges.cal import s11
 from edges.cal.s11.base import CalibratedS11
 from edges.cal.s11.s11model import S11ModelParams

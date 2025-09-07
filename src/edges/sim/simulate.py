@@ -11,7 +11,7 @@ from read_acq import _coordinates as crda
 from tqdm import tqdm
 
 from .. import const
-from .. import modelling as mdl
+from .. import modeling as mdl
 from . import sky_models
 from .beams import Beam
 
