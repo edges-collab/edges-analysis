@@ -222,7 +222,7 @@ def chunked_iterative_filter(
         mask = (x >= xmin) & (x < xmin + chunk_size)
 
         out_flags[mask], info = xrfi_iterative(
-            x=x[mask],
+            freqs=x[mask],
             data=data[mask],
             flags=out_flags[mask],
             init_flags=init_flags[mask],
@@ -390,7 +390,7 @@ class _RFIFilterFactory:
         out_flags = run_xrfi(
             method=self.method,
             spectrum=data.data[..., mask],
-            freq=data.freqs[mask].to_value("MHz"),
+            freqs=data.freqs[mask].to_value("MHz"),
             flags=flg[..., mask],
             weights=wgt[..., mask],
             n_threads=n_threads,
@@ -406,10 +406,11 @@ class _RFIFilterFactory:
         )
 
 
-rfi_model_filter = gsregister("filter")(gsdata_filter()(_RFIFilterFactory("model")))
-rfi_model_sweep_filter = gsregister("filter")(
-    gsdata_filter()(_RFIFilterFactory("model_sweep"))
+rfi_model_filter = gsregister("filter")(gsdata_filter()(_RFIFilterFactory("iterative")))
+rfi_iterative_filter = gsregister("filter")(
+    gsdata_filter()(_RFIFilterFactory("iterative"))
 )
+
 rfi_watershed_filter = gsregister("filter")(
     gsdata_filter()(_RFIFilterFactory("watershed"))
 )

@@ -118,8 +118,13 @@ class LinearModeler(Modeler):
     """A :class:`Modeler` that uses a linear model to fit either data or std."""
 
     model: mdl.Model = attrs.field(validator=attrs.validators.instance_of(mdl.Model))
-    min_terms: int = attrs.field(default=5, converter=int)
+    min_terms: int = attrs.field(converter=int)
     max_terms: int = attrs.field(converter=int)
+    term_increase: int = 0
+
+    @min_terms.default
+    def _min_terms_default(self) -> int:
+        return self.model.n_terms
 
     @max_terms.default
     def _max_terms_default(self):
@@ -128,7 +133,9 @@ class LinearModeler(Modeler):
     def set_params(self, iteration: int) -> dict[str, Any]:
         """Set the number of terms for the model for a given iteration."""
         return {
-            "nterms": min(self.min_terms + iteration, self.max_terms),
+            "nterms": min(
+                self.min_terms + iteration * self.term_increase, self.max_terms
+            ),
         }
 
     def init_model(
@@ -211,9 +218,9 @@ def xrfi_iterative(
     freqs: np.ndarray,
     flags: np.ndarray | None = None,
     weights: np.ndarray | None = None,
-    data_modeler: Modeler,
-    std_modeler: Modeler,
-    threshold_setter: Callable,
+    data_modeler: Modeler = LinearModeler(model=mdl.Fourier(n_terms=37), min_terms=37),
+    std_modeler: Modeler = LinearModeler(model=mdl.Fourier(n_terms=15)),
+    threshold_setter: Callable = lambda counter: 5.0,
     max_iter: int = 20,
     watershed: dict[float, int] | None = None,
     flag_if_broken: bool = True,
@@ -399,6 +406,9 @@ def xrfi_iterative(
             flags=flag_list,
         ),
     )
+
+
+xrfi_iterative.ndim = (1,)
 
 
 @dataclass

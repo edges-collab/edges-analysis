@@ -158,15 +158,15 @@ class TestPowerPercentFilter:
 
 
 class TestXRFI:
-    def test_basic_run(self, mock):
-        run_filter_check(mock, filters.rfi_model_filter, freq_range=(40, 100))
+    def test_basic_run(self, mock: GSData):
+        run_filter_check(mock, filters.rfi_iterative_filter, freq_range=(40, 100))
 
     @pytest.mark.parametrize(
         "strategy",
         ["flagged-nsamples", "flags-only", "flagged-nsamples-uniform", "nsamples-only"],
     )
     def test_nsamples_strategy(self, mock, strategy):
-        data = filters.rfi_model_filter(
+        data = filters.rfi_iterative_filter(
             mock, freq_range=(40, 100), nsamples_strategy=strategy
         )
         assert not np.any(data.complete_flags)
