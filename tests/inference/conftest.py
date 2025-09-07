@@ -4,7 +4,7 @@ from scipy import stats
 
 from edges.inference.eor_models import FlattenedGaussian
 from edges.inference.foregrounds import DampedOscillations, LogPoly
-from edges.modelling import LinLog
+from edges.modeling import LinLog
 
 
 @pytest.fixture(scope="session")

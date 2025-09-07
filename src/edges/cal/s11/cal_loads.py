@@ -62,7 +62,7 @@ def get_loads11_from_load_and_switch(
     standards = StandardsReadings.from_filespec(
         loaddef.calkit, f_low=f_low, f_high=f_high
     )
-    external_match = SParams.from_s1p_file(loaddef.external, f_low=f_low, f_high=f_high)
+    uncal_load_s11 = SParams.from_s1p_file(loaddef.external, f_low=f_low, f_high=f_high)
     freq = standards.freq
 
     # Historically we use (1, -1, 0) in EDGES2, and proper calkit in EDGES3
@@ -74,7 +74,7 @@ def get_loads11_from_load_and_switch(
         standards.short.s11,
         standards.match.s11,
     )
-    loads11 = rc.gamma_de_embed(external_match.s11, smatrix)
+    loads11 = rc.gamma_de_embed(uncal_load_s11.s11, smatrix)
 
     if switchdef is not None:
         internal_switch = CalibratedSParams.from_internal_switchdef(

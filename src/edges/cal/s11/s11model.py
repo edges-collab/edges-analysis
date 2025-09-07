@@ -9,12 +9,12 @@ import numpy as np
 from astropy import units as un
 from scipy.interpolate import InterpolatedUnivariateSpline as Spline
 
-from edges.modelling.models import Polynomial
-from edges.modelling.xtransforms import UnitTransform
+from edges.modeling.models import Polynomial
+from edges.modeling.xtransforms import UnitTransform
 
 from ... import types as tp
 from ...io.serialization import hickleable
-from ...modelling import (
+from ...modeling import (
     ComplexMagPhaseModel,
     ComplexRealImagModel,
     Fourier,

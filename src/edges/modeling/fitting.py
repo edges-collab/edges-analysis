@@ -67,15 +67,23 @@ class ModelFit:
     @cached_property
     def fit(self) -> core.FixedLinearModel:
         """A model that has parameters set based on the best fit to this data."""
+        mask = np.isfinite(self.ydata)
+
         if self.method == "lstsq":
             if np.isscalar(self.weights):
-                pars = self._ls(self.model.basis, self.ydata)
+                pars = self._ls(self.model.basis[:, mask], self.ydata[mask])
             else:
-                pars = self._wls(self.model.basis, self.ydata, w=self.weights)
+                pars = self._wls(
+                    self.model.basis[:, mask], self.ydata[mask], w=self.weights[mask]
+                )
         elif self.method == "qr":
-            pars = self._qr(self.model.basis, self.ydata, w=self.weights)
+            pars = self._qr(
+                self.model.basis[:, mask], self.ydata[mask], w=self.weights[mask]
+            )
         elif self.method == "alan-qrd":
-            pars = self._alan_qrd(self.model.basis, self.ydata, w=self.weights)
+            pars = self._alan_qrd(
+                self.model.basis[:, mask], self.ydata[mask], w=self.weights[mask]
+            )
 
         # Create a new model with the same parameters but specific parameters and xdata.
         return self.model.with_params(parameters=pars)

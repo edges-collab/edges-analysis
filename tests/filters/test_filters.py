@@ -7,7 +7,7 @@ from pygsdata import GSData, GSFlag
 from pygsdata.concat import concat
 from pygsdata.select import select_freqs
 
-from edges import modelling as mdl
+from edges import modeling as mdl
 from edges.averaging.utils import NsamplesStrategy
 from edges.filters import filters
 from edges.testing import create_mock_edges_data

@@ -13,11 +13,11 @@ from astropy import units as un
 from attrs import define, field
 from pygsdata import GSData, GSFlag, gsregister
 
-from edges.modelling import FourierDay, LinLog, Model
+from edges.modeling import FourierDay, LinLog, Model
 
 from .. import types as tp
 from . import DATA_PATH
-from .filters import chunked_iterative_model_filter, gsdata_filter
+from .filters import chunked_iterative_filter, gsdata_filter
 
 logger = logging.getLogger(__name__)
 
@@ -333,7 +333,7 @@ def get_gha_model_filter(
     if detrend_std_model is None:
         detrend_std_model = std_model
 
-    flags, _resid, std, flag_info = chunked_iterative_model_filter(
+    flags, _resid, std, flag_info = chunked_iterative_filter(
         x=gha,
         data=metric,
         init_flags=init_flags,

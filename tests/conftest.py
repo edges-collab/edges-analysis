@@ -7,7 +7,7 @@ from astropy.time import Time
 from pygsdata import GSData
 
 from edges import const
-from edges import modelling as mdl
+from edges import modeling as mdl
 from edges.analysis.datamodel import add_model
 from edges.averaging import lstbin
 from edges.cal import CalibratedS11, CalibrationObservation, Load, LoadSpectrum

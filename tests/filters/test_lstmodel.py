@@ -3,7 +3,7 @@
 import numpy as np
 from pygsdata import GSData
 
-from edges import modelling as mdl
+from edges import modeling as mdl
 from edges.filters import lst_model
 
 

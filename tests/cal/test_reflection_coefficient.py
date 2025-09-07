@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 from astropy import units as u
 
-from edges import modelling as mdl
+from edges import modeling as mdl
 from edges.cal import reflection_coefficient as rc
 from edges.cal.ee import KNOWN_CABLES
 from edges.cal.s11.calkit_standards import StandardsReadings

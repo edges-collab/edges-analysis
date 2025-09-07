@@ -7,7 +7,7 @@ import numpy as np
 import yaml
 from attrs import define, evolve, field
 
-from .. import modelling as mdl
+from .. import modeling as mdl
 
 try:
     from typing import Self

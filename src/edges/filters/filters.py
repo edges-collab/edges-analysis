@@ -13,11 +13,11 @@ from attrs import define
 from pygsdata import GSData, GSFlag, gsregister
 from pygsdata.select import _mask_times
 
-from .. import modelling as mdl
+from .. import modeling as mdl
 from .. import types as tp
 from ..averaging import NsamplesStrategy, averaging, get_weights_from_strategy
 from ..filters import xrfi as rfi
-from ..filters.xrfi import ModelFilterInfoContainer, model_filter
+from ..filters.xrfi import ModelFilterInfoContainer, xrfi_iterative
 from .runners import run_xrfi
 
 logger = logging.getLogger(__name__)
@@ -174,7 +174,7 @@ def gsdata_filter(multi_data: bool = False):
     return inner
 
 
-def chunked_iterative_model_filter(
+def chunked_iterative_filter(
     *,
     x: np.ndarray,
     data: np.ndarray,
@@ -221,7 +221,7 @@ def chunked_iterative_model_filter(
     while xmin < x.max():
         mask = (x >= xmin) & (x < xmin + chunk_size)
 
-        out_flags[mask], info = model_filter(
+        out_flags[mask], info = xrfi_iterative(
             x=x[mask],
             data=data[mask],
             flags=out_flags[mask],
@@ -625,10 +625,12 @@ def maxfm_filter(*, data: GSData, threshold: float = 200):
     """Filter data based on max FM power.
 
     This function focuses on data between 88-120 MHz. In that range, it detrends the
-    data using a simple convolution kernel with weights [-0.5, 1., -0.5], such that a
-    flat spectrum would be de-trended perfectly to zero. The maximum absolute value of
-    the detrended spectrum is then compared to the threshold, and the entire integration
-    is flagged if the max FM power is greater than the given threshold.
+    data using a simple convolution kernel with weights [0.5, 0, 0.5], such that a
+    flat spectrum would be de-trended to itself, and a spectrum that is totally flat
+    except for some single-channel spikes results in the channels where the spikes were
+    being the mean value (though surrounding channels will be spiky).
+    The spectrum is flagged if the residual of the original spectrum to the de-trended
+    is larger than the threshold (only positive).
     """
     freqs = data.freqs.to_value("MHz")
     fm_freq = (freqs >= 88) & (freqs <= 120)

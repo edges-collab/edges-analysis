@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 from astropy import units as un
 
-from edges import modelling as mdl
+from edges import modeling as mdl
 from edges.cal import Calibrator
 from edges.cal import noise_waves as nw
 

@@ -8,7 +8,7 @@ import attrs
 import numpy as np
 from astropy import units as un
 
-from .. import modelling as mdl
+from .. import modeling as mdl
 from .. import types as tp
 
 

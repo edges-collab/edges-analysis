@@ -9,6 +9,7 @@ __all__ = [
     "freq_bin",
     "gauss_smooth",
     "get_lst_bins",
+    "get_weights_from_strategy",
     "lst_bin",
 ]
 

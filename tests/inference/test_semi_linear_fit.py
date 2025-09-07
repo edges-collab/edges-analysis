@@ -1,7 +1,7 @@
 import numpy as np
 
 from edges.inference import FlattenedGaussian, SemiLinearFit
-from edges.modelling import LinLog
+from edges.modeling import LinLog
 
 
 def test_semi_linear_fit():

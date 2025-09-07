@@ -18,7 +18,7 @@ from edges.cal.s11.base import CalibratedSParams
 from edges.frequencies import get_mask
 from edges.io.calobsdef3 import CalObsDefEDGES3
 
-from .. import modelling as mdl
+from .. import modeling as mdl
 from .. import types as tp
 from ..averaging.freqbin import gauss_smooth
 from ..averaging.lstbin import average_over_times
