@@ -64,6 +64,9 @@ class Load:
         s11_kwargs: dict | None = None,
         spec_kwargs: dict | None = None,
         loss_model: Callable | None = None,
+        loss_model_params: S11ModelParams = (
+            S11ModelParams.from_hot_load_cable_defaults()
+        ),
         restrict_s11_freqs: bool = False,
     ):
         """
@@ -148,6 +151,13 @@ class Load:
         s11 = raw_s11.smoothed(s11_model_params, freqs=spec.freqs)
 
         if loss_model is not None:
+            if loss_model.spaams.freqs.size != spec.freqs.size:
+                loss_model = attrs.evolve(
+                    loss_model,
+                    sparams=loss_model.sparams.smoothed(
+                        params=loss_model_params, freqs=spec.freqs
+                    ),
+                )
             loss = loss_model(spec.freqs, s11.s11)
         else:
             loss = np.ones(spec.freqs.shape)

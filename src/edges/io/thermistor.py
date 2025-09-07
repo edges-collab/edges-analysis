@@ -140,9 +140,9 @@ def read_old_style_csv(path: tp.PathLike) -> QTable:
             },
         )
     table = QTable(data)
-    for name, col in table.columns.items():
+    for name in table.columns:
         if name.endswith("_resistance"):
-            col <<= units.ohm
+            table[name] <<= units.ohm
 
     table["times"] = Time(table["start_time"], format="iso_custom")
 

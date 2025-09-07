@@ -109,10 +109,9 @@ def get_ave_and_var_spec(
 
     data = select_times(
         data,
-        time_range=(spec_timestamps[ignore_ninteg], spec_timestamps[-1]),
+        indx=slice(ignore_ninteg, None),
         load=data.loads[time_coordinate_swpos],
     )
-
     spec_timestamps = spec_timestamps[ignore_ninteg:]
 
     if temperature_range is not None:
@@ -122,7 +121,6 @@ def get_ave_and_var_spec(
         data = select_times(data, idx=temp_mask)
 
     q = dicke_calibration(data)
-
     if freq_bin_size > 1:
         if frequency_smoothing == "bin":
             q = freqbin.freq_bin(q, bins=freq_bin_size)

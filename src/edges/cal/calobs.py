@@ -89,6 +89,7 @@ class CalibrationObservation:
         receiver_kwargs: dict[str, Any] | None = None,
         restrict_s11_model_freqs: bool = True,
         loss_models: dict[str, callable] | None = None,
+        loss_model_params: S11ModelParams | None = None,
     ) -> Self:
         """Create the object from an edges-io observation.
 
@@ -159,6 +160,7 @@ class CalibrationObservation:
             receiver_kwargs=receiver_kwargs,
             restrict_s11_model_freqs=restrict_s11_model_freqs,
             loss_models=loss_models,
+            loss_model_params=loss_model_params,
         )
 
     @classmethod
@@ -264,6 +266,7 @@ class CalibrationObservation:
         receiver_kwargs: dict[str, Any] | None = None,
         restrict_s11_model_freqs: bool = True,
         loss_models: dict[str, callable] | None = None,
+        loss_model_params: S11ModelParams | None = None,
         **kwargs,
     ) -> Self:
         """Create a CalibrationObservation from a "definition" of all required paths.
@@ -356,6 +359,7 @@ class CalibrationObservation:
                 ambient_temperature=ambient_temperature,
                 restrict_s11_freqs=restrict_s11_model_freqs,
                 loss_model=loss_models.get(name, None),
+                loss_model_params=loss_model_params,
             )
 
         amb = get_load("ambient")

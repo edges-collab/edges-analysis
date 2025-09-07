@@ -24,6 +24,13 @@ LOADMAP = bidict({
     "short": "short",
 })
 
+SPEC_LOADMAP = bidict({
+    "load": "ambient",
+    "hot": "hot_load",
+    "open": "open",
+    "short": "short",
+})
+
 
 def read_raul_s11_format(fname: tp.PathLike) -> dict[str, np.ndarray]:
     """
@@ -324,10 +331,18 @@ def read_modelled_s11s(pth: Path) -> QTable:
     for name in raw_s11m.dtype.names:
         if name == "freq":
             s11m["freqs"] = freq * un.MHz
+            continue
 
         bits = name.split("_")
         cmp = bits[-1]
-        load = LOADMAP["_".join(bits[:-1])]
+        load = "_".join(bits[:-1])
+
+        if load == "lna":
+            load = "receiver"
+        elif load.startswith("rig"):
+            load = f"semi_rigid {load.split('_')[-1]}"
+        else:
+            load = LOADMAP[load]
 
         if load not in s11m:
             s11m[load] = np.zeros(len(raw_s11m), dtype=complex)

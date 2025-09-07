@@ -61,6 +61,7 @@ dependencies = [
     'cattrs',
     'cyclopts',
     'yabf',
+    "pooch",
 
 ]
 dynamic = ["version"]
