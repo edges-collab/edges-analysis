@@ -1,19 +1,21 @@
 Tutorials
 =========
 
-After reading the `basic usage <../usage>`_, a good place to get a feel for how
-``edges-analysis`` works is by following some tutorials.
+After reading the `Quickstart Guide <library_usage>`_, a good place to get a feel for how
+``edges`` works is by following some tutorials. Since ``edges`` is a large library with
+several different/standalone tools, these tutorials are not designed to be read in
+a linear fashion. Instead, they are designed to be a reference for when you need to do
+something specific.
 
 .. toctree::
    :maxdepth: 2
-
-   demos/processing_bowman2018
+   demos/using_alanmod_b18
    demos/rfi_algorithm_exploration
    demos/comparison_of_beamfactor_to_alan
    demos/beam_factor_sensitivities
 
-If you've covered the tutorials and still have questions about "how to do stuff" in
-``edges-analysis``, consult the FAQs:
+If you've covered the tutorials and still have questions about "how to do stuff" with
+``edges``, consult the FAQs:
 
 .. toctree::
    :maxdepth: 2

@@ -6,6 +6,7 @@
 !.isort.cfg
 !setup.cfg
 *.log
+!temperature.log
 *.pot
 __pycache__/*
 .cache/*
@@ -53,3 +54,5 @@ pip-wheel-metadata/
 .ipynb_checkpoints/
 
 /GHAModel_*
+plots/
+docs/demos/*.txt

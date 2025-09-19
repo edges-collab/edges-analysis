@@ -1,0 +1,109 @@
+[AntSim1]
+kind = "passive"
+misspells = [
+    'antsim1',
+    'AntSim01',
+    'SimAnt1',
+    'simulator1'
+]
+
+[AntSim2]
+kind = "passive"
+misspells = [
+    'antsim2',
+    'AntSim02',
+    'SimAnt2',
+    'simulator2'
+]
+
+[AntSim3]
+kind = "passive"
+misspells = [
+    'antsim3',
+    'AntSim03',
+    'SimAnt3'
+]
+
+[AntSim4]
+kind = "passive"
+misspells = [
+    'antsim4',
+    'AntSim04',
+    'SimAnt4',
+]
+
+[AntSim2Long]
+kind = "passive"
+misspells = [
+    'simulator2_long',
+]
+
+[AntSim1Long]
+kind = "passive"
+misspells = [
+    'simulator1_long',
+]
+
+[AlanNoiseSource]
+kind = "active"
+misspells = [
+    "AllanNoiseSource",
+]
+
+[AlanNoiseSource_3db]
+kind = "active"
+misspells = [
+    'AllanNoiseSource_3db',
+    'Alans_noise_source_at_VNA_3dB',
+]
+
+[AlanNoiseSource_at_Receiver_3db]
+kind = "active"
+misspells = [
+    'AlanNoiseSource_at_Receiver_3dB',
+]
+
+[AlanNoiseSource_3db_CableBox]
+kind = "active"
+misspells = [
+    "AlansNoiseSource_and_CableBox",
+]
+
+[AlanNoiseSource_6db_CableBox]
+kind = "active"
+misspells = [
+    "Alan_noise_source_6dB_with_cablebox",
+]
+
+[AlanNoiseSource_6db]
+kind = "active"
+misspells = [
+    'AllanNoiseSource_6db',
+    "Alan_noise_source_6dB",
+]
+
+[AlanNoiseSource_10db]
+kind = "active"
+misspells = [
+    'AllanNoiseSource_10db',
+    'AlanNoiseSource10dB'
+]
+
+[AlanNoiseSource_Enclosed]
+kind = "active"
+misspells = [
+    'AllanNoiseSource_Enclosed',
+]
+
+
+[AlanNoiseSource_Enclosed_10dB]
+kind = "active"
+misspells = [
+    'AllanNoiseSource_Enclosed_10dB',
+]
+
+[AlanNoiseSource2]
+kind = "active"
+misspells = [
+    "AlanNoiseSource_2",
+]
