@@ -19,7 +19,7 @@ from ..config import config
 def low2_balun_connector_loss(
     freq: un.Quantity[un.MHz],
     ants11: np.ndarray | LoadS11 | str | Path,
-    connector: ee.CoaxialCable =  ee.KNOWN_CABLES["SC3792 Connector"],
+    connector: ee.CoaxialCable = ee.KNOWN_CABLES["SC3792 Connector"],
     balun: ee.CoaxialCable = ee.KNOWN_CABLES["lowband-balun-tube"],
     use_approx_eps0: bool = True,
 ) -> npt.NDArray:
