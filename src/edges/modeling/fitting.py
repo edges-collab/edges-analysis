@@ -1,7 +1,9 @@
 """Fitting routines for models."""
 
 from copy import copy
+from ctypes import CDLL, POINTER, c_double, c_int, c_longdouble
 from functools import cached_property
+from pathlib import Path
 from typing import Literal
 
 import attrs
@@ -47,7 +49,8 @@ class ModelFit:
         default=1.0, validator=attrs.validators.instance_of((np.ndarray, float))
     )
     method: Literal["lstsq", "qr", "alan-qrd"] = attrs.field(
-        default="lstsq", validator=attrs.validators.in_(["lstsq", "qr", "alan-qrd"])
+        default="lstsq",
+        validator=attrs.validators.in_(["lstsq", "qr", "alan-qrd", "qrd-c"]),
     )
 
     @ydata.validator
@@ -78,6 +81,8 @@ class ModelFit:
                 pars = self._wls(self.model.basis[:, mask], self.ydata[mask], w=w)
         elif self.method == "qr":
             pars = self._qr(self.model.basis[:, mask], self.ydata[mask], w=w)
+        elif self.method == "qrd-c":
+            pars = self._qrd_c(self.model.basis[:, mask], self.ydata[mask], w=w)
         elif self.method == "alan-qrd":
             pars = self._alan_qrd(self.model.basis[:, mask], self.ydata[mask], w=w)
 
@@ -110,7 +115,37 @@ class ModelFit:
         return sp.linalg.solve(r, np.dot(q.T, w_ydata))
 
     def _alan_qrd(self, basis: np.ndarray, y: np.ndarray, w: np.ndarray) -> np.ndarray:
-        """Solve a linear system using QR decomposition.
+        """Solve a linear system using QR decomposition implemented in C.
+
+        This solves the system in the same way as Alan Roger's original C-code that was
+        used for Bowman+2018. See
+        https://github.com/edges-collab/alans-pipeline/blob/
+        0e41156ddc7aaa3dd4b37cd1ee1ada971e68d728/src/edges2k.c#L2735
+        for the C-Code.
+
+        This is the same as qrd-c *except* that the preparation of the A and b matrices
+        is done in python rather than C. This actually makes a difference because
+        both A and b are dot-products, and the sum in numpy uses pairwise summation
+        which is more accurate than a naive accumulation as would be done in C.
+        """
+        if np.isscalar(w):
+            w = np.eye(len(y))
+        elif np.ndim(w) == 1:
+            w = np.diag(w)
+
+        npar, _ = basis.shape
+
+        wa = np.dot(basis, w)
+
+        bbrr = np.dot(wa, y)
+        aarr = np.dot(wa, basis.T)
+        assert bbrr.shape == (npar,)
+        assert aarr.shape == (npar, npar)
+        _, bb = _c_qrd(aarr, bbrr)
+        return bb
+
+    def _qrd_c(self, basis: np.ndarray, y: np.ndarray, w: np.ndarray) -> np.ndarray:
+        """Solve a linear system using QR decomposition implemented in C.
 
         This solves the system in the same way as Alan Roger's original C-code that was
         used for Bowman+2018. See
@@ -119,23 +154,14 @@ class ModelFit:
         for the C-Code.
         """
         if np.isscalar(w):
-            w = np.eye(len(y))
-        elif np.ndim(w) == 1:
-            w = np.diag(w)
-
-        npar, _ndata = basis.shape
-
-        wa = np.dot(basis, w)
-
-        bbrr = np.dot(wa, y)
-        aarr = np.dot(wa, basis.T)
-        assert bbrr.shape == (npar,)
-        assert aarr.shape == (npar, npar)
+            w = np.ones(len(y))
+        elif np.ndim(w) != 1:
+            raise ValueError("Weights must be a 1D array or scalar for qrd_c method.")
 
         # solve the system
-        _alan_qrd(aarr.astype(np.longdouble), bbrr)
-
-        return bbrr
+        a, b = _get_a_and_b(basis, y, w)
+        _, bb = _c_qrd(a, b)
+        return bb
 
     def _wls(self, van, y, w):
         """Ripped straight outta numpy for speed.
@@ -240,74 +266,63 @@ class ModelFit:
         )
 
 
-def _alan_qrd(a: np.ndarray, b: np.ndarray):
+_dllpath = next(iter(Path(__file__).parent.glob("cqrd.*.so")))
+_dll = CDLL(_dllpath)
+_qrd = _dll.qrd
+_qrd.argtypes = [POINTER(c_longdouble), c_int, POINTER(c_double)]
+_qrd.restype = None
+
+_lfit = _dll.get_a_and_b
+
+_lfit.argtypes = [
+    c_int,
+    c_int,
+    POINTER(c_double),
+    POINTER(c_double),
+    POINTER(c_double),
+    POINTER(c_longdouble),
+    POINTER(c_double),
+]
+_lfit.restype = None
+
+
+def _c_qrd(a: np.ndarray, b: np.ndarray):
     """Solve a linear system using QR decomposition.
 
     This solves the system in the same way as Alan Roger's original C-code that was
     used for Bowman+2018.
     """
-    n = a.shape[0]
-    c = np.zeros(n, dtype=np.longdouble)
-    d = np.zeros(n, dtype=np.longdouble)
-    qt = np.zeros((n, n), np.longdouble)
-    u = np.zeros((n, n), np.longdouble)
+    aa = a.copy().astype(np.float128)
+    bb = b.copy().astype(np.float64)
 
-    for k in range(n - 1):
-        scale = np.longdouble(0.0)
-        for i in range(k, n):
-            if np.abs(a[k, i]):
-                scale = np.abs(a[k, i])
-        if scale == 0.0:
-            # SINGULAR!
-            c[k] = d[k] = 0.0
-        else:
-            a[k, k:] /= scale
-            sm = np.sum(a[k, k:] ** 2)
-            sigma = np.sqrt(sm) if a[k, k] > 0 else -np.sqrt(sm)
-            a[k, k] += sigma
-            c[k] = sigma * a[k, k]
-            d[k] = -scale * sigma
-            for j in range(k + 1, n):
-                sm = np.sum(a[k, k:] * a[j, k:])
-                tau = sm / c[k]
-                a[j, k:] -= tau * a[k, k:]
+    _qrd(
+        aa.ctypes.data_as(POINTER(c_longdouble)),
+        b.shape[0],
+        bb.ctypes.data_as(POINTER(c_double)),
+    )
 
-    d[-1] = a[-1, -1]
+    return aa, bb
 
-    qt = np.eye(n)
 
-    for k in range(n - 1):
-        if c[k] != 0.0:
-            for j in range(n):
-                sm = np.sum(a[k, k:] * qt[k:, j]) / c[k]
-                qt[k:, j] -= sm * a[k, k:]
+def _get_a_and_b(
+    basis: np.ndarray,
+    data: np.ndarray,
+    weights: np.ndarray,
+):
+    a = np.zeros(basis.shape[0] * basis.shape[0], dtype=np.float128)
+    b = np.zeros(basis.shape[0], dtype=np.float64)
 
-    for j in range(n - 1):
-        sm = np.sum(a[j, j:] * b[j:])
-        tau = sm / c[j]
-        b[j:] -= tau * a[j, j:]
+    basis = basis.astype(np.float64)
+    data = data.astype(np.float64)
+    weights = weights.astype(np.float64)
 
-    b[-1] /= d[-1]
-    for i in range(n - 2, -1, -1):
-        sm = np.sum(a[(i + 1) :, i] * b[(i + 1) :])
-        b[i] = (b[i] - sm) / d[i]
-
-    for i in range(n):
-        for j in range(i + 1, n):
-            u[i, j] = a[j, i]
-        u[i, i] = d[i]
-
-    for k in range(n):
-        if u[k, k] == 0:
-            return
-        u[k, k] = 1.0 / u[k, k]
-
-    for i in range(n - 2, 0, -1):
-        for j in range(n - 1, i, -1):
-            sm = np.sum(u[i, i + 1 : j] * u[i + 1 : j, j])
-            u[i, j] = -u[i, i] * sm
-
-    for i in range(n):
-        for j in range(n):
-            sm = np.dot(u[i], qt[:, j])
-            a[j, i] = sm
+    _lfit(
+        basis.shape[0],
+        basis.shape[1],
+        basis.ctypes.data_as(POINTER(c_double)),
+        data.ctypes.data_as(POINTER(c_double)),
+        weights.ctypes.data_as(POINTER(c_double)),
+        a.ctypes.data_as(POINTER(c_longdouble)),
+        b.ctypes.data_as(POINTER(c_double)),
+    )
+    return a, b

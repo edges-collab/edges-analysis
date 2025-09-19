@@ -552,7 +552,7 @@ class ModelFilterInfoContainer:
 def xrfi_iterative_sliding_window(
     spectrum: np.ndarray,
     *,
-    freq: np.ndarray,
+    freqs: np.ndarray,
     model: mdl.Model,
     flags=None,
     window_frac: int = 16,
@@ -629,13 +629,14 @@ def xrfi_iterative_sliding_window(
         A :class:`ModelFilterInfo` object containing information about the fit at
         each iteration.
     """
-    fmod = model.at(x=freq)
+    fmod = model.at(x=freqs) if not isinstance(model, mdl.FixedLinearModel) else model
+
     fit_kwargs = fit_kwargs or {}
 
     if flags is None:
         flags = np.zeros(len(spectrum), dtype=bool)
 
-    weights = (~flags).astype(int) if weights is None else np.where(flags, 0, weights)
+    weights = (~flags).astype(float) if weights is None else np.where(flags, 0, weights)
 
     orig_weights = weights.copy()
 
@@ -654,7 +655,7 @@ def xrfi_iterative_sliding_window(
         # TODO: pass through fit_kwargs
         fit = fmod.fit(ydata=spectrum, weights=weights, **fit_kwargs)
 
-        model_list.append(fit.fit.model)
+        model_list.append(fit.evaluate())
 
         rms = np.zeros(n)
         avs = np.zeros(n)
@@ -717,7 +718,7 @@ def xrfi_iterative_sliding_window(
             std_params=[],
             stds=std_list,
             thresholds=[threshold] * it,
-            x=freq,
+            x=freqs,
             data=spectrum,
             flags=flags_list,
         ),
@@ -730,7 +731,7 @@ xrfi_iterative_sliding_window.ndim = (1,)
 def xrfi_watershed(
     spectrum: np.ndarray | None = None,
     *,
-    freq: np.ndarray | None = None,
+    freqs: np.ndarray | None = None,
     flags: np.ndarray | None = None,
     weights: np.ndarray | None = None,
     tol: float | tuple[float] = 0.5,

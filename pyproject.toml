@@ -103,7 +103,10 @@ dev = [
 [project.scripts]
 edges = "edges.cli:app"
 
-
+[tool.setuptools]
+ext-modules = [
+  {name = "edges.modeling.cqrd", sources = ["src/edges/modeling/c_modeling.c"]}
+]
 
 [tool.pytest.ini_options]
 # Options for py.test:

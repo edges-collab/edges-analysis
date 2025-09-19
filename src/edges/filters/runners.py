@@ -45,13 +45,13 @@ def run_xrfi(
         weights = np.where(flags, 0, weights)
 
     if spectrum.ndim in rfi.ndim:
-        flags = rfi(spectrum, weights=weights, **kwargs)[0]
+        flags = rfi(spectrum, weights=weights, freqs=freqs, **kwargs)[0]
     elif spectrum.ndim > max(rfi.ndim) + 1:
         # say we have a 3-dimensional spectrum but can only do 1D in the method.
         # then we collapse to 2D and recursively run xrfi_pipe. That will trigger
         # the *next* clause, which will do parallel mapping over the first axis.
         orig_shape = spectrum.shape
-        new_shape = (-1, *orig_shape[2:])
+        new_shape = (-1, *orig_shape[-max(rfi.ndim) :])
         flags = run_xrfi(
             spectrum=spectrum.reshape(new_shape),
             weights=weights.reshape(new_shape),
@@ -91,7 +91,7 @@ def run_xrfi(
             shared_spectrum = RawArray("d", spectrum.size)
             shared_weights = RawArray("d", spectrum.size)
 
-            # Wrap X as an numpy array so we can easily manipulates its data.
+            # Wrap X as an numpy array so we can easily manipulate its data.
             shared_spectrum_np = np.frombuffer(shared_spectrum).reshape(spectrum.shape)
             shared_weights_np = np.frombuffer(shared_weights).reshape(spectrum.shape)
 

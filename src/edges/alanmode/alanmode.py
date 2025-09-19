@@ -665,8 +665,8 @@ class Edges3CalobsParams:
     load_delay: float = attrs.field()
     open_delay: float = attrs.field()
     short_delay: float = attrs.field()
-    lna_cable_length: Annotated[float, Parameter(name=("cablen",))] = (4.26,)
-    lna_cable_loss: Annotated[float, Parameter(name=("cabloss",))] = (-91.5,)
+    lna_cable_length: Annotated[float, Parameter(name=("cablen",))] = 4.26
+    lna_cable_loss: Annotated[float, Parameter(name=("cabloss",))] = -91.5
     lna_cable_dielectric: Annotated[float, Parameter(name=("cabdiel",))] = -1.24
 
     @load_delay.default

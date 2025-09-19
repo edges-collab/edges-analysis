@@ -312,7 +312,7 @@ class TestXRFIIterativeSlidingWindow:
         true_flags = rfi_model > 0
         flags, _ = xrfi.xrfi_iterative_sliding_window(
             sky,
-            freq=freq,
+            freqs=freq,
             model=EdgesPoly(n_terms=6),
             threshold=3.5,
             max_iter=15,

@@ -52,12 +52,13 @@ def test_model_fit():
     assert isinstance(fit.model.model, mdl.PhysicalLin)
 
 
-def test_simple_fit():
+@pytest.mark.parametrize("method", ["lstsq", "qr", "alan-qrd", "qrd-c"])
+def test_simple_fit(method: str):
     pl = mdl.PhysicalLin(parameters=[1, 2, 3])
     model = pl.at(x=np.linspace(50, 100, 10))
 
     data = model()
-    fit = mdl.ModelFit(model, ydata=data)
+    fit = mdl.ModelFit(model, ydata=data, method=method)
 
     assert np.allclose(fit.model_parameters, [1, 2, 3])
     assert np.allclose(fit.residual, 0)
@@ -66,7 +67,8 @@ def test_simple_fit():
     assert fit.hessian.shape == (3, 3)
 
 
-def test_weighted_fit():
+@pytest.mark.parametrize("method", ["lstsq", "qr", "alan-qrd", "qrd-c"])
+def test_weighted_fit(method: str):
     rng = np.random.default_rng(1234)
     four = mdl.Fourier(parameters=[1, 2, 3])
     model = four.at(x=np.linspace(50, 100, 10))

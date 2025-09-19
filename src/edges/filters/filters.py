@@ -3,7 +3,6 @@
 import functools
 import logging
 from collections.abc import Callable, Sequence
-from typing import Literal
 
 import hickle
 import numpy as np
@@ -17,7 +16,6 @@ from .. import modeling as mdl
 from .. import types as tp
 from ..averaging import NsamplesStrategy, averaging, get_weights_from_strategy
 from ..filters import xrfi as rfi
-from ..filters.xrfi import ModelFilterInfoContainer, xrfi_iterative
 from .runners import run_xrfi
 
 logger = logging.getLogger(__name__)
@@ -174,68 +172,6 @@ def gsdata_filter(multi_data: bool = False):
     return inner
 
 
-def chunked_iterative_filter(
-    *,
-    x: np.ndarray,
-    data: np.ndarray,
-    flags: np.ndarray | None = None,
-    init_flags: np.ndarray | None = None,
-    chunk_size: float = np.inf,
-    **kwargs,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Perform a chunk-wise iterative model filter.
-
-    This breaks the given data into smaller chunks and then calls
-    :func:`edges.xrfi.model_filter` on each chunk, returning the full 1D array of
-    flags after all the chunks have been processed.
-
-    Parameters
-    ----------
-    chunk_size
-        The size of the chunks to process, in units of the input coordinates, ``x``.
-    **kwargs
-        Everything else is passed to :func:`edges.filters.xrfi.model_filter`.
-
-    Returns
-    -------
-    flags
-        The 1D array of flags corresponding to the data. Note that input flags are not
-        modified in the course of this function, but the output does already contain
-        those flags.
-    resid
-        Residuals to the model
-    std
-        Estimates of the standard deviation of the data at each data point.
-    """
-    if flags is None:
-        flags = np.zeros(len(x), dtype=bool)
-    if init_flags is None:
-        init_flags = np.zeros(len(x), dtype=bool)
-
-    out_flags = flags | np.isnan(data)
-    resids = np.zeros_like(data)
-    std = np.zeros_like(data)
-
-    xmin = x.min()
-    infos = ModelFilterInfoContainer()
-    while xmin < x.max():
-        mask = (x >= xmin) & (x < xmin + chunk_size)
-
-        out_flags[mask], info = xrfi_iterative(
-            freqs=x[mask],
-            data=data[mask],
-            flags=out_flags[mask],
-            init_flags=init_flags[mask],
-            **kwargs,
-        )
-        resids[mask] = info.get_residual()
-        std[mask] = info.stds[-1]
-        infos = infos.append(info)
-        xmin += chunk_size
-
-    return out_flags, resids, std, infos
-
-
 @gsregister("filter")
 @gsdata_filter()
 def aux_filter(
@@ -355,12 +291,7 @@ class _RFIFilterFactory:
         *,
         n_threads: int = 1,
         freq_range: tuple[float, float] = (40, 200),
-        nsamples_strategy: Literal[
-            "flagged-nsamples",
-            "flags-only",
-            "flagged-nsamples-uniform",
-            "nsamples-only",
-        ] = "flagged-nsamples",
+        nsamples_strategy: NsamplesStrategy = NsamplesStrategy.FLAGGED_NSAMPLES,
         **kwargs,
     ):
         mask = (data.freqs.to_value("MHz") >= freq_range[0]) & (
@@ -369,29 +300,12 @@ class _RFIFilterFactory:
 
         flags = data.complete_flags
 
-        if nsamples_strategy == "flagged-nsamples":
-            wgt = data.nsamples
-            flg = data.complete_flags
-        elif nsamples_strategy == "flags-only":
-            flg = data.complete_flags
-            wgt = np.ones_like(data.data)
-        elif nsamples_strategy == "flagged-nsamples-uniform":
-            flg = (data.flagged_nsamples == 0).astype(float)
-            wgt = np.ones_like(data.data)
-        elif nsamples_strategy == "nsamples-only":
-            wgt = data.nsamples
-            flg = np.zeros_like(data.complete_flags)
-        else:
-            raise ValueError(
-                f"Invalid nsamples_strategy: {nsamples_strategy}. Must be one of "
-                "'flagged-nsamples', 'flags-only', 'flagged-nsamples-uniform' or "
-                "'nsamples-only'"
-            )
+        wgt, _ = get_weights_from_strategy(data, nsamples_strategy)
+
         out_flags = run_xrfi(
             method=self.method,
             spectrum=data.data[..., mask],
             freqs=data.freqs[mask].to_value("MHz"),
-            flags=flg[..., mask],
             weights=wgt[..., mask],
             n_threads=n_threads,
             **kwargs,
@@ -406,16 +320,16 @@ class _RFIFilterFactory:
         )
 
 
-rfi_model_filter = gsregister("filter")(gsdata_filter()(_RFIFilterFactory("iterative")))
 rfi_iterative_filter = gsregister("filter")(
     gsdata_filter()(_RFIFilterFactory("iterative"))
 )
+rfi_model_filter = rfi_iterative_filter  # Backwards compatibility
 
 rfi_watershed_filter = gsregister("filter")(
     gsdata_filter()(_RFIFilterFactory("watershed"))
 )
-rfi_model_nonlinear_window = gsregister("filter")(
-    gsdata_filter()(_RFIFilterFactory("model_nonlinear_window"))
+rfi_iterative_sliding_window = gsregister("filter")(
+    gsdata_filter()(_RFIFilterFactory("iterative_sliding_window"))
 )
 
 

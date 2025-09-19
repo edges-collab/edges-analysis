@@ -9,15 +9,21 @@ from platformdirs import PlatformDirs
 
 dirs = PlatformDirs("edges", "edges-collab")
 
-B18CAL_REPO = POOCH = pooch.create(
+# Don't "auto" populate the registry, because that requires an API call, and sometimes
+# we want to be running this in massive parallel.
+_S11FILE = "s11_calibration_low_band_LNA25degC_2015-09-16-12-30-29_simulator2_long.txt"
+B18CAL_REPO = pooch.create(
     path=dirs.user_cache_dir,
     # Use the figshare DOI
     base_url="doi:10.5281/zenodo.16883743",
-    registry=None,
+    registry={
+        "LegacyPipelineOutputs.7z": "df5f573d390f0cff46157ce157849925",
+        "Resistance.7z": "9ac40bdd7a009ec722af4235dadc6162",
+        "S11.7z": "551b20c4d3f37f74ece8e94e963f716e",
+        _S11FILE: "eaf078330589b4adedf4ce0b687f4add",
+        "Spectra.7z": "c81c5d7ae127d0306b7c7dcaf5510304",
+    },
 )
-
-# Automatically populate the registry
-B18CAL_REPO.load_registry_from_doi()
 
 _UNZIPPED_B18CAL_OBS = Path(dirs.user_cache_dir) / "B18-cal-raw-data"
 
