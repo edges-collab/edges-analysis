@@ -19,6 +19,8 @@ from ..config import config
 def low2_balun_connector_loss(
     freq: un.Quantity[un.MHz],
     ants11: np.ndarray | LoadS11 | str | Path,
+    connector: ee.CoaxialCable = ee.KNOWN_CABLES["SC3792 Connector"],
+    balun: ee.CoaxialCable = ee.KNOWN_CABLES["lowband-balun-tube"],
     use_approx_eps0: bool = True,
 ) -> npt.NDArray:
     """Obtain the balun and connector loss for the low-2 instrument on-site at MRO.
@@ -31,9 +33,6 @@ def low2_balun_connector_loss(
         Whether to approximate the vacuum electric permittivity as 8.854e-12 F/m
         instead of the ~10-digit accuracy it has from astropy.
     """
-    connector = ee.KNOWN_CABLES["SC3792 Connector"]
-    balun = ee.KNOWN_CABLES["lowband-balun-tube"]
-
     if use_approx_eps0:
         connector = attrs.evolve(connector, eps0=8.854e-12 * un.F / un.m)
         balun = attrs.evolve(balun, eps0=8.854e-12 * un.F / un.m)
