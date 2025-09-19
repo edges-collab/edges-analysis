@@ -33,9 +33,7 @@ def low2_balun_connector_loss(
         Whether to approximate the vacuum electric permittivity as 8.854e-12 F/m
         instead of the ~10-digit accuracy it has from astropy.
     """
-    connector = ee.KNOWN_CABLES["SC3792 Connector"]
-    balun = ee.KNOWN_CABLES["lowband-balun-tube"]
-
+    
     if use_approx_eps0:
         connector = attrs.evolve(connector, eps0=8.854e-12 * un.F / un.m)
         balun = attrs.evolve(balun, eps0=8.854e-12 * un.F / un.m)
