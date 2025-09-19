@@ -17,6 +17,8 @@ def low2_balun_connector_loss(
     freq: un.Quantity[un.MHz],
     ants11: np.ndarray | CalibratedS11 | str | Path,
     use_approx_eps0: bool = True,
+    connector: ee.CoaxialCable = ee.KNOWN_CABLES["SC3792 Connector"],
+    balun: ee.CoaxialCable = ee.KNOWN_CABLES["lowband-balun-tube"],
 ) -> npt.NDArray:
     """Obtain the balun and connector loss for the low-2 instrument on-site at MRO.
 
@@ -24,13 +26,25 @@ def low2_balun_connector_loss(
     ----------
     freq
         An array of frequencies at which to calculate the balun+connector loss.
+    ants11
+        The antenna S11, either as a numpy array, a path to a file containing the
+        S11, or a S11Model instance.
     use_approx_eps0 : bool, optional
         Whether to approximate the vacuum electric permittivity as 8.854e-12 F/m
         instead of the ~10-digit accuracy it has from astropy.
-    """
-    connector = ee.KNOWN_CABLES["SC3792 Connector"]
-    balun = ee.KNOWN_CABLES["lowband-balun-tube"]
+        This is mainly for backward compatibility with previous results.
+        Default is True.
+    connector
+        The connector to use. Default is the SC3792 connector.
+    balun
+        The balun to use. Default is the lowband-balun-tube.
 
+    Returns
+    -------
+    loss : np.ndarray
+        The balun+connector loss as a function of frequency (same length
+        as `freq`).
+    """
     if use_approx_eps0:
         connector = attrs.evolve(connector, eps0=8.854e-12 * un.F / un.m)
         balun = attrs.evolve(balun, eps0=8.854e-12 * un.F / un.m)
