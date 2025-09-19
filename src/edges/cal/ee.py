@@ -361,6 +361,7 @@ KNOWN_CABLES = {
         inner_material="copper",
         inner_conductivity=5.96e07 * 0.20 * un.siemens / un.m,
         relative_dielectric=2.05,
+        length=2e-2 * un.m,
     ),
     "UT-141C-SP": CoaxialCable(
         outer_radius=0.1175 * un.imperial.inch / 2,
