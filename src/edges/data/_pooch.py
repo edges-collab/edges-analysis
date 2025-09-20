@@ -17,11 +17,11 @@ B18CAL_REPO = pooch.create(
     # Use the figshare DOI
     base_url="doi:10.5281/zenodo.16883743",
     registry={
-        "LegacyPipelineOutputs.7z": "df5f573d390f0cff46157ce157849925",
-        "Resistance.7z": "9ac40bdd7a009ec722af4235dadc6162",
-        "S11.7z": "551b20c4d3f37f74ece8e94e963f716e",
-        _S11FILE: "eaf078330589b4adedf4ce0b687f4add",
-        "Spectra.7z": "c81c5d7ae127d0306b7c7dcaf5510304",
+        "LegacyPipelineOutputs.7z": "md5:df5f573d390f0cff46157ce157849925",
+        "Resistance.7z": "md5:9ac40bdd7a009ec722af4235dadc6162",
+        "S11.7z": "md5:551b20c4d3f37f74ece8e94e963f716e",
+        _S11FILE: "md5:eaf078330589b4adedf4ce0b687f4add",
+        "Spectra.7z": "md5:c81c5d7ae127d0306b7c7dcaf5510304",
     },
 )
 

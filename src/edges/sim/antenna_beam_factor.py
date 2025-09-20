@@ -219,7 +219,7 @@ class BeamFactor:
         return np.mean(self.get_beam_factor(model, freqs), axis=0)
 
     def get_integrated_beam_factor(
-        self, model: mdl.Model, freqs: np.ndarray | None = None
+        self, model: mdl.Model, freqs: np.ndarray | None = None, **fit_kwargs
     ) -> np.ndarray:
         """Return the beam factor integrated over the LST range.
 
@@ -231,7 +231,7 @@ class BeamFactor:
             freqs = self.frequencies
 
         bf = np.sum(self.antenna_temp, axis=0) / np.sum(self.antenna_temp_ref, axis=0)
-        fit = model.fit(self.frequencies, bf)
+        fit = model.fit(self.frequencies, bf, **fit_kwargs)
         return fit.evaluate(freqs) / fit.evaluate(self.reference_frequency)
 
 

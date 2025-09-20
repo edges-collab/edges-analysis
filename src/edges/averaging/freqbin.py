@@ -177,8 +177,9 @@ def gauss_smooth(
         if maintain_flags == 1:
             nsamples[inflags] = 0
         else:
-            window = np.ones(maintain_flags)
-            flags = convolve1d((~inflags).astype(int), window, mode="constant", cval=0)
+            flags = convolve1d(
+                (~inflags).astype(int), np.ones(maintain_flags), mode="constant", cval=0
+            )
             nsamples[flags == 0] = 0
 
     nsamples = nsamples[..., decimate_at::decimate]
