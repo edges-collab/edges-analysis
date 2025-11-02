@@ -193,8 +193,9 @@ def gauss_smooth(
     if not use_nsamples:
         # We have to still get the proper nsamples for the output.
         nsamples_ = convolve1d(data.flagged_nsamples, window, mode="constant", cval=0)
-        nsamples_[nsamples_ == 0] = 0
-        nsamples = nsamples_[..., decimate_at::decimate]
+        nsamples_ = nsamples_[..., decimate_at::decimate]
+        nsamples_[nsamples == 0] = 0
+        nsamples = nsamples_
 
     models = data.model[..., decimate_at::decimate] if use_residuals else 0
 

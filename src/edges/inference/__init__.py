@@ -18,3 +18,5 @@ from .foregrounds import (
     PhysicalSmallIonDepth,
     Sinusoid,
 )
+from .linear_fg_likelihoods import LinearFG
+from .partial_linear_model import PartialLinearModel
