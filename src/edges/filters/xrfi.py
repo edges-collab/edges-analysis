@@ -103,7 +103,8 @@ class Modeler:
 
     def get_std(self, model, resids: np.ndarray, weights: np.ndarray) -> np.ndarray:
         """Get the standard deviation for the given residuals and weights."""
-        rsq = np.log(resids**2)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            rsq = np.log(resids**2)
         rsq[~np.isfinite(rsq)] = np.nan
         smooth_rsq = self.get_model(model, rsq, weights)
         return 1.888 * np.sqrt(np.exp(smooth_rsq))

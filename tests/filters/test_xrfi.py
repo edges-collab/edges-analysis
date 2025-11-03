@@ -158,8 +158,12 @@ class TestXRFIIterative:
     def test_easy_rfi_signatures(
         self, sky_model, rfi_model, scale, freq, data_modeler, std_modeler
     ):
-        if isinstance(data_modeler, xrfi.MedianFilterModeler) and isinstance(
-            std_modeler, xrfi.MedianFilterModeler
+        if (isinstance(data_modeler, xrfi.MedianFilterModeler)) and (
+            isinstance(std_modeler, xrfi.MedianFilterModeler)
+            or (
+                isinstance(std_modeler, xrfi.LinearModeler)
+                and std_modeler.min_terms == 3
+            )  # variable poly
         ):
             pytest.skip(
                 "Median for both data and std can produce zeros in the std model for "

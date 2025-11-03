@@ -33,7 +33,7 @@ classifiers = [
 
 dependencies = [
     "numpy>=2.0",
-    "scipy",
+    "scipy>=1.16",
     "matplotlib",
     "astropy>=5.0",
     "pygsdata>=0.2.2",

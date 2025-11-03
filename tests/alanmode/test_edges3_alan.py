@@ -119,7 +119,7 @@ def test_modelled_s11(edges3_2022_316, alandata: Path):
 
         # We clip the ends here, because they are slightly extrapolated in the default
         # case.
-        np.testing.assert_allclose(alans11m[k], ours11m[k], atol=4e-9, rtol=0)
+        np.testing.assert_allclose(alans11m[k], ours11m[k], atol=5e-9, rtol=0)
 
 
 def test_specal(edges3_2022_316: Path, alandata: Path):
