@@ -6,8 +6,8 @@ import pytest
 from astropy import units as un
 from pygsdata import GSData
 
-from edges_analysis.averaging.lstbin import average_over_times, get_lst_bins, lst_bin
-from edges_analysis.averaging.utils import NsamplesStrategy
+from edges.averaging.lstbin import average_over_times, get_lst_bins, lst_bin
+from edges.averaging.utils import NsamplesStrategy
 
 
 class TestGetLSTBins:
@@ -29,17 +29,21 @@ class TestGetLSTBins:
 
 class TestLSTBin:
     def test_simple_full_average(self, mock: GSData):
-        data = lst_bin(mock)
+        with pytest.warns(UserWarning, match="Auxiliary measurements cannot be binned"):
+            data = lst_bin(mock)
         manual = np.mean(mock.data, axis=2)
         np.testing.assert_array_almost_equal(data.data[:, :, 0], manual)
 
     def test_bad_inputs(self, mock: GSData):
-        with pytest.raises(ValueError, match="Cannot bin with models without a model"):
+        with pytest.raises(
+            ValueError, match="Cannot bin with models without residuals"
+        ):
             lst_bin(mock, use_model_residuals=True)
 
         rng = np.random.default_rng()
         mock2 = mock.update(
-            effective_integration_time=rng.uniform(size=mock.data.shape[:-1]) * un.s
+            effective_integration_time=rng.uniform(size=mock.data.shape[:-1]) * un.s,
+            auxiliary_measurements=None,
         )
         with pytest.warns(
             UserWarning, match="lstbin does not yet support variable integration times"
@@ -51,7 +55,10 @@ class TestLSTBin:
         new = mock_with_model.update(
             nsamples=rng.uniform(size=mock_with_model.nsamples.shape)
         )
-        data = lst_bin(new)
+        with pytest.warns(UserWarning, match="Auxiliary measurements cannot be binned"):
+            # mock_with_model has auxiliary measurements, check that we warn when lst
+            # binning!
+            data = lst_bin(new)
         manual = np.mean(new.data, axis=2)
         assert not np.allclose(data.data[:, :, 0], manual)
 
