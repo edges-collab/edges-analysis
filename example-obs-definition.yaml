@@ -1,0 +1,50 @@
+# This file is an example file for "defining" an observation. It should be included
+# inside an observation directory, and provides meta-information about which files
+# are useful vs. not, and how to "complete" the observation if not all files are
+# available.
+
+# An observation definition in any included/preferred directory will be used to
+# complement this one.
+
+# A root observation directory from which all paths in this definition are relative
+# (unless specified as absolute).
+root_obs_dir: '../..'
+
+# Use this key only if this entire observation is to be considered invalid for some
+# reason. If so, specify the reason. Note that it can also help to add ".invalid" to
+# the end of the overall observation folder.
+entirely_invalid: 'reason'
+
+include:
+  # List of directories to include to supplement this observation.
+  # These are only used if they are not available in this observation.
+  # Specifying a top-level directory means everything under it will be included.
+
+prefer:
+  # Similar to "include", but uses the preferred directory wherever it contains files
+  # whether or not this observation contains those files.
+
+invalid:
+  # A list of specific files (glob-compatible) in this observation that should be always
+  # ignored. Note that these *should* have filename extensions of ".invalid" or ".old"
+  # in which case including them here is unnecessary. This just provides an alternate
+  # path of achieving the same thing.
+
+measurements:
+  # Use this section to define any parameters of the run(s).
+  resistance_m: 50.0
+  resistance_f: 50.0
+
+defaults:
+  # Use this section to give default run numbers / repeat numbers to use
+  # Note that you don't *need* this section: by default in the program, the last run and repeat
+  # will be used for each load. It is restricted to use the same repeat for all standards
+  # within a load.
+  run:
+    ambient: 1
+    hot_load: 2
+    short: 1
+    open: 2
+  repeat:
+    ambient: 1
+    SwitchingState: 1
