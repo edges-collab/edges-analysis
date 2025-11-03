@@ -183,7 +183,8 @@ def _alancal(
 
 @amode.command(name="cal-edges2")
 def alancal_edges2(
-    data: Edges2CalobsParams, opts: Annotated[AlanCalOpts, Parameter(name="*")]
+    data: Edges2CalobsParams,
+    opts: Annotated[AlanCalOpts, Parameter(name="*")] = AlanCalOpts(),
 ):
     """Run a calibration for EDGES2 in as close a manner to Alan's code as possible.
 
@@ -200,7 +201,8 @@ def alancal_edges2(
 
 @amode.command(name="cal-edges3")
 def alancal_edges3(
-    data: Edges3CalobsParams, opts: Annotated[AlanCalOpts, Parameter(name="*")]
+    data: Edges3CalobsParams,
+    opts: Annotated[AlanCalOpts, Parameter(name="*")] = AlanCalOpts(),
 ):
     """Run a calibration for EDGES3 in as close a manner to Alan's code as possible.
 

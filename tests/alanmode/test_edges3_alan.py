@@ -13,7 +13,12 @@ import numpy as np
 import pytest
 
 from edges import alanmode as am
-from edges.alanmode.cli import amode
+from edges.alanmode.cli import amode as _amode
+
+
+def amode(*args, **kwargs):
+    """Return the CLI app with SystemExit disabled for testing."""
+    return _amode(*args, **kwargs, result_action="return_value")
 
 
 @pytest.fixture(scope="module")

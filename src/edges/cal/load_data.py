@@ -151,7 +151,10 @@ class Load:
         s11 = raw_s11.smoothed(s11_model_params, freqs=spec.freqs)
 
         if loss_model is not None:
-            if loss_model.spaams.freqs.size != spec.freqs.size:
+            if (
+                hasattr(loss_model, "sparams")
+                and loss_model.sparams.freqs.size != spec.freqs.size
+            ):
                 loss_model = attrs.evolve(
                     loss_model,
                     sparams=loss_model.sparams.smoothed(
