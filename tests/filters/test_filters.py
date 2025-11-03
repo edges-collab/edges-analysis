@@ -163,7 +163,12 @@ class TestXRFI:
 
     @pytest.mark.parametrize(
         "strategy",
-        ["flagged-nsamples", "flags-only", "flagged-nsamples-uniform", "nsamples-only"],
+        [
+            NsamplesStrategy.FLAGGED_NSAMPLES,
+            NsamplesStrategy.NSAMPLES_ONLY,
+            NsamplesStrategy.FLAGGED_NSAMPLES_UNIFORM,
+            NsamplesStrategy.FLAGS_ONLY,
+        ],
     )
     def test_nsamples_strategy(self, mock, strategy):
         data = filters.rfi_iterative_filter(

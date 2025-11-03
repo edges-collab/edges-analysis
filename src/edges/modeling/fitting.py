@@ -266,36 +266,22 @@ class ModelFit:
         )
 
 
-_dllpath = next(iter(Path(__file__).parent.glob("cqrd.*.so")))
-_dll = CDLL(_dllpath)
-_qrd = _dll.qrd
-_qrd.argtypes = [POINTER(c_longdouble), c_int, POINTER(c_double)]
-_qrd.restype = None
-
-_lfit = _dll.get_a_and_b
-
-_lfit.argtypes = [
-    c_int,
-    c_int,
-    POINTER(c_double),
-    POINTER(c_double),
-    POINTER(c_double),
-    POINTER(c_longdouble),
-    POINTER(c_double),
-]
-_lfit.restype = None
-
-
 def _c_qrd(a: np.ndarray, b: np.ndarray):
     """Solve a linear system using QR decomposition.
 
     This solves the system in the same way as Alan Roger's original C-code that was
     used for Bowman+2018.
     """
-    aa = a.copy().astype(np.float128)
+    dllpath = next(iter(Path(__file__).parent.glob("cqrd.*.so")))
+    dll = CDLL(dllpath)
+    qrd = dll.qrd
+    qrd.argtypes = [POINTER(c_longdouble), c_int, POINTER(c_double)]
+    qrd.restype = None
+
+    aa = a.copy().astype(np.longdouble)
     bb = b.copy().astype(np.float64)
 
-    _qrd(
+    qrd(
         aa.ctypes.data_as(POINTER(c_longdouble)),
         b.shape[0],
         bb.ctypes.data_as(POINTER(c_double)),
@@ -309,14 +295,29 @@ def _get_a_and_b(
     data: np.ndarray,
     weights: np.ndarray,
 ):
-    a = np.zeros(basis.shape[0] * basis.shape[0], dtype=np.float128)
+    dllpath = next(iter(Path(__file__).parent.glob("cqrd.*.so")))
+    dll = CDLL(dllpath)
+    lfit = dll.get_a_and_b
+
+    lfit.argtypes = [
+        c_int,
+        c_int,
+        POINTER(c_double),
+        POINTER(c_double),
+        POINTER(c_double),
+        POINTER(c_longdouble),
+        POINTER(c_double),
+    ]
+    lfit.restype = None
+
+    a = np.zeros(basis.shape[0] * basis.shape[0], dtype=np.longdouble)
     b = np.zeros(basis.shape[0], dtype=np.float64)
 
     basis = basis.astype(np.float64)
     data = data.astype(np.float64)
     weights = weights.astype(np.float64)
 
-    _lfit(
+    lfit(
         basis.shape[0],
         basis.shape[1],
         basis.ctypes.data_as(POINTER(c_double)),

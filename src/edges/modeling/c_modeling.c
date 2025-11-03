@@ -1,5 +1,6 @@
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h> // For malloc and free
 
 void qrd(long double a[], int n, double b[]) {
     /*
@@ -18,9 +19,15 @@ void qrd(long double a[], int n, double b[]) {
     */
     int i, j, k;
     int pi, pk;
-    long double c[n], d[n];
+    long double *c = (long double *)malloc(n * sizeof(long double)); // Allocate memory for 'n' long doubles
+    long double *d = (long double *)malloc(n * sizeof(long double)); // Allocate memory for 'n' long doubles
     long double scale, sigma, sum, tau;
-    long double qt[n][n], u[n][n];
+    long double **qt = (long double **)malloc(n * sizeof(long double *));
+    long double **u = (long double **)malloc(n * sizeof(long double *));
+    for (i = 0; i < n; i++) {
+        qt[i] = (long double *)malloc(n * sizeof(long double));
+        u[i] = (long double *)malloc(n * sizeof(long double));
+    }
 
     for (k = 0; k < n - 1; k++) {
         scale = 0.0;
