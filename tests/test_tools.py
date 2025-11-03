@@ -1,8 +1,32 @@
-"""Test the tools module."""
+"""Tests of the tools module."""
 
 import numpy as np
+import pytest
 
-from edges_analysis import tools
+from edges import tools
+
+
+def test_dct_to_list():
+    """Ensure simple dictionary is dealt with correctly."""
+    dct_of_lists = {"a": [1, 2], "b": [3, 4]}
+
+    list_of_dicts = tools.dct_of_list_to_list_of_dct(dct_of_lists)
+
+    assert list_of_dicts == [
+        {"a": 1, "b": 3},
+        {"a": 1, "b": 4},
+        {"a": 2, "b": 3},
+        {"a": 2, "b": 4},
+    ]
+
+
+def test_tuplify():
+    assert tools._tuplify((3, 4, 5, 3)) == (3, 4, 5, 3)
+    assert tools._tuplify((3.0, 4.0)) == (3, 4)
+    assert tools._tuplify(3) == (3, 3, 3) == tools._tuplify(3.0)
+
+    with pytest.raises(ValueError):
+        tools._tuplify("hey")
 
 
 class TestJoinStructArrays:

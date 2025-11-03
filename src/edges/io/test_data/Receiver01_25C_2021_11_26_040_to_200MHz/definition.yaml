@@ -1,0 +1,13 @@
+root_obs_dir: '../'
+
+prefer:
+  - Receiver01_25C_2020_11_26_040_to_200MHz
+
+measurements:
+  # Use this section to define any parameters of the run(s).
+  resistance_m:
+    01: 50.0
+    02: 50.0
+  resistance_f:
+    01: 50.0
+    02: 50.0

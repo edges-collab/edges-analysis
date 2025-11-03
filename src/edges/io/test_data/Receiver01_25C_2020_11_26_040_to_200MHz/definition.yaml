@@ -1,0 +1,45 @@
+# This file is an example file for "defining" an observation. It should be included
+# inside an observation directory, and provides meta-information about which files
+# are useful vs. not, and how to "complete" the observation if not all files are
+# available.
+
+# An observation definition in any included/preferred directory will be used to
+# complement this one.
+
+# A root observation directory from which all paths in this definition are relative
+# (unless specified as absolute).
+root_obs_dir: '../'
+
+include:
+  # List of directories to include to supplement this observation.
+  # These are only used if they are not available in this observation.
+  # Specifying a top-level directory means everything under it will be included.
+  - Receiver01_25C_2019_11_26_040_to_200MHz
+
+measurements:
+  # Use this section to define any parameters of the run(s).
+  resistance_m:
+    01: 50.0
+    02: 50.0
+  resistance_f:
+    01: 50.0
+    02: 50.0
+
+defaults:
+  # Use this section to give default run numbers / repeat numbers to use
+  # Note that you don't *need* this section: by default in the program, the last run
+  # will be used. Use this only if you know that the first run is better for some reason.
+  resistance:
+    run: 1        # Specifies which run to use (by default) for _all_ sources
+    hot_load: 2   # Specifies which run to use for hot_load. Over-rides 'run' if provided.
+  spectra:
+    ambient: 1    # use the first run for ambient (by default). Note that the default for all
+                  # other sources here will be the last available run. Also, spectra
+                  # can contain multiple files per-run, which are just merged in the read.
+  s11:
+    repeat: 1     # Sets the default repeat number for all s11 files.
+    run:    1     # Sets the default run number for all s11 files (within the repeat)
+    SwitchingState:
+      repeat: 2   # Default repeat for switching state
+      run:    1   # Default run num for switching state files
+      match:  2   # Default run num for match load within switching state.

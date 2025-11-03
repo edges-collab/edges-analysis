@@ -1,0 +1,38 @@
+[Ambient]
+alias = "ambient"
+misspells = [
+    "AmbientLoad",
+    "Ambient_Load",
+    "ambient_load",
+    "Ambient_load",
+]
+
+
+[HotLoad]
+alias = 'hot_load'
+misspells = [
+    "Hot_Load",
+]
+
+[LongCableOpen]
+alias = "open"
+misspells = [
+    "cable_open",
+    "long_cable_open",
+    "Long_Cable_Open",
+    "Open_Cable",
+    "open_cable"
+]
+
+[LongCableShorted]
+alias = "short"
+misspells = [
+    "LongCableShort",
+    "cable_short",
+    "long_cable_short",
+    "long_cable_shorted",
+    "cable_shorted",
+    "Short_cable",
+    "Short_Cable",
+    "shorted_cable",
+]
