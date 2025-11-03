@@ -1,0 +1,60 @@
+# This file is an example file for _externally_ "defining" an observation. \
+# It should not be included inside an observation directory, but rather it sets out
+# various files that should be included to form a full virtual observation.
+
+# This is supposed to be exact and exhaustive, and it will likely contain a lot of
+# repetition. However, you can use use the "write_observation_yaml" method in the
+# CalibrationObservation to do most of the work for you.
+
+# A root observation directory from which all paths in this definition are relative
+# (unless specified as absolute).
+root: ''
+
+meta:
+  year: 2020
+  month: 01
+  day: 01
+  rcv_num: 1
+  temp: 25
+  freq_low: 40
+  freq_hi: 200
+
+files:
+  # Files (absolute, or relative to 'root') defining the observation.
+  # This list *must* be complete. Categories that can take more than one file can
+  # take glob patterns, or specific lists.
+  spectra:
+    ambient:
+      - Receiver01_25C_2019_11_26_040_to_200MHz/Spectra/Ambient*
+    short:
+      - Receiver01_25C_2019_11_26_040_to_200MHz/Spectra/LongCableShorted*
+    open:
+      - Receiver01_25C_2019_11_26_040_to_200MHz/Spectra/LongCableOpen*
+    hot_load:
+      - Receiver01_25C_2019_11_26_040_to_200MHz/Spectra/HotLoad*
+    ant_sim4:
+      - Receiver01_25C_2020_11_26_040_to_200MHz/Spectra/AntSim4*
+  resistance:
+    ambient:
+      - Receiver01_25C_2019_11_26_040_to_200MHz/Resistance/Ambient*
+    short:
+      - Receiver01_25C_2019_11_26_040_to_200MHz/Resistance/LongCableShorted*
+    open:
+      - Receiver01_25C_2019_11_26_040_to_200MHz/Resistance/LongCableOpen*
+    hot_load:
+      - Receiver01_25C_2019_11_26_040_to_200MHz/Resistance/HotLoad*
+    ant_sim4:
+      - Receiver01_25C_2020_11_26_040_to_200MHz/Resistance/AntSim4*
+  s11:
+    ambient: ['Receiver01_25C_2019_11_26_040_to_200MHz/S11/Ambient01', 1]
+    hot_load: ['Receiver01_25C_2019_11_26_040_to_200MHz/S11/HotLoad01', 2]
+    open: ['Receiver01_25C_2019_11_26_040_to_200MHz/S11/LongCableOpen01', 1]
+    short: ['Receiver01_25C_2019_11_26_040_to_200MHz/S11/LongCableShorted01', 2]
+    receiver: ['Receiver01_25C_2019_11_26_040_to_200MHz/S11/ReceiverReading02', 1]
+    switch: ['Receiver01_25C_2020_11_26_040_to_200MHz/S11/SwitchingState01', 2]
+
+
+measurements:
+  # Use this section to define any parameters of the run(s).
+  resistance_m: 50.0
+  resistance_f: 50.0

@@ -3,7 +3,7 @@
 import numpy as np
 from pygsdata import GSFlag
 
-from edges_analysis.averaging import freqbin
+from edges.averaging import freqbin
 
 
 def test_freq_bin_direct(gsd_ones):
