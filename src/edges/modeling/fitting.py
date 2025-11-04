@@ -258,6 +258,13 @@ class ModelFit:
         """The Covariance matrix of the parameters."""
         return np.linalg.inv(self.hessian)
 
+    @cached_property
+    def parameter_correlation(self) -> np.ndarray:
+        """The correlation matrix of the parameters."""
+        cov = self.parameter_covariance
+        std = np.sqrt(np.diag(cov))
+        return cov / std[:, None] / std[None, :]
+
     def get_sample(self, size: int | tuple[int] = 1):
         """Generate a random sample from the posterior distribution."""
         rng = np.random.default_rng()
