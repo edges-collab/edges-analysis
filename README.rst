@@ -14,8 +14,8 @@ edges-analysis
 **Analysis and Calibration Code for the EDGES experiment**
 
 ``edges-analysis`` has methods for I/O, receiver calibration, averaging, filtering and
-calibrating EDGES data. The primary goal of the code is to allow the analysis to be
-fully reproducible, efficient, and clear.
+calibrating EDGES (and other global 21cm experiment) data. The primary goal of the code
+is to allow the analysis to be fully reproducible, efficient, and clear.
 
 Features
 ========

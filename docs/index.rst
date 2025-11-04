@@ -9,7 +9,7 @@ Contents
    License <license>
    Authors <authors>
    Changelog <changelog>
-   Usage <usage_overview>
+   Quickstart <usage_overview>
    Tutorials <tutorials>
    Calibration Observation File Structure <structure>
    API Reference <reference/index>

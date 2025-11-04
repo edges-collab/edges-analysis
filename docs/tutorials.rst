@@ -10,7 +10,6 @@ something specific.
 .. toctree::
    :maxdepth: 2
    demos/using_alanmod_b18
-   demos/rfi_algorithm_exploration
    demos/comparison_of_beamfactor_to_alan
    demos/beam_factor_sensitivities
 
