@@ -298,3 +298,32 @@ def test_shift_transform():
     x = np.linspace(0, 1, 10)
     t = mdl.ShiftTransform(shift=1)
     assert np.allclose(t.transform(x), x - 1)
+
+
+def test_parameter_covariance():
+    pl = mdl.Polynomial(parameters=[1, 2, 3])
+    model = pl.at(x=np.linspace(0, 1, 10))
+
+    data = model()
+    fit = mdl.ModelFit(model, ydata=data)
+
+    cov = fit.parameter_covariance
+    assert cov.shape == (3, 3)
+
+    corr = fit.parameter_correlation
+    assert corr.shape == (3, 3)
+    assert np.allclose(np.diag(corr), 1)
+
+
+def test_sample_from_posterior():
+    pl = mdl.Polynomial(parameters=[1, 2])
+    model = pl.at(x=np.linspace(0, 1, 10))
+
+    data = model()
+    fit = mdl.ModelFit(model, ydata=data)
+
+    samples = fit.get_sample(1000)
+    assert samples.shape == (1000, 2)
+
+    mean_params = np.mean(samples, axis=0)
+    assert np.allclose(mean_params, fit.model_parameters, atol=1e-1)

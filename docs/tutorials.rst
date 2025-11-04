@@ -10,6 +10,7 @@ you need to do something specific.
 .. toctree::
    :maxdepth: 2
 
+   demos/linear_modeling
    demos/using_alanmod_b18
    demos/comparison_of_beamfactor_to_alan
    demos/beam_factor_sensitivities
