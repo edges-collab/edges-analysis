@@ -6,7 +6,7 @@ The library is split into subpackages for different steps of the calibration and
 pipeline for the EDGES telescope, for example the ``io``, ``cal``, ``averaging``
 and ``analysis`` sub-packages. There are also submodules for calculating beam
 corrections, sky models, and other useful functions such as plotting.
-There is no "one way" to use the ``edges`` package -- it is a _collection_ of
+There is no "one way" to use the ``edges`` package -- it is a *collection* of
 routines that can be put together to form a data pipeline (the actual pipelining
 is not defined in this package). Nevertheless, there are aspects of the package
 that are unified, and make it much easier to work with global spectrum data.
