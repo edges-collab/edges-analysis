@@ -14,7 +14,7 @@ from pygsdata import GSData
 from pygsdata.select import select_freqs, select_times
 from read_acq.gsdata import read_acq_to_gsdata
 
-from edges.cal.s11.base import CalibratedSParams
+from edges.cal import sparams as sp
 from edges.frequencies import get_mask
 from edges.io.calobsdef3 import CalObsDefEDGES3
 
@@ -22,21 +22,23 @@ from .. import modeling as mdl
 from .. import types as tp
 from ..averaging.freqbin import gauss_smooth
 from ..averaging.lstbin import average_over_times
-from ..cal import reflection_coefficient as rc
 from ..cal.apply import approximate_temperature
-from ..cal.calobs import CalibrationObservation, Calibrator, Load
+from ..cal.calobs import CalibrationObservation, Calibrator, InputSource
 from ..cal.dicke import dicke_calibration
 from ..cal.loss import (
     LossFunctionGivenSparams,
     get_cable_loss_model,
     get_loss_model_from_file,
 )
-from ..cal.receiver_cal import get_calcoeffs_iterative
-from ..cal.s11 import CalibratedS11, StandardsReadings
-from ..cal.s11.receiver import correct_receiver_for_extra_cable
-from ..cal.s11.s11model import S11ModelParams
+from ..cal.receiver_cal import get_noise_wave_calibration_iterative
+from ..cal.sparams import (
+    CalkitReadings,
+    ReflectionCoefficient,
+    S11ModelParams,
+    SParams,
+    correct_receiver_for_extra_cable,
+)
 from ..cal.spectra import LoadSpectrum
-from ..io.vna import SParams
 from . import alanio
 
 logger = logging.getLogger(__name__)
@@ -53,31 +55,31 @@ def reads1p1(
     loadps: float = 33.0,
     openps: float = 33.0,
     shortps: float = 33.0,
-):
+) -> sp.ReflectionCoefficient:
     """Reads the s1p1 file and returns the data."""
-    standards = StandardsReadings(
-        open=SParams.from_s1p_file(s11_file_open),
-        short=SParams.from_s1p_file(s11_file_short),
-        match=SParams.from_s1p_file(s11_file_load),
+    standards = CalkitReadings(
+        open=sp.ReflectionCoefficient.from_s1p(s11_file_open),
+        short=sp.ReflectionCoefficient.from_s1p(s11_file_short),
+        match=sp.ReflectionCoefficient.from_s1p(s11_file_load),
     )
-    load = SParams.from_s1p_file(s11_file_ant)
-    freq = standards.freq
+    load = sp.ReflectionCoefficient.from_s1p(s11_file_ant)
+    freq = standards.freqs
 
-    calkit = rc.get_calkit(rc.AGILENT_ALAN, resistance_of_match=res * un.ohm)
+    calkit = sp.get_calkit(sp.AGILENT_ALAN, resistance_of_match=res * un.ohm)
 
     calkit = calkit.clone(
         short={"offset_delay": shortps * un.ps},
         open={"offset_delay": openps * un.ps},
         match={"offset_delay": loadps * un.ps},
     )
-    smatrix = rc.SMatrix.from_calkit_and_vna(calkit, standards)
-    calibrated = rc.gamma_de_embed(load.s11, smatrix)
-    return freq, calibrated
+    smatrix = sp.SParams.from_calkit_measurements(
+        model=calkit.at_freqs(freq), measurements=standards
+    )
+    return load.de_embed(smatrix)
 
 
 def corrcsv(
-    freq: np.ndarray | tp.FreqType,
-    s11: np.ndarray,
+    s11: sp.ReflectionCoefficient,
     cablen: float,
     cabdiel: float,
     cabloss: float,
@@ -99,13 +101,9 @@ def corrcsv(
     cabloss : float
         The cable loss, as a percent.
     """
-    if not hasattr(freq, "unit"):
-        freq = freq * un.MHz
-
     cable_length = (cablen * un.imperial.inch).to("m")
     return correct_receiver_for_extra_cable(
-        s11_in=s11,
-        freq=freq,
+        gamma=s11,
         cable_length=cable_length,
         cable_loss_percent=cabloss,
         cable_dielectric_percent=cabdiel,
@@ -342,10 +340,12 @@ def _get_load_s11s(
     s11mask: np.ndarray,
     s11freq: tp.FreqType,
     spec_freqs: tp.FreqType,
-) -> tuple[dict[str, CalibratedS11], S11ModelParams, dict[str, CalibratedS11]]:
+) -> tuple[
+    dict[str, ReflectionCoefficient], S11ModelParams, dict[str, ReflectionCoefficient]
+]:
     raw_s11s = {
-        name: CalibratedS11(
-            s11=s11[s11mask],
+        name: ReflectionCoefficient(
+            reflection_coefficient=s11[s11mask],
             freqs=s11freq,
         )
         for name, s11 in zip(
@@ -381,8 +381,8 @@ def _get_load_s11s(
 def _get_receiver_s11(params: EdgesScriptParams, s11lna, s11mask, s11freq, spec_fq):
     mt = mdl.Fourier if (params.nfit3 > 16 or params.lna_poly == 0) else mdl.Polynomial
 
-    raw_receiver = CalibratedS11(
-        s11=s11lna[s11mask],
+    raw_receiver = ReflectionCoefficient(
+        reflection_coefficient=s11lna[s11mask],
         freqs=s11freq,
     )
     model_transform = (
@@ -439,7 +439,7 @@ def _get_hotload_loss(
             fit_method="lstsq",
         )
 
-        hot_load_cable_s11 = CalibratedSParams(
+        hot_load_cable_s11 = SParams(
             s11=s11rig,
             s12=s12rig,
             s22=s22rig,
@@ -548,11 +548,11 @@ def edges(
     )
 
     loads = {
-        name: Load(
+        name: InputSource(
             spectrum=specs[name],
-            s11=load_s11s[name],
+            reflection_coefficient=load_s11s[name],
             raw_s11=raw_load_s11s[name],
-            loss=hot_loss_model(spec_fq, load_s11s[name].s11)
+            loss=hot_loss_model(load_s11s[name])
             if name == "hot_load" and hot_loss_model
             else np.ones(spec_fq.size),
             ambient_temperature=params.tcold * un.K,
@@ -563,7 +563,7 @@ def edges(
     calobs = CalibrationObservation(
         loads=loads, receiver=receiver, raw_receiver=raw_receiver
     )
-    calibrator = get_calcoeffs_iterative(
+    calibrator = get_noise_wave_calibration_iterative(
         calobs,
         cterms=params.cfit,
         wterms=params.wfit,
@@ -703,7 +703,7 @@ class Edges3CalobsParams:
             else:
                 s11def = caldef.receiver_s11
 
-            s11freq, raws11s[load] = reads1p1(
+            raws11s[load] = reads1p1(
                 s11_file_open=s11def.calkit.open,
                 s11_file_short=s11def.calkit.short,
                 s11_file_load=s11def.calkit.match,
@@ -717,7 +717,6 @@ class Edges3CalobsParams:
             if load == "receiver_s11":
                 # Correction for path length
                 raws11s[load] = corrcsv(
-                    s11freq,
                     raws11s[load],
                     self.lna_cable_length,
                     self.lna_cable_dielectric,
@@ -726,10 +725,11 @@ class Edges3CalobsParams:
 
             # Update the precision of the raws11s because we need to match the
             # C-code which writes to file and reads it back in.
+            s11freq = raws11s[load].freqs
             np.round(s11freq, decimals=16, out=s11freq)
             raws11s[load] = (
-                np.round(raws11s[load].real, decimals=16)
-                + np.round(raws11s[load].imag, decimals=16) * 1j
+                np.round(raws11s[load].reflection_coefficient.real, decimals=16)
+                + np.round(raws11s[load].reflection_coefficient.imag, decimals=16) * 1j
             )
         return s11freq, raws11s
 

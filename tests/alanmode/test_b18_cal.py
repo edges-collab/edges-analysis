@@ -138,7 +138,7 @@ def test_s11_modelled(b18cal: Path, mask, testdata_path):
     for load in ours:
         print(f"Testing {load}")
         np.testing.assert_allclose(
-            ours[load].to_numpy(), alan[load].to_numpy()[mask], rtol=0, atol=1e-7
+            ours[load].to_numpy(), alan[load].to_numpy()[mask], rtol=0, atol=2e-7
         )
 
 

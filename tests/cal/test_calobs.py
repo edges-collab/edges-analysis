@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 from astropy import units as un
 
-from edges.cal import CalibratedS11, CalibrationObservation, Calibrator
+from edges.cal import CalibrationObservation, Calibrator, ReflectionCoefficient
 from edges.io import CalObsDefEDGES2
 
 
@@ -39,8 +39,9 @@ class TestCalibrationObservation:
 
     def test_update(self, calobs: CalibrationObservation):
         c2 = calobs.clone(
-            receiver=CalibratedS11(
-                s11=np.zeros(calobs.freqs.size, dtype=complex), freqs=calobs.freqs
+            receiver=ReflectionCoefficient(
+                reflection_coefficient=np.zeros(calobs.freqs.size, dtype=complex),
+                freqs=calobs.freqs,
             )
         )
         assert c2 != calobs

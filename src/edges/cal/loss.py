@@ -7,14 +7,11 @@ import numpy as np
 from numpy import typing as npt
 from scipy.interpolate import InterpolatedUnivariateSpline as Spline
 
-from .. import types as tp
-from . import ee
-from . import reflection_coefficient as rc
-from .s11 import CalibratedSParams
+from . import sparams as sp
 
 
 def compute_cable_loss_from_scattering_params(
-    input_s11: npt.NDArray[complex], smatrix: rc.SMatrix | CalibratedSParams
+    input_s11: sp.ReflectionCoefficient, sparams: sp.SParams
 ) -> npt.NDArray[float]:
     """Compute loss from a cable, given the S-params of the cable, and input S11.
 
@@ -33,21 +30,24 @@ def compute_cable_loss_from_scattering_params(
     actual calls to this function generally throughout our calibration do make this
     assumption.
     """
-    s12 = smatrix.s12
-    s21 = smatrix.s21
-    s22 = smatrix.s22
+    s12 = sparams.s12
+    s21 = sparams.s21
+    s22 = sparams.s22
 
-    T = rc.gamma_de_embed(input_s11, smatrix)
+    T = input_s11.de_embed(sparams).reflection_coefficient
 
     return (
         np.abs(s12 * s21)
         * (1 - np.abs(T) ** 2)
-        / ((1 - np.abs(input_s11) ** 2) * np.abs(1 - s22 * T) ** 2)
+        / (
+            (1 - np.abs(input_s11.reflection_coefficient) ** 2)
+            * np.abs(1 - s22 * T) ** 2
+        )
     )
 
 
 def get_cable_loss_model(
-    cable: ee.CoaxialCable | str | Sequence[ee.CoaxialCable | str],
+    cable: sp.CoaxialCable | str | Sequence[sp.CoaxialCable | str],
 ) -> callable:
     """Return a callable loss model for a particular cable or series of cables.
 
@@ -64,16 +64,16 @@ def get_cable_loss_model(
         Either a string, or a CoaxialCable instance, or a list of such. If a string,
         it should be a name present in `ee.KNOWN_CABLES`.
     """
-    if isinstance(cable, ee.CoaxialCable | str):
+    if isinstance(cable, sp.CoaxialCable | str):
         cable = [cable]
 
-    cable = [c if isinstance(c, ee.CoaxialCable) else ee.KNOWN_CABLES[c] for c in cable]
+    cable = [c if isinstance(c, sp.CoaxialCable) else sp.KNOWN_CABLES[c] for c in cable]
 
-    def loss_model(freq, s11a):
-        s0 = cable[0].scattering_parameters(freq)
+    def loss_model(s11a: sp.ReflectionCoefficient) -> npt.NDArray:
+        s0 = cable[0].scattering_parameters(s11a.freqs)
         if len(cable) > 1:
             for cbl in cable[1:]:
-                ss = cbl.scattering_parameters(freq)
+                ss = cbl.scattering_parameters(s11a.freqs)
                 s0 = s0.cascade_with(ss)
 
         return compute_cable_loss_from_scattering_params(s11a, s0)
@@ -91,7 +91,7 @@ def get_loss_model_from_file(fname):
         data = np.genfromtxt(fl)
 
     spl = Spline(data[:, 0], data[:, 1])
-    return lambda freq, s11a: spl(freq)
+    return lambda s11a: spl(s11a.freqs)
 
 
 @attrs.define(slots=False, frozen=True)
@@ -104,11 +104,11 @@ class LossFunctionGivenSparams:
 
     """
 
-    sparams: CalibratedSParams = attrs.field(
-        validator=attrs.validators.instance_of(CalibratedSParams)
+    sparams: sp.SParams = attrs.field(
+        validator=attrs.validators.instance_of(sp.SParams)
     )
 
-    def __call__(self, freq: tp.FreqType, hot_load_s11: np.ndarray) -> np.ndarray:
+    def __call__(self, gamma: sp.ReflectionCoefficient) -> np.ndarray:
         """
         Calculate the power gain.
 
@@ -124,11 +124,9 @@ class LossFunctionGivenSparams:
         gain : np.ndarray
             The power gain as a function of frequency.
         """
-        if self.sparams.freqs.size != hot_load_s11.size:
+        if self.sparams.freqs.size != len(gamma.freqs):
             raise ValueError(
-                "Given hot_load_s11 doesn't have the same size as the S-params."
+                "Given gamma doesn't have the same length as the S-params."
             )
 
-        return compute_cable_loss_from_scattering_params(
-            hot_load_s11, self.sparams.smatrix
-        )
+        return compute_cable_loss_from_scattering_params(gamma, self.sparams)

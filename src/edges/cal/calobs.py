@@ -13,65 +13,60 @@ import numpy as np
 from astropy import units as un
 from astropy.convolution import Gaussian1DKernel, convolve
 
-from edges.cal.s11.base import CalibratedSParams
-from edges.cal.s11.s11model import S11ModelParams
-
 from .. import types as tp
 from ..cached_property import cached_property, safe_property
 from ..io import calobsdef, calobsdef3
 from ..io.serialization import hickleable
 from . import loss
-from . import noise_waves as rcf
-from . import reflection_coefficient as rc
+from . import noise_waves as nw
+from . import sparams as sp
 from .calibrator import Calibrator
-from .load_data import Load
+from .input_sources import InputSource, get_internal_switch_from_caldef
 from .loss import LossFunctionGivenSparams
-from .s11 import CalibratedS11
 
 
 @hickleable
 @attrs.define(slots=False, kw_only=True, frozen=True)
 class CalibrationObservation:
     """
-    A composite object representing a full Calibration Observation.
-
-    This includes spectra of all calibrators, and methods to find the calibration
-    parameters. It strictly follows Monsalve et al. (2017) in its formalism.
-    While by default the class uses the calibrator sources ("ambient", "hot_load",
-    "open", "short"), it can be modified to take other sources by setting
-    ``CalibrationObservation._sources`` to a new tuple of strings.
+    An object representing a full Calibration Observation.
 
     Parameters
     ----------
     loads
-        dictionary of load names to Loads
+        Dictionary of load names mapping to :class:`InputSource` objects.
     receiver
-        The object defining the reflection coefficient of the receiver.
-    metadata
-        Metadata associated with the data.
+        The reflection coefficient of the receiver.
     """
 
-    loads: dict[str, Load] = attrs.field()
-    receiver: CalibratedS11 = attrs.field()
-    _raw_receiver: CalibratedS11 | None = attrs.field(default=None)
+    loads: dict[str, InputSource] = attrs.field()
+    receiver: sp.ReflectionCoefficient = attrs.field(
+        validator=attrs.validators.instance_of(sp.ReflectionCoefficient)
+    )
+    _raw_receiver: sp.ReflectionCoefficient | None = attrs.field(
+        default=None,
+        validator=attrs.validators.optional(
+            attrs.validators.instance_of(sp.ReflectionCoefficient)
+        ),
+    )
 
     @property
-    def ambient(self) -> Load:
+    def ambient(self) -> InputSource:
         """The ambient load."""
         return self.loads["ambient"]
 
     @property
-    def hot_load(self) -> Load:
+    def hot_load(self) -> InputSource:
         """The hot load."""
         return self.loads["hot_load"]
 
     @property
-    def open(self) -> Load:
+    def open(self) -> InputSource:
         """The open load."""
         return self.loads["open"]
 
     @property
-    def short(self) -> Load:
+    def short(self) -> InputSource:
         """The short load."""
         return self.loads["short"]
 
@@ -83,13 +78,14 @@ class CalibrationObservation:
         freq_bin_size: int = 1,
         spectrum_kwargs: dict[str, dict[str, Any]] | None = None,
         s11_kwargs: dict[str, dict[str, Any]] | None = None,
-        internal_switch_kwargs: dict[str, Any] | None = None,
+        internal_calkit: sp.Calkit | None = None,
+        external_calkit_internal_switch: sp.Calkit | None = None,
         f_low: tp.FreqType = 40.0 * un.MHz,
         f_high: tp.FreqType = np.inf * un.MHz,
         receiver_kwargs: dict[str, Any] | None = None,
         restrict_s11_model_freqs: bool = True,
         loss_models: dict[str, callable] | None = None,
-        loss_model_params: S11ModelParams | None = None,
+        loss_model_params: sp.S11ModelParams | None = None,
     ) -> Self:
         """Create the object from an edges-io observation.
 
@@ -97,9 +93,6 @@ class CalibrationObservation:
         ----------
         caldef
             A calibration definition object from which all the data can be read.
-        semi_rigid_path : str or Path, optional
-            Path to a file containing S11 measurements for the semi rigid cable. Used to
-            correct the hot load S11. Found automatically if not given.
         freq_bin_size
             The size of each frequency bin (of the spectra) in units of the raw size.
         spectrum_kwargs
@@ -111,7 +104,7 @@ class CalibrationObservation:
             objects. See its documentation for relevant parameters. Parameters specified
             here are used for _all_ calibrator sources.
         internal_switch_kwargs
-            Keyword arguments used to instantiate the :class:`~s11.CalibratedSParams`
+            Keyword arguments used to instantiate the :class:`~s11.SParams`
             objects. See its documentation for relevant parameters. The same internal
             switch is used to calibrate the S11 for each input source.
         f_low : float
@@ -137,24 +130,30 @@ class CalibrationObservation:
         """
         receiver_kwargs = receiver_kwargs or {}
         if "calkit" not in receiver_kwargs:
-            receiver_kwargs["calkit"] = rc.get_calkit(
-                rc.AGILENT_85033E, resistance_of_match=caldef.receiver_female_resistance
+            receiver_kwargs["calkit"] = sp.get_calkit(
+                sp.AGILENT_85033E, resistance_of_match=caldef.receiver_female_resistance
             )
 
         loss_models = loss_models or {}
         if "hot_load" not in loss_models and caldef.hot_load.sparams_file is not None:
-            hot_load_cable_sparams = CalibratedSParams.from_hot_load_semi_rigid(
+            hot_load_cable_sparams = sp.read_semi_rigid_cable_sparams_file(
                 caldef.hot_load.sparams_file, f_low=f_low, f_high=f_high
             )
 
             loss_models["hot_load"] = LossFunctionGivenSparams(hot_load_cable_sparams)
+
+        internal_switch = get_internal_switch_from_caldef(
+            caldef,
+            external_calkit=external_calkit_internal_switch,
+            internal_calkit=internal_calkit,
+        )
 
         return cls._from_caldef(
             caldef=caldef,
             freq_bin_size=freq_bin_size,
             spectrum_kwargs=spectrum_kwargs,
             s11_kwargs=s11_kwargs,
-            internal_switch_kwargs=internal_switch_kwargs,
+            internal_switch=internal_switch,
             f_low=f_low,
             f_high=f_high,
             receiver_kwargs=receiver_kwargs,
@@ -195,7 +194,7 @@ class CalibrationObservation:
             objects. See its documentation for relevant parameters. Parameters specified
             here are used for _all_ calibrator sources.
         internal_switch_kwargs
-            Keyword arguments used to instantiate the :class:`~s11.CalibratedSParams`
+            Keyword arguments used to instantiate the :class:`~s11.SParams`
             objects. See its documentation for relevant parameters. The same internal
             switch is used to calibrate the S11 for each input source.
         f_low : float
@@ -230,8 +229,8 @@ class CalibrationObservation:
         receiver_kwargs = receiver_kwargs or {}
 
         default_rcv_kw = {
-            "calkit": rc.get_calkit(
-                rc.AGILENT_ALAN,
+            "calkit": sp.get_calkit(
+                sp.AGILENT_ALAN,
                 resistance_of_match=49.962 * un.Ohm,
             ),
             "cable_length": 4.26 * un.imperial.inch,
@@ -260,13 +259,13 @@ class CalibrationObservation:
         freq_bin_size: int = 1,
         spectrum_kwargs: dict[str, dict[str, Any]] | None = None,
         s11_kwargs: dict[str, dict[str, Any]] | None = None,
-        internal_switch_kwargs: dict[str, Any] | None = None,
+        internal_switch: sp.SParams | None = None,
         f_low: tp.FreqType = 40.0 * un.MHz,
         f_high: tp.FreqType = np.inf * un.MHz,
         receiver_kwargs: dict[str, Any] | None = None,
         restrict_s11_model_freqs: bool = True,
         loss_models: dict[str, callable] | None = None,
-        loss_model_params: S11ModelParams | None = None,
+        loss_model_params: sp.S11ModelParams | None = None,
         **kwargs,
     ) -> Self:
         """Create a CalibrationObservation from a "definition" of all required paths.
@@ -286,7 +285,7 @@ class CalibrationObservation:
             objects. See its documentation for relevant parameters. Parameters specified
             here are used for _all_ calibrator sources.
         internal_switch_kwargs
-            Keyword arguments used to instantiate the :class:`~s11.CalibratedSParams`
+            Keyword arguments used to instantiate the :class:`~s11.SParams`
             objects. See its documentation for relevant parameters. The same internal
             switch is used to calibrate the S11 for each input source.
         f_low : float
@@ -319,25 +318,20 @@ class CalibrationObservation:
 
         spectrum_kwargs = spectrum_kwargs or {}
         s11_kwargs = s11_kwargs or {}
-        internal_switch_kwargs = internal_switch_kwargs or {}
         receiver_kwargs = receiver_kwargs or {}
         loss_models = loss_models or {}
 
-        for v in [spectrum_kwargs, s11_kwargs, internal_switch_kwargs, receiver_kwargs]:
+        for v in [spectrum_kwargs, s11_kwargs, receiver_kwargs]:
             assert isinstance(v, dict)
 
         f_low = f_low.to("MHz", copy=False)
         f_high = f_high.to("MHz", copy=False)
 
         rcv_model_params = receiver_kwargs.pop(
-            "model_params", S11ModelParams.from_receiver_defaults()
+            "model_params", sp.receiver_model_params()
         )
-        raw_receiver = CalibratedS11.from_receiver_filespec(
-            pathspec=caldef.receiver_s11,
-            f_low=f_low if restrict_s11_model_freqs else 0 * un.MHz,
-            f_high=f_high if restrict_s11_model_freqs else np.inf * un.MHz,
-            **receiver_kwargs,
-        )
+
+        raw_receiver = sp.get_gamma_receiver_from_filespec(caldef, **receiver_kwargs)
 
         if "default" not in spectrum_kwargs:
             spectrum_kwargs["default"] = {}
@@ -346,7 +340,7 @@ class CalibrationObservation:
             spectrum_kwargs["default"]["freq_bin_size"] = freq_bin_size
 
         def get_load(name, ambient_temperature=298 * un.K):
-            return Load.from_caldef(
+            return InputSource.from_caldef(
                 caldef=caldef,
                 load_name=name,
                 f_low=f_low,
@@ -360,6 +354,7 @@ class CalibrationObservation:
                 restrict_s11_freqs=restrict_s11_model_freqs,
                 loss_model=loss_models.get(name, None),
                 loss_model_params=loss_model_params,
+                internal_switch=internal_switch,
             )
 
         amb = get_load("ambient")
@@ -382,7 +377,7 @@ class CalibrationObservation:
                 loss_models[name] = attrs.evolve(
                     loss_model,
                     sparams=loss_model.sparams.smoothed(
-                        params=S11ModelParams.from_hot_load_cable_defaults(),
+                        params=sp.hot_load_cable_model_params(),
                         freqs=amb.freqs,
                     ),
                 )
@@ -404,21 +399,24 @@ class CalibrationObservation:
         """Names of the loads."""
         return tuple(self.loads.keys())
 
-    def averaged_spectrum(self, load: Load, t_load_ns: float, t_load: float):
+    def averaged_spectrum(self, load: InputSource, t_load_ns: float, t_load: float):
         """Compute a quick guess at the calibrated spectrum of a given load."""
         return load.spectrum.q.data.squeeze() * t_load_ns + t_load
 
     @cached_property
-    def load_s11_models(self):
+    def load_s11_models(self) -> dict[str, np.ndarray]:
         """Dictionary of S11 correction models, one for each source."""
-        return {name: source.s11.s11 for name, source in self.loads.items()}
+        return {
+            name: source.reflection_coefficient.reflection_coefficient
+            for name, source in self.loads.items()
+        }
 
     @cached_property
     def source_thermistor_temps(self) -> dict[str, tp.TemperatureType]:
         """Dictionary of input source thermistor temperatures."""
         return {k: source.temp_ave for k, source in self.loads.items()}
 
-    def _load_str_to_load(self, load: Load | str):
+    def _load_str_to_load(self, load: InputSource | str):
         if isinstance(load, str):
             try:
                 load = self.loads[load]
@@ -427,8 +425,8 @@ class CalibrationObservation:
                     f"load must be a Load object or a string (one of {self.load_names})"
                 ) from e
         else:
-            assert isinstance(load, Load), (
-                f"load must be a Load instance, got the {load} {type(Load)}"
+            assert isinstance(load, InputSource), (
+                f"load must be a Load instance, got the {load} {type(InputSource)}"
             )
         return load
 
@@ -436,12 +434,10 @@ class CalibrationObservation:
         self,
     ) -> dict[str, tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]]:
         """Get the source-S11-dependent factors of Monsalve (2017) Eq. 7."""
-        gamma_ants = {name: load.s11.s11 for name, load in self.loads.items()}
-
         lna_s11 = self.receiver.s11
         return {
-            name: rcf.get_K(gamma_rec=lna_s11, gamma_ant=gamma_ant)
-            for name, gamma_ant in gamma_ants.items()
+            name: nw.get_K(gamma_rec=lna_s11, gamma_ant=gamma_ant)
+            for name, gamma_ant in self.load_s11_models.items()
         }
 
     def get_calibration_residuals(
@@ -480,7 +476,7 @@ class CalibrationObservation:
         return attrs.evolve(self, **kwargs)
 
     @property
-    def receiver_s11(self) -> CalibratedS11:
+    def receiver_s11(self) -> sp.ReflectionCoefficient:
         """The S11 of the receiver."""
         return self.receiver.s11
 
@@ -502,7 +498,9 @@ class CalibrationObservation:
 
         kw = {}
         if receiver is not None:
-            receiver = CalibratedS11(s11=receiver, freqs=self.freqs)
+            receiver = sp.ReflectionCoefficient(
+                reflection_coefficient=receiver, freqs=self.freqs
+            )
             kw["receiver"] = receiver
 
         if (
@@ -515,7 +513,10 @@ class CalibrationObservation:
             if source_s11s is not None:
                 for name, s in source_s11s.items():
                     newloads[name] = attrs.evolve(
-                        newloads[name], s11=CalibratedS11(freqs=self.freqs, s11=s)
+                        newloads[name],
+                        reflection_coefficient=sp.ReflectionCoefficient(
+                            freqs=self.freqs, reflection_coefficient=s
+                        ),
                     )
 
             if averaged_q is not None or thermistor_temp_ave is not None:

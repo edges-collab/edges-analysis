@@ -8,17 +8,16 @@ import numpy as np
 import numpy.typing as npt
 from astropy import units as un
 
-from ..cal import ee, loss
-from ..cal.s11 import CalibratedS11
+from ..cal import loss
+from ..cal import sparams as sp
 from ..config import config
 
 
 def low2_balun_connector_loss(
-    freq: un.Quantity[un.MHz],
-    ants11: np.ndarray | CalibratedS11 | str | Path,
+    ants11: sp.ReflectionCoefficient | str | Path,
     use_approx_eps0: bool = True,
-    connector: ee.CoaxialCable = ee.KNOWN_CABLES["SC3792 Connector"],
-    balun: ee.CoaxialCable = ee.KNOWN_CABLES["lowband-balun-tube"],
+    connector: sp.CoaxialCable = sp.KNOWN_CABLES["SC3792 Connector"],
+    balun: sp.CoaxialCable = sp.KNOWN_CABLES["lowband-balun-tube"],
 ) -> npt.NDArray:
     """Obtain the balun and connector loss for the low-2 instrument on-site at MRO.
 
@@ -51,19 +50,10 @@ def low2_balun_connector_loss(
 
     # Get the antenna s11
     if isinstance(ants11, str | Path):
-        ants11 = CalibratedS11.from_file(ants11).s11
-    elif isinstance(ants11, CalibratedS11):
-        ants11 = ants11.s11
-
-    try:
-        ants11 = np.asarray(ants11)
-    except Exception as e:
-        raise ValueError(
-            "ants11 must be a numpy array or a S11Model instance or path."
-        ) from e
+        ants11 = sp.ReflectionCoefficient.from_file(ants11)
 
     mdl = loss.get_cable_loss_model([connector, balun])
-    return mdl(freq, ants11)
+    return mdl(ants11)
 
 
 def _get_loss(fname: str | Path, freq: np.ndarray, n_terms: int) -> np.ndarray:

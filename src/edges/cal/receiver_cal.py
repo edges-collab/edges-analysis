@@ -14,7 +14,7 @@ from .noise_waves import get_calibration_quantities_iterative as _get_cc_iterati
 logger = logging.getLogger(__name__)
 
 
-def get_calcoeffs_iterative(
+def get_noise_wave_calibration_iterative(
     calobs: CalibrationObservation,
     *,
     cterms: int = 5,
@@ -82,7 +82,10 @@ def get_calcoeffs_iterative(
             calobs.freqs,
             source_q=source_q,
             receiver_s11=calobs.receiver.s11,
-            source_s11s={name: load.s11.s11 for name, load in calobs.loads.items()},
+            source_s11s={
+                name: load.reflection_coefficient.s11
+                for name, load in calobs.loads.items()
+            },
             source_true_temps=source_true_temps,
             cterms=cterms,
             wterms=wterms,
@@ -146,7 +149,9 @@ def perform_term_sweep(
 
     for i, c in enumerate(cterms):
         for j, w in enumerate(wterms):
-            calibrator = get_calcoeffs_iterative(calobs, cterms=c, wterms=w, **kwargs)
+            calibrator = get_noise_wave_calibration_iterative(
+                calobs, cterms=c, wterms=w, **kwargs
+            )
 
             res = calobs.get_rms(calibrator)
             dof = len(calobs.freqs) * len(calobs.loads) - c - w

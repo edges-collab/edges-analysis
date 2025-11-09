@@ -10,6 +10,7 @@ from pygsdata import KNOWN_TELESCOPES, GSData
 from read_acq.gsdata import write_gsdata_to_acq
 
 from edges import alanmode as am
+from edges.cal import ReflectionCoefficient
 from edges.frequencies import edges_raw_freqs
 
 
@@ -117,8 +118,10 @@ class TestACQPlot7AMoon:
 
 class TestCorrcsv:
     def test_zero_cable_length(self):
-        freq = np.linspace(50, 100, 101) * un.MHz
-        s11 = np.zeros(len(freq), dtype=complex)
+        freqs = np.linspace(50, 100, 101) * un.MHz
+        s11 = ReflectionCoefficient(
+            reflection_coefficient=np.zeros(len(freqs), dtype=complex), freqs=freqs
+        )
 
-        corr = am.corrcsv(freq=freq, s11=s11, cablen=0, cabdiel=0, cabloss=0)
-        np.testing.assert_allclose(corr, 0, atol=1e-15)
+        corr = am.corrcsv(s11, cablen=0, cabdiel=0, cabloss=0)
+        np.testing.assert_allclose(corr.reflection_coefficient, 0, atol=1e-15)

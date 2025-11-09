@@ -259,7 +259,9 @@ def write_modelled_s11s(
     If a HotLoadCorrection exists, also write the rigid cable S-parameters, as
     edges2k.c does, otherwise assume the edges3.c format.
     """
-    s11m = {name: load.s11.s11 for name, load in calobs.loads.items()}
+    s11m = {
+        name: load.reflection_coefficient.s11 for name, load in calobs.loads.items()
+    }
     lna = calobs.receiver.s11
     if isinstance(hot_loss_model, LossFunctionGivenSparams):
         s11m |= {
