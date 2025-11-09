@@ -16,7 +16,15 @@ def calibrate_loads11_with_switch(
     load_s11: np.ndarray,
     internal_switch: CalibratedSParams,
 ) -> CalibratedS11:
-    """Generate the LoadS11 from an uncalibrated load and internal switch."""
+    """De-Embed the internal switch from the load S11 measurements.
+
+    Parameters
+    ----------
+    load_s11
+        The uncalibrated load S11 measurements.
+    internal_switch
+        The S-parameters of the internal switch two-port network.
+    """
     if not hasattr(load_s11, "__len__"):
         load_s11 = [load_s11]
 

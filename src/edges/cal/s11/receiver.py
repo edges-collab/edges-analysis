@@ -66,8 +66,9 @@ def get_receiver_s11model_from_filespec(
 
     Parameters
     ----------
-    path : str or Path
-        Path to overall Calibration Observation.
+    pathspec
+        A single ReceiverS11 filespec or a list of such. These define the paths
+        to the S11 measurement files for the receiver.
     run_num_load : int
         The run to use for the LNA (default latest available).
     run_num_switch : int
