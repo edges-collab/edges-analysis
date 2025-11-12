@@ -1,14 +1,13 @@
 """Functions for calibrating the receiver reflection coefficients."""
 
-from collections.abc import Sequence
-
 import numpy as np
 from astropy import units as un
 from astropy.constants import c as speed_of_light
 
 from edges import types as tp
 from edges.io import CalObsDefEDGES2, CalObsDefEDGES3
-from edges.modeling import Fourier, UnitTransform
+from edges.io.calobsdef import ReceiverS11
+from edges.modeling import ComplexRealImagModel, Fourier, ZerotooneTransform
 
 from .. import (
     AGILENT_85033E,
@@ -17,6 +16,8 @@ from .. import (
     ReflectionCoefficient,
     S11ModelParams,
     SParams,
+    average_reflection_coefficients,
+    get_calkit,
 )
 
 
@@ -122,8 +123,8 @@ def correct_receiver_for_extra_cable(
 
 # Constructor Methods
 def calibrate_gamma_receiver(
-    calkit_measurements: CalkitReadings | Sequence[CalkitReadings],
-    gamma_receiver: ReflectionCoefficient | Sequence[ReflectionCoefficient],
+    calkit_measurements: CalkitReadings,
+    gamma_receiver: ReflectionCoefficient,
     calkit: Calkit = AGILENT_85033E,
     cable_length: tp.LengthType = 0.0 * un.cm,
     cable_loss_percent: float = 0.0,
@@ -155,52 +156,77 @@ def calibrate_gamma_receiver(
     ReflectionCoefficient
         The calibrated receiver reflection coefficient.
     """
-    if not hasattr(calkit_measurements, "__len__"):
-        calkit_measurements = [calkit_measurements]
-    if not hasattr(gamma_receiver, "__len__"):
-        gamma_receiver = [gamma_receiver]
+    freqs = calkit_measurements.freqs
 
-    freqs = calkit_measurements[0].freqs
-
-    s11s = []
-    for standards, gamma_rcv in zip(calkit_measurements, gamma_receiver, strict=True):
-        # De-embed the small "offset" in the VNA to calibrate the receiver
-        # reflection coefficient to the correct reference plane.
-        smatrix = SParams.from_calkit_measurements(
-            model=calkit.at_freqs(freqs), measurements=standards
-        )
-        gamma_rcv = gamma_rcv.de_embed(smatrix)
-
-        if cable_length != 0 * un.m:
-            gamma_rcv = correct_receiver_for_extra_cable(
-                gamma=gamma_rcv,
-                cable_length=cable_length,
-                cable_dielectric_percent=cable_dielectric_percent,
-                cable_loss_percent=cable_loss_percent,
-            )
-
-        s11s.append(gamma_rcv.reflection_coefficient)
-
-    return ReflectionCoefficient(
-        reflection_coefficient=np.mean(s11s, axis=0), freqs=freqs
+    # De-embed the small "offset" in the VNA to calibrate the receiver
+    # reflection coefficient to the correct reference plane.
+    smatrix = SParams.from_calkit_measurements(
+        model=calkit.at_freqs(freqs), measurements=calkit_measurements
     )
+    gamma_rcv = gamma_receiver.de_embed(smatrix)
+
+    if cable_length != 0 * un.m:
+        gamma_rcv = correct_receiver_for_extra_cable(
+            gamma=gamma_rcv,
+            cable_length=cable_length,
+            cable_dielectric_percent=cable_dielectric_percent,
+            cable_loss_percent=cable_loss_percent,
+        )
+
+    return gamma_rcv
 
 
-def receiver_model_params(find_model_delay: bool = True, **kwargs) -> S11ModelParams:
+def receiver_model_params(
+    find_model_delay: bool = True, complex_model_type=ComplexRealImagModel, **kwargs
+) -> S11ModelParams:
     """Get default S11ModelParams for receiver S11 modeling."""
     model = kwargs.pop(
-        "model", Fourier(n_terms=37, transform=UnitTransform(range=(0, 1)))
+        "model",
+        Fourier(n_terms=11, transform=ZerotooneTransform(range=(1, 2)), period=1.5),
     )
 
-    return S11ModelParams(model=model, find_model_delay=find_model_delay, **kwargs)
+    return S11ModelParams(
+        model=model,
+        find_model_delay=find_model_delay,
+        complex_model_type=complex_model_type,
+        **kwargs,
+    )
 
 
 def get_gamma_receiver_from_filespec(
-    caldef: CalObsDefEDGES2 | CalObsDefEDGES3, **kwargs
+    caldef: CalObsDefEDGES2 | CalObsDefEDGES3 | ReceiverS11,
+    calkit: Calkit | None = None,
+    calkit_overrides: dict | None = None,
+    **kwargs,
 ) -> ReflectionCoefficient:
     """Get the calibrated receiver reflection coeff from a calibration definition."""
-    return calibrate_gamma_receiver(
-        calkit_measurements=CalkitReadings.from_filespec(caldef.receiver_s11.calkit),
-        gamma_receiver=ReflectionCoefficient.from_s1p(caldef.receiver_s11.device),
-        **kwargs,
-    )
+    if isinstance(caldef, CalObsDefEDGES2 | CalObsDefEDGES3):
+        rcvdef = caldef.receiver_s11
+    else:
+        rcvdef = caldef
+
+    if not hasattr(rcvdef, "__len__"):
+        rcvdef = [rcvdef]
+
+    gamma_rcv = []
+    for rcv in rcvdef:
+        if calkit is None:
+            this_calkit = get_calkit(
+                rcv.calkit_name, resistance_of_match=rcv.calkit_match_resistance
+            )
+        else:
+            this_calkit = calkit
+
+        if calkit_overrides is not None:
+            this_calkit = get_calkit(this_calkit, **calkit_overrides)
+
+        gamma_rcv.append(
+            calibrate_gamma_receiver(
+                calkit_measurements=CalkitReadings.from_filespec(rcv.calkit),
+                gamma_receiver=ReflectionCoefficient.from_s1p(rcv.device),
+                calkit=this_calkit,
+                **kwargs,
+            )
+        )
+
+    return average_reflection_coefficients(gamma_rcv)

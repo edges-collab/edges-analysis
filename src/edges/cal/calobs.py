@@ -21,7 +21,7 @@ from . import loss
 from . import noise_waves as nw
 from . import sparams as sp
 from .calibrator import Calibrator
-from .input_sources import InputSource, get_internal_switch_from_caldef
+from .input_sources import InputSource
 from .loss import LossFunctionGivenSparams
 
 
@@ -86,6 +86,9 @@ class CalibrationObservation:
         restrict_s11_model_freqs: bool = True,
         loss_models: dict[str, callable] | None = None,
         loss_model_params: sp.S11ModelParams | None = None,
+        internal_switch_temperature: tp.TemperatureType | None = None,
+        internal_switch_model_params: sp.S11ModelParams
+        | None = sp.internal_switch_model_params(),
     ) -> Self:
         """Create the object from an edges-io observation.
 
@@ -131,7 +134,10 @@ class CalibrationObservation:
         receiver_kwargs = receiver_kwargs or {}
         if "calkit" not in receiver_kwargs:
             receiver_kwargs["calkit"] = sp.get_calkit(
-                sp.AGILENT_85033E, resistance_of_match=caldef.receiver_female_resistance
+                sp.AGILENT_85033E,
+                resistance_of_match=caldef.receiver_s11.calkit_match_resistance
+                if hasattr(caldef.receiver_s11, "calkit_match_resistance")
+                else caldef.receiver_s11[0].calkit_match_resistance,
             )
 
         loss_models = loss_models or {}
@@ -142,11 +148,18 @@ class CalibrationObservation:
 
             loss_models["hot_load"] = LossFunctionGivenSparams(hot_load_cable_sparams)
 
-        internal_switch = get_internal_switch_from_caldef(
+        internal_switch = sp.get_internal_switch_from_caldef(
             caldef,
             external_calkit=external_calkit_internal_switch,
             internal_calkit=internal_calkit,
+            measured_temperature=internal_switch_temperature,
         )
+
+        if internal_switch_model_params is not None:
+            internal_switch = internal_switch.smoothed(
+                internal_switch_model_params,
+                freqs=internal_switch.freqs,
+            )
 
         return cls._from_caldef(
             caldef=caldef,

@@ -327,6 +327,7 @@ class CalObsDefEDGES3:
         s11_hour: int | str = "first",
         allow_closest_s11_within: int = 5,
         specfmt: Literal["acq", "gsh5"] = "acq",
+        receiver_metadata: dict | None = None,
     ) -> Self:
         """
         Create a CalObsDefEDGES3 instance from the standard directory layout.
@@ -390,6 +391,8 @@ class CalObsDefEDGES3:
         rcv = ReceiverS11(
             calkit=rcv_calkit,
             device=rcv_calkit.open.parent / rcv_calkit.open.name.replace("_O", ""),
+            metadata=receiver_metadata
+            or {"calkit_match_resistance": 49.8, "calkit": "AGILENT_ALAN"},
         )
 
         # Get the actual S11 date from the rcv

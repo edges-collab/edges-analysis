@@ -59,7 +59,30 @@ def get_delay(
 @hickleable
 @attrs.define(kw_only=True, frozen=True)
 class S11ModelParams:
-    """A class holding parameters required to model an S11."""
+    """A class holding parameters required to model an S11.
+
+    Parameters
+    ----------
+    model
+        The linear model used to fit each component of the data (real/imag or abs/phase)
+    complex_model_type
+        The type of complex model to use (ComplexMagPhaseModel or ComplexRealImagModel).
+    find_model_delay
+        Whether to find and remove a delay in the S11 data before fitting the model.
+    optimize_model_delay
+        Whether to optimize the model delay using a minimization routine (by default,
+        do a simple grid search).
+    model_delay
+        If not finding the model delay, use this fixed delay value.
+    set_transform_range
+        Whether to set the transform range/scale based on the frequency range of the
+        data.
+    fit_method
+        The fitting method to use when fitting the model to the data, see
+        :func:`edges.modeling.fitting.ModelFit`.
+    combine_s12s21
+        Whether to fit to s12*s21 instead of fitting s12 and s21 separately.
+    """
 
     model: Model = attrs.field(
         default=Fourier(n_terms=55, transform=UnitTransform(range=(0, 1)))
@@ -72,6 +95,7 @@ class S11ModelParams:
     model_delay: tp.TimeType = attrs.field(default=0 * un.s)
     set_transform_range: bool = attrs.field(default=True, converter=bool)
     fit_method: str = attrs.field(default="lstsq")
+    combine_s12s21: bool = attrs.field(default=True)
 
     def clone(self, **kwargs):
         """Clone with new parameters."""
@@ -193,7 +217,7 @@ def new_s11_modelled(
 
 def smooth_sparams(
     sparams: SParams,
-    params: S11ModelParams,
+    params: S11ModelParams | dict[str, S11ModelParams],
     freqs: tp.FreqType | None = None,
 ) -> SParams:
     """Smooth all S-parameters using the S11 modeling procedure.
@@ -213,29 +237,45 @@ def smooth_sparams(
     smoothed_sparams
         A new SParams object that has been smoothed.
     """
-    s11 = new_s11_modelled(
-        ReflectionCoefficient(freqs=sparams.freqs, reflection_coefficient=sparams.s11),
-        params,
-        freqs=freqs,
-    ).reflection_coefficient
+    if freqs is None:
+        freqs = sparams.freqs
 
-    s12 = new_s11_modelled(
-        ReflectionCoefficient(freqs=sparams.freqs, reflection_coefficient=sparams.s12),
-        params,
-        freqs=freqs,
-    ).reflection_coefficient
-    s21 = new_s11_modelled(
-        ReflectionCoefficient(freqs=sparams.freqs, reflection_coefficient=sparams.s21),
-        params,
-        freqs=freqs,
-    ).reflection_coefficient
-    s22 = new_s11_modelled(
-        ReflectionCoefficient(freqs=sparams.freqs, reflection_coefficient=sparams.s22),
-        params,
-        freqs=freqs,
-    ).reflection_coefficient
+    if isinstance(params, S11ModelParams):
+        params = {"s11": params, "s12": params, "s21": params, "s22": params}
 
-    return SParams(freqs=freqs, s11=s11, s12=s12, s21=s21, s22=s22)
+    if not params["s11"].combine_s12s21:
+        keys = ["s11", "s12", "s21", "s22"]
+    else:
+        keys = ["s11", "s22"]
+
+    out = {
+        param_name: new_s11_modelled(
+            ReflectionCoefficient(
+                freqs=sparams.freqs, reflection_coefficient=getattr(sparams, param_name)
+            ),
+            params[param_name],
+            freqs=freqs,
+        ).reflection_coefficient
+        for param_name in keys
+    }
+
+    if params["s11"].combine_s12s21:
+        s12_s21 = ReflectionCoefficient(
+            freqs=sparams.freqs,
+            reflection_coefficient=(sparams.s12 * sparams.s21),
+        )
+        s12_s21_smoothed = new_s11_modelled(
+            s12_s21,
+            params["s12"],
+            freqs=freqs,
+        ).reflection_coefficient
+
+        out |= {
+            "s12": np.sqrt(s12_s21_smoothed),
+            "s21": np.sqrt(s12_s21_smoothed),
+        }
+
+    return SParams(freqs=freqs, **out)
 
 
 # Attach methods to classes for

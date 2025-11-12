@@ -17,32 +17,6 @@ from .sparams import ReflectionCoefficient
 from .spectra import LoadSpectrum
 
 
-def get_internal_switch_from_caldef(
-    caldef: CalObsDefEDGES2,
-    external_calkit: sp.Calkit | None = None,
-    internal_calkit: sp.Calkit | None = None,
-) -> sp.SParams:
-    """Obtain the S-parameters of the internal switch from a caldef."""
-    if external_calkit is None:
-        external_calkit = sp.get_calkit(
-            sp.AGILENT_85033E, resistance_of_match=caldef.male_resistance
-        )
-
-    internal_calkit_measurements = sp.CalkitReadings.from_filespec(
-        caldef.switching_state.internal
-    )
-    external_calkit_measurements = sp.CalkitReadings.from_filespec(
-        caldef.switching_state.external
-    )
-
-    return sp.get_internal_switch_sparams(
-        internal_osl=internal_calkit_measurements,
-        external_osl=external_calkit_measurements,
-        external_calkit=external_calkit,
-        internal_calkit=internal_calkit,
-    )
-
-
 @hickleable
 @attrs.define(kw_only=True)
 class InputSource:
@@ -190,9 +164,6 @@ class InputSource:
         )
 
         # Fill up kwargs with keywords from this instance
-        # TODO: here we only use the calkit defined for the FIRST switching_state,
-        # instead of using each calkit for each switching_state. To fix this, we require
-        # having meta information inside the S11/ directory.
         s11_kwargs["f_low"] = f_low if restrict_s11_freqs else 0 * un.MHz
         s11_kwargs["f_high"] = f_high if restrict_s11_freqs else np.inf * un.MHz
 

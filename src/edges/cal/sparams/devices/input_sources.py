@@ -1,8 +1,18 @@
 """Functions for calibrating input source reflection coefficients."""
 
-from edges.modeling import Fourier, UnitTransform
+from collections.abc import Sequence
 
-from .. import Calkit, CalkitReadings, ReflectionCoefficient, S11ModelParams, SParams
+from edges.io import CalObsDefEDGES2, CalObsDefEDGES3, LoadS11
+from edges.modeling import ComplexRealImagModel, Fourier, ZerotooneTransform
+
+from .. import (
+    Calkit,
+    CalkitReadings,
+    ReflectionCoefficient,
+    S11ModelParams,
+    SParams,
+    average_reflection_coefficients,
+)
 
 
 def calibrate_gamma_src(
@@ -48,20 +58,55 @@ def calibrate_gamma_src(
     return gamma_src
 
 
+def get_gamma_src_from_filespec(
+    caldef: CalObsDefEDGES2 | CalObsDefEDGES3 | LoadS11 | Sequence[LoadS11],
+    source: str | None = None,
+    **kwargs,
+) -> ReflectionCoefficient:
+    """Get the calibrated receiver reflection coeff from a calibration definition."""
+    if isinstance(caldef, CalObsDefEDGES2 | CalObsDefEDGES3):
+        srcdef = getattr(caldef, source)
+    else:
+        srcdef = caldef
+
+    if not hasattr(srcdef, "__len__"):
+        srcdef = [srcdef]
+
+    gamma_src = []
+    for src in srcdef:
+        gsrc = ReflectionCoefficient.from_s1p(src.external)
+        calkit = CalkitReadings.from_filespec(src.calkit)
+
+        gamma_src.append(
+            calibrate_gamma_src(
+                gamma_src=gsrc,
+                internal_osl=calkit,
+                **kwargs,
+            )
+        )
+
+    return average_reflection_coefficients(gamma_src)
+
+
 def input_source_model_params(
-    name: str, find_model_delay: bool = True, **kwargs
+    name: str,
+    find_model_delay: bool = True,
+    complex_model_type=ComplexRealImagModel,
+    **kwargs,
 ) -> S11ModelParams:
     """Return the default input source S11 model parameters."""
-    default_nterms = {
-        "ambient": 37,
-        "hot_load": 37,
-        "open": 105,
-        "short": 105,
-    }
-    n_terms = default_nterms.get(name, 37)
+    n_terms = 27  # default_nterms.get(name, 37)
 
     model = kwargs.pop(
-        "model", Fourier(n_terms=n_terms, transform=UnitTransform(range=(0, 1)))
+        "model",
+        Fourier(
+            n_terms=n_terms, transform=ZerotooneTransform(range=(0, 1)), period=1.5
+        ),
     )
 
-    return S11ModelParams(model=model, find_model_delay=find_model_delay, **kwargs)
+    return S11ModelParams(
+        model=model,
+        find_model_delay=find_model_delay,
+        complex_model_type=complex_model_type,
+        **kwargs,
+    )

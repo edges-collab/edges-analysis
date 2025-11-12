@@ -26,17 +26,26 @@ from .core.s11model import (
     smooth_sparams,
 )
 from .core.sparam_calibration import (
+    average_reflection_coefficients,
+    average_sparams,
     gamma2impedance,
     gamma_de_embed,
     gamma_embed,
     impedance2gamma,
 )
 from .devices.hot_load_cable import (
+    get_hot_load_semi_rigid_from_filespec,
     hot_load_cable_model_params,
     read_semi_rigid_cable_sparams_file,
 )
-from .devices.input_sources import calibrate_gamma_src, input_source_model_params
+from .devices.input_sources import (
+    calibrate_gamma_src,
+    get_gamma_src_from_filespec,
+    input_source_model_params,
+)
 from .devices.internal_switch import (
+    combine_internal_switch_sparams,
+    get_internal_switch_from_caldef,
     get_internal_switch_sparams,
     internal_switch_model_params,
 )

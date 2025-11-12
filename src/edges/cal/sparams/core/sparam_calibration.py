@@ -4,6 +4,8 @@ Functions for de-embedding and embedding 2-port networks,
 as well as generating S-parameters from calkit measurements.
 """
 
+from collections.abc import Sequence
+
 import numpy as np
 
 from .datatypes import CalkitReadings, ReflectionCoefficient, SParams
@@ -224,6 +226,27 @@ def de_embed_network_from_calkit_measurements(
         kind: getattr(measurements, kind).de_embed(sparams)
         for kind in ("open", "short", "match")
     })
+
+
+def average_reflection_coefficients(
+    s: Sequence[ReflectionCoefficient],
+) -> ReflectionCoefficient:
+    """Average multiple reflection coefficients."""
+    return ReflectionCoefficient(
+        freqs=s[0].freqs,
+        reflection_coefficient=np.mean([ss.reflection_coefficient for ss in s], axis=0),
+    )
+
+
+def average_sparams(s: Sequence[SParams]) -> SParams:
+    """Average multiple reflection coefficients."""
+    return ReflectionCoefficient(
+        freqs=s[0].freqs,
+        s11=np.mean([ss.s11 for ss in s], axis=0),
+        s12=np.mean([ss.s12 for ss in s], axis=0),
+        s21=np.mean([ss.s21 for ss in s], axis=0),
+        s22=np.mean([ss.s22 for ss in s], axis=0),
+    )
 
 
 # Patch some of these functions onto the class definitions, for convenience.

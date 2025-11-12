@@ -9,9 +9,10 @@ from astropy import units as un
 from edges import get_data_path
 from edges import types as tp
 from edges.frequencies import get_mask
-from edges.modeling import ComplexRealImagModel, Polynomial, UnitTransform
+from edges.io.calobsdef import HotLoadSemiRigidCable
+from edges.modeling import ComplexRealImagModel, Fourier, ZerotooneTransform
 
-from .. import S11ModelParams, SParams
+from .. import Calkit, CalkitReadings, S11ModelParams, SParams, get_calkit
 
 
 def read_semi_rigid_cable_sparams_file(
@@ -52,10 +53,32 @@ def read_semi_rigid_cable_sparams_file(
     return SParams(freqs=freq, s11=data[:, 0], s12=data[:, 1], s22=data[:, 2])
 
 
+def get_hot_load_semi_rigid_from_filespec(
+    filespec: HotLoadSemiRigidCable,
+    calkit: Calkit | None = None,
+    calkit_overrides: dict | None = None,
+) -> SParams:
+    """Get the hot load semi-rigid cable S-params from a file spec."""
+    osl = CalkitReadings.from_filespec(filespec.osl)
+
+    if calkit is None:
+        calkit = get_calkit(
+            filespec.calkit, resistance_of_match=filespec.calkit_match_resistance
+        )
+
+    if calkit_overrides:
+        calkit = calkit.clone(**calkit_overrides)
+
+    return SParams.from_calkit_measurements(
+        model=calkit.at_freqs(osl.freqs), measurements=osl
+    )
+
+
 def hot_load_cable_model_params(**kwargs) -> S11ModelParams:
     """Get default model parameters for the hot load cable S11 model."""
     model = kwargs.pop(
-        "model", Polynomial(n_terms=21, transform=UnitTransform(range=(0, 1)))
+        "model",
+        Fourier(n_terms=27, transform=ZerotooneTransform(range=(0, 1)), period=1.5),
     )
 
     return S11ModelParams(

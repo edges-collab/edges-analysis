@@ -12,6 +12,7 @@ you need to do something specific.
 
    demos/linear_modeling
    demos/using_alanmod_b18
+   demos/constructing_b18_manually
    demos/beam_factor_sensitivities
    demos/reflection_coefficients
 

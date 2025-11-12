@@ -231,40 +231,6 @@ class SParams:
         """The Voltage Standing Wave Ratio (VSWR) of the network output."""
         return (1 + np.abs(self.s22)) / (1 - np.abs(self.s22))
 
-    def smoothed(self, params, freqs: tp.FreqType | None = None):
-        """Return a new SParams, smoothed and interpolated to new frequencies.
-
-        Parameters
-        ----------
-        params : ~s11model.S11ModelParams
-            The set of parameters to use to construct the smoothing model.
-        freqs
-            The frequencies to interpolate to. By default, the same frequencies
-            as in this object (i.e. only smoothing, no interpolation).
-        """
-        from .s11model import S11ModelParams, new_s11_modelled
-
-        if isinstance(params, S11ModelParams):
-            params = {"s11": params, "s12": params, "s21": params, "s22": params}
-
-        s11 = new_s11_modelled(
-            self.s11, params["s11"], freqs=self.freqs, new_freqs=freqs
-        )
-        s12 = new_s11_modelled(
-            self.s12, params["s12"], freqs=self.freqs, new_freqs=freqs
-        )
-        s21 = new_s11_modelled(
-            self.s21,
-            params.get("s21", params["s12"]),
-            freqs=self.freqs,
-            new_freqs=freqs,
-        )
-        s22 = new_s11_modelled(
-            self.s22, params["s22"], freqs=self.freqs, new_freqs=freqs
-        )
-
-        return SParams(freqs=freqs, s11=s11.s11, s12=s12.s11, s21=s21.s11, s22=s22.s11)
-
 
 @hickleable
 @attrs.define(kw_only=True, frozen=True)

@@ -1,0 +1,4 @@
+temperature: 27.16              # deg C
+external_calkit: AGILENT_85033E
+calkit_match_resistance: 50.12  # ohm
+date: 2019-11-26

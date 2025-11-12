@@ -668,9 +668,11 @@ AGILENT_ALAN = Calkit(
     ),
 )
 
+KNOWN_CALKITS = {"AGILENT_85033E": AGILENT_85033E, "AGILENT_ALAN": AGILENT_ALAN}
+
 
 def get_calkit(
-    base,
+    base: Calkit | str,
     resistance_of_match: tp.ImpedanceType | None = None,
     open: dict | None = None,  # noqa: A002
     short: dict | None = None,
@@ -691,6 +693,9 @@ def get_calkit(
     match
         Dictionary of parameters to overwrite the match standard.
     """
+    if isinstance(base, str):
+        base = KNOWN_CALKITS[base]
+
     match = match or {}
     if resistance_of_match is not None:
         match.update(resistance=resistance_of_match)

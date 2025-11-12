@@ -437,6 +437,7 @@ def _get_hotload_loss(
             set_transform_range=False,
             complex_model_type=mdl.ComplexRealImagModel,
             fit_method="lstsq",
+            combine_s12s21=False,
         )
 
         hot_load_cable_s11 = SParams(

@@ -380,3 +380,18 @@ def read_spe_file(
         data_unit="temperature",
         name=name,
     )
+
+
+def read_all_spec_txt(direc: Path, flow, fhigh):
+    """Read all spe_*r.txt files from a directory into a dict of spectra."""
+    spec = {}
+    allfiles = direc.glob("spe_*r.txt")
+    for fl in allfiles:
+        load = fl.name.split("_")[1][:-5]
+        s = read_spec_txt(fl)
+        freq = s.freqs
+        mask = (freq >= flow) * (freq <= fhigh)
+
+        spec[SPEC_LOADMAP[load]] = s.data.squeeze()[mask]
+
+    return freq[mask], spec
