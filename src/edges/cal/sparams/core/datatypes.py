@@ -221,7 +221,7 @@ class SParams:
     @property
     def reverse_isolation(self):
         """The reverse isolation, ``1/|S12|``, in decibels."""
-        return np.abs(self.reverse_gain)
+        return -np.abs(self.reverse_gain)
 
     def voltage_standing_wave_ratio_in(self):
         """The Voltage Standing Wave Ratio (VSWR) of the network input."""

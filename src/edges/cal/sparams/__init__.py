@@ -20,7 +20,6 @@ from .core.network_component_models import (
 from .core.s11model import (
     S11ModelParams,
     get_delay,
-    get_rough_delay,
     get_s11_model,
     new_s11_modelled,
     smooth_sparams,

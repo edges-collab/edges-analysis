@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 from astropy import units as un
 
+from edges.cal import sparams as sp
 from edges.cal.sparams.core import datatypes as dt
 
 
@@ -12,6 +13,103 @@ def freqs_mhz(n=3):
 
 
 class TestSParams:
+    def setup_class(self):
+        rng = np.random.default_rng()
+        s11 = rng.uniform(0, 1, size=10) + rng.uniform(0, 1, size=10) * 1j
+        s12 = rng.uniform(0, 1, size=10) + rng.uniform(0, 1, size=10) * 1j
+        freqs = np.linspace(50, 100, 10) * un.MHz
+
+        self.smatrix = dt.SParams(s11=s11, s12=s12, freqs=freqs)
+
+    def test_from_sparams(self):
+        assert np.allclose(self.smatrix.s21, self.smatrix.s12)
+        assert np.allclose(self.smatrix.s22, self.smatrix.s11)
+
+    def test_roundtrip_transfer_matrix(self):
+        transfer_matrix = self.smatrix.as_transfer_matrix()
+
+        assert transfer_matrix.shape == (2, 2, len(self.smatrix.s11))
+
+        new_smatrix = dt.SParams.from_transfer_matrix(
+            self.smatrix.freqs, transfer_matrix
+        )
+        assert np.allclose(new_smatrix.s11, self.smatrix.s11)
+        assert np.allclose(new_smatrix.s12, self.smatrix.s12)
+        assert np.allclose(new_smatrix.s21, self.smatrix.s21)
+        assert np.allclose(new_smatrix.s22, self.smatrix.s22)
+
+    def test_cascade(self):
+        new = self.smatrix.cascade_with(self.smatrix)
+        assert isinstance(new, dt.SParams)
+        assert new.s11.shape == self.smatrix.s11.shape
+
+    def test_reciprocal(self):
+        assert self.smatrix.is_reciprocal()
+
+    def test_lossless(self):
+        freqs = np.linspace(50, 100, 10) * un.MHz
+        lossless_smatrix = dt.SParams(
+            s11=np.ones(10),
+            s12=np.zeros(10),
+            freqs=freqs,
+        )
+        assert lossless_smatrix.is_lossless()
+
+    def test_properties(self):
+        assert np.allclose(self.smatrix.complex_linear_gain, self.smatrix.s12)
+        assert np.allclose(self.smatrix.scalar_linear_gain, np.abs(self.smatrix.s21))
+        assert np.allclose(
+            self.smatrix.scalar_logarithmic_gain,
+            20 * np.log10(np.abs(self.smatrix.s21)),
+        )
+        assert np.allclose(
+            self.smatrix.insertion_loss, -self.smatrix.scalar_logarithmic_gain
+        )
+        assert np.allclose(
+            self.smatrix.input_return_loss, -20 * np.log10(np.abs(self.smatrix.s11))
+        )
+        assert np.allclose(
+            self.smatrix.output_return_loss, -20 * np.log10(np.abs(self.smatrix.s22))
+        )
+        assert np.allclose(
+            self.smatrix.reverse_gain, 20 * np.log10(np.abs(self.smatrix.s12))
+        )
+
+    def test_voltage_standing_wave_ratio(self):
+        vswr = self.smatrix.voltage_standing_wave_ratio_in()
+        assert np.all(np.isfinite(vswr))
+
+        vswr = self.smatrix.voltage_standing_wave_ratio_out()
+        assert np.all(np.isfinite(vswr))
+
+    def test_from_transmission_line(self):
+        line = sp.KNOWN_CABLES["balun-tube"].as_transmission_line(
+            freqs=np.array([50]) * un.MHz
+        )
+        smatrix = line.scattering_parameters(
+            line_length=1 * un.m
+        )  # dt.SParams.from_transmission_line(line, length=1 * un.m)
+
+        assert smatrix.is_reciprocal()
+
+    def test_from_calkit_and_vna(self):
+        calkit = sp.AGILENT_85033E
+        freq = np.linspace(50, 100, 10) * un.MHz
+        vna = dt.CalkitReadings(
+            open=dt.ReflectionCoefficient(
+                reflection_coefficient=np.array([1 + 0j] * 10), freqs=freq
+            ),
+            short=dt.ReflectionCoefficient(
+                reflection_coefficient=np.array([-1 + 0j] * 10), freqs=freq
+            ),
+            match=dt.ReflectionCoefficient(
+                reflection_coefficient=np.array([0 + 0j] * 10), freqs=freq
+            ),
+        )
+
+        smatrix = dt.SParams.from_calkit_measurements(model=calkit, measurements=vna)
+        assert smatrix.is_reciprocal()
+
     def test_basic_and_matrix_roundtrip(self):
         freqs = freqs_mhz(4)
         s11 = np.array([0.1, 0.2, 0.0, 0.5], dtype=complex)
@@ -92,6 +190,25 @@ class TestSParams:
             freqs=freqs, s11=np.zeros(1), s12=np.zeros(1), s21=s21, s22=np.zeros(1)
         )
         np.testing.assert_allclose(s.scalar_logarithmic_gain, expected_db)
+
+    def test_smatrix_alias(self):
+        assert np.allclose(self.smatrix.s, self.smatrix.smatrix)
+
+    def test_bad_cascading(self):
+        diff_smatrix = dt.SParams(
+            freqs=self.smatrix.freqs[:-1],
+            s11=self.smatrix.s11[:-1],
+            s12=self.smatrix.s12[:-1],
+            s21=self.smatrix.s21[:-1],
+            s22=self.smatrix.s22[:-1],
+        )
+        with pytest.raises(ValueError, match="Both SMatrices must have the same shape"):
+            self.smatrix.cascade_with(diff_smatrix)
+
+    def test_reverse_isolation(self):
+        assert np.allclose(
+            self.smatrix.reverse_isolation, -np.abs(self.smatrix.reverse_gain)
+        )
 
 
 class TestReflectionCoefficient:
@@ -174,6 +291,16 @@ class TestReflectionCoefficient:
         np.testing.assert_allclose(rc.freqs, freqs)
         np.testing.assert_allclose(rc.reflection_coefficient, s11)
 
+    def test_bad_sparam_shape(self):
+        freqs = np.array([10, 20]) * un.MHz
+        s11 = np.array([0.1 + 0j, -0.2 + 0j])
+        s12 = np.array([0.0 + 0j])  # wrong shape
+
+        with pytest.raises(
+            ValueError, match="Number of frequencies in S-matrix must match"
+        ):
+            dt.SParams(freqs=freqs, s11=s11, s12=s12)
+
 
 class TestCalkitReadings:
     def test_ideal_and_validation(self):
@@ -230,3 +357,32 @@ class TestCalkitReadings:
         assert isinstance(cr.open, dt.ReflectionCoefficient)
         assert isinstance(cr.short, dt.ReflectionCoefficient)
         assert isinstance(cr.match, dt.ReflectionCoefficient)
+
+    def test_different_freqs_in_standards(self):
+        freqs = np.linspace(50, 100, 100) * un.MHz
+        s = np.linspace(0, 1, 100) + 0j
+
+        vna1 = dt.ReflectionCoefficient(freqs=freqs, reflection_coefficient=s)
+        vna2 = dt.ReflectionCoefficient(freqs=freqs[:80], reflection_coefficient=s[:80])
+
+        with pytest.raises(
+            ValueError, match="short standard does not have same frequencies"
+        ):
+            dt.CalkitReadings(open=vna1, short=vna2, match=vna1)
+
+        with pytest.raises(
+            ValueError, match="match standard does not have same frequencies"
+        ):
+            dt.CalkitReadings(open=vna1, short=vna1, match=vna2)
+
+        sr = dt.CalkitReadings(open=vna1, short=vna1, match=vna1)
+        assert np.all(sr.freqs == vna1.freqs)
+
+        # Also catch when the frequencies are same shape but different values
+        vna3 = dt.ReflectionCoefficient(
+            freqs=freqs + 1 * un.MHz, reflection_coefficient=s
+        )
+        with pytest.raises(
+            ValueError, match="match standard does not have same frequencies"
+        ):
+            dt.CalkitReadings(open=vna1, short=vna1, match=vna3)

@@ -7,8 +7,8 @@ from edges.cal.input_sources import InputSource
 from edges.io import CalObsDefEDGES2
 
 
-class TestLoad:
-    def test_load_from_caldef(self, caldef: CalObsDefEDGES2):
+class TestInputSource:
+    def test_input_source_from_caldef(self, caldef: CalObsDefEDGES2):
         load = InputSource.from_caldef(
             caldef, load_name="hot_load", ambient_temperature=300.0 * un.K
         )

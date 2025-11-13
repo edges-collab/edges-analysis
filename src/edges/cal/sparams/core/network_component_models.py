@@ -339,7 +339,7 @@ class CoaxialCable:
 
     def propagation_constant(
         self, freq: tp.FreqType, length: tp.LengthType | None = None
-    ) -> tp.DimlessType:
+    ) -> un.Quantity[1 / un.m]:
         """Get the propagation constant of the cable at a given frequency."""
         return self.as_transmission_line(freq, length).propagation_constant
 

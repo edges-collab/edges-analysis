@@ -240,7 +240,7 @@ def average_reflection_coefficients(
 
 def average_sparams(s: Sequence[SParams]) -> SParams:
     """Average multiple reflection coefficients."""
-    return ReflectionCoefficient(
+    return SParams(
         freqs=s[0].freqs,
         s11=np.mean([ss.s11 for ss in s], axis=0),
         s12=np.mean([ss.s12 for ss in s], axis=0),

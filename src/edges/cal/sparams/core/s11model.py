@@ -6,8 +6,6 @@ from collections.abc import Callable
 import attrs
 import numpy as np
 from astropy import units as un
-from scipy.optimize import minimize
-from scipy.signal.windows import blackmanharris
 
 from edges import types as tp
 from edges.io.serialization import hickleable
@@ -24,32 +22,12 @@ from .datatypes import ReflectionCoefficient, SParams
 logger = logging.getLogger(__name__)
 
 
-def get_rough_delay(gamma: ReflectionCoefficient) -> un.Quantity[un.microsecond]:
-    """Calculate the delay of an S11 using FFT."""
-    nf = len(gamma.reflection_coefficient)
-    power = np.abs(np.fft.fft(gamma.reflection_coefficient * blackmanharris(nf))) ** 2
-    kk = np.fft.fftfreq(nf, d=gamma.freqs[1] - gamma.freqs[0])
-
-    return -kk[np.argmax(power)]
-
-
-def get_delay(
-    gamma: ReflectionCoefficient, optimize: bool = False
-) -> un.Quantity[un.microsecond]:
-    """Find the delay of an S11 using a minimization routine."""
-    freq = gamma.freqs.to_value("MHz")  # resulting delay in microsecond
+def get_delay(gamma: ReflectionCoefficient) -> un.Quantity[un.microsecond]:
+    """Find the delay of an S11 with a grid search."""
 
     def _objfun(delay, gamma):
         reph = gamma.rephase(delay * un.microsecond)
         return -np.abs(np.sum(reph.reflection_coefficient))
-
-    if optimize:
-        start = -get_rough_delay(gamma)
-        dk = 1 / (freq[1] - freq[0])
-        res = minimize(
-            _objfun, x0=(start,), bounds=((start - dk, start + dk),), args=(gamma,)
-        )
-        return res.x * un.microsecond
 
     delays = np.arange(-1e-3, 0.1, 1e-4)
     obj = [_objfun(d, gamma) for d in delays]
@@ -91,7 +69,6 @@ class S11ModelParams:
         attrs.field(default=ComplexMagPhaseModel)
     )
     find_model_delay: bool = attrs.field(default=False)
-    optimize_model_delay: bool = attrs.field(default=False)
     model_delay: tp.TimeType = attrs.field(default=0 * un.s)
     set_transform_range: bool = attrs.field(default=True, converter=bool)
     fit_method: str = attrs.field(default="lstsq")
@@ -167,10 +144,7 @@ def get_s11_model(
 
     cmodel = params.complex_model_type(emodel, emodel)
 
-    if params.find_model_delay:
-        delay = get_delay(gamma, optimize=params.optimize_model_delay)
-    else:
-        delay = params.model_delay
+    delay = get_delay(gamma) if params.find_model_delay else params.model_delay
 
     gamma = gamma.rephase(delay)
 
@@ -209,8 +183,7 @@ def new_s11_modelled(
 
     model = get_s11_model(params, gamma=gamma)
 
-    if isinstance(model, DelayedS11Model):
-        logger.info(f"Using S11 model with delay={model.delay}")
+    logger.info(f"Using S11 model with delay={model.delay}")
 
     return ReflectionCoefficient(freqs=freqs, reflection_coefficient=model(freqs))
 
