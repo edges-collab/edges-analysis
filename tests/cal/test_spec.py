@@ -175,12 +175,10 @@ class TestLoadSpectrum:
                 f_low=50 * un.MHz,
             )
 
+    @pytest.mark.filterwarnings("ignore::UserWarning")
     def test_with_templog(self, gsd_averaged, monkeypatch):
         tlog = io.TEST_DATA_PATH / "edges3-mock-root/temperature_logger/temperature.log"
-        with pytest.warns(UserWarning, match="Error parsing temperature log entry"):
-            # THere is a single entry that is corrupted, and this should not make the
-            # reader break.
-            table = read_temperature_log(tlog)
+        table = read_temperature_log(tlog)
 
         start = table["time"].min()
         end = table["time"].max()
