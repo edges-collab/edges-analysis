@@ -108,6 +108,12 @@ def gsd_ones():
 
 
 @pytest.fixture(scope="session")
+def gsd_averaged():
+    freqs = np.linspace(50, 100, 26) * un.MHz
+    return make_gsd_ones(freqs, ntime=1)
+
+
+@pytest.fixture(scope="session")
 def gsd_ones_power():
     freqs = np.linspace(50, 100, 26) * un.MHz
     return make_gsd_ones(freqs, ntime=10, data_unit="power")

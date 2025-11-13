@@ -341,7 +341,7 @@ class LoadSpectrum:
             elif templog is None:
                 raise ValueError(
                     f"templog doesn't exist, and no source temperature passed for"
-                    f"{loaddef.name}"
+                    f"{load_name}"
                 )
             else:
                 start = data.times.min()

@@ -1,5 +1,7 @@
 """Test spectrum reading."""
 
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 from astropy import units as un
@@ -8,7 +10,9 @@ from astropy.time import Time
 from pygsdata import GSData
 from pygsdata.select import select_freqs, select_times
 
+from edges import io
 from edges.cal import LoadSpectrum, spectra
+from edges.cal.spectra import read_temperature_log
 from edges.cal.thermistor import ThermistorReadings
 from edges.io.calobsdef import CalObsDefEDGES2
 
@@ -144,3 +148,56 @@ class TestLoadSpectrum:
         assert any(fl.name.startswith("Ambient_") for fl in all_cached_files)
 
         assert spec == spec2
+
+    def test_bad_loaddef(self, monkeypatch):
+        with pytest.raises(
+            ValueError, match="Either loaddef or specfiles AND load_name"
+        ):
+            LoadSpectrum.from_loaddef(f_high=100 * un.MHz, f_low=50 * un.MHz)
+
+    def test_missing_templog(self, monkeypatch):
+        def _mock_ave_var_spec(*args, **kwargs):
+            return None, None
+
+        def _mock_read_spectra(*args, **kwargs):
+            return None
+
+        monkeypatch.setattr(
+            "edges.cal.spectra.get_ave_and_var_spec", _mock_ave_var_spec
+        )
+        monkeypatch.setattr("edges.cal.spectra.read_spectra", _mock_read_spectra)
+
+        with pytest.raises(ValueError, match=r"templog doesn't exist"):
+            LoadSpectrum.from_loaddef(
+                specfiles=[],
+                load_name="ambient",
+                f_high=100 * un.MHz,
+                f_low=50 * un.MHz,
+            )
+
+    def test_with_templog(self, gsd_averaged, monkeypatch):
+        tlog = io.TEST_DATA_PATH / "edges3-mock-root/temperature_logger/temperature.log"
+        table = read_temperature_log(tlog)
+
+        start = table["time"].min()
+        end = table["time"].max()
+
+        def _mock_read_spectra(*args, **kwargs):
+            times = Time(np.linspace(start.jd, end.jd, 10), format="jd")
+            return SimpleNamespace(times=times)
+
+        def _mock_ave_var_spec(*args, **kwargs):
+            return gsd_averaged, gsd_averaged
+
+        monkeypatch.setattr("edges.cal.spectra.read_spectra", _mock_read_spectra)
+        monkeypatch.setattr(
+            "edges.cal.spectra.get_ave_and_var_spec", _mock_ave_var_spec
+        )
+
+        LoadSpectrum.from_loaddef(
+            specfiles=[],
+            load_name="ambient",
+            templog=tlog,
+            f_high=100 * un.MHz,
+            f_low=50 * un.MHz,
+        )

@@ -11,6 +11,7 @@ from read_acq.gsdata import write_gsdata_to_acq
 
 from edges import alanmode as am
 from edges.cal import ReflectionCoefficient
+from edges.data import fetch_b18_cal_outputs
 from edges.frequencies import edges_raw_freqs
 
 
@@ -58,6 +59,15 @@ def unity_acq(tmpdir):
     write_gsdata_to_acq(data, tmpdir / "unity.acq")
 
     return tmpdir / "unity.acq"
+
+
+def test_read_all_spec_text():
+    datadir = fetch_b18_cal_outputs() / "H2Case-fittpfix"
+    freqs, specs = am.read_all_spec_txt(datadir, flow=50 * un.MHz, fhigh=100 * un.MHz)
+    assert freqs.min() >= 50 * un.MHz
+    assert freqs.max() <= 100 * un.MHz
+    assert len(specs) == 4  # four files in that directory
+    assert all(spec.shape == (len(freqs),) for spec in specs.values())
 
 
 class TestACQPlot7AMoon:

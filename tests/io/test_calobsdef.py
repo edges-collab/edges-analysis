@@ -10,7 +10,7 @@ def test_dir(tmp_path_factory):
     return mock_calobs_dir(tmp_path_factory)
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def mock_calobs_dir(tmp_path_factory) -> Path:
     # Create an ideal observation file using tmp_path_factory
     path_list = ["Spectra", "Resistance", "S11"]
@@ -54,7 +54,13 @@ def mock_calobs_dir(tmp_path_factory) -> Path:
                 slist.append(dlist[i] / s)
                 slist[k].mkdir()
                 if s[:-2] == "ReceiverReading":
-                    file_list = ["ReceiverReading", "Match", "Open", "Short"]
+                    file_list = [
+                        "ReceiverReading",
+                        "Match",
+                        "Open",
+                        "Short",
+                        "metadata.yaml",
+                    ]
                 elif s[:-2] == "SwitchingState":
                     file_list = [
                         "ExternalOpen",
@@ -63,10 +69,19 @@ def mock_calobs_dir(tmp_path_factory) -> Path:
                         "Match",
                         "Open",
                         "Short",
+                        "metadata.yaml",
                     ]
                 else:
                     file_list = ["External", "Match", "Open", "Short"]
                 for filename in file_list:
+                    if filename == "metadata.yaml":
+                        file1 = slist[k] / filename
+                        file1.write_text(
+                            "calkit: AGILENT_85033E\n"
+                            "calkit_match_resistance: 49.98  # ohm\n"
+                        )
+                        continue
+
                     name1 = f"{filename}01.s1p"
                     name2 = filename + "02.s1p"
                     file1 = slist[k] / name1
@@ -99,7 +114,7 @@ def mock_calobs_dir(tmp_path_factory) -> Path:
 
 
 # function to make observation object
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="module")
 def calio(mock_calobs_dir):
     return calobsdef.CalObsDefEDGES2.from_standard_layout(mock_calobs_dir)
 
@@ -121,3 +136,21 @@ class TestFromStandardLayout:
         direc = datadir / "Receiver01_25C_2019_11_26_040_to_200MHz"
         with pytest.warns(UserWarning, match="using ReceiverReading01"):
             calobsdef.CalObsDefEDGES2.from_standard_layout(rootdir=direc, run_num=3)
+
+
+def test_metadata(calio: calobsdef.CalObsDefEDGES2):
+    with pytest.raises(TypeError, match="Value must be a dict"):
+        calobsdef.InternalSwitch(
+            internal=calio.internal_switch.internal,
+            external=calio.internal_switch.external,
+            metadata=3,
+        )
+
+    isw = calobsdef.InternalSwitch(
+        internal=calio.internal_switch.internal,
+        external=calio.internal_switch.external,
+        metadata={"external_calkit": "calkit-name"},
+    )
+
+    assert isw.temperature is None
+    assert isw.external_calkit == "calkit-name"
