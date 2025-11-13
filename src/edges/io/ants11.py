@@ -1,4 +1,4 @@
-"""Functions for creating CalibratedS11 objects from antenna S11 measurement files."""
+"""Functions for dealing with antenna S11 files."""
 
 import contextlib
 import glob
@@ -9,12 +9,6 @@ from pathlib import Path
 
 import numpy as np
 from astropy.time import Time
-
-from edges import types as tp
-from edges.io import CalkitFileSpec, LoadS11, SwitchingState
-
-from .base import CalibratedS11
-from .cal_loads import get_loads11_from_load_and_switch
 
 
 def _get_closest_s11_time(
@@ -78,7 +72,7 @@ def _get_closest_s11_time(
             good_idx.append(i)
     times = Time(times)
 
-    if len(good_idx) == 0:
+    if not good_idx:
         raise ValueError("No files were parseable as datetimes.")
 
     if len(good_idx) != len(files):
@@ -173,19 +167,3 @@ def get_antenna_s11_paths(
         )
 
     raise ValueError(f"s11_path {s11_path} not in a recognized format")
-
-
-def get_ants11_from_edges2_files(
-    files: tuple[tp.PathLike, tp.PathLike, tp.PathLike, tp.PathLike],
-    switchdef: SwitchingState,
-    **kwargs,
-) -> CalibratedS11:
-    """Construct a CalibratedS11 for the antenna measurements."""
-    return get_loads11_from_load_and_switch(
-        loaddef=LoadS11(
-            calkit=CalkitFileSpec(open=files[0], short=files[1], match=files[2]),
-            external=files[3],
-        ),
-        switchdef=switchdef,
-        **kwargs,
-    )

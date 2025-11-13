@@ -12,8 +12,9 @@ you need to do something specific.
 
    demos/linear_modeling
    demos/using_alanmod_b18
-   demos/comparison_of_beamfactor_to_alan
+   demos/constructing_b18_manually
    demos/beam_factor_sensitivities
+   demos/reflection_coefficients
 
 If you've covered the tutorials and still have questions about "how to do stuff" with
 ``edges``, consult the FAQs:

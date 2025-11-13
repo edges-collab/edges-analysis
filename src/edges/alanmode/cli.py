@@ -80,7 +80,7 @@ def _make_plots(
                 calobs.freqs.to_value("MHz"),
             ]
             + [
-                calobs.source_thermistor_temps.get(load.load_name, load.temp_ave)
+                calobs.source_thermistor_temps.get(load.name, load.temp_ave)
                 * np.ones(calobs.freqs.size)
                 for load in calobs.loads.values()
             ]

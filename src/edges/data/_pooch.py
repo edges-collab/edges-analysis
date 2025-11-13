@@ -15,11 +15,11 @@ _S11FILE = "s11_calibration_low_band_LNA25degC_2015-09-16-12-30-29_simulator2_lo
 B18CAL_REPO = pooch.create(
     path=dirs.user_cache_dir,
     # Use the figshare DOI
-    base_url="doi:10.5281/zenodo.16883743",
+    base_url="doi:10.5281/zenodo.17598201",
     registry={
         "LegacyPipelineOutputs.7z": "md5:df5f573d390f0cff46157ce157849925",
         "Resistance.7z": "md5:9ac40bdd7a009ec722af4235dadc6162",
-        "S11.7z": "md5:551b20c4d3f37f74ece8e94e963f716e",
+        "S11.7z": "md5:e04bd94977fb0a2d330290c92d0c19f8",
         _S11FILE: "md5:eaf078330589b4adedf4ce0b687f4add",
         "Spectra.7z": "md5:c81c5d7ae127d0306b7c7dcaf5510304",
     },
@@ -50,7 +50,11 @@ def _unpack_to_calobs(fname: str, action: str, pup: pooch.Pooch):
 
     # Don't unzip if file already exists and is not being downloaded
     if action in ("update", "download") or not newpath.exists():
+        if newpath.exists():
+            newpath.unlink()
+
         _UNZIPPED_B18CAL_OBS.mkdir(parents=True, exist_ok=True)
+
         py7zr.unpack_7zarchive(path, _UNZIPPED_B18CAL_OBS)
 
     return newpath

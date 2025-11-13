@@ -12,6 +12,7 @@ from .alanio import (
     LOADMAP,
     SPEC_LOADMAP,
     read_alan_calibrated_temp,
+    read_all_spec_txt,
     read_modelled_s11s,
     read_raul_s11_format,
     read_s11_csv,

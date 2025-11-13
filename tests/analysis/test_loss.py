@@ -7,7 +7,7 @@ import pytest
 from astropy import units as un
 
 from edges.analysis import loss
-from edges.cal.s11.base import CalibratedS11
+from edges.cal.sparams import ReflectionCoefficient
 
 
 def test_no_band():
@@ -22,22 +22,23 @@ class TestLow2BalunConnectorLoss:
         ants11 = np.ones(51) / 2
 
         bcloss = loss.low2_balun_connector_loss(
-            fq, ants11, use_approx_eps0=use_approx_eps0
+            ReflectionCoefficient(reflection_coefficient=ants11, freqs=fq),
+            use_approx_eps0=use_approx_eps0,
         )
 
         assert bcloss.shape == fq.shape
 
     def test_other_s11_inputs(self, tmp_path: Path):
-        s11 = CalibratedS11(
-            freqs=np.linspace(50, 100, 100) * un.MHz, s11=np.zeros(100, dtype=complex)
+        s11 = ReflectionCoefficient(
+            freqs=np.linspace(50, 100, 100) * un.MHz,
+            reflection_coefficient=np.zeros(100, dtype=complex),
         )
-        fq = np.linspace(50, 100, 100) * un.MHz
 
         # S11Model object
-        bcloss = loss.low2_balun_connector_loss(fq, ants11=s11)
-        assert bcloss.shape == fq.shape
+        bcloss = loss.low2_balun_connector_loss(ants11=s11)
+        assert bcloss.shape == s11.freqs.shape
 
         # Hickled file
         s11.write(tmp_path / "tmp-ant.h5")
-        bcloss2 = loss.low2_balun_connector_loss(fq, tmp_path / "tmp-ant.h5")
+        bcloss2 = loss.low2_balun_connector_loss(tmp_path / "tmp-ant.h5")
         assert np.allclose(bcloss, bcloss2)

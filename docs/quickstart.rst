@@ -57,7 +57,7 @@ and applying some pre-computed calibration solutions::
     from edges.cal.dicke import dicke_calibration
     from edges.filters import sun_filter, negative_power_filter, rfi_model_filter
     from edges.averaging import lst_bin
-    from edges.cal.s11 import CalibratedS11
+    from edges.cal import ReflectionCoefficient
     from edges.analysis.calibrate import apply_noise_wave_calibration
     from edges.modelling import LinLog
 
@@ -82,7 +82,7 @@ and applying some pre-computed calibration solutions::
 
     # Now we want to apply calibration solutions.
     # First we need to specify the S11 of the antenna
-    ants11 = CalibratedS11.from_calibrated_file("my_antenna_s11.csv")
+    ants11 = ReflectionCoefficient.from_csv("my_antenna_s11.csv")
 
     # Now calibrate, pointing to pre-computed solutions.
     data = apply_noise_wave_calibration(
