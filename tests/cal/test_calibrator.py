@@ -13,7 +13,7 @@ def write_read_roundtrip(identity_calibrator: Calibrator, tmpdir: Path):
 
 def test_cal_uncal_round_trip(calobs: CalibrationObservation, calibrator: Calibrator):
     a, b = calibrator.get_linear_coefficients(
-        freqs=calobs.freqs, ant_s11=calobs.open.s11.s11
+        freqs=calobs.freqs, ant_s11=calobs.open.reflection_coefficient.s11
     )
     q = calobs.open.averaged_q
 
@@ -22,13 +22,13 @@ def test_cal_uncal_round_trip(calobs: CalibrationObservation, calibrator: Calibr
     tcal = calibrator.calibrate_load(calobs.open)
     decal = calibrator.decalibrate(
         tcal,
-        ant_s11=calobs.open.s11.s11,
+        ant_s11=calobs.open.reflection_coefficient.s11,
     )
     np.testing.assert_allclose(decal, calobs.open.averaged_q, atol=3e-5)
 
     new_tcal = calibrator.calibrate_q(
         decal,
-        ant_s11=calobs.open.s11.s11,
+        ant_s11=calobs.open.reflection_coefficient.s11,
     )
 
     np.testing.assert_allclose(new_tcal, tcal, atol=1e-6)

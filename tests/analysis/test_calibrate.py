@@ -8,12 +8,14 @@ from pygsdata import GSData
 from edges import modeling as mdl
 from edges.analysis import calibrate
 from edges.cal import Calibrator, apply
-from edges.cal.s11.base import CalibratedS11
+from edges.cal.sparams import ReflectionCoefficient
 from edges.sim.antenna_beam_factor import BeamFactor
 
 
 def get_ideal_s11model(freqs):
-    return CalibratedS11(s11=np.zeros(freqs.size, dtype=complex), freqs=freqs)
+    return ReflectionCoefficient(
+        reflection_coefficient=np.zeros(freqs.size, dtype=complex), freqs=freqs
+    )
 
 
 class TestApplyNoiseWaveCalibration:

@@ -12,7 +12,7 @@ from .. import types as tp
 from ..cal import (
     Calibrator,
 )
-from ..cal.s11 import CalibratedS11
+from ..cal.sparams import ReflectionCoefficient
 from ..sim import antenna_beam_factor
 from ..sim.antenna_beam_factor import BeamFactor
 
@@ -21,7 +21,7 @@ from ..sim.antenna_beam_factor import BeamFactor
 def apply_noise_wave_calibration(
     data: GSData,
     calibrator: Calibrator | tp.PathLike,
-    antenna_s11: CalibratedS11,
+    antenna_s11: ReflectionCoefficient,
     tload: float | None = None,
     tns: float | None = None,
 ) -> GSData:

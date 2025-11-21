@@ -259,7 +259,9 @@ def write_modelled_s11s(
     If a HotLoadCorrection exists, also write the rigid cable S-parameters, as
     edges2k.c does, otherwise assume the edges3.c format.
     """
-    s11m = {name: load.s11.s11 for name, load in calobs.loads.items()}
+    s11m = {
+        name: load.reflection_coefficient.s11 for name, load in calobs.loads.items()
+    }
     lna = calobs.receiver.s11
     if isinstance(hot_loss_model, LossFunctionGivenSparams):
         s11m |= {
@@ -378,3 +380,18 @@ def read_spe_file(
         data_unit="temperature",
         name=name,
     )
+
+
+def read_all_spec_txt(direc: Path, flow, fhigh):
+    """Read all spe_*r.txt files from a directory into a dict of spectra."""
+    spec = {}
+    allfiles = direc.glob("spe_*r.txt")
+    for fl in allfiles:
+        load = fl.name.split("_")[1][:-5]
+        s = read_spec_txt(fl)
+        freq = s.freqs
+        mask = (freq >= flow) * (freq <= fhigh)
+
+        spec[SPEC_LOADMAP[load]] = s.data.squeeze()[mask]
+
+    return freq[mask], spec

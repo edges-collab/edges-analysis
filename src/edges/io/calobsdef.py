@@ -13,7 +13,7 @@ from typing import Self
 
 import attrs
 import yaml
-from astropy import units
+from astropy import units as un
 from bidict import bidict
 
 from .. import DATA_PATH
@@ -210,16 +210,28 @@ class LoadDefEDGES2:
         )
 
 
+def _yamlfile_to_dict(val: Path | str | dict) -> dict:
+    """Convert a Path/str/dict to a dict."""
+    if isinstance(val, dict):
+        return val
+    if isinstance(val, (Path, str)):
+        with Path(val).open("r") as fl:
+            return yaml.safe_load(fl)
+    else:
+        raise TypeError("Value must be a dict, Path, or str!")
+
+
 @attrs.define(frozen=True, kw_only=True)
-class SwitchingState:
-    """File-specification for the switching state measurement.
+class InternalSwitch:
+    """File-specification for VNA measurements to compute Sparams of internal switch.
 
     Parameters
     ----------
     internal
-        The internal calkit measurements of the switching state.
+        Measurements of the internal calkit loads.
     external
-        The external calkit measurements of the switching state.
+        Measurements of the external calkit loads (plugged in at the source
+        input).
     """
 
     internal: CalkitFileSpec = attrs.field(
@@ -228,6 +240,29 @@ class SwitchingState:
     external: CalkitFileSpec = attrs.field(
         validator=attrs.validators.instance_of(CalkitFileSpec)
     )
+    _metadata: dict = attrs.field(converter=_yamlfile_to_dict)
+
+    @_metadata.default
+    def _meta_yaml_default(self) -> Path:
+        return self.internal.open.parent / "metadata.yaml"
+
+    @property
+    def calkit_match_resistance(self) -> tp.OhmType:
+        """The measured resistance of the match standard in the calkit."""
+        return self._metadata["calkit_match_resistance"] * un.ohm
+
+    @property
+    def temperature(self) -> tp.TemperatureType | None:
+        """The temperature at which the internal switch measurements were made."""
+        try:
+            return self._metadata["temperature"] * un.Celsius
+        except KeyError:
+            return None
+
+    @property
+    def external_calkit(self):
+        """The name of the calkit used for the calkit measurements."""
+        return self._metadata["external_calkit"]
 
 
 @attrs.define(frozen=True, kw_only=True)
@@ -246,11 +281,50 @@ class ReceiverS11:
         validator=attrs.validators.instance_of(CalkitFileSpec)
     )
     device: Path = attrs.field(converter=Path, validator=_vld_path_exists)
+    _metadata: dict = attrs.field(converter=_yamlfile_to_dict)
 
     @property
     def external(self) -> Path:
         """Alias for the 'device' measurement."""
         return self.device
+
+    @_metadata.default
+    def _meta_yaml_default(self) -> Path:
+        return self.device.parent / "metadata.yaml"
+
+    @property
+    def calkit_match_resistance(self):
+        """The measured resistance of the match standard in the calkit."""
+        return self._metadata["calkit_match_resistance"]
+
+    @property
+    def calkit_name(self):
+        """The name of the calkit used for the calkit measurements."""
+        return self._metadata["calkit"]
+
+
+@attrs.define(frozen=True, kw_only=True)
+class HotLoadSemiRigidCable:
+    """File specification for the hot-load semi-rigid cable S-parameters."""
+
+    osl: CalkitFileSpec = attrs.field(
+        validator=attrs.validators.instance_of(CalkitFileSpec)
+    )
+    _metadata: dict = attrs.field(converter=_yamlfile_to_dict)
+
+    @_metadata.default
+    def _meta_yaml_default(self):
+        return self.osl.open.parent / "metadata.yaml"
+
+    @property
+    def calkit(self) -> str:
+        """The model name of the calkit used for the calkit measurements."""
+        return self._metadata["calkit"]
+
+    @property
+    def calkit_match_resistance(self) -> tp.ImpedanceType:
+        """The measured resistance of the match standard in the calkit."""
+        return self._metadata["calkit_match_resistance"] * un.ohm
 
 
 @attrs.define(frozen=True, kw_only=True)
@@ -267,8 +341,8 @@ class CalObsDefEDGES2:
         The ambient load definition.
     hot_load
         The hot load definition.
-    switching_state
-        The switching state definition.
+    internal_switch
+        The internal switch definition.
     receiver_s11
         The receiver S11 definition.
     run_num
@@ -285,14 +359,10 @@ class CalObsDefEDGES2:
     ambient: LoadDefEDGES2 = attrs.field()
     hot_load: LoadDefEDGES2 = attrs.field()
 
-    switching_state: SwitchingState = attrs.field()
-    receiver_s11: ReceiverS11 = attrs.field()
+    internal_switch: InternalSwitch | list[InternalSwitch] = attrs.field()
+    receiver_s11: ReceiverS11 | list[ReceiverS11] = attrs.field()
 
-    run_num: int = attrs.field()
-    receiver_female_resistance: units.Quantity[units.ohm] = attrs.field(
-        default=50 * units.ohm
-    )
-    male_resistance: units.Quantity[units.ohm] = attrs.field(default=50 * units.ohm)
+    run_num: int = attrs.field(default=None)
 
     @property
     def loads(self) -> dict[str, LoadDefEDGES2]:
@@ -310,8 +380,6 @@ class CalObsDefEDGES2:
         rootdir: tp.PathLike,
         run_num: int = 1,
         repeat_num: int = 1,
-        receiver_female_resistance: units.Quantity[units.ohm] | None = None,
-        male_resistance: units.Quantity[units.ohm] | None = None,
     ) -> Self:
         """
         Create a CalObsDefEDGES2 object from a standard directory layout.
@@ -325,10 +393,6 @@ class CalObsDefEDGES2:
         repeat_num
             The repeat number to search for (generally, repeats are taken closer
             together than "runs").
-        receiver_female_resistance
-            The resistance of the receiver.
-        male_resistance
-            The male resistance.
         """
         rootdir = Path(rootdir)
         if not rootdir.exists():
@@ -368,7 +432,7 @@ class CalObsDefEDGES2:
 
         sw_calkit = CalkitFileSpec.from_edges2_layout(swstate, repeat_num)
         repnum = int(sw_calkit.open.stem[-2:])
-        swsate = SwitchingState(
+        swsate = InternalSwitch(
             internal=sw_calkit,
             external=CalkitFileSpec.from_edges2_layout(
                 swstate, repeat_num=repnum, allow_other=False, prefix="External"
@@ -389,40 +453,12 @@ class CalObsDefEDGES2:
             rootdir, "Ambient", run_num=run_num, rep_num=repeat_num
         )
 
-        # Try getting the female receiver resistance from a definition.yaml
-        if (receiver_female_resistance is None or male_resistance is None) and (
-            (defn := rootdir / "definition.yaml").exists()
-        ):
-            with defn.open("r") as fl:
-                dd = yaml.safe_load(fl)
-
-                if receiver_female_resistance is None:
-                    receiver_female_resistance = (
-                        dd.get("measurements", {})
-                        .get("resistance_f", {})
-                        .get(run_num, 50 * units.ohm)
-                    )
-
-                if male_resistance is None:
-                    male_resistance = (
-                        dd.get("measurements", {})
-                        .get("resistance_m", {})
-                        .get(run_num, 50 * units.ohm)
-                    )
-
-        if male_resistance is None:
-            male_resistance = 50 * units.ohm
-        if receiver_female_resistance is None:
-            receiver_female_resistance = 50 * units.ohm
-
         return cls(
             open=open_,
             short=short,
             hot_load=hotload,
             ambient=ambient,
-            switching_state=swsate,
+            internal_switch=swsate,
             receiver_s11=rcv,
             run_num=run_num,
-            receiver_female_resistance=receiver_female_resistance,
-            male_resistance=male_resistance,
         )

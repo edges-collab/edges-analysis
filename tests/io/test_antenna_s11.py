@@ -1,7 +1,7 @@
 import pytest
 from astropy.time import Time
 
-from edges.cal.s11.antenna import _get_closest_s11_time, get_antenna_s11_paths
+from edges.io.ants11 import _get_closest_s11_time, get_antenna_s11_paths
 
 
 class TestGetClosestS11Time:

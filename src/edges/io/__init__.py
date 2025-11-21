@@ -21,12 +21,13 @@ __all__ = [
     "CalObsDefEDGES2",
     "CalObsDefEDGES3",
     "CalkitFileSpec",
-    "CalkitFileSpec",
+    "HotLoadSemiRigidCable",
+    "InternalSwitch",
     "LoadDefEDGES2",
     "LoadDefEDGES3",
     "LoadS11",
+    "ReceiverS11",
     "SParams",
-    "SwitchingState",
     "get_mean_temperature",
     "hickleable",
     "read_auxiliary_data",
@@ -41,9 +42,11 @@ from .auxiliary import read_auxiliary_data, read_thermlog_file, read_weather_fil
 from .calobsdef import (
     CalkitFileSpec,
     CalObsDefEDGES2,
+    HotLoadSemiRigidCable,
+    InternalSwitch,
     LoadDefEDGES2,
     LoadS11,
-    SwitchingState,
+    ReceiverS11,
 )
 from .calobsdef3 import CalObsDefEDGES3, LoadDefEDGES3
 from .serialization import hickleable

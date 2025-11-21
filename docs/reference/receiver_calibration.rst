@@ -13,7 +13,7 @@ High-Level Interface
 
     edges.cal.calobs
     edges.cal.calibrator
-    edges.cal.load_data
+    edges.cal.input_sources
     edges.cal.receiver_cal
     edges.cal.spectra
     edges.cal.apply
@@ -31,5 +31,11 @@ Low-Level Functions
     edges.cal.noise_waves
     edges.cal.reflection_coefficient
     edges.cal.thermistor
-    edges.cal.s11.base
-    edges.cal.s11.s11model
+    edges.cal.sparams.core.datatypes
+    edges.cal.sparams.core.s11model
+    edges.cal.sparams.core.network_component_models
+    edges.cal.sparams.core.sparam_calibration
+    edges.cal.sparams.devices.receiver
+    edges.cal.sparams.devices.internal_switch
+    edges.cal.sparams.devices.input_sources
+    edges.cal.sparams.devices.hot_load_cable

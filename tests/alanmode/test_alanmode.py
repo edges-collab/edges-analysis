@@ -10,6 +10,8 @@ from pygsdata import KNOWN_TELESCOPES, GSData
 from read_acq.gsdata import write_gsdata_to_acq
 
 from edges import alanmode as am
+from edges.cal import ReflectionCoefficient
+from edges.data import fetch_b18_cal_outputs
 from edges.frequencies import edges_raw_freqs
 
 
@@ -57,6 +59,15 @@ def unity_acq(tmpdir):
     write_gsdata_to_acq(data, tmpdir / "unity.acq")
 
     return tmpdir / "unity.acq"
+
+
+def test_read_all_spec_text():
+    datadir = fetch_b18_cal_outputs() / "H2Case-fittpfix"
+    freqs, specs = am.read_all_spec_txt(datadir, flow=50 * un.MHz, fhigh=100 * un.MHz)
+    assert freqs.min() >= 50 * un.MHz
+    assert freqs.max() <= 100 * un.MHz
+    assert len(specs) == 4  # four files in that directory
+    assert all(spec.shape == (len(freqs),) for spec in specs.values())
 
 
 class TestACQPlot7AMoon:
@@ -117,8 +128,10 @@ class TestACQPlot7AMoon:
 
 class TestCorrcsv:
     def test_zero_cable_length(self):
-        freq = np.linspace(50, 100, 101) * un.MHz
-        s11 = np.zeros(len(freq), dtype=complex)
+        freqs = np.linspace(50, 100, 101) * un.MHz
+        s11 = ReflectionCoefficient(
+            reflection_coefficient=np.zeros(len(freqs), dtype=complex), freqs=freqs
+        )
 
-        corr = am.corrcsv(freq=freq, s11=s11, cablen=0, cabdiel=0, cabloss=0)
-        np.testing.assert_allclose(corr, 0, atol=1e-15)
+        corr = am.corrcsv(s11, cablen=0, cabdiel=0, cabloss=0)
+        np.testing.assert_allclose(corr.reflection_coefficient, 0, atol=1e-15)

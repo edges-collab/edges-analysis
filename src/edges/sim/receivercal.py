@@ -7,7 +7,7 @@ from astropy import units as un
 
 from .. import modeling as mdl
 from .. import types as tp
-from ..cal import Calibrator, Load, noise_waves
+from ..cal import Calibrator, InputSource, noise_waves
 
 
 def simulate_q(
@@ -66,7 +66,7 @@ def simulate_q(
 
 
 def simulate_q_from_calibrator(
-    load: Load,
+    load: InputSource,
     calibrator: Calibrator,
     scale_model: Callable | None = None,
 ) -> np.ndarray:
@@ -91,7 +91,7 @@ def simulate_q_from_calibrator(
     temp_ave = load.temp_ave
 
     return simulate_q(
-        load_s11=load.s11.s11,
+        load_s11=load.reflection_coefficient.s11,
         receiver_s11=receiver_s11,
         load_temp=temp_ave,
         t_sca=t_sca,

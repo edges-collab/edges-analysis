@@ -1,10 +1,14 @@
+import matplotlib
+
+matplotlib.use("Agg")
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 from astropy import units as un
 
 from edges.cal import plots
-from edges.cal.s11 import CalibratedS11, S11ModelParams
+from edges.cal.sparams import ReflectionCoefficient, S11ModelParams
 
 
 class TestPlotRawSpectrum:
@@ -37,8 +41,8 @@ class TestPlotRawSpectra:
 class TestPlotS11Residual:
     def setup_class(self):
         rng = np.random.default_rng()
-        self.s11 = CalibratedS11(
-            s11=np.exp(rng.uniform(size=100) * 1j),
+        self.s11 = ReflectionCoefficient(
+            reflection_coefficient=np.exp(rng.uniform(size=100) * 1j),
             freqs=np.linspace(100, 200, 100) * un.MHz,
         )
         self.s11_model_params = S11ModelParams()

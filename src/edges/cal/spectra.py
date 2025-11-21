@@ -4,6 +4,7 @@ import contextlib
 import inspect
 import logging
 from pathlib import Path
+from typing import Self
 
 import attrs
 import numpy as np
@@ -189,8 +190,11 @@ class LoadSpectrum:
     @classmethod
     def from_loaddef(
         cls,
-        loaddef: LoadDefEDGES2 | LoadDefEDGES3,
-        # load_name: str,
+        loaddef: LoadDefEDGES2 | LoadDefEDGES3 | None = None,
+        templog: Path | None = None,
+        specfiles: list[Path] | None = None,
+        thermistor: Path | None = None,
+        load_name: str | None = None,
         f_low=40.0 * un.MHz,
         f_high=np.inf * un.MHz,
         f_range_keep: tuple[tp.FreqType, tp.FreqType] | None = None,
@@ -205,60 +209,115 @@ class LoadSpectrum:
         cache_dir: Path | None = None,
         temperature: tp.TemperatureType | None = None,
         allow_closest_time: bool = True,
-    ):
+    ) -> Self:
         """Instantiate the class from a given load name and directory.
+
+        Note that either `loaddef` must be given, or `specfiles` and `load_name` and
+        one of `thermistor`, `templog` or `temperature` must be given.
+
+        The bandwidth is limited twice: once when reading in the raw spectra, and once
+        at the end when returning the final LoadSpectrum. Any frequency averaging
+        is done on the spectra *after* the initial bandwidth cut, but *before* the
+        final frequency cut. TThe first cut is defined via `f_low` and `f_high`, while
+        the final cut is defined via `f_range_keep`.
 
         Parameters
         ----------
-        direc : str or Path
-            The top-level calibration observation directory.
-        run_num : int
-            The run number to use for the spectra.
-        filetype : str
-            The filetype to look for (acq or h5).
-        freqeuncy_smoothing
+        loaddef
+            A LoadDefEDGES2 or LoadDefEDGES3 instance defining the files containing
+            raw spectra for this load. If None, specfiles and load_name must be given.
+        templog
+            Path to a temperature log CSV file. Only used if loaddef is None and
+            not required if temperature is given or thermistor is given.
+        specfiles
+            A list of paths to raw spectrum files. Only used if loaddef is None.
+        thermistor
+            Path to a thermistor CSV file. Only used if loaddef is None. Defines the
+            "true" physical temperature of the load during the observation.
+        load_name
+            The name of the load. Only used if loaddef is None.
+        f_low
+            The lowest frequency to read in (before any other processing).
+        f_high
+            The highest frequency to read in (before any other processing).
+        f_range_keep
+            An optional tuple of (f_low, f_high) frequencies to keep in the final
+            LoadSpectrum. This is applied after any frequency averaging.
+        freq_bin_size
+            The size of frequency bins to average over, in numbers of channels.
+        ignore_times
+            Times to ignore at the start of the observation. See
+            :func:`edges.io.templogs.ignore_ntimes` for details.
+        temperature_range
+            If given, only use data where the thermistor temperature is within this
+            range. Can either be a single temperature (in which case it is treated
+            as a +/- around the median temperature), or a tuple of (T_low, T_high).
+        frequency_smoothing
             How to average frequency bins together. Default is to merely bin them
-            directly. Other options are 'gauss' to do Gaussian filtering (this is the
-            same as Alan's C pipeline).
-        ignore_times_percent
-            The fraction of readings to ignore at the start of the observation. If
-            greater than 100, will be interpreted as being a number of seconds to
-            ignore.
-        kwargs :
-            All other arguments to :class:`LoadSpectrum`.
+            directly. Other options are 'gauss' to convolve with Gaussian then
+            downsample (this is the same as the legacy pipeline).
+        time_coordinate_swpos
+            Which switch position to use when deciding whether to ignore a time
+            according to the `ignore_times` parameter. Setting to 2 will ignore
+            a full integration only if *all three* switch positions are to be ignored.
+        invalidate_cache
+            If True, do not use any cached spectra even if they exist.
+        cache_dir
+            If given, a directory in which to cache the integrated spectra for
+            future use.
+        temperature
+            If given, the average physical temperature of the load during the
+            observation. Only used if loaddef is None and thermistor is None.
+        allow_closest_time
+            If True, when finding the mean temperature from a temperature log,
+            allow using the closest time if no times are strictly within the
+            observation time range.
 
         Returns
         -------
-        :class:`LoadSpectrum`.
+        :class:`LoadSpectrum`
         """
+        if loaddef is not None:
+            templog = getattr(loaddef, "templog", None)
+            specfiles = loaddef.spectra
+            thermistor = getattr(loaddef, "thermistor", None)
+            load_name = loaddef.name
+        else:
+            if specfiles is None or load_name is None:
+                raise ValueError(
+                    "Either loaddef or specfiles AND load_name must be given"
+                )
+
         if cache_dir is not None:
             cache_dir = Path(cache_dir)
 
             sig = inspect.signature(cls.from_loaddef)
             lc = locals()
             defining_dict = {
-                p: lc[p] for p in sig.parameters if p not in ["cls", "caldef"]
+                p: lc[p]
+                for p in sig.parameters
+                if p not in ["cls", "loaddef", "invalidate_cache"]
             }
-            defining_dict["files"] = loaddef
+            defining_dict["files"] = (specfiles, thermistor, templog)
 
             hsh = stable_hash((
                 *tuple(defining_dict.values()),
                 __version__.split(".")[0],
             ))
 
-            fname = cache_dir / f"{loaddef.name}_{hsh}.gsh5"
+            fname = cache_dir / f"{load_name}_{hsh}.gsh5"
 
         if not invalidate_cache and cache_dir is not None and fname.exists():
             logger.info(
-                f"Reading in previously-created integrated {loaddef.name} spectra..."
+                f"Reading in previously-created integrated {load_name} spectra..."
             )
             return cls.from_file(fname)
 
-        data: GSData = read_spectra(loaddef.spectra)
+        data: GSData = read_spectra(specfiles)
 
         if hasattr(loaddef, "thermistor"):
             thermistor = ThermistorReadings.from_csv(
-                loaddef.thermistor, ignore_times=ignore_times
+                thermistor, ignore_times=ignore_times
             )
         else:
             thermistor = None
@@ -279,15 +338,15 @@ class LoadSpectrum:
         if temperature is None:
             if thermistor is not None:
                 temperature = np.nanmean(thermistor.get_physical_temperature())
-            elif loaddef.templog is None:
+            elif templog is None:
                 raise ValueError(
                     f"templog doesn't exist, and no source temperature passed for"
-                    f"{loaddef.name}"
+                    f"{load_name}"
                 )
             else:
                 start = data.times.min()
                 end = data.times.max()
-                table = read_temperature_log(loaddef.templog)
+                table = read_temperature_log(templog)
 
                 if (
                     not np.any((table["time"] >= start) & (table["time"] <= end))
@@ -297,7 +356,7 @@ class LoadSpectrum:
                     end = table["time"][np.argmin(np.abs(table["time"] - end))]
 
                 temperature = get_mean_temperature(
-                    table, start_time=start, end_time=end, load=loaddef.name
+                    table, start_time=start, end_time=end, load=load_name
                 ).to("K")
 
         out = cls(

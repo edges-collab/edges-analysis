@@ -7,8 +7,8 @@ from edges.averaging.averaging import bin_array_unweighted
 
 from .calibrator import Calibrator
 from .calobs import CalibrationObservation
-from .load_data import Load
-from .s11 import CalibratedS11, S11ModelParams
+from .input_sources import InputSource
+from .sparams import ReflectionCoefficient, S11ModelParams
 from .spectra import LoadSpectrum
 
 
@@ -89,7 +89,7 @@ def plot_raw_spectra(calobs: CalibrationObservation, fig=None, ax=None) -> plt.F
 
 
 def plot_s11_residual(
-    raw_s11: CalibratedS11,
+    raw_s11: ReflectionCoefficient,
     s11_model_params: S11ModelParams,
     load_name: str | None = None,
     fig=None,
@@ -206,7 +206,7 @@ def plot_s11_models(
 def plot_calibrated_temp(
     calobs: CalibrationObservation,
     calibrator: Calibrator,
-    load: Load | str,
+    load: InputSource | str,
     bins: int = 2,
     fig=None,
     ax=None,
@@ -257,10 +257,10 @@ def plot_calibrated_temp(
     ax.plot(
         f,
         freq_ave_cal,
-        label=f"Calibrated {load.load_name} [RMS = {rms:.3f}]",
+        label=f"Calibrated {load.name} [RMS = {rms:.3f}]",
     )
 
-    temp_ave = calobs.source_thermistor_temps.get(load.load_name, load.temp_ave)
+    temp_ave = calobs.source_thermistor_temps.get(load.name, load.temp_ave)
 
     if temp_ave.isscalar:
         temp_ave = np.ones(calobs.freqs.size) * temp_ave

@@ -8,6 +8,11 @@ composite linear models.
 
 .. autosummary::
     :toctree: _autosummary
-    :recursive:
+    :template: module.rst
 
-    edges.modelling
+    edges.modeling.core
+    edges.modeling.composite
+    edges.modeling.data_transforms
+    edges.modeling.fitting
+    edges.modeling.models
+    edges.modeling.xtransforms

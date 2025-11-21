@@ -13,9 +13,9 @@ from edges.io import hickleable
 from edges.modeling import CompositeModel, Model
 
 from ..tools import ComplexSpline, Spline
-from .load_data import Load
+from .input_sources import InputSource
 from .noise_waves import get_linear_coefficients
-from .s11 import CalibratedS11, S11ModelParams
+from .sparams import ReflectionCoefficient, S11ModelParams
 
 
 @hickleable
@@ -84,7 +84,7 @@ class Calibrator:
 
     def get_linear_coefficients(
         self,
-        ant_s11: CalibratedS11 | tp.ComplexArray,
+        ant_s11: ReflectionCoefficient | tp.ComplexArray,
         freqs: tp.FreqType | None = None,
         models: dict[str, Callable | Model | None] | None = None,
         s11_model_params: S11ModelParams = S11ModelParams(),
@@ -119,7 +119,7 @@ class Calibrator:
                 "receiver_s11", freqs, model=models.get("receiver_s11")
             )
 
-        if isinstance(ant_s11, CalibratedS11):
+        if isinstance(ant_s11, ReflectionCoefficient):
             if ant_s11.s11.size != freqs.size or not np.allclose(ant_s11.freqs, freqs):
                 ant_s11 = ant_s11.smoothed(
                     params=s11_model_params or S11ModelParams(), freqs=freqs
@@ -145,17 +145,22 @@ class Calibrator:
         return a, b
 
     def calibrate_load(
-        self, load: Load, models: dict[str, Callable | Model | None] | None = None
+        self,
+        load: InputSource,
+        models: dict[str, Callable | Model | None] | None = None,
     ) -> tp.TemperatureType:
         """Calibrate a :class:`Load` object, returning the calibrated temperature."""
         return self.calibrate_q(
-            load.averaged_q, ant_s11=load.s11.s11, freqs=load.freqs, models=models
+            load.averaged_q,
+            ant_s11=load.reflection_coefficient.s11,
+            freqs=load.freqs,
+            models=models,
         )
 
     def calibrate_q(
         self,
         q: np.ndarray,
-        ant_s11: CalibratedS11 | tp.ComplexArray,
+        ant_s11: ReflectionCoefficient | tp.ComplexArray,
         freqs: tp.FreqType | None = None,
         models: dict[str, Callable | Model | None] | None = None,
     ) -> tp.TemperatureType:
@@ -185,7 +190,7 @@ class Calibrator:
     def decalibrate(
         self,
         temp: tp.TemperatureType,
-        ant_s11: CalibratedS11 | tp.ComplexArray,
+        ant_s11: ReflectionCoefficient | tp.ComplexArray,
         freqs: tp.FreqType | None = None,
         models: dict[str, Callable | Model | None] | None = None,
     ) -> tp.TemperatureType:
@@ -222,7 +227,7 @@ class Calibrator:
         temp: tp.FloatArray,
         t_load: float,
         t_load_ns: float,
-        ant_s11: CalibratedS11 | tp.ComplexArray,
+        ant_s11: ReflectionCoefficient | tp.ComplexArray,
         freqs: tp.FreqType | None = None,
         models: dict[str, Callable | Model | None] | None = None,
     ) -> tp.TemperatureType:
