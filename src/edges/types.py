@@ -13,6 +13,7 @@ TemperatureType = units.Quantity["temperature"]
 
 PathLike = str | Path
 ImpedanceType = units.Quantity["electrical impedance"]
+VoltageType = units.Quantity["electrical potential"]
 OhmType = units.Quantity["ohm"]
 DimlessType = units.Quantity["dimensionless"]
 FreqType = units.Quantity["frequency"]

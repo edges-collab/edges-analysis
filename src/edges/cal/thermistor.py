@@ -52,11 +52,16 @@ def get_temperature_thermistor(
     temperature
         The temperature for each `resistance` given.
     """
-    # Steinhart-Hart coefficients
-    coeffs_ = {"oven_industries_TR136_170": [1.03514e-3, 2.33825e-4, 7.92467e-8]}
-
     if isinstance(coeffs, str):
-        coeffs = coeffs_[coeffs]
+        # Steinhart-Hart coefficients
+        coeffs = {
+            "oven_industries_TR136_170": [1.03514e-3, 2.33825e-4, 7.92467e-8],
+            "omega_ON_930_44006": [
+                0.001296751267466723,
+                0.00019737361897609893,
+                3.0403175473012516e-7,
+            ],
+        }[coeffs]
 
     assert len(coeffs) == 3
 
@@ -70,6 +75,28 @@ def get_temperature_thermistor(
             + coeffs[2] * (np.log(resistance.to_value("ohm"))) ** 3
         )
     )
+
+
+def voltage_to_resistance(
+    voltage: tp.VoltageType,
+    load_resistance: tp.OhmType,
+) -> tp.OhmType:
+    """
+    Convert thermistor voltage reading to resistance.
+
+    Parameters
+    ----------
+    voltage
+        The voltage reading from the thermistor circuit.
+    load_resistance
+        The resistance of the load resistor in series with the thermistor.
+
+    Returns
+    -------
+    resistance
+        The resistance of the thermistor.
+    """
+    return load_resistance * voltage / (5 * un.V - voltage)
 
 
 @hickleable
