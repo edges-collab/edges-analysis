@@ -8,6 +8,7 @@ LOSS_PATH = DATA_PATH / "loss"
 
 from ._pooch import (
     fetch_b18_cal_outputs,
+    fetch_b18cal_ants11s,
     fetch_b18cal_calibrated_s11s,
     fetch_b18cal_full,
     fetch_b18cal_resistances,

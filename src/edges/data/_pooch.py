@@ -22,6 +22,7 @@ B18CAL_REPO = pooch.create(
         "S11.7z": "md5:e04bd94977fb0a2d330290c92d0c19f8",
         _S11FILE: "md5:eaf078330589b4adedf4ce0b687f4add",
         "Spectra.7z": "md5:c81c5d7ae127d0306b7c7dcaf5510304",
+        "AntennaS11.7z": "md5:09d67ed167e293864150afa92edd32b2",
     },
 )
 
@@ -78,6 +79,10 @@ def fetch_b18cal_s11s() -> Path:
     return _fetch_b18cal_data("S11")
 
 
+def fetch_b18cal_ants11s() -> Path:
+    return _fetch_b18cal_data("AntennaS11")
+
+
 def fetch_b18cal_calibrated_s11s(in_obs: bool = False) -> Path:
     fl = Path(
         B18CAL_REPO.fetch(
@@ -95,6 +100,7 @@ def fetch_b18cal_calibrated_s11s(in_obs: bool = False) -> Path:
 def fetch_b18cal_full() -> Path:
     fetch_b18cal_resistances()
     fetch_b18cal_s11s()
+    fetch_b18cal_ants11s()
     fetch_b18cal_spectra()
     fetch_b18cal_calibrated_s11s(in_obs=True)
     return _UNZIPPED_B18CAL_OBS
