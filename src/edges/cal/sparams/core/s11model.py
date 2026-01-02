@@ -146,7 +146,7 @@ def get_s11_model(
 
     delay = get_delay(gamma) if params.find_model_delay else params.model_delay
 
-    gamma = gamma.rephase(delay)
+    gamma = gamma.remove_delay(delay)
 
     cmodel = cmodel.fit(
         ydata=gamma.reflection_coefficient,

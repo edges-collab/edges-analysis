@@ -271,11 +271,8 @@ class ReflectionCoefficient:
             reflection_coefficient=self.reflection_coefficient[mask],
         )
 
-    def rephase(self, delay: tp.TimeType) -> Self:
-        """Return a new ReflectionCoefficient rephased by a given delay.
-
-        This is useful to shift the reference plane of the reflection coefficient
-        by a certain electrical length (delay).
+    def remove_delay(self, delay: tp.TimeType) -> Self:
+        """Return a new ReflectionCoefficient with the delay removed.
 
         Parameters
         ----------
