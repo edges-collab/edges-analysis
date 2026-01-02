@@ -8,7 +8,7 @@ from collections.abc import Callable, Sequence
 import hickle
 import numpy as np
 from astropy import units as un
-from astropy.coordinates import AltAz, SkyCoord
+from astropy.coordinates import AltAz, Angle, SkyCoord
 from astropy.time import Time
 from attrs import define
 from pygsdata import GSData, GSFlag, gsregister
@@ -281,7 +281,7 @@ def sky_coord_filter(
     *,
     data: GSData,
     coord: str | SkyCoord,
-    elevation_range: tuple[un.Angle, un.Angle],
+    elevation_range: tuple[Angle, Angle],
 ) -> GSFlag:
     """
     Perform a filter based on a sky coordinate position.
