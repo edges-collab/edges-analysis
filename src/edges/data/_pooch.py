@@ -15,7 +15,7 @@ _S11FILE = "s11_calibration_low_band_LNA25degC_2015-09-16-12-30-29_simulator2_lo
 B18CAL_REPO = pooch.create(
     path=dirs.user_cache_dir,
     # Use the figshare DOI
-    base_url="doi:10.5281/zenodo.17598201",
+    base_url="doi:10.5281/zenodo.18091240",
     registry={
         "LegacyPipelineOutputs.7z": "md5:df5f573d390f0cff46157ce157849925",
         "Resistance.7z": "md5:9ac40bdd7a009ec722af4235dadc6162",
