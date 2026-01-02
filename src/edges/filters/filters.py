@@ -311,7 +311,7 @@ def sky_coord_filter(
 def galaxy_filter(
     *,
     data: GSData,
-    elevation_range: tuple[un.Angle, un.Angle] = (-90 * un.deg, 0 * un.deg),
+    elevation_range: tuple[Angle, Angle] = (-90 * un.deg, 0 * un.deg),
 ) -> GSFlag:
     """
     Perform a filter based on the Galactic center position.
