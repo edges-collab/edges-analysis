@@ -2,14 +2,14 @@
 
 import functools
 import logging
-from collections.abc import Callable, Sequence
 import warnings
+from collections.abc import Callable, Sequence
 
 import hickle
 import numpy as np
 from astropy import units as un
+from astropy.coordinates import AltAz, SkyCoord
 from astropy.time import Time
-from astropy.coordinates import SkyCoord
 from attrs import define
 from pygsdata import GSData, GSFlag, gsregister
 from pygsdata.select import _mask_times, select_freqs
@@ -296,19 +296,22 @@ def sky_coord_filter(
     if isinstance(coord, str):
         coord = SkyCoord.from_name(coord)
 
-    azalt = coord.transform_to(AltAz(location=data.telescope.location, obstime=Time(data.times)))
+    azalt = coord.transform_to(
+        AltAz(location=data.telescope.location, obstime=Time(data.times))
+    )
     alt, _ = azalt.alt
 
     return GSFlag(
         flags=(alt < elevation_range[0]) | (alt > elevation_range[1]), axes=("time",)
     )
 
+
 @gsregister("filter")
 @gsdata_filter()
 def galaxy_filter(
     *,
     data: GSData,
-    elevation_range: tuple[un.Angle, un.Angle] = (-90 * un.deg,  0 * un.deg),
+    elevation_range: tuple[un.Angle, un.Angle] = (-90 * un.deg, 0 * un.deg),
 ) -> GSFlag:
     """
     Perform a filter based on the Galactic center position.
@@ -318,7 +321,9 @@ def galaxy_filter(
     elevation_range
         The minimum and maximum allowed elevation (as an astropy Angle).
     """
-    return sky_coord_filter(data, coord="Galactic Center", elevation_range=elevation_range)
+    return sky_coord_filter(
+        data, coord="Galactic Center", elevation_range=elevation_range
+    )
 
 
 @define
@@ -581,13 +586,14 @@ def peak_orbcomm_filter(
         )[-flags.ndim :],
     )
 
+
 @gsregister("filter")
 @gsdata_filter()
 def single_channel_spike_filter(
     *,
     data: GSData,
     threshold: float = 200,
-    freq_range: tuple[tp.FreqType, tp.FreqType] = (88*un.MHz, 120*un.MHz)
+    freq_range: tuple[tp.FreqType, tp.FreqType] = (88 * un.MHz, 120 * un.MHz),
 ):
     """Filter data based on single channel spikes.
 
@@ -716,7 +722,7 @@ def power_percent_filter(
 def rms_filter(
     data: GSData,
     threshold: float,
-    freq_range: tuple[tp.FreqType, tp.FreqType] = (0.0*un.MHz, np.inf*un.MHz),
+    freq_range: tuple[tp.FreqType, tp.FreqType] = (0.0 * un.MHz, np.inf * un.MHz),
     nsamples_strategy: NsamplesStrategy = NsamplesStrategy.FLAGGED_NSAMPLES,
     model: mdl.Model | None = None,
 ) -> bool:
@@ -740,23 +746,14 @@ def rms_filter(
 
     data = select_freqs(data, freq_range=freq_range)
 
-    # if (
-    #     freq_range[0] * un.MHz > data.freqs.min()
-    #     or freq_range[1] * un.MHz < data.freqs.max()
-    # ):
-    #     data = flag_frequency_ranges(data=data, freq_ranges=[freq_range], invert=True)
-
     if data.residuals is None:
         if model is None:
             raise ValueError("Cannot perform rms_filter without residuals or a model.")
         data = add_model(data=data, model=model, nsamples_strategy=nsamples_strategy)
 
-    #shp = (-1, data.nfreqs)
     w = get_weights_from_strategy(data, nsamples_strategy)[0]
 
-    rms = np.sqrt(
-        averaging.weighted_mean(data=data.residuals ** 2, weights=w)[0]
-    )
+    rms = np.sqrt(averaging.weighted_mean(data=data.residuals**2, weights=w)[0])
 
     return GSFlag(
         flags=(rms > threshold),
@@ -766,6 +763,7 @@ def rms_filter(
             "time",
         ),
     )
+
 
 @gsregister("filter")
 @gsdata_filter()
@@ -784,12 +782,9 @@ def rmsf_filter(
     warnings.warn(
         "rmsf_filter is deprecated, please use rms_filter instead.",
         DeprecationWarning,
+        stacklevel=2,
     )
-    if data.data_unit == "uncalibrated":
-        data =
-    elif data.data_unit in ("uncalibrated_temp", "temperature"):
-        spec = data.data
-    else:
+    if data.data_unit not in ("uncalibrated_temp", "temperature"):
         raise ValueError(
             "Unsupported data_unit for rmsf_filter. "
             "Need uncalibrated or uncalibrated_temp"
