@@ -26,7 +26,7 @@ def get_delay(gamma: ReflectionCoefficient) -> un.Quantity[un.microsecond]:
     """Find the delay of an S11 with a grid search."""
 
     def _objfun(delay, gamma):
-        reph = gamma.rephase(delay * un.microsecond)
+        reph = gamma.remove_delay(delay * un.microsecond)
         return -np.abs(np.sum(reph.reflection_coefficient))
 
     delays = np.arange(-1e-3, 0.1, 1e-4)
