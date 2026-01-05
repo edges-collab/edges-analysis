@@ -63,7 +63,7 @@ dependencies = [
     'yabf',
     "pooch",
     "py7zr",
-
+    'deprecation',
 ]
 dynamic = ["version"]
 
