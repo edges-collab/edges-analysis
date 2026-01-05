@@ -16,6 +16,8 @@ jobs:
           os: [ubuntu-latest, macos-latest]
 
     runs-on: ${{ matrix.os }}
+    outputs:
+      usercache: ${{ steps.usercache.outputs.usercache }}
     steps:
       - uses: actions/checkout@master
         with:
@@ -23,10 +25,14 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
+
+      - name: Setup Environment
+        run: |
+          pip install .
+
       - name: Get Platform Cache Directory
         id: usercache
         run: |
-          pip install platformdirs
           usercache=$(python -c "from platformdirs import user_cache_dir; print(user_cache_dir('edges'))")
           echo "usercache=${usercache}" >> $GITHUB_OUTPUT
 
@@ -71,17 +77,11 @@ jobs:
           pip install -U coverage
           pip install .[dev]
 
-      - name: Get Platform Cache Directory
-        id: usercache
-        run: |
-          usercache=$(python -c "from platformdirs import user_cache_dir; print(user_cache_dir('edges'))")
-          echo "usercache=${usercache}" >> $GITHUB_OUTPUT
-
       - name: Setup Cached Data Files
         uses: actions/cache@v5
         with:
-          path: "${{ steps.usercache.outputs.usercache }}/**/*"
-          key: "pooch-cache"
+          path: "${{ needs.get_cache_data.outputs.usercache }}/**/*"
+          key: "pooch-cache-${{ runner.os }}"
 
       - name: Run Tests
         run: |
