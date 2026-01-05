@@ -7,7 +7,40 @@ on:
 
 
 jobs:
+  get_cache_data:
+    env:
+      ENV_NAME: get_cache_data
+    name: Get Cache Data
+    strategy:
+      matrix:
+          os: [ubuntu-latest, macos-latest]
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@master
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Get Platform Cache Directory
+        id: usercache
+        run: |
+          pip install platformdirs
+          usercache=$(python -c "from platformdirs import user_cache_dir; print(user_cache_dir('edges'))")
+          echo "usercache=${usercache}" >> $GITHUB_OUTPUT
+
+      - name: Setup Cached Data Files
+        uses: actions/cache@v5
+        with:
+          path: "${{ steps.usercache.outputs.usercache }}/**/*"
+          key: "pooch-cache-${{ runner.os }}"
+
+      - name: Download Cached Files
+        run: edges data fetch-b18 --dataset testing
+
   tests:
+    needs: get_cache_data
     env:
       ENV_NAME: tests
       PYTHON: ${{ matrix.python-version }}
@@ -40,7 +73,9 @@ jobs:
 
       - name: Get Platform Cache Directory
         id: usercache
-        run: echo "::set-output name=usercache::$(python -c "from platformdirs import user_cache_dir; print(user_cache_dir('edges'))")"
+        run: |
+          usercache=$(python -c "from platformdirs import user_cache_dir; print(user_cache_dir('edges'))")
+          echo "usercache=${usercache}" >> $GITHUB_OUTPUT
 
       - name: Setup Cached Data Files
         uses: actions/cache@v5

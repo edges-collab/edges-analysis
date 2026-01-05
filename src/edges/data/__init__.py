@@ -6,6 +6,7 @@ DATA_PATH = Path(__file__).absolute().parent
 BEAM_PATH = DATA_PATH / "beams"
 LOSS_PATH = DATA_PATH / "loss"
 
+from . import cli
 from ._pooch import (
     fetch_b18_cal_outputs,
     fetch_b18cal_ants11s,
