@@ -19,13 +19,13 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
         python-version: ["3.11", "3.12", "3.13"]
-        warnfail: [true, false]
+        testtype: ['warnfail', 'standard']
         exclude:
           - os: macos-latest
-            warnfail: true
+            testtype: 'warnfail'
           - os: ubuntu-latest
             python-version: "3.12"
-            warnfail: true
+            testtype: 'warnfail'
     steps:
       - uses: actions/checkout@master
         with:
@@ -48,7 +48,7 @@ jobs:
           key: "pooch-cache"
       - name: Run Tests
         run: |
-          if [ "${{ matrix.warnfail }}" = "true" ]; then
+          if [ "${{ matrix.testtype }}" = "warnfail" ]; then
             python -W error -m pytest;
           else
             python -m pytest --cov edges --cov-report xml:./coverage.xml
