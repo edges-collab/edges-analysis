@@ -236,10 +236,11 @@ def sky_coord_filter(
     if isinstance(coord, str):
         coord = SkyCoord.from_name(coord)
 
+    # Use the times of the first load, assuming that this is the antenna data.
     azalt = coord.transform_to(
-        AltAz(location=data.telescope.location, obstime=Time(data.times))
+        AltAz(location=data.telescope.location, obstime=Time(data.times[:, 0]))
     )
-    alt, _ = azalt.alt
+    alt = azalt.alt
 
     return GSFlag(
         flags=(alt < elevation_range[0]) | (alt > elevation_range[1]), axes=("time",)
@@ -261,8 +262,8 @@ def galaxy_filter(
     elevation_range
         The minimum and maximum allowed elevation (as an astropy Angle).
     """
-    return sky_coord_filter(
-        data, coord="Galactic Center", elevation_range=elevation_range
+    return sky_coord_filter.func(
+        data=data, coord="Galactic Center", elevation_range=elevation_range
     )
 
 

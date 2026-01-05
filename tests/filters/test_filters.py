@@ -355,3 +355,11 @@ class TestPruneFlaggedIntegrations:
         new = mock.add_flags("explicit", flags)
         new = filters.prune_flagged_integrations(new)
         assert new.ntimes == mock.ntimes - 1
+
+
+class TestGalaxyFilter:
+    def test_basic(self, mock):
+        run_filter_check(
+            mock,
+            filters.galaxy_filter,
+        )
