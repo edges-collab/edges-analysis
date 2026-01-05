@@ -14,14 +14,14 @@ dirs = PlatformDirs("edges", "edges-collab")
 _S11FILE = "s11_calibration_low_band_LNA25degC_2015-09-16-12-30-29_simulator2_long.txt"
 B18CAL_REPO = pooch.create(
     path=dirs.user_cache_dir,
-    # Use the figshare DOI
-    base_url="doi:10.5281/zenodo.17598201",
+    base_url="doi:10.5281/zenodo.18091240",
     registry={
         "LegacyPipelineOutputs.7z": "md5:df5f573d390f0cff46157ce157849925",
         "Resistance.7z": "md5:9ac40bdd7a009ec722af4235dadc6162",
         "S11.7z": "md5:e04bd94977fb0a2d330290c92d0c19f8",
         _S11FILE: "md5:eaf078330589b4adedf4ce0b687f4add",
         "Spectra.7z": "md5:c81c5d7ae127d0306b7c7dcaf5510304",
+        "AntennaS11.7z": "md5:09d67ed167e293864150afa92edd32b2",
     },
 )
 
@@ -78,6 +78,10 @@ def fetch_b18cal_s11s() -> Path:
     return _fetch_b18cal_data("S11")
 
 
+def fetch_b18cal_ants11s() -> Path:
+    return _fetch_b18cal_data("AntennaS11")
+
+
 def fetch_b18cal_calibrated_s11s(in_obs: bool = False) -> Path:
     fl = Path(
         B18CAL_REPO.fetch(
@@ -95,6 +99,7 @@ def fetch_b18cal_calibrated_s11s(in_obs: bool = False) -> Path:
 def fetch_b18cal_full() -> Path:
     fetch_b18cal_resistances()
     fetch_b18cal_s11s()
+    fetch_b18cal_ants11s()
     fetch_b18cal_spectra()
     fetch_b18cal_calibrated_s11s(in_obs=True)
     return _UNZIPPED_B18CAL_OBS
