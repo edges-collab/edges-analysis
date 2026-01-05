@@ -5,6 +5,7 @@ import logging
 import warnings
 from collections.abc import Callable, Sequence
 
+import deprecation
 import hickle
 import numpy as np
 from astropy import units as un
@@ -13,6 +14,8 @@ from astropy.time import Time
 from attrs import define
 from pygsdata import GSData, GSFlag, gsregister
 from pygsdata.select import _mask_times, select_freqs
+
+from edges import __version__
 
 from .. import modeling as mdl
 from .. import types as tp
@@ -711,6 +714,12 @@ def rms_filter(
 
 @gsregister("filter")
 @gsdata_filter()
+@deprecation.deprecated(
+    deprecated_in="8.1.0",
+    removed_in="9.0.0",
+    current_version=__version__,
+    details="Use the rms_filter function instead",
+)
 def rmsf_filter(
     *,
     data: GSData,

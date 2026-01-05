@@ -7,6 +7,9 @@ on:
 
 
 jobs:
+  # Our first job just grabs the data from Zenodo required to perform tests
+  # that reproduce B18. This is cached for later jobs to use, and between sessions,
+  # so we don't put as much strain on the Zenodo repo.
   get_cache_data:
     env:
       ENV_NAME: get_cache_data

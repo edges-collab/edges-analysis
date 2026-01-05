@@ -1,5 +1,6 @@
 """Test the filters module."""
 
+import deprecation
 import numpy as np
 import pytest
 from astropy import units as un
@@ -102,15 +103,6 @@ class TestPeakPowerFilter:
 
 def test_peak_orbcomm_filter(mock):
     run_filter_check(mock, filters.peak_orbcomm_filter)
-
-
-class TestRMSF:
-    def test_basic(self, mock):
-        run_filter_check(mock, filters.rmsf_filter, threshold=100)
-
-    def test_all_outside_range(self, mock):
-        new = filters.rmsf_filter(mock, freq_range=(200, 250))
-        assert not np.any(new.complete_flags)
 
 
 class TestMaxFM:
@@ -259,6 +251,7 @@ class TestNegativePowerFilter:
         assert np.all(data.complete_flags[:, :, 0])
 
 
+@deprecation.fail_if_not_removed
 def test_rmsf_filter(gsd_ones: GSData):
     with pytest.raises(ValueError, match="Unsupported data_unit for rmsf_filter"):
         filters.rmsf_filter(gsd_ones.update(data_unit="power"), threshold=100)
@@ -315,6 +308,12 @@ class TestRMSFilter:
     def test_modelled_data(self, mock_with_model: GSData):
         data = filters.rms_filter(mock_with_model, threshold=10)
         assert not np.any(data.complete_flags)
+
+    def test_all_outside_range(self, mock):
+        new = filters.rms_filter(
+            mock, threshold=10, freq_range=(200 * un.MHz, 250 * un.MHz)
+        )
+        assert not np.any(new.complete_flags)
 
 
 class TestExplicitDayFilter:
