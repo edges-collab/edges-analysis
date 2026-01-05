@@ -39,13 +39,15 @@ jobs:
           pip install .[dev]
 
       - name: Get Platform Cache Directory
-        run:  echo "USER_CACHE_DIR=$(python -c "from platformdirs import user_cache_dir; print(user_cache_dir('edges'))")" >> $GITHUB_ENV
+        id: usercache
+        run: echo "::set-output name=usercache::$(python -c "from platformdirs import user_cache_dir; print(user_cache_dir('edges'))")"
 
       - name: Setup Cached Data Files
         uses: actions/cache@v5
         with:
-          path: "$USER_CACHE_DIR/**/*"
+          path: "${{ steps.usercache.outputs.usercache }}/**/*"
           key: "pooch-cache"
+
       - name: Run Tests
         run: |
           if [ "${{ matrix.testtype }}" = "warnfail" ]; then
