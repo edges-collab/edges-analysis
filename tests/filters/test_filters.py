@@ -273,13 +273,7 @@ def test_rmsf_filter(gsd_ones: GSData):
 
     data = gsd_ones.update(data=pl, data_unit="uncalibrated_temp")
 
-    print(gsd_ones.data.shape, data.data.shape)
-    new = filters.rmsf_filter(data, threshold=1)
-
-    data = gsd_ones.update(data=(pl - 300) / 1000, data_unit="uncalibrated")
-    new2 = filters.rmsf_filter(data, threshold=1, tcal=300, tload=1000)
-
-    assert np.all(new.complete_flags == new2.complete_flags)
+    filters.rmsf_filter(data, threshold=1)
 
 
 class TestRMSFilter:

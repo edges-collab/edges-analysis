@@ -23,71 +23,6 @@ from .runners import run_xrfi
 logger = logging.getLogger(__name__)
 
 
-class _GSDataFilter:
-    def __init__(
-        self,
-        func: Callable,
-        multi_data: bool = False,
-    ):
-        self.func = func
-        self.multi_data = multi_data
-        functools.update_wrapper(self, func, updated=())
-
-    def __call__(
-        self,
-        data: Sequence[GSData],
-        *,
-        flag_id: str | None = None,
-        **kwargs,
-    ) -> GSData | Sequence[GSData]:
-        # Read all the data, in case they haven't been turned into objects yet.
-        # And check that everything is the right type.
-        if self.multi_data and isinstance(data, GSData):
-            data = [data]
-        elif not self.multi_data and not isinstance(data, GSData):
-            raise TypeError(
-                f"'{self.func.__name__}' only accepts single GSData objects as data."
-            )
-
-        def per_file_processing(data: GSData, flags: GSFlag):
-            old = np.sum(data.flagged_nsamples == 0)
-
-            data = data.add_flags(flag_id or self.func.__name__, flags)
-
-            if np.all(flags.flags):
-                logger.warning(
-                    f"{data.name} was fully flagged during {self.func.__name__} filter"
-                )
-            else:
-                sz = flags.flags.size / 100
-                new = np.sum(flags.flags)
-                tot = np.sum(data.flagged_nsamples == 0)
-                totsz = data.complete_flags.size
-
-                rep = data.get_initial_yearday(hours=True)
-
-                logger.info(
-                    f"'{rep}': "
-                    f"{old / totsz:.2f} + {new / sz:.2f} → "
-                    f"{tot / totsz:.2f}% [bold]<+{(tot - old) / totsz:.2f}%>[/] "
-                    f"flagged after [blue]{self.func.__name__}[/]"
-                )
-
-            return data
-
-        this_flag = self.func(data=data, **kwargs)
-
-        if self.multi_data:
-            data = [
-                per_file_processing(d, out_flg)
-                for d, out_flg in zip(data, this_flag, strict=False)
-            ]
-        else:
-            data = per_file_processing(data, this_flag)
-
-        return data
-
-
 def gsdata_filter(multi_data: bool = False):
     """A decorator to register a filtering function as a potential filter.
 
@@ -115,6 +50,8 @@ def gsdata_filter(multi_data: bool = False):
     """
 
     def inner(func: Callable) -> Callable:
+        func.func = func  # type: ignore
+
         @functools.wraps(func)
         def wrapper(
             data: GSData | Sequence[GSData],
@@ -326,7 +263,7 @@ def galaxy_filter(
     )
 
 
-@define
+@define(frozen=False, slots=False)
 class _RFIFilterFactory:
     method: str
 
@@ -628,7 +565,7 @@ def maxfm_filter(*, data: GSData, threshold: float = 200):
     that had the same filter with this name. It is really just a very thin wrapper
     around `single_channel_spike_filter`, focusing on the FM band.
     """
-    return single_channel_spike_filter(
+    return single_channel_spike_filter.func(
         data=data, threshold=threshold, freq_range=(88 * un.MHz, 120 * un.MHz)
     )
 
@@ -746,6 +683,13 @@ def rms_filter(
 
     data = select_freqs(data, freq_range=freq_range)
 
+    if data.data.size == 0:
+        # No data in the given frequency range, so nothing to flag.
+        return GSFlag(
+            flags=np.zeros(shape=(data.nloads, data.npols, data.ntimes), dtype=bool),
+            axes=("load", "pol", "time"),
+        )
+
     if data.residuals is None:
         if model is None:
             raise ValueError("Cannot perform rms_filter without residuals or a model.")
@@ -787,10 +731,10 @@ def rmsf_filter(
     if data.data_unit not in ("uncalibrated_temp", "temperature"):
         raise ValueError(
             "Unsupported data_unit for rmsf_filter. "
-            "Need uncalibrated or uncalibrated_temp"
+            "Need temperature or uncalibrated_temp"
         )
 
-    rms_filter(
+    return rms_filter.func(
         data=data,
         threshold=threshold,
         freq_range=freq_range,
