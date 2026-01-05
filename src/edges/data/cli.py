@@ -6,7 +6,7 @@ from cyclopts import App
 from rich.console import Console
 
 from ..cli import app
-from . import (
+from ._pooch import (
     fetch_b18cal_calibrated_s11s,
     fetch_b18cal_full,
     fetch_b18cal_resistances,
