@@ -19,6 +19,13 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
         python-version: ["3.11", "3.12", "3.13"]
+        warnfail: [true, false]
+        exclude:
+          - os: macos-latest
+            warnfail: true
+          - os: ubuntu-latest
+            python-version: "3.12"
+            warnfail: true
     steps:
       - uses: actions/checkout@master
         with:
@@ -30,9 +37,22 @@ jobs:
         run: |
           pip install -U coverage
           pip install .[dev]
+
+      - name: Get Platform Cache Directory
+        run:  echo "USER_CACHE_DIR=$(python -c "from platformdirs import user_cache_dir; print(user_cache_dir('edges'))")" >> $GITHUB_ENV
+
+      - name: Setup Cached Data Files
+        uses: actions/cache@v5
+        with:
+          path: "$USER_CACHE_DIR/**/*"
+          key: "pooch-cache"
       - name: Run Tests
         run: |
-          python -m pytest --cov edges --cov-report xml:./coverage.xml
+          if [ "${{ matrix.warnfail }}" = "true" ]; then
+            python -W error -m pytest;
+          else
+            python -m pytest --cov edges --cov-report xml:./coverage.xml
+          fi
       - uses: codecov/codecov-action@v5
         if: matrix.os == 'ubuntu-latest' && success()
         with:
@@ -41,29 +61,3 @@ jobs:
           fail_ci_if_error: true
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-
-  warnings_tests:
-    env:
-      PYTHON: ${{ matrix.python-version }}
-      OS: ${{ matrix.os }}
-    name: Warnings Tests
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest]
-        python-version: ["3.11", "3.13"]
-    steps:
-      - uses: actions/checkout@master
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-python@v6
-        with:
-          python-version: ${{ matrix.python-version }}
-      - name: Setup Environment
-        run: |
-          pip install -U coverage
-          pip install .[dev]
-      - name: Run Tests
-        run: |
-          python -W error -m pytest
