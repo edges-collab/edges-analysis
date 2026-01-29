@@ -109,16 +109,30 @@ def average_over_times(
 
     # The new time will be the mean unflagged time
     ww = np.any(w > 0, axis=(0, 1, 3))
-    times = Time(np.atleast_2d(np.mean(data.times.jd[ww], axis=0)), format="jd")
-    time_ranges = Time(
-        np.array([
-            [
-                data.time_ranges.jd[ww].min(axis=(0, 2)),
-                data.time_ranges.jd[ww].max(axis=(0, 2)),
-            ]
-        ]).transpose((0, 2, 1)),
-        format="jd",
-    )
+    if not np.any(ww):
+        raise ValueError(
+            "No valid (unflagged) time samples to average. "
+            "All time steps have zero weight under the chosen nsamples_strategy."
+        )
+    jd_mean = np.nanmean(data.times.jd[ww], axis=0)
+    if not np.all(np.isfinite(jd_mean)):
+        raise ValueError(
+            "Computed mean time is non-finite (NaN/Inf). "
+            "Check that data.times has finite JD values for unflagged samples."
+        )
+    times = Time(np.atleast_2d(jd_mean), format="jd")
+    tr_jd = np.array([
+        [
+            data.time_ranges.jd[ww].min(axis=(0, 2)),
+            data.time_ranges.jd[ww].max(axis=(0, 2)),
+        ]
+    ]).transpose((0, 2, 1))
+    if not np.all(np.isfinite(tr_jd)):
+        raise ValueError(
+            "Time ranges contain non-finite values. "
+            "Check data.time_ranges for unflagged samples."
+        )
+    time_ranges = Time(tr_jd, format="jd")
 
     # Wrap the LSTs into +-12 hours of the reference LST.
     # Note that we de-unit the quantities to do the wrapping
