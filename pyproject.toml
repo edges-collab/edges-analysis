@@ -177,6 +177,7 @@ ignore = [
     "PTH123",
     "PT011",
     "A005",  # module name shadows builtin
+    "RUF067",  # allow defining new variables in __Init__ files
 ]
 
 [tool.ruff.lint.per-file-ignores]
