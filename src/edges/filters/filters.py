@@ -160,7 +160,10 @@ def aux_filter(
                 f"{k} not in data.auxiliary_measurements. "
                 f"Allowed: {data.auxiliary_measurements.keys()}"
             )
-        filt(data.auxiliary_measurements[k] < v, f"{k} minimum", flags)
+        if isinstance(data.auxiliary_measurements[k], un.Quantity):
+            filt(data.auxiliary_measurements[k].value < v, f"{k} minimum", flags)
+        else:
+            filt(data.auxiliary_measurements[k] < v, f"{k} minimum", flags)
 
     for k, v in maxima.items():
         if k not in data.auxiliary_measurements.keys():  # noqa: SIM118
@@ -168,7 +171,10 @@ def aux_filter(
                 f"{k} not in data.auxiliary_measurements. "
                 f"Allowed: {data.auxiliary_measurements.keys()}"
             )
-        filt(data.auxiliary_measurements[k] > v, f"{k} maximum", flags)
+        if isinstance(data.auxiliary_measurements[k], un.Quantity):
+            filt(data.auxiliary_measurements[k].value > v, f"{k} minimum", flags)
+        else:
+            filt(data.auxiliary_measurements[k] > v, f"{k} maximum", flags)
 
     return GSFlag(flags=flags, axes=("time",))
 
