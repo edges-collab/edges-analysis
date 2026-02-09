@@ -172,7 +172,7 @@ def aux_filter(
                 f"Allowed: {data.auxiliary_measurements.keys()}"
             )
         if isinstance(data.auxiliary_measurements[k], un.Quantity):
-            filt(data.auxiliary_measurements[k].value > v, f"{k} minimum", flags)
+            filt(data.auxiliary_measurements[k].value > v, f"{k} maximum", flags)
         else:
             filt(data.auxiliary_measurements[k] > v, f"{k} maximum", flags)
 
