@@ -296,7 +296,7 @@ def Haslam408AllNoh():  # noqa: N802
     fl = download_file(
         (
             "https://raw.githubusercontent.com/edges-collab/alans-pipeline/main/"
-            "scripts/408-all-noh"
+            "data/408-all-noh"
         ),
         cache=True,
     )
