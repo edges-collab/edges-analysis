@@ -320,7 +320,7 @@ class LoadSpectrum:
                 thermistor, ignore_times=ignore_times
             )
         else:
-            thermistor = None
+            # thermistor = None
             temperature_range = None
 
         meanq, varq = get_ave_and_var_spec(
@@ -337,6 +337,9 @@ class LoadSpectrum:
 
         if temperature is None:
             if thermistor is not None:
+                thermistor = ThermistorReadings.from_csv(
+                    thermistor, ignore_times=ignore_times
+                )
                 temperature = np.nanmean(thermistor.get_physical_temperature())
             elif templog is None:
                 raise ValueError(
