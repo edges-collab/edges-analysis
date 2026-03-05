@@ -169,6 +169,13 @@ class LinLog(Foreground):
     """
     LinLog model from Memo #122.
 
+    Parameters
+    ----------
+    poly_order : int
+        The maximum polynomial order will be `poly_order - 1`. There are
+        `poly_order + 1` total parameters, including `beta` and `p1` (which should
+        usually be set to zero).
+
     Notes
     -----
     The model there is slightly ambiguous. Actually taking the Taylor Expansion
@@ -177,13 +184,6 @@ class LinLog(Foreground):
 
     We leave that parameter open, but suggest not letting it vary, and leaving
     it as zero.
-
-    Parameters
-    ----------
-    poly_order : int
-        The maximum polynomial order will be `poly_order - 1`. There are
-        `poly_order + 1` total parameters, including `beta` and `p1` (which should
-        usually be set to zero).
     """
 
     poly_order = attrs.field(default=5, converter=int, kw_only=True)

@@ -98,14 +98,14 @@ def plot_daily_residuals(
     separation
         The separation between residuals in K (on the plot).
 
-    Other Parameters
-    ----------------
-    All other parameters are passed through to :func:`plot_time_average`.
-
     Returns
     -------
     ax
         The matplotlib Axes on which the plot is made.
+
+    Other Parameters
+    ----------------
+    All other parameters are passed through to :func:`plot_time_average`.
     """
     if ax is None:
         _fig, ax = plt.subplots(1, 1)

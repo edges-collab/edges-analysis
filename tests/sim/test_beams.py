@@ -85,6 +85,93 @@ def test_uniform_beam():
     assert np.allclose(beam.angular_interpolator(0)(az, el), 1)
 
 
+def _off_axis_azimuth_averaged_response(
+    beam: beams.Beam, freq_indx: int, el: int
+) -> float:
+    el_indx = np.where(beam.elevation == el)[0][0]
+    beam_slice = np.asarray(beam.beam[freq_indx])
+
+    return float(np.nanmean(beam_slice[el_indx]))
+
+
+def test_gaussian_beam_wider_at_lower_frequency():
+    beam = beams.Beam.gaussian(
+        dish_size=3.0,
+        f_low=50,
+        f_high=150,
+        delta_f=50,
+        delta_el=1,
+        delta_az=5,
+    )
+
+    low_freq_response = _off_axis_azimuth_averaged_response(beam, freq_indx=0, el=80)
+    high_freq_response = _off_axis_azimuth_averaged_response(beam, freq_indx=-1, el=80)
+
+    assert low_freq_response > high_freq_response
+
+
+def test_airy_beam_wider_at_lower_frequency():
+    beam = beams.Beam.airy(
+        dish_size=3.0,
+        f_low=50,
+        f_high=150,
+        delta_f=50,
+        delta_el=1,
+        delta_az=5,
+    )
+
+    low_freq_response = _off_axis_azimuth_averaged_response(beam, freq_indx=0, el=85)
+    high_freq_response = _off_axis_azimuth_averaged_response(beam, freq_indx=-1, el=85)
+
+    assert low_freq_response > high_freq_response
+
+
+@pytest.mark.parametrize("beam_constructor", ["gaussian", "airy"])
+def test_gaussian_and_airy_beams_no_nans(beam_constructor):
+    """Verify that both gaussian and airy constructors produce no NaN values."""
+    beam = getattr(beams.Beam, beam_constructor)(
+        dish_size=3.0,
+        f_low=50,
+        f_high=150,
+    )
+
+    assert not np.any(np.isnan(beam.beam)), "beam contains NaN values"
+
+
+@pytest.mark.parametrize("beam_constructor", ["gaussian", "airy", "uniform"])
+def test_gaussian_beam_rotationally_symmetric(beam_constructor):
+    """Test that Gaussian beams are rotationally symmetric.
+
+    For a rotationally symmetric antenna, the beam response at a given elevation
+    should be constant across all azimuths.
+    """
+    kw = {
+        "f_low": 75,
+        "f_high": 125,
+        "delta_f": 25,
+        "delta_el": 10,
+        "delta_az": 1,
+    }
+    if beam_constructor in ("gaussian", "airy"):
+        beam = getattr(beams.Beam, beam_constructor)(dish_size=3.0, **kw)
+    else:
+        beam = beams.Beam.uniform(**kw)
+
+    # Check at multiple frequencies and elevations
+    for freq_indx in [0, 1, -1]:
+        for el in [0, 30, 60, 80]:
+            if el not in beam.elevation:
+                continue
+            el_indx = np.where(beam.elevation == el)[0][0]
+            beam_row = beam.beam[freq_indx][el_indx, :]
+
+            # All azimuths at this elevation should have the same beam value
+            assert np.allclose(beam_row, beam_row[0], rtol=1e-10), (
+                "Gaussian beam not rotationally symmetric at "
+                f"freq_indx={freq_indx}, el={el}"
+            )
+
+
 def test_antenna_beam_factor(beam):
     abf = edges.sim.compute_antenna_beam_factor(
         beam=beam,

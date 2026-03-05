@@ -16,9 +16,9 @@ def is_unit(unit: str) -> bool:
 
     try:
         u.Unit(unit)
-        return True
     except ValueError:
         return False
+    return True
 
 
 def vld_unit(

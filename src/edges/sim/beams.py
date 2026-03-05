@@ -9,6 +9,7 @@ import attrs
 import numpy as np
 import scipy.interpolate as spi
 from astropy import units as u
+from scipy.special import j1
 
 from edges.data import BEAM_PATH
 
@@ -49,6 +50,17 @@ class Beam:
     simulator: str | None = attrs.field(default=None, converter=str)
     instrument: str | None = attrs.field(default=None, converter=str)
     raw_file: str | None = attrs.field(default=None, converter=str)
+
+    @beam.validator
+    def _check_beam_shape(self, attribute, value):
+        if value.ndim != 3:
+            raise ValueError("Beam must be a 3D array.")
+        if value.shape[0] != len(self.frequency):
+            raise ValueError("First dimension of beam must match length of frequency.")
+        if value.shape[1] != len(self.elevation):
+            raise ValueError("Second dimension of beam must match length of elevation.")
+        if value.shape[2] != len(self.azimuth):
+            raise ValueError("Third dimension of beam must match length of azimuth.")
 
     @classmethod
     def from_hfss(
@@ -229,6 +241,57 @@ class Beam:
         )
 
     @classmethod
+    def gaussian(
+        cls, dish_size: float, delta_f=2, f_low=40, f_high=200, delta_az=1, delta_el=1
+    ):
+        """Create an ideal Gaussian beam."""
+        freq = np.arange(f_low, f_high, delta_f)
+        az = np.arange(0, 360, delta_az)
+        el = np.arange(0, 90 + 0.1 * delta_el, delta_el)
+
+        beam_sigma = (
+            1.22 * (3e8 / (freq * 1e6)) / dish_size
+        )  # FWHM of the beam in radians
+        r = np.tile(90 - el, len(az)).reshape((len(az), len(el))).T  # zenith angle
+        beam = np.exp(
+            -0.5 * (r[None] / beam_sigma[:, None, None]) ** 2
+        )  # Gaussian beam pattern
+
+        return Beam(
+            frequency=freq * u.MHz,
+            azimuth=az,
+            elevation=el,
+            beam=beam,
+            simulator="analytic",
+        )
+
+    @classmethod
+    def airy(
+        cls, dish_size: float, delta_f=2, f_low=40, f_high=200, delta_az=1, delta_el=1
+    ):
+        """Create an ideal Airy disk beam."""
+        freq = np.arange(f_low, f_high, delta_f)
+        az = np.arange(0, 360, delta_az)
+        el = np.arange(0, 90 + 0.1 * delta_el, delta_el)
+
+        k = 2 * np.pi * (freq * 1e6) / 3e8  # wavenumber
+        r = np.tile(90 - el, len(az)).reshape((len(az), len(el))).T  # zenith angle
+        x = (
+            k[:, None, None] * dish_size * np.sin(np.radians(r[None])) / 2
+        )  # argument for the Bessel function
+        with np.errstate(divide="ignore", invalid="ignore"):
+            beam = (2 * j1(x) / x) ** 2  # Airy disk pattern
+        beam[x == 0] = 1.0  # Handle the x=0 case: limit of (2*J1(x)/x)^2 as x->0 is 1
+
+        return Beam(
+            frequency=freq * u.MHz,
+            azimuth=az,
+            elevation=el,
+            beam=beam,
+            simulator="analytic",
+        )
+
+    @classmethod
     def from_feko(cls, path: str | Path, az_antenna_axis: float = 0) -> Self:
         """
         Read a FEKO beam file.
@@ -397,7 +460,7 @@ class Beam:
 
         read_file(Path(f"{file_name_prefix}_0-90.{ext}"), 0)
 
-        z = theta_p * 90 + 10  #
+        z = theta_p * 90 + 10
 
         read_file(Path(f"{file_name_prefix}_91-180.{ext}"), 91)
         read_file(Path(f"{file_name_prefix}_181-270.{ext}"), 181)

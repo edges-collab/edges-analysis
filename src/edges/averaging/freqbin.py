@@ -13,7 +13,7 @@ from . import averaging as avg
 @gsregister("reduce")
 def freq_bin(
     data: GSData,
-    bins: np.ndarray | un.Quantity | int | float | None = None,
+    bins: np.ndarray | un.Quantity | float | None = None,
     debias: bool | None = None,
 ) -> GSData:
     """

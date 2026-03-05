@@ -104,6 +104,11 @@ dev = [
 [project.scripts]
 edges = "edges.cli:app"
 
+[dependency-groups]
+dev = [
+    "ruff>=0.15.4",
+]
+
 [tool.setuptools]
 ext-modules = [
   {name = "edges.modeling.cqrd", sources = ["src/edges/modeling/c_modeling.c"]}
@@ -178,6 +183,8 @@ ignore = [
     "PT011",
     "A005",  # module name shadows builtin
     "RUF067",  # allow defining new variables in __Init__ files
+    "RUF069",  # allow "unreliable" floating point equality comparison for now
+    "PLR0206",  # allow pytest.fixtures to have parameters
 ]
 
 [tool.ruff.lint.per-file-ignores]
