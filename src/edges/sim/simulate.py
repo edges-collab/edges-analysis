@@ -6,6 +6,8 @@ import astropy.coordinates as apc
 import astropy.time as apt
 import numpy as np
 from astropy import units as un
+from astropy.coordinates import Longitude
+from pygsdata import GSData, Telescope
 from pygsdata import coordinates as gscrd
 from read_acq import _coordinates as crda
 from rich.progress import track
@@ -22,7 +24,7 @@ REFERENCE_TIME = apt.Time("2014-01-01T09:39:42", location=const.edges_location)
 
 
 def sky_convolution_generator(
-    lsts: np.ndarray,
+    lsts: Longitude,
     beam: Beam,
     sky_model: sky_models.SkyModel,
     index_model: sky_models.IndexModel,
@@ -114,7 +116,7 @@ def sky_convolution_generator(
         ground_gain = np.asarray(ground_loss)
 
     # Get the local times corresponding to the given LSTs
-    times = gscrd.lsts_to_times(lsts * un.hourangle, ref_time, location)
+    times = gscrd.lsts_to_times(lsts, ref_time, location)
 
     beam_above_horizon = np.full(sky_model.coords.shape, np.nan)
     interpolators = {}
@@ -134,7 +136,7 @@ def sky_convolution_generator(
                 sky_model.coords.galactic.b.deg, sky_model.coords.galactic.l.deg
             )
             az, el = crda.radec_azel_from_lst(
-                lsts[lst_idx] * np.pi / 12, ra, dec, location.lat.rad
+                lsts[lst_idx].rad, ra, dec, location.lat.rad
             )
             az *= 180 / np.pi
             el *= 180 / np.pi
@@ -218,10 +220,10 @@ def simulate_spectra(
     f_high: float | None = np.inf,
     normalize_beam: bool = True,
     index_model: sky_models.IndexModel = sky_models.ConstantIndex(),
-    lsts: np.ndarray = None,
+    lsts: Longitude | None = None,
     beam_smoothing: bool = True,
     smoothing_model: mdl.Model = mdl.Polynomial(n_terms=12),
-    location: apc.EarthLocation = const.KNOWN_TELESCOPES["edges-low"].location,
+    telescope: Telescope = const.KNOWN_TELESCOPES["edges-low"],
     ref_time: apt.Time = REFERENCE_TIME,
     interp_kind: Literal[
         "linear",
@@ -234,16 +236,16 @@ def simulate_spectra(
         "sphere-spline",
     ] = "sphere-spline",
     use_astropy_azel: bool = True,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+) -> GSData:
     """
     Simulate global spectra from sky and beam models.
 
     Parameters
     ----------
-    band
-        The band of the antenna (low, mid, high).
     beam
         A :class:`Beam` object.
+    sky_model
+        A sky model to use.
     ground_loss
         An array of ground-loss values for the beam, shape (Nfreq,).
     f_low
@@ -254,29 +256,50 @@ def simulate_spectra(
         the beam).
     normalize_beam
         Whether to normalize the beam to be maximum unity.
-    sky_model
-        A sky model to use.
     index_model
         An :class:`IndexModel` to use to generate different frequencies of the sky
         model.
     lsts
         The LSTs at which to simulate
+    beam_smoothing
+        Whether to smooth the beam in frequency before interpolating. This can help
+        with interpolation artifacts, but can also make the simulation less accurate.
+    smoothing_model
+        The model to use for smoothing the beam in frequency. Only used if
+        ``beam_smoothing`` is True.
+    telescope
+        The telescope to use for the simulation. Specifies the location and
+        polarizations of the simulation.
+    ref_time
+        The reference time to use for the simulation. This is used to convert between
+        LST and local time. By default, this is set to a time when the LST is 0.1666
+        (00:10 Hrs LST) at the EDGES location, but can be set to any time.
+    interp_kind
+        The kind of interpolation to use for the beam. "spline" uses
+        :class:`scipy.interpolate.RectBivariateSpline` and "sphere-spline" uses
+        :class:`scipy.interpolate.RectSphereBivariateSpline`. All other options use
+        :class:`scipy.interpolate.RegularGridInterpolator`. with the given kind as
+        ``method``.
+    use_astropy_azel
+        Whether to use the astropy coordinate system for azimuth and elevation. If
+        False, compute the az/el using Alan's method.
 
     Returns
     -------
-    antenna_temperature_above_horizon
-        The antenna temperature for pixels above the horizon, shape (Nlst, Nfreq)
-    freq
-        The frequencies at which the simulation is defined.
-    lst
-        The LSTs at which the sim is defined.
+    spectra
+        A :class:`GSData` object containing the simulated spectra. The data array has
+        shape (1, 1, Ntimes, Nfreqs), where the first two dimensions are singleton
+        dimensions for loads and polarizations. The frequencies are taken from the beam,
+        but only those between ``f_low`` and ``f_high`` are kept.
+
     """
     beam = beam.between_freqs(f_low, f_high)
     if lsts is None:
-        lsts = np.arange(0, 24, 0.5)
+        lsts = Longitude(np.arange(0, 24, 0.5) * un.hour)
 
     antenna_temperature_above_horizon = np.zeros((len(lsts), len(beam.frequency)))
-    for i, j, temperature, _, _, _, _, _, _, _, _ in sky_convolution_generator(
+    times = []
+    for i, j, temperature, _, _, _, time, _, _, _, _ in sky_convolution_generator(
         lsts=lsts,
         ground_loss=ground_loss,
         beam=beam,
@@ -287,9 +310,21 @@ def simulate_spectra(
         smoothing_model=smoothing_model,
         interp_kind=interp_kind,
         use_astropy_azel=use_astropy_azel,
-        location=location,
+        location=telescope.location,
         ref_time=ref_time,
     ):
         antenna_temperature_above_horizon[i, j] = temperature
 
-    return antenna_temperature_above_horizon, beam.frequency, lsts
+        # Only append the time for a single frequency on each loop
+        if j == 0:
+            times.append(time)
+
+    return GSData(
+        data=antenna_temperature_above_horizon[None, None],
+        freqs=beam.frequency,
+        lsts=lsts[:, None],
+        times=apt.Time(times)[:, None],
+        telescope=telescope,
+        pols=telescope.pols,
+        loads=("ant",),
+    )
