@@ -9,7 +9,6 @@ from astropy import units as un
 from pygsdata import coordinates as gscrd
 from read_acq import _coordinates as crda
 from rich.progress import track
-from tqdm import tqdm
 
 from .. import const
 from .. import modeling as mdl
@@ -151,9 +150,9 @@ def sky_convolution_generator(
         # Using np.roll means we start at the reference frequency and loop around.
         # Starting at ref freq (if there is one) means that we can use the
         # reference beam with other frequencies.
-        for freq_idx in tqdm(
+        for freq_idx in track(
             np.roll(range(len(beam.frequency)), -ref_freq_idx),
-            unit="Frequency",
+            description="Frequency",
             disable=not freq_progress,
         ):
             if freq_idx not in interpolators:
