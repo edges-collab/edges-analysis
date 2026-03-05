@@ -66,20 +66,6 @@ def gamma_de_embed(
     See Eq. 2 of Monsalve et al., 2016 or
     https://en.wikipedia.org/wiki/Scattering_parameters#S-parameters_in_amplifier_design
 
-    Notes
-    -----
-    Given the reflection coefficient observed at a reference plane on one side of
-    an electrical component/subsystem, this function returns the reflection coefficient
-    at the reference plane on the other side of the subsystem::
-
-       ---         ------------
-      |VNA| ---|---| SUBSYTEM |---|---
-       ---         ------------
-               ^                  ^
-               |                  |
-           MEAS. REF.          DESIRED REF.
-             PLANE               PLANE
-
     Parameters
     ----------
     gamma
@@ -101,6 +87,21 @@ def gamma_de_embed(
     --------
     gamma_embed
         The inverse function to this one.
+
+    Notes
+    -----
+    Given the reflection coefficient observed at a reference plane on one side of
+    an electrical component/subsystem, this function returns the reflection coefficient
+    at the reference plane on the other side of the subsystem::
+
+       ---         ------------
+      |VNA| ---|---| SUBSYTEM |---|---
+       ---         ------------
+               ^                  ^
+               |                  |
+           MEAS. REF.          DESIRED REF.
+             PLANE               PLANE
+
     """
     gamma_in = gamma.reflection_coefficient
     return ReflectionCoefficient(
