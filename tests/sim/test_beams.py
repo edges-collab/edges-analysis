@@ -20,6 +20,46 @@ def beam() -> beams.Beam:
     return beams.Beam.from_file("low")
 
 
+def test_bad_beam_shapes():
+    with pytest.raises(ValueError, match="Beam must be a 3D array"):
+        beams.Beam(
+            frequency=np.array([50, 75, 100]) * un.MHz,
+            azimuth=np.array([0, 90, 180]),
+            elevation=np.array([0, 45, 90]),
+            beam=np.zeros((3, 3)),
+        )
+
+    with pytest.raises(
+        ValueError, match="First dimension of beam must match length of frequency"
+    ):
+        beams.Beam(
+            frequency=np.array([50, 75, 90]) * un.MHz,
+            azimuth=np.array([0, 90]),
+            elevation=np.array([0, 45]),
+            beam=np.zeros((2, 2, 2)),
+        )
+
+    with pytest.raises(
+        ValueError, match="Second dimension of beam must match length of elevation"
+    ):
+        beams.Beam(
+            frequency=np.array([50, 75]) * un.MHz,
+            azimuth=np.array([0, 90]),
+            elevation=np.array([0, 45, 90]),
+            beam=np.zeros((2, 2, 2)),
+        )
+
+    with pytest.raises(
+        ValueError, match="Third dimension of beam must match length of azimuth"
+    ):
+        beams.Beam(
+            frequency=np.array([50, 75]) * un.MHz,
+            azimuth=np.array([0, 45, 90]),
+            elevation=np.array([0, 45]),
+            beam=np.zeros((2, 2, 2)),
+        )
+
+
 def test_beam_from_feko(beam):
     assert beam.frequency.min() == 40.0 * un.MHz
     assert beam.frequency.max() == 100.0 * un.MHz

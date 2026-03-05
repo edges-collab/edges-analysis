@@ -216,13 +216,13 @@ def sky_convolution_generator(
 
 def simulate_spectra(
     beam: Beam,
+    lsts: Longitude,
     sky_model: sky_models.SkyModel,
     ground_loss: np.ndarray | None = None,
     f_low: FreqType = 0 * un.MHz,
     f_high: FreqType = np.inf * un.MHz,
     normalize_beam: bool = True,
     index_model: sky_models.IndexModel = sky_models.ConstantIndex(),
-    lsts: Longitude | None = None,
     beam_smoothing: bool = True,
     smoothing_model: mdl.Model = mdl.Polynomial(n_terms=12),
     telescope: Telescope = const.KNOWN_TELESCOPES["edges-low"],
@@ -246,6 +246,8 @@ def simulate_spectra(
     ----------
     beam
         A :class:`Beam` object.
+    lsts
+        The LSTs at which to simulate
     sky_model
         A sky model to use.
     ground_loss
@@ -261,8 +263,6 @@ def simulate_spectra(
     index_model
         An :class:`IndexModel` to use to generate different frequencies of the sky
         model.
-    lsts
-        The LSTs at which to simulate
     beam_smoothing
         Whether to smooth the beam in frequency before interpolating. This can help
         with interpolation artifacts, but can also make the simulation less accurate.
@@ -296,8 +296,7 @@ def simulate_spectra(
 
     """
     beam = beam.between_freqs(f_low, f_high)
-    if lsts is None:
-        lsts = Longitude(np.arange(0, 24, 0.5) * un.hour)
+    lsts = Longitude(np.arange(0, 24, 0.5) * un.hour)
 
     antenna_temperature_above_horizon = np.zeros((len(lsts), len(beam.frequency)))
     times = []
