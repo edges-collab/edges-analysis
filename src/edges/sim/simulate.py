@@ -219,6 +219,8 @@ def simulate_spectra(
     lsts: np.ndarray = None,
     beam_smoothing: bool = True,
     smoothing_model: mdl.Model = mdl.Polynomial(n_terms=12),
+    location: apc.EarthLocation = const.KNOWN_TELESCOPES["edges-low"].location,
+    ref_time: apt.Time = REFERENCE_TIME,
     interp_kind: Literal[
         "linear",
         "nearest",
@@ -283,6 +285,8 @@ def simulate_spectra(
         smoothing_model=smoothing_model,
         interp_kind=interp_kind,
         use_astropy_azel=use_astropy_azel,
+        location=location,
+        ref_time=ref_time,
     ):
         antenna_temperature_above_horizon[i, j] = temperature
 
