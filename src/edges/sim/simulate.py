@@ -8,6 +8,7 @@ import numpy as np
 from astropy import units as un
 from pygsdata import coordinates as gscrd
 from read_acq import _coordinates as crda
+from rich.progress import track
 from tqdm import tqdm
 
 from .. import const
@@ -119,8 +120,8 @@ def sky_convolution_generator(
     beam_above_horizon = np.full(sky_model.coords.shape, np.nan)
     interpolators = {}
 
-    for lst_idx, time in tqdm(
-        enumerate(times), unit="LST", disable=not lst_progress, total=len(times)
+    for lst_idx, time in track(
+        enumerate(times), description="LST", disable=not lst_progress, total=len(times)
     ):
         # Transform Galactic coordinates of Sky Model to Local coordinates
         if use_astropy_azel:
