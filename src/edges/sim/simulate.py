@@ -296,7 +296,6 @@ def simulate_spectra(
 
     """
     beam = beam.between_freqs(f_low, f_high)
-    lsts = Longitude(np.arange(0, 24, 0.5) * un.hour)
 
     antenna_temperature_above_horizon = np.zeros((len(lsts), len(beam.frequency)))
     times = []
