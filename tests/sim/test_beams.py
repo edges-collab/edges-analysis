@@ -4,7 +4,8 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from astropy import units as u
+from astropy import units as un
+from astropy.coordinates import Longitude
 
 import edges.sim
 import edges.sim.antenna_beam_factor
@@ -20,29 +21,29 @@ def beam() -> beams.Beam:
 
 
 def test_beam_from_feko(beam):
-    assert beam.frequency.min() == 40.0 * u.MHz
-    assert beam.frequency.max() == 100.0 * u.MHz
+    assert beam.frequency.min() == 40.0 * un.MHz
+    assert beam.frequency.max() == 100.0 * un.MHz
 
     assert beam.beam.max() > 0
 
-    beam2 = beam.between_freqs(50 * u.MHz, 70 * u.MHz)
-    assert beam2.frequency.min() >= 50 * u.MHz
-    assert beam2.frequency.max() <= 70 * u.MHz
+    beam2 = beam.between_freqs(50 * un.MHz, 70 * un.MHz)
+    assert beam2.frequency.min() >= 50 * un.MHz
+    assert beam2.frequency.max() <= 70 * un.MHz
 
 
 def test_beam_from_raw_feko(sim_data_path: Path):
     beam = beams.Beam.from_feko_raw(
         sim_data_path / "lowband_dielectric1-new-90orient_simple",
         ext="txt",
-        f_low=40 * u.MHz,
-        f_high=48 * u.MHz,
+        f_low=40 * un.MHz,
+        f_high=48 * un.MHz,
         freq_p=5,
         theta_p=181,
         phi_p=361,
     )
 
-    assert beam.frequency.min() == 40.0 * u.MHz
-    assert beam.frequency.max() == 48.0 * u.MHz
+    assert beam.frequency.min() == 40.0 * un.MHz
+    assert beam.frequency.max() == 48.0 * un.MHz
 
     assert beam.beam.max() > 0
 
@@ -52,10 +53,10 @@ def test_beam_from_raw_feko(sim_data_path: Path):
 
 
 def test_feko_interp(beam):
-    beam2 = beam.at_freq(np.linspace(50, 60, 5) * u.MHz)
-    assert (beam2.frequency == np.linspace(50, 60, 5) * u.MHz).all()
+    beam2 = beam.at_freq(np.linspace(50, 60, 5) * un.MHz)
+    assert (beam2.frequency == np.linspace(50, 60, 5) * un.MHz).all()
 
-    indx_50 = list(beam.frequency).index(50.0 * u.MHz)
+    indx_50 = list(beam.frequency).index(50.0 * un.MHz)
     az, el = np.meshgrid(beam.azimuth, beam.elevation[:-1])
     interp = beam2.angular_interpolator(0)(az.flatten(), el.flatten())
 
@@ -175,9 +176,9 @@ def test_gaussian_beam_rotationally_symmetric(beam_constructor):
 def test_antenna_beam_factor(beam):
     abf = edges.sim.compute_antenna_beam_factor(
         beam=beam,
-        f_low=50 * u.MHz,
-        f_high=56 * u.MHz,
-        lsts=np.arange(0, 24, 6),
+        f_low=50 * un.MHz,
+        f_high=56 * un.MHz,
+        lsts=Longitude(np.arange(0, 24, 6) * un.hour),
         sky_model=SkyModel.uniform_healpix(frequency=75.0, nside=4),
         index_model=StepIndex(),
         use_astropy_azel=False,
@@ -366,13 +367,13 @@ def test_beamfactor_get():
 def test_beam_factor_alan_azel(beam):
     defaults = {
         "beam": beam,
-        "f_low": 40 * u.MHz,
-        "f_high": 100 * u.MHz,
-        "lsts": [12.0],
+        "f_low": 40 * un.MHz,
+        "f_high": 100 * un.MHz,
+        "lsts": Longitude([12.0 * un.hour]),
         "sky_model": Haslam408AllNoh(),
         "index_model": ConstantIndex(),
         "normalize_beam": False,
-        "reference_frequency": 75 * u.MHz,
+        "reference_frequency": 75 * un.MHz,
         "beam_smoothing": False,
         "interp_kind": "nearest",
         "freq_progress": False,

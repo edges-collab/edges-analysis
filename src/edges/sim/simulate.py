@@ -12,6 +12,8 @@ from pygsdata import coordinates as gscrd
 from read_acq import _coordinates as crda
 from rich.progress import track
 
+from edges.types import FreqType
+
 from .. import const
 from .. import modeling as mdl
 from . import sky_models
@@ -216,8 +218,8 @@ def simulate_spectra(
     beam: Beam,
     sky_model: sky_models.SkyModel,
     ground_loss: np.ndarray | None = None,
-    f_low: float | None = 0,
-    f_high: float | None = np.inf,
+    f_low: FreqType = 0 * un.MHz,
+    f_high: FreqType = np.inf * un.MHz,
     normalize_beam: bool = True,
     index_model: sky_models.IndexModel = sky_models.ConstantIndex(),
     lsts: Longitude | None = None,
