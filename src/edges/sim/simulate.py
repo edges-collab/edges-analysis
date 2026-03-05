@@ -120,7 +120,7 @@ def sky_convolution_generator(
     interpolators = {}
 
     for lst_idx, time in track(
-        enumerate(times), description="LST", disable=not lst_progress, total=len(times)
+        enumerate(times), description="LSTs", disable=not lst_progress, total=len(times)
     ):
         # Transform Galactic coordinates of Sky Model to Local coordinates
         if use_astropy_azel:
@@ -152,8 +152,10 @@ def sky_convolution_generator(
         # reference beam with other frequencies.
         for freq_idx in track(
             np.roll(range(len(beam.frequency)), -ref_freq_idx),
-            description="Frequency",
+            description="Frequencies",
             disable=not freq_progress,
+            total=len(beam.frequency),
+            transient=True,
         ):
             if freq_idx not in interpolators:
                 interpolators[freq_idx] = beam.angular_interpolator(
