@@ -2,15 +2,20 @@
 
 import functools
 import logging
+import warnings
 from collections.abc import Callable, Sequence
 
+import deprecation
 import hickle
 import numpy as np
-from astropy import units as u
+from astropy import units as un
+from astropy.coordinates import AltAz, Angle, SkyCoord
 from astropy.time import Time
 from attrs import define
 from pygsdata import GSData, GSFlag, gsregister
-from pygsdata.select import _mask_times
+from pygsdata.select import _mask_times, select_freqs
+
+from edges import __version__
 
 from .. import modeling as mdl
 from .. import types as tp
@@ -19,71 +24,6 @@ from ..filters import xrfi as rfi
 from .runners import run_xrfi
 
 logger = logging.getLogger(__name__)
-
-
-class _GSDataFilter:
-    def __init__(
-        self,
-        func: Callable,
-        multi_data: bool = False,
-    ):
-        self.func = func
-        self.multi_data = multi_data
-        functools.update_wrapper(self, func, updated=())
-
-    def __call__(
-        self,
-        data: Sequence[GSData],
-        *,
-        flag_id: str | None = None,
-        **kwargs,
-    ) -> GSData | Sequence[GSData]:
-        # Read all the data, in case they haven't been turned into objects yet.
-        # And check that everything is the right type.
-        if self.multi_data and isinstance(data, GSData):
-            data = [data]
-        elif not self.multi_data and not isinstance(data, GSData):
-            raise TypeError(
-                f"'{self.func.__name__}' only accepts single GSData objects as data."
-            )
-
-        def per_file_processing(data: GSData, flags: GSFlag):
-            old = np.sum(data.flagged_nsamples == 0)
-
-            data = data.add_flags(flag_id or self.func.__name__, flags)
-
-            if np.all(flags.flags):
-                logger.warning(
-                    f"{data.name} was fully flagged during {self.func.__name__} filter"
-                )
-            else:
-                sz = flags.flags.size / 100
-                new = np.sum(flags.flags)
-                tot = np.sum(data.flagged_nsamples == 0)
-                totsz = data.complete_flags.size
-
-                rep = data.get_initial_yearday(hours=True)
-
-                logger.info(
-                    f"'{rep}': "
-                    f"{old / totsz:.2f} + {new / sz:.2f} → "
-                    f"{tot / totsz:.2f}% [bold]<+{(tot - old) / totsz:.2f}%>[/] "
-                    f"flagged after [blue]{self.func.__name__}[/]"
-                )
-
-            return data
-
-        this_flag = self.func(data=data, **kwargs)
-
-        if self.multi_data:
-            data = [
-                per_file_processing(d, out_flg)
-                for d, out_flg in zip(data, this_flag, strict=False)
-            ]
-        else:
-            data = per_file_processing(data, this_flag)
-
-        return data
 
 
 def gsdata_filter(multi_data: bool = False):
@@ -113,6 +53,8 @@ def gsdata_filter(multi_data: bool = False):
     """
 
     def inner(func: Callable) -> Callable:
+        func.func = func  # type: ignore
+
         @functools.wraps(func)
         def wrapper(
             data: GSData | Sequence[GSData],
@@ -273,7 +215,59 @@ def moon_filter(
     )
 
 
-@define
+@gsregister("filter")
+@gsdata_filter()
+def sky_coord_filter(
+    *,
+    data: GSData,
+    coord: str | SkyCoord,
+    elevation_range: tuple[Angle, Angle],
+) -> GSFlag:
+    """
+    Perform a filter based on a sky coordinate position.
+
+    Parameters
+    ----------
+    coord
+        The sky coordinate to filter on.
+    elevation_range
+        The minimum and maximum allowed elevation (as an astropy Angle).
+    """
+    if isinstance(coord, str):
+        coord = SkyCoord.from_name(coord)
+
+    # Use the times of the first load, assuming that this is the antenna data.
+    azalt = coord.transform_to(
+        AltAz(location=data.telescope.location, obstime=Time(data.times[:, 0]))
+    )
+    alt = azalt.alt
+
+    return GSFlag(
+        flags=(alt < elevation_range[0]) | (alt > elevation_range[1]), axes=("time",)
+    )
+
+
+@gsregister("filter")
+@gsdata_filter()
+def galaxy_filter(
+    *,
+    data: GSData,
+    elevation_range: tuple[Angle, Angle] = (-90 * un.deg, 0 * un.deg),
+) -> GSFlag:
+    """
+    Perform a filter based on the Galactic center position.
+
+    Parameters
+    ----------
+    elevation_range
+        The minimum and maximum allowed elevation (as an astropy Angle).
+    """
+    return sky_coord_filter.func(
+        data=data, coord="Galactic Center", elevation_range=elevation_range
+    )
+
+
+@define(frozen=False, slots=False)
 class _RFIFilterFactory:
     method: str
 
@@ -536,91 +530,47 @@ def peak_orbcomm_filter(
 
 @gsregister("filter")
 @gsdata_filter()
-def maxfm_filter(*, data: GSData, threshold: float = 200):
-    """Filter data based on max FM power.
+def single_channel_spike_filter(
+    *,
+    data: GSData,
+    threshold: float = 200,
+    freq_range: tuple[tp.FreqType, tp.FreqType] = (88 * un.MHz, 120 * un.MHz),
+):
+    """Filter data based on single channel spikes.
 
-    This function focuses on data between 88-120 MHz. In that range, it detrends the
-    data using a simple convolution kernel with weights [0.5, 0, 0.5], such that a
-    flat spectrum would be de-trended to itself, and a spectrum that is totally flat
-    except for some single-channel spikes results in the channels where the spikes were
-    being the mean value (though surrounding channels will be spiky).
-    The spectrum is flagged if the residual of the original spectrum to the de-trended
-    is larger than the threshold (only positive).
+    This filter detrends the data using a simple convolution kernel with weights
+    [0.5, 0, 0.5], which makes single channel spikes stand out.
+    The entire spectrum is flagged if the residual of the original spectrum to the
+    de-trended is larger than the threshold.
     """
-    freqs = data.freqs.to_value("MHz")
-    fm_freq = (freqs >= 88) & (freqs <= 120)
-    # freq mask between 80 and 120 MHz for the FM range
+    freqs = data.freqs
+    mask = (freqs >= freq_range[0]) & (freqs <= freq_range[1])
 
-    if not np.any(fm_freq):
+    if not np.any(mask):
         return GSFlag(flags=np.zeros(data.ntimes, dtype=bool), axes=("time",))
 
-    fm_power = data.data[..., fm_freq]
+    power = data.data[..., mask]
 
-    avg = (fm_power[..., 2:] + fm_power[..., :-2]) / 2
-    fm_deviation_power = np.abs(fm_power[..., 1:-1] - avg)
-    maxfm = np.max(fm_deviation_power, axis=-1)
+    avg = (power[..., 2:] + power[..., :-2]) / 2
+    deviation_power = np.abs(power[..., 1:-1] - avg)
 
     return GSFlag(
-        flags=maxfm > threshold,
+        flags=np.max(deviation_power, axis=-1) > threshold,
         axes=("load", "pol", "time"),
     )
 
 
 @gsregister("filter")
 @gsdata_filter()
-def rmsf_filter(
-    *,
-    data: GSData,
-    threshold: float = 200,
-    freq_range: tuple[float, float] = (60, 80),
-    tload: float = 1000,
-    tcal: float = 300,
-):
+def maxfm_filter(*, data: GSData, threshold: float = 200):
+    """Filter data based on large single-channel spikes in FM band.
+
+    This function is only provided as a convenience when comparing to the legacy code
+    that had the same filter with this name. It is really just a very thin wrapper
+    around `single_channel_spike_filter`, focusing on the FM band.
     """
-    Filter data based on rms calculated between 60 and 80 MHz.
-
-    An initial powerlaw model is calculated using the normalized frequency range.
-    Data between the freq_range is clipped.
-    A standard deviation is calculated using the data and the init_model.
-    Then rms is calculated from the mean that is eatimated
-    using the standard deviation times initmodel.
-    """
-    # TODO: get rid of this filter and just use the `rms_filter` below as its more
-    #       general.
-    freqs = data.freqs.to_value("MHz")
-    freq_mask = (freqs >= freq_range[0]) & (freqs <= freq_range[1])
-
-    if not np.any(freq_mask):
-        return GSFlag(np.zeros(data.ntimes, dtype=bool), axes=("time",))
-
-    if data.data_unit == "uncalibrated":
-        spec = (data.data * tload) + tcal
-    elif data.data_unit in ("uncalibrated_temp", "temperature"):
-        spec = data.data
-    else:
-        raise ValueError(
-            "Unsupported data_unit for rmsf_filter. "
-            "Need uncalibrated or uncalibrated_temp"
-        )
-    freq = data.freqs.value[freq_mask]
-    init_model = (freq / 75.0) ** -2.5
-
-    spec = spec[..., freq_mask]
-    t_75 = np.sum(init_model * spec, axis=-1) / np.sum(init_model**2)
-
-    prod = np.outer(t_75, init_model)
-    # We have to set the shape explicitly, because the outer product collapses
-    # the dimensions.
-    prod.shape = spec.shape
-    rms = np.sqrt(np.mean((spec - prod) ** 2, axis=-1))
-
-    return GSFlag(
-        flags=rms > threshold,
-        axes=(
-            "load",
-            "pol",
-            "time",
-        ),
+    return single_channel_spike_filter.func(
+        data=data, threshold=threshold, freq_range=(88 * un.MHz, 120 * un.MHz)
     )
 
 
@@ -634,14 +584,14 @@ def filter_150mhz(*, data: GSData, threshold: float):
     157 MHz (which is expected to be cleaner). If this ratio (RMS to mean) is greater
     than 200 times the threshold given, the integration will be flagged.
     """
-    if data.freqs.max() < 157 * u.MHz:
+    if data.freqs.max() < 157 * un.MHz:
         return GSFlag(flags=np.zeros(data.ntimes, dtype=bool), axes=("time",))
 
-    freq_mask = (data.freqs >= 152.75 * u.MHz) & (data.freqs <= 154.25 * u.MHz)
+    freq_mask = (data.freqs >= 152.75 * un.MHz) & (data.freqs <= 154.25 * un.MHz)
     mean = np.mean(data.data[..., freq_mask], axis=-1)
     rms = np.sqrt(np.mean((data.data[..., freq_mask].T - mean.T) ** 2)).T
 
-    freq_mask2 = (data.freqs >= 156.25 * u.MHz) & (data.freqs <= 157.75 * u.MHz)
+    freq_mask2 = (data.freqs >= 156.25 * un.MHz) & (data.freqs <= 157.75 * un.MHz)
     av = np.mean(data.data[..., freq_mask2], axis=-1)
     d = 200.0 * np.sqrt(rms) / av
 
@@ -713,7 +663,7 @@ def power_percent_filter(
 def rms_filter(
     data: GSData,
     threshold: float,
-    freq_range: float = (0.0, np.inf),
+    freq_range: tuple[tp.FreqType, tp.FreqType] = (0.0 * un.MHz, np.inf * un.MHz),
     nsamples_strategy: NsamplesStrategy = NsamplesStrategy.FLAGGED_NSAMPLES,
     model: mdl.Model | None = None,
 ) -> bool:
@@ -735,33 +685,71 @@ def rms_filter(
     """
     from ..analysis.datamodel import add_model
 
-    if (
-        freq_range[0] * u.MHz > data.freqs.min()
-        or freq_range[1] * u.MHz < data.freqs.max()
-    ):
-        data = flag_frequency_ranges(data=data, freq_ranges=[freq_range], invert=True)
+    data = select_freqs(data, freq_range=freq_range)
+
+    if data.data.size == 0:
+        # No data in the given frequency range, so nothing to flag.
+        return GSFlag(
+            flags=np.zeros(shape=(data.nloads, data.npols, data.ntimes), dtype=bool),
+            axes=("load", "pol", "time"),
+        )
 
     if data.residuals is None:
         if model is None:
             raise ValueError("Cannot perform rms_filter without residuals or a model.")
         data = add_model(data=data, model=model, nsamples_strategy=nsamples_strategy)
 
-    shp = (-1, data.nfreqs)
     w = get_weights_from_strategy(data, nsamples_strategy)[0]
 
-    rms = np.sqrt(
-        averaging.weighted_mean(
-            data=data.residuals.reshape(shp) ** 2, weights=w.reshape(shp), axis=-1
-        )[0]
-    )
+    rms = np.sqrt(averaging.weighted_mean(data=data.residuals**2, weights=w)[0])
 
     return GSFlag(
-        flags=(rms > threshold).reshape(data.data.shape[:-1]),
+        flags=(rms > threshold),
         axes=(
             "load",
             "pol",
             "time",
         ),
+    )
+
+
+@gsregister("filter")
+@gsdata_filter()
+@deprecation.deprecated(
+    deprecated_in="8.1.0",
+    removed_in="9.0.0",
+    current_version=__version__,
+    details="Use the rms_filter function instead",
+)
+def rmsf_filter(
+    *,
+    data: GSData,
+    threshold: float = 200,
+    freq_range: tuple[float, float] = (60, 80),
+) -> GSFlag:
+    """
+    Filter data based on rms calculated between 60 and 80 MHz.
+
+    Note that this function is deprecated in favour of the more general
+    :func:`rms_filter`.
+    """
+    warnings.warn(
+        "rmsf_filter is deprecated, please use rms_filter instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    if data.data_unit not in ("uncalibrated_temp", "temperature"):
+        raise ValueError(
+            "Unsupported data_unit for rmsf_filter. "
+            "Need temperature or uncalibrated_temp"
+        )
+
+    return rms_filter.func(
+        data=data,
+        threshold=threshold,
+        freq_range=freq_range,
+        nsamples_strategy=NsamplesStrategy.FLAGGED_NSAMPLES,
+        model=mdl.LinLog(n_terms=1, beta=-2.5),
     )
 
 

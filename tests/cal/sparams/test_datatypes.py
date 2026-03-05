@@ -221,7 +221,7 @@ class TestReflectionCoefficient:
         np.testing.assert_allclose(rc_sel.freqs, freqs[1:])
         np.testing.assert_allclose(rc_sel.reflection_coefficient, gamma[1:])
 
-        rc_rp = rc.rephase(0 * un.s)
+        rc_rp = rc.remove_delay(0 * un.s)
         np.testing.assert_allclose(rc_rp.reflection_coefficient, gamma)
 
         with pytest.raises(ValueError):
@@ -243,7 +243,7 @@ class TestReflectionCoefficient:
         freqs = np.array([10.0, 20.0]) * un.MHz
         gamma = np.array([0.1 + 0j, -0.2 + 0j])
         rc = dt.ReflectionCoefficient(freqs=freqs, reflection_coefficient=gamma)
-        rc_ph = rc.rephase(delay)
+        rc_ph = rc.remove_delay(delay)
         expected = gamma * np.exp(2j * np.pi * (freqs * delay).to_value(""))
         np.testing.assert_allclose(rc_ph.reflection_coefficient, expected)
 

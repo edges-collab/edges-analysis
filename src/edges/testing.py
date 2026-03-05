@@ -16,10 +16,10 @@ from .frequencies import edges_raw_freqs
 # used in the total_power_filter as a rough model to guide when to cut atrocious
 # things out.
 model = np.load(
-    DATA_PATH / "Lowband_30mx30m_Haslam_2p5_20minlst_50_100.npy", allow_pickle=True
+    DATA_PATH / "Lowband_30mx30m_Haslam_2p5_20minlst_50_100.npz", allow_pickle=True
 )
-msky = model[0][:, 25]  # this is the 75 MHz slice
-mgha = model[2]
+msky = model["sky_temp"][:, 25]  # this is the 75 MHz slice
+mgha = model["lsts"]
 spl75 = interp1d(mgha, msky)
 
 

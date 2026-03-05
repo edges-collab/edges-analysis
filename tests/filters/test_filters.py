@@ -1,5 +1,6 @@
 """Test the filters module."""
 
+import deprecation
 import numpy as np
 import pytest
 from astropy import units as un
@@ -102,15 +103,6 @@ class TestPeakPowerFilter:
 
 def test_peak_orbcomm_filter(mock):
     run_filter_check(mock, filters.peak_orbcomm_filter)
-
-
-class TestRMSF:
-    def test_basic(self, mock):
-        run_filter_check(mock, filters.rmsf_filter, threshold=100)
-
-    def test_all_outside_range(self, mock):
-        new = filters.rmsf_filter(mock, freq_range=(200, 250))
-        assert not np.any(new.complete_flags)
 
 
 class TestMaxFM:
@@ -259,6 +251,7 @@ class TestNegativePowerFilter:
         assert np.all(data.complete_flags[:, :, 0])
 
 
+@deprecation.fail_if_not_removed
 def test_rmsf_filter(gsd_ones: GSData):
     with pytest.raises(ValueError, match="Unsupported data_unit for rmsf_filter"):
         filters.rmsf_filter(gsd_ones.update(data_unit="power"), threshold=100)
@@ -273,13 +266,7 @@ def test_rmsf_filter(gsd_ones: GSData):
 
     data = gsd_ones.update(data=pl, data_unit="uncalibrated_temp")
 
-    print(gsd_ones.data.shape, data.data.shape)
-    new = filters.rmsf_filter(data, threshold=1)
-
-    data = gsd_ones.update(data=(pl - 300) / 1000, data_unit="uncalibrated")
-    new2 = filters.rmsf_filter(data, threshold=1, tcal=300, tload=1000)
-
-    assert np.all(new.complete_flags == new2.complete_flags)
+    filters.rmsf_filter(data, threshold=1)
 
 
 class TestRMSFilter:
@@ -322,6 +309,12 @@ class TestRMSFilter:
         data = filters.rms_filter(mock_with_model, threshold=10)
         assert not np.any(data.complete_flags)
 
+    def test_all_outside_range(self, mock):
+        new = filters.rms_filter(
+            mock, threshold=10, freq_range=(200 * un.MHz, 250 * un.MHz)
+        )
+        assert not np.any(new.complete_flags)
+
 
 class TestExplicitDayFilter:
     @pytest.mark.parametrize("days", [(2022, 11, 17), (2022, 321)])
@@ -362,3 +355,11 @@ class TestPruneFlaggedIntegrations:
         new = mock.add_flags("explicit", flags)
         new = filters.prune_flagged_integrations(new)
         assert new.ntimes == mock.ntimes - 1
+
+
+class TestGalaxyFilter:
+    def test_basic(self, mock):
+        run_filter_check(
+            mock,
+            filters.galaxy_filter,
+        )

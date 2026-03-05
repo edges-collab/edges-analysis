@@ -7,7 +7,49 @@ on:
 
 
 jobs:
+  # Our first job just grabs the data from Zenodo required to perform tests
+  # that reproduce B18. This is cached for later jobs to use, and between sessions,
+  # so we don't put as much strain on the Zenodo repo.
+  get_cache_data:
+    env:
+      ENV_NAME: get_cache_data
+    name: Get Cache Data
+    strategy:
+      matrix:
+          os: [ubuntu-latest, macos-latest]
+
+    runs-on: ${{ matrix.os }}
+    outputs:
+      usercache: ${{ steps.usercache.outputs.usercache }}
+    steps:
+      - uses: actions/checkout@master
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Setup Environment
+        run: |
+          pip install .
+
+      - name: Get Platform Cache Directory
+        id: usercache
+        run: |
+          usercache=$(python -c "from platformdirs import user_cache_dir; print(user_cache_dir('edges'))")
+          echo "usercache=${usercache}" >> $GITHUB_OUTPUT
+
+      - name: Setup Cached Data Files
+        uses: actions/cache@v5
+        with:
+          path: "${{ steps.usercache.outputs.usercache }}/**/*"
+          key: "pooch-cache-${{ runner.os }}"
+
+      - name: Download Cached Files
+        run: edges data fetch-b18 --dataset testing
+
   tests:
+    needs: get_cache_data
     env:
       ENV_NAME: tests
       PYTHON: ${{ matrix.python-version }}
@@ -19,6 +61,13 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
         python-version: ["3.11", "3.12", "3.13"]
+        testtype: ['warnfail', 'standard']
+        exclude:
+          - os: macos-latest
+            testtype: 'warnfail'
+          - os: ubuntu-latest
+            python-version: "3.12"
+            testtype: 'warnfail'
     steps:
       - uses: actions/checkout@master
         with:
@@ -30,9 +79,20 @@ jobs:
         run: |
           pip install -U coverage
           pip install .[dev]
+
+      - name: Setup Cached Data Files
+        uses: actions/cache@v5
+        with:
+          path: "${{ needs.get_cache_data.outputs.usercache }}/**/*"
+          key: "pooch-cache-${{ runner.os }}"
+
       - name: Run Tests
         run: |
-          python -m pytest --cov edges --cov-report xml:./coverage.xml
+          if [ "${{ matrix.testtype }}" = "warnfail" ]; then
+            python -W error -m pytest;
+          else
+            python -m pytest --cov edges --cov-report xml:./coverage.xml
+          fi
       - uses: codecov/codecov-action@v5
         if: matrix.os == 'ubuntu-latest' && success()
         with:
@@ -41,29 +101,3 @@ jobs:
           fail_ci_if_error: true
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-
-  warnings_tests:
-    env:
-      PYTHON: ${{ matrix.python-version }}
-      OS: ${{ matrix.os }}
-    name: Warnings Tests
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest]
-        python-version: ["3.11", "3.13"]
-    steps:
-      - uses: actions/checkout@master
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-python@v6
-        with:
-          python-version: ${{ matrix.python-version }}
-      - name: Setup Environment
-        run: |
-          pip install -U coverage
-          pip install .[dev]
-      - name: Run Tests
-        run: |
-          python -W error -m pytest
