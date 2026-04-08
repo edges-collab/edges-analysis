@@ -21,7 +21,7 @@ class TestCalibrationObservation:
         ld = ideal_calobs.loads
         cmp = {
             k: ideal_calobs.loads[k].averaged_q - ld[k].temp_ave.to_value("K")
-            for k, v in out.items()
+            for k in out
         }
 
         np.testing.assert_allclose(out["ambient"], cmp["ambient"])
