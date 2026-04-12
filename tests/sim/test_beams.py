@@ -4,7 +4,8 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from astropy import units as u
+from astropy import units as un
+from astropy.coordinates import Longitude
 
 import edges.sim
 import edges.sim.antenna_beam_factor
@@ -19,30 +20,70 @@ def beam() -> beams.Beam:
     return beams.Beam.from_file("low")
 
 
+def test_bad_beam_shapes():
+    with pytest.raises(ValueError, match="Beam must be a 3D array"):
+        beams.Beam(
+            frequency=np.array([50, 75, 100]) * un.MHz,
+            azimuth=np.array([0, 90, 180]),
+            elevation=np.array([0, 45, 90]),
+            beam=np.zeros((3, 3)),
+        )
+
+    with pytest.raises(
+        ValueError, match="First dimension of beam must match length of frequency"
+    ):
+        beams.Beam(
+            frequency=np.array([50, 75, 90]) * un.MHz,
+            azimuth=np.array([0, 90]),
+            elevation=np.array([0, 45]),
+            beam=np.zeros((2, 2, 2)),
+        )
+
+    with pytest.raises(
+        ValueError, match="Second dimension of beam must match length of elevation"
+    ):
+        beams.Beam(
+            frequency=np.array([50, 75]) * un.MHz,
+            azimuth=np.array([0, 90]),
+            elevation=np.array([0, 45, 90]),
+            beam=np.zeros((2, 2, 2)),
+        )
+
+    with pytest.raises(
+        ValueError, match="Third dimension of beam must match length of azimuth"
+    ):
+        beams.Beam(
+            frequency=np.array([50, 75]) * un.MHz,
+            azimuth=np.array([0, 45, 90]),
+            elevation=np.array([0, 45]),
+            beam=np.zeros((2, 2, 2)),
+        )
+
+
 def test_beam_from_feko(beam):
-    assert beam.frequency.min() == 40.0 * u.MHz
-    assert beam.frequency.max() == 100.0 * u.MHz
+    assert beam.frequency.min() == 40.0 * un.MHz
+    assert beam.frequency.max() == 100.0 * un.MHz
 
     assert beam.beam.max() > 0
 
-    beam2 = beam.between_freqs(50 * u.MHz, 70 * u.MHz)
-    assert beam2.frequency.min() >= 50 * u.MHz
-    assert beam2.frequency.max() <= 70 * u.MHz
+    beam2 = beam.between_freqs(50 * un.MHz, 70 * un.MHz)
+    assert beam2.frequency.min() >= 50 * un.MHz
+    assert beam2.frequency.max() <= 70 * un.MHz
 
 
 def test_beam_from_raw_feko(sim_data_path: Path):
     beam = beams.Beam.from_feko_raw(
         sim_data_path / "lowband_dielectric1-new-90orient_simple",
         ext="txt",
-        f_low=40 * u.MHz,
-        f_high=48 * u.MHz,
+        f_low=40 * un.MHz,
+        f_high=48 * un.MHz,
         freq_p=5,
         theta_p=181,
         phi_p=361,
     )
 
-    assert beam.frequency.min() == 40.0 * u.MHz
-    assert beam.frequency.max() == 48.0 * u.MHz
+    assert beam.frequency.min() == 40.0 * un.MHz
+    assert beam.frequency.max() == 48.0 * un.MHz
 
     assert beam.beam.max() > 0
 
@@ -52,10 +93,10 @@ def test_beam_from_raw_feko(sim_data_path: Path):
 
 
 def test_feko_interp(beam):
-    beam2 = beam.at_freq(np.linspace(50, 60, 5) * u.MHz)
-    assert (beam2.frequency == np.linspace(50, 60, 5) * u.MHz).all()
+    beam2 = beam.at_freq(np.linspace(50, 60, 5) * un.MHz)
+    assert (beam2.frequency == np.linspace(50, 60, 5) * un.MHz).all()
 
-    indx_50 = list(beam.frequency).index(50.0 * u.MHz)
+    indx_50 = list(beam.frequency).index(50.0 * un.MHz)
     az, el = np.meshgrid(beam.azimuth, beam.elevation[:-1])
     interp = beam2.angular_interpolator(0)(az.flatten(), el.flatten())
 
@@ -85,12 +126,99 @@ def test_uniform_beam():
     assert np.allclose(beam.angular_interpolator(0)(az, el), 1)
 
 
+def _off_axis_azimuth_averaged_response(
+    beam: beams.Beam, freq_indx: int, el: int
+) -> float:
+    el_indx = np.where(beam.elevation == el)[0][0]
+    beam_slice = np.asarray(beam.beam[freq_indx])
+
+    return float(np.nanmean(beam_slice[el_indx]))
+
+
+def test_gaussian_beam_wider_at_lower_frequency():
+    beam = beams.Beam.gaussian(
+        dish_size=3.0,
+        f_low=50,
+        f_high=150,
+        delta_f=50,
+        delta_el=1,
+        delta_az=5,
+    )
+
+    low_freq_response = _off_axis_azimuth_averaged_response(beam, freq_indx=0, el=80)
+    high_freq_response = _off_axis_azimuth_averaged_response(beam, freq_indx=-1, el=80)
+
+    assert low_freq_response > high_freq_response
+
+
+def test_airy_beam_wider_at_lower_frequency():
+    beam = beams.Beam.airy(
+        dish_size=3.0,
+        f_low=50,
+        f_high=150,
+        delta_f=50,
+        delta_el=1,
+        delta_az=5,
+    )
+
+    low_freq_response = _off_axis_azimuth_averaged_response(beam, freq_indx=0, el=85)
+    high_freq_response = _off_axis_azimuth_averaged_response(beam, freq_indx=-1, el=85)
+
+    assert low_freq_response > high_freq_response
+
+
+@pytest.mark.parametrize("beam_constructor", ["gaussian", "airy"])
+def test_gaussian_and_airy_beams_no_nans(beam_constructor):
+    """Verify that both gaussian and airy constructors produce no NaN values."""
+    beam = getattr(beams.Beam, beam_constructor)(
+        dish_size=3.0,
+        f_low=50,
+        f_high=150,
+    )
+
+    assert not np.any(np.isnan(beam.beam)), "beam contains NaN values"
+
+
+@pytest.mark.parametrize("beam_constructor", ["gaussian", "airy", "uniform"])
+def test_gaussian_beam_rotationally_symmetric(beam_constructor):
+    """Test that Gaussian beams are rotationally symmetric.
+
+    For a rotationally symmetric antenna, the beam response at a given elevation
+    should be constant across all azimuths.
+    """
+    kw = {
+        "f_low": 75,
+        "f_high": 125,
+        "delta_f": 25,
+        "delta_el": 10,
+        "delta_az": 1,
+    }
+    if beam_constructor in ("gaussian", "airy"):
+        beam = getattr(beams.Beam, beam_constructor)(dish_size=3.0, **kw)
+    else:
+        beam = beams.Beam.uniform(**kw)
+
+    # Check at multiple frequencies and elevations
+    for freq_indx in [0, 1, -1]:
+        for el in [0, 30, 60, 80]:
+            if el not in beam.elevation:
+                continue
+            el_indx = np.where(beam.elevation == el)[0][0]
+            beam_row = beam.beam[freq_indx][el_indx, :]
+
+            # All azimuths at this elevation should have the same beam value
+            assert np.allclose(beam_row, beam_row[0], rtol=1e-10), (
+                "Gaussian beam not rotationally symmetric at "
+                f"freq_indx={freq_indx}, el={el}"
+            )
+
+
 def test_antenna_beam_factor(beam):
     abf = edges.sim.compute_antenna_beam_factor(
         beam=beam,
-        f_low=50 * u.MHz,
-        f_high=56 * u.MHz,
-        lsts=np.arange(0, 24, 6),
+        f_low=50 * un.MHz,
+        f_high=56 * un.MHz,
+        lsts=Longitude(np.arange(0, 24, 6) * un.hour),
         sky_model=SkyModel.uniform_healpix(frequency=75.0, nside=4),
         index_model=StepIndex(),
         use_astropy_azel=False,
@@ -279,13 +407,13 @@ def test_beamfactor_get():
 def test_beam_factor_alan_azel(beam):
     defaults = {
         "beam": beam,
-        "f_low": 40 * u.MHz,
-        "f_high": 100 * u.MHz,
-        "lsts": [12.0],
+        "f_low": 40 * un.MHz,
+        "f_high": 100 * un.MHz,
+        "lsts": Longitude([12.0 * un.hour]),
         "sky_model": Haslam408AllNoh(),
         "index_model": ConstantIndex(),
         "normalize_beam": False,
-        "reference_frequency": 75 * u.MHz,
+        "reference_frequency": 75 * un.MHz,
         "beam_smoothing": False,
         "interp_kind": "nearest",
         "freq_progress": False,

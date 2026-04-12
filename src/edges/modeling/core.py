@@ -292,15 +292,15 @@ class FixedLinearModel(yaml.YAMLObject):
         xdata
             The co-ordinates at which to fit the data. If not given, use ``self.x``.
 
-        Other Parameters
-        ----------------
-        All other parameters used to construct the :class:`ModelFit` object. Includes
-        ``method`` to specify the lstsq solving method.
-
         Returns
         -------
         fit
             The :class:`ModelFit` object.
+
+        Other Parameters
+        ----------------
+        All other parameters used to construct the :class:`ModelFit` object. Includes
+        ``method`` to specify the lstsq solving method.
         """
         thing = self.at_x(xdata) if xdata is not None else self
         d = self.model.data_transform.transform(thing.x, ydata)
