@@ -93,7 +93,7 @@ jobs:
           else
             python -m pytest --cov edges --cov-report xml:./coverage.xml
           fi
-      - uses: codecov/codecov-action@v5
+      - uses: codecov/codecov-action@v6
         if: matrix.os == 'ubuntu-latest' && success()
         with:
           file: ./coverage.xml #optional

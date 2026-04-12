@@ -793,7 +793,7 @@ class TwoPortNetwork:
 
     def _check_add_args(self, other: Self):
         if not isinstance(other, TwoPortNetwork):
-            raise ValueError("Two matrices must be of the same type.")
+            raise TypeError("Two matrices must be of the same type.")
 
         if other.x.shape != self.x.shape:
             raise ValueError("Two matrices must have the same dimensions.")

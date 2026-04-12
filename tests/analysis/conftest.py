@@ -10,7 +10,7 @@ from edges.config import config
 
 
 @pytest.fixture(scope="session", autouse=True)
-def _set_mpl_backend():
+def _set_mpl_backend():  # noqa: RUF066
     """Set the matplotlib backend for faster tests."""
     mpl.use("pdf")
 
@@ -23,16 +23,19 @@ def integration_test_data() -> Path:
     repo = tmp_path / "edges-analysis-test-data"
 
     if repo.exists():
-        run(["git", "-C", str(repo), "pull"])
+        run(["git", "-C", str(repo), "pull"], check=True)
     else:
-        run([
-            "git",
-            "clone",
-            "https://github.com/edges-collab/edges-analysis-test-data",
-            str(repo),
-            "--depth",
-            "1",
-        ])
+        run(
+            [
+                "git",
+                "clone",
+                "https://github.com/edges-collab/edges-analysis-test-data",
+                str(repo),
+                "--depth",
+                "1",
+            ],
+            check=True,
+        )
     return repo
 
 
