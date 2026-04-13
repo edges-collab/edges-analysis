@@ -48,6 +48,9 @@ MANIFEST
 # Per-project virtualenvs
 .venv*/
 
+# uv / local lockfiles
+uv.lock
+
 devel/output/*
 pip-wheel-metadata/
 .vscode/
@@ -56,3 +59,7 @@ pip-wheel-metadata/
 /GHAModel_*
 plots/
 docs/demos/*.txt
+
+# Local-only pre-push/pre-commit helper
+run_checks_before_commit.sh
+uv.lock
