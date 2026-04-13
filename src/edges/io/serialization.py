@@ -4,7 +4,7 @@ This includes ways to read/write them to HDF5 files.
 """
 
 from datetime import datetime
-from typing import Any, TypeVar
+from typing import Any, TypeVar, get_origin
 
 import attrs
 import cattrs
@@ -15,7 +15,8 @@ import numpy as np
 from astropy.coordinates import EarthLocation
 from astropy.table import QTable
 from astropy.time import Time
-from astropy.units import Quantity
+from astropy.units import Quantity, Unit
+from astropy.units.core import UnitBase
 
 from .. import types as tp
 
@@ -33,6 +34,36 @@ def ndarray_hook(val: Any, _) -> np.ndarray:
 @converter.register_unstructure_hook
 def ndarray_unstructure_hook(val: np.ndarray) -> np.ndarray:
     """Unstructure a numpy array."""
+    return val
+
+
+def _is_numpy_ndarray_generic_type(typ: Any) -> bool:
+    """Match ``NDArray[float]``-style annotations (not bare ``ndarray``)."""
+    return get_origin(typ) is np.ndarray
+
+
+def _structure_numpy_ndarray_generic(val: Any, _: Any) -> np.ndarray:
+    return np.asarray(val)
+
+
+converter.register_structure_hook_func(
+    _is_numpy_ndarray_generic_type, _structure_numpy_ndarray_generic
+)
+
+
+@converter.register_structure_hook
+def _astropy_unit_hook(val: Any, _) -> Unit:
+    """Structure an astropy Unit (hickle may restore ``IrreducibleUnit`` etc.)."""
+    if isinstance(val, UnitBase):
+        return val
+    if isinstance(val, str):
+        return Unit(val)
+    raise TypeError(f"Cannot structure {type(val)!r} as astropy Unit")
+
+
+@converter.register_unstructure_hook
+def _astropy_unit_unstructure_hook(val: UnitBase) -> UnitBase:
+    """Pass through; hickle serializes Unit objects natively."""
     return val
 
 
