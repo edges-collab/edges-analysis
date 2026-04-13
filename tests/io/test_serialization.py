@@ -13,6 +13,18 @@ import h5py
 from edges.io.serialization import converter, hickleable
 
 
+@hickleable
+@attrs.define
+class _HickleBase:
+    x: int
+
+
+@hickleable
+@attrs.define
+class _HickleChild(_HickleBase):
+    y: float = 1.0
+
+
 def test_numpy_ndarray_hook_structures_list_to_ndarray():
     arr = converter.structure([1, 2, 3], np.ndarray)
     assert isinstance(arr, np.ndarray)
@@ -102,23 +114,13 @@ def test_qtable_hook_roundtrip():
 
 
 def test_hickleable_roundtrip_and_subclass_structuring(tmp_path):
-    @hickleable
-    @attrs.define
-    class Base:
-        x: int
-
-    @hickleable
-    @attrs.define
-    class Child(Base):
-        y: float = 1.0
-
-    obj: Base = Child(x=3, y=2.5)
+    obj: _HickleBase = _HickleChild(x=3, y=2.5)
     path = tmp_path / "obj.h5"
 
     obj.write(path)
-    new = Base.from_file(path)
+    new = _HickleBase.from_file(path)
 
-    assert isinstance(new, Child)
+    assert isinstance(new, _HickleChild)
     assert new == obj
 
 
