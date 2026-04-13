@@ -1,6 +1,7 @@
 from datetime import datetime
 
 import attrs
+import h5py
 import numpy as np
 import pytest
 from astropy.coordinates import EarthLocation
@@ -8,7 +9,6 @@ from astropy.table import QTable
 from astropy.time import Time
 from astropy.units import Quantity, Unit
 from astropy.units.core import UnitBase
-import h5py
 
 from edges.io.serialization import converter, hickleable
 
@@ -84,7 +84,9 @@ def test_datetime_hook_roundtrip():
 
 
 def test_location_hook_roundtrip():
-    loc = EarthLocation(lat=1.0 * Unit("deg"), lon=2.0 * Unit("deg"), height=3.0 * Unit("m"))
+    loc = EarthLocation(
+        lat=1.0 * Unit("deg"), lon=2.0 * Unit("deg"), height=3.0 * Unit("m")
+    )
     raw = converter.unstructure(loc)
     assert isinstance(raw, list)
     assert len(raw) == 3
@@ -157,4 +159,3 @@ def test_hickleable_rejects_untyped_fields():
 
     with pytest.raises(TypeError, match="untyped fields"):
         hickleable(HasUntyped)
-
