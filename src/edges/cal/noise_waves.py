@@ -627,67 +627,6 @@ def get_linear_coefficients_from_K(  # noqa: N802
     return t_sca / k[0], (t_off - noise_wave_terms) / k[0]
 
 
-def calibrated_antenna_temperature(
-    temp_raw, gamma_ant, gamma_rec, sca, off, t_unc, t_cos, t_sin, t_load=300
-):
-    """
-    Use M17 Eq. 7 to determine calibrated temperature from an uncalibrated temperature.
-
-    Parameters
-    ----------
-    temp_raw : array_like
-        The raw (uncalibrated) temperature spectrum, T*.
-    gamma_ant : array_like
-        S11 of the antenna/load.
-    gamma_rec : array_like
-        S11 of the receiver.
-    sca,off : array_like
-        Scale and offset calibration parameters (i.e. C1 and C2). These are in the form
-        of arrays over frequency (i.e. it is not the polynomial coefficients).
-    t_unc, t_cos, t_sin : array_like
-        Noise-wave calibration parameters (uncorrelated, cosine, sine). These are in the
-        form of arrays over frequency (i.e. not the polynomial coefficients).
-    t_load : float, optional
-        The nominal temperature of the internal ambient load. This *must match* the
-        value used to derive the calibration parameters in the first place.
-    """
-    a, b = get_linear_coefficients(
-        gamma_ant, gamma_rec, sca, off, t_unc, t_cos, t_sin, t_load
-    )
-
-    return temp_raw * a + b
-
-
-def decalibrate_antenna_temperature(
-    temp, gamma_ant, gamma_rec, sca, off, t_unc, t_cos, t_sin, t_load=300
-):
-    """
-    Use M17 Eq. 7 to determine uncalibrated temperature from a calibrated temperature.
-
-    Parameters
-    ----------
-    temp : array_like
-        The true (or calibrated) temperature spectrum.
-    gamma_ant : array_like
-        S11 of the antenna/load.
-    gamma_rec : array_like
-        S11 of the receiver.
-    sca,off : array_like
-        Scale and offset calibration parameters (i.e. C1 and C2). These are in the form
-        of arrays over frequency (i.e. it is not the polynomial coefficients).
-    t_unc, t_cos, t_sin : array_like
-        Noise-wave calibration parameters (uncorrelated, cosine, sine). These are in the
-        form of arrays over frequency (i.e. not the polynomial coefficients).
-    t_load : float, optional
-        The nominal temperature of the internal ambient load. This *must match* the
-        value used to derive the calibration parameters in the first place.
-    """
-    a, b = get_linear_coefficients(
-        gamma_ant, gamma_rec, sca, off, t_unc, t_cos, t_sin, t_load
-    )
-    return (temp - b) / a
-
-
 @attrs.define(frozen=True, kw_only=True, slots=False)
 class NoiseWaves:
     """A class to manage linear models for fitting noise-wave parameters.
