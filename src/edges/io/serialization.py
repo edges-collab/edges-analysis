@@ -62,9 +62,9 @@ def _astropy_unit_hook(val: Any, _) -> Unit:
 
 
 @converter.register_unstructure_hook
-def _astropy_unit_unstructure_hook(val: UnitBase) -> UnitBase:
-    """Pass through; hickle serializes Unit objects natively."""
-    return val
+def _astropy_unit_unstructure_hook(val: UnitBase) -> str:
+    """Serialize as plain string."""
+    return str(val)
 
 
 @converter.register_structure_hook
