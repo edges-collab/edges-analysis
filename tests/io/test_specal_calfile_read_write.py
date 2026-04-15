@@ -1,4 +1,4 @@
-"""Round-trip specal.txt → Calibrator h5 → Calibrator.from_calfile."""
+"""Round-trip specal.txt -> Calibrator -> h5 -> Calibrator.from_calfile."""
 
 from pathlib import Path
 
