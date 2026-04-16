@@ -103,7 +103,7 @@ jobs:
             uv run pytest --cov edges --cov-report xml:./coverage.xml
           fi
       - uses: codecov/codecov-action@v6
-        if: matrix.os == 'ubuntu-latest' && success()
+        if: matrix.os == 'ubuntu-latest' && success() && matrix.testtype != 'warnfail'
         with:
           file: ./coverage.xml #optional
           verbose: true
