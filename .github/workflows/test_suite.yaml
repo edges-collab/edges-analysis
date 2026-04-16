@@ -41,7 +41,7 @@ jobs:
       - name: Get Platform Cache Directory
         id: usercache
         run: |
-          usercache=$(python -c "from platformdirs import user_cache_dir; print(user_cache_dir('edges'))")
+          usercache=$(uv run python -c "from platformdirs import user_cache_dir; print(user_cache_dir('edges'))")
           echo "usercache=${usercache}" >> $GITHUB_OUTPUT
 
       - name: Setup Cached Data Files
