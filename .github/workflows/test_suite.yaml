@@ -25,18 +25,23 @@ jobs:
       - uses: actions/checkout@master
         with:
           fetch-depth: 0
+
       - uses: actions/setup-python@v6
         with:
-          python-version: "3.13"
+          python-version-file: pyproject.toml
 
-      - name: Setup Environment
-        run: |
-          pip install .
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Install
+        run:  uv sync --locked
 
       - name: Get Platform Cache Directory
         id: usercache
         run: |
-          usercache=$(python -c "from platformdirs import user_cache_dir; print(user_cache_dir('edges'))")
+          usercache=$(uv run python -c "from platformdirs import user_cache_dir; print(user_cache_dir('edges'))")
           echo "usercache=${usercache}" >> $GITHUB_OUTPUT
 
       - name: Setup Cached Data Files
@@ -46,7 +51,7 @@ jobs:
           key: "pooch-cache-${{ runner.os }}"
 
       - name: Download Cached Files
-        run: edges data fetch-b18 --dataset testing
+        run: uv run edges data fetch-b18 --dataset testing
 
   tests:
     needs: get_cache_data
@@ -60,7 +65,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
-        python-version: ["3.11", "3.12", "3.13"]
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
         testtype: ['warnfail', 'standard']
         exclude:
           - os: macos-latest
@@ -75,10 +80,14 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Setup Environment
-        run: |
-          pip install -U coverage
-          pip install .[dev]
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Install
+        run:  uv sync --locked --all-extras --dev
 
       - name: Setup Cached Data Files
         uses: actions/cache@v5
@@ -89,12 +98,12 @@ jobs:
       - name: Run Tests
         run: |
           if [ "${{ matrix.testtype }}" = "warnfail" ]; then
-            python -W error -m pytest;
+            uv run pytest -Werror;
           else
-            python -m pytest --cov edges --cov-report xml:./coverage.xml
+            uv run pytest --cov edges --cov-report xml:./coverage.xml
           fi
       - uses: codecov/codecov-action@v6
-        if: matrix.os == 'ubuntu-latest' && success()
+        if: matrix.os == 'ubuntu-latest' && success() && matrix.testtype != 'warnfail'
         with:
           file: ./coverage.xml #optional
           verbose: true
