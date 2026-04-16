@@ -64,6 +64,7 @@ dependencies = [
     "pooch",
     "py7zr",
     'deprecation',
+    "platformdirs>=4.5.1",
 ]
 dynamic = ["version"]
 
@@ -74,7 +75,7 @@ Issues = "https://github.com/edges-collab/edges-analysis/issues"
 Changelog = "https://github.com/edges-collab/edges-analysis/releases"
 
 
-[project.optional-dependencies]
+[dependency-groups]
 testing = [
   "pytest",
   "pytest-cov",
@@ -93,21 +94,17 @@ docs = [
 report = [
   "papermill", "jupyter", "beautifultable"
 ]
-all = [
-  "edges-analysis[report]"
-]
 dev = [
-  "edges-analysis[testing,docs,report]",
-  "pre-commit"
+  {include-group = "testing"},
+  {include-group = "docs"},
+  {include-group = "report"},
+  "prek>=0.3.9",
+  "ruff>=0.15.10",
 ]
 
 [project.scripts]
 edges = "edges.cli:app"
 
-[dependency-groups]
-dev = [
-    "ruff>=0.15.4",
-]
 
 [tool.setuptools]
 ext-modules = [
