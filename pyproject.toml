@@ -105,15 +105,6 @@ dev = [
 [project.scripts]
 edges = "edges.cli:app"
 
-<<<<<<< fix-read-h5file
-[dependency-groups]
-dev = [
-    "pytest>=9.0.2",
-    "ruff>=0.15.4",
-]
-=======
->>>>>>> main
-
 [tool.setuptools]
 ext-modules = [
   {name = "edges.modeling.cqrd", sources = ["src/edges/modeling/c_modeling.c"]}
