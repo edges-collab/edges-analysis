@@ -1,8 +1,9 @@
 """Models of the foregrounds."""
 
+from functools import cached_property
+
 import attrs
 import numpy as np
-from cached_property import cached_property
 from yabf import Component, Parameter
 
 
@@ -15,7 +16,7 @@ def damped_oscillation_model(freqs, period, damping_index, amp_sin, amp_cos):
     )
 
 
-@attrs.define(frozen=True)
+@attrs.define(frozen=True, slots=False)
 class Foreground(Component):
     """Base class for all foreground models.
 
@@ -23,7 +24,7 @@ class Foreground(Component):
     """
 
     freqs: np.ndarray = attrs.field(kw_only=True, eq=attrs.cmp_using(eq=np.array_equal))
-    nuc = attrs.field(default=75.0, kw_only=True, converter=float)
+    nuc: float = attrs.field(default=75.0, kw_only=True, converter=float)
 
     @cached_property
     def provides(self):
@@ -43,11 +44,11 @@ class Foreground(Component):
         """Abstract method specifying that subclasses must implement a model."""
 
 
-@attrs.define(frozen=True)
+@attrs.define(frozen=True, slots=False)
 class Tcmb(Component):
     """A simple component adding the CMB temperature to a set of foregrounds."""
 
-    T = attrs.field(default=2.7255, kw_only=True, converter=float)
+    T: float = attrs.field(default=2.7255, kw_only=True, converter=float)
 
     @cached_property
     def provides(self):
@@ -59,13 +60,20 @@ class Tcmb(Component):
         return self.T
 
 
+@attrs.define(frozen=True, slots=False)
 class _PhysicalBase(Foreground):
     base_parameters = [
-        Parameter("b0", 1750, min=0, max=1e5, latex=r"b_0 [K]"),
-        Parameter("b1", 0, latex=r"b_1 [K]"),
-        Parameter("b2", 0, latex=r"b_2 [K]"),
-        Parameter("b3", 0, latex=r"b_3 [K]"),
-        Parameter("ion_spec_index", -2, min=-3, max=-1, latex=r"\alpha_{\rm ion}"),
+        Parameter(name="b0", fiducial=1750, min=0, max=1e5, latex=r"b_0 [K]"),
+        Parameter(name="b1", fiducial=0, latex=r"b_1 [K]"),
+        Parameter(name="b2", fiducial=0, latex=r"b_2 [K]"),
+        Parameter(name="b3", fiducial=0, latex=r"b_3 [K]"),
+        Parameter(
+            name="ion_spec_index",
+            fiducial=-2,
+            min=-3,
+            max=-1,
+            latex=r"\alpha_{\rm ion}",
+        ),
     ]
 
     def model(self, **p):
@@ -77,6 +85,7 @@ class _PhysicalBase(Foreground):
         return b[0] * self.f ** (b[1] + b[2] * np.log(self.f) - 2.5) * x, x
 
 
+@attrs.define(frozen=True, slots=False)
 class PhysicalHills(_PhysicalBase):
     """Eq 6. from Hills et al."""
 
@@ -91,6 +100,7 @@ class PhysicalHills(_PhysicalBase):
         return first_term + electron_temperature * (1 - x)
 
 
+@attrs.define(frozen=True, slots=False)
 class PhysicalSmallIonDepth(_PhysicalBase):
     """Eq. 7 from Hills et al."""
 
@@ -111,6 +121,7 @@ class PhysicalSmallIonDepth(_PhysicalBase):
         return params["b4"] / params["b3"]
 
 
+@attrs.define(frozen=True, slots=False)
 class PhysicalLin(Foreground):
     """Eq. 8 from Hills et al."""
 
@@ -150,7 +161,7 @@ class PhysicalLin(Foreground):
         return p["p4"]
 
 
-@attrs.define
+@attrs.define(frozen=True, slots=False)
 class IonContrib(Foreground):
     """Absorption and emission due to the ionosphere."""
 
@@ -164,7 +175,7 @@ class IonContrib(Foreground):
         return p["absorption"] * self.f**-4.5 + p["emissivity"] * self.f**-2
 
 
-@attrs.define
+@attrs.define(frozen=True, slots=False)
 class LinLog(Foreground):
     """
     LinLog model from Memo #122.
@@ -235,7 +246,7 @@ class LinLog(Foreground):
         return self.f ** p["beta"] * np.sum(terms, axis=0)
 
 
-@attrs.define
+@attrs.define(frozen=True, slots=False)
 class Sinusoid(Foreground):
     """An additive sinusoidal model."""
 
@@ -250,7 +261,7 @@ class Sinusoid(Foreground):
         return p["amp"] * np.sin(2 * np.pi * self.freqs / p["lambda"] + p["phase"])
 
 
-@attrs.define
+@attrs.define(frozen=True, slots=False)
 class DampedOscillations(Foreground):
     """A DampedOscillations model with a given period and amplitude of sin/cos."""
 
@@ -269,7 +280,7 @@ class DampedOscillations(Foreground):
         )
 
 
-@attrs.define
+@attrs.define(frozen=True, slots=False)
 class DampedSinusoid(Component):
     """A damped sinusoid model, ala Sims+2019."""
 
@@ -290,6 +301,7 @@ class DampedSinusoid(Component):
         return amp * np.sin(2 * np.pi * self.freqs / p["lambda"] + p["phase"])
 
 
+@attrs.define(frozen=True, slots=False)
 class LinPoly(LinLog):
     """Eq. 10 from Hills et al.
 
@@ -312,7 +324,7 @@ class LinPoly(LinLog):
         return np.sum(terms, axis=0) * self.f ** p["beta"]
 
 
-@attrs.define
+@attrs.define(frozen=True, slots=False)
 class Bias(Component):
     """A Bias component that can be added to another component."""
 
@@ -357,7 +369,7 @@ class Bias(Component):
                 ctx[key] *= bias
 
 
-@attrs.define
+@attrs.define(frozen=True, slots=False)
 class LogPoly(Foreground):
     """
     LogPoly model from Sims et.al. 2020 (Equation 18).
