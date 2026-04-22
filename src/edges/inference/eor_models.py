@@ -21,7 +21,7 @@ def simple_gaussian(freqs, amp, nu0, w):
     return -amp * np.exp(-((freqs - nu0) ** 2) / (2 * w**2))
 
 
-@attrs.define
+@attrs.define(frozen=True, kw_only=True, slots=False)
 class FlattenedGaussian(Component):
     """Flattened-Gaussian absorption profile, ala Bowman+2018."""
 
@@ -45,7 +45,7 @@ class FlattenedGaussian(Component):
         return ctx["eor_spectrum"]
 
 
-@attrs.define
+@attrs.define(frozen=True, kw_only=True, slots=False)
 class GaussianAbsorptionProfile(Component):
     """Standard Gaussian absorption profile."""
 

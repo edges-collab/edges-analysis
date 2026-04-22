@@ -1,6 +1,9 @@
 name: Update Draft Release
 
 on: push
+permissions:
+  contents: write
+  pull-requests: write
 
 jobs:
   draft-release:
@@ -11,11 +14,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-
       - name: Publish the release notes
-        uses: release-drafter/release-drafter@v6.2.0
+        uses: release-drafter/release-drafter@v7.1.1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

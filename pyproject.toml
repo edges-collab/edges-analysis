@@ -18,7 +18,7 @@ authors = [
     {name="Akshatha Vydula", email="avydula@asu.edu"}
 ]
 license = {text="MIT"}
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
@@ -60,10 +60,11 @@ dependencies = [
     "statsmodels",
     'cattrs',
     'cyclopts',
-    'yabf',
     "pooch",
     "py7zr",
     'deprecation',
+    "platformdirs>=4.5.1",
+    "yabf>=2.1.4",
 ]
 dynamic = ["version"]
 
@@ -74,7 +75,7 @@ Issues = "https://github.com/edges-collab/edges-analysis/issues"
 Changelog = "https://github.com/edges-collab/edges-analysis/releases"
 
 
-[project.optional-dependencies]
+[dependency-groups]
 testing = [
   "pytest",
   "pytest-cov",
@@ -93,12 +94,12 @@ docs = [
 report = [
   "papermill", "jupyter", "beautifultable"
 ]
-all = [
-  "edges-analysis[report]"
-]
 dev = [
-  "edges-analysis[testing,docs,report]",
-  "pre-commit"
+  {include-group = "testing"},
+  {include-group = "docs"},
+  {include-group = "report"},
+  "prek>=0.3.9",
+  "ruff>=0.15.10",
 ]
 
 [project.scripts]
@@ -178,6 +179,8 @@ ignore = [
     "PT011",
     "A005",  # module name shadows builtin
     "RUF067",  # allow defining new variables in __Init__ files
+    "RUF069",  # allow "unreliable" floating point equality comparison for now
+    "PLR0206",  # allow pytest.fixtures to have parameters
 ]
 
 [tool.ruff.lint.per-file-ignores]
