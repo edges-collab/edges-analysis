@@ -1,8 +1,9 @@
 """Models of the foregrounds."""
 
+from functools import cached_property
+
 import attrs
 import numpy as np
-from cached_property import cached_property
 from yabf import Component, Parameter
 
 
@@ -23,7 +24,7 @@ class Foreground(Component):
     """
 
     freqs: np.ndarray = attrs.field(kw_only=True, eq=attrs.cmp_using(eq=np.array_equal))
-    nuc = attrs.field(default=75.0, kw_only=True, converter=float)
+    nuc: float = attrs.field(default=75.0, kw_only=True, converter=float)
 
     @cached_property
     def provides(self):
@@ -47,7 +48,7 @@ class Foreground(Component):
 class Tcmb(Component):
     """A simple component adding the CMB temperature to a set of foregrounds."""
 
-    T = attrs.field(default=2.7255, kw_only=True, converter=float)
+    T: float = attrs.field(default=2.7255, kw_only=True, converter=float)
 
     @cached_property
     def provides(self):
@@ -61,11 +62,17 @@ class Tcmb(Component):
 
 class _PhysicalBase(Foreground):
     base_parameters = [
-        Parameter("b0", 1750, min=0, max=1e5, latex=r"b_0 [K]"),
-        Parameter("b1", 0, latex=r"b_1 [K]"),
-        Parameter("b2", 0, latex=r"b_2 [K]"),
-        Parameter("b3", 0, latex=r"b_3 [K]"),
-        Parameter("ion_spec_index", -2, min=-3, max=-1, latex=r"\alpha_{\rm ion}"),
+        Parameter(name="b0", fiducial=1750, min=0, max=1e5, latex=r"b_0 [K]"),
+        Parameter(name="b1", fiducial=0, latex=r"b_1 [K]"),
+        Parameter(name="b2", fiducial=0, latex=r"b_2 [K]"),
+        Parameter(name="b3", fiducial=0, latex=r"b_3 [K]"),
+        Parameter(
+            name="ion_spec_index",
+            fiducial=-2,
+            min=-3,
+            max=-1,
+            latex=r"\alpha_{\rm ion}",
+        ),
     ]
 
     def model(self, **p):
