@@ -85,7 +85,7 @@ def get_binned_weights(
 
 def get_bin_edges(
     coords: np.ndarray,
-    bins: np.ndarray | un.Quantity | int | float | None = None,
+    bins: np.ndarray | un.Quantity | float | None = None,
     start: float | un.Quantity | None = None,
     stop: float | un.Quantity | None = None,
 ) -> np.ndarray | un.Quantity:

@@ -9,16 +9,17 @@ from astropy import units
 from astropy import units as u
 
 
-def is_unit(unit: str) -> bool:
+def is_unit(unit: str | u.Unit) -> bool:
     """Whether the given input is a recognized unit."""
     if isinstance(unit, u.Unit):
         return True
-
-    try:
-        u.Unit(unit)
+    if isinstance(unit, str):
+        try:
+            u.Unit(unit)
+        except ValueError:
+            return False
         return True
-    except ValueError:
-        return False
+    return False
 
 
 def vld_unit(

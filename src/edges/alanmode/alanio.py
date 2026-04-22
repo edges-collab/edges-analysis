@@ -131,7 +131,7 @@ def read_spec_txt(
 
 
 def write_spec_txt(
-    freq: np.ndarray | tp.FreqType, n: int | float, spec: np.ndarray, fname: tp.PathLike
+    freq: np.ndarray | tp.FreqType, n: float, spec: np.ndarray, fname: tp.PathLike
 ):
     """Write an averaged-spectrum file, like spe_<load>r.txt files from edges2k.c."""
     if hasattr(freq, "unit"):
@@ -241,14 +241,14 @@ def write_specal(
     lna = calibrator.receiver_s11
 
     with open(outfile, "w") as fl:
-        for i in range(calibrator.freqs.size):
-            fl.write(
-                f"freq {calibrator.freqs[i].to_value('MHz'):{precision}} "
-                f"s11lna {lna[i].real:{precision}} {lna[i].imag:{precision}} "
-                f"sca {sca[i]:{precision}} ofs {ofs[i]:{precision}} "
-                f"tlnau {tlnau[i]:{precision}} tlnac {tlnac[i]:{precision}} "
-                f"tlnas {tlnas[i]:{precision}} wtcal 1 cal_data\n"
-            )
+        fl.writelines(
+            f"freq {calibrator.freqs[i].to_value('MHz'):{precision}} "
+            f"s11lna {lna[i].real:{precision}} {lna[i].imag:{precision}} "
+            f"sca {sca[i]:{precision}} ofs {ofs[i]:{precision}} "
+            f"tlnau {tlnau[i]:{precision}} tlnac {tlnac[i]:{precision}} "
+            f"tlnas {tlnas[i]:{precision}} wtcal 1 cal_data\n"
+            for i in range(calibrator.freqs.size)
+        )
 
 
 def write_modelled_s11s(
@@ -277,52 +277,52 @@ def write_modelled_s11s(
                 "short_real short_imag lna_real lna_imag rig_s11_real rig_s11_imag "
                 "rig_s12_real rig_s12_imag rig_s22_real rig_s22_imag\n"
             )
-            for i, (f, amb, hot, op, sh, rigs11, rigs12, rigs22) in enumerate(
-                zip(
-                    calobs.freqs.to_value("MHz"),
-                    s11m["ambient"],
-                    s11m["hot_load"],
-                    s11m["open"],
-                    s11m["short"],
-                    s11m["rig_s11"],
-                    s11m["rig_s12"],
-                    s11m["rig_s22"],
-                    strict=False,
+            fl.writelines(
+                f"{f} {amb.real} {amb.imag} "
+                f"{hot.real} {hot.imag} "
+                f"{op.real} {op.imag} "
+                f"{sh.real} {sh.imag} "
+                f"{lna[i].real} {lna[i].imag} "
+                f"{rigs11.real} {rigs11.imag} "
+                f"{rigs12.real} {rigs12.imag} "
+                f"{rigs22.real} {rigs22.imag}\n"
+                for i, (f, amb, hot, op, sh, rigs11, rigs12, rigs22) in enumerate(
+                    zip(
+                        calobs.freqs.to_value("MHz"),
+                        s11m["ambient"],
+                        s11m["hot_load"],
+                        s11m["open"],
+                        s11m["short"],
+                        s11m["rig_s11"],
+                        s11m["rig_s12"],
+                        s11m["rig_s22"],
+                        strict=False,
+                    )
                 )
-            ):
-                fl.write(
-                    f"{f} {amb.real} {amb.imag} "
-                    f"{hot.real} {hot.imag} "
-                    f"{op.real} {op.imag} "
-                    f"{sh.real} {sh.imag} "
-                    f"{lna[i].real} {lna[i].imag} "
-                    f"{rigs11.real} {rigs11.imag} "
-                    f"{rigs12.real} {rigs12.imag} "
-                    f"{rigs22.real} {rigs22.imag}\n"
-                )
+            )
 
         else:
             fl.write(
                 "# freq, amb_real amb_imag hot_real hot_imag open_real open_imag "
                 "short_real short_imag lna_real lna_imag\n"
             )
-            for i, (f, amb, hot, op, sh) in enumerate(
-                zip(
-                    calobs.freqs.to_value("MHz"),
-                    s11m["ambient"],
-                    s11m["hot_load"],
-                    s11m["open"],
-                    s11m["short"],
-                    strict=False,
+            fl.writelines(
+                f"{f} {amb.real} {amb.imag} "
+                f"{hot.real} {hot.imag} "
+                f"{op.real} {op.imag} "
+                f"{sh.real} {sh.imag} "
+                f"{lna[i].real} {lna[i].imag}\n"
+                for i, (f, amb, hot, op, sh) in enumerate(
+                    zip(
+                        calobs.freqs.to_value("MHz"),
+                        s11m["ambient"],
+                        s11m["hot_load"],
+                        s11m["open"],
+                        s11m["short"],
+                        strict=False,
+                    )
                 )
-            ):
-                fl.write(
-                    f"{f} {amb.real} {amb.imag} "
-                    f"{hot.real} {hot.imag} "
-                    f"{op.real} {op.imag} "
-                    f"{sh.real} {sh.imag} "
-                    f"{lna[i].real} {lna[i].imag}\n"
-                )
+            )
 
 
 def read_modelled_s11s(pth: Path) -> QTable:
