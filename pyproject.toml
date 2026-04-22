@@ -18,7 +18,7 @@ authors = [
     {name="Akshatha Vydula", email="avydula@asu.edu"}
 ]
 license = {text="MIT"}
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
@@ -60,11 +60,11 @@ dependencies = [
     "statsmodels",
     'cattrs',
     'cyclopts',
-    'yabf',
     "pooch",
     "py7zr",
     'deprecation',
     "platformdirs>=4.5.1",
+    "yabf>=2.1.4",
 ]
 dynamic = ["version"]
 
@@ -104,7 +104,6 @@ dev = [
 
 [project.scripts]
 edges = "edges.cli:app"
-
 
 [tool.setuptools]
 ext-modules = [
