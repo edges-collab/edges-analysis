@@ -320,7 +320,6 @@ class LoadSpectrum:
                 thermistor, ignore_times=ignore_times
             )
         else:
-            # thermistor = None
             temperature_range = None
 
         meanq, varq = get_ave_and_var_spec(
