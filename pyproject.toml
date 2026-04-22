@@ -60,11 +60,11 @@ dependencies = [
     "statsmodels",
     'cattrs',
     'cyclopts',
-    "yabf>=2.1.4",
     "pooch",
     "py7zr",
     'deprecation',
     "platformdirs>=4.5.1",
+    "yabf>=2.1.4",
 ]
 dynamic = ["version"]
 
@@ -226,6 +226,3 @@ property-decorators = ["pytest.fixture"]
 
 [tool.ruff.lint.mccabe]
 max-complexity = 21
-
-[tool.uv.sources]
-yabf = { path = "../../misc/yabf" }

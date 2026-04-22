@@ -1022,7 +1022,7 @@ requires-dist = [
     { name = "statsmodels" },
     { name = "tqdm" },
     { name = "typing-extensions" },
-    { name = "yabf", directory = "../../misc/yabf" },
+    { name = "yabf", specifier = ">=2.1.4" },
 ]
 
 [package.metadata.requires-dev]
@@ -1270,7 +1270,7 @@ wheels = [
 
 [[package]]
 name = "getdist"
-version = "1.7.5"
+version = "1.7.6"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "matplotlib" },
@@ -1279,9 +1279,9 @@ dependencies = [
     { name = "pyyaml" },
     { name = "scipy" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/bf/81/b1754e449948b79c7f480e2e611cbce3450cc1332aab6592529b37131f68/getdist-1.7.5.tar.gz", hash = "sha256:b0295c10e861db3ed9439eac88d8dc452e93d67173b5723756b0658b9694f98c", size = 823498, upload-time = "2025-12-17T10:46:10.1Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/7d/ac/fd569f337e1a11a8092f50d6da94952f754ee74cfa19379fd4632f46de5c/getdist-1.7.6.tar.gz", hash = "sha256:f8fea2fd03961cb48821e625ec187b521891454dac389b397d4cc70dabc8a011", size = 823467, upload-time = "2026-03-11T13:38:38.391Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/0a/dc/d4b9a09e7b8732564bb8a72be1a916fceb2717318d52e828ad9645152f18/getdist-1.7.5-py3-none-any.whl", hash = "sha256:d167491bc90b1d53e4377b6d574239e397151608381b295a65717f9ab096c2d7", size = 834048, upload-time = "2025-12-17T10:46:08.351Z" },
+    { url = "https://files.pythonhosted.org/packages/4a/d7/bd6f655d54300aa1e0b4ff721118069675d6de384d5ead9ab3509e952326/getdist-1.7.6-py3-none-any.whl", hash = "sha256:088578f395e3c70135279c9b42822c03da77152678a34a0a288458015ac7ef71", size = 834057, upload-time = "2026-03-11T13:38:36.213Z" },
 ]
 
 [[package]]
@@ -3931,7 +3931,8 @@ wheels = [
 
 [[package]]
 name = "yabf"
-source = { directory = "../../misc/yabf" }
+version = "2.1.4"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "click" },
     { name = "emcee" },
@@ -3942,41 +3943,9 @@ dependencies = [
     { name = "rich" },
     { name = "scipy" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "click", specifier = ">=6.0" },
-    { name = "emcee" },
-    { name = "frozendict" },
-    { name = "getdist" },
-    { name = "numpy", specifier = ">=1.6.2" },
-    { name = "pyyaml", specifier = ">=5" },
-    { name = "rich" },
-    { name = "scipy" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "coverage", specifier = ">=7.13.5" },
-    { name = "nbsphinx", specifier = ">=0.9.8" },
-    { name = "numpydoc", specifier = ">=1.10.0" },
-    { name = "prek", specifier = ">=0.3.9" },
-    { name = "pytest", specifier = ">=9.0.3" },
-    { name = "pytest-cov", specifier = ">=7.1.0" },
-    { name = "pytest-lazy-fixtures", specifier = ">=1.4.0" },
-    { name = "ruff", specifier = ">=0.15.10" },
-    { name = "sphinx", specifier = ">=9.1.0" },
-]
-docs = [
-    { name = "nbsphinx", specifier = ">=0.9.8" },
-    { name = "numpydoc", specifier = ">=1.10.0" },
-    { name = "sphinx", specifier = ">=9.1.0" },
-]
-tests = [
-    { name = "coverage", specifier = ">=7.13.5" },
-    { name = "pytest", specifier = ">=9.0.3" },
-    { name = "pytest-cov", specifier = ">=7.1.0" },
-    { name = "pytest-lazy-fixtures", specifier = ">=1.4.0" },
+sdist = { url = "https://files.pythonhosted.org/packages/2d/0f/0de39773fd3a7ba402c1a75aef598c194600d90e352538f035287d450650/yabf-2.1.4.tar.gz", hash = "sha256:78857a69b4de5512f35f57a96bbd0c875cebf0a2aedafb8640101b105624c144", size = 144118, upload-time = "2026-04-16T15:28:28.916Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d4/5b/5a9b72da88f6736a54ca7de2ef1ef20da2e0ab568d7d0beeac32042a5a8e/yabf-2.1.4-py3-none-any.whl", hash = "sha256:9b3d2363a4ed5547ba0db5a8a9f0ce356b1f47e8fdb445b7b168bc01171edac0", size = 35268, upload-time = "2026-04-16T15:28:27.427Z" },
 ]
 
 [[package]]
