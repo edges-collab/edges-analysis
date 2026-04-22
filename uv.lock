@@ -39,13 +39,13 @@ name = "aiohttp"
 version = "3.13.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "aiohappyeyeballs" },
-    { name = "aiosignal" },
-    { name = "attrs" },
-    { name = "frozenlist" },
-    { name = "multidict" },
-    { name = "propcache" },
-    { name = "yarl" },
+    { name = "aiohappyeyeballs", marker = "python_full_version < '3.13'" },
+    { name = "aiosignal", marker = "python_full_version < '3.13'" },
+    { name = "attrs", marker = "python_full_version < '3.13'" },
+    { name = "frozenlist", marker = "python_full_version < '3.13'" },
+    { name = "multidict", marker = "python_full_version < '3.13'" },
+    { name = "propcache", marker = "python_full_version < '3.13'" },
+    { name = "yarl", marker = "python_full_version < '3.13'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/45/4a/064321452809dae953c1ed6e017504e72551a26b6f5708a5a80e4bf556ff/aiohttp-3.13.4.tar.gz", hash = "sha256:d97a6d09c66087890c2ab5d49069e1e570583f7ac0314ecf98294c1b6aaebd38", size = 7859748, upload-time = "2026-03-28T17:19:40.6Z" }
 wheels = [
@@ -124,7 +124,7 @@ name = "aiosignal"
 version = "1.4.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "frozenlist" },
+    { name = "frozenlist", marker = "python_full_version < '3.13'" },
     { name = "typing-extensions", marker = "python_full_version < '3.13'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/61/62/06741b579156360248d1ec624842ad0edf697050bbaf7c3e46394e106ad1/aiosignal-1.4.0.tar.gz", hash = "sha256:f47eecd9468083c2029cc99945502cb7708b082c232f9aca65da147157b251c7", size = 25007, upload-time = "2025-07-03T22:54:43.528Z" }
@@ -1022,7 +1022,7 @@ requires-dist = [
     { name = "statsmodels" },
     { name = "tqdm" },
     { name = "typing-extensions" },
-    { name = "yabf", specifier = ">=2.1.4" },
+    { name = "yabf", directory = "../../misc/yabf" },
 ]
 
 [package.metadata.requires-dev]
@@ -2551,7 +2551,7 @@ name = "pexpect"
 version = "4.9.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "ptyprocess" },
+    { name = "ptyprocess", marker = "sys_platform != 'emscripten' and sys_platform != 'win32'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/42/92/cc564bf6381ff43ce1f4d06852fc19a2f11d180f23dc32d9588bee2f149d/pexpect-4.9.0.tar.gz", hash = "sha256:ee7d41123f3c9911050ea2c2dac107568dc43b2d3b0c7557a33212c398ead30f", size = 166450, upload-time = "2023-11-25T09:07:26.339Z" }
 wheels = [
@@ -3931,8 +3931,7 @@ wheels = [
 
 [[package]]
 name = "yabf"
-version = "2.1.4"
-source = { registry = "https://pypi.org/simple" }
+source = { directory = "../../misc/yabf" }
 dependencies = [
     { name = "click" },
     { name = "emcee" },
@@ -3943,9 +3942,41 @@ dependencies = [
     { name = "rich" },
     { name = "scipy" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/2d/0f/0de39773fd3a7ba402c1a75aef598c194600d90e352538f035287d450650/yabf-2.1.4.tar.gz", hash = "sha256:78857a69b4de5512f35f57a96bbd0c875cebf0a2aedafb8640101b105624c144", size = 144118, upload-time = "2026-04-16T15:28:28.916Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/d4/5b/5a9b72da88f6736a54ca7de2ef1ef20da2e0ab568d7d0beeac32042a5a8e/yabf-2.1.4-py3-none-any.whl", hash = "sha256:9b3d2363a4ed5547ba0db5a8a9f0ce356b1f47e8fdb445b7b168bc01171edac0", size = 35268, upload-time = "2026-04-16T15:28:27.427Z" },
+
+[package.metadata]
+requires-dist = [
+    { name = "click", specifier = ">=6.0" },
+    { name = "emcee" },
+    { name = "frozendict" },
+    { name = "getdist" },
+    { name = "numpy", specifier = ">=1.6.2" },
+    { name = "pyyaml", specifier = ">=5" },
+    { name = "rich" },
+    { name = "scipy" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "coverage", specifier = ">=7.13.5" },
+    { name = "nbsphinx", specifier = ">=0.9.8" },
+    { name = "numpydoc", specifier = ">=1.10.0" },
+    { name = "prek", specifier = ">=0.3.9" },
+    { name = "pytest", specifier = ">=9.0.3" },
+    { name = "pytest-cov", specifier = ">=7.1.0" },
+    { name = "pytest-lazy-fixtures", specifier = ">=1.4.0" },
+    { name = "ruff", specifier = ">=0.15.10" },
+    { name = "sphinx", specifier = ">=9.1.0" },
+]
+docs = [
+    { name = "nbsphinx", specifier = ">=0.9.8" },
+    { name = "numpydoc", specifier = ">=1.10.0" },
+    { name = "sphinx", specifier = ">=9.1.0" },
+]
+tests = [
+    { name = "coverage", specifier = ">=7.13.5" },
+    { name = "pytest", specifier = ">=9.0.3" },
+    { name = "pytest-cov", specifier = ">=7.1.0" },
+    { name = "pytest-lazy-fixtures", specifier = ">=1.4.0" },
 ]
 
 [[package]]
@@ -3953,9 +3984,9 @@ name = "yarl"
 version = "1.22.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "idna" },
-    { name = "multidict" },
-    { name = "propcache" },
+    { name = "idna", marker = "python_full_version < '3.13'" },
+    { name = "multidict", marker = "python_full_version < '3.13'" },
+    { name = "propcache", marker = "python_full_version < '3.13'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/57/63/0c6ebca57330cd313f6102b16dd57ffaf3ec4c83403dcb45dbd15c6f3ea1/yarl-1.22.0.tar.gz", hash = "sha256:bebf8557577d4401ba8bd9ff33906f1376c877aa78d1fe216ad01b4d6745af71", size = 187169, upload-time = "2025-10-06T14:12:55.963Z" }
 wheels = [
