@@ -77,7 +77,9 @@ def edges3_2022_316_edges(tmp_path_factory, alanmode_data_path):
         )
 
     spcold = am.read_spec_txt(out / "spambient.txt", telescope="edges3", name="ambient")
-    sphot = am.read_spec_txt(out / "sphot_load.txt", telescope="edges3", name="hot_load")
+    sphot = am.read_spec_txt(
+        out / "sphot_load.txt", telescope="edges3", name="hot_load"
+    )
     spopen = am.read_spec_txt(out / "spopen.txt", telescope="edges3", name="open")
     spshort = am.read_spec_txt(out / "spshort.txt", telescope="edges3", name="short")
 
@@ -105,9 +107,13 @@ def edges3_2022_316_edges(tmp_path_factory, alanmode_data_path):
 
     for name, load in calobs.loads.items():
         am.write_s11_csv(load._raw_s11.freqs, load._raw_s11.s11, out / f"s11{name}.csv")
-    am.write_s11_csv(calobs._raw_receiver.freqs, calobs._raw_receiver.s11, out / "s11lna.csv")
+    am.write_s11_csv(
+        calobs._raw_receiver.freqs, calobs._raw_receiver.s11, out / "s11lna.csv"
+    )
     am.write_modelled_s11s(calobs, out / "s11_modelled.txt", hot_loss_model)
-    am.write_specal(calibrator, out / "specal.txt", t_load=acqparams.tload, t_load_ns=acqparams.tcal)
+    am.write_specal(
+        calibrator, out / "specal.txt", t_load=acqparams.tload, t_load_ns=acqparams.tcal
+    )
 
     return out
 
@@ -146,7 +152,9 @@ def test_modelled_s11(edges3_2022_316_edges: Path, alandata: Path):
 
 def test_specal(edges3_2022_316_edges: Path, alandata: Path):
     alan = am.read_specal(alandata / "specal.txt", t_load=300, t_load_ns=1000)
-    ours = am.read_specal(edges3_2022_316_edges / "specal.txt", t_load=300, t_load_ns=1000)
+    ours = am.read_specal(
+        edges3_2022_316_edges / "specal.txt", t_load=300, t_load_ns=1000
+    )
 
     np.testing.assert_allclose(ours.Tsca, alan.Tsca, rtol=3e-6)
     np.testing.assert_allclose(ours.Toff, alan.Toff, atol=4e-5)
