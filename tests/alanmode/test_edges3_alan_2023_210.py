@@ -13,7 +13,6 @@ from astropy import units as un
 from edges import alanmode as am
 from edges.alanmode.alanmode import _average_spectra
 
-
 CTERMS = 7
 WTERMS = 7
 YEAR = 2023
@@ -33,6 +32,7 @@ NFIT2 = 27
 NFIT3 = 10
 NFIT4 = 27
 
+
 @pytest.fixture(scope="module")
 def edges3_2023_210(tmp_path_factory):
     repo_root = Path(__file__).resolve().parents[4]
@@ -50,7 +50,9 @@ def edges3_2023_210(tmp_path_factory):
 
     datadir = Path("/data5/edges/data/EDGES3_data/MRO")
     if not datadir.exists():
-        pytest.skip("Requires enterprise EDGES3 data at /data5/edges/data/EDGES3_data/MRO")
+        pytest.skip(
+            "Requires enterprise EDGES3 data at /data5/edges/data/EDGES3_data/MRO"
+        )
     if not c_pipeline_dir.exists():
         pytest.skip("Requires packages/alans-pipeline to be available")
     if not c_edges3.exists():
@@ -212,7 +214,9 @@ def edges3_2023_210(tmp_path_factory):
         )
         shutil.move(workingdir / "spe.txt", workingdir / f"sp{c_load}.txt")
         if (workingdir / "flagfile.txt").exists():
-            shutil.move(workingdir / "flagfile.txt", workingdir / f"flagfile-{c_load}.txt")
+            shutil.move(
+                workingdir / "flagfile.txt", workingdir / f"flagfile-{c_load}.txt"
+            )
 
     subprocess.run(
         [
@@ -317,8 +321,12 @@ def edges3_2023_210(tmp_path_factory):
         delaystart=acqparams.delaystart,
         telescope="edges3",
     )
-    spcold = am.read_spec_txt(py_out / "spambient.txt", telescope="edges3", name="ambient")
-    sphot = am.read_spec_txt(py_out / "sphot_load.txt", telescope="edges3", name="hot_load")
+    spcold = am.read_spec_txt(
+        py_out / "spambient.txt", telescope="edges3", name="ambient"
+    )
+    sphot = am.read_spec_txt(
+        py_out / "sphot_load.txt", telescope="edges3", name="hot_load"
+    )
     spopen = am.read_spec_txt(py_out / "spopen.txt", telescope="edges3", name="open")
     spshort = am.read_spec_txt(py_out / "spshort.txt", telescope="edges3", name="short")
 
@@ -345,8 +353,12 @@ def edges3_2023_210(tmp_path_factory):
     )
 
     for name, load in calobs.loads.items():
-        am.write_s11_csv(load._raw_s11.freqs, load._raw_s11.s11, py_out / f"s11{name}.csv")
-    am.write_s11_csv(calobs._raw_receiver.freqs, calobs._raw_receiver.s11, py_out / "s11lna.csv")
+        am.write_s11_csv(
+            load._raw_s11.freqs, load._raw_s11.s11, py_out / f"s11{name}.csv"
+        )
+    am.write_s11_csv(
+        calobs._raw_receiver.freqs, calobs._raw_receiver.s11, py_out / "s11lna.csv"
+    )
     am.write_modelled_s11s(calobs, py_out / "s11_modelled.txt", hot_loss_model)
     am.write_specal(
         calibrator,
@@ -417,7 +429,9 @@ def test_specal(edges3_2023_210):
     alan_out = edges3_2023_210["alan_out"]
     py_out = edges3_2023_210["py_out"]
 
-    acqparams = am.ACQPlot7aMoonParams(fstart=FSTART, fstop=FSTOP, smooth=8, tload=300, tcal=1000)
+    acqparams = am.ACQPlot7aMoonParams(
+        fstart=FSTART, fstop=FSTOP, smooth=8, tload=300, tcal=1000
+    )
     alan = am.read_specal(
         alan_out / "specal.txt",
         t_load=acqparams.tload,
