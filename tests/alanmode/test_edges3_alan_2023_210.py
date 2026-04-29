@@ -20,8 +20,8 @@ YEAR = 2023
 DAY = 210
 S11DATE = "2023_210_03"
 
-FSTART = 48.0
-FSTOP = 198.0
+FSTART = 50.0
+FSTOP = 190.0
 WFSTART = 50.0
 WFSTOP = 190.0
 
@@ -31,6 +31,7 @@ TCAB = 298.96
 
 NFIT2 = 27
 NFIT3 = 10
+NFIT4 = 27
 
 @pytest.fixture(scope="module")
 def edges3_2023_210(tmp_path_factory):
@@ -45,7 +46,7 @@ def edges3_2023_210(tmp_path_factory):
     c_reads1p1 = c_bindir / "reads1p1"
     c_corrcsv = c_bindir / "corrcsv"
     c_acqplot = c_bindir / "acqplot7amoon"
-    c_edges3 = c_bindir / "edges3_fittpfix_pifix"
+    c_edges3 = c_bindir / "edges3_fittpfix"
 
     datadir = Path("/data5/edges/data/EDGES3_data/MRO")
     if not datadir.exists():
@@ -53,7 +54,7 @@ def edges3_2023_210(tmp_path_factory):
     if not c_pipeline_dir.exists():
         pytest.skip("Requires packages/alans-pipeline to be available")
     if not c_edges3.exists():
-        pytest.skip("Required binary not found: edges3_fittpfix_pifix")
+        pytest.skip("Required binary not found: edges3_fittpfix")
     if not all(p.exists() for p in (c_reads1p1, c_corrcsv, c_acqplot)):
         pytest.skip(
             "reads1p1/corrcsv/acqplot7amoon not available in packages/alans-pipeline"
@@ -280,8 +281,8 @@ def edges3_2023_210(tmp_path_factory):
             "0.0",
             "-delaylna",
             "0e-12",
-            "-nfit2",
-            str(NFIT2),
+            "-nfit4",
+            str(NFIT4),
         ],
         cwd=workingdir,
         check=True,
