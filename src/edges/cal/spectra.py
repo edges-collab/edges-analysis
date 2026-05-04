@@ -193,7 +193,7 @@ class LoadSpectrum:
         loaddef: LoadDefEDGES2 | LoadDefEDGES3 | None = None,
         templog: Path | None = None,
         specfiles: list[Path] | None = None,
-        thermistor: Path | None = None,
+        thermistor_pth: Path | None = None,
         load_name: str | None = None,
         f_low=40.0 * un.MHz,
         f_high=np.inf * un.MHz,
@@ -280,7 +280,7 @@ class LoadSpectrum:
         if loaddef is not None:
             templog = getattr(loaddef, "templog", None)
             specfiles = loaddef.spectra
-            thermistor = getattr(loaddef, "thermistor", None)
+            thermistor_pth: Path | None = getattr(loaddef, "thermistor", None)
             load_name = loaddef.name
         else:
             if specfiles is None or load_name is None:
@@ -298,7 +298,7 @@ class LoadSpectrum:
                 for p in sig.parameters
                 if p not in ["cls", "loaddef", "invalidate_cache"]
             }
-            defining_dict["files"] = (specfiles, thermistor, templog)
+            defining_dict["files"] = (specfiles, thermistor_pth, templog)
 
             hsh = stable_hash((
                 *tuple(defining_dict.values()),
@@ -315,11 +315,12 @@ class LoadSpectrum:
 
         data: GSData = read_spectra(specfiles)
 
-        if hasattr(loaddef, "thermistor"):
-            thermistor = ThermistorReadings.from_csv(
-                thermistor, ignore_times=ignore_times
+        if thermistor_pth is not None:
+            thermistor: ThermistorReadings | None = ThermistorReadings.from_csv(
+                thermistor_pth, ignore_times=ignore_times
             )
         else:
+            thermistor: ThermistorReadings | None = None
             temperature_range = None
 
         meanq, varq = get_ave_and_var_spec(
@@ -336,9 +337,6 @@ class LoadSpectrum:
 
         if temperature is None:
             if thermistor is not None:
-                thermistor = ThermistorReadings.from_csv(
-                    thermistor, ignore_times=ignore_times
-                )
                 temperature = np.nanmean(thermistor.get_physical_temperature())
             elif templog is None:
                 raise ValueError(
