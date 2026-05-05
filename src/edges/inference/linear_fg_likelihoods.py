@@ -10,7 +10,7 @@ from .eor_models import FlattenedGaussian, GaussianAbsorptionProfile
 from .partial_linear_model import PartialLinearModel
 
 
-@attrs.define(frozen=True, kw_only=True)
+@attrs.define(frozen=True, kw_only=True, slots=False)
 class LinearFG:
     """Classic traditional EoR fit to a calibrated sky spectrum.
 
