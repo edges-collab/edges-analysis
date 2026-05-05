@@ -10,7 +10,6 @@ import pytest
 from astropy import units as un
 
 from edges import alanmode as am
-from edges.alanmode.alanmode import _average_spectra
 
 
 @pytest.fixture(scope="module")
@@ -61,20 +60,14 @@ def edges3_2022_316_edges(tmp_path_factory, alanmode_data_path):
         for fl in sorted(datadir.glob("sp*.txt")):
             shutil.copy(fl, out / fl.name)
     else:
-        _average_spectra(
-            specfiles=defparams.get_spectrum_files(),
-            out=out,
-            redo_spectra=False,
-            fstart=acqparams.fstart,
-            fstop=acqparams.fstop,
-            smooth=acqparams.smooth,
-            tload=acqparams.tload,
-            tcal=acqparams.tcal,
-            tstart=acqparams.tstart,
-            tstop=acqparams.tstop,
-            delaystart=acqparams.delaystart,
-            telescope="edges3",
-        )
+        specfiles = defparams.get_spectrum_files()
+        for load, files in specfiles.items():
+            outfile = out / f"sp{load}.txt"
+            if not outfile.exists():
+                if len(files) == 0:
+                    raise ValueError(f"{load} has no spectrum files!")
+                gsd = am.acqplot7amoon(files, params=acqparams)
+                am.write_spec_txt_gsd(gsd, outfile)
 
     spcold = am.read_spec_txt(out / "spambient.txt", telescope="edges3", name="ambient")
     sphot = am.read_spec_txt(
