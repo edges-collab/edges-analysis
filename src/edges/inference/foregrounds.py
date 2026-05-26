@@ -3,8 +3,8 @@
 from functools import cached_property
 
 import attrs
-from cached_property import cached_property as yabf_cached_property
 import numpy as np
+from cached_property import cached_property as yabf_cached_property
 from yabf import Component, Parameter
 
 
