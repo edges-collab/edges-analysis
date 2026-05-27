@@ -4,7 +4,6 @@ from functools import cached_property
 
 import attrs
 import numpy as np
-from cached_property import cached_property as yabf_cached_property
 from yabf import Component, Parameter
 
 
@@ -27,7 +26,7 @@ class Foreground(Component):
     freqs: np.ndarray = attrs.field(kw_only=True, eq=attrs.cmp_using(eq=np.array_equal))
     nuc: float = attrs.field(default=75.0, kw_only=True, converter=float)
 
-    @yabf_cached_property
+    @cached_property
     def provides(self):
         """The foreground model provides a spectrum."""
         return [f"{self.name}_spectrum"]
@@ -51,7 +50,7 @@ class Tcmb(Component):
 
     T: float = attrs.field(default=2.7255, kw_only=True, converter=float)
 
-    @yabf_cached_property
+    @cached_property
     def provides(self):
         """The Tcmb model provides a scalar value."""
         return [f"{self.name}_scalar"]
