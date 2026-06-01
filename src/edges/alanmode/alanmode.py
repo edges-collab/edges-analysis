@@ -1,7 +1,7 @@
 """Functions that run the calibration in a style similar to the C-code."""
 
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Annotated, Self
 
@@ -173,7 +173,9 @@ class ACQPlot7aMoonParams:
 
 
 def acqplot7amoon(
-    acqfile: str | Path, params: ACQPlot7aMoonParams = ACQPlot7aMoonParams(), **kwargs
+    acqfile: tp.PathLike | Sequence[tp.PathLike],
+    params: ACQPlot7aMoonParams = ACQPlot7aMoonParams(),
+    **kwargs,
 ) -> GSData:
     """A function that does what the acqplot7amoon C-code does.
 
@@ -225,9 +227,17 @@ class EdgesScriptParams:
     Lh
         The mode in which to calculate the loss function.
     wfstart
-        The lowest frequency included for fitting the calibration functions.
+        The lowest frequency included for fitting the calibration functions, and the
+        antenna S11.
     wfstop
-        The highest frequency included for fitting the calibration functions.
+        The highest frequency included for fitting the calibration functions, and the
+        antenna S11.
+    fstart
+        The lowest frequency included when reading the spectra and raw calibration
+        s11s (and therefore defining the range over which the calibration S11s are fit)
+    fstop
+        The highest frequency included when reading the spectra and raw calibration
+        s11s (and therefore defining the range over which the calibration S11s are fit)
     tcold
         The "true" temperature of the ambient load.
     thot
@@ -252,11 +262,18 @@ class EdgesScriptParams:
         Whether the receiver S11 should be modeled as a polynomial. 0 for False,
         anything else will determine the model based on `nfit3`. If `nfit3` is greater
         than 16, a Fourier model will be used, otherwise a Polynomial model.
+    wtmode
+        How to set weights for noise-wave fitting. Currently only wtmode=0 is supported,
+        which sets the weights based on wfstart/wfstop. We've added the parameter here
+        to remind you NOT to set it to anything else when comparing to the legacy
+        C-code (i.e. make sure it's set to zero there too!).
     """
 
     Lh: Annotated[int, Parameter(name=("Lh",))] = -1
     wfstart: float = 50
-    wfstop: float = 190
+    wfstop: float = 200
+    fstart: float = 50
+    fstop: float = 200
     tcold: float = 306.5
     thot: float = 393.22
     tcab: float = attrs.field()
@@ -266,6 +283,7 @@ class EdgesScriptParams:
     nfit2: int = 27
     nter: int = 8
     lna_poly: int = -1
+    wtmode: int = attrs.field(default=0, validator=attrs.validators.in_((0,)))
 
     @tcab.default
     def _tcab_default(self) -> float:
@@ -325,6 +343,12 @@ def _get_specs(
             ),
             temp_ave=temp * un.K,
         )
+        # We use wfstart/wfstop here instead of fstart/fstop, because even though the
+        # C code uses fstart/fstop, it only ever uses the spectra when doing the NW
+        # fitting, and there it gives zero weight to frequencies outside of
+        # wfstart/wfstop. So effectively, the spectra are only used within that range.
+        # Note that this doesn't apply to the S11s, which are _modelled_ on the full
+        # range fstart/fstop, so need to be read in on that full range.
         specs[name] = specs[name].between_freqs(
             params.wfstart * un.MHz, params.wfstop * un.MHz
         )
@@ -532,9 +556,7 @@ def edges(
     specs = _get_specs(spcold, sphot, spopen, spshort, params, tload, tcal)
     spec_fq = specs["ambient"].freqs
 
-    s11mask = get_mask(
-        s11freq, low=params.wfstart * un.MHz, high=params.wfstop * un.MHz
-    )
+    s11mask = get_mask(s11freq, low=params.fstart * un.MHz, high=params.fstop * un.MHz)
     s11freq = s11freq[s11mask]
 
     raw_load_s11s, s11_model_params, load_s11s = _get_load_s11s(
@@ -693,7 +715,7 @@ class Edges3CalobsParams:
             s11_hour=int(self.s11date.split("_")[2]) if self.s11date else None,
         )
 
-    def get_raw_s11s(self):
+    def get_raw_s11s(self) -> tuple[np.ndarray, dict[str, np.ndarray]]:
         """Read all the raw S11 information."""
         caldef = self.get_caldef()
 

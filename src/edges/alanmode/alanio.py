@@ -76,11 +76,11 @@ def read_raul_s11_format(fname: tp.PathLike) -> dict[str, np.ndarray]:
     return out
 
 
-def read_s11_csv(fname) -> tuple[np.ndarray, np.ndarray]:
+def read_s11_csv(fname) -> tuple[tp.FreqType, np.ndarray]:
     """Read a CSV file containing S11 data in Alan's output format."""
     with open(fname) as fl:
         data = np.genfromtxt(fl, delimiter=",", skip_header=1, skip_footer=1)
-        freq = data[:, 0]
+        freq = data[:, 0] * un.MHz
         s11 = data[:, 1] + data[:, 2] * 1j
     return freq, s11
 
@@ -207,7 +207,7 @@ def read_specal_iter(fname: tp.PathLike) -> np.ndarray:
     )
 
 
-def read_alan_calibrated_temp(fname: tp.PathLike) -> np.ndarray:
+def read_calibrated_temp(fname: tp.PathLike) -> np.ndarray:
     """
     Read calibrated_{load}.txt from edges3.c.
 
