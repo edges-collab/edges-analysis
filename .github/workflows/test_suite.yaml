@@ -45,7 +45,7 @@ jobs:
           echo "usercache=${usercache}" >> $GITHUB_OUTPUT
 
       - name: Setup Cached Data Files
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: "${{ steps.usercache.outputs.usercache }}/**/*"
           key: "pooch-cache-${{ runner.os }}"
@@ -90,7 +90,7 @@ jobs:
         run:  uv sync --locked --all-extras --dev
 
       - name: Setup Cached Data Files
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: "${{ needs.get_cache_data.outputs.usercache }}/**/*"
           key: "pooch-cache-${{ runner.os }}"
