@@ -268,7 +268,7 @@ class CoaxialCable:
 
     @property
     def inductance_per_metre(self) -> tp.InductanceType:
-        """Get the inductance per metre of the cable.
+        """The inductance per metre of the cable.
 
         See https://en.wikipedia.org/wiki/Inductance#Inductance_of_a_coaxial_cable.
 
@@ -280,7 +280,7 @@ class CoaxialCable:
 
     @property
     def capacitance_per_metre(self) -> tp.Conductivity:
-        """Get the capacitance per metre of the cable.
+        """The capacitance per metre of the cable.
 
         See https://en.wikipedia.org/wiki/Coaxial_cable#Physical_parameters
         """
@@ -479,7 +479,7 @@ class CalkitStandard:
         return ee.impedance2gamma(self.resistance, 50.0 * un.Ohm)
 
     def termination_impedance(self, freq: tp.FreqType) -> tp.OhmType:
-        """The impedance of the termination of the standard.
+        """Compute the impedance of the termination of the standard.
 
         See Eq. 22-25 of M16 for open and short standards. The match standard
         uses the input measured resistance as the impedance.
@@ -751,22 +751,22 @@ class TwoPortNetwork:
 
     @property
     def A(self):  # noqa: N802
-        """Return the A parameter."""
+        """The A parameter."""
         return self.x[0, 0]
 
     @property
     def B(self):  # noqa: N802
-        """Return the B parameter."""
+        """The B parameter."""
         return self.x[0, 1]
 
     @property
     def C(self):  # noqa: N802
-        """Return the C parameter."""
+        """The C parameter."""
         return self.x[1, 0]
 
     @property
     def D(self):  # noqa: N802
-        """Return the D parameter."""
+        """The D parameter."""
         return self.x[1, 1]
 
     @cached_property
@@ -826,7 +826,7 @@ class TwoPortNetwork:
 
     @property
     def zmatrix(self):
-        """Return the Z-matrix (impedance parameters) of the network."""
+        """The Z-matrix (impedance parameters) of the network."""
         nf = self.B.shape[-1]
         return (1 / self.C) * np.array([
             [self.A, self.determinant],
@@ -840,7 +840,7 @@ class TwoPortNetwork:
 
     @property
     def ymatrix(self):
-        """Return the Y-matrix (admittance parameters) of the network.
+        """The Y-matrix (admittance parameters) of the network.
 
         This is the inverse of the z-matrix.
         """
@@ -867,7 +867,7 @@ class TwoPortNetwork:
 
     @property
     def hmatrix(self):
-        """Return the H-matrix (hybrid parameters) of the network."""
+        """The H-matrix (hybrid parameters) of the network."""
         nf = self.B.shape[-1]
         return (1 / self.D) * np.array([
             [self.B, self.determinant],
