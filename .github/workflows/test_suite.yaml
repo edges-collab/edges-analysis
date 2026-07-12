@@ -95,6 +95,12 @@ jobs:
           path: "${{ needs.get_cache_data.outputs.usercache }}/**/*"
           key: "pooch-cache-${{ runner.os }}"
 
+      - name: Setup Astropy Download Cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.astropy/cache
+          key: "astropy-cache-${{ runner.os }}"
+
       - name: Run Tests
         run: |
           if [ "${{ matrix.testtype }}" = "warnfail" ]; then
