@@ -429,7 +429,7 @@ class IterativeXRFIInfo:
 
     @property
     def n_iters(self) -> int:
-        """Get the number of iterations."""
+        """The number of iterations."""
         return len(self.model_params)
 
     def get_model(self, indx: int = -1):

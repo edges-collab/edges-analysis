@@ -24,7 +24,7 @@ _NEW_WEATHER_PATTERN = re.compile(
 _OLD_WEATHER_PATTERN = re.compile(
     r"rack_temp  (?P<rack_temp>\d{3}.\d{2}) Kelvin, "
     r"ambient_temp  (?P<ambient_temp>\d{3}.\d{2}) Kelvin, "
-    r"ambient_hum  (?P<ambient_hum>[\d\- ]{3}.\d{2}) percent, "
+    r"ambient_hum  (?P<ambient_hum>[\d\- ]{3}.\d{2}) percent"
 )
 
 _THERMLOG_PATTERN = re.compile(

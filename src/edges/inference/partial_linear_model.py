@@ -15,7 +15,7 @@ from ..modeling import Model
 logger = logging.getLogger(__name__)
 
 
-@attrs.define(frozen=True, kw_only=True)
+@attrs.define(frozen=True, kw_only=True, slots=False)
 class PartialLinearModel(Chi2, Likelihood):
     r"""
     A likelihood where some of the parameters are linear and pre-marginalized.

@@ -51,10 +51,11 @@ class Config:
         for k, v in kwargs.items():
             setattr(self, k, v)
 
-        yield self
-
-        for k in kwargs:
-            setattr(self, k, getattr(backup, k))
+        try:
+            yield self
+        finally:
+            for k in kwargs:
+                setattr(self, k, getattr(backup, k))
 
     def write(self, fname=None):
         """Write current configuration to file to make it permanent."""

@@ -33,7 +33,7 @@ def edges3_2022_316(tmp_path_factory, alanmode_data_path):
     datadir = Path("/data5/edges/data/EDGES3_data/MRO")
     if not datadir.exists():
         # We're not on enterprise, so we can only do the S11 stuff.
-        datadir = alanmode_data_path / "edges3-data-for-alan-comparison"
+        datadir = alanmode_data_path / "edges3-2022-316-raw"
 
     on_enterprise = "/data5/" in str(datadir)
 
@@ -62,6 +62,8 @@ def edges3_2022_316(tmp_path_factory, alanmode_data_path):
         "--cal.Lh -1 "
         "--cal.wfstart 50.0 "
         "--cal.wfstop 190.0 "
+        "--cal.fstart 50.0 "
+        "--cal.fstop 190.0 "
         "--cal.tcold 306.5 "
         "--cal.thot 393.22 "
         "--cal.tcab 306.5 "

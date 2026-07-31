@@ -16,9 +16,7 @@ from edges.frequencies import edges_raw_freqs
 
 
 def test_read_write_spec_loop(alanmode_data_path: Path, tmpdir: Path):
-    spamb = am.read_spec_txt(
-        alanmode_data_path / "edges3-data-for-alan-comparison/spambient.txt"
-    )
+    spamb = am.read_spec_txt(alanmode_data_path / "edges3-2022-316-raw/spambient.txt")
 
     am.write_spec_txt(
         spamb.freqs,

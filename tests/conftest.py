@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 from astropy import units as un
 from astropy.time import Time
+from astropy.utils import iers
 from pygsdata import GSData
 
 from edges import const
@@ -22,6 +23,13 @@ from edges.cal.receiver_cal import get_noise_wave_calibration_iterative
 from edges.frequencies import edges_raw_freqs
 from edges.io import calobsdef
 from edges.testing import create_mock_edges_data
+
+# Avoid flaky CI failures from astropy trying (and sometimes failing) to
+# download IERS Earth-rotation data. auto_max_age must also be disabled,
+# otherwise the bundled table is treated as too stale to interpolate from.
+iers.conf.auto_download = False
+iers.conf.auto_max_age = None
+iers.conf.iers_degraded_accuracy = "ignore"
 
 
 @pytest.fixture(scope="session")
