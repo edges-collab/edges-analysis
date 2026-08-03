@@ -153,7 +153,7 @@ class LinLog(Foreground):
         return term * x**self.beta
 
 
-def LogPoly(**kwargs):  # noqa: N802
+def LogPoly(**kwargs):  # ruff: ignore[invalid-function-name]
     """A factory function for a LogPoly model."""
     return Polynomial(transform=Log10Transform(), offset=0, **kwargs)
 

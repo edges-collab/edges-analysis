@@ -12,7 +12,7 @@ from .. import modeling as mdl
 from .. import types as tp
 
 
-def get_F(gamma_rec: np.ndarray, gamma_ant: np.ndarray) -> np.ndarray:  # noqa: N802
+def get_F(gamma_rec: np.ndarray, gamma_ant: np.ndarray) -> np.ndarray:  # ruff: ignore[invalid-function-name]
     """Get the F parameter for a given receiver and antenna.
 
     Parameters
@@ -43,7 +43,7 @@ def get_alpha(gamma_rec: np.ndarray, gamma_ant: np.ndarray) -> np.ndarray:
     return np.angle(gamma_ant * get_F(gamma_rec, gamma_ant))
 
 
-def get_K(gamma_rec, gamma_ant, f_ratio=None, alpha=None, gain=None):  # noqa: N802
+def get_K(gamma_rec, gamma_ant, f_ratio=None, alpha=None, gain=None):  # ruff: ignore[invalid-function-name]
     """
     Determine the S11-dependent factors for each term in Eq. 7 (Monsalve 2017).
 
@@ -603,7 +603,7 @@ def get_linear_coefficients(gamma_ant, gamma_rec, t_sca, t_off, t_unc, t_cos, t_
     return get_linear_coefficients_from_K(K, t_sca, t_off, t_unc, t_cos, t_sin)
 
 
-def get_linear_coefficients_from_K(  # noqa: N802
+def get_linear_coefficients_from_K(  # ruff: ignore[invalid-function-name]
     k, t_sca, t_off, t_unc, t_cos, t_sin
 ):
     """Calculate linear coefficients a and b from noise-wave parameters K0-4.

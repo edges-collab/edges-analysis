@@ -155,7 +155,7 @@ def aux_filter(
             logger.info(f"{nnew}/{len(flags) - nflags} times flagged due to {message}")
 
     for k, v in minima.items():
-        if k not in data.auxiliary_measurements.keys():  # noqa: SIM118
+        if k not in data.auxiliary_measurements.keys():  # ruff: ignore[in-dict-keys]
             raise ValueError(
                 f"{k} not in data.auxiliary_measurements. "
                 f"Allowed: {data.auxiliary_measurements.keys()}"
@@ -163,7 +163,7 @@ def aux_filter(
         filt(data.auxiliary_measurements[k] < v, f"{k} minimum", flags)
 
     for k, v in maxima.items():
-        if k not in data.auxiliary_measurements.keys():  # noqa: SIM118
+        if k not in data.auxiliary_measurements.keys():  # ruff: ignore[in-dict-keys]
             raise ValueError(
                 f"{k} not in data.auxiliary_measurements. "
                 f"Allowed: {data.auxiliary_measurements.keys()}"

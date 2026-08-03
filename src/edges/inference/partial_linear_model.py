@@ -107,7 +107,7 @@ class PartialLinearModel(Chi2, Likelihood):
         return linear_fit, data, var
 
     @cached_property
-    def Q(self):  # noqa: N802
+    def Q(self):  # ruff: ignore[invalid-function-name]
         """The precision matrix of the data marginalized over the linear model."""
         if self.basis_func is not None or self.variance_func is not None:
             raise AttributeError("Q is not static in this instance!")
@@ -116,7 +116,7 @@ class PartialLinearModel(Chi2, Likelihood):
         )
 
     @cached_property
-    def logdetCinv(self) -> float | None:  # noqa: N802
+    def logdetCinv(self) -> float | None:  # ruff: ignore[invalid-function-name]
         """A derived quantity, the log-determinant of the inverse of the covariance."""
         if np.all(self.data["data_variance"] == 0):
             return 0.0

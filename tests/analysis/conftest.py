@@ -10,7 +10,7 @@ from edges.config import config
 
 
 @pytest.fixture(scope="session", autouse=True)
-def _set_mpl_backend():  # noqa: RUF066
+def _set_mpl_backend():  # ruff: ignore[property-without-return]
     """Set the matplotlib backend for faster tests."""
     mpl.use("pdf")
 
