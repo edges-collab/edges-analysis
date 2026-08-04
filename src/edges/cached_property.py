@@ -3,7 +3,7 @@
 from functools import cached_property as cp
 
 
-class cached_property(cp):  # noqa
+class cached_property(cp):  # ruff: ignore[undocumented-public-class, invalid-class-name]
     def __get__(self, obj, cls):
         """Get the store value of the attribute."""
         try:

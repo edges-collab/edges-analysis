@@ -294,7 +294,7 @@ class EdgesScriptParams:
         cls,
         cfit=6,
         wfit=5,
-        Lh=-2,  # noqa: N803
+        Lh=-2,  # ruff: ignore[invalid-argument-name]
         wfstart=50.0,
         wfstop=100.0,
         tcold=296,

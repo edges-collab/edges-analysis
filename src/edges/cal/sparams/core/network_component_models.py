@@ -192,7 +192,7 @@ class CoaxialCable:
     """
 
     # These conductivities are taken from Alan's code in cabl2
-    conductivities: dict[str, tp.Conductivity] = {  # noqa: RUF008
+    conductivities: dict[str, tp.Conductivity] = {  # ruff: ignore[mutable-dataclass-default]
         "copper": 5.96e07 * un.siemens / un.m,
         "brass": 5.96e07 * 0.29 * un.siemens / un.m,
         "stainless steel": 5.96e07 * 0.024 * un.siemens / un.m,
@@ -606,7 +606,7 @@ class Calkit:
     def _match_vld(self, att, val):
         assert val.name == "match"
 
-    def clone(self, *, short=None, open=None, match=None):  # noqa: A002
+    def clone(self, *, short=None, open=None, match=None):  # ruff: ignore[builtin-argument-shadowing]
         """Return a clone with updated parameters for each standard."""
         return attrs.evolve(
             self,
@@ -674,7 +674,7 @@ KNOWN_CALKITS = {"AGILENT_85033E": AGILENT_85033E, "AGILENT_ALAN": AGILENT_ALAN}
 def get_calkit(
     base: Calkit | str,
     resistance_of_match: tp.ImpedanceType | None = None,
-    open: dict | None = None,  # noqa: A002
+    open: dict | None = None,  # ruff: ignore[builtin-argument-shadowing]
     short: dict | None = None,
     match: dict | None = None,
 ):
@@ -750,22 +750,22 @@ class TwoPortNetwork:
         return cls(np.linalg.inv(abcd.T).T) if inverse else cls(abcd)
 
     @property
-    def A(self):  # noqa: N802
+    def A(self):  # ruff: ignore[invalid-function-name]
         """The A parameter."""
         return self.x[0, 0]
 
     @property
-    def B(self):  # noqa: N802
+    def B(self):  # ruff: ignore[invalid-function-name]
         """The B parameter."""
         return self.x[0, 1]
 
     @property
-    def C(self):  # noqa: N802
+    def C(self):  # ruff: ignore[invalid-function-name]
         """The C parameter."""
         return self.x[1, 0]
 
     @property
-    def D(self):  # noqa: N802
+    def D(self):  # ruff: ignore[invalid-function-name]
         """The D parameter."""
         return self.x[1, 1]
 

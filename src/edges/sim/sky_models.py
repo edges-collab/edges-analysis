@@ -281,7 +281,7 @@ class SkyModel:
         )
 
 
-def Haslam408AllNoh():  # noqa: N802
+def Haslam408AllNoh():  # ruff: ignore[invalid-function-name]
     """Return the original raw Haslam 408 MHz all-sky map.
 
     This is the file in Alan's repo.
@@ -303,7 +303,7 @@ def Haslam408AllNoh():  # noqa: N802
     return SkyModel.from_latlon_grid_file(fl, frequency=408.0, name="Haslam408AllNoh")
 
 
-def Haslam408(min_nside=2**0, max_nside=2**100):  # noqa: N802
+def Haslam408(min_nside=2**0, max_nside=2**100):  # ruff: ignore[invalid-function-name]
     """Return he Haslam 408 MHz all-sky map.
 
     408MHz radio continuum all-sky map of Haslam etal combines data from
@@ -327,7 +327,7 @@ def Haslam408(min_nside=2**0, max_nside=2**100):  # noqa: N802
     )
 
 
-def Remazeilles408(min_nside=2**0, max_nside=2**100):  # noqa: N802
+def Remazeilles408(min_nside=2**0, max_nside=2**100):  # ruff: ignore[invalid-function-name]
     """Return the Remazeilles 408 MHz all-sky map.
 
     Remazeilles et al. 2014 have re-evaluated and re-processed the rawest Haslam
@@ -355,7 +355,7 @@ def Remazeilles408(min_nside=2**0, max_nside=2**100):  # noqa: N802
     )
 
 
-def LW150(min_nside=2**0, max_nside=2**100):  # noqa: N802
+def LW150(min_nside=2**0, max_nside=2**100):  # ruff: ignore[invalid-function-name]
     """Return the Landecker & Wielebinski 150 MHz all-sky map.
 
     Patra et al. 2015, provided a recalibration of the 150 MHz map based on comparison
@@ -382,7 +382,7 @@ def LW150(min_nside=2**0, max_nside=2**100):  # noqa: N802
     )
 
 
-def Guzman45(min_nside=2**0, max_nside=2**100):  # noqa: N802
+def Guzman45(min_nside=2**0, max_nside=2**100):  # ruff: ignore[invalid-function-name]
     """Return the Guzman 45 MHz all-sky map.
 
     Guzmán et al. (2011) produced an all-sky map of 45 MHz emission by combining data
@@ -410,7 +410,7 @@ def Guzman45(min_nside=2**0, max_nside=2**100):  # noqa: N802
     return attrs.evolve(out, temperature=new_temp)
 
 
-def WhamHAlpha(min_nside=2**0, max_nside=2**100):  # noqa: N802
+def WhamHAlpha(min_nside=2**0, max_nside=2**100):  # ruff: ignore[invalid-function-name]
     """Return the WHAM H-alpha all-sky map.
 
     The Wisconsin H-Alpha Mapper (WHAM) made a survey of H alpha intensity over the full
@@ -432,7 +432,7 @@ def WhamHAlpha(min_nside=2**0, max_nside=2**100):  # noqa: N802
     )
 
 
-def PlanckCO(min_nside=2**0, max_nside=2**100):  # noqa: N802
+def PlanckCO(min_nside=2**0, max_nside=2**100):  # ruff: ignore[invalid-function-name]
     """Return the Planck CO all-sky map.
 
     Planck All Sky Maps are in HEALPix format, with Nside 2048, in Galactic coordinates
@@ -456,7 +456,7 @@ def PlanckCO(min_nside=2**0, max_nside=2**100):  # noqa: N802
     )
 
 
-def HI4PI(min_nside=2**0, max_nside=2**100):  # noqa: N802
+def HI4PI(min_nside=2**0, max_nside=2**100):  # ruff: ignore[invalid-function-name]
     r"""Return an HI4PI all-sky map.
 
     The HI 4-PI Survey (HI4PI) is a 21-cm all-sky survey of neutral atomic hydrogen.

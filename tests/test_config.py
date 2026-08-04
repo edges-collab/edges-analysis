@@ -31,6 +31,6 @@ def test_write_and_load(cfg, tmpdir):
 
 
 def test_cant_use_nonexistent(cfg):
-    with pytest.raises(KeyError, match="Cannot use bad in config"):  # noqa: SIM117
+    with pytest.raises(KeyError, match="Cannot use bad in config"):  # ruff: ignore[multiple-with-statements]
         with cfg.use(bad="bad"):
             pass
