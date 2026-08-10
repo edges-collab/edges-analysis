@@ -65,7 +65,7 @@ def average_over_times(
     nsamples_strategy: NsamplesStrategy = NsamplesStrategy.FLAGGED_NSAMPLES,
     reference_lst: Longitude = Longitude(12 * un.hour),
     use_resids: bool | None = None,
-    fill_value: float = 0.0,
+    fill_value: float = np.nan,
 ) -> GSData:
     """Average a GSData object over the time axis.
 
@@ -83,7 +83,9 @@ def average_over_times(
         Whether to average the residuals and add them back to the mean model, or simply
         average the data directly.
     fill_value : float
-        The value to impute when no data exists in a bin.
+        The value to impute when no data exists in a bin. Defaults to NaN so empty
+        channels are not filled with zeros (which can look like real sky signal and
+        confuse downstream weighting / RFI flagging).
     """
     if use_resids is None:
         use_resids = data.residuals is not None
