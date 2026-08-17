@@ -450,6 +450,15 @@ class TestBinData:
 
         np.testing.assert_allclose(res1, res2)
 
+    def test_empty_residual_weight_is_nan(self):
+        data = np.array([100.0, 200.0])
+        residuals = np.array([0.0, 0.0])
+        weights = np.array([0.0, 0.0])
+        res, w, r = bin_data(data, residuals=residuals, weights=weights)
+        assert np.isnan(res)
+        assert w == 0
+        assert np.isnan(r)
+
     def test_with_multiple_bins(self):
         data = np.array([1, 2, 3, 4], dtype=float)
         bins = [slice(0, 2), slice(2, 4)]

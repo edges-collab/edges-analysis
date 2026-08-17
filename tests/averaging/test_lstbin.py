@@ -85,3 +85,26 @@ class TestAverageOverTimes:
         new.data[0, 0, 0] = np.nan
         new = average_over_times(new, nsamples_strategy=nsamples_strategy)
         assert np.all(new.data == 1.0)
+
+    def test_empty_channels_use_fill_value(self, mock_with_model: GSData):
+        from pygsdata import GSFlag
+
+        # Flag a single channel on every time so that channel has zero residual weight.
+        flags = np.zeros(mock_with_model.nfreqs, dtype=bool)
+        flags[0] = True
+        resid = mock_with_model.residuals.copy()
+        resid[..., 0] = np.nan
+        flagged = mock_with_model.update(
+            residuals=resid,
+            flags={"chan0": GSFlag(flags=flags, axes=("freq",))},
+            auxiliary_measurements=None,
+        )
+        avg = average_over_times(
+            flagged,
+            use_resids=True,
+            nsamples_strategy=NsamplesStrategy.FLAGGED_NSAMPLES_UNIFORM,
+            fill_value=np.nan,
+        )
+        assert np.all(np.isnan(avg.data[..., 0]))
+        assert np.all(np.isnan(avg.residuals[..., 0]))
+        assert np.all(np.isfinite(avg.data[..., 1]))
