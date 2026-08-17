@@ -1,7 +1,6 @@
 """Functions for combining multiple GSData files/objects."""
 
 import logging
-import warnings
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -19,6 +18,7 @@ def average_multiple_objects(
     *objs: Sequence[GSData],
     nsamples_strategy: NsamplesStrategy = NsamplesStrategy.FLAGGED_NSAMPLES,
     use_resids: bool | None = None,
+    fill_value: float = np.nan,
 ) -> GSData:
     """Average multiple GSData objects together.
 
@@ -40,6 +40,8 @@ def average_multiple_objects(
         If True, the residuals will be averaged and added to the average model. If
         False, the residuals will be ignored. If None, the residuals will be used if
         they are present in all objects, and otherwise ignored.
+    fill_value : float
+        Value for bins with no contributing weight. Defaults to NaN.
 
     Returns
     -------
@@ -67,28 +69,51 @@ def average_multiple_objects(
         weights.append(w)
         nsamples.append(n)
 
-    wtot = np.sum(weights, axis=0)
-    ntot = np.sum(nsamples, axis=0)
-
     if use_resids:
+        # Drop non-finite residuals from the weight support.
+        weights = [
+            np.where(np.isfinite(obj.residuals), w, 0.0)
+            for obj, w in zip(objs, weights, strict=False)
+        ]
+        nsamples = [
+            np.where(np.isfinite(obj.residuals), n, 0.0)
+            for obj, n in zip(objs, nsamples, strict=False)
+        ]
+        wtot = np.sum(weights, axis=0)
+        ntot = np.sum(nsamples, axis=0)
+        good = wtot > 0
+
+        # Weighted residual mean over contributing nights.
         residuals = np.nansum(
             [obj.residuals * w for obj, w in zip(objs, weights, strict=False)], axis=0
         )
+        residuals = np.divide(
+            residuals, wtot, out=np.full_like(residuals, fill_value), where=good
+        )
 
-        residuals[wtot > 0] /= wtot[wtot > 0]
-        tot_model = np.nansum([obj.model for obj in objs], axis=0)
-        nobj = len(objs) - sum(np.all(np.isnan(obj.model), axis=3) for obj in objs)
-
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore")
-            tot_model /= nobj[..., None]
-
-        final_data = tot_model + residuals
+        # Unweighted model mean over the *same* nights (w > 0 only).
+        contrib = [(w > 0).astype(float) for w in weights]
+        n_good = np.sum(contrib, axis=0)
+        tot_model = np.nansum(
+            [obj.model * c for obj, c in zip(objs, contrib, strict=False)], axis=0
+        )
+        tot_model = np.divide(
+            tot_model,
+            n_good,
+            out=np.full_like(tot_model, fill_value),
+            where=n_good > 0,
+        )
+        final_data = np.where(good, tot_model + residuals, fill_value)
     else:
+        wtot = np.sum(weights, axis=0)
+        ntot = np.sum(nsamples, axis=0)
+        good = wtot > 0
         final_data = np.nansum(
             [obj.data * w for obj, w in zip(objs, weights, strict=False)], axis=0
         )
-        final_data[wtot > 0] /= wtot[wtot > 0]
+        final_data = np.divide(
+            final_data, wtot, out=np.full_like(final_data, fill_value), where=good
+        )
         residuals = None
 
     return objs[0].update(

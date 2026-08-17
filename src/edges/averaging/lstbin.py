@@ -95,17 +95,29 @@ def average_over_times(
 
     w, n = get_weights_from_strategy(data, nsamples_strategy)
 
-    ntot = np.sum(w, axis=-2)
-    nsamples_tot = np.sum(n, axis=-2)
-
+    mean_resids = None
     if use_resids:
-        sum_resids = np.nansum(data.residuals * w, axis=-2)
-        mean_resids = sum_resids / ntot
+        # Residuals: weighted. Zero weight where residual is non-finite.
+        w_resid = np.where(np.isfinite(data.residuals), w, 0.0)
+        ntot = np.sum(w_resid, axis=-2)
+        nsamples_tot = np.sum(np.where(np.isfinite(data.residuals), n, 0.0), axis=-2)
+        sum_resids = np.nansum(data.residuals * w_resid, axis=-2)
+        mean_resids = np.divide(
+            sum_resids,
+            ntot,
+            out=np.full_like(sum_resids, fill_value),
+            where=ntot > 0,
+        )
+        # Models: unweighted mean over finite models (memo; flagged times may contribute).
         mean_model = np.nanmean(data.model, axis=-2)
-        new_data = mean_model + mean_resids
+        new_data = np.where(ntot > 0, mean_model + mean_resids, fill_value)
     else:
+        ntot = np.sum(w, axis=-2)
+        nsamples_tot = np.sum(n, axis=-2)
         sum_data = np.nansum(data.data * w, axis=-2)
-        new_data = sum_data / ntot
+        new_data = np.divide(
+            sum_data, ntot, out=np.full_like(sum_data, fill_value), where=ntot > 0
+        )
 
     new_data[np.isnan(new_data)] = fill_value
 
