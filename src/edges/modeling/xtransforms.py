@@ -1,6 +1,6 @@
 """Module defining x-variable transforms for modelling."""
 
-from abc import ABCMeta, abstractmethod
+from abc import ABC, abstractmethod
 from functools import cached_property
 from typing import Self
 
@@ -23,7 +23,7 @@ def _transform_yaml_representer(dumper: yaml.SafeDumper, tr) -> yaml.nodes.Mappi
 
 @hickleable
 @attrs.define(frozen=True, kw_only=True, slots=False)
-class XTransform(metaclass=ABCMeta):
+class XTransform(ABC):
     """Abstract base class for all coordinate transforms."""
 
     _models = {}

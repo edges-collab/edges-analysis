@@ -1,6 +1,6 @@
 """Core classes for linear modelling."""
 
-from abc import ABCMeta, abstractmethod
+from abc import ABC, abstractmethod
 from collections.abc import Callable, Sequence
 from functools import cached_property
 from typing import ClassVar, Self
@@ -20,7 +20,7 @@ _MODELS = {}
 
 @hickleable
 @attrs.define(frozen=True, kw_only=True, slots=False)
-class Model(metaclass=ABCMeta):
+class Model(ABC):
     """A base class for a linear model."""
 
     default_n_terms: ClassVar[int | None] = None
