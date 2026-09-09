@@ -1,6 +1,6 @@
 """Module defining transforms of data that occur pre-fitting."""
 
-from abc import ABCMeta, abstractmethod
+from abc import ABC, abstractmethod
 from typing import Self
 
 import attrs
@@ -22,7 +22,7 @@ def _transform_yaml_representer(dumper: yaml.SafeDumper, tr) -> yaml.nodes.Mappi
 
 @hickleable
 @attrs.define(frozen=True, kw_only=True, slots=False)
-class DataTransform(metaclass=ABCMeta):
+class DataTransform(ABC):
     """A base class for model transforms.
 
     A DataTransform must implement *both* the `transform` and `inverse` methods.
