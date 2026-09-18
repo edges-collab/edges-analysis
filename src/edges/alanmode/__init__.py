@@ -35,4 +35,5 @@ from .alanmode import (
     alancal,
     corrcsv,
     edges,
+    reads1p1,
 )
