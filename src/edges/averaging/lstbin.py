@@ -108,9 +108,22 @@ def average_over_times(
             out=np.full_like(sum_resids, fill_value),
             where=ntot > 0,
         )
-        # Models: unweighted mean over finite models (memo; flagged times may contribute).
-        mean_model = np.nanmean(data.model, axis=-2)
-        new_data = np.where(ntot > 0, mean_model + mean_resids, fill_value)
+        # Unweighted model mean over the *same* samples (w > 0 and finite model).
+        # Do not use data.model (= data - residual): NaN data or leftover 0s
+        # after flagging would enter np.nanmean as fake sky (icicles).
+        model = data.data - data.residuals
+        contrib = (w_resid > 0) & np.isfinite(model)
+        n_good = np.sum(contrib, axis=-2)
+        tot_model = np.nansum(np.where(contrib, model, np.nan), axis=-2)
+        mean_model = np.divide(
+            tot_model,
+            n_good,
+            out=np.full_like(tot_model, fill_value),
+            where=n_good > 0,
+        )
+        new_data = np.where(
+            (ntot > 0) & (n_good > 0), mean_model + mean_resids, fill_value
+        )
     else:
         ntot = np.sum(w, axis=-2)
         nsamples_tot = np.sum(n, axis=-2)

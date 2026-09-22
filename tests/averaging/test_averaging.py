@@ -450,6 +450,16 @@ class TestBinData:
 
         np.testing.assert_allclose(res1, res2)
 
+    def test_zero_weight_zero_model_excluded(self):
+        # Flagged sample with model=0 must not pull the unweighted FG mean.
+        data = np.array([101.0, 0.0])
+        residuals = np.array([1.0, 0.0])
+        weights = np.array([1.0, 0.0])
+        res, w, r = bin_data(data, residuals=residuals, weights=weights)
+        np.testing.assert_allclose(res, 101.0)
+        np.testing.assert_allclose(r, 1.0)
+        assert w == 1.0
+
     def test_empty_residual_weight_is_nan(self):
         data = np.array([100.0, 200.0])
         residuals = np.array([0.0, 0.0])
