@@ -360,9 +360,16 @@ def bin_data(
             m = slice_along_axis(model, bn, axis=axis)
             r = slice_along_axis(residuals, bn, axis=axis)
 
-            m = weighted_mean(m, axis=axis)[0]
+            # Memo estimator: unweighted model mean over w>0 samples only,
+            # plus weighted residual mean. Zeros with no weight must not count.
+            if w is not None:
+                m_w = ((np.asarray(w) > 0) & np.isfinite(m)).astype(float)
+            else:
+                m_w = None
+            m = weighted_mean(m, weights=m_w, axis=axis)[0]
             r, w = weighted_mean(r, weights=w, axis=axis)
-            d = r + m
+            # No residual weight => empty bin (not model-only).
+            d = np.where(np.asarray(w) > 0, r + m, np.nan)
         else:
             d = slice_along_axis(data, bn, axis=axis)
             d, w = weighted_mean(d, weights=w, axis=axis)
