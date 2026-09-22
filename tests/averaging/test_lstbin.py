@@ -78,6 +78,21 @@ class TestLSTBin:
         out = lst_bin(gsd_ones, binsize=1.0, reference_time=reference_time)
         assert out.ntimes == 24
 
+    @pytest.mark.parametrize(
+        "nsamples_strategy",
+        [
+            NsamplesStrategy.FLAGGED_NSAMPLES,
+            NsamplesStrategy.FLAGS_ONLY,
+            NsamplesStrategy.FLAGGED_NSAMPLES_UNIFORM,
+            NsamplesStrategy.NSAMPLES_ONLY,
+        ],
+    )
+    def test_nsamples_strategy(self, mock: GSData, nsamples_strategy: NsamplesStrategy):
+        data = mock.update(auxiliary_measurements=None)
+        binned = lst_bin(data, nsamples_strategy=nsamples_strategy)
+        assert binned.ntimes == 1
+        assert np.all(np.isfinite(binned.data) | (binned.nsamples == 0))
+
     def test_with_model(self, mock_with_model: GSData):
         rng = np.random.default_rng()
         new = mock_with_model.update(
