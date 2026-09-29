@@ -277,7 +277,9 @@ class LoadSpectrum:
         -------
         :class:`LoadSpectrum`
         """
+        telescope = None
         if loaddef is not None:
+            telescope = loaddef.telescope
             templog = getattr(loaddef, "templog", None)
             specfiles = loaddef.spectra
             thermistor_pth: Path | None = getattr(loaddef, "thermistor", None)
@@ -313,7 +315,7 @@ class LoadSpectrum:
             )
             return cls.from_file(fname)
 
-        data: GSData = read_spectra(specfiles)
+        data: GSData = read_spectra(specfiles, telescope=telescope)
 
         if thermistor_pth is not None:
             thermistor: ThermistorReadings | None = ThermistorReadings.from_csv(

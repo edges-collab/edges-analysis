@@ -166,11 +166,16 @@ def _read_acq_spectra(
 
     data = read_acq_to_gsdata(files, telescope=telescope, **kwargs)
 
-    time_ranges = acq_time_ranges(data.times)
+    # A cycle is (nloads x integration time) plus switching and processing overhead,
+    # which is ~15-40% for EDGES-2 and EDGES-3. Anything much longer is a gap.
+    cycle_intg = telescope.integration_time if intg_time is None else intg_time * un.s
+    max_cycle = 2 * data.nloads * cycle_intg
+    time_ranges = acq_time_ranges(data.times, max_cycle_duration=max_cycle)
     if time_ranges is None:
         warnings.warn(
             f"Cannot determine the cycle duration from the time stamps in {files}, "
-            "as there are fewer than two switch cycles. Time ranges will use the "
+            "as no two consecutive switch cycles are within "
+            f"{max_cycle.to(un.s):.1f} of each other. Time ranges will use the "
             f"telescope's integration time ({telescope.integration_time}).",
             stacklevel=3,
         )
@@ -183,7 +188,11 @@ def _read_acq_spectra(
     )
 
 
-def acq_time_ranges(times: Time, max_gap_factor: float = 1.5) -> Time | None:
+def acq_time_ranges(
+    times: Time,
+    max_cycle_duration: un.Quantity[un.s] | None = None,
+    max_gap_factor: float = 1.5,
+) -> Time | None:
     """Compute the time range of each switch position from ACQ time stamps.
 
     ACQ files have one time stamp per switch cycle (shared by all switch positions),
@@ -194,13 +203,18 @@ def acq_time_ranges(times: Time, max_gap_factor: float = 1.5) -> Time | None:
     The last cycle has no following time stamp, and a gap in the data (e.g. between
     files, or from dropped cycles) would make a cycle look too long. These cycles,
     and any whose following time stamp is not later than its own, are assigned the
-    median cycle duration instead.
+    median cycle duration instead. The median is taken over cycles no longer than
+    ``max_cycle_duration``, so that it is not set by the gaps between files when
+    each file has only a few cycles.
 
     Parameters
     ----------
     times
         The time stamps of the data, with shape ``(ntimes, nloads)``, where the
         loads are in the order of the switch positions.
+    max_cycle_duration
+        The longest plausible cycle. Longer intervals between time stamps are
+        treated as gaps. By default, there is no limit.
     max_gap_factor
         Cycles longer than this factor times the median cycle duration are assigned
         the median duration.
@@ -209,15 +223,19 @@ def acq_time_ranges(times: Time, max_gap_factor: float = 1.5) -> Time | None:
     -------
     Time or None
         The time ranges, with shape ``(ntimes, nloads, 2)``. None if the cycle
-        duration cannot be determined (fewer than two distinct cycle time stamps).
+        duration cannot be determined, i.e. no two consecutive time stamps are a
+        plausible cycle apart.
     """
     start = times[:, 0]
     nloads = times.shape[1]
 
     duration = (start[1:] - start[:-1]).to_value(un.s)
-    if not np.any(duration > 0):
+    valid = duration > 0
+    if max_cycle_duration is not None:
+        valid &= duration <= max_cycle_duration.to_value(un.s)
+    if not np.any(valid):
         return None
-    typical = np.median(duration[duration > 0])
+    typical = np.median(duration[valid])
 
     duration = np.append(duration, typical)
     duration[(duration <= 0) | (duration > max_gap_factor * typical)] = typical

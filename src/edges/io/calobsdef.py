@@ -9,7 +9,7 @@ import tomllib as toml
 import warnings
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Self
+from typing import ClassVar, Self
 
 import attrs
 import yaml
@@ -146,7 +146,15 @@ class LoadDefEDGES2:
     sparams_file
         This file, if given, contains the S-parameters of the load device (e.g. the
         semi-rigid cable for a hot load).
+
+    Attributes
+    ----------
+    telescope
+        The telescope used when reading the spectra. EDGES-2 spectrum files do not
+        identify the telescope, so it is set explicitly.
     """
+
+    telescope: ClassVar[str | None] = "edges-low"
 
     name: str = attrs.field()
 

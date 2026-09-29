@@ -23,6 +23,11 @@ from edges.io.spectra import (
 # GSData stores times as float64 Julian dates, precise to ~50 microseconds.
 TIME_ATOL = 1e-4  # seconds
 
+# read_acq warns about empty header items (e.g. --output_file) in these files.
+pytestmark = pytest.mark.filterwarnings(
+    "ignore:(?s)In file .* has no value:UserWarning"
+)
+
 EDGES3_AMB = TEST_DATA_PATH / "edges3-mock-root/mro/amb/2023/2023_070_12_43_06_amb.acq"
 
 
@@ -140,6 +145,19 @@ def test_acq_time_ranges_gap():
     np.testing.assert_allclose(dt, 23 / 3, atol=TIME_ATOL)
 
 
+def test_acq_time_ranges_file_gaps():
+    # Two short files an hour apart: the median must not be set by the gap.
+    times = _cycle_times([0, 23, 3600, 3623])
+    tr = acq_time_ranges(times, max_cycle_duration=40 * un.s)
+    dt = (tr[..., 1] - tr[..., 0]).to_value(un.s)
+    np.testing.assert_allclose(dt, 23 / 3, atol=TIME_ATOL)
+
+    # Single-cycle files an hour apart have no plausible cycle at all.
+    assert (
+        acq_time_ranges(_cycle_times([0, 3600]), max_cycle_duration=40 * un.s) is None
+    )
+
+
 def test_acq_time_ranges_single_cycle():
     assert acq_time_ranges(_cycle_times([0])) is None
 
@@ -154,7 +172,7 @@ def test_read_single_cycle_warns(tmp_path):
             break
     fl = tmp_path / "one_cycle.acq"
     fl.write_text("".join(keep))
-    with pytest.warns(UserWarning, match="fewer than two switch cycles"):
+    with pytest.warns(UserWarning, match="Cannot determine the cycle duration"):
         data = read_spectra([fl])
     dt = (data.time_ranges[..., 1] - data.time_ranges[..., 0]).to_value(un.s)
     np.testing.assert_allclose(dt, 2684354560 / 400e6, atol=TIME_ATOL)
