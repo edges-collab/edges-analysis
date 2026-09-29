@@ -5,8 +5,11 @@ import warnings
 from collections.abc import Sequence
 from pathlib import Path
 
+import numpy as np
 from astropy import units as un
+from astropy.time import Time
 from pygsdata import GSData, Telescope
+from pygsdata.utils import time_concat
 from read_acq.gsdata import read_acq_to_gsdata
 from read_acq.read_acq import Ancillary
 
@@ -123,8 +126,10 @@ def read_spectra(
     Returns
     -------
     GSData
-        The data. For ``.acq`` files written by fastspec, the effective integration
-        time is read from the file header rather than taken from the telescope.
+        The data. For ``.acq`` files, the time ranges are derived from the time
+        stamps (see :func:`acq_time_ranges`), and for files written by fastspec the
+        effective integration time is read from the header. Neither is taken from
+        the telescope, except as a fallback.
     """
     fmt = files[0].suffix
 
@@ -159,7 +164,68 @@ def _read_acq_spectra(
     if intg_time is not None:
         kwargs["effective_integration_time"] = intg_time * un.s
 
-    return read_acq_to_gsdata(files, telescope=telescope, **kwargs)
+    data = read_acq_to_gsdata(files, telescope=telescope, **kwargs)
+
+    time_ranges = acq_time_ranges(data.times)
+    if time_ranges is None:
+        warnings.warn(
+            f"Cannot determine the cycle duration from the time stamps in {files}, "
+            "as there are fewer than two switch cycles. Time ranges will use the "
+            f"telescope's integration time ({telescope.integration_time}).",
+            stacklevel=3,
+        )
+        return data
+
+    # lst_ranges must be recomputed as well, since update() keeps existing fields.
+    return data.update(
+        time_ranges=time_ranges,
+        lst_ranges=time_ranges.sidereal_time("apparent", telescope.location),
+    )
+
+
+def acq_time_ranges(times: Time, max_gap_factor: float = 1.5) -> Time | None:
+    """Compute the time range of each switch position from ACQ time stamps.
+
+    ACQ files have one time stamp per switch cycle (shared by all switch positions),
+    marking the start of the cycle. Each cycle is taken to last until the next
+    cycle starts, and is split equally between its switch positions, in order.
+    The resulting time ranges tile the observation with no gaps or overlaps.
+
+    The last cycle has no following time stamp, and a gap in the data (e.g. between
+    files, or from dropped cycles) would make a cycle look too long. These cycles,
+    and any whose following time stamp is not later than its own, are assigned the
+    median cycle duration instead.
+
+    Parameters
+    ----------
+    times
+        The time stamps of the data, with shape ``(ntimes, nloads)``, where the
+        loads are in the order of the switch positions.
+    max_gap_factor
+        Cycles longer than this factor times the median cycle duration are assigned
+        the median duration.
+
+    Returns
+    -------
+    Time or None
+        The time ranges, with shape ``(ntimes, nloads, 2)``. None if the cycle
+        duration cannot be determined (fewer than two distinct cycle time stamps).
+    """
+    start = times[:, 0]
+    nloads = times.shape[1]
+
+    duration = (start[1:] - start[:-1]).to_value(un.s)
+    if not np.any(duration > 0):
+        return None
+    typical = np.median(duration[duration > 0])
+
+    duration = np.append(duration, typical)
+    duration[(duration <= 0) | (duration > max_gap_factor * typical)] = typical
+
+    step = duration / nloads
+    offsets = np.arange(nloads + 1) * step[:, None]  # (ntimes, nloads + 1)
+    edges = start[:, None] + offsets * un.s
+    return time_concat((edges[:, :-1, None], edges[:, 1:, None]), axis=-1)
 
 
 def _infer_telescope(files: Sequence[Path], metas: Sequence[dict]) -> Telescope:

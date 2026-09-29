@@ -8,15 +8,20 @@ from pathlib import Path
 import numpy as np
 import pytest
 from astropy import units as un
+from astropy.time import Time
 
 from edges.const import KNOWN_TELESCOPES
 from edges.io import TEST_DATA_PATH
 from edges.io.spectra import (
+    acq_time_ranges,
     get_acq_integration_time,
     infer_telescope_from_acq_header,
     read_acq_header,
     read_spectra,
 )
+
+# GSData stores times as float64 Julian dates, precise to ~50 microseconds.
+TIME_ATOL = 1e-4  # seconds
 
 EDGES3_AMB = TEST_DATA_PATH / "edges3-mock-root/mro/amb/2023/2023_070_12_43_06_amb.acq"
 
@@ -93,12 +98,66 @@ def test_read_edges3_acq(caplog):
     np.testing.assert_allclose(
         data.effective_integration_time.to_value(un.s), 6.7108864, rtol=1e-12
     )
-    # The default time-ranges come from the telescope's integration time.
+    # Time ranges come from the time stamps, not the integration time. The mock file
+    # has cycles starting at 12:43:06, 12:43:30 and 12:43:53.
+    dt = (data.time_ranges[..., 1] - data.time_ranges[..., 0]).to_value(un.s)
+    np.testing.assert_allclose(dt[:, 0], [24 / 3, 23 / 3, 23.5 / 3], atol=TIME_ATOL)
+    np.testing.assert_allclose(data.time_ranges[0, 0, 0].jd, data.times[0, 0].jd)
+    # LST ranges must be consistent with the new time ranges.
     np.testing.assert_allclose(
-        (data.time_ranges[..., 1] - data.time_ranges[..., 0]).to_value(un.s),
-        6.7108864,
-        rtol=1e-6,
+        data.lst_ranges.hour,
+        data.time_ranges.sidereal_time("apparent", data.telescope.location).hour,
     )
+
+
+def _cycle_times(offsets_s, nloads=3):
+    t0 = Time("2025:100:04:01:19", format="yday", scale="utc")
+    starts = t0 + np.asarray(offsets_s, dtype=float) * un.s
+    return starts[:, None][:, np.zeros(nloads, dtype=int)]
+
+
+def test_acq_time_ranges_tile_the_observation():
+    times = _cycle_times([0, 24, 47, 71])
+    tr = acq_time_ranges(times)
+    assert tr.shape == (4, 3, 2)
+    # Each switch position starts where the previous one ended.
+    flat = tr.jd.reshape(-1, 2)
+    np.testing.assert_allclose(flat[1:, 0], flat[:-1, 1], rtol=0, atol=1e-9)
+    # Positions are an equal share of their cycle.
+    dt = (tr[..., 1] - tr[..., 0]).to_value(un.s)
+    np.testing.assert_allclose(
+        dt[:3], np.array([[8.0] * 3, [23 / 3] * 3, [8.0] * 3]), atol=TIME_ATOL
+    )
+    # The last cycle gets the median duration.
+    np.testing.assert_allclose(dt[3], 8.0, atol=TIME_ATOL)
+
+
+def test_acq_time_ranges_gap():
+    # A gap (e.g. between files) doesn't stretch the cycle before it.
+    times = _cycle_times([0, 23, 46, 3600, 3623])
+    tr = acq_time_ranges(times)
+    dt = (tr[..., 1] - tr[..., 0]).to_value(un.s)
+    np.testing.assert_allclose(dt, 23 / 3, atol=TIME_ATOL)
+
+
+def test_acq_time_ranges_single_cycle():
+    assert acq_time_ranges(_cycle_times([0])) is None
+
+
+def test_read_single_cycle_warns(tmp_path):
+    # Keep the header and the first cycle (three switch positions) only.
+    keep, ndata = [], 0
+    for ln in EDGES3_AMB.read_text().splitlines(keepends=True):
+        keep.append(ln)
+        ndata += not ln.startswith((";", "#"))
+        if ndata == 3:
+            break
+    fl = tmp_path / "one_cycle.acq"
+    fl.write_text("".join(keep))
+    with pytest.warns(UserWarning, match="fewer than two switch cycles"):
+        data = read_spectra([fl])
+    dt = (data.time_ranges[..., 1] - data.time_ranges[..., 0]).to_value(un.s)
+    np.testing.assert_allclose(dt, 2684354560 / 400e6, atol=TIME_ATOL)
 
 
 def test_read_devon_acq(tmp_path):
