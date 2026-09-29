@@ -35,6 +35,7 @@ __all__ = [
     "read_temperature_log",
     "read_thermistor_csv",
     "read_thermlog_file",
+    "read_tmp_file",
     "read_weather_file",
 ]
 from . import time_formats
@@ -50,7 +51,7 @@ from .calobsdef import (
 )
 from .calobsdef3 import CalObsDefEDGES3, LoadDefEDGES3
 from .serialization import hickleable
-from .templogs import get_mean_temperature, read_temperature_log
+from .templogs import get_mean_temperature, read_temperature_log, read_tmp_file
 from .thermistor import read_thermistor_csv
 from .vna import SParams, read_s1p
 
