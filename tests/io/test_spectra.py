@@ -1,6 +1,8 @@
 """Tests of the edges.io.spectra module."""
 
+import logging
 import re
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -39,28 +41,37 @@ def _write_pxspec(tmp_path: Path) -> Path:
     return out
 
 
+# Real (site, instrument, datadir) combinations from a survey of the EDGES archive.
 @pytest.mark.parametrize(
-    ("site", "instrument", "expected"),
+    ("site", "instrument", "datadir", "expected"),
     [
-        ("mro", "ant", "edges3"),
-        ("mro", "amb", "edges3"),
-        ("mro", "low2", "edges-low"),
-        ("asulab", "lab", "edges-low"),
+        ("mro", "ant", "/home/edges/edges3/MRO", "edges3"),
+        ("mro", "amb", "/home/edges/edges3/MRO", "edges3"),
+        ("hmp", "ant", "/home/edges/edges3/devon", "edges3-devon"),
+        # EDGES-3 systems without a preset.
+        ("hmp", "loads", "/home/edges/edges3/devon", None),
+        ("adak", "loads", "/home/edges/edges3_adak/ADAK", None),
+        ("mro", "loads", "/home/edges/edges3_adak/MRO", None),
+        # The Adak system reported site=mro during its first days at Adak.
+        ("mro", "ant", "/home/edges/edges3_adak/MRO", None),
+        # EDGES-2 bands: no preset distinguishes them.
+        ("mro", "low2", "/home/loco/edges/data", None),
+        ("mro", "low2-128k", "/home/loco/edges/data", None),
+        ("mro", "mid", "/home/loco/edges/data", None),
+        # Lab tests and RFI surveys.
+        ("hay", "loads", "/home/edges/quick_test", None),
+        ("asulab", "lab", "/home/edges-0/Desktop/DATA/", None),
+        ("lab", "razormax", "/home/jdbowman/data", None),
+        ("meteor-crater-1", "rfi", "/home/jdbowman/data", None),
     ],
 )
-def test_infer_telescope(site, instrument, expected):
-    meta = {"site": site, "instrument": instrument}
-    assert infer_telescope_from_acq_header(meta).name == expected
+def test_infer_telescope(site, instrument, datadir, expected):
+    meta = {"site": site, "instrument": instrument, "datadir": datadir}
+    assert infer_telescope_from_acq_header(meta) == expected
 
 
 def test_infer_telescope_no_header():
-    assert infer_telescope_from_acq_header({}).name == "edges-low"
-
-
-def test_infer_telescope_unknown_warns():
-    with pytest.warns(UserWarning, match="Could not infer telescope"):
-        tel = infer_telescope_from_acq_header({"site": "devon", "instrument": "x"})
-    assert tel.name == "edges-low"
+    assert infer_telescope_from_acq_header({}) is None
 
 
 def test_integration_time_from_header():
@@ -73,9 +84,11 @@ def test_integration_time_missing():
     assert get_acq_integration_time({}) is None
 
 
-def test_read_edges3_acq():
+def test_read_edges3_acq(caplog):
     """Regression test for #298: EDGES-3 data was read as edges-low with 13s."""
-    data = read_spectra([EDGES3_AMB])
+    with caplog.at_level(logging.INFO, logger="edges.io.spectra"):
+        data = read_spectra([EDGES3_AMB])
+    assert "Inferred telescope 'edges3'" in caplog.text
     assert data.telescope.name == "edges3"
     np.testing.assert_allclose(
         data.effective_integration_time.to_value(un.s), 6.7108864, rtol=1e-12
@@ -88,7 +101,21 @@ def test_read_edges3_acq():
     )
 
 
-def test_read_acq_explicit_telescope():
+def test_read_devon_acq(tmp_path):
+    fl = _write_variant(
+        tmp_path, "devon.acq", site="hmp", datadir="/home/edges/edges3/devon"
+    )
+    assert read_spectra([fl]).telescope.name == "edges3-devon"
+
+
+def test_read_acq_explicit_telescope(tmp_path):
+    # No warning when the telescope is given, even if it can't be inferred.
+    fl = _write_variant(tmp_path, "low2.acq", instrument="low2")
+    with warnings.catch_warnings():
+        warnings.filterwarnings("error", message="Could not determine")
+        data = read_spectra([fl], telescope="edges-low")
+    assert data.telescope.name == "edges-low"
+
     data = read_spectra([EDGES3_AMB], telescope="edges-low")
     assert data.telescope.name == "edges-low"
 
@@ -103,7 +130,8 @@ def test_read_edges2_fastspec(tmp_path):
         instrument="low2",
         samples_per_accumulation=4294967296,
     )
-    data = read_spectra([fl])
+    with pytest.warns(UserWarning, match="Could not determine the telescope"):
+        data = read_spectra([fl])
     assert data.telescope.name == "edges-low"
     np.testing.assert_allclose(
         data.effective_integration_time.to_value(un.s), 2**32 / 400e6, rtol=1e-12
@@ -111,7 +139,8 @@ def test_read_edges2_fastspec(tmp_path):
 
 
 def test_read_pxspec_uses_telescope_integration_time(tmp_path):
-    data = read_spectra([_write_pxspec(tmp_path)])
+    with pytest.warns(UserWarning, match="Could not determine the telescope"):
+        data = read_spectra([_write_pxspec(tmp_path)])
     assert data.telescope.name == "edges-low"
     np.testing.assert_allclose(
         data.effective_integration_time.to_value(un.s),
