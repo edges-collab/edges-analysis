@@ -45,6 +45,19 @@ CODE_NAMES: dict[int, str] = {
     152: "pr59_current",
 }
 
+#: Units of the values recorded under each code. Codes not listed are dimensionless.
+CODE_UNITS: dict[int, un.UnitBase] = {
+    100: un.deg_C,
+    101: un.deg_C,
+    102: un.deg_C,
+    103: un.deg_C,
+    150: un.V,
+    152: un.A,
+}
+
+# Temperatures are converted to Kelvin in tables; everything else keeps its unit.
+_OUTPUT_UNITS = {code: un.K for code, unit in CODE_UNITS.items() if unit == un.deg_C}
+
 #: Codes that appear in the logs but are deliberately not read. Code 0 is constant
 #: within a file (e.g. 25.0 or 35.0) and is probably a temperature set-point.
 IGNORED_CODES: frozenset[int] = frozenset({0})
@@ -92,14 +105,14 @@ def _to_record(values: dict[int, float]) -> dict[str, Any]:
     record = {}
     for code, name in CODE_NAMES.items():
         value = values.get(code, np.nan)
-        record[name] = value * un.deg_C if name.endswith("temperature") else value
+        record[name] = value * CODE_UNITS[code] if code in CODE_UNITS else value
     return record
 
 
 def _to_kelvin(record: dict[str, Any]) -> dict[str, Any]:
     return {
         k: v.to(un.K, equivalencies=un.temperature())
-        if k.endswith("temperature")
+        if isinstance(v, un.Quantity) and v.unit == un.deg_C
         else v
         for k, v in record.items()
     }
@@ -158,9 +171,9 @@ def read_temperature_log_entry(
     Returns
     -------
     dict
-        The ``time`` of the entry and one field per code in :data:`CODE_NAMES`.
-        Temperatures are in degrees Celsius. Fields whose code is missing from the
-        entry are NaN.
+        The ``time`` of the entry and one field per code in :data:`CODE_NAMES`,
+        with the units in :data:`CODE_UNITS` (so temperatures are in degrees
+        Celsius). Fields whose code is missing from the entry are NaN.
 
     Raises
     ------
@@ -214,7 +227,8 @@ def read_temperature_log(
     -------
     QTable
         A table sorted by ``time`` with one row per unique timestamp and one column per
-        code in :data:`CODE_NAMES`. Temperatures are in Kelvin. Values that are
+        code in :data:`CODE_NAMES`, with the units in :data:`CODE_UNITS` except that
+        temperatures are converted to Kelvin. Values that are
         missing from an entry are NaN. Where the same (time, code) appears more than
         once (e.g. in overlapping logs), identical values are merged, and conflicting
         values are set to NaN with a warning.
@@ -255,8 +269,11 @@ def read_temperature_log(
     out = QTable({"time": Time(times)})
     for code, name in CODE_NAMES.items():
         col = np.array([merged[t].get(code, np.nan) for t in times])
-        if name.endswith("temperature"):
-            col = (col * un.deg_C).to(un.K, equivalencies=un.temperature())
+        if code in CODE_UNITS:
+            col = (col * CODE_UNITS[code]).to(
+                _OUTPUT_UNITS.get(code, CODE_UNITS[code]),
+                equivalencies=un.temperature(),
+            )
         out[name] = col
     return out
 

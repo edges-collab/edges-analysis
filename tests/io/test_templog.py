@@ -49,6 +49,9 @@ def test_temperature_read(templog_table: QTable):
         for col in templog_table.columns
         if col.endswith("temperature")
     )
+    assert templog_table["battery_voltage"].unit == un.V
+    assert templog_table["pr59_current"].unit == un.A
+    assert templog_table["thermal_control"].unit is None
 
 
 def test_corrupted_entries_are_partial(templog_table: QTable):
@@ -90,8 +93,8 @@ def test_entry_parsed_by_code():
     assert entry["time"] == Time("2023-03-10T00:05:07", scale="utc")
     assert entry["front_end_temperature"].to_value(un.deg_C) == pytest.approx(35.0519)
     assert entry["hot_load_temperature"].to_value(un.deg_C) == pytest.approx(122.862)
-    assert entry["battery_voltage"] == pytest.approx(13.11)
-    assert entry["pr59_current"] == pytest.approx(0.593)
+    assert entry["battery_voltage"].to_value(un.V) == pytest.approx(13.11)
+    assert entry["pr59_current"].to_value(un.A) == pytest.approx(0.593)
 
 
 def test_entry_missing_and_unknown_codes():
@@ -225,7 +228,7 @@ def test_read_tmp_file_fixture(testdata_path):
     assert out["hot_load_temperature"].to_value(un.K) == pytest.approx(
         118.5631 + 273.15
     )
-    assert out["pr59_current"] == pytest.approx(0.818)
+    assert out["pr59_current"].to_value(un.A) == pytest.approx(0.818)
     assert np.isnan(out["thermal_control"])
     assert np.isnan(out["battery_voltage"])
 
@@ -243,4 +246,4 @@ def test_read_tmp_file_garbage(tmp_path):
     assert out["inner_box_temperature"].to_value(un.K) == pytest.approx(
         29.34121 + 273.15
     )
-    assert out["pr59_current"] == pytest.approx(0.818)
+    assert out["pr59_current"].to_value(un.A) == pytest.approx(0.818)
