@@ -63,6 +63,21 @@ Ask first:
 - formatting and lint checks pass
 - unit tests pass
 - tests added for new or changed behavior
+- PR has the appropriate labels (see below)
+
+### PR labels
+
+Release Drafter files each PR into a section of the release notes by its labels
+(`.github/release-drafter.yml`), so a PR without a `type:` label is left
+uncategorised. Label every PR you open:
+- at least one `type:` label for the main kind of change, e.g. `type: bug`,
+  `type: feature: ui`, `type: feature: physical`, `type: accuracy`,
+  `type: performance: cpu`, `type: maint: refactoring`, `type: maint: documentation`,
+  `type: testing`, `type: ci`
+- `API Breaking` if it removes or renames public API, or changes a default in a way
+  that changes users' results
+- use only existing labels (`gh api repos/edges-collab/edges-analysis/labels`, or
+  `.github/labels.yml`); do not create new ones
 
 ### When stuck
 

@@ -2,7 +2,7 @@
 
 import contextlib
 from pathlib import Path
-from typing import Literal, Self, get_args
+from typing import ClassVar, Literal, Self, get_args
 
 import attrs
 from bidict import bidict
@@ -179,7 +179,15 @@ class LoadDefEDGES3:
         The spectrum measurement files.
     templog
         The temperature logger file.
+
+    Attributes
+    ----------
+    telescope
+        The telescope used when reading the spectra. None means it is inferred from
+        the header of the spectrum files.
     """
+
+    telescope: ClassVar[str | None] = None
 
     name: str = attrs.field()
 
