@@ -160,7 +160,7 @@ def test_read_log_skips_bad_entries(tmp_path):
         "leading junk\n"
         + _entry("2023_069_00", "Fri Mar 10 00:05:07 UTC 2023", GOOD_CODES)
         + _entry("2023_069_01", "Fri Mar 10 00:10:19 UTC 2023", GOOD_CODES)
-        + _entry("2023_069_00", "Fri Mar 10 00:15:32 UTC 2023", {0: "+35", 1: "x"})
+        + _entry("2023_069_00", "Fri Mar 10 00:15:32 UTC 2023", {0: "+3.5e+01", 1: "x"})
         + _entry("2023_069_00", "Fri Mar 10 00:20:44 UTC 2023", GOOD_CODES)
         + "\n"  # blank lines are ignored
         + "2023_069_00\n"  # truncated entry at the end of the file
@@ -253,4 +253,71 @@ def test_read_tmp_file_garbage(tmp_path):
     assert out["inner_box_temperature"].to_value(un.K) == pytest.approx(
         29.34121 + 273.15
     )
+    assert out["pr59_current"].to_value(un.A) == pytest.approx(0.818)
+
+
+def test_read_log_binary_junk(tmp_path):
+    # Non-UTF-8 bytes must not crash the reader, or a multi-log read.
+    bad = tmp_path / "bad.log"
+    bad.write_bytes(
+        _entry("2023_069_00", "Fri Mar 10 00:05:07 UTC 2023", GOOD_CODES).encode()
+        + b"\xff\x9c\x00garbage\n"
+        + _entry("2023_069_00", "Fri Mar 10 00:10:19 UTC 2023", GOOD_CODES).encode()
+    )
+    good = tmp_path / "good.log"
+    good.write_text(_entry("2023_069_00", "Fri Mar 10 00:15:32 UTC 2023", GOOD_CODES))
+
+    with pytest.warns(UserWarning, match="1 malformed lines"):
+        table = templogs.read_temperature_log([bad, good])
+    assert len(table) == 3
+    assert not np.any(np.isnan(table["front_end_temperature"]))
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "100 1101",  # bare integer: two lines of output run together
+        "100 +3.505190e+01101",  # exponent run into the next line's code
+        "100 +1.0e400",  # overflows to inf
+    ],
+)
+def test_entry_rejects_run_together_values(line):
+    codes = {k: v for k, v in GOOD_CODES.items() if k != 100}
+    issues = Counter()
+    entry = templogs.read_temperature_log_entry(
+        [
+            *_entry("2023_069_00", "Fri Mar 10 00:05:07 UTC 2023", codes).splitlines(),
+            line,
+        ],
+        issues=issues,
+    )
+    assert np.isnan(entry["front_end_temperature"])
+    assert issues == {"malformed lines": 1}
+
+
+def test_read_log_truncated_last_line(tmp_path):
+    log = tmp_path / "temperature.log"
+    text = _entry("2023_069_00", "Fri Mar 10 00:05:07 UTC 2023", GOOD_CODES) + _entry(
+        "2023_069_00", "Fri Mar 10 00:10:19 UTC 2023", GOOD_CODES
+    )
+    # Copied while being written: ends part-way through a line with no newline.
+    log.write_text(text[: text.rindex("103 ") + len("103 +3")])
+
+    with pytest.warns(UserWarning, match="1 truncated last lines"):
+        table = templogs.read_temperature_log(log)
+    assert len(table) == 2
+    assert np.isnan(table["inner_box_temperature"][1])
+    assert table["hot_load_temperature"][1].to_value(un.K) == pytest.approx(
+        122.862 + 273.15
+    )
+
+
+@pytest.mark.parametrize(
+    "suffix", ["", "_ant", "_amb", "_hot", "_open", "_short", "_L"]
+)
+def test_read_tmp_file_load_suffix(tmp_path, suffix):
+    path = tmp_path / f"2024_345_09{suffix}.tmp"
+    path.write_text("100 +3.005550e+01\n152 +0.818")  # no final newline is fine
+    out = templogs.read_tmp_file(path)
+    assert out["time"] == Time("2024-12-10T09:00:00", scale="utc")
     assert out["pr59_current"].to_value(un.A) == pytest.approx(0.818)

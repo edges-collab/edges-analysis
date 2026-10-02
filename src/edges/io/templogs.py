@@ -17,7 +17,18 @@ The files written in the field are not always clean: lines can be garbled or mis
 entries can be merged, and log files are sometimes cumulative copies of each other. The
 readers here parse each line by its code (so a missing or reordered line never shifts
 values into the wrong field), skip anything malformed, and emit a single summary
-warning per file describing what was skipped.
+warning per file describing what was skipped. Specifically:
+
+- Files are decoded as latin-1, so junk bytes never raise; they just produce
+  malformed lines.
+- A line is accepted only if it is ``<code> <value>`` with a decimal point in the
+  value. Lines with unknown codes are skipped.
+- An entry missing some codes is kept, with NaN for the missing values.
+- If the same code appears more than once for the same time (within an entry, or
+  across overlapping log files) with *different* values, the value is set to NaN,
+  since there is no way to tell which is right. Identical repeats are merged.
+- A ``.log`` file that does not end with a newline has its last line dropped, as it
+  may have been truncated while being written.
 
 References
 ----------
@@ -43,7 +54,8 @@ from astropy.time import Time
 #: PR59 thermal controller registers listed in Table 1 of EDGES memo 300: 100 front-end
 #: box temperature, 101 ambient load temperature, 102 hot load temperature, 103
 #: temperature of the PR59 in the inner box, 106 thermal control output (%), 150
-#: battery voltage and 152 PR59 current.
+#: battery voltage and 152 PR59 current. The thermal control output is signed (the
+#: MRO logs range from about -70% to +80%).
 CODE_NAMES: dict[int, str] = {
     100: "front_end_temperature",
     101: "amb_load_temperature",
@@ -75,7 +87,33 @@ _OUTPUT_UNITS = {code: un.K for code, unit in CODE_UNITS.items() if unit == un.d
 IGNORED_CODES: frozenset[int] = frozenset({0})
 
 _HEADER = re.compile(r"^(\d{4})_(\d{3})_(\d{2})$")
-_CODE_LINE = re.compile(r"^(\d+)\s+([+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)$")
+# .tmp files are named YYYY_DDD_HH.tmp, usually with a load suffix (e.g. _ant, _hot).
+_TMP_NAME = re.compile(r"^(\d{4})_(\d{3})_(\d{2})(?:_\w+)?$")
+# Every genuine value has a decimal point (e.g. +3.505190e+01, +12.88), and printf
+# exponents have two or three digits. Being strict here rejects lines that were run
+# together, such as "100 1101" or "100 +3.505190e+01101".
+_CODE_LINE = re.compile(r"^(\d+)\s+([+-]?(?:\d+\.\d*|\.\d+)(?:[eE][+-]?\d{2,3})?)$")
+
+
+def _read_lines(path: Path, issues: Counter, *, drop_unterminated: bool) -> list[str]:
+    """Read the lines of a log file, tolerating non-UTF-8 junk.
+
+    Bytes are decoded as latin-1, which never fails, so junk bytes simply produce
+    lines that fail the line patterns. Lines are split on newlines only (not on the
+    other characters :meth:`str.splitlines` treats as line breaks).
+
+    If ``drop_unterminated`` is True and the file does not end with a newline, its
+    last line is dropped, since the file was probably copied while being written and
+    the line may be truncated (e.g. ``103 +3`` instead of ``103 +3.124716e+01``).
+    """
+    lines = path.read_bytes().decode("latin-1").replace("\r\n", "\n").split("\n")
+    last = lines.pop()  # empty if the file ends with a newline
+    if last.strip():
+        if drop_unterminated:
+            issues["truncated last lines"] += 1
+        else:
+            lines.append(last)
+    return lines
 
 
 def _parse_code_lines(lines: Sequence[str], issues: Counter) -> dict[int, float]:
@@ -97,6 +135,9 @@ def _parse_code_lines(lines: Sequence[str], issues: Counter) -> dict[int, float]
             continue
 
         code, value = int(match[1]), float(match[2])
+        if not np.isfinite(value):
+            issues["malformed lines"] += 1
+            continue
         if code in IGNORED_CODES:
             continue
         if code not in CODE_NAMES:
@@ -200,8 +241,7 @@ def read_temperature_log_entry(
 def _read_log_values(
     path: Path, issues: Counter
 ) -> list[tuple[datetime, dict[int, float]]]:
-    with path.open("r") as fl:
-        lines = fl.read().splitlines()
+    lines = _read_lines(path, issues, drop_unterminated=True)
 
     starts = [i for i, line in enumerate(lines) if _HEADER.match(line.strip())]
     if n_junk := sum(bool(x.strip()) for x in lines[: starts[0] if starts else None]):
@@ -304,19 +344,17 @@ def read_tmp_file(path: Path | str) -> dict[str, Any]:
     dict
         One field per code in :data:`CODE_NAMES` (temperatures in Kelvin, for
         consistency with :func:`read_temperature_log`), plus ``time``. The time is
-        read from a ``YYYY_DDD_HH`` filename (so only has hour resolution) and is
-        None if the filename is not of that form.
+        read from a ``YYYY_DDD_HH`` or ``YYYY_DDD_HH_<load>`` filename (so only has
+        hour resolution) and is None if the filename is not of that form.
     """
     path = Path(path)
-    with path.open("r") as fl:
-        lines = fl.read().splitlines()
-
     issues = Counter()
+    lines = _read_lines(path, issues, drop_unterminated=False)
     record = _to_kelvin(_to_record(_parse_code_lines(lines, issues)))
     _warn_issues(path, issues, stacklevel=2)
 
     time = None
-    if match := _HEADER.match(path.stem):
+    if match := _TMP_NAME.match(path.stem):
         year, day, hour = (int(x) for x in match.groups())
         time = Time(datetime(year, 1, 1, hour, tzinfo=UTC) + timedelta(days=day - 1))
     return {"time": time, **record}
