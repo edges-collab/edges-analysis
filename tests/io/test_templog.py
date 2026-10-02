@@ -80,6 +80,11 @@ def test_get_mean_temperature(templog_table: QTable):
     mean_temp0 = templogs.get_mean_temperature(templog_table, load="hot")
     assert mean_temp0 > mean_temp
 
+    with pytest.raises(ValueError, match="No data found"):
+        templogs.get_mean_temperature(
+            templog_table, start_time=Time("2000-01-01"), end_time=Time("2000-01-02")
+        )
+
     with pytest.raises(ValueError, match="Unknown load fake"):
         templogs.get_mean_temperature(templog_table, load="fake")
 
@@ -157,12 +162,14 @@ def test_read_log_skips_bad_entries(tmp_path):
         + _entry("2023_069_01", "Fri Mar 10 00:10:19 UTC 2023", GOOD_CODES)
         + _entry("2023_069_00", "Fri Mar 10 00:15:32 UTC 2023", {0: "+35", 1: "x"})
         + _entry("2023_069_00", "Fri Mar 10 00:20:44 UTC 2023", GOOD_CODES)
+        + "\n"  # blank lines are ignored
+        + "2023_069_00\n"  # truncated entry at the end of the file
     )
     with pytest.warns(UserWarning, match="Skipped bad data") as record:
         table = templogs.read_temperature_log(log)
     assert len(record) == 1
     msg = str(record[0].message)
-    assert "1 entries with a bad header" in msg
+    assert "2 entries with a bad header" in msg
     assert "1 entries with no valid data" in msg
     assert "2 malformed lines" in msg
     assert len(table) == 2

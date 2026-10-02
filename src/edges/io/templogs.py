@@ -117,7 +117,7 @@ def _to_record(values: dict[int, float]) -> dict[str, Any]:
     record = {}
     for code, name in CODE_NAMES.items():
         value = values.get(code, np.nan)
-        record[name] = value * CODE_UNITS[code] if code in CODE_UNITS else value
+        record[name] = value * CODE_UNITS[code]
     return record
 
 
@@ -281,12 +281,10 @@ def read_temperature_log(
     out = QTable({"time": Time(times)})
     for code, name in CODE_NAMES.items():
         col = np.array([merged[t].get(code, np.nan) for t in times])
-        if code in CODE_UNITS:
-            col = (col * CODE_UNITS[code]).to(
-                _OUTPUT_UNITS.get(code, CODE_UNITS[code]),
-                equivalencies=un.temperature(),
-            )
-        out[name] = col
+        out[name] = (col * CODE_UNITS[code]).to(
+            _OUTPUT_UNITS.get(code, CODE_UNITS[code]),
+            equivalencies=un.temperature(),
+        )
     return out
 
 
