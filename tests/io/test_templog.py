@@ -51,7 +51,7 @@ def test_temperature_read(templog_table: QTable):
     )
     assert templog_table["battery_voltage"].unit == un.V
     assert templog_table["pr59_current"].unit == un.A
-    assert templog_table["thermal_control"].unit is None
+    assert templog_table["thermal_control"].unit == un.percent
 
 
 def test_corrupted_entries_are_partial(templog_table: QTable):

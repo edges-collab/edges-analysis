@@ -18,6 +18,11 @@ entries can be merged, and log files are sometimes cumulative copies of each oth
 readers here parse each line by its code (so a missing or reordered line never shifts
 values into the wrong field), skip anything malformed, and emit a single summary
 warning per file describing what was skipped.
+
+References
+----------
+EDGES memo 300, Table 1:
+https://www.haystack.mit.edu/wp-content/uploads/2020/07/memo_EDGES_300.pdf
 """
 
 import re
@@ -34,7 +39,11 @@ from astropy import units as un
 from astropy.table import QTable
 from astropy.time import Time
 
-#: Mapping of the numeric codes in temperature logs to column names.
+#: Mapping of the numeric codes in temperature logs to column names. The codes are the
+#: PR59 thermal controller registers listed in Table 1 of EDGES memo 300: 100 front-end
+#: box temperature, 101 ambient load temperature, 102 hot load temperature, 103
+#: temperature of the PR59 in the inner box, 106 thermal control output (%), 150
+#: battery voltage and 152 PR59 current.
 CODE_NAMES: dict[int, str] = {
     100: "front_end_temperature",
     101: "amb_load_temperature",
@@ -45,12 +54,14 @@ CODE_NAMES: dict[int, str] = {
     152: "pr59_current",
 }
 
-#: Units of the values recorded under each code. Codes not listed are dimensionless.
+#: Units of the values recorded under each code. Memo 300 gives the quantity but not
+#: the scale for 150 and 152; volts and amps match the recorded values (~13 and ~0-2).
 CODE_UNITS: dict[int, un.UnitBase] = {
     100: un.deg_C,
     101: un.deg_C,
     102: un.deg_C,
     103: un.deg_C,
+    106: un.percent,
     150: un.V,
     152: un.A,
 }
@@ -58,8 +69,9 @@ CODE_UNITS: dict[int, un.UnitBase] = {
 # Temperatures are converted to Kelvin in tables; everything else keeps its unit.
 _OUTPUT_UNITS = {code: un.K for code, unit in CODE_UNITS.items() if unit == un.deg_C}
 
-#: Codes that appear in the logs but are deliberately not read. Code 0 is constant
-#: within a file (e.g. 25.0 or 35.0) and is probably a temperature set-point.
+#: Codes that appear in the logs but are deliberately not read. Code 0 is not listed
+#: in memo 300; it is constant within a file (e.g. 25.0 or 35.0) and is probably a
+#: temperature set-point.
 IGNORED_CODES: frozenset[int] = frozenset({0})
 
 _HEADER = re.compile(r"^(\d{4})_(\d{3})_(\d{2})$")
