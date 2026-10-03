@@ -317,7 +317,20 @@ def test_read_log_truncated_last_line(tmp_path):
 )
 def test_read_tmp_file_load_suffix(tmp_path, suffix):
     path = tmp_path / f"2024_345_09{suffix}.tmp"
-    path.write_text("100 +3.005550e+01\n152 +0.818")  # no final newline is fine
+    path.write_text("100 +3.005550e+01\n152 +0.818\n")
     out = templogs.read_tmp_file(path)
     assert out["time"] == Time("2024-12-10T09:00:00", scale="utc")
     assert out["pr59_current"].to_value(un.A) == pytest.approx(0.818)
+
+
+def test_read_tmp_file_truncated_last_line(tmp_path):
+    # Cut off after the decimal point: still matches the line pattern, so it must be
+    # dropped because the file does not end with a newline.
+    path = tmp_path / "2024_345_09_ant.tmp"
+    path.write_text("100 +3.005550e+01\n152 +1.")
+    with pytest.warns(UserWarning, match="1 truncated last lines"):
+        out = templogs.read_tmp_file(path)
+    assert np.isnan(out["pr59_current"])
+    assert out["front_end_temperature"].to_value(un.K) == pytest.approx(
+        30.0555 + 273.15
+    )

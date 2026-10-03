@@ -27,8 +27,9 @@ warning per file describing what was skipped. Specifically:
 - If the same code appears more than once for the same time (within an entry, or
   across overlapping log files) with *different* values, the value is set to NaN,
   since there is no way to tell which is right. Identical repeats are merged.
-- A ``.log`` file that does not end with a newline has its last line dropped, as it
-  may have been truncated while being written.
+- A file that does not end with a newline has its last line dropped, as it may have
+  been truncated while being written. A truncated value can still look valid (e.g.
+  ``152 +1.`` from ``152 +1.370``).
 
 References
 ----------
@@ -95,24 +96,21 @@ _TMP_NAME = re.compile(r"^(\d{4})_(\d{3})_(\d{2})(?:_\w+)?$")
 _CODE_LINE = re.compile(r"^(\d+)\s+([+-]?(?:\d+\.\d*|\.\d+)(?:[eE][+-]?\d{2,3})?)$")
 
 
-def _read_lines(path: Path, issues: Counter, *, drop_unterminated: bool) -> list[str]:
+def _read_lines(path: Path, issues: Counter) -> list[str]:
     """Read the lines of a log file, tolerating non-UTF-8 junk.
 
     Bytes are decoded as latin-1, which never fails, so junk bytes simply produce
     lines that fail the line patterns. Lines are split on newlines only (not on the
     other characters :meth:`str.splitlines` treats as line breaks).
 
-    If ``drop_unterminated`` is True and the file does not end with a newline, its
-    last line is dropped, since the file was probably copied while being written and
-    the line may be truncated (e.g. ``103 +3`` instead of ``103 +3.124716e+01``).
+    If the file does not end with a newline, its last line is dropped, since the file
+    was probably copied while being written and the line may be truncated (e.g.
+    ``103 +3`` instead of ``103 +3.124716e+01``).
     """
     lines = path.read_bytes().decode("latin-1").replace("\r\n", "\n").split("\n")
     last = lines.pop()  # empty if the file ends with a newline
     if last.strip():
-        if drop_unterminated:
-            issues["truncated last lines"] += 1
-        else:
-            lines.append(last)
+        issues["truncated last lines"] += 1
     return lines
 
 
@@ -241,7 +239,7 @@ def read_temperature_log_entry(
 def _read_log_values(
     path: Path, issues: Counter
 ) -> list[tuple[datetime, dict[int, float]]]:
-    lines = _read_lines(path, issues, drop_unterminated=True)
+    lines = _read_lines(path, issues)
 
     starts = [i for i, line in enumerate(lines) if _HEADER.match(line.strip())]
     if n_junk := sum(bool(x.strip()) for x in lines[: starts[0] if starts else None]):
@@ -349,7 +347,7 @@ def read_tmp_file(path: Path | str) -> dict[str, Any]:
     """
     path = Path(path)
     issues = Counter()
-    lines = _read_lines(path, issues, drop_unterminated=False)
+    lines = _read_lines(path, issues)
     record = _to_kelvin(_to_record(_parse_code_lines(lines, issues)))
     _warn_issues(path, issues, stacklevel=2)
 
