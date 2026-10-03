@@ -762,7 +762,15 @@ def rms_rfi_filter(
     """Flag specific channel-integrations via their outlier-ness compared to RMS."""
     w = get_weights_from_strategy(data, nsamples_strategy)[0]
 
-    rms = np.sqrt(np.average(np.square(data.residuals), weights=w, axis=-1))[..., None]
+    if data.residuals is None:
+        raise ValueError("Cannot perform rms_rfi_filter without residuals.")
+
+    # np.average(..., weights=...) raises ZeroDivisionError when sum(weights)==0.
+    res2 = np.square(data.residuals)
+    sumw = np.sum(w, axis=-1)
+    sumres2 = np.sum(res2 * w, axis=-1)
+    meanres2 = np.where(sumw > 0, sumres2 / sumw, np.inf)
+    rms = np.sqrt(meanres2)[..., None]
     return GSFlag(
         flags=data.residuals > rms * threshold, axes=("load", "pol", "time", "freq")
     )
