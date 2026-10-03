@@ -1,6 +1,7 @@
 """Methods for dealing with EDGES-3 files and structures."""
 
 import re
+import warnings
 from collections.abc import Mapping, Sequence
 from datetime import date, timedelta
 from pathlib import Path
@@ -119,7 +120,9 @@ def get_s1p_files(
         measurement of the day.
     allow_closest_s11_within
         If no file exists for the given day, search up to this many days either
-        side of it (across year boundaries) for the closest day that has one.
+        side of it (across year boundaries) for the closest day that has one. Days
+        are tried in the order day+1, day-1, day+2, ..., so the later day wins a
+        tie.
     s11_dir
         Directory holding the ``.s1p`` files, relative to ``root_dir`` (or absolute).
         It can contain a ``{year}`` placeholder.
@@ -169,7 +172,8 @@ def from_edges3_layout(
     hour
         The hour of observation, or "first" for automaic search.
     allow_closest_s11_within
-        The number of surrounding days to search for S11.
+        The number of surrounding days (either side) to search for S11. Days are
+        tried in the order day+1, day-1, day+2, ..., so the later day wins a tie.
     s11_dir
         Directory holding the ``.s1p`` files, relative to ``root_dir`` (or absolute).
         It can contain a ``{year}`` placeholder.
@@ -231,6 +235,14 @@ def get_spectrum_files(
         If no files are found.
     OSError
         If more than one file is found and ``allow_multiple`` is False.
+
+    Warns
+    -----
+    UserWarning
+        If there are files for the load that start at midnight (``00_00``) on the
+        next day. These are probably the continuation of the last file of the day
+        (files are split at UTC midnight), but are not included. To include them,
+        use :meth:`CalObsDefEDGES3.from_files`.
     """
     d = _resolve_dir(Path(root), spectrum_dir, load=load, year=year)
     glob = f"{year}_{day:03d}_??_??_??_{load}.{fmt}"
@@ -242,6 +254,18 @@ def get_spectrum_files(
         raise OSError(
             f"More than one file found in {d} for {glob}. Set allow_multiple=True to "
             "use all of them."
+        )
+
+    next_year, next_day = _shift_day(year, day, 1)
+    next_dir = _resolve_dir(Path(root), spectrum_dir, load=load, year=next_year)
+    if continued := sorted(
+        next_dir.glob(f"{next_year}_{next_day:03d}_00_00_??_{load}.{fmt}")
+    ):
+        warnings.warn(
+            f"Spectrum file(s) {[fl.name for fl in continued]} start at midnight "
+            f"after {files[-1].name}, so are probably its continuation, but are not "
+            "included. To include them, use CalObsDefEDGES3.from_files.",
+            stacklevel=2,
         )
 
     return files
@@ -353,6 +377,8 @@ class LoadDefEDGES3:
             selection.
         allow_closest_s11_within : int, optional
             Maximum number of days (either side) to search for the closest S11 file.
+            The search wraps across year boundaries. Days are tried in the order
+            day+1, day-1, day+2, ..., so the later day wins a tie.
         specfmt : {'acq', 'gsh5'}, optional
             The file format for spectrum files.
         s11_dir
@@ -603,7 +629,8 @@ class CalObsDefEDGES3:
             selection.
         allow_closest_s11_within : int, optional
             Maximum number of days (either side) to search for the closest S11 file.
-            The search wraps across year boundaries.
+            The search wraps across year boundaries. Days are tried in the order
+            day+1, day-1, day+2, ..., so the later day wins a tie.
         specfmt : {'acq', 'gsh5'}, optional
             The file format for spectrum files.
         receiver_metadata

@@ -380,8 +380,10 @@ def get_mean_temperature(
 
         if not np.any(mask):
             raise ValueError(
-                f"No data found between {start_time} and {end_time} in temperature "
-                f"table"
+                f"No data found between {Time(start_time).isot} and "
+                f"{Time(end_time).isot} in temperature table (which covers "
+                f"{temperature_table['time'].min().isot} to "
+                f"{temperature_table['time'].max().isot})"
             )
 
         temperature_table = temperature_table[mask]

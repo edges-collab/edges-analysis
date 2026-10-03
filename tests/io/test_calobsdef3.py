@@ -227,6 +227,46 @@ class TestCustomLayout:
         ]
         assert len(caldef.hot_load.spectra) == 1
 
+    def test_warn_midnight_continuation(self, custom_layout: Path):
+        shortdir = custom_layout / "spectra" / "short"
+        shutil.copy(
+            shortdir / "2023_070_21_32_02_short.acq",
+            shortdir / "2023_071_00_00_02_short.acq",
+        )
+        with pytest.warns(UserWarning, match="2023_071_00_00_02_short.acq") as rec:
+            caldef = CalObsDefEDGES3.from_standard_layout(
+                rootdir=custom_layout,
+                year=2023,
+                day=70,
+                s11_dir="s11/{year}",
+                spectrum_dir="spectra/{load}",
+            )
+        assert len(rec) == 1
+        assert caldef.short.spectra == [shortdir / "2023_070_21_32_02_short.acq"]
+
+
+class TestGetSpectrumFiles:
+    def _touch(self, root: Path, *names: str):
+        for name in names:
+            year = name[:4]
+            (root / "mro" / "short" / year).mkdir(parents=True, exist_ok=True)
+            (root / "mro" / "short" / year / name).touch()
+
+    def test_no_warning_for_later_start(self, tmp_path: Path, recwarn):
+        self._touch(
+            tmp_path, "2023_070_21_32_02_short.acq", "2023_071_00_05_00_short.acq"
+        )
+        files = calobsdef3.get_spectrum_files("short", tmp_path, 2023, 70)
+        assert [fl.name for fl in files] == ["2023_070_21_32_02_short.acq"]
+        assert not [w for w in recwarn if "midnight" in str(w.message)]
+
+    def test_warn_continuation_across_year(self, tmp_path: Path):
+        self._touch(
+            tmp_path, "2023_365_22_00_00_short.acq", "2024_001_00_00_05_short.acq"
+        )
+        with pytest.warns(UserWarning, match="2024_001_00_00_05_short.acq"):
+            calobsdef3.get_spectrum_files("short", tmp_path, 2023, 365)
+
 
 class TestFromFiles:
     @pytest.fixture
