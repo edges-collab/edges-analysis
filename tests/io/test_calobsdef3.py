@@ -91,6 +91,12 @@ class TestGetSingleS1PFile:
         assert get(tmp_path, 2023, 70, "O", hour="last").name == "2023_070_11_O.s1p"
         assert get(tmp_path, 2023, 70, "O", hour=11).name == "2023_070_11_O.s1p"
 
+    def test_ambiguous_hour(self, tmp_path: Path):
+        _make_s11s(tmp_path, "2023_070_02")
+        _make_s11s(tmp_path, "2023_070_11")
+        with pytest.raises(OSError, match="More than one file"):
+            calobsdef3._get_single_s1p_file(tmp_path, 2023, 70, "O", hour=None)
+
 
 def _split_log(log: Path, outdir: Path, cuts: list[slice]) -> list[Path]:
     """Split a temperature log into several (possibly overlapping) files."""
@@ -259,6 +265,11 @@ class TestGetSpectrumFiles:
         files = calobsdef3.get_spectrum_files("short", tmp_path, 2023, 70)
         assert [fl.name for fl in files] == ["2023_070_21_32_02_short.acq"]
         assert not [w for w in recwarn if "midnight" in str(w.message)]
+
+    def test_no_files(self, tmp_path: Path):
+        self._touch(tmp_path, "2023_071_21_32_02_short.acq")
+        with pytest.raises(FileNotFoundError, match="No files found"):
+            calobsdef3.get_spectrum_files("short", tmp_path, 2023, 70)
 
     def test_warn_continuation_across_year(self, tmp_path: Path):
         self._touch(
