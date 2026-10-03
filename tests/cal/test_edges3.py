@@ -35,7 +35,6 @@ def test_calobs_creation(calobs):
     assert calobs is not None
 
 
-@pytest.mark.filterwarnings("ignore:.*has no value:UserWarning")
 def test_load_spectrum_from_split_templogs(smallcal, tmp_path):
     """Temperatures from several overlapping templogs match those from the full log."""
     full = smallcal.ambient.templog
@@ -49,9 +48,16 @@ def test_load_spectrum_from_split_templogs(smallcal, tmp_path):
     split = attrs.evolve(smallcal.ambient, templog=[part0, part1])
 
     kw = {"f_low": 50 * un.MHz, "f_high": 100 * un.MHz}
-    with pytest.warns(UserWarning, match="malformed lines"):
+    # The mock .acq files have empty header items, and the mock log has bad lines.
+    with (
+        pytest.warns(UserWarning, match="malformed lines"),
+        pytest.warns(UserWarning, match="has no value"),
+    ):
         ref = LoadSpectrum.from_loaddef(smallcal.ambient, **kw)
-    with pytest.warns(UserWarning, match="malformed lines"):
+    with (
+        pytest.warns(UserWarning, match="malformed lines"),
+        pytest.warns(UserWarning, match="has no value"),
+    ):
         new = LoadSpectrum.from_loaddef(split, **kw)
 
     assert new.temp_ave.unit == un.K
