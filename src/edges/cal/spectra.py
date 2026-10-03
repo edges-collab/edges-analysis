@@ -3,6 +3,7 @@
 import contextlib
 import inspect
 import logging
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Self
 
@@ -191,7 +192,7 @@ class LoadSpectrum:
     def from_loaddef(
         cls,
         loaddef: LoadDefEDGES2 | LoadDefEDGES3 | None = None,
-        templog: Path | None = None,
+        templog: Path | Sequence[Path] | None = None,
         specfiles: list[Path] | None = None,
         thermistor_pth: Path | None = None,
         load_name: str | None = None,
@@ -227,8 +228,9 @@ class LoadSpectrum:
             A LoadDefEDGES2 or LoadDefEDGES3 instance defining the files containing
             raw spectra for this load. If None, specfiles and load_name must be given.
         templog
-            Path to a temperature log CSV file. Only used if loaddef is None and
-            not required if temperature is given or thermistor is given.
+            Path to a temperature log file, or a sequence of them (which are merged,
+            see :func:`edges.io.templogs.read_temperature_log`). Only used if loaddef
+            is None and not required if temperature is given or thermistor is given.
         specfiles
             A list of paths to raw spectrum files. Only used if loaddef is None.
         thermistor

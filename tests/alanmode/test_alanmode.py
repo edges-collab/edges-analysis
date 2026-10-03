@@ -11,6 +11,7 @@ from read_acq.gsdata import write_gsdata_to_acq
 
 from edges import alanmode as am
 from edges.cal import ReflectionCoefficient
+from edges.config import config
 from edges.data import fetch_b18_cal_outputs
 from edges.frequencies import edges_raw_freqs
 
@@ -133,3 +134,14 @@ class TestCorrcsv:
 
         corr = am.corrcsv(s11, cablen=0, cabdiel=0, cabloss=0)
         np.testing.assert_allclose(corr.reflection_coefficient, 0, atol=1e-15)
+
+
+def test_edges3_calobs_params_datadir_from_config(tmp_path: Path):
+    with config.use(edges3_data=tmp_path):
+        params = am.Edges3CalobsParams(specyear=2023, specday=70, s11date="")
+    assert params.datadir == tmp_path
+
+    params = am.Edges3CalobsParams(
+        specyear=2023, specday=70, s11date="", datadir=str(tmp_path)
+    )
+    assert params.datadir == tmp_path
