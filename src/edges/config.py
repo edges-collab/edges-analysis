@@ -26,6 +26,9 @@ class Config:
     raw_lab_data: Path | None = attrs.field(
         default=None, converter=attrs.converters.optional(Path)
     )
+    edges3_data: Path = attrs.field(
+        default=Path("/data5/edges/data/EDGES3_data/MRO/"), converter=Path
+    )
     beams: Path = attrs.field(
         default=Path(dirs.user_cache_dir) / "beams", converter=Path
     )

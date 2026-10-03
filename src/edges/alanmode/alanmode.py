@@ -39,6 +39,7 @@ from ..cal.sparams import (
     correct_receiver_for_extra_cable,
 )
 from ..cal.spectra import LoadSpectrum
+from ..config import config
 from . import alanio
 
 logger = logging.getLogger(__name__)
@@ -653,7 +654,8 @@ class Edges3CalobsParams:
     s11date
         The date of the S11 measurement in the format YYYY_DDD_HH.
     datadir
-        The root directory of the observation data.
+        The root directory of the observation data. By default, the ``edges3_data``
+        option of the global configuration (:data:`edges.config.config`).
     match_resistance
         The measured impedance of the "match" calkit standard. Used to calibrate
         the Receiver s11.
@@ -682,7 +684,7 @@ class Edges3CalobsParams:
     specyear: int
     specday: int
     s11date: str
-    datadir: Path = Path("/data5/edges/data/EDGES3_data/MRO/")
+    datadir: Path = attrs.field(factory=lambda: config.edges3_data, converter=Path)
     match_resistance: Annotated[float, Parameter(name=("res",))] = 49.8
     calkit_delays: Annotated[float, Parameter(name=("ps",))] = 33
     load_delay: float = attrs.field()

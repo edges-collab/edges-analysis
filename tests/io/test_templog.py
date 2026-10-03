@@ -80,7 +80,13 @@ def test_get_mean_temperature(templog_table: QTable):
     mean_temp0 = templogs.get_mean_temperature(templog_table, load="hot")
     assert mean_temp0 > mean_temp
 
-    with pytest.raises(ValueError, match="No data found"):
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"No data found between 2000-01-01T00:00:00.000 and "
+            r"2000-01-02T00:00:00.000 in temperature table \(which covers 2023-"
+        ),
+    ):
         templogs.get_mean_temperature(
             templog_table, start_time=Time("2000-01-01"), end_time=Time("2000-01-02")
         )
