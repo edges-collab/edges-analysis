@@ -24,7 +24,9 @@ KNOWN_TELESCOPES["edges3"] = Telescope(
     name="edges3",
     location=apc.EarthLocation(lat=-26.7 * apu.deg, lon=116.5 * apu.deg),
     pols=("xx",),
-    integration_time=13.0 * apu.s,
+    # Per switch position: 2684354560 samples per accumulation at 400 MHz, as set in
+    # the fastspec header of EDGES-3 files at MRO.
+    integration_time=2684354560 / 400e6 * apu.s,
     x_orientation=0.0 * apu.deg,
 )
 
