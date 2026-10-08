@@ -143,6 +143,24 @@ def get_ave_and_var_spec(
     return mean, variance
 
 
+def _file_signature(*paths) -> tuple[tuple[str, int, int], ...]:
+    """Return ``(path, mtime_ns, size)`` for every existing file in ``paths``.
+
+    Each element of ``paths`` may be a single path, a sequence of paths, or None.
+    Used to make cache keys sensitive to changes in the contents of input files.
+    """
+    out = []
+    for p in paths:
+        if p is None:
+            continue
+        for fl in [p] if isinstance(p, str | Path) else p:
+            fl = Path(fl)
+            if fl.exists():
+                st = fl.stat()
+                out.append((str(fl), st.st_mtime_ns, st.st_size))
+    return tuple(out)
+
+
 @hickleable
 @attrs.define(kw_only=True, frozen=True)
 class LoadSpectrum:
@@ -304,6 +322,11 @@ class LoadSpectrum:
                 if p not in ["cls", "loaddef", "invalidate_cache"]
             }
             defining_dict["files"] = (specfiles, thermistor_pth, templog)
+            # Include file sizes and modification times so that the cache is
+            # invalidated when any input file is rewritten (e.g. appended logs).
+            defining_dict["file_stats"] = _file_signature(
+                specfiles, thermistor_pth, templog
+            )
 
             hsh = stable_hash((
                 *tuple(defining_dict.values()),

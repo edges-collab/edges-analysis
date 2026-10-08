@@ -267,6 +267,29 @@ class TestLoadSpectrum:
 
         assert spec == spec2
 
+    def test_cache_invalidated_when_input_file_changes(self, tmp_path, caldef):
+        """Rewriting an input file must not silently reuse a stale cache."""
+        import os
+
+        cache = tmp_path / "cache"
+        kw = {"f_high": 100 * un.MHz, "f_low": 50 * un.MHz, "cache_dir": cache}
+        LoadSpectrum.from_loaddef(caldef.ambient, **kw)
+        assert len(list(cache.glob("*.gsh5"))) == 1
+
+        # Same inputs: cache is reused.
+        LoadSpectrum.from_loaddef(caldef.ambient, **kw)
+        assert len(list(cache.glob("*.gsh5"))) == 1
+
+        # Bump the modification time of the thermistor file: new cache entry.
+        therm = caldef.ambient.thermistor
+        st = therm.stat()
+        try:
+            os.utime(therm, ns=(st.st_atime_ns, st.st_mtime_ns + 10**9))
+            LoadSpectrum.from_loaddef(caldef.ambient, **kw)
+        finally:
+            os.utime(therm, ns=(st.st_atime_ns, st.st_mtime_ns))
+        assert len(list(cache.glob("*.gsh5"))) == 2
+
     def test_bad_loaddef(self, monkeypatch):
         with pytest.raises(
             ValueError, match="Either loaddef or specfiles AND load_name"
