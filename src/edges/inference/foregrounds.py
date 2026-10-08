@@ -1,6 +1,7 @@
 """Models of the foregrounds."""
 
 from functools import cached_property
+from typing import ClassVar
 
 import attrs
 import numpy as np
@@ -200,11 +201,18 @@ class LinLog(Foreground):
     poly_order = attrs.field(default=5, converter=int, kw_only=True)
     use_p1 = attrs.field(default=False, converter=bool)
 
+    # Whether p1 is set to zero in the model when use_p1 is False.
+    _p1_ignored_unless_use_p1: ClassVar[bool] = True
+
     def __attrs_post_init__(self):
         """Perform validation after all parameters are set."""
         super().__attrs_post_init__()
 
-        if not self.use_p1 and "p1" in self.child_active_params:
+        if (
+            self._p1_ignored_unless_use_p1
+            and not self.use_p1
+            and "p1" in self.child_active_params
+        ):
             raise ValueError(
                 "You are attempting to fit p1, but it won't affect anything!"
             )
@@ -309,8 +317,13 @@ class LinPoly(LinLog):
 
     The equation is
 
-    .. math :: T(nu) = (nu/nuc)**-beta * Sum[p_i (nu/nuc)**i]
+    .. math :: T(nu) = (nu/nuc)**beta * Sum[p_i (nu/nuc)**i]
+
+    Unlike :class:`LinLog`, all polynomial terms (including ``p1``) are always used,
+    so ``use_p1`` has no effect and ``p1`` may be fit.
     """
+
+    _p1_ignored_unless_use_p1: ClassVar[bool] = False
 
     def model(self, **p):
         """Compute the LinPoly model."""
