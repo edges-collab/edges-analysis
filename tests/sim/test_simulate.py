@@ -293,3 +293,62 @@ def test_ground_loss_applied_when_unnormalised():
     with_loss = simulate_spectra(ground_loss=np.array([0.5, 0.5]), **kw)
     without = simulate_spectra(ground_loss=None, **kw)
     np.testing.assert_allclose(with_loss.data, 0.5 * without.data, rtol=1e-10)
+
+
+def test_generator_yields_independent_beam_arrays():
+    """Collecting the generator output must not alias the per-frequency beam arrays."""
+    beam = Beam.uniform(f_low=50, f_high=54, delta_f=2, delta_az=5, delta_el=5)
+    beam = Beam(
+        frequency=beam.frequency,
+        azimuth=beam.azimuth,
+        elevation=beam.elevation,
+        beam=beam.beam * np.array([1.0, 2.0])[:, None, None],
+    )
+    sky = SkyModel.uniform_healpix(408.0, nside=4)
+    outs = list(
+        sky_convolution_generator(
+            lsts=Longitude([1.0] * un.hour),
+            beam=beam,
+            sky_model=sky,
+            index_model=ConstantIndex(),
+            normalize_beam=False,
+            beam_smoothing=False,
+            smoothing_model=None,
+            interp_kind="linear",
+            lst_progress=False,
+            freq_progress=False,
+        )
+    )
+    bm0, bm1 = outs[0][5], outs[1][5]
+    assert bm0 is not bm1
+    np.testing.assert_allclose(np.nan_to_num(bm1), 2 * np.nan_to_num(bm0), rtol=1e-12)
+
+
+@pytest.mark.parametrize("use_astropy_azel", [True, False])
+def test_nan_sky_pixels_excluded_from_normalisation(use_astropy_azel, achromatic_beam):
+    """Blank (NaN) sky pixels above the horizon must not bias the normalised result."""
+    sky = SkyModel.uniform_healpix(frequency=408.0, temperature=1000.0, nside=8)
+    temp = sky.temperature.copy()
+    # Blank a cap around the south celestial pole, which is always above the horizon
+    # at the EDGES site (like the blank pixels in the Guzman 45 MHz map).
+    temp[sky.coords.icrs.dec.deg < -60] = np.nan
+    blanked = SkyModel(
+        frequency=408.0, temperature=temp, coords=sky.coords, healpix=sky.healpix
+    )
+    assert np.sum(np.isnan(temp)) > 10
+
+    spectra = simulate_spectra(
+        beam=achromatic_beam,
+        lsts=Longitude([0.0, 12.0] * un.hour),
+        sky_model=blanked,
+        index_model=ConstantIndex(),
+        use_astropy_azel=use_astropy_azel,
+        **FAST,
+    )
+    expected = np.array([
+        sky.at_freq(f, index_model=ConstantIndex())[0]
+        for f in achromatic_beam.frequency.to_value("MHz")
+    ])
+    np.testing.assert_allclose(
+        spectra.data[0, 0], np.broadcast_to(expected, (2, len(expected))), rtol=1e-10
+    )
