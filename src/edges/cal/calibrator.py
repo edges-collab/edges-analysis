@@ -17,6 +17,15 @@ from .input_sources import InputSource
 from .noise_waves import get_linear_coefficients
 from .sparams import ReflectionCoefficient, S11ModelParams
 
+_CALIBRATOR_QUANTITIES = ("Tsca", "Toff", "Tunc", "Tcos", "Tsin", "receiver_s11")
+
+
+def _freqs_to_mhz(freqs: tp.FreqType | np.ndarray) -> tp.FreqType:
+    """Convert frequencies to a Quantity in MHz (plain arrays are assumed in MHz)."""
+    if isinstance(freqs, un.Quantity):
+        return freqs.to(un.MHz)
+    return np.asarray(freqs) * un.MHz
+
 
 @hickleable
 @attrs.define(kw_only=True, frozen=True)
@@ -24,9 +33,23 @@ class Calibrator:
     """A class holding all information required to perform receiver calibration.
 
     This object makes sense in the context of the noise-wave formalism.
+
+    Parameters
+    ----------
+    freqs
+        The frequencies at which the calibration quantities are defined. Plain arrays
+        are interpreted as being in MHz.
+    Tsca, Toff, Tunc, Tcos, Tsin
+        The scale, offset and noise-wave temperatures at each frequency.
+    receiver_s11
+        The reflection coefficient of the receiver at each frequency.
+    unit
+        The unit of the temperatures.
     """
 
-    freqs: tp.FreqType = attrs.field(eq=attrs.cmp_using(eq=np.allclose))
+    freqs: tp.FreqType = attrs.field(
+        converter=_freqs_to_mhz, eq=attrs.cmp_using(eq=np.allclose)
+    )
 
     Tsca: tp.FloatArray = attrs.field(eq=attrs.cmp_using(eq=np.allclose))
     Toff: tp.FloatArray = attrs.field(eq=attrs.cmp_using(eq=np.allclose))
@@ -37,17 +60,26 @@ class Calibrator:
     receiver_s11: tp.ComplexArray = attrs.field(eq=attrs.cmp_using(eq=np.allclose))
     unit: un.Unit = attrs.field(default=un.K)
 
+    def __attrs_post_init__(self):
+        """Check that all quantities are defined at every frequency."""
+        nfreq = len(self.freqs)
+        for name in _CALIBRATOR_QUANTITIES:
+            if len(getattr(self, name)) != nfreq:
+                raise ValueError(
+                    f"{name} must have the same length as freqs ({nfreq}), "
+                    f"got {len(getattr(self, name))}"
+                )
+
     def get_modelled(
         self,
-        thing: Literal["Tsca", "Toff", "Tunc", "Tcos", "Tsin"],
+        thing: Literal["Tsca", "Toff", "Tunc", "Tcos", "Tsin", "receiver_s11"],
         freq: tp.FreqType,
         model: Callable | Model | None = None,
     ) -> np.ndarray:
         """Evaluate a quantity at particular frequencies."""
-        if not hasattr(self, thing):
+        if thing not in _CALIBRATOR_QUANTITIES:
             raise ValueError(
-                f"thing must be one of Tsca, Toff, Tunc, Tcos, Tsin or receiver_s11, "
-                f"got {thing}"
+                f"thing must be one of {', '.join(_CALIBRATOR_QUANTITIES)}, got {thing}"
             )
 
         fqin = self.freqs.to_value("MHz")
@@ -68,7 +100,7 @@ class Calibrator:
             return model.at(x=fqin).fit(this).evaluate(fqout)
 
         if isinstance(model, CompositeModel):
-            return model.at(x=fqin).fit(this)(fqout)
+            return model.at(x=fqin).fit(this).evaluate(fqout)
         if callable(model):
             return model(fqin, this)(fqout)
         raise ValueError("model given is not callable!")
@@ -123,7 +155,8 @@ class Calibrator:
             if ant_s11.s11.size != freqs.size or not np.allclose(ant_s11.freqs, freqs):
                 ant_s11 = ant_s11.smoothed(
                     params=s11_model_params or S11ModelParams(), freqs=freqs
-                ).s11
+                )
+            ant_s11 = ant_s11.s11
 
         elif len(ant_s11) != len(freqs):
             raise ValueError(
