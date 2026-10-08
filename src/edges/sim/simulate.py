@@ -290,7 +290,7 @@ def simulate_spectra(
         Maximum frequency to keep in the simulation (frequencies otherwise defined by
         the beam).
     normalize_beam
-        Whether to normalize the beam to be maximum unity.
+        Whether to normalize the beam to unit integral over the visible sky.
     index_model
         An :class:`IndexModel` to use to generate different frequencies of the sky
         model.
