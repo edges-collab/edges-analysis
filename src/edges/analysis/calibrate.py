@@ -12,7 +12,7 @@ from .. import types as tp
 from ..cal import (
     Calibrator,
 )
-from ..cal.sparams import ReflectionCoefficient
+from ..cal.sparams import ReflectionCoefficient, S11ModelParams
 from ..sim import antenna_beam_factor
 from ..sim.antenna_beam_factor import BeamFactor
 
@@ -22,26 +22,44 @@ def apply_noise_wave_calibration(
     data: GSData,
     calibrator: Calibrator | tp.PathLike,
     antenna_s11: ReflectionCoefficient,
-    tload: float | None = None,
-    tns: float | None = None,
+    tload: float | tp.TemperatureType | None = None,
+    tns: float | tp.TemperatureType | None = None,
 ) -> GSData:
     """Apply noise-wave calibration to data.
 
-    This function requires a :class:`edges.cal.cal_coefficients.Calibrator` object
-    (or a path to a file containing such an object) which must be created beforehand.
-    The antenna S11 used is found automatically by searching for the file that has
-    the closest match to the time of the data. This can be constrained by passing
-    options that match the regex pattern for the S11 files.
+    This function requires a :class:`edges.cal.Calibrator` object (or a path to a
+    file containing such an object) which must be created beforehand, and the
+    reflection coefficient of the antenna.
 
     Parameters
     ----------
     data
-        Data to be calibrated.
-    calobs
-        Calibrator object or path to file containing calibrator object.
+        Data to be calibrated. Its ``data_unit`` must be either "uncalibrated" (i.e.
+        the power ratio Q) or "uncalibrated_temp" (i.e. ``Q*tns + tload``). If the
+        data has residuals, they are calibrated as well.
+    calibrator
+        Calibrator object, or path to a file containing a calibrator object (as
+        written by :meth:`edges.cal.Calibrator.write`).
     antenna_s11
+        The reflection coefficient of the antenna. If it is not defined at the
+        frequencies of the data, it is modelled (with the default
+        :class:`edges.cal.sparams.S11ModelParams`) and evaluated at those
+        frequencies.
+    tload
+        The load temperature used to compute the approximate temperature. Required
+        if the ``data_unit`` is "uncalibrated_temp".
+    tns
+        The noise-source temperature used to compute the approximate temperature.
+        Required if the ``data_unit`` is "uncalibrated_temp".
 
+    Returns
+    -------
+    data
+        The calibrated data, with ``data_unit`` "temperature".
     """
+    if isinstance(calibrator, str | Path):
+        calibrator = Calibrator.from_calfile(calibrator)
+
     if data.data_unit not in ("uncalibrated", "uncalibrated_temp"):
         raise ValueError("Data must be uncalibrated to apply calibration!")
 
@@ -58,7 +76,15 @@ def apply_noise_wave_calibration(
     else:
         q = data.data
 
-    new_data = calibrator.calibrate_q(q, ant_s11=antenna_s11.s11, freqs=data.freqs)
+    # Calibrator.get_linear_coefficients would model the S11 itself, but cannot
+    # currently take a ReflectionCoefficient that is already on the right grid.
+    if antenna_s11.freqs.size != data.freqs.size or not np.allclose(
+        antenna_s11.freqs, data.freqs
+    ):
+        antenna_s11 = antenna_s11.smoothed(params=S11ModelParams(), freqs=data.freqs)
+    ant_s11 = antenna_s11.reflection_coefficient
+
+    new_data = calibrator.calibrate_q(q, ant_s11=ant_s11, freqs=data.freqs)
     if data.model is not None:
         qmodel = (
             (data.model - tload) / tns
@@ -66,8 +92,9 @@ def apply_noise_wave_calibration(
             else data.model
         )
         resids = new_data - calibrator.calibrate_q(
-            qmodel, ant_s11=antenna_s11.s11, freq=data.freqs
+            qmodel, ant_s11=ant_s11, freqs=data.freqs
         )
+        resids = resids.to_value("K")
     else:
         resids = None
 
@@ -91,7 +118,9 @@ def apply_loss_correction(
     data
         The GSData object on which to apply the loss-correction.
     ambient_temp
-        The ambient temperature at which to apply the loss-correction.
+        The ambient temperature at which to apply the loss-correction. Either a
+        scalar, or an array with one temperature per time in the data. Any
+        temperature unit can be used (e.g. deg_C, as in thermlog files).
     loss
         An array of losses, where the size of the array must be equal to the number
         of frequencies in the data. If None, a loss function is used to compute
@@ -117,7 +146,7 @@ def apply_loss_correction(
     if data.data_unit != "temperature":
         raise ValueError("Data must be temperature to apply antenna loss correction!")
 
-    a = ambient_temp.to_value(un.K)
+    a = ambient_temp.to_value(un.K, equivalencies=un.temperature())
     spec = (data.data - np.outer(a, (1 - loss))) / loss
 
     return data.update(
@@ -139,7 +168,7 @@ def apply_beam_factor_directly(data: GSData, beam_file: str | Path) -> GSData:
     ----------
     data
         The GSData object containing the data to correct.
-    beamfile
+    beam_file
         The path to the beamfile containing the correction factors. The correction
         factors should be in the fourth column of the csv file, and should have a size
         equal to the number of frequencies in the data.

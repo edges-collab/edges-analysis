@@ -121,6 +121,84 @@ class TestApplyNoiseWaveCalibration:
         assert out.data_unit == "temperature"
         np.testing.assert_allclose(out.data, temp.to_value("K"), rtol=1e-12, atol=0)
 
+    def _decalibrated(self, gsd: GSData, calibrator: Calibrator, ant_s11, seed=0):
+        rng = np.random.default_rng(seed)
+        temp = rng.uniform(1000, 5000, gsd.data.shape) * un.K
+        temp_model = temp * (1 + rng.uniform(-0.01, 0.01, gsd.data.shape))
+        kw = {"ant_s11": ant_s11.reflection_coefficient, "freqs": gsd.freqs}
+        q = calibrator.decalibrate(temp, **kw).to_value("")
+        qmodel = calibrator.decalibrate(temp_model, **kw).to_value("")
+        return temp, temp_model, q, qmodel
+
+    def test_residuals_are_calibrated(self, gsd_ones: GSData):
+        """Regression test for ANA-3: data with a model used to crash."""
+        calibrator = get_random_calibrator(gsd_ones.freqs)
+        ant_s11 = get_random_s11(gsd_ones.freqs)
+        temp, temp_model, q, qmodel = self._decalibrated(gsd_ones, calibrator, ant_s11)
+        data = gsd_ones.update(data=q, residuals=q - qmodel, data_unit="uncalibrated")
+
+        out = calibrate.apply_noise_wave_calibration(
+            data, calibrator=calibrator, antenna_s11=ant_s11
+        )
+        np.testing.assert_allclose(out.data, temp.to_value("K"), rtol=1e-12, atol=0)
+        np.testing.assert_allclose(
+            out.residuals, (temp - temp_model).to_value("K"), rtol=0, atol=1e-8
+        )
+
+    def test_residuals_uncalibrated_temp(self, gsd_ones: GSData):
+        """Residuals of approximate-temperature data are calibrated too (ANA-3)."""
+        calibrator = get_random_calibrator(gsd_ones.freqs)
+        ant_s11 = get_random_s11(gsd_ones.freqs)
+        temp, temp_model, q, qmodel = self._decalibrated(gsd_ones, calibrator, ant_s11)
+        tload, tns = 300.0, 1000.0
+        data = gsd_ones.update(
+            data=q * tns + tload,
+            residuals=(q - qmodel) * tns,
+            data_unit="uncalibrated_temp",
+        )
+
+        out = calibrate.apply_noise_wave_calibration(
+            data, calibrator=calibrator, antenna_s11=ant_s11, tload=tload, tns=tns
+        )
+        np.testing.assert_allclose(out.data, temp.to_value("K"), rtol=1e-12, atol=0)
+        np.testing.assert_allclose(
+            out.residuals, (temp - temp_model).to_value("K"), rtol=0, atol=1e-8
+        )
+
+    def test_calibrator_from_path(self, gsd_ones: GSData, tmp_path):
+        """A path to a calibrator file can be given instead of the object (ANA-3)."""
+        calibrator = get_random_calibrator(gsd_ones.freqs)
+        ant_s11 = get_random_s11(gsd_ones.freqs)
+        temp, _, q, _ = self._decalibrated(gsd_ones, calibrator, ant_s11)
+        data = gsd_ones.update(data=q, data_unit="uncalibrated")
+
+        calibrator.write(tmp_path / "calibrator.h5")
+
+        for pth in (tmp_path / "calibrator.h5", str(tmp_path / "calibrator.h5")):
+            out = calibrate.apply_noise_wave_calibration(
+                data, calibrator=pth, antenna_s11=ant_s11
+            )
+            np.testing.assert_allclose(out.data, temp.to_value("K"), rtol=1e-12, atol=0)
+
+    def test_antenna_s11_interpolated_to_data_freqs(self, gsd_ones: GSData):
+        """An antenna S11 on a different frequency grid is modelled (ANA-3)."""
+        calibrator = get_random_calibrator(gsd_ones.freqs)
+        gamma = 0.2 * np.exp(0.3j)
+        exact = ReflectionCoefficient(
+            reflection_coefficient=np.full(gsd_ones.nfreqs, gamma), freqs=gsd_ones.freqs
+        )
+        fine_freqs = np.linspace(40, 110, 301) * un.MHz
+        fine = ReflectionCoefficient(
+            reflection_coefficient=np.full(fine_freqs.size, gamma), freqs=fine_freqs
+        )
+        temp, _, q, _ = self._decalibrated(gsd_ones, calibrator, exact)
+        data = gsd_ones.update(data=q, data_unit="uncalibrated")
+
+        out = calibrate.apply_noise_wave_calibration(
+            data, calibrator=calibrator, antenna_s11=fine
+        )
+        np.testing.assert_allclose(out.data, temp.to_value("K"), rtol=1e-9, atol=0)
+
 
 class TestApplyLossCorrection:
     def test_explicit_unity_loss(self, mock: GSData):
@@ -174,6 +252,17 @@ class TestApplyLossCorrection:
             mock.update(data=measured), ambient_temp=tamb, loss=loss
         )
         np.testing.assert_allclose(out.data, mock.data, rtol=1e-12, atol=0)
+
+    def test_ambient_temp_in_celsius(self, mock: GSData):
+        """Regression test for ANA-12: thermlog temperatures in deg C used to crash."""
+        loss = np.linspace(0.9, 0.99, mock.nfreqs)
+        in_kelvin = calibrate.apply_loss_correction(
+            mock, ambient_temp=298.15 * un.K, loss=loss
+        )
+        in_celsius = calibrate.apply_loss_correction(
+            mock, ambient_temp=25.0 * un.deg_C, loss=loss
+        )
+        np.testing.assert_allclose(in_celsius.data, in_kelvin.data, rtol=1e-12, atol=0)
 
     def test_bad_data_unit(self, mock_power: GSData):
         loss = np.ones(mock_power.nfreqs)
