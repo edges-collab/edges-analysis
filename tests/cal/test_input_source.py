@@ -4,7 +4,9 @@ import attrs
 import numpy as np
 import pytest
 from astropy import units as un
+from pygsdata import GSData
 
+from edges.cal import LoadSpectrum, ReflectionCoefficient
 from edges.cal.input_sources import InputSource
 from edges.io import CalObsDefEDGES2
 
@@ -45,3 +47,32 @@ class TestInputSource:
             ValueError, match="loss must have the same number of channels"
         ):
             attrs.evolve(load, loss=loss)
+
+
+class TestTempWithLoss:
+    """Limits of the loss-corrected source temperature."""
+
+    def _source(self, gsd: GSData, loss: np.ndarray) -> InputSource:
+        return InputSource(
+            spectrum=LoadSpectrum(q=gsd, temp_ave=370.0 * un.K),
+            reflection_coefficient=ReflectionCoefficient(
+                freqs=gsd.freqs, reflection_coefficient=np.zeros(gsd.nfreqs)
+            ),
+            ambient_temperature=296.0 * un.K,
+            loss=loss,
+        )
+
+    def test_no_loss_is_identity(self, gsd_averaged: GSData):
+        src = self._source(gsd_averaged, np.ones(gsd_averaged.nfreqs))
+        np.testing.assert_allclose(src.temp_ave.to_value("K"), 370.0, rtol=0, atol=0)
+
+    def test_total_loss_is_ambient(self, gsd_averaged: GSData):
+        src = self._source(gsd_averaged, np.zeros(gsd_averaged.nfreqs))
+        np.testing.assert_allclose(src.temp_ave.to_value("K"), 296.0, rtol=0, atol=0)
+
+    def test_partial_loss(self, gsd_averaged: GSData):
+        loss = np.linspace(0.5, 1, gsd_averaged.nfreqs)
+        src = self._source(gsd_averaged, loss)
+        np.testing.assert_allclose(
+            src.temp_ave.to_value("K"), loss * 370 + (1 - loss) * 296, rtol=1e-14
+        )

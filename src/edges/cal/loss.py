@@ -26,9 +26,25 @@ def compute_cable_loss_from_scattering_params(
     reflection coefficient at the input of the cable), and the equation for the loss,
     L.
 
-    SGM: as far as I can tell, this function *doesn't* assume that S12 == S21, though
-    actual calls to this function generally throughout our calibration do make this
-    assumption.
+    The loss computed here is the available gain of the cable from its far end
+    (port 2, terminated by the de-embedded load reflection coefficient T) to the
+    input (port 1). The exact available gain has |S12|^2 in the numerator; this
+    function uses |S12*S21| instead, so it *does* assume |S12| == |S21|, i.e. a
+    reciprocal (in magnitude) network, which is true for passive cables. The
+    de-embedding itself depends only on the product S12*S21.
+
+    Parameters
+    ----------
+    input_s11
+        The reflection coefficient measured at the input (port 1) of the cable.
+    sparams
+        The S-parameters of the cable.
+
+    Returns
+    -------
+    loss
+        The power gain (between 0 and 1 for a passive cable) as a function of
+        frequency.
     """
     s12 = sparams.s12
     s21 = sparams.s21
