@@ -97,9 +97,11 @@ def _write_synthetic_load(tmp_path: Path) -> dict:
     resistance = np.where(np.arange(ntime) < nhalf, r_cool, r_warm)
     therm_times = t_ant - 2 * un.s
     lines = [
-        "Date,Time,LNA Voltage,LNA Thermistor (Ohm),LNA (C),SP4T Voltage,"
-        "SP4T Thermistor (Ohm),SP4T (C),Load Voltage,Load-thermistor (Ohm),"
-        "Load (C),Room_Temp(C)"
+        (
+            "Date,Time,LNA Voltage,LNA Thermistor (Ohm),LNA (C),SP4T Voltage,"
+            "SP4T Thermistor (Ohm),SP4T (C),Load Voltage,Load-thermistor (Ohm),"
+            "Load (C),Room_Temp(C)"
+        )
     ]
     for t, r in zip(therm_times, resistance, strict=True):
         dt = t.to_datetime()

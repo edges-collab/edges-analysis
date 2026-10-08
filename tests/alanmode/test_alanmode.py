@@ -192,7 +192,7 @@ class TestACQPlot7AMoon:
 class TestEdgesParams:
     """Regression tests for ANA-9: params given with kwargs were silently dropped."""
 
-    class _Stop(Exception):  # noqa: N818
+    class _Stop(Exception):  # ruff: ignore[error-suffix-on-exception-name]
         pass
 
     def _params_used(self, monkeypatch, **kwargs) -> am.EdgesScriptParams:

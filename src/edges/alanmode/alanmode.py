@@ -545,10 +545,7 @@ def edges(
     s11rig, s12rig, s22rig
         The S11, S12, and S22 measurements for the semi-rigid cable respectively.
         Optional -- generally required for EDGES-2.
-
-    Other Parameters
-    ----------------
-    kwargs
+    **kwargs
         Any field of :class:`EdgesScriptParams`, overriding its value in ``params``.
 
     Returns
