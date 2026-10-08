@@ -37,8 +37,6 @@ def _make_plots(
     out: Path,
     calobs: CalibrationObservation,
     calibrator: Calibrator,
-    load_s11_mdl,
-    rcv_s11_mdl,
     hot_loss_model,
     plot: bool,
     t_load: float = 300.0,
@@ -57,7 +55,7 @@ def _make_plots(
             calobs.freqs.to_value("MHz"),
             calobs.hot_load.loss,
         ]).T,
-        header="# freq, hot_load_loss",
+        header="freq, hot_load_loss",
     )
 
     console.print("Saving calibrated temperatures")
@@ -69,7 +67,7 @@ def _make_plots(
             ]
             + [calibrator.calibrate_load(load) for load in calobs.loads.values()]
         ).T,
-        header="# freq, " + ", ".join(calobs.loads),
+        header="freq, " + ", ".join(calobs.loads),
     )
 
     console.print("Saving known load temperatures")
@@ -85,7 +83,7 @@ def _make_plots(
                 for load in calobs.loads.values()
             ]
         ).T,
-        header="# freq, " + ", ".join(calobs.loads),
+        header="freq, " + ", ".join(calobs.loads),
     )
 
     if plot:
@@ -133,7 +131,6 @@ so using cached results is often preferable."""
 in the given --out directory."""
 
 
-# @amode.command(name='run')
 def _alancal(
     data: Edges3CalobsParams | Edges2CalobsParams,
     opts: AlanCalOpts,
@@ -148,7 +145,7 @@ def _alancal(
     and thus it runs a complete calibration, not just a single part. However, you can
     turn off parts of the calibration by setting the appropriate flags to False.
     """
-    calobs, calibrator, load_s11_mdl, rcv_s11_mdl, hot_loss_model = acal(
+    result = acal(
         defparams=data,
         out=opts.out,
         redo_spectra=opts.redo_spectra,
@@ -158,6 +155,14 @@ def _alancal(
     )
 
     out = Path(opts.out)
+    if result is None:
+        console.print(
+            f"Calibration already exists in {out}, not re-running it "
+            "(use --redo-cal to re-run it)."
+        )
+        return
+
+    calobs, calibrator, _, _, hot_loss_model = result
 
     for name, load in calobs.loads.items():
         # Output Raw S11s
@@ -172,8 +177,6 @@ def _alancal(
         out,
         calobs,
         calibrator,
-        load_s11_mdl,
-        rcv_s11_mdl,
         hot_loss_model,
         opts.plot,
         t_load=opts.avg.tload,

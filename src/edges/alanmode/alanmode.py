@@ -828,9 +828,16 @@ def alancal(
     redo_cal: bool = True,
     acqparams: ACQPlot7aMoonParams = ACQPlot7aMoonParams(),
     calparams: EdgesScriptParams = EdgesScriptParams(),
-) -> tuple[
-    CalibrationObservation, Calibrator, S11ModelParams, S11ModelParams, Callable | None
-]:
+) -> (
+    tuple[
+        CalibrationObservation,
+        Calibrator,
+        S11ModelParams,
+        S11ModelParams,
+        Callable | None,
+    ]
+    | None
+):
     """Run a calibration in as close a manner to Alan's code as possible.
 
     This exists mostly for being able to compare to Alan's memos etc in an easy way. It
@@ -851,7 +858,10 @@ def alancal(
     redo_spectra
         Whether to re-average the spectra if they already exist in the output directory.
     redo_cal
-        Whether to re-compute the calibration coefficients if they already exist.
+        Whether to re-compute the calibration coefficients if they already exist
+        (i.e. if ``out`` contains a ``specal.txt`` file). If False and they exist,
+        nothing is computed (except for re-averaging the spectra, if
+        ``redo_spectra`` is True) and None is returned.
     acqparams
         Parameters governing how to average the spectrum files.
     calparams
@@ -870,8 +880,17 @@ def alancal(
         The parameters used to create models of the receiver S11.
     hot_loss_model
         The model used to account for losses in the hot load.
+
+    If the calibration is not re-run (see ``redo_cal``), None is returned instead.
     """
     out = Path(out)
+
+    # If the calibration exists and is not to be redone, the only thing left to do
+    # is to re-average the spectra (if requested).
+    skip_cal = not redo_cal and (out / "specal.txt").exists()
+    if skip_cal and not redo_spectra:
+        logger.info(f"Calibration already exists in {out}, not re-running it.")
+        return None
 
     s11freq, raws11s = defparams.get_raw_s11s()
     specfiles = defparams.get_spectrum_files()
@@ -900,8 +919,8 @@ def alancal(
     )
 
     # Now do the calibration
-    outfile = out / "specal.txt"
-    if not redo_cal and outfile.exists():
+    if skip_cal:
+        logger.info(f"Calibration already exists in {out}, not re-running it.")
         return None
 
     logger.info("Performing calibration")
