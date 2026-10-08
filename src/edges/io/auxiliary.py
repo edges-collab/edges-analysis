@@ -100,8 +100,8 @@ def _read_aux_file(
         Number of hours of data to return, if ``end`` is not given. Default is to
         return the rest of the day.
     end
-        The end of the chunk of times to return. Default is ``start`` plus
-        ``n_hours``.
+        The end of the chunk of times to return (exclusive). Default is ``start``
+        plus ``n_hours``.
 
     Returns
     -------
@@ -135,7 +135,7 @@ def _read_aux_file(
 
             if t < start:
                 continue
-            if t > end:
+            if t >= end:
                 break
 
             values = _parse_aux_line(line[17:])
@@ -200,8 +200,8 @@ def read_weather_file(
         Number of hours of data to return, if ``end`` is not given. Default is to
         return the rest of the day of ``start``.
     end
-        The end of the chunk of times to return. Default is ``start`` plus
-        ``n_hours``.
+        The end of the chunk of times to return (exclusive). Default is ``start``
+        plus ``n_hours``.
 
     Returns
     -------
@@ -247,8 +247,8 @@ def read_thermlog_file(
         Number of hours of data to return, if ``end`` is not given. Default is to
         return the rest of the day of ``start``.
     end
-        The end of the chunk of times to return. Default is ``start`` plus
-        ``n_hours``.
+        The end of the chunk of times to return (exclusive). Default is ``start``
+        plus ``n_hours``.
 
     Returns
     -------
@@ -289,8 +289,8 @@ def read_auxiliary_data(
         Number of hours of data to return, if ``end`` is not given. Default is to
         return the rest of the day of ``start``.
     end
-        The end of the chunk of times to return. Default is ``start`` plus
-        ``n_hours``.
+        The end of the chunk of times to return (exclusive). Default is ``start``
+        plus ``n_hours``.
 
     Returns
     -------

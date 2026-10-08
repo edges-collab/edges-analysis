@@ -125,3 +125,20 @@ def test_thermlog_values(datadir: Path):
     assert out["power_percent"][0].to_value(un.percent) == pytest.approx(
         -32.94, abs=1e-9
     )
+
+
+def test_end_is_exclusive(tmp_path: Path):
+    fl = tmp_path / "weather.txt"
+    fl.write_text(
+        "".join(
+            _NEW.format(t=t)
+            for t in ("2020:107:11:00:01", "2020:107:11:05:01", "2020:107:11:10:01")
+        )
+    )
+    start = Time("2020:107:11:00:01")
+    out = read_weather_file(fl, start, end=Time("2020:107:11:05:01"))
+    assert len(out) == 1
+    assert out["time"][0] == start  # start is inclusive
+
+    out = read_weather_file(fl, start, end=Time("2020:107:11:05:02"))
+    assert len(out) == 2
