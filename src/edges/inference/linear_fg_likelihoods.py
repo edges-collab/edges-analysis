@@ -43,7 +43,7 @@ class LinearFG:
 
     @cosmic_signal.default
     def _eorcmp(self):
-        return (FlattenedGaussian(freqs=self.freqs, params=("amp", "w", "tau", "nu0")),)
+        return FlattenedGaussian(freqs=self.freqs, params=("amp", "w", "tau", "nu0"))
 
     @cached_property
     def partial_linear_model(self):

@@ -10,7 +10,7 @@ from scipy import stats
 from yabf import Likelihood
 from yabf.chi2 import Chi2
 
-from ..modeling import Model
+from ..modeling import FixedLinearModel
 
 logger = logging.getLogger(__name__)
 
@@ -23,12 +23,15 @@ class PartialLinearModel(Chi2, Likelihood):
     Parameters
     ----------
     linear_model
-        A linear model containing all the terms that are linear.
+        A linear model containing all the terms that are linear, fixed at the data
+        coordinates (e.g. ``model.at(x=freqs)``).
     variance_func
         A callable function that takes two arguments: ``ctx`` and ``data``, and returns
         an array of model variance. If not provided, the input data must have a key
         called `"data_variance"` that provides static variance (i.e. the :math`\Sigma`
-        in the derivation in the Notes).
+        in the derivation in the Notes). Variances must be positive; an infinite
+        variance flags (removes) a channel. If *all* variances are zero, the fit is
+        unweighted.
     data_func
         A function that has the same signature as ``variance_func``, but returns data
         (i.e. the :math:`d` in the derivation). This might be dependent on non-linear
@@ -76,7 +79,7 @@ class PartialLinearModel(Chi2, Likelihood):
     with the first term only.
     """
 
-    linear_model: Model = attrs.field()
+    linear_model: FixedLinearModel = attrs.field()
     variance_func: Callable | None = attrs.field(default=None)
     data_func: Callable | None = attrs.field(default=None)
     basis_func: Callable | None = attrs.field(default=None)
@@ -101,7 +104,16 @@ class PartialLinearModel(Chi2, Likelihood):
             else self.basis_func(self.linear_model, ctx, self.data)
         )
 
-        wght = 1.0 if np.all(var == 0) else 1 / var
+        if np.all(var == 0):
+            wght = 1.0
+        else:
+            bad = np.isnan(var) | (np.asarray(var) <= 0)
+            if np.any(bad):
+                raise ValueError(
+                    "The data variance must be positive (use inf to flag a channel), "
+                    f"but got {np.sum(bad)} zero, negative or NaN value(s)."
+                )
+            wght = 1 / var
 
         linear_fit = linear_model.fit(ydata=data, weights=wght)
         return linear_fit, data, var
@@ -123,23 +135,31 @@ class PartialLinearModel(Chi2, Likelihood):
 
         try:
             Cinv = self.Q
-            return np.log(np.linalg.det(Cinv))
         except AttributeError:
             return None
+        return _logdet(Cinv)
 
     @cached_property
     def sigma_plus_v_inverse(self):
-        """The inverse of the sum of the data variance and the foreground variance."""
+        r"""The inverse of the sum of the data variance and the foreground variance.
+
+        The foreground covariance is :math:`V = A^T \Lambda A`, where :math:`A` is
+        the (M, N) linear basis and :math:`\Lambda` the prior covariance of the
+        linear parameters. For the uninformative (flat) prior used for the
+        marginalization, :math:`\Lambda \to \infty`, and by the Woodbury identity
+
+        .. math:: (\Sigma + V)^{-1} \to \Sigma^{-1} - \Sigma^{-1} A^T
+                  (A \Sigma^{-1} A^T)^{-1} A \Sigma^{-1},
+
+        which annihilates the foreground basis, and for which :math:`d^T (\Sigma +
+        V)^{-1} d` is the minimum chi^2 of the weighted least-squares fit.
+        """
         if self.basis_func is not None or self.variance_func is not None:
             raise AttributeError("V is not static in this instance!")
         A = self.linear_model.basis
-        var = self.data["data_variance"]
-        Sig = np.diag(var)
-        SigInv = np.diag(1 / var)
-        C = np.linalg.inv(self.Q)
-        SigFG = A.T.dot(C.dot(A))
-        V = np.linalg.inv(np.linalg.inv(SigFG) - SigInv)
-        return np.linalg.inv(Sig + V)
+        sig_inv = 1 / self.data["data_variance"]
+        sig_inv_a = A * sig_inv  # A Sigma^-1, shape (M, N)
+        return np.diag(sig_inv) - sig_inv_a.T @ np.linalg.solve(self.Q, sig_inv_a)
 
     @cached_property
     def fiducial_lnl(self):
@@ -150,8 +170,7 @@ class PartialLinearModel(Chi2, Likelihood):
         """A derived quantity, the log-determinant of the inverse of C."""
         if self.logdetCinv is None:
             fit = model[0]
-            h = fit.hessian
-            return np.log(np.linalg.det(h))
+            return _logdet(fit.hessian)
         return self.logdetCinv
 
     def logdet_sig(self, model, ctx, **params):
@@ -230,3 +249,12 @@ class PartialLinearModel(Chi2, Likelihood):
         resid = data - linear
         nm = stats.norm(loc=0, scale=np.sqrt(var))
         return np.sum(nm.logpdf(resid))
+
+
+def _logdet(mat: np.ndarray) -> float:
+    """Log-determinant of a matrix, robust to overflow.
+
+    Returns NaN for a negative determinant (as ``log(det)`` would).
+    """
+    sign, logdet = np.linalg.slogdet(mat)
+    return np.nan if sign < 0 else logdet

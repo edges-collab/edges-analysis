@@ -13,7 +13,10 @@ class SemiLinearFit:
 
     In this model, the FG component is assumed to be a linear model, while the
     21cm component is modeled as a non-linear function. The linear component is
-    fixed via analytic marginalization.
+    *profiled* (not marginalized): for each set of non-linear parameters, the linear
+    parameters are set to their weighted least-squares best fit, and the likelihood
+    is evaluated there. For analytic marginalization over the linear parameters, use
+    :class:`~edges.inference.PartialLinearModel`.
 
     Parameters
     ----------
@@ -25,9 +28,14 @@ class SemiLinearFit:
     spectrum
         The sky data to fit to.
     sigma
-        Either a 1D array with the same shape as the spectrum, or a float indicating
-        a constant noise level for all frequencies.
+        The noise standard deviation: either a 1D array with the same shape as the
+        spectrum, or a float indicating a constant noise level for all frequencies.
+        A 2D covariance matrix is not supported.
 
+    Raises
+    ------
+    NotImplementedError
+        If ``sigma`` is two-dimensional (a covariance matrix).
     """
 
     def __init__(
@@ -42,6 +50,12 @@ class SemiLinearFit:
         Useful for fitting foregrounds and EoR at the same time, where the EoR model is
         not linear, but the foreground model is.
         """
+        if np.ndim(sigma) > 1:
+            raise NotImplementedError(
+                "SemiLinearFit does not support a covariance matrix for sigma; pass "
+                "the per-channel noise standard deviation (1D array or float)."
+            )
+
         self.fg = fg
         self.eor = eor
         self.spectrum = spectrum
@@ -71,13 +85,7 @@ class SemiLinearFit:
     def neg_lk(self, p):
         """Comptue the negative log-likelihood given parameters p."""
         resid = self.get_resid(p)
-        if hasattr(self.sigma, "ndim") and self.sigma.ndim == 2:
-            norm_obj = stats.multivariate_normal(
-                mean=np.zeros_like(resid), cov=self.sigma
-            )
-        else:
-            norm_obj = stats.norm(loc=0, scale=self.sigma)
-
+        norm_obj = stats.norm(loc=0, scale=self.sigma)
         return -np.sum(norm_obj.logpdf(resid))
 
     def __call__(self, dual_annealing_kw=None, **kwargs):
