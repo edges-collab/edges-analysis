@@ -84,16 +84,14 @@ def corrcsv(
     cablen: float,
     cabdiel: float,
     cabloss: float,
-):
+) -> sp.ReflectionCoefficient:
     """Corrects the S11 data (LNA) for cable effects.
 
     This function is a direct translation of the C-code function corrcsv.
 
     Parameters
     ----------
-    freq : np.ndarray
-        The frequency array.
-    s11 : np.ndarray
+    s11
         The S11 data.
     cablen : float
         The cable length, in inches.
@@ -232,7 +230,11 @@ class EdgesScriptParams:
     Parameters
     ----------
     Lh
-        The mode in which to calculate the loss function.
+        The mode in which to calculate the hot-load loss. -1 uses the model of the
+        UT-141C-SP cable (as for EDGES-3). -2 models the loss from the semi-rigid
+        cable S-parameters (``s11rig``, ``s12rig`` and ``s22rig``, as for EDGES-2).
+        From Python, a path to a file tabulating the loss can also be given. Any
+        other value means no hot-load loss.
     wfstart
         The lowest frequency included for fitting the calibration functions, and the
         antenna S11.
@@ -500,14 +502,14 @@ def edges(
     sphot: GSData,
     spopen: GSData,
     spshort: GSData,
-    s11freq: np.ndarray,
+    s11freq: tp.FreqType,
     s11hot: np.ndarray,
     s11cold: np.ndarray,
     s11lna: np.ndarray,
     s11open: np.ndarray,
     s11short: np.ndarray,
-    tload: float,
-    tcal: float,
+    tload: tp.TemperatureType,
+    tcal: tp.TemperatureType,
     params: EdgesScriptParams | None = None,
     s11rig: np.ndarray | None = None,
     s12rig: np.ndarray | None = None,
@@ -532,8 +534,9 @@ def edges(
         The S11 measurements for the hot, ambient, LNA, open, and short loads
         respectively.
     tload
-        A guess of the internal load temperature, used as the initial guess for the
-        optimization. **MUST MATCH** tload used to generate the time-averaged spectra.
+        A guess of the internal load temperature (a temperature Quantity), used as the
+        initial guess for the optimization. **MUST MATCH** tload used to generate the
+        time-averaged spectra.
     tcal
         Like tload, but for the internal load + noise source.
     params
@@ -625,7 +628,7 @@ def _average_spectra(
     fstop,
     telescope: str,
     **kwargs,
-) -> GSData:
+) -> dict[str, GSData]:
     spectra = {}
     for load, files in specfiles.items():
         outfile = out / f"sp{load}.txt"
@@ -676,7 +679,6 @@ class Edges3CalobsParams:
     calkit_delays
         The delays of the three calkit standards. To set each individually, use
         the ``load_delay``, ``open_delay``, and ``short_delay`` parameters.
-    lna_cable_length
     load_delay
         The delay of the "load" calkit stsandard. By default the same as
         ``calkit_delays``.
