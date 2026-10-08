@@ -32,5 +32,14 @@ KNOWN_TELESCOPES["edges3"] = Telescope(
 
 
 galactic_centre_lst = 17 + (45 / 60) + (40.04 / (60 * 60))
+"""The LST (in hours) at which the Galactic centre transits (its J2000 RA)."""
+
 absolute_zero = (0 * apu.deg_C).to(apu.K, equivalencies=apu.temperature()).value
+"""0 degC expressed in Kelvin (273.15), i.e. the offset between Celsius and Kelvin.
+
+Note that, despite its name, this is *not* absolute zero (which is 0 K, or
+-273.15 degC).
+"""
+
 edges_location = KNOWN_TELESCOPES["edges-low"].location
+"""The location of the EDGES-low telescope."""

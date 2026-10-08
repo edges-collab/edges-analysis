@@ -9,9 +9,9 @@ from astropy import units
 from astropy import units as u
 
 
-def is_unit(unit: str | u.Unit) -> bool:
+def is_unit(unit: str | u.UnitBase) -> bool:
     """Whether the given input is a recognized unit."""
-    if isinstance(unit, u.Unit):
+    if isinstance(unit, u.UnitBase):
         return True
     if isinstance(unit, str):
         try:
@@ -23,7 +23,7 @@ def is_unit(unit: str | u.Unit) -> bool:
 
 
 def vld_unit(
-    unit: str | u.Unit, equivalencies=()
+    unit: str | u.UnitBase, equivalencies=()
 ) -> Callable[[Any, attrs.Attribute, Any], None]:
     """Attr validator to check physical type."""
     utype = is_unit(unit)
