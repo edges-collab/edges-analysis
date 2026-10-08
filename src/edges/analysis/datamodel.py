@@ -1,23 +1,17 @@
 """Data models for GSData objects."""
 
 import logging
+from typing import Self
 
 import h5py
 import numpy as np
 import yaml
 from attrs import define, evolve, field
-
-from .. import modeling as mdl
-
-try:
-    from typing import Self
-except ImportError:
-    from typing import Self
-
 from pygsdata import GSData
 from pygsdata.attrs import npfield
 from pygsdata.register import gsregister
 
+from .. import modeling as mdl
 from ..averaging import NsamplesStrategy, get_weights_from_strategy
 
 logger = logging.getLogger(__name__)

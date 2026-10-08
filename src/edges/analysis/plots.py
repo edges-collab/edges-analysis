@@ -95,8 +95,17 @@ def plot_daily_residuals(
     ----------
     objs
         A list of objects to plot.
+    model
+        The model with which to compute residuals, for objects that do not already
+        have residuals.
     separation
         The separation between residuals in K (on the plot).
+    ax
+        The axis to plot on. If None, a new axis is created.
+    load
+        The index of the load to plot (only one load is plotted).
+    pol
+        The index of the polarization to plot (only one polarization is plotted).
 
     Returns
     -------
@@ -118,7 +127,13 @@ def plot_daily_residuals(
             data = add_model(data, model=model)
 
         ax, d = plot_time_average(
-            data, attribute="residuals", offset=separation * i, ax=ax, **kw
+            data,
+            attribute="residuals",
+            offset=separation * i,
+            ax=ax,
+            load=load,
+            pol=pol,
+            **kw,
         )
 
         rms = np.sqrt(
