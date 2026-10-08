@@ -181,7 +181,12 @@ class Fourier(core.Model):
 @hickleable
 @attrs.define(frozen=True, kw_only=True, slots=False)
 class FourierDay(core.Model):
-    """A Fourier-basis model with period of 24 (hours)."""
+    """A Fourier-basis model with a fundamental period of 48 (hours).
+
+    The fundamental period is 48 (hours), not 24: the n-th cosine/sine pair has a
+    period of 48/n hours, so the 24-hour mode is the second pair. Consequently, the
+    model is not, in general, periodic over 24 hours.
+    """
 
     @property
     def _fourier(self):

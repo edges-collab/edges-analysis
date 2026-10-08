@@ -355,3 +355,68 @@ def test_sample_from_posterior():
 
     mean_params = np.mean(samples, axis=0)
     assert np.allclose(mean_params, fit.model_parameters, atol=1e-1)
+
+
+def _x_dependent_scaler(x):
+    # A scaler that depends on the (raw) coordinate values, not only their number.
+    return 1 + (x - 50) / 100
+
+
+@pytest.mark.parametrize("with_scaler", [True, False])
+def test_call_without_x_equals_call_at_x(with_scaler: bool):
+    """MOD-9: the basis scaler always receives the raw (untransformed) coordinates."""
+    x = np.linspace(50, 100, 30)
+    model = mdl.Polynomial(
+        parameters=[1.0, 2.0, -3.0],
+        transform=mdl.ScaleTransform(scale=75.0),
+        basis_scaler=_x_dependent_scaler if with_scaler else None,
+    )
+    fm = model.at(x=x)
+
+    np.testing.assert_allclose(fm(), fm(x=fm.x), rtol=1e-14)
+    np.testing.assert_allclose(model.get_basis_terms(x), fm.basis, rtol=1e-14)
+
+    # The scaler multiplies the un-scaled basis evaluated at the transformed x.
+    expected = np.array([(x / 75.0) ** i for i in range(3)])
+    if with_scaler:
+        expected = expected * _x_dependent_scaler(x)
+    np.testing.assert_allclose(fm.basis, expected, rtol=1e-14)
+
+
+def test_composite_call_without_x_equals_call_at_x():
+    """MOD-9 for composite models with transforms and basis scalers."""
+    x = np.linspace(50, 100, 30)
+    cmp = mdl.CompositeModel(
+        models={
+            "a": mdl.Polynomial(
+                parameters=[1.0, 2.0],
+                transform=mdl.ScaleTransform(scale=75.0),
+                basis_scaler=_x_dependent_scaler,
+            ),
+            "b": mdl.PhysicalLin(parameters=[3.0, 0.5]),
+        }
+    )
+    fm = cmp.at(x=x)
+    np.testing.assert_allclose(fm(), fm(x=fm.x), rtol=1e-14)
+    np.testing.assert_allclose(
+        cmp.get_model("a", x=x),
+        (1 + 2 * x / 75.0) * _x_dependent_scaler(x),
+        rtol=1e-14,
+    )
+
+
+def test_composite_get_basis_term_uses_submodel_transform():
+    """MOD-21: CompositeModel.get_basis_term applies each sub-model's transform."""
+    x = np.linspace(50, 100, 30)
+    poly = mdl.Polynomial(n_terms=3, transform=mdl.ScaleTransform(scale=75.0))
+    four = mdl.Fourier(n_terms=3, transform=mdl.ShiftTransform(shift=50.0))
+    cmp = mdl.CompositeModel(models={"poly": poly, "four": four})
+
+    for i in range(cmp.n_terms):
+        np.testing.assert_allclose(
+            cmp.get_basis_term(i, x), cmp.get_basis_term_transformed(i, x)
+        )
+    np.testing.assert_allclose(cmp.get_basis_term(2, x), (x / 75.0) ** 2)
+    np.testing.assert_allclose(
+        cmp.get_basis_term(4, x), four.get_basis_term(1, x - 50.0)
+    )

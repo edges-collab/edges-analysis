@@ -224,3 +224,92 @@ def test_mean_reduced_chi2_is_one():
     ]
     # Standard error of the mean here is ~0.015.
     np.testing.assert_allclose(np.mean(rchi2), 1.0, atol=0.06)
+
+
+# ---------------------------------------------------------------------------
+# Regression tests for Phase-2 bug fixes.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("method", ALL_METHODS)
+@pytest.mark.parametrize("weighted", [True, False])
+def test_nan_data_is_masked_consistently(method: str, weighted: bool):
+    """MOD-7: NaN data is excluded from fit, chi^2, rms, Hessian and covariance."""
+    rng, x, sigma, w = _heteroscedastic_setup()
+    if not weighted:
+        w = 1.0
+    model = mdl.Polynomial(n_terms=4, transform=mdl.UnitTransform(range=(50, 100)))
+    y = model(x=x, parameters=[1, 2, -3, 0.5]) + rng.normal(scale=sigma)
+
+    bad = np.array([5, 22, 23])
+    keep = np.setdiff1d(np.arange(x.size), bad)
+    ynan = y.copy()
+    ynan[bad] = np.nan
+
+    fit_nan = model.at(x=x).fit(ydata=ynan, weights=w, method=method)
+    fit_drop = model.at(x=x[keep]).fit(
+        ydata=y[keep], weights=w if np.isscalar(w) else w[keep], method=method
+    )
+
+    np.testing.assert_allclose(
+        fit_nan.model_parameters, fit_drop.model_parameters, rtol=1e-10
+    )
+    assert np.all(np.isnan(fit_nan.residual[bad]))
+    np.testing.assert_allclose(fit_nan.residual[keep], fit_drop.residual, atol=1e-10)
+
+    for attr in ("weighted_chi2", "weighted_rms", "hessian", "parameter_covariance"):
+        val = getattr(fit_nan, attr)
+        assert np.all(np.isfinite(val)), attr
+        np.testing.assert_allclose(val, getattr(fit_drop, attr), rtol=1e-10)
+
+
+def test_nan_masking_does_not_change_finite_results():
+    """With no NaNs present, the statistics are exactly the unmasked expressions."""
+    rng, x, sigma, w = _heteroscedastic_setup()
+    fm = mdl.LinLog(n_terms=4).at(x=x)
+    y = fm(parameters=[1750, -90, 30, -8]) + rng.normal(scale=sigma)
+    fit = fm.fit(ydata=y, weights=w)
+
+    r = fit.residual
+    assert fit.weighted_chi2 == np.dot(r.T, w * r)
+    assert fit.weighted_rms == np.sqrt(np.dot(r.T, w * r)) / np.sum(w)
+    np.testing.assert_array_equal(fit.hessian, (fm.basis * w).dot(fm.basis.T))
+
+
+@pytest.mark.parametrize("bad", [np.inf, np.nan, -1.0])
+@pytest.mark.parametrize("method", ALL_METHODS)
+def test_bad_weights_raise(bad: float, method: str):
+    """MOD-8: a single infinite, NaN or negative weight gives a clear error."""
+    x = np.linspace(50, 100, 20)
+    fm = mdl.Polynomial(n_terms=3).at(x=x)
+    w = np.ones(x.size)
+    w[4] = bad
+    with pytest.raises(ValueError, match="Weights must be"):
+        fm.fit(ydata=np.ones(x.size), weights=w, method=method)
+
+
+@pytest.mark.parametrize("bad", [np.inf, np.nan, -1.0])
+def test_bad_scalar_weight_raises(bad: float):
+    fm = mdl.Polynomial(n_terms=3).at(x=np.linspace(50, 100, 20))
+    with pytest.raises(ValueError, match="Weights must be"):
+        fm.fit(ydata=np.ones(20), weights=bad)
+
+
+@pytest.mark.parametrize("weights", [None, 1, 3, np.float32(2.0)])
+def test_weights_converter(weights):
+    """MOD-19: None, int and numpy scalars are accepted as weights."""
+    x = np.linspace(50, 100, 20)
+    fm = mdl.Polynomial(n_terms=3, transform=mdl.UnitTransform(range=(50, 100))).at(x=x)
+    y = fm(parameters=[1.0, 2.0, 3.0])
+    fit = fm.fit(ydata=y, weights=weights)
+    assert isinstance(fit.weights, float)
+    assert fit.weights == (1.0 if weights is None else float(weights))
+    np.testing.assert_allclose(fit.model_parameters, [1.0, 2.0, 3.0], rtol=1e-10)
+
+
+def test_weights_list_converted_to_array():
+    x = np.linspace(50, 100, 5)
+    fm = mdl.Polynomial(n_terms=2).at(x=x)
+    fit = fm.fit(ydata=x.copy(), weights=[1, 2, 3, 4, 5])
+    assert isinstance(fit.weights, np.ndarray)
+    assert fit.weights.dtype == float
