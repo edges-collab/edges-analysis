@@ -1,6 +1,7 @@
 """Module defining external datasets used throughout tests and tutorials."""
 
 import shutil
+import tempfile
 from pathlib import Path
 
 import pooch
@@ -28,36 +29,73 @@ B18CAL_REPO = pooch.create(
 _UNZIPPED_B18CAL_OBS = Path(dirs.user_cache_dir) / "B18-cal-raw-data"
 
 
-def _unpack7z(fname: str, action: str, pup: pooch.Pooch):
+def _extract_7z(archive: Path, dest: Path, name: str, force: bool) -> Path:
+    """Extract a 7z archive whose top-level entry is ``name`` into ``dest``.
+
+    The archive is extracted into a temporary directory inside ``dest`` and then
+    moved into place, so an interrupted extraction never leaves a partial
+    ``dest / name`` that would later be taken as complete. Existing entries are
+    replaced (whether files or directories).
+
+    Parameters
+    ----------
+    archive
+        The archive to extract.
+    dest
+        The directory to extract into.
+    name
+        The name of the top-level entry of the archive (its stem), whose path is
+        returned.
+    force
+        Whether to extract even if ``dest / name`` already exists.
+
+    Returns
+    -------
+    Path
+        The path to the extracted ``dest / name``.
+    """
+    target = dest / name
+    if target.exists() and not force:
+        return target
+
+    dest.mkdir(parents=True, exist_ok=True)
+    tmpdir = Path(tempfile.mkdtemp(prefix=f".{name}-extracting-", dir=dest))
+    try:
+        py7zr.unpack_7zarchive(str(archive), str(tmpdir))
+        # Move the target last, so that it only exists once everything is in place.
+        entries = sorted(tmpdir.iterdir(), key=lambda pth: pth.name == name)
+        for entry in entries:
+            out = dest / entry.name
+            if out.is_dir() and not out.is_symlink():
+                shutil.rmtree(out)
+            elif out.exists() or out.is_symlink():
+                out.unlink()
+            entry.rename(out)
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+    return target
+
+
+def _unpack7z(fname: str, action: str, pup: pooch.Pooch) -> Path:
+    """Post-processing hook to unzip a file next to it and return the unzipped path."""
     path = Path(fname)
-
-    newpath = path.parent / path.stem
-
     # Don't unzip if file already exists and is not being downloaded
-    if action in ("update", "download") or not newpath.exists():
-        py7zr.unpack_7zarchive(path, path.parent)
+    return _extract_7z(
+        path, path.parent, path.stem, force=action in ("update", "download")
+    )
 
-    return newpath
 
-
-def _unpack_to_calobs(fname: str, action: str, pup: pooch.Pooch):
+def _unpack_to_calobs(fname: str, action: str, pup: pooch.Pooch) -> Path:
     """Post-processing hook to unzip a file and return the unzipped file name."""
     path = Path(fname)
-    # Create a new name for the unzipped file. Appending something to the
-    # name is a relatively safe way of making sure there are no clashes
-    # with other files in the registry.
-    newpath = _UNZIPPED_B18CAL_OBS / path.stem
-
     # Don't unzip if file already exists and is not being downloaded
-    if action in ("update", "download") or not newpath.exists():
-        if newpath.exists():
-            newpath.unlink()
-
-        _UNZIPPED_B18CAL_OBS.mkdir(parents=True, exist_ok=True)
-
-        py7zr.unpack_7zarchive(path, _UNZIPPED_B18CAL_OBS)
-
-    return newpath
+    return _extract_7z(
+        path,
+        _UNZIPPED_B18CAL_OBS,
+        path.stem,
+        force=action in ("update", "download"),
+    )
 
 
 def _fetch_b18cal_data(kind: str) -> Path:
@@ -83,11 +121,7 @@ def fetch_b18cal_ants11s() -> Path:
 
 
 def fetch_b18cal_calibrated_s11s(in_obs: bool = False) -> Path:
-    fl = Path(
-        B18CAL_REPO.fetch(
-            "s11_calibration_low_band_LNA25degC_2015-09-16-12-30-29_simulator2_long.txt"
-        )
-    )
+    fl = Path(B18CAL_REPO.fetch(_S11FILE))
     if in_obs:
         (_UNZIPPED_B18CAL_OBS / "S11").mkdir(parents=True, exist_ok=True)
 
