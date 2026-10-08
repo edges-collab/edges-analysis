@@ -98,19 +98,24 @@ def average_over_times(
     ntot = np.sum(w, axis=-2)
     nsamples_tot = np.sum(n, axis=-2)
 
-    if use_resids:
-        sum_resids = np.nansum(data.residuals * w, axis=-2)
-        mean_resids = sum_resids / ntot
-        mean_model = np.nanmean(data.model, axis=-2)
-        new_data = mean_model + mean_resids
-    else:
-        sum_data = np.nansum(data.data * w, axis=-2)
-        new_data = sum_data / ntot
+    # Channels with zero total weight give NaN here (and are then set to fill_value).
+    with np.errstate(divide="ignore", invalid="ignore"):
+        if use_resids:
+            sum_resids = np.nansum(data.residuals * w, axis=-2)
+            mean_resids = sum_resids / ntot
+            mean_model = np.nanmean(data.model, axis=-2)
+            new_data = mean_model + mean_resids
+        else:
+            sum_data = np.nansum(data.data * w, axis=-2)
+            new_data = sum_data / ntot
 
     new_data[np.isnan(new_data)] = fill_value
 
-    # The new time will be the mean unflagged time
+    # The new time will be the mean unflagged time. If all the data is flagged, use
+    # the mean of all times (the data is then fill_value, with zero nsamples).
     ww = np.any(w > 0, axis=(0, 1, 3))
+    if not np.any(ww):
+        ww = np.ones_like(ww)
     times = Time(np.atleast_2d(np.mean(data.times.jd[ww], axis=0)), format="jd")
     time_ranges = Time(
         np.array([
@@ -197,9 +202,9 @@ def lst_bin(
         The JD at which to reference the LSTs to in the output. The JDs of the output
         will be exactly at the centre of each LST bin, but the _day_ to which they are
         referenced will be set by the `reference_time` (all will be within 24 hours of
-        this time). This can be a float (JD), an astropy Time, or one of 'min', 'max',
-        'mean' or 'closest' (default). Options 'min', 'max' and 'mean' will use the
-        corresponding min/max/mean time in the data object to set the reference time.
+        this time). This can be a float (JD), an astropy Time, or one of 'min', 'max'
+        or 'mean' (default). These strings use the corresponding min/max/mean time in
+        the data object as the reference time.
 
     Returns
     -------
@@ -270,12 +275,18 @@ def lst_bin(
     # Determine a reference time. The output GSDatawill still need to have "times" in JD
     # which should be exactly at the centre of each LST bin. However, the choice of
     # which JD each LST bin should correspond to is somewhat arbitrary.
-    if reference_time == "min":
-        reference_time = data.times.min()
-    elif reference_time == "max":
-        reference_time = data.times.max()
-    elif reference_time == "mean":
-        reference_time = data.times.mean()
+    if isinstance(reference_time, str):
+        if reference_time == "min":
+            reference_time = data.times.min()
+        elif reference_time == "max":
+            reference_time = data.times.max()
+        elif reference_time == "mean":
+            reference_time = data.times.mean()
+        else:
+            raise ValueError(
+                f"Unsupported reference_time '{reference_time}'. Must be a JD, an "
+                "astropy Time, or one of 'min', 'max' or 'mean'."
+            )
 
     times = lsts_to_times(
         np.where(lstbins < lstbins[0, 0], lstbins + 2 * np.pi * un.rad, lstbins),

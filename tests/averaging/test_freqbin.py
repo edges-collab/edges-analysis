@@ -103,3 +103,15 @@ def test_gauss_smooth_nsamples_is_inverse_variance():
     reported = np.mean(out.nsamples[0, 0, :, inner])
     empirical = 1 / np.var(out.data[0, 0, :, inner])
     assert reported == pytest.approx(empirical, rel=0.1)
+
+
+def test_gauss_smooth_maintains_nan_flags_with_any_nsamples(gsd_ones: GSData):
+    """NaN channels are flagged whatever their nsamples (operator precedence bug)."""
+    data = gsd_ones.data.copy()
+    data[..., 10] = np.nan
+    new = gsd_ones.update(data=data, nsamples=2 * np.ones_like(data))
+
+    out = freqbin.gauss_smooth(new, size=1, decimate=False, maintain_flags=1)
+    assert np.all(out.nsamples[..., 10] == 0)
+    assert np.all(out.nsamples[..., 9] > 0)
+    assert np.all(out.nsamples[..., 11] > 0)

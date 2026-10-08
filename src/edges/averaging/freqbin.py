@@ -161,7 +161,7 @@ def gauss_smooth(
     # mask data and flagged samples wherever it is NaN
     dd = data.residuals if use_residuals else data.data
 
-    inflags = data.flagged_nsamples == 0 | np.isnan(dd)
+    inflags = (data.flagged_nsamples == 0) | np.isnan(dd)
 
     data_mask = np.where(np.isnan(dd), 0, dd)
     nsamples = data.flagged_nsamples if use_nsamples else (~inflags).astype(float)

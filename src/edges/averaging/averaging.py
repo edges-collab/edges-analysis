@@ -7,11 +7,15 @@ for averaging, in order to make the average unbiased (given flags).
 """
 
 import contextlib
+import logging
+import numbers
 
 import numpy as np
 from astropy import units as un
 
 from ..tools import slice_along_axis
+
+logger = logging.getLogger(__name__)
 
 
 def get_binned_weights(
@@ -35,10 +39,12 @@ def get_binned_weights(
         all ones.
     include_left
         Whether to include coordinates to the left of the minimum bin in the first bin.
+        If False, such coordinates are ignored.
     include_right
         Whether to include coordinates to the right of the maximum bin in the last bin.
         Note that for historical reasons, this is True, but it should probably be set
-        to False for typical cases.
+        to False for typical cases. If False, such coordinates (and any NaN
+        coordinates) are ignored.
 
     Returns
     -------
@@ -77,6 +83,11 @@ def get_binned_weights(
     if include_right:
         indices[indices >= (len(bins) - 1)] = len(bins) - 2
 
+    # Drop any coordinates that remain outside the bins.
+    in_range = (indices >= 0) & (indices < len(bins) - 1)
+    indices = indices[in_range]
+    weights = weights[..., in_range]
+
     for indx in np.ndindex(*out.shape[:-1]):
         out[indx] = np.bincount(indices, weights=weights[indx], minlength=out.shape[-1])
 
@@ -97,10 +108,12 @@ def get_bin_edges(
         The input co-ordinates to bin. These must be regular and monotonically
         increasing.
     bins
-        The bin *edges* (lower inclusive, upper not inclusive). If an ``int``, simply
-        use ``bins`` coords per bin, starting from the first bin. If a float, use
-        equi-spaced bin edges, starting from the start of coords, and ending past the
-        end of coords. If an array, assumed to be the bin edges.
+        The bin *edges* (lower inclusive, upper not inclusive). If an integer (including
+        numpy integer types), simply use ``bins`` coords per bin, starting from the
+        first bin. If the number of coords is not divisible by ``bins``, the trailing
+        coords that do not fill a whole bin are dropped (and a warning is logged).
+        If a float, use equi-spaced bin edges, starting from the start of coords, and
+        ending past the end of coords. If an array, assumed to be the bin edges.
         If not provided, assume a single bin encompassing all the data.
     start
         Where to start the bin edges when ``bins`` is an int or float. Defaults to
@@ -143,8 +156,16 @@ def get_bin_edges(
         return np.array(bins)
     if isinstance(bins, un.Quantity) and not bins.isscalar:
         return bins
-    if isinstance(bins, int):
+    if isinstance(bins, numbers.Integral):
         if len(coords) % bins != 0:
+            # This is logged rather than emitted with warnings.warn, since it is the
+            # normal situation in some standard pipelines (e.g. binning 8193
+            # channels by 8 in calibration).
+            logger.warning(
+                f"The number of coordinates per bin ({bins}) does not divide the "
+                f"number of coordinates ({len(coords)}): the last {len(coords) % bins} "
+                "coordinate(s) will not be in any bin."
+            )
             return (coords[::bins] - dx / 2) * unit
         edges = coords[::bins] - dx / 2
         return np.concatenate((edges, [coords[-1] + dx / 2])) * unit
@@ -267,28 +288,45 @@ def weighted_variance(
 ):
     """Calculate a careful weighted variance.
 
-    Simply calculates the weighted mean of [(data - mean)/sigma]^2 over the data, where
-    the weights are 1/sigma^2. This is useful for computing the expected standard
-    deviation when the intrinsic variance and number of samples of each datum are known.
+    This computes::
+
+        sum(n**2 * (data - avg)**2) / sum(n**2)
+
+    over the given axis, where ``n`` is ``nsamples`` and ``avg`` is the
+    ``nsamples``-weighted mean of the data (unless given).
 
     Parameters
     ----------
     data : array-like
         The data over which to calculate the variance.
     nsamples
-        The number of samples corresponding to each datum. These will be used as
-        weights. Default is all unity.
+        The number of samples corresponding to each datum. The mean is weighted by
+        ``nsamples``, while the squared deviations are weighted by ``nsamples**2``.
+        Default is all unity.
     avg
-        The weighted average of the data over the given axis. By default, compute this
-        internally.
+        The weighted average of the data over the given axis (with ``keepdims=True``).
+        By default, compute this internally.
+    **kwargs
+        Passed to :func:`weighted_mean` (e.g. ``axis`` and ``fill_value``).
 
     Returns
     -------
-    std
-        The weighted variance of the data over the given axis.
-    sumweights
-        The sum of the nsamples**2 over the given axis.
+    var
+        The weighted variance of the data over the given axis. Only this array is
+        returned (not the sum of the weights).
+
+    Notes
+    -----
+    This is a plain weighted mean of the squared deviations. No correction is made for
+    the degree of freedom used in estimating the mean (it is the analogue of
+    ``np.var(..., ddof=0)``), so it is a biased estimator of the variance. Also, since
+    the weights are ``nsamples**2``, it is not the inverse-variance-weighted estimate of
+    the variance of a single sample when ``nsamples`` varies. With uniform
+    ``nsamples``, it reduces to ``np.var(data, axis=axis)``.
     """
+    if nsamples is None:
+        nsamples = np.ones_like(data)
+
     if avg is None:
         avg, _ = weighted_mean(data, weights=nsamples, keepdims=True, **kwargs)
 
@@ -397,14 +435,14 @@ def bin_array_unweighted(x: np.ndarray, size: int = 1) -> np.ndarray:
     Simple 1D example::
 
         >>> x = np.array([1, 1, 2, 2, 3, 3])
-        >>> bin_array(x, size=2)
-        [1, 2, 3]
+        >>> bin_array_unweighted(x, size=2)
+        array([1., 2., 3.])
 
     The last remaining values are left out::
 
         >>> x = np.array([1, 1, 2, 2, 3, 3, 4])
-        >>> bin_array(x, size=2)
-        [1, 2, 3]
+        >>> bin_array_unweighted(x, size=2)
+        array([1., 2., 3.])
     """
     if size == 1:
         return x

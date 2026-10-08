@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 from astropy import units as un
 from astropy.time import Time
-from pygsdata import GSData
+from pygsdata import GSData, GSFlag
 
 from edges.averaging.lstbin import average_over_times, get_lst_bins, lst_bin
 from edges.averaging.utils import NsamplesStrategy
@@ -68,6 +68,15 @@ class TestLSTBin:
         ):
             lst_bin(mock2)
 
+    def test_bad_reference_time(self, gsd_ones: GSData):
+        with pytest.raises(ValueError, match="reference_time"):
+            lst_bin(gsd_ones, reference_time="closest")
+
+    @pytest.mark.parametrize("reference_time", ["min", "max", "mean"])
+    def test_string_reference_times(self, gsd_ones: GSData, reference_time: str):
+        out = lst_bin(gsd_ones, binsize=1.0, reference_time=reference_time)
+        assert out.ntimes == 24
+
     def test_with_model(self, mock_with_model: GSData):
         rng = np.random.default_rng()
         new = mock_with_model.update(
@@ -108,6 +117,30 @@ class TestAverageOverTimes:
 def _hours_from_midnight(lst_hours: np.ndarray) -> np.ndarray:
     lst_hours = np.asarray(lst_hours) % 24
     return np.minimum(lst_hours, 24 - lst_hours)
+
+
+class TestAverageOverTimesFullyFlagged:
+    def test_fully_flagged(self, gsd_ones: GSData):
+        flags = GSFlag(flags=np.ones(gsd_ones.ntimes, dtype=bool), axes=("time",))
+        data = gsd_ones.add_flags("all", flags)
+
+        new = average_over_times(data)
+        assert new.ntimes == 1
+        assert np.all(np.isnan(new.data))
+        assert np.all(new.nsamples == 0)
+        # Metadata should still be sensible: the mean of all times.
+        np.testing.assert_allclose(
+            new.times.jd[0], np.mean(gsd_ones.times.jd, axis=0), rtol=0, atol=1e-9
+        )
+
+    def test_fully_flagged_with_resids(self, gsd_ones: GSData):
+        flags = GSFlag(flags=np.ones(gsd_ones.ntimes, dtype=bool), axes=("time",))
+        data = gsd_ones.update(residuals=np.zeros_like(gsd_ones.data)).add_flags(
+            "all", flags
+        )
+        new = average_over_times(data)
+        assert np.all(np.isnan(new.data))
+        assert np.all(new.nsamples == 0)
 
 
 class TestAcrossMidnight:
