@@ -100,38 +100,48 @@ class CalibrationObservation:
             The size of each frequency bin (of the spectra) in units of the raw size.
         spectrum_kwargs
             Keyword arguments used to instantiate the calibrator :class:`LoadSpectrum`
-            objects. See its documentation for relevant parameters. Parameters specified
-            here are used for _all_ calibrator sources.
+            objects. See its documentation for relevant parameters. Parameters under
+            the key "default" are used for _all_ calibrator sources, and parameters
+            under the name of a source are used for that source only.
         s11_kwargs
-            Keyword arguments used to instantiate the calibrator :class:`LoadS11`
-            objects. See its documentation for relevant parameters. Parameters specified
-            here are used for _all_ calibrator sources.
-        internal_switch_kwargs
-            Keyword arguments used to instantiate the :class:`~s11.SParams`
-            objects. See its documentation for relevant parameters. The same internal
-            switch is used to calibrate the S11 for each input source.
+            Keyword arguments used to calibrate and model the reflection coefficients
+            of all calibrator sources (see :meth:`InputSource.from_caldef`). The key
+            "model_params" may hold the :class:`S11ModelParams` used for all sources.
+        internal_calkit
+            The calkit model of the internal standards used to calibrate the internal
+            switch. By default, determined from ``caldef``.
+        external_calkit_internal_switch
+            The calkit model of the external standards used to calibrate the internal
+            switch. By default, determined from ``caldef``.
         f_low : float
-            Minimum frequency to keep for all loads (and their S11's). If for some
-            reason different frequency bounds are desired per-load, one can pass in
-            full load objects through ``load_spectra``.
+            Minimum frequency to keep for all loads (and their S11's).
         f_high : float
-            Maximum frequency to keep for all loads (and their S11's). If for some
-            reason different frequency bounds are desired per-load, one can pass in
-            full load objects through ``load_spectra``.
-        sources
-            A sequence of strings specifying which loads to actually use in the
-            calibration. Default is all four standard calibrators.
+            Maximum frequency to keep for all loads (and their S11's).
         receiver_kwargs
-            Keyword arguments used to instantiate the calibrator :class:`~s11.Receiver`
-            objects. See its documentation for relevant parameters. ``lna_kwargs`` is a
-            deprecated alias.
+            Keyword arguments used to compute the receiver reflection coefficient (see
+            :func:`edges.cal.sparams.get_gamma_receiver_from_filespec`). The key
+            "model_params" may hold the :class:`S11ModelParams` used to model it.
         restrict_s11_model_freqs
             Whether to restrict the S11 modelling (i.e. smoothing) to the given freq
             range. The final output will be calibrated only between the given freq
             range, but the S11 models themselves can be fit over a broader set of
             frequencies.
+        loss_models
+            A dictionary of loss models for each source. If a particular source has no
+            loss its entry can be missing or None. By default, the hot load uses the
+            cable S-parameters in ``caldef.hot_load.sparams_file``, if it is set.
+        loss_model_params
+            Parameters used to smooth the S-parameters of loss models onto the
+            frequencies of the spectra. If None, use
+            :func:`edges.cal.sparams.hot_load_cable_model_params`.
+        internal_switch_temperature
+            The measured temperature of the internal switch, used to choose the
+            internal switch calkit model. By default, determined from ``caldef``.
+        internal_switch_model_params
+            Parameters used to smooth the internal switch S-parameters. If None, they
+            are not smoothed.
         """
-        receiver_kwargs = receiver_kwargs or {}
+        receiver_kwargs = dict(receiver_kwargs or {})
         if "calkit" not in receiver_kwargs:
             receiver_kwargs["calkit"] = sp.get_calkit(
                 sp.AGILENT_85033E,
@@ -140,7 +150,7 @@ class CalibrationObservation:
                 else caldef.receiver_s11[0].calkit_match_resistance,
             )
 
-        loss_models = loss_models or {}
+        loss_models = dict(loss_models or {})
         if "hot_load" not in loss_models and caldef.hot_load.sparams_file is not None:
             hot_load_cable_sparams = sp.read_semi_rigid_cable_sparams_file(
                 caldef.hot_load.sparams_file, f_low=f_low, f_high=f_high
@@ -194,37 +204,28 @@ class CalibrationObservation:
 
         Parameters
         ----------
-        io_obj
-            An calibration observation object from which all the data can be read.
+        caldef
+            A calibration definition object from which all the data can be read.
         freq_bin_size
             The size of each frequency bin (of the spectra) in units of the raw size.
         spectrum_kwargs
             Keyword arguments used to instantiate the calibrator :class:`LoadSpectrum`
-            objects. See its documentation for relevant parameters. Parameters specified
-            here are used for _all_ calibrator sources.
+            objects. See its documentation for relevant parameters. Parameters under
+            the key "default" are used for _all_ calibrator sources, and parameters
+            under the name of a source are used for that source only.
         s11_kwargs
-            Keyword arguments used to instantiate the calibrator :class:`LoadS11`
-            objects. See its documentation for relevant parameters. Parameters specified
-            here are used for _all_ calibrator sources.
-        internal_switch_kwargs
-            Keyword arguments used to instantiate the :class:`~s11.SParams`
-            objects. See its documentation for relevant parameters. The same internal
-            switch is used to calibrate the S11 for each input source.
+            Keyword arguments used to calibrate and model the reflection coefficients
+            of all calibrator sources (see :meth:`InputSource.from_caldef`). The key
+            "model_params" may hold the :class:`S11ModelParams` used for all sources.
         f_low : float
-            Minimum frequency to keep for all loads (and their S11's). If for some
-            reason different frequency bounds are desired per-load, one can pass in
-            full load objects through ``load_spectra``.
+            Minimum frequency to keep for all loads (and their S11's).
         f_high : float
-            Maximum frequency to keep for all loads (and their S11's). If for some
-            reason different frequency bounds are desired per-load, one can pass in
-            full load objects through ``load_spectra``.
-        sources
-            A sequence of strings specifying which loads to actually use in the
-            calibration. Default is all four standard calibrators.
+            Maximum frequency to keep for all loads (and their S11's).
         receiver_kwargs
-            Keyword arguments used to instantiate the calibrator :class:`~s11.Receiver`
-            objects. See its documentation for relevant parameters. ``lna_kwargs`` is a
-            deprecated alias.
+            Keyword arguments used to compute the receiver reflection coefficient (see
+            :func:`edges.cal.sparams.get_gamma_receiver_from_filespec`). These update
+            the EDGES-3 defaults. The key "model_params" may hold the
+            :class:`S11ModelParams` used to model it.
         restrict_s11_model_freqs
             Whether to restrict the S11 modelling (i.e. smoothing) to the given freq
             range. The final output will be calibrated only between the given freq
@@ -234,8 +235,11 @@ class CalibrationObservation:
             A dictionary of loss models for each source. If a particular source has no
             loss its entry can be missing or None. By default, the only source with loss
             is the hot_load, which uses a 4" cable.
+        kwargs
+            Passed through to :meth:`_from_caldef` (e.g. ``loss_model_params``).
+            Unknown keywords raise a TypeError.
         """
-        loss_models = loss_models or {}
+        loss_models = dict(loss_models or {})
         if "hot_load" not in loss_models:
             loss_models["hot_load"] = loss.get_cable_loss_model("UT-141C-SP")
 
@@ -262,6 +266,7 @@ class CalibrationObservation:
             receiver_kwargs=receiver_kwargs,
             restrict_s11_model_freqs=restrict_s11_model_freqs,
             loss_models=loss_models,
+            **kwargs,
         )
 
     @classmethod
@@ -286,36 +291,29 @@ class CalibrationObservation:
         Parameters
         ----------
         caldef
-            An calibration observation object from which all the data can be read.
+            A calibration definition object from which all the data can be read.
         freq_bin_size
             The size of each frequency bin (of the spectra) in units of the raw size.
         spectrum_kwargs
             Keyword arguments used to instantiate the calibrator :class:`LoadSpectrum`
-            objects. See its documentation for relevant parameters. Parameters specified
-            here are used for _all_ calibrator sources.
+            objects. See its documentation for relevant parameters. Parameters under
+            the key "default" are used for _all_ calibrator sources, and parameters
+            under the name of a source are used for that source only.
         s11_kwargs
-            Keyword arguments used to instantiate the calibrator :class:`LoadS11`
-            objects. See its documentation for relevant parameters. Parameters specified
-            here are used for _all_ calibrator sources.
-        internal_switch_kwargs
-            Keyword arguments used to instantiate the :class:`~s11.SParams`
-            objects. See its documentation for relevant parameters. The same internal
-            switch is used to calibrate the S11 for each input source.
+            Keyword arguments used to calibrate and model the reflection coefficients
+            of all calibrator sources (see :meth:`InputSource.from_caldef`). The key
+            "model_params" may hold the :class:`S11ModelParams` used for all sources.
+        internal_switch
+            The (smoothed) S-parameters of the internal switch, used to calibrate the
+            S11 of each input source (EDGES-2 only).
         f_low : float
-            Minimum frequency to keep for all loads (and their S11's). If for some
-            reason different frequency bounds are desired per-load, one can pass in
-            full load objects through ``load_spectra``.
+            Minimum frequency to keep for all loads (and their S11's).
         f_high : float
-            Maximum frequency to keep for all loads (and their S11's). If for some
-            reason different frequency bounds are desired per-load, one can pass in
-            full load objects through ``load_spectra``.
-        sources
-            A sequence of strings specifying which loads to actually use in the
-            calibration. Default is all four standard calibrators.
+            Maximum frequency to keep for all loads (and their S11's).
         receiver_kwargs
-            Keyword arguments used to instantiate the calibrator :class:`~s11.Receiver`
-            objects. See its documentation for relevant parameters. ``lna_kwargs`` is a
-            deprecated alias.
+            Keyword arguments used to compute the receiver reflection coefficient (see
+            :func:`edges.cal.sparams.get_gamma_receiver_from_filespec`). The key
+            "model_params" may hold the :class:`S11ModelParams` used to model it.
         restrict_s11_model_freqs
             Whether to restrict the S11 modelling (i.e. smoothing) to the given freq
             range. The final output will be calibrated only between the given freq
@@ -323,8 +321,13 @@ class CalibrationObservation:
             frequencies.
         loss_models
             A dictionary of loss models for each source. If a particular source has no
-            loss its entry can be missing or None. By default, the only source with loss
-            is the hot_load, which uses a 4" cable.
+            loss its entry can be missing or None.
+        loss_model_params
+            Parameters used to smooth the S-parameters of loss models onto the
+            frequencies of the spectra. If None, use
+            :func:`edges.cal.sparams.hot_load_cable_model_params`.
+        kwargs
+            Passed through to the class constructor.
         """
         if f_high < f_low:
             raise ValueError("f_high must be larger than f_low!")
@@ -340,17 +343,17 @@ class CalibrationObservation:
         f_low = f_low.to("MHz", copy=False)
         f_high = f_high.to("MHz", copy=False)
 
-        rcv_model_params = receiver_kwargs.pop(
-            "model_params", sp.receiver_model_params()
-        )
+        # Never modify the caller's dictionaries.
+        receiver_kwargs = dict(receiver_kwargs)
+        rcv_model_params = receiver_kwargs.pop("model_params", None)
+        if rcv_model_params is None:
+            rcv_model_params = sp.receiver_model_params()
 
         raw_receiver = sp.get_gamma_receiver_from_filespec(caldef, **receiver_kwargs)
 
-        if "default" not in spectrum_kwargs:
-            spectrum_kwargs["default"] = {}
-
-        if "freq_bin_size" not in spectrum_kwargs["default"]:
-            spectrum_kwargs["default"]["freq_bin_size"] = freq_bin_size
+        spectrum_kwargs = {k: dict(v) for k, v in spectrum_kwargs.items()}
+        spectrum_kwargs.setdefault("default", {})
+        spectrum_kwargs["default"].setdefault("freq_bin_size", freq_bin_size)
 
         def get_load(name, ambient_temperature=298 * un.K):
             return InputSource.from_caldef(
@@ -380,20 +383,6 @@ class CalibrationObservation:
 
         # Smooth the receiver s11
         receiver = raw_receiver.smoothed(rcv_model_params, freqs=amb.freqs)
-
-        # Smooth the loss models, if necessary:
-        for name, loss_model in loss_models.items():
-            if (
-                isinstance(loss_model, LossFunctionGivenSparams)
-                and loss_model.sparams.freqs.size != amb.freqs.size
-            ):
-                loss_models[name] = attrs.evolve(
-                    loss_model,
-                    sparams=loss_model.sparams.smoothed(
-                        params=sp.hot_load_cable_model_params(),
-                        freqs=amb.freqs,
-                    ),
-                )
 
         return cls(
             loads=loads,
@@ -495,20 +484,30 @@ class CalibrationObservation:
 
     def inject(
         self,
-        receiver: np.ndarray = None,
+        receiver: np.ndarray | None = None,
         source_s11s: dict[str, np.ndarray] | None = None,
         averaged_q: dict[str, np.ndarray] | None = None,
         thermistor_temp_ave: dict[str, np.ndarray] | None = None,
     ) -> Self:
         """Make a new :class:`CalibrationObservation` based on this, with injections.
 
+        Parameters
+        ----------
+        receiver
+            A new receiver reflection coefficient.
+        source_s11s
+            New reflection coefficients for (some of) the input sources.
+        averaged_q
+            New time-averaged power ratios, Q, for (some of) the input sources.
+        thermistor_temp_ave
+            New average thermistor temperatures for (some of) the input sources.
+            These are the physical temperatures of the sources, before any loss.
+
         Returns
         -------
         :class:`CalibrationObservation`
             A new observation object with the injected models.
         """
-        self.freqs.to_value("MHz")
-
         kw = {}
         if receiver is not None:
             receiver = sp.ReflectionCoefficient(
@@ -532,20 +531,17 @@ class CalibrationObservation:
                         ),
                     )
 
-            if averaged_q is not None or thermistor_temp_ave is not None:
-                for name, s in averaged_q.items():
-                    newloads[name] = attrs.evolve(
-                        newloads[name],
-                        spectrum=attrs.evolve(
-                            newloads[name].spectrum,
-                            q=newloads[name].spectrum.q.update(
-                                data=s[None, None, None]
-                            ),
-                            temp_ave=thermistor_temp_ave.get(
-                                name, newloads[name].temp_ave
-                            ),
-                        ),
+            averaged_q = averaged_q or {}
+            thermistor_temp_ave = thermistor_temp_ave or {}
+            for name in {**averaged_q, **thermistor_temp_ave}:
+                spec = newloads[name].spectrum
+                if name in averaged_q:
+                    spec = attrs.evolve(
+                        spec, q=spec.q.update(data=averaged_q[name][None, None, None])
                     )
+                if name in thermistor_temp_ave:
+                    spec = attrs.evolve(spec, temp_ave=thermistor_temp_ave[name])
+                newloads[name] = attrs.evolve(newloads[name], spectrum=spec)
 
             kw["loads"] = newloads
         return self.clone(**kw)

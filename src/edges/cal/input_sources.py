@@ -102,7 +102,7 @@ class InputSource:
         s11_kwargs: dict | None = None,
         spec_kwargs: dict | None = None,
         loss_model: Callable | None = None,
-        loss_model_params: sp.S11ModelParams = sp.hot_load_cable_model_params(),
+        loss_model_params: sp.S11ModelParams | None = None,
         restrict_s11_freqs: bool = False,
     ) -> Self:
         """
@@ -131,6 +131,11 @@ class InputSource:
             Keyword arguments affecting how the spectra are defined.
         loss_model
             A callable model of the loss of the source.
+        loss_model_params
+            Parameters used to smooth/interpolate the S-parameters of the loss model
+            onto the frequencies of the spectrum, if the loss model is defined by
+            S-parameters at different frequencies. If None (default), use
+            :func:`edges.cal.sparams.hot_load_cable_model_params`.
         restrict_s11_freqs
             Whether to restrict the S11 frequencies to f_low/f_high when calibrating
             and modelling (they will always be restricted to the spectrum frequencies
@@ -142,10 +147,12 @@ class InputSource:
             The InputSource object, containing all info about spectra and S11's for
             that input source.
         """
-        if not spec_kwargs:
-            spec_kwargs = {}
-        if not s11_kwargs:
-            s11_kwargs = {}
+        # Copy so that we never modify the caller's dictionaries.
+        spec_kwargs = dict(spec_kwargs or {})
+        s11_kwargs = dict(s11_kwargs or {})
+
+        if loss_model_params is None:
+            loss_model_params = sp.hot_load_cable_model_params()
 
         # For the LoadSpectrum, we can specify both f_low/f_high and f_range_keep.
         # The first pair is what defines what gets read in and smoothed/averaged.
@@ -167,9 +174,9 @@ class InputSource:
         s11_kwargs["f_low"] = f_low if restrict_s11_freqs else 0 * un.MHz
         s11_kwargs["f_high"] = f_high if restrict_s11_freqs else np.inf * un.MHz
 
-        s11_model_params = s11_kwargs.pop(
-            "model_params", sp.input_source_model_params(name=load_name)
-        )
+        s11_model_params = s11_kwargs.get("model_params")
+        if s11_model_params is None:
+            s11_model_params = sp.input_source_model_params(name=load_name)
 
         gamma_src = ReflectionCoefficient.from_s1p(loaddef.s11.external)
         internal_osl = sp.CalkitReadings.from_filespec(loaddef.s11.calkit)
