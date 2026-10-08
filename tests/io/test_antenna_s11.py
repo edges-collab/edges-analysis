@@ -1,3 +1,5 @@
+from datetime import datetime
+
 import pytest
 from astropy.time import Time
 
@@ -171,3 +173,45 @@ class TestGetS11Paths:
             get_antenna_s11_paths(
                 f"{d}/2015_312_00_{{load}}.s1p",
             )
+
+
+class TestDirectoryModeDefaults:
+    """Regression tests for directory mode with default arguments (SP-17)."""
+
+    def test_no_parseable_files(self, tmp_path):
+        for i in range(4):
+            (tmp_path / f"notadate_input{i}.s1p").touch()
+
+        with pytest.raises(ValueError, match="No files were parseable"):
+            get_antenna_s11_paths(tmp_path, time=Time("2015:312:00:00"))
+
+    def test_default_glob_and_format(self, tmp_path):
+        files = [tmp_path / f"2015_312_00_input{i}.s1p" for i in range(4)]
+        for fl in files:
+            fl.touch()
+        (tmp_path / "2015_300_00_input1.s1p").touch()
+
+        out = get_antenna_s11_paths(
+            tmp_path,
+            time=datetime(2015, 11, 8, 1, 0, 0),  # day 312
+            date_slice=slice(0, 11),
+        )
+        assert out == sorted(files)
+
+    def test_time_required(self, tmp_path):
+        for i in range(4):
+            (tmp_path / f"2015_312_00_input{i}.s1p").touch()
+
+        with pytest.raises(ValueError, match="time must be given"):
+            get_antenna_s11_paths(tmp_path, date_slice=slice(0, 11))
+
+    def test_no_matching_files_lists_available(self, tmp_path):
+        (tmp_path / "some_other_file.txt").touch()
+        with pytest.raises(FileNotFoundError, match=r"some_other_file\.txt"):
+            get_antenna_s11_paths(tmp_path, time=Time("2015:312:00:00"))
+
+    def test_single_s1p_file(self, tmp_path):
+        fl = tmp_path / "2015_312_00_input1.s1p"
+        fl.touch()
+        with pytest.raises(ValueError, match=r"single \.s1p file"):
+            get_antenna_s11_paths(fl)

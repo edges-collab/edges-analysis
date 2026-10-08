@@ -43,6 +43,11 @@ def _get_closest_s11_time(
         ``ignore_files=['2020_076']`` and it will ignore the file
         ``/home/user/data/2020_076_01_02_input1.s1p``. Full regex can be used.
     """
+    if time is None:
+        raise ValueError(
+            "time must be given to find the S11 files closest to it in a directory."
+        )
+
     if isinstance(time, datetime):
         time = Time(time)
 
@@ -58,9 +63,11 @@ def _get_closest_s11_time(
     )
 
     if not files:
+        available = sorted(fl.name for fl in s11_dir.iterdir())
         raise FileNotFoundError(
-            f"No files found matching the input pattern. Available files: "
-            f"{[fl.name for fl in files]}. Regex pattern: {fileglob}. "
+            f"No files found matching the input pattern in {s11_dir}. Available "
+            f"files: {available}. Glob pattern: {fileglob}. Ignore patterns: "
+            f"{ignore_files}."
         )
 
     fnames = [fl.name[date_slice] for fl in files]
@@ -70,10 +77,14 @@ def _get_closest_s11_time(
         with contextlib.suppress(ValueError):
             times.append(Time.strptime(fname, dateformat))
             good_idx.append(i)
-    times = Time(times)
 
     if not good_idx:
-        raise ValueError("No files were parseable as datetimes.")
+        raise ValueError(
+            f"No files were parseable as datetimes with format '{dateformat}' and "
+            f"date_slice {date_slice}. Files: {fnames}"
+        )
+
+    times = Time(times)
 
     if len(good_idx) != len(files):
         warnings.warn(
@@ -123,7 +134,20 @@ def get_antenna_s11_paths(
        to `time` will be returned.
     4. `s11_path` is a single file whose suffix is not .s1p. In this case, a list of
        just that file will be returned, under the assumption that the file represents
-       a pre-calibrated S11.
+       a pre-calibrated S11. A single .s1p file is not accepted, since it can only
+       hold one of the four required readings.
+
+    Parameters
+    ----------
+    s11_path
+        The path specification, in one of the forms described above.
+    time
+        The time to which to find the closest set of files. Required (and only used)
+        when `s11_path` is a directory.
+    fileglob, dateformat, date_slice, ignore_files
+        Passed to :func:`_get_closest_s11_time` when `s11_path` is a directory.
+        Note that `date_slice` must select the date part of the filename that
+        matches `dateformat`.
     """
     # If we get four files, make sure they exist and pass them back
     if isinstance(s11_path, tuple | list):
@@ -152,7 +176,13 @@ def get_antenna_s11_paths(
     # Otherwise it must be a path.
     s11_path = Path(s11_path).expanduser()
 
-    if s11_path.is_file() and s11_path.suffix != ".s1p":
+    if s11_path.is_file():
+        if s11_path.suffix == ".s1p":
+            raise ValueError(
+                f"s11_path {s11_path} is a single .s1p file, but the antenna S11 "
+                "requires four calkit readings. Pass a list of four files, a "
+                "pattern containing '{load}', or a directory."
+            )
         return [s11_path]
 
     if s11_path.is_dir():
