@@ -57,10 +57,10 @@ class ModelFit:
         The method to solve the linear least squares problem. This can be 'lstsq',
         'qr', 'alan-qrd' or 'qrd-c'. The 'lstsq' method uses the np.linalg.lstsq
         function, while the 'qr' method uses the np.linalg.solve function after
-        scipy.linalg.qr. The 'alan-qrd' method solves the normal equations with a
-        port of the QR decomposition found in Alan's C codebase (building the
-        normal equations in Python), while 'qrd-c' does the same but builds the
-        normal equations in C as well.
+        scipy.linalg.qr. The 'alan-qrd' method solves the normal equations with the
+        QR decomposition from Alan's C codebase (building the normal equations in
+        Python), while 'qrd-c' does the same but builds the normal equations in C
+        as well.
 
     Raises
     ------
