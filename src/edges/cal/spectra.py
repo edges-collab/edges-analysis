@@ -96,15 +96,16 @@ def get_ave_and_var_spec(
     Parameters
     ----------
     frequency_smoothing
-        How to average frequency bins together. Default is to merely bin them
-        directly. Other options are 'gauss' to do Gaussian filtering (this is the
-        same as Alan's C pipeline).
+        How to average frequency bins together (only used if ``freq_bin_size > 1``).
+        The default, 'gauss', does Gaussian filtering (this is the same as Alan's C
+        pipeline). The other option is 'bin', to merely bin them directly.
     """
     data = select_freqs(data, freq_range=(f_low, f_high))
 
     spec_timestamps = data.times[:, time_coordinate_swpos]  # jd
 
-    with contextlib.suppress(Exception):
+    # time_coordinate_swpos may be a (base, load) tuple, or a single int.
+    with contextlib.suppress(TypeError):
         _base_time, time_coordinate_swpos = time_coordinate_swpos
 
     ignore_ninteg = ignore_ntimes(spec_timestamps, ignore_times)
@@ -120,7 +121,7 @@ def get_ave_and_var_spec(
         temp_mask = flag_data_outside_temperature_range(
             temperature_range, spec_timestamps, thermistor
         )
-        data = select_times(data, idx=temp_mask)
+        data = select_times(data, indx=temp_mask)
 
     q = dicke_calibration(data)
     if freq_bin_size > 1:
