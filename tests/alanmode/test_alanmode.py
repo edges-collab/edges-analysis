@@ -10,6 +10,7 @@ from pygsdata import KNOWN_TELESCOPES, GSData, GSFlag
 from read_acq.gsdata import write_gsdata_to_acq
 
 from edges import alanmode as am
+from edges import modeling as mdl
 from edges.cal import ReflectionCoefficient
 from edges.config import config
 from edges.data import fetch_b18_cal_outputs
@@ -187,6 +188,36 @@ class TestCorrcsv:
 
         corr = am.corrcsv(s11, cablen=0, cabdiel=0, cabloss=0)
         np.testing.assert_allclose(corr.reflection_coefficient, 0, atol=1e-15)
+
+
+class TestGetLoadS11s:
+    """Regression tests for ANA-7: polynomial load-S11 models used to crash."""
+
+    def _inputs(self):
+        s11freq = np.linspace(50, 190, 141) * un.MHz
+        f = s11freq.to_value("MHz")
+        s11 = (0.2 + 1e-3 * f) * np.exp(1j * 0.01 * f)
+        mask = np.ones(f.size, dtype=bool)
+        return s11, mask, s11freq
+
+    @pytest.mark.parametrize(
+        ("nfit2", "model_type"), [(8, mdl.Polynomial), (27, mdl.Fourier)]
+    )
+    def test_model_type(self, nfit2: int, model_type: type):
+        s11, mask, s11freq = self._inputs()
+        params = am.EdgesScriptParams(nfit2=nfit2)
+        raw, model_params, models = am.alanmode._get_load_s11s(
+            params, s11, s11, s11, s11, mask, s11freq, s11freq
+        )
+        assert isinstance(model_params.model, model_type)
+        assert model_params.model.n_terms == nfit2
+        for name, model in models.items():
+            np.testing.assert_allclose(
+                model.reflection_coefficient,
+                raw[name].reflection_coefficient,
+                atol=1e-4,
+                rtol=0,
+            )
 
 
 def test_edges3_calobs_params_datadir_from_config(tmp_path: Path):

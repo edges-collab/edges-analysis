@@ -356,6 +356,21 @@ def _get_specs(
     return specs
 
 
+def _fourier_or_polynomial(
+    n_terms: int,
+    fourier: bool,
+    fourier_transform: mdl.XTransform,
+    polynomial_transform: mdl.XTransform,
+) -> mdl.Model:
+    """Return the S11 model of the C code: a Fourier series or a polynomial.
+
+    Only the Fourier series takes a period (1.5, as in the C code).
+    """
+    if fourier:
+        return mdl.Fourier(n_terms=n_terms, transform=fourier_transform, period=1.5)
+    return mdl.Polynomial(n_terms=n_terms, transform=polynomial_transform)
+
+
 def _get_load_s11s(
     params: EdgesScriptParams,
     s11cold,
@@ -378,16 +393,12 @@ def _get_load_s11s(
         )
     }
 
-    mdltype = mdl.Fourier if params.nfit2 > 16 else mdl.Polynomial
     s11_modelling_params = S11ModelParams(
-        model=mdltype(
+        model=_fourier_or_polynomial(
             n_terms=params.nfit2,
-            transform=(
-                mdl.ZerotooneTransform(range=(1, 2))
-                if params.nfit2 > 16
-                else mdl.Log10Transform(scale=1)
-            ),
-            period=1.5,
+            fourier=params.nfit2 > 16,
+            fourier_transform=mdl.ZerotooneTransform(range=(1, 2)),
+            polynomial_transform=mdl.Log10Transform(scale=1),
         ),
         complex_model_type=mdl.ComplexRealImagModel,
         set_transform_range=True,
@@ -404,20 +415,17 @@ def _get_load_s11s(
 
 
 def _get_receiver_s11(params: EdgesScriptParams, s11lna, s11mask, s11freq, spec_fq):
-    mt = mdl.Fourier if (params.nfit3 > 16 or params.lna_poly == 0) else mdl.Polynomial
-
     raw_receiver = ReflectionCoefficient(
         reflection_coefficient=s11lna[s11mask],
         freqs=s11freq,
     )
-    model_transform = (
-        mdl.ZerotooneTransform(range=(1, 2))
-        if mt == mdl.Fourier
-        else mdl.Log10Transform(scale=120)
-    )
-    model_kwargs = {"period": 1.5} if mt == mdl.Fourier else {}
     receiver_model = S11ModelParams(
-        model=mt(n_terms=params.nfit3, transform=model_transform, **model_kwargs),
+        model=_fourier_or_polynomial(
+            n_terms=params.nfit3,
+            fourier=params.nfit3 > 16 or params.lna_poly == 0,
+            fourier_transform=mdl.ZerotooneTransform(range=(1, 2)),
+            polynomial_transform=mdl.Log10Transform(scale=120),
+        ),
         complex_model_type=mdl.ComplexRealImagModel,
         set_transform_range=True,
         fit_method="alan-qrd",
@@ -442,23 +450,15 @@ def _get_hotload_loss(
         if s11rig is None or s12rig is None or s22rig is None:
             raise ValueError("must provide rigid cable s11/s12/s22 if Lh=-2")
 
-        mdltype = mdl.Fourier if params.nfit2 > 16 else mdl.Polynomial
-
-        mdlopts = {
-            "transform": (
-                mdl.ZerotooneTransform(
-                    range=(s11freq.min().to_value("MHz"), s11freq.max().to_value("MHz"))
-                )
-                if params.nfit2 > 16
-                else mdl.Log10Transform(scale=1)
-            ),
-            "n_terms": params.nfit2,
-        }
-        if params.nfit2 > 16:
-            mdlopts["period"] = 1.5
-
         hlc_model_params = S11ModelParams(
-            model=mdltype(**mdlopts),
+            model=_fourier_or_polynomial(
+                n_terms=params.nfit2,
+                fourier=params.nfit2 > 16,
+                fourier_transform=mdl.ZerotooneTransform(
+                    range=(s11freq.min().to_value("MHz"), s11freq.max().to_value("MHz"))
+                ),
+                polynomial_transform=mdl.Log10Transform(scale=1),
+            ),
             set_transform_range=False,
             complex_model_type=mdl.ComplexRealImagModel,
             fit_method="lstsq",
