@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+import attrs
 import numpy as np
 import pytest
 from astropy import units as un
@@ -177,6 +178,59 @@ class TestACQPlot7AMoon:
         assert meanspec.nfreqs == FREQS.size // 8
         assert np.isclose(meanspec.nsamples.mean(), NTIME * 8, rtol=0.08)
         np.testing.assert_allclose(meanspec.data, 1300)
+
+    def test_params_and_kwargs(self, unity_acq):
+        """Regression test for ANA-9: kwargs used to replace params entirely."""
+        params = am.ACQPlot7aMoonParams(smooth=0, tload=300, tcal=1000)
+        meanspec = am.acqplot7amoon(unity_acq, params=params, fstart=0, fstop=np.inf)
+
+        # smooth=0 from params is kept (the default would be smooth=8).
+        assert meanspec.nfreqs == FREQS.size
+        np.testing.assert_allclose(meanspec.data, 1300)
+
+
+class TestEdgesParams:
+    """Regression tests for ANA-9: params given with kwargs were silently dropped."""
+
+    class _Stop(Exception):  # noqa: N818
+        pass
+
+    def _params_used(self, monkeypatch, **kwargs) -> am.EdgesScriptParams:
+        def stop(spcold, sphot, spopen, spshort, params, *args):
+            raise self._Stop(params)
+
+        monkeypatch.setattr(am.alanmode, "_get_specs", stop)
+        with pytest.raises(self._Stop) as exc:
+            am.edges(
+                spcold=None,
+                sphot=None,
+                spopen=None,
+                spshort=None,
+                s11freq=None,
+                s11hot=None,
+                s11cold=None,
+                s11lna=None,
+                s11open=None,
+                s11short=None,
+                tload=300 * un.K,
+                tcal=1000 * un.K,
+                **kwargs,
+            )
+        return exc.value.args[0]
+
+    def test_params_with_kwargs(self, monkeypatch):
+        params = am.EdgesScriptParams(cfit=4, wfit=3)
+        used = self._params_used(monkeypatch, params=params, nfit3=12)
+        assert used == attrs.evolve(params, nfit3=12)
+
+    def test_kwargs_only(self, monkeypatch):
+        used = self._params_used(monkeypatch, tcold=300.0)
+        # tcab defaults to tcold, as when constructing the params directly.
+        assert used == am.EdgesScriptParams(tcold=300.0)
+        assert used.tcab == 300.0
+
+    def test_default(self, monkeypatch):
+        assert self._params_used(monkeypatch) == am.EdgesScriptParams()
 
 
 class TestCorrcsv:

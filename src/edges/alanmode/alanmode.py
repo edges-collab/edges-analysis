@@ -186,9 +186,15 @@ def acqplot7amoon(
         The path to the ACQ file to process.
     params
         The parameters for the ACQPlot7aMoon function.
+
+    Other Parameters
+    ----------------
+    kwargs
+        Any field of :class:`ACQPlot7aMoonParams`, overriding its value in
+        ``params``.
     """
     if kwargs:
-        params = ACQPlot7aMoonParams(**kwargs)
+        params = attrs.evolve(params, **kwargs)
 
     data = read_acq_to_gsdata(acqfile, telescope="edges-low")
 
@@ -502,7 +508,7 @@ def edges(
     s11short: np.ndarray,
     tload: float,
     tcal: float,
-    params: EdgesScriptParams = EdgesScriptParams(),
+    params: EdgesScriptParams | None = None,
     s11rig: np.ndarray | None = None,
     s12rig: np.ndarray | None = None,
     s22rig: np.ndarray | None = None,
@@ -531,10 +537,16 @@ def edges(
     tcal
         Like tload, but for the internal load + noise source.
     params
-        An object defining the parameters used in determining the calibration.
+        An object defining the parameters used in determining the calibration. By
+        default, ``EdgesScriptParams(**kwargs)``.
     s11rig, s12rig, s22rig
         The S11, S12, and S22 measurements for the semi-rigid cable respectively.
         Optional -- generally required for EDGES-2.
+
+    Other Parameters
+    ----------------
+    kwargs
+        Any field of :class:`EdgesScriptParams`, overriding its value in ``params``.
 
     Returns
     -------
@@ -550,8 +562,10 @@ def edges(
     hot_loss_model
         The model used to account for losses in the hot load.
     """
-    if kwargs:
+    if params is None:
         params = EdgesScriptParams(**kwargs)
+    elif kwargs:
+        params = attrs.evolve(params, **kwargs)
 
     # First set up the S11 models
     specs = _get_specs(spcold, sphot, spopen, spshort, params, tload, tcal)
