@@ -22,10 +22,16 @@ def read_semi_rigid_cable_sparams_file(
 ):
     """Read a semi-rigid cable S-parameters file.
 
-    This file is simply a whitespace-separated text file with frequency in MHz
-    in the first column, and the S-parameters in the subsequent columns as
-    real and imaginary parts. It can have either 6 or 7 columns (the latter
-    includes a header row).
+    This file is simply a whitespace-separated text file (with optional ``#``
+    comment/header lines) with frequency in MHz in the first column, and the
+    S-parameters in the subsequent columns. Two layouts are supported:
+
+    * 7 columns (the original file from 2015): frequency, then the real and
+      imaginary parts of S11, S12*S21 and S22. The S12*S21 column is stored as
+      ``s12`` (and hence also ``s21``).
+    * 6 columns (the file from 2017): frequency, real and imaginary parts of S11,
+      ``|S21|`` (stored as ``s12``, and hence also ``s21``), then the real and
+      imaginary parts of S22.
 
     Parameters
     ----------
@@ -33,10 +39,21 @@ def read_semi_rigid_cable_sparams_file(
         Path to the S-parameters file.
     f_low, f_high
         The min/max frequencies to use in the modelling.
+
+    Raises
+    ------
+    ValueError
+        If the file does not have either 6 or 7 columns.
     """
     path = get_data_path(path)
 
-    data = np.genfromtxt(path)
+    data = np.genfromtxt(path, ndmin=2)
+    if data.shape[1] not in (6, 7):
+        raise ValueError(
+            f"Semi-rigid cable S-parameter file {path} has {data.shape[1]} columns, "
+            "but only files with 6 or 7 columns are supported."
+        )
+
     mask = get_mask(data[:, 0] * un.MHz, low=f_low, high=f_high)
     data = data[mask]
     freq = data[:, 0] * un.MHz
