@@ -1,3 +1,4 @@
+import attrs
 import numpy as np
 import pytest
 from astropy import units as un
@@ -56,11 +57,9 @@ class TestTransmissionLine:
         gamma = tl.propagation_constant
         assert gamma.unit.is_equivalent(1 / un.m)
 
-        # calling input_impedance triggers numpy tanh on an astropy Quantity
-        # which raises UnitTypeError in this environment (tanh expects angle units).
-        with pytest.raises(un.UnitTypeError):
-            # accept UnitTypeError or UnitConversionError depending on astropy/numpy
-            tl.input_impedance(load_impedance=50 * un.Ohm, line_length=1.0 * un.m)
+        zin = tl.input_impedance(load_impedance=50 * un.Ohm, line_length=1.0 * un.m)
+        assert zin.unit.is_equivalent(un.ohm)
+        assert zin.shape == tl.freqs.shape
 
         # reflection should be zero if load == characteristic impedance
         refl = tl.reflection_coefficient(load_impedance=Zo)
@@ -435,17 +434,19 @@ class TestTwoPortNetwork:
         "addfunc",
         ["add_in_series", "add_in_parallel", "add_in_series_parallel", "cascade_with"],
     )
-    def add_bad(self, addfunc):
+    def test_add_bad(self, addfunc):
         network1 = ncm.TwoPortNetwork([[1, 0], [0, 1]])
 
         fnc = getattr(network1, addfunc)
-        with pytest.raises(ValueError, match="Two matrices must be of the same type"):
+        with pytest.raises(TypeError, match="Two matrices must be of the same type"):
             fnc([[0, 1], [1, 0]])
 
+        # A network with a different number of frequencies.
+        network2 = ncm.TwoPortNetwork(np.ones((2, 2, 3)))
         with pytest.raises(
             ValueError, match="Two matrices must have the same dimensions"
         ):
-            fnc(np.array([[[1, 0], [0, 1]], [[1, 0], [0, 1 + 0.1j]]]))
+            fnc(network2)
 
     def test_add_in_series(self):
         network1 = ncm.TwoPortNetwork.from_zmatrix([[1, 1], [1, 1]])
@@ -500,3 +501,286 @@ class TestTwoPortNetwork:
 
         assert network.is_reciprocal()
         assert network.is_symmetric()
+
+
+def _lossless_line(
+    z0: float = 50.0, freqs: un.Quantity | None = None, length=1.0 * un.m
+) -> ncm.TransmissionLine:
+    """A lossless line with phase velocity 2e8 m/s and the given impedance."""
+    if freqs is None:
+        freqs = np.linspace(40, 200, 33) * un.MHz
+    v = 2e8  # m/s
+    return ncm.TransmissionLine(
+        freqs=freqs.to("Hz"),
+        resistance=0 * un.ohm / un.m,
+        inductance=z0 / v * un.ohm * un.s / un.m,
+        conductance=0 * un.siemens / un.m,
+        capacitance=1 / (z0 * v) * un.siemens * un.s / un.m,
+        length=length,
+    )
+
+
+class TestTransmissionLinePhysics:
+    """Physical limits and invariants of the TransmissionLine model."""
+
+    def test_lossless_characteristic_impedance(self):
+        tl = _lossless_line(z0=61.0)
+        expected = np.sqrt(tl.inductance / tl.capacitance).to_value("ohm")
+        np.testing.assert_allclose(
+            tl.characteristic_impedance.to_value("ohm"), expected, rtol=1e-12
+        )
+        np.testing.assert_allclose(expected, 61.0, rtol=1e-12)
+
+    def test_lossless_propagation_is_pure_phase(self):
+        tl = _lossless_line()
+        gamma = tl.propagation_constant.to_value("1/m")
+        np.testing.assert_allclose(gamma.real, 0, atol=1e-15)
+        # The phase constant is omega / v.
+        np.testing.assert_allclose(
+            gamma.imag, 2 * np.pi * tl.freqs.to_value("Hz") / 2e8, rtol=1e-12
+        )
+
+    @pytest.mark.parametrize("z0", [50.0, 61.0, 75.0])
+    def test_lossless_line_unitary(self, z0):
+        tl = _lossless_line(z0=z0, length=0.37 * un.m)
+        s = tl.scattering_parameters(load_impedance=50 * un.ohm)
+        np.testing.assert_allclose(np.abs(s.s12), np.abs(s.s21), rtol=1e-12)
+        np.testing.assert_allclose(
+            np.abs(s.s11) ** 2 + np.abs(s.s21) ** 2, 1.0, rtol=1e-12
+        )
+        assert s.is_lossless()
+        assert s.is_reciprocal()
+        if z0 == 50.0:
+            np.testing.assert_allclose(np.abs(s.s21), 1.0, rtol=1e-12)
+            np.testing.assert_allclose(s.s11, 0, atol=1e-14)
+
+    def test_zero_length_is_identity(self):
+        cable = ncm.KNOWN_CABLES["UT-141C-SP"]
+        tl = cable.as_transmission_line(np.linspace(40, 200, 17) * un.MHz)
+        s = tl.scattering_parameters(line_length=0 * un.m)
+        np.testing.assert_allclose(s.s11, 0, atol=1e-15)
+        np.testing.assert_allclose(s.s22, 0, atol=1e-15)
+        np.testing.assert_allclose(s.s12, 1, rtol=1e-14)
+        np.testing.assert_allclose(s.s21, 1, rtol=1e-14)
+
+    def test_quarter_wave_transformer(self):
+        """A lossless lambda/4 line has Zin = Z0^2 / ZL."""
+        freq = np.array([100.0]) * un.MHz
+        # lambda = v / f = 2 m, so lambda / 4 = 0.5 m.
+        tl = _lossless_line(z0=50.0, freqs=freq, length=0.5 * un.m)
+        for zl in [25.0, 100.0, 10.0 + 30j]:
+            zin = tl.input_impedance(load_impedance=zl * un.ohm)
+            np.testing.assert_allclose(zin.to_value("ohm"), 50.0**2 / zl, rtol=1e-9)
+
+    def test_matched_load_input_impedance(self):
+        """A line terminated in its own characteristic impedance has Zin = Z0."""
+        cable = ncm.KNOWN_CABLES["UT-141C-SP"]
+        tl = cable.as_transmission_line(np.linspace(40, 200, 17) * un.MHz)
+        z0 = tl.characteristic_impedance
+        zin = tl.input_impedance(load_impedance=z0, line_length=0.7 * un.m)
+        np.testing.assert_allclose(zin.to_value("ohm"), z0.to_value("ohm"), rtol=1e-12)
+
+    def test_input_impedance_matches_sparams(self):
+        """Zin from the line formula agrees with embedding Gamma_L through S."""
+        cable = ncm.KNOWN_CABLES["UT-141C-SP"]
+        freqs = np.linspace(40, 200, 17) * un.MHz
+        tl = cable.as_transmission_line(freqs)
+        zin = tl.input_impedance(load_impedance=20.0 * un.ohm, line_length=0.3 * un.m)
+        gamma_in = ncm.ee.impedance2gamma(zin.to_value("ohm"), 50.0)
+
+        s = tl.scattering_parameters(line_length=0.3 * un.m)
+        gamma_l = dt.ReflectionCoefficient(
+            freqs=freqs,
+            reflection_coefficient=np.full(
+                len(freqs), ncm.ee.impedance2gamma(20.0, 50.0), dtype=complex
+            ),
+        )
+        np.testing.assert_allclose(
+            gamma_l.embed(s).reflection_coefficient, gamma_in, rtol=1e-10
+        )
+
+
+class TestCoaxialCablePhysics:
+    def setup_class(self):
+        self.coax = ncm.CoaxialCable(
+            outer_radius=0.01 * un.m,
+            inner_radius=0.001 * un.m,
+            outer_material="copper",
+            inner_material="copper",
+            relative_dielectric=2.0,
+            relative_conductance_interior=0,  # zero dielectric loss tangent
+        )
+
+    def test_attenuation_scales_as_sqrt_freq(self):
+        """With G = 0 the loss is due to the skin effect only, so alpha ~ sqrt(f)."""
+        f = np.array([1e7, 4e7, 1.6e8, 6.4e8]) * un.Hz
+        alpha = self.coax.propagation_constant(f).real.to_value("1/m")
+        np.testing.assert_allclose(alpha[1:] / alpha[:-1], 2.0, rtol=5e-3)
+
+    def test_characteristic_impedance_matches_coax_formula(self):
+        """Z0 ~ eta0 / (2 pi sqrt(eps_r)) ln(b/a), plus a small internal-L term."""
+        f = np.array([1e7, 1e8, 1e9]) * un.Hz
+        z0 = self.coax.characteristic_impedance(f).to_value("ohm")
+        eta0 = np.sqrt(ncm.mu0 / ncm.eps0).to_value("ohm")
+        expected = eta0 / (2 * np.pi * np.sqrt(2.0)) * np.log(10.0)
+        np.testing.assert_allclose(z0.real, expected, rtol=1e-2)
+        # The internal inductance only ever increases Z0, and its effect falls
+        # with frequency as the skin depth shrinks.
+        assert np.all(z0.real > expected)
+        assert np.all(np.diff(z0.real - expected) < 0)
+
+    def test_methods_accept_length(self):
+        """Regression test: passing ``length=`` must not take a Quantity's truth."""
+        f = np.linspace(50, 100, 5) * un.MHz
+        length = 0.5 * un.m
+
+        tl = self.coax.as_transmission_line(f, length=length)
+        assert tl.length == length
+
+        np.testing.assert_allclose(
+            self.coax.characteristic_impedance(f, length=length),
+            self.coax.characteristic_impedance(f),
+        )
+        np.testing.assert_allclose(
+            self.coax.propagation_constant(f, length=length),
+            self.coax.propagation_constant(f),
+        )
+        s = self.coax.scattering_parameters(f, length=length)
+        expected = self.coax.as_transmission_line(f).scattering_parameters(
+            line_length=length
+        )
+        np.testing.assert_allclose(s.s, expected.s)
+
+    def test_length_defaults_to_instance_length(self):
+        coax = attrs.evolve(self.coax, length=0.25 * un.m)
+        f = np.linspace(50, 100, 5) * un.MHz
+        assert coax.as_transmission_line(f).length == 0.25 * un.m
+        assert coax.as_transmission_line(f, length=1 * un.m).length == 1 * un.m
+
+
+class TestCalkitStandardPhysics:
+    freqs = np.linspace(40, 200, 161) * un.MHz
+
+    def test_ideal_short_is_minus_one(self):
+        std = ncm.CalkitStandard.short(offset_delay=0 * un.ps, offset_loss=0)
+        np.testing.assert_allclose(
+            std.reflection_coefficient(self.freqs).reflection_coefficient,
+            -1,
+            atol=1e-15,
+        )
+
+    def test_ideal_open_is_plus_one(self):
+        """Regression test: an open with R=inf and no capacitance gives +1."""
+        std = ncm.CalkitStandard.open(offset_delay=0 * un.ps, offset_loss=0)
+        assert std.name == "open"
+        gamma = std.reflection_coefficient(self.freqs).reflection_coefficient
+        np.testing.assert_allclose(gamma, 1, atol=1e-15)
+
+    @pytest.mark.parametrize("delay", [0, 10, 31.785, 100, 1000])
+    @pytest.mark.parametrize("kind", ["open", "short"])
+    def test_lossless_standard_has_unit_magnitude(self, delay, kind):
+        std = getattr(ncm.CalkitStandard, kind)(
+            offset_delay=delay * un.ps, offset_loss=0
+        )
+        gamma = std.reflection_coefficient(self.freqs).reflection_coefficient
+        np.testing.assert_allclose(np.abs(gamma), 1, rtol=1e-12)
+
+        # A pure offset delay just rotates the phase: Gamma = Gamma_T exp(-2j w tau)
+        expected = (1 if kind == "open" else -1) * np.exp(
+            -2j * np.pi * 2 * (self.freqs * delay * un.ps).to_value("")
+        )
+        np.testing.assert_allclose(gamma, expected, rtol=1e-12)
+
+    @pytest.mark.parametrize("kind", ["open", "short"])
+    def test_lossless_reactive_standard_has_unit_magnitude(self, kind):
+        """The 85033E open/short are pure reactances, so lossless means |G| = 1."""
+        std = attrs.evolve(getattr(ncm.AGILENT_85033E, kind), offset_loss=0)
+        gamma = std.reflection_coefficient(self.freqs).reflection_coefficient
+        np.testing.assert_allclose(np.abs(gamma), 1, rtol=1e-12)
+
+    @pytest.mark.parametrize("kind", ["open", "short", "match"])
+    def test_85033e_passive(self, kind):
+        std = getattr(ncm.AGILENT_85033E, kind)
+        gamma = std.reflection_coefficient(self.freqs).reflection_coefficient
+        assert np.all(np.isfinite(gamma))
+        assert np.all(np.abs(gamma) <= 1)
+
+
+class TestCalkitValidation:
+    def test_wrong_standard_raises_value_error(self):
+        kit = ncm.AGILENT_85033E
+        with pytest.raises(ValueError, match="open"):
+            ncm.Calkit(open=kit.short, short=kit.short, match=kit.match)
+        with pytest.raises(ValueError, match="short"):
+            ncm.Calkit(open=kit.open, short=kit.match, match=kit.match)
+        with pytest.raises(ValueError, match="match"):
+            ncm.Calkit(open=kit.open, short=kit.short, match=kit.open)
+
+    def test_get_calkit_does_not_mutate_input(self):
+        match = {"offset_delay": 30 * un.ps}
+        kit = ncm.get_calkit(
+            "AGILENT_85033E", resistance_of_match=49 * un.ohm, match=match
+        )
+        assert match == {"offset_delay": 30 * un.ps}
+        assert kit.match.resistance == 49 * un.ohm
+        assert kit.match.offset_delay == 30 * un.ps
+
+
+class TestTwoPortNetworkPhysics:
+    freqs = np.linspace(40, 200, 9) * un.MHz
+
+    def _lossless_network(self, z0=60.0, theta=1.0):
+        n = len(self.freqs)
+        c, s = np.cos(theta) * np.ones(n), np.sin(theta) * np.ones(n)
+        return ncm.TwoPortNetwork(np.array([[c, 1j * z0 * s], [1j * s / z0, c]]))
+
+    def test_transmission_line_matches_sparams(self):
+        """ABCD of a line converted to S agrees with the direct S formula."""
+        cable = ncm.KNOWN_CABLES["UT-141C-SP"]
+        tl = cable.as_transmission_line(self.freqs)
+        tpn = ncm.TwoPortNetwork.from_transmission_line(tl, 0.3 * un.m)
+        s1 = tpn.as_sparams(self.freqs, 50.0)
+        s2 = tl.scattering_parameters(line_length=0.3 * un.m)
+        np.testing.assert_allclose(s1.s, s2.s, rtol=1e-10)
+
+    def test_lossless_equal_impedances_unitary(self):
+        s = self._lossless_network().as_sparams(self.freqs, 50.0)
+        assert s.is_reciprocal()
+        assert s.is_lossless()
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            "TwoPortNetwork.as_sparams uses 2*zs and 2*zl instead of 2*sqrt(zs*zl) "
+            "in S12/S21, so it is wrong when source and load impedances differ; "
+            "fix pending (result-changing)"
+        ),
+    )
+    def test_lossless_unequal_impedances_unitary(self):
+        """With zs != zl a reciprocal lossless network still has a unitary S."""
+        s = self._lossless_network().as_sparams(
+            self.freqs, source_impedance=50.0, load_impedance=75.0
+        )
+        np.testing.assert_allclose(s.s12, s.s21, rtol=1e-12)
+        np.testing.assert_allclose(
+            np.abs(s.s11) ** 2 + np.abs(s.s21) ** 2, 1, rtol=1e-12
+        )
+        assert s.is_lossless()
+
+    @pytest.mark.parametrize("z0", [50.0, 50 * un.ohm, 0.05 * un.kohm])
+    def test_from_smatrix_z0_units(self, z0):
+        """Regression test: a z0 Quantity is converted to ohms, not stripped."""
+        rng = np.random.default_rng(42)
+        n = len(self.freqs)
+        s = dt.SParams(
+            freqs=self.freqs,
+            s11=0.1 * rng.normal(size=n) + 0.1j * rng.normal(size=n),
+            s12=0.8 + 0.1j * rng.normal(size=n),
+            s21=0.7 + 0.1j * rng.normal(size=n),
+            s22=0.2 * rng.normal(size=n) + 0j,
+        )
+        net = ncm.TwoPortNetwork.from_smatrix(s, z0=z0)
+        ref = ncm.TwoPortNetwork.from_smatrix(s, z0=50.0)
+        np.testing.assert_allclose(net.x, ref.x, rtol=1e-12)
+        out = net.as_sparams(self.freqs, source_impedance=50.0)
+        np.testing.assert_allclose(out.s, s.s, rtol=1e-10, atol=1e-14)

@@ -164,7 +164,8 @@ class SParams:
     def is_reciprocal(self) -> bool:
         """Whether the S-matrix describes a reciprocal network.
 
-        Defined as a network that is passive and symmetric.
+        A reciprocal network has a symmetric S-matrix, i.e. S12 == S21. (This says
+        nothing about whether the network is passive, nor whether S11 == S22.)
 
         See https://en.wikipedia.org/wiki/Scattering_parameters#Reciprocity
         """
@@ -182,7 +183,7 @@ class SParams:
 
     @property
     def complex_linear_gain(self) -> tp.ComplexArray:
-        """The complex linear gain of the network, i.e. S12."""
+        """The complex linear (forward) gain of the network, i.e. S21."""
         return self.s[1, 0]
 
     @property
@@ -215,13 +216,17 @@ class SParams:
 
     @property
     def reverse_gain(self):
-        """The reverse gain, ``S|12|``, in decibels."""
+        """The reverse gain, ``|S12|``, in decibels."""
         return linear_to_decibels(self.s[0, 1])
 
     @property
     def reverse_isolation(self):
-        """The reverse isolation, ``1/|S12|``, in decibels."""
-        return -np.abs(self.reverse_gain)
+        """The reverse isolation, ``1/|S12|``, in decibels.
+
+        This is the negative of :attr:`reverse_gain`, and is positive for a passive
+        network (``|S12| < 1``).
+        """
+        return -self.reverse_gain
 
     def voltage_standing_wave_ratio_in(self):
         """The Voltage Standing Wave Ratio (VSWR) of the network input."""
@@ -286,15 +291,24 @@ class ReflectionCoefficient:
         )
 
     @classmethod
-    def from_s1p(cls, path: tp.PathLike) -> Self:
+    def from_s1p(
+        cls,
+        path: tp.PathLike,
+        f_low: tp.FreqType = 0 * un.MHz,
+        f_high: tp.FreqType = np.inf * un.MHz,
+    ) -> Self:
         """Create a ReflectionCoefficient by reading a .s1p file.
 
         Parameters
         ----------
         path
             The path to the .s1p file.
+        f_low
+            The minimum frequency to keep.
+        f_high
+            The maximum frequency to keep.
         """
-        sparams = read_s1p(path)
+        sparams = read_s1p(path, f_low=f_low, f_high=f_high)
         return cls(
             freqs=sparams["frequency"],
             reflection_coefficient=sparams["s11"],
@@ -318,7 +332,7 @@ class ReflectionCoefficient:
         freq_unit
             The unit of the frequency column in the file. Default is Hz.
         """
-        delimiter = "," if path.endswith(".csv") else " "
+        delimiter = "," if str(path).endswith(".csv") else " "
 
         f_orig, gamma_real, gamma_imag = np.loadtxt(
             path,
@@ -388,8 +402,8 @@ class CalkitReadings:
         Other Parameters
         ----------------
         kwargs
-            Everything else is passed to the :class:`SParams` objects. This includes
-            f_low and f_high.
+            Everything else is passed to :meth:`ReflectionCoefficient.from_s1p` for
+            each standard, i.e. ``f_low`` and ``f_high``.
         """
         return cls(
             open=ReflectionCoefficient.from_s1p(paths.open, **kwargs),
@@ -411,17 +425,15 @@ class CalkitReadings:
         freqs
             The frequencies at which to define the ideal standards.
         """
+        n = len(freqs)
         return cls(
             open=ReflectionCoefficient(
-                freqs=freqs,
-                reflection_coefficient=np.ones_like(freqs, dtype=complex),
+                freqs=freqs, reflection_coefficient=np.ones(n, dtype=complex)
             ),
             short=ReflectionCoefficient(
-                freqs=freqs,
-                reflection_coefficient=-1 * np.ones_like(freqs, dtype=complex),
+                freqs=freqs, reflection_coefficient=-np.ones(n, dtype=complex)
             ),
             match=ReflectionCoefficient(
-                freqs=freqs,
-                reflection_coefficient=np.zeros_like(freqs, dtype=complex),
+                freqs=freqs, reflection_coefficient=np.zeros(n, dtype=complex)
             ),
         )

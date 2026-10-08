@@ -57,7 +57,7 @@ class TransmissionLine:
 
     @cached_property
     def angular_freq(self) -> tp.FreqType:
-        """The angular frequencies at which to evaluate the transmission line."""
+        """The imaginary angular frequency, j*omega = 2*pi*j*f, of the line."""
         return 2 * np.pi * 1j * self.freqs
 
     @cached_property
@@ -96,8 +96,15 @@ class TransmissionLine:
 
         Parameters
         ----------
-        freq : tp.FreqType
-            Frequency of the signal.
+        load_impedance
+            The impedance terminating the far end of the line.
+        line_length
+            The length of the line. If not given, use the length set on the instance.
+
+        Returns
+        -------
+        input_impedance
+            The impedance looking into the near end of the line, at each frequency.
         """
         if line_length is None:
             line_length = self.length
@@ -105,18 +112,9 @@ class TransmissionLine:
         if line_length is None:
             raise ValueError("Line length must be provided or set on the instance.")
 
-        return (
-            self.characteristic_impedance
-            * (
-                load_impedance
-                + self.characteristic_impedance
-                * np.tanh(self.propagation_constant * line_length)
-            )
-            / (
-                self.characteristic_impedance
-                + load_impedance * np.tanh(self.propagation_constant * line_length)
-            )
-        )
+        tanh_gl = np.tanh((self.propagation_constant * line_length).to_value(""))
+        zo = self.characteristic_impedance
+        return zo * (load_impedance + zo * tanh_gl) / (zo + load_impedance * tanh_gl)
 
     def reflection_coefficient(
         self,
@@ -279,7 +277,7 @@ class CoaxialCable:
         )
 
     @property
-    def capacitance_per_metre(self) -> tp.Conductivity:
+    def capacitance_per_metre(self) -> un.Quantity[un.F / un.m]:
         """The capacitance per metre of the cable.
 
         See https://en.wikipedia.org/wiki/Coaxial_cable#Physical_parameters
@@ -305,7 +303,9 @@ class CoaxialCable:
         """Get the spectral inductance per metre of the cable."""
         return self.inductance_per_metre * (1 + self.disp(freq))
 
-    def conductance_per_metre(self, freq: tp.FreqType) -> un.Quantity[un.m / un.ohm]:
+    def conductance_per_metre(
+        self, freq: tp.FreqType
+    ) -> un.Quantity[un.siemens / un.m]:
         """Get the conductance per metre of the cable."""
         return (
             2
@@ -325,7 +325,7 @@ class CoaxialCable:
             inductance=self.spectral_inductance_per_metre(freqs),
             conductance=self.conductance_per_metre(freqs),
             capacitance=self.capacitance_per_metre,
-            length=length or self.length,
+            length=length if length is not None else self.length,
         )
 
     def characteristic_impedance(
@@ -496,9 +496,13 @@ class CalkitStandard:
     def termination_gamma(self, freq: tp.FreqType) -> tp.DimlessType:
         """Reflection coefficient of the termination.
 
-        Eq. 19 of M16.
+        Eq. 19 of M16. An infinite termination impedance (an ideal open with no
+        capacitance model) gives a reflection coefficient of exactly 1.
         """
-        return ee.impedance2gamma(self.termination_impedance(freq), 50 * un.ohm)
+        zterm = self.termination_impedance(freq)
+        if np.all(np.isinf(zterm)):
+            return np.ones(np.shape(zterm)) * un.dimensionless_unscaled
+        return ee.impedance2gamma(zterm, 50 * un.ohm)
 
     def lossy_characteristic_impedance(self, freq: tp.FreqType) -> tp.OhmType:
         """Obtain the lossy characteristic impedance of the transmission line (offset).
@@ -595,16 +599,14 @@ class Calkit:
     match: CalkitStandard = attrs.field()
 
     @open.validator
-    def _open_vld(self, att, val):
-        assert val.name == "open"
-
     @short.validator
-    def _short_vld(self, att, val):
-        assert val.name == "short"
-
     @match.validator
-    def _match_vld(self, att, val):
-        assert val.name == "match"
+    def _standard_vld(self, att, val):
+        if val.name != att.name:
+            raise ValueError(
+                f"The '{att.name}' standard of a Calkit must be of type "
+                f"'{att.name}' (as inferred from its resistance), got '{val.name}'."
+            )
 
     def clone(self, *, short=None, open=None, match=None):  # ruff: ignore[builtin-argument-shadowing]
         """Return a clone with updated parameters for each standard."""
@@ -696,9 +698,9 @@ def get_calkit(
     if isinstance(base, str):
         base = KNOWN_CALKITS[base]
 
-    match = match or {}
+    match = dict(match or {})
     if resistance_of_match is not None:
-        match.update(resistance=resistance_of_match)
+        match["resistance"] = resistance_of_match
     return base.clone(short=short, open=open, match=match)
 
 
@@ -903,8 +905,20 @@ class TwoPortNetwork:
         )
 
     @classmethod
-    def from_smatrix(cls, s: SParams, z0: npt.NDArray) -> Self:
-        """Compute the network from scattering parameters."""
+    def from_smatrix(
+        cls, s: SParams, z0: float | npt.NDArray | tp.ImpedanceType
+    ) -> Self:
+        """Compute the network from scattering parameters.
+
+        Parameters
+        ----------
+        s
+            The scattering parameters of the network.
+        z0
+            The reference impedance of the scattering parameters. Plain numbers are
+            interpreted as Ohms; Quantities are converted to Ohms.
+        """
+        z0 = un.Quantity(z0, "ohm").value
         denom = 1 / (2 * s.s21)
         xx = s.s21 * s.s12
 
