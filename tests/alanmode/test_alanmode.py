@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 from astropy import units as un
 from astropy.time import Time
-from pygsdata import KNOWN_TELESCOPES, GSData
+from pygsdata import KNOWN_TELESCOPES, GSData, GSFlag
 from read_acq.gsdata import write_gsdata_to_acq
 
 from edges import alanmode as am
@@ -29,6 +29,59 @@ def test_read_write_spec_loop(alanmode_data_path: Path, tmpdir: Path):
     np.testing.assert_allclose(spamb.freqs, spamb2.freqs)
     np.testing.assert_allclose(spamb.data, spamb2.data)
     np.testing.assert_allclose(spamb.nsamples, spamb2.nsamples)
+
+
+def _make_spec_gsd(nfreq: int = 64, flagged=(3, 10, 11), scale: float = 300.0):
+    freqs = np.linspace(50, 100, nfreq) * un.MHz
+    rng = np.random.default_rng(3)
+    data = scale + rng.uniform(-1, 1, nfreq)
+    flags = np.zeros(nfreq, dtype=bool)
+    flags[list(flagged)] = True
+    return GSData(
+        data=data[None, None, None],
+        freqs=freqs,
+        times=Time([[2459856.0]], format="jd"),
+        telescope=KNOWN_TELESCOPES["edges-low"],
+        nsamples=np.full((1, 1, 1, nfreq), 450.0),
+        flags={"flags": GSFlag(flags, axes=("freq",))},
+        data_unit="uncalibrated_temp",
+    )
+
+
+def test_spec_txt_roundtrip_keeps_flags(tmp_path: Path):
+    """Regression test for ANA-10: written weights were always 1."""
+    gsd = _make_spec_gsd()
+    am.write_spec_txt_gsd(gsd, tmp_path / "sp.txt")
+    new = am.read_spec_txt(tmp_path / "sp.txt")
+
+    np.testing.assert_array_equal(new.complete_flags, gsd.complete_flags)
+    np.testing.assert_allclose(new.freqs, gsd.freqs, atol=1e-6 * un.MHz)
+    np.testing.assert_allclose(new.data, gsd.data, atol=1e-6, rtol=0)
+    np.testing.assert_allclose(new.flagged_nsamples, gsd.flagged_nsamples)
+
+
+def test_write_spec_txt_weights(tmp_path: Path):
+    freqs = np.linspace(50, 100, 5)
+    weights = np.array([1, 0, 1, 1, 0])
+    am.write_spec_txt(freqs, n=10, spec=np.ones(5), fname=tmp_path / "sp.txt")
+    am.write_spec_txt(
+        freqs, n=10, spec=np.ones(5), fname=tmp_path / "spw.txt", weights=weights
+    )
+    np.testing.assert_array_equal(
+        np.genfromtxt(tmp_path / "sp.txt", comments="/", usecols=2), 1
+    )
+    np.testing.assert_array_equal(
+        np.genfromtxt(tmp_path / "spw.txt", comments="/", usecols=2), weights
+    )
+
+
+def test_read_spec_txt_wide_values(tmp_path: Path):
+    """Regression test for ANA-10: n was read from a fixed column of the first line."""
+    gsd = _make_spec_gsd(flagged=(), scale=1.0e7)
+    am.write_spec_txt_gsd(gsd, tmp_path / "sp.txt")
+    new = am.read_spec_txt(tmp_path / "sp.txt")
+    np.testing.assert_allclose(new.nsamples, 450.0)
+    np.testing.assert_allclose(new.data, gsd.data, atol=1e-6, rtol=0)
 
 
 NTIME = 24
@@ -145,3 +198,43 @@ def test_edges3_calobs_params_datadir_from_config(tmp_path: Path):
         specyear=2023, specday=70, s11date="", datadir=str(tmp_path)
     )
     assert params.datadir == tmp_path
+
+
+class TestReadSpeFile:
+    """Regression tests for ANA-11: read_spe_file couldn't read the repo's spe0.txt."""
+
+    @pytest.mark.parametrize("day", ["2022-316", "2023-210"])
+    def test_read_edges3_spe0(self, alanmode_data_path: Path, day: str):
+        fname = alanmode_data_path / f"edges3-{day}-alan" / "spe0.txt"
+        raw = np.genfromtxt(fname, usecols=(1, 3, 6, 9))
+
+        spec = am.read_spe_file(fname)
+        np.testing.assert_allclose(spec.freqs.to_value("MHz"), raw[:, 0], rtol=1e-12)
+        np.testing.assert_allclose(spec.data[0, 0, 0], raw[:, 1], rtol=1e-12)
+        np.testing.assert_allclose(spec.nsamples[0, 0, 0], raw[:, 3], rtol=1e-12)
+        assert isinstance(spec.flags["flags"], GSFlag)
+        np.testing.assert_array_equal(spec.complete_flags[0, 0, 0], raw[:, 3] == 0)
+        assert spec.residuals is None
+
+    def test_read_with_resid_and_flags(self, tmp_path: Path):
+        lines = [
+            f"freq {f:10.6f} tantenna {t:11.6f} K skymodel {m:11.6f} K "
+            f"resid {t - m:9.6f} K wt {w}\n"
+            for f, t, m, w in [
+                (50.0, 300.0, 299.5, 1),
+                (50.5, 301.0, 300.0, 0),
+                (51.0, 302.0, 302.5, 1),
+            ]
+        ]
+        (tmp_path / "spe.txt").write_text("".join(lines))
+
+        spec = am.read_spe_file(tmp_path / "spe.txt")
+        np.testing.assert_allclose(spec.data[0, 0, 0], [300.0, 301.0, 302.0])
+        np.testing.assert_allclose(spec.residuals[0, 0, 0], [0.5, 1.0, -0.5])
+        np.testing.assert_array_equal(spec.complete_flags[0, 0, 0], [0, 1, 0])
+
+    def test_default_time_is_not_import_time(self, alanmode_data_path: Path):
+        fname = alanmode_data_path / "edges3-2022-316-alan" / "spe0.txt"
+        before = Time.now()
+        spec = am.read_spe_file(fname)
+        assert spec.times[0, 0] >= before
