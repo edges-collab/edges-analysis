@@ -445,6 +445,11 @@ class LoadDefEDGES3:
         )
 
 
+def _receiver_metadata(metadata: Mapping | None) -> dict:
+    """Merge user-given receiver S11 metadata with the defaults."""
+    return {**DEFAULT_RECEIVER_METADATA, **(metadata or {})}
+
+
 def _label_s11_files(files: Sequence[tp.PathLike]) -> dict[str, Path]:
     """Map the label of each S11 file (e.g. "amb", "lna_O") to its path."""
     out = {}
@@ -534,7 +539,8 @@ class CalObsDefEDGES3:
             The temperature log file(s), merged if more than one.
         receiver_metadata
             Metadata of the receiver S11 measurement (see
-            :class:`edges.io.calobsdef.ReceiverS11`).
+            :class:`edges.io.calobsdef.ReceiverS11`). Keys not given are taken
+            from :data:`DEFAULT_RECEIVER_METADATA`.
 
         Returns
         -------
@@ -570,7 +576,7 @@ class CalObsDefEDGES3:
         rcv = ReceiverS11(
             calkit=_calkit("lna_"),
             device=s11["lna"],
-            metadata=receiver_metadata or dict(DEFAULT_RECEIVER_METADATA),
+            metadata=_receiver_metadata(receiver_metadata),
         )
 
         load_calkit = _calkit()
@@ -635,7 +641,8 @@ class CalObsDefEDGES3:
             The file format for spectrum files.
         receiver_metadata
             Metadata of the receiver S11 measurement (see
-            :class:`edges.io.calobsdef.ReceiverS11`).
+            :class:`edges.io.calobsdef.ReceiverS11`). Keys not given are taken
+            from :data:`DEFAULT_RECEIVER_METADATA`.
         s11_dir
             Directory holding the ``.s1p`` files, relative to ``rootdir`` (or
             absolute). It can contain a ``{year}`` placeholder.
@@ -658,10 +665,8 @@ class CalObsDefEDGES3:
 
         Raises
         ------
-        AssertionError
-            If the root directory does not exist.
         FileNotFoundError
-            If required files are not found.
+            If the root directory does not exist, or required files are not found.
         OSError
             If multiple files are found where only one is expected.
         """
@@ -671,7 +676,8 @@ class CalObsDefEDGES3:
             s11_day = day
 
         rootdir = Path(rootdir)
-        assert rootdir.exists()
+        if not rootdir.is_dir():
+            raise FileNotFoundError(f"rootdir {rootdir} does not exist")
 
         # Get the ReceiverS11
         rcv_calkit = CalkitFileSpec.from_edges3_layout(
@@ -687,7 +693,7 @@ class CalObsDefEDGES3:
         rcv = ReceiverS11(
             calkit=rcv_calkit,
             device=rcv_calkit.open.parent / rcv_calkit.open.name.replace("_O", ""),
-            metadata=receiver_metadata or dict(DEFAULT_RECEIVER_METADATA),
+            metadata=_receiver_metadata(receiver_metadata),
         )
 
         # Get the actual S11 date from the rcv

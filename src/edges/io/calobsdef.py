@@ -46,6 +46,25 @@ def _vld_path_exists(inst, att, val):
         raise ValueError(f"{att.name} path does not exist! ({val})")
 
 
+def _sorted_glob(direc: Path, pattern: str) -> list[Path]:
+    """Glob a directory, sorted by name, raising if nothing matches."""
+    if files := sorted(direc.glob(pattern)):
+        return files
+    raise FileNotFoundError(f"No files matching '{pattern}' found in {direc}")
+
+
+def _check_edges2_rootdir(root: Path) -> None:
+    """Check that a directory has the standard EDGES-2 observation layout."""
+    if not root.is_dir():
+        raise FileNotFoundError(f"rootdir {root} does not exist")
+    for sub in ("Resistance", "S11", "Spectra"):
+        if not (root / sub).is_dir():
+            raise FileNotFoundError(
+                f"{root} is not a standard EDGES-2 observation directory: it has no "
+                f"'{sub}' subdirectory"
+            )
+
+
 @attrs.define(frozen=True, kw_only=True)
 class CalkitFileSpec:
     """File-specification for calkit S11 measurements.
@@ -86,13 +105,19 @@ class CalkitFileSpec:
         prefix
             A prefix for the files. Sometimes this is necessary to find, e.g.
             External<load>.s1p
+
+        Raises
+        ------
+        FileNotFoundError
+            If no ``Open`` file is found (or, if ``allow_other`` is False, the one
+            for ``repeat_num`` is not found).
         """
         direc = Path(direc)
         open_ = direc / f"{prefix}Open{repeat_num:02}.s1p"
 
         if not open_.exists():
             if allow_other:
-                open_ = sorted(direc.glob(f"{prefix}Open*.s1p"))[0]
+                open_ = _sorted_glob(direc, f"{prefix}Open*.s1p")[0]
 
                 warnings.warn(
                     f"Could not find {prefix}Open{repeat_num:02} in {direc}, using"
@@ -100,7 +125,9 @@ class CalkitFileSpec:
                     stacklevel=2,
                 )
             else:
-                raise OSError(f"Could not find {prefix}Open{repeat_num:02} in {direc}")
+                raise FileNotFoundError(
+                    f"Could not find {prefix}Open{repeat_num:02} in {direc}"
+                )
 
         rep_num = open_.stem[-2:]
 
@@ -187,18 +214,32 @@ class LoadDefEDGES2:
         sparams_file
             An optional file containing S-parameters of the load device (e.g. the
             semi-rigid cable for a hot load).
+
+        Raises
+        ------
+        FileNotFoundError
+            If ``root`` is not a standard EDGES-2 observation directory, or no
+            Resistance, Spectra or S11 files are found for the load.
+
+        Warns
+        -----
+        UserWarning
+            If more than one Resistance file is found for the load and run (the
+            first, by name, is used).
         """
         root = Path(root)
-        assert root.exists()
-
-        # Check the basic validity of this observation directory
-        assert (root / "Resistance").exists()
-        assert (root / "S11").exists()
-        assert (root / "Spectra").exists()
+        _check_edges2_rootdir(root)
 
         # Get Resistance
-        res = sorted((root / "Resistance").glob(f"{loadname}_{run_num:02}_*.csv"))[0]
-        spec = sorted((root / "Spectra").glob(f"{loadname}_{run_num:02}_*.acq"))
+        res = _sorted_glob(root / "Resistance", f"{loadname}_{run_num:02}_*.csv")
+        if len(res) > 1:
+            warnings.warn(
+                f"Found {len(res)} Resistance files for {loadname} run {run_num:02}: "
+                f"{[fl.name for fl in res]}. Using the first, {res[0].name}.",
+                stacklevel=2,
+            )
+        res = res[0]
+        spec = _sorted_glob(root / "Spectra", f"{loadname}_{run_num:02}_*.acq")
 
         s11dir = root / "S11" / f"{loadname}{run_num:02}"
         clk = CalkitFileSpec.from_edges2_layout(s11dir, rep_num)
@@ -401,23 +442,34 @@ class CalObsDefEDGES2:
         repeat_num
             The repeat number to search for (generally, repeats are taken closer
             together than "runs").
+
+        Raises
+        ------
+        FileNotFoundError
+            If ``rootdir`` does not exist or is not a standard EDGES-2 observation
+            directory (with ``Resistance``, ``S11`` and ``Spectra`` subdirectories),
+            or if required files are not found.
+
+        Warns
+        -----
+        UserWarning
+            If ``ReceiverReading{run_num}`` does not exist. The first other
+            ``ReceiverReading`` directory is used, and its run number is then used
+            for the switching state and all the loads as well.
         """
         rootdir = Path(rootdir)
-        if not rootdir.exists():
-            raise FileNotFoundError(f"rootdir {rootdir} does not exist")
-
-        # Check the basic validity of this observation directory
-        assert (rootdir / "Resistance").exists()
-        assert (rootdir / "S11").exists()
-        assert (rootdir / "Spectra").exists()
+        _check_edges2_rootdir(rootdir)
 
         # Get the ReceiverS11
         rcvdir = rootdir / "S11" / f"ReceiverReading{run_num:02}"
         if not rcvdir.exists():
-            # Try any run num:
-            rcvdir = min((rootdir / "S11").glob("ReceiverReading*"))
+            # Try any run num. Note that the run number of the receiver reading
+            # found here is then used for ALL the loads too.
+            rcvdir = _sorted_glob(rootdir / "S11", "ReceiverReading*")[0]
             warnings.warn(
-                f"Could not find ReceiverReading{run_num:02}, using {rcvdir.name}",
+                f"Could not find ReceiverReading{run_num:02}, using {rcvdir.name}. "
+                f"The loads (and switching state) will also use run "
+                f"{rcvdir.stem[-2:]} instead of run {run_num:02}.",
                 stacklevel=2,
             )
 
@@ -432,7 +484,7 @@ class CalObsDefEDGES2:
         swstate = rootdir / "S11" / f"SwitchingState{run_num:02}"
         if not swstate.exists():
             # Try any run num:
-            swstate = sorted((rootdir / "S11").glob("SwitchingState*"))[0]
+            swstate = _sorted_glob(rootdir / "S11", "SwitchingState*")[0]
             warnings.warn(
                 f"Could not find SwitchingState{run_num:02}, using {swstate.name}",
                 stacklevel=2,

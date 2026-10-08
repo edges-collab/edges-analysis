@@ -345,6 +345,38 @@ class TestFromFiles:
         with pytest.raises(FileNotFoundError, match="short"):
             CalObsDefEDGES3.from_files(s11_files=s11_files, spectra=spectra)
 
+    def test_receiver_metadata_merged_with_defaults(self, s11_files, spectra):
+        caldef = CalObsDefEDGES3.from_files(
+            s11_files=s11_files,
+            spectra=spectra,
+            receiver_metadata={"calkit_match_resistance": 50.1},
+        )
+        assert caldef.receiver_s11.calkit_match_resistance == 50.1
+        assert (
+            caldef.receiver_s11.calkit_name
+            == calobsdef3.DEFAULT_RECEIVER_METADATA["calkit"]
+        )
+
+
+def test_standard_layout_receiver_metadata_merged(mockroot: Path):
+    caldef = CalObsDefEDGES3.from_standard_layout(
+        rootdir=mockroot, year=2023, day=70, receiver_metadata={"calkit": "MYKIT"}
+    )
+    assert caldef.receiver_s11.calkit_name == "MYKIT"
+    assert (
+        caldef.receiver_s11.calkit_match_resistance
+        == calobsdef3.DEFAULT_RECEIVER_METADATA["calkit_match_resistance"]
+    )
+    # The module default must not be mutated.
+    assert calobsdef3.DEFAULT_RECEIVER_METADATA["calkit"] == "AGILENT_ALAN"
+
+
+def test_standard_layout_missing_rootdir(tmp_path: Path):
+    with pytest.raises(FileNotFoundError, match="does not exist"):
+        CalObsDefEDGES3.from_standard_layout(
+            rootdir=tmp_path / "nonexistent", year=2023, day=70
+        )
+
 
 _IO3_REASON = (
     "Each S11 label (O, S, L, input) is searched for independently, so one calkit "
