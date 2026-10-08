@@ -2,6 +2,7 @@ from datetime import datetime
 
 import attrs
 import h5py
+import hickle
 import numpy as np
 import pytest
 from astropy.coordinates import EarthLocation
@@ -67,11 +68,94 @@ def test_astropy_quantity_hook_roundtrip():
 def test_astropy_time_hook_roundtrip():
     t = Time(2451545.0, format="jd")
     raw = converter.unstructure(t)
-    assert raw == pytest.approx(2451545.0)
+    assert raw["jd1"] + raw["jd2"] == 2451545.0
+    assert raw["scale"] == "utc"
 
     t2 = converter.structure(raw, Time)
     assert isinstance(t2, Time)
-    assert t2.jd == pytest.approx(t.jd)
+    assert t2.jd == t.jd
+    assert t2.scale == "utc"
+    assert t2.location is None
+
+
+MRO = EarthLocation(lat=-26.714778 * Unit("deg"), lon=116.605528 * Unit("deg"))
+
+
+def _assert_time_identical(t2: Time, t: Time):
+    assert t2.scale == t.scale
+    assert t2.format == t.format
+    assert t2.shape == t.shape
+    np.testing.assert_array_equal(t2.jd1, t.jd1)
+    np.testing.assert_array_equal(t2.jd2, t.jd2)
+    np.testing.assert_allclose((t2 - t).to_value("s"), 0, rtol=0, atol=1e-9)
+
+
+@pytest.mark.parametrize(
+    "t",
+    [
+        Time("2020-01-01T12:34:56.123456", scale="tt", location=MRO),
+        Time(
+            ["2020-01-01T12:34:56.000001", "2021-06-30T23:59:59.999999"],
+            scale="tai",
+            format="isot",
+        ),
+        Time(2459856.123456789, 1.234e-11, format="jd", scale="utc", location=MRO),
+    ],
+)
+def test_astropy_time_roundtrip_is_lossless(t: Time):
+    t2 = converter.structure(converter.unstructure(t), Time)
+    _assert_time_identical(t2, t)
+    if t.location is None:
+        assert t2.location is None
+    else:
+        for a, b in zip(
+            t2.location.to_geocentric(), t.location.to_geocentric(), strict=True
+        ):
+            np.testing.assert_allclose(
+                a.to_value("m"), b.to_value("m"), rtol=0, atol=1e-6
+            )
+        # The location is needed for sidereal times.
+        np.testing.assert_allclose(
+            t2.sidereal_time("apparent").hour,
+            t.sidereal_time("apparent").hour,
+            rtol=0,
+            atol=1e-12,
+        )
+
+
+def test_astropy_time_reads_old_jd_format():
+    # Files written before the lossless format stored Time as bare UTC JDs.
+    t2 = converter.structure(np.array([2451545.0, 2451546.5]), Time)
+    assert t2.scale == "utc"
+    np.testing.assert_array_equal(t2.jd, [2451545.0, 2451546.5])
+
+    t3 = converter.structure(2451545.0, Time)
+    assert t3.jd == 2451545.0
+
+
+@hickleable
+@attrs.define
+class _HasTime:
+    t: Time
+
+
+def test_hickleable_time_roundtrip_file(tmp_path):
+    t = Time("2020-01-01T12:34:56.123456", scale="tt", location=MRO)
+    path = tmp_path / "time.h5"
+    _HasTime(t=t).write(path)
+    new = _HasTime.from_file(path)
+    _assert_time_identical(new.t, t)
+    assert new.t.location is not None
+
+
+def test_hickleable_time_reads_old_file(tmp_path):
+    path = tmp_path / "old.h5"
+    hickle.dump(
+        {"t": np.array([2451545.0, 2451546.0]), "__classname__": "_HasTime"}, path
+    )
+    new = _HasTime.from_file(path)
+    assert new.t.scale == "utc"
+    np.testing.assert_array_equal(new.t.jd, [2451545.0, 2451546.0])
 
 
 def test_datetime_hook_roundtrip():

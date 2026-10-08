@@ -88,18 +88,50 @@ def _astropy_quantity_unstructure_hook(val: Quantity) -> dict[str, Any]:
 
 
 @converter.register_structure_hook
-def _astropy_time_hook(val: np.ndarray, _) -> Time:
-    """Convert an astropy quantity to a numpy array."""
-    return Time(
-        val,
+def _astropy_time_hook(val: dict[str, Any] | np.ndarray | float, _) -> Time:
+    """Structure an astropy Time.
+
+    Accepts the dict written by :func:`_astropy_time_unstructure_hook`, and also
+    the bare Julian dates written by older versions (which are interpreted as UTC,
+    with no location, as they always were).
+    """
+    if not isinstance(val, dict):
+        return Time(val, format="jd")
+
+    location = val.get("location")
+    if location is not None:
+        location = EarthLocation.from_geocentric(*np.asarray(location), unit="m")
+
+    out = Time(
+        val["jd1"],
+        val["jd2"],
         format="jd",
+        scale=str(val["scale"]),
+        location=location,
     )
+    if (fmt := val.get("format")) is not None and str(fmt) in Time.FORMATS:
+        out.format = str(fmt)
+    return out
 
 
 @converter.register_unstructure_hook
-def _astropy_time_unstructure_hook(val: Time) -> np.ndarray:
-    """Convert an astropy quantity to a numpy array."""
-    return val.jd
+def _astropy_time_unstructure_hook(val: Time) -> dict[str, Any]:
+    """Unstructure an astropy Time without loss.
+
+    The two-part Julian date is stored (so there is no loss of precision), along
+    with the time scale, the format and the geocentric location in metres (if any).
+    """
+    out = {
+        "jd1": val.jd1,
+        "jd2": val.jd2,
+        "scale": val.scale,
+        "format": val.format,
+    }
+    if val.location is not None:
+        out["location"] = np.array([
+            c.to_value("m") for c in val.location.to_geocentric()
+        ])
+    return out
 
 
 @converter.register_structure_hook
