@@ -433,3 +433,84 @@ def test_beam_factor_alan_azel(beam):
         alanazel.get_mean_beam_factor(poly, np.array([55.0])),
         atol=1e-2,
     )
+
+
+@pytest.fixture(scope="module")
+def random_beam_maps() -> np.ndarray:
+    rng = np.random.default_rng(42)
+    return rng.uniform(size=(2, 91, 360))
+
+
+def test_shift_beam_maps_full_rotation_is_identity(random_beam_maps):
+    np.testing.assert_array_equal(
+        beams.Beam.shift_beam_maps(360, random_beam_maps), random_beam_maps
+    )
+    np.testing.assert_array_equal(
+        beams.Beam.shift_beam_maps(0, random_beam_maps), random_beam_maps
+    )
+
+
+@pytest.mark.parametrize("angle", [1, 37, 90, 271])
+def test_shift_beam_maps_inverse_and_roll(angle, random_beam_maps):
+    shifted = beams.Beam.shift_beam_maps(angle, random_beam_maps)
+    np.testing.assert_array_equal(
+        beams.Beam.shift_beam_maps(-angle, shifted), random_beam_maps
+    )
+    np.testing.assert_array_equal(shifted, np.roll(random_beam_maps, angle, axis=2))
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "SIM-6: Beam.gaussian divides a zenith angle in degrees by a width in radians, "
+        "so the beam is ~57x too narrow; fix pending (result-changing)"
+    ),
+)
+def test_gaussian_beam_value_at_known_zenith_angle():
+    dish_size = 3.0
+    beam = beams.Beam.gaussian(dish_size=dish_size, f_low=50, f_high=52, delta_f=2)
+    sigma = 1.22 * (3e8 / 50e6) / dish_size  # radians, as in the constructor
+    za = 20.0
+    el_indx = np.where(beam.elevation == 90 - za)[0][0]
+    expected = np.exp(-0.5 * (np.radians(za) / sigma) ** 2)
+    np.testing.assert_allclose(beam.beam[0, el_indx], expected, rtol=1e-6)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "SIM-7: the sphere-spline interpolator uses the 89 deg row as the zenith pole "
+        "value, so the interpolated zenith response is wrong; "
+        "fix pending (result-changing)"
+    ),
+)
+def test_sphere_spline_zenith_value():
+    az = np.arange(0, 360, 2.0)
+    el = np.arange(0, 91, 1.0)
+    pattern = np.repeat((el / 90)[:, None], len(az), axis=1)  # 1 at zenith
+    beam = beams.Beam(
+        frequency=np.array([50.0]) * un.MHz,
+        azimuth=az,
+        elevation=el,
+        beam=pattern[None],
+    )
+    interp = beam.angular_interpolator(0, "sphere-spline")
+    np.testing.assert_allclose(
+        interp(np.array([0.0, 123.0]), np.array([90.0, 90.0])),
+        beam.beam[0, -1, 0],
+        rtol=1e-4,
+    )
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "SIM-13: get_beam_solid_angle uses a rectangle rule that includes both "
+        "elevation endpoints, biasing the solid angle high by ~d_el/2 (0.9% at 1 deg, "
+        "4.3% at 5 deg); fix pending (result-changing)"
+    ),
+)
+@pytest.mark.parametrize("delta", [1, 5])
+def test_isotropic_beam_solid_angle_coarse_grid(delta):
+    beam = beams.Beam.uniform(f_low=50, f_high=54, delta_el=delta, delta_az=delta)
+    np.testing.assert_allclose(beam.get_beam_solid_angle(), 2 * np.pi, rtol=2e-3)
