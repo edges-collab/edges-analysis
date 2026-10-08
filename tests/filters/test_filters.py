@@ -6,6 +6,7 @@ import deprecation
 import numpy as np
 import pytest
 from astropy import units as un
+from astropy.time import Time
 from pygsdata import GSData, GSFlag
 from pygsdata.concat import concat
 from pygsdata.select import select_freqs, select_loads
@@ -418,6 +419,54 @@ class TestExplicitDayFilter:
         assert np.all(new.complete_flags[:, :, data.ntimes // 2 :])
         assert not np.any(new.complete_flags[:, :, : data.ntimes // 2])
 
+    @pytest.fixture(scope="class")
+    def across_utc_midnight(self) -> GSData:
+        """Data running from 2022-11-17 20:00 to 2022-11-18 ~04:00 UTC."""
+        t0 = Time("2022-11-17 20:00:00", scale="utc").jd
+        return create_mock_edges_data(time0=t0, ntime=48, dt=600 * un.s).update(
+            auxiliary_measurements=None
+        )
+
+    @pytest.mark.parametrize(
+        "day",
+        [
+            (2022, 11, 18),
+            (2022, 322),
+            Time("2022-11-18 13:00:00", scale="utc"),
+            2459902,  # The Julian Day Number of 2022-11-18 (JD at noon).
+            np.int64(2459902),
+        ],
+        ids=["ymd", "yday", "Time", "int", "np.int64"],
+    )
+    def test_flags_utc_calendar_day(self, across_utc_midnight: GSData, day):
+        """A requested day flags 00:00 -> 24:00 UTC (not noon to noon)."""
+        new = filters.explicit_day_filter(across_utc_midnight, flag_days=[day])
+
+        after_midnight = across_utc_midnight.times.jd[:, 0] >= 2459901.5
+        assert 0 < np.sum(after_midnight) < across_utc_midnight.ntimes
+        np.testing.assert_array_equal(
+            new.flags["explicit_day_filter"].flags, after_midnight
+        )
+
+    def test_multiple_days_and_time_array(self, across_utc_midnight: GSData):
+        new = filters.explicit_day_filter(
+            across_utc_midnight,
+            flag_days=[Time(["2022-11-17 21:00", "2022-11-18 01:00"], scale="utc")],
+        )
+        assert np.all(new.flags["explicit_day_filter"].flags)
+
+    def test_does_not_mutate_input(self, across_utc_midnight: GSData):
+        flag_days = [(2022, 11, 18), Time("2022-11-17 21:00", scale="utc")]
+        orig = list(flag_days)
+        filters.explicit_day_filter(across_utc_midnight, flag_days=flag_days)
+        assert len(flag_days) == len(orig)
+        assert all(a is b for a, b in zip(flag_days, orig, strict=True))
+
+    @pytest.mark.parametrize("day", [(2022, 11, 18, 1), 2459902.0, "2022-11-18"])
+    def test_bad_entries(self, across_utc_midnight: GSData, day):
+        with pytest.raises(ValueError, match="flag_days"):
+            filters.explicit_day_filter(across_utc_midnight, flag_days=[day])
+
 
 class TestPruneFlaggedIntegrations:
     def test_pruning(self, mock: GSData):
@@ -443,8 +492,6 @@ class TestFilterLogging:
         flags = np.zeros(gsd_ones.ntimes, dtype=bool)
         flags[0] = True  # 1 of 10 integrations, i.e. 10% of the data
         with caplog.at_level(logging.INFO, logger=filters.logger.name):
-            filters.apply_flags(
-                gsd_ones, flags=GSFlag(flags=flags, axes=("time",))
-            )
+            filters.apply_flags(gsd_ones, flags=GSFlag(flags=flags, axes=("time",)))
         assert "0.00% + 10.00% → 10.00%" in caplog.text
         assert "<+10.00%>" in caplog.text

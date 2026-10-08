@@ -2,6 +2,7 @@
 
 import functools
 import logging
+import numbers
 import warnings
 from collections.abc import Callable, Sequence
 
@@ -796,42 +797,61 @@ def rms_rfi_filter(
     )
 
 
+def _utc_day_number(t: Time) -> np.ndarray:
+    """Get the Julian Day Number of the UTC calendar day containing each time.
+
+    A UTC calendar day runs from JD ``N - 0.5`` (midnight) to ``N + 0.5``, where ``N``
+    is its Julian Day Number (the JD at noon of that day).
+    """
+    return np.floor(t.utc.jd + 0.5).astype(int)
+
+
 @gsregister("filter")
 @gsdata_filter()
 def explicit_day_filter(
     data: GSData,
-    flag_days: list[tuple[int, int] | tuple[int, int, int] | int | Time],
+    flag_days: Sequence[tuple[int, int] | tuple[int, int, int] | int | Time],
 ) -> GSFlag:
-    """Filter out any data coming from specific days.
+    """Filter out any data coming from specific (UTC calendar) days.
+
+    Each day is a UTC calendar day, i.e. it runs from 00:00 to 24:00 UTC.
 
     Parameters
     ----------
     flag_days
         A list of days to flag. Each entry can be a 2-tuple, 3-tuple, astropy.Time or an
-        int. If a 2-tuple, it is interpreted as ``(year, day_of_year)``. If a 3-tuple,
-        it is interpreted as ``(year, month, day)``. If an int, it is interpreted as a
-        Julian day.
+        integer. If a 2-tuple, it is interpreted as ``(year, day_of_year)``. If a
+        3-tuple, it is interpreted as ``(year, month, day)``. If an astropy Time, the
+        day(s) containing the time(s) are flagged. If an integer (including numpy
+        integer types), it is interpreted as a Julian Day Number, i.e. the day whose
+        noon (12:00 UTC) has a JD equal to that integer. This list is not modified.
     """
-    for i, day in enumerate(flag_days):
-        if hasattr(day, "__len__"):
+    day_numbers = []
+    for day in flag_days:
+        if isinstance(day, Time):
+            day_numbers.extend(np.atleast_1d(_utc_day_number(day)).tolist())
+        elif isinstance(day, numbers.Integral):
+            day_numbers.append(int(day))
+        elif isinstance(day, tuple | list) and len(day) in (2, 3):
             if len(day) == 2:
-                t = Time(f"{day[0]:04}:{day[1]:03}:00:00:00.000", format="yday")
-            elif len(day) == 3:
                 t = Time(
-                    f"{day[0]:04}-{day[1]:02}-{day[2]:02} 00:00:00.000", format="iso"
+                    f"{day[0]:04}:{day[1]:03}:00:00:00.000", format="yday", scale="utc"
                 )
             else:
-                raise ValueError("Day must be a 2-tuple, 3-tuple, Time or an int.")
-
-            flag_days[i] = int(t.jd)
-        elif isinstance(day, Time):
-            flag_days[i] = int(day.jd)
-
-    if not all(isinstance(day, int) for day in flag_days):
-        raise ValueError("All entries in flag_days must be integers.")
+                t = Time(
+                    f"{day[0]:04}-{day[1]:02}-{day[2]:02} 00:00:00.000",
+                    format="iso",
+                    scale="utc",
+                )
+            day_numbers.append(int(_utc_day_number(t)))
+        else:
+            raise ValueError(
+                "Each entry in flag_days must be a 2-tuple, 3-tuple, astropy Time or "
+                f"an integer, got {day!r}."
+            )
 
     return GSFlag(
-        flags=np.any(np.isin(data.times.jd.astype(int), flag_days), axis=-1),
+        flags=np.any(np.isin(_utc_day_number(data.times), day_numbers), axis=-1),
         axes=("time",),
     )
 
