@@ -20,7 +20,6 @@ from edges import __version__
 from .. import modeling as mdl
 from .. import types as tp
 from ..averaging import NsamplesStrategy, averaging, get_weights_from_strategy
-from ..filters import xrfi as rfi
 from .runners import run_xrfi
 
 logger = logging.getLogger(__name__)
@@ -33,15 +32,22 @@ def gsdata_filter(multi_data: bool = False):
     signature::
 
         def fnc(
+            *,
             data: GSData | Sequence[GSData],
-            use_existing_flags: bool,
             **kwargs
-        ) -> GSFlag
+        ) -> GSFlag | Sequence[GSFlag]
 
     Where the ``data`` is either a single GSData object, or sequence of such
     objects.
 
-    The return value should be a :class:`GSFlag` object, which contains the flags.
+    The return value should be a :class:`GSFlag` object, which contains the flags (or
+    a sequence of them, one per input object, if ``multi_data`` is True).
+
+    The returned wrapper has the signature ``wrapper(data, *, flag_id=None, **kwargs)``.
+    It calls the filter function and adds the resulting flags to the data (under the
+    name ``flag_id``, which defaults to the name of the filter function), returning
+    the new :class:`GSData` object(s). Existing flags on the data are kept: the new
+    flags are added alongside them.
 
     Parameters
     ----------
@@ -81,16 +87,19 @@ def gsdata_filter(multi_data: bool = False):
                         f"{data.name} was fully flagged during {func.__name__} filter"
                     )
                 else:
-                    sz = flags.flags.size / 100
-                    new = np.sum(flags.flags)
+                    # All numbers are reported as percentages: the percentage of the
+                    # data flagged before this filter, the percentage of the new flag
+                    # array that is flagged, the percentage of data flagged after this
+                    # filter, and the increase.
+                    new = 100 * np.sum(flags.flags) / flags.flags.size
                     tot = np.sum(data.flagged_nsamples == 0)
-                    totsz = data.complete_flags.size
+                    totsz = data.complete_flags.size / 100
 
                     rep = data.get_initial_yearday(hours=True)
 
                     logger.info(
                         f"'{rep}': "
-                        f"{old / totsz:.2f} + {new / sz:.2f} → "
+                        f"{old / totsz:.2f}% + {new:.2f}% → "
                         f"{tot / totsz:.2f}% [bold]<+{(tot - old) / totsz:.2f}%>[/] "
                         f"flagged after [blue]{func.__name__}[/]"
                     )
@@ -267,17 +276,39 @@ def galaxy_filter(
     )
 
 
+_RFI_FILTER_DOC = """Flag RFI in a GSData object with an xRFI method.
+
+    This uses :func:`edges.filters.xrfi.xrfi_{method}`, applied independently to
+    each spectrum (i.e. each load, polarization and time) via
+    :func:`edges.filters.runners.run_xrfi`.
+
+    Parameters
+    ----------
+    data : GSData
+        The data to flag.
+    n_threads : int
+        The number of processes to use.
+    freq_range : tuple[float, float]
+        The range of frequencies (in MHz, inclusive) over which to flag. Data outside
+        this range is not flagged.
+    nsamples_strategy : NsamplesStrategy
+        The strategy used to obtain the weights passed to the xRFI method.
+    **kwargs
+        Passed through to :func:`edges.filters.xrfi.xrfi_{method}`.
+    """
+
+
 @define(frozen=False, slots=False)
 class _RFIFilterFactory:
     method: str
 
+    def __attrs_post_init__(self):
+        # Set a real docstring, so that the wrapped filter function has one.
+        self.__doc__ = _RFI_FILTER_DOC.format(method=self.method)
+
     @property
     def __name__(self):
         return f"rfi_{self.method}_filter"
-
-    @property
-    def __docstring__(self):
-        return getattr(rfi, self.method).__doc__
 
     def __call__(
         self,
@@ -438,10 +469,7 @@ def _peak_power_filter(
 
     mean, _ = averaging.weighted_mean(
         spec,
-        weights=(
-            (spec > 0)
-            & ((spec.transpose(0, 1, 3, 2) < peak_power / 10).transpose(0, 1, 3, 2))
-        ).astype(float),
+        weights=((spec > 0) & (spec < peak_power[..., None] / 10)).astype(float),
         axis=-1,
     )
     peak_power = 10 * np.log10(peak_power / mean)

@@ -1,12 +1,14 @@
 """Test the filters module."""
 
+import logging
+
 import deprecation
 import numpy as np
 import pytest
 from astropy import units as un
 from pygsdata import GSData, GSFlag
 from pygsdata.concat import concat
-from pygsdata.select import select_freqs
+from pygsdata.select import select_freqs, select_loads
 
 from edges import modeling as mdl
 from edges.averaging.utils import NsamplesStrategy
@@ -100,6 +102,42 @@ class TestPeakPowerFilter:
         data = filters.peak_power_filter(mock, mean_freq_range=(250, 270))
         assert not np.any(data.complete_flags)
 
+    def test_multi_load_power(self):
+        """Multi-load (power) data used to crash with a broadcasting error."""
+        power = create_mock_edges_data(add_noise=True, as_power=True, ntime=6)
+        fq = power.freqs.to_value("MHz")
+        assert power.nloads == 3
+        assert np.any((fq > 80) & (fq <= 200))
+
+        out = filters.peak_power_filter(power)
+        flg = out.flags["peak_power_filter"]
+        assert flg.flags.shape == (power.nloads, power.npols, power.ntimes)
+        assert not np.any(flg.flags)
+
+        # A huge spike in one load and integration flags only that one.
+        data = power.data.copy()
+        ichan = np.argmin(np.abs(fq - 90))
+        data[1, 0, 2, ichan] = 1e6 * np.mean(data[1, 0, 2])
+        out = filters.peak_power_filter(power.update(data=data))
+        expected = np.zeros((power.nloads, power.npols, power.ntimes), dtype=bool)
+        expected[1, 0, 2] = True
+        np.testing.assert_array_equal(out.flags["peak_power_filter"].flags, expected)
+
+    def test_multi_load_matches_single_load(self):
+        """The fix for multi-load data must not change single-load results."""
+        power = create_mock_edges_data(add_noise=True, as_power=True, ntime=6)
+        data = power.data.copy()
+        fq = power.freqs.to_value("MHz")
+        data[:, 0, 3, np.argmin(np.abs(fq - 95))] *= 1e5
+        power = power.update(data=data)
+
+        multi = filters._peak_power_filter(data=power, threshold=40.0)
+        for iload in range(power.nloads):
+            single = filters._peak_power_filter(
+                data=select_loads(power, loads=[power.loads[iload]]), threshold=40.0
+            )
+            np.testing.assert_array_equal(multi[iload], single[0])
+
 
 def test_peak_orbcomm_filter(mock):
     run_filter_check(mock, filters.peak_orbcomm_filter)
@@ -174,6 +212,18 @@ class TestPowerPercentFilter:
 class TestXRFI:
     def test_basic_run(self, mock: GSData):
         run_filter_check(mock, filters.rfi_iterative_filter, freq_range=(40, 100))
+
+    @pytest.mark.parametrize(
+        ("fnc", "method"),
+        [
+            (filters.rfi_iterative_filter, "iterative"),
+            (filters.rfi_watershed_filter, "watershed"),
+            (filters.rfi_iterative_sliding_window, "iterative_sliding_window"),
+        ],
+    )
+    def test_docstring(self, fnc, method):
+        assert fnc.__doc__ is not None
+        assert f"xrfi_{method}" in fnc.__doc__
 
     @pytest.mark.parametrize(
         "strategy",
@@ -385,3 +435,16 @@ class TestGalaxyFilter:
             mock,
             filters.galaxy_filter,
         )
+
+
+class TestFilterLogging:
+    def test_percentages_in_log(self, gsd_ones: GSData, caplog):
+        """The summary log line reports every number as a percentage."""
+        flags = np.zeros(gsd_ones.ntimes, dtype=bool)
+        flags[0] = True  # 1 of 10 integrations, i.e. 10% of the data
+        with caplog.at_level(logging.INFO, logger=filters.logger.name):
+            filters.apply_flags(
+                gsd_ones, flags=GSFlag(flags=flags, axes=("time",))
+            )
+        assert "0.00% + 10.00% → 10.00%" in caplog.text
+        assert "<+10.00%>" in caplog.text
