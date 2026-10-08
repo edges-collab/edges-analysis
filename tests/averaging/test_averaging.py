@@ -382,6 +382,30 @@ class TestWeightedMean:
         result, _ = averaging.weighted_mean(data, weights, fill_value=0)
         assert result == 0
 
+    def test_identical_data_arbitrary_weights(self):
+        """The weighted mean of identical data is that data, whatever the weights."""
+        rng = np.random.default_rng(11)
+        row = rng.normal(size=7)
+        data = np.tile(row, (20, 1))
+        weights = rng.uniform(0.01, 10, size=data.shape)
+        weights[3] = 0  # a fully zero-weighted sample must not matter
+
+        avg, wsum = averaging.weighted_mean(data, weights, axis=0)
+        np.testing.assert_allclose(avg, row, rtol=1e-12, atol=0)
+        np.testing.assert_allclose(wsum, weights.sum(axis=0), rtol=1e-12)
+
+    def test_inverse_variance_weighting(self):
+        """For iid samples with variance 1/w, var(weighted mean) * sum(w) = 1."""
+        rng = np.random.default_rng(42)
+        nsamp, nreal = 8, 20000
+        w = rng.uniform(0.5, 5.0, size=nsamp)
+        data = rng.normal(size=(nreal, nsamp)) / np.sqrt(w)
+
+        avg, wsum = averaging.weighted_mean(data, np.broadcast_to(w, data.shape))
+        np.testing.assert_allclose(wsum, w.sum(), rtol=1e-12)
+        # Relative std of a sample variance with N=20000 is sqrt(2/N) = 1%.
+        assert np.var(avg) * w.sum() == pytest.approx(1.0, abs=0.05)
+
 
 class TestWeightedVariance:
     # Calculate weighted variance with provided data and nsamples

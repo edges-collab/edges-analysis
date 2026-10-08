@@ -124,6 +124,28 @@ class Test150MHzFilter:
         data = filters.filter_150mhz(mock, threshold=100)
         assert not np.any(data.complete_flags)
 
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            "FLT-3: filter_150mhz takes np.mean without an axis, so the RMS is a "
+            "single scalar over all loads/pols/times and one bad integration flags all "
+            "integration; fix pending (result-changing)"
+        ),
+    )
+    def test_single_bad_integration(self):
+        mock = create_mock_edges_data(fhigh=200 * un.MHz, ntime=10)
+        band = (mock.freqs >= 152.75 * un.MHz) & (mock.freqs <= 154.25 * un.MHz)
+        data = mock.data.copy()
+        rng = np.random.default_rng(1)
+        # Very large excess noise in one integration only: its ratio is ~10x the
+        # clean integrations' ratio, both with and without the sqrt in the statistic.
+        data[..., 3, band] += rng.normal(scale=100.0, size=band.sum())
+
+        out = filters.filter_150mhz(mock.update(data=data), threshold=3)
+        expected = np.zeros(mock.ntimes, dtype=bool)
+        expected[3] = True
+        np.testing.assert_array_equal(out.complete_flags[0, 0, :, 0], expected)
+
 
 class TestPowerPercentFilter:
     def test_basic(self, mock_power):

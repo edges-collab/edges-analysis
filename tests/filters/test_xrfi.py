@@ -7,6 +7,7 @@ import pytest
 import yaml
 from pytest_cases import fixture_ref as fxref
 from pytest_cases import parametrize
+from scipy.stats import norm
 
 from edges import modeling as mdl
 from edges.filters import xrfi
@@ -331,3 +332,138 @@ class TestXRFIIterativeSlidingWindow:
         print(sky)
 
         assert len(wrong) == 0
+
+
+# ---------------------------------------------------------------------------
+# Statistical tests of the xRFI noise model and flagging.
+# ---------------------------------------------------------------------------
+NSTAT = 10000
+
+
+@pytest.fixture(scope="module")
+def stat_freqs():
+    return np.linspace(50, 150, NSTAT)
+
+
+def _poly_modeler(n_terms: int = 3) -> xrfi.LinearModeler:
+    return xrfi.LinearModeler(model=mdl.Polynomial(n_terms=n_terms))
+
+
+class TestStdModelers:
+    """Each std modeler should return ~1 when fed unit-variance Gaussian residuals."""
+
+    @pytest.mark.parametrize(
+        "modeler",
+        [_poly_modeler(3), xrfi.FilterModeler.gaussian(size=64)],
+        ids=["linear", "gaussian-filter"],
+    )
+    def test_base_get_std_unit_noise(self, modeler, stat_freqs):
+        rng = np.random.default_rng(1234)
+        resids = rng.normal(size=NSTAT)
+        model = modeler.init_model(modeler.set_params(0), stat_freqs)
+        std = modeler.get_std(model, resids, np.ones(NSTAT))
+        assert np.mean(std) == pytest.approx(1.0, abs=0.05)
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            "FLT-1: MedianFilterModeler.get_std divides sqrt(median(r^2)) by 0.456, "
+            "but median(chi2_1)=0.4549 belongs inside the sqrt, so the std is ~1.48x "
+            "too large; fix pending (result-changing)"
+        ),
+    )
+    def test_median_get_std_unit_noise(self):
+        rng = np.random.default_rng(1234)
+        resids = rng.normal(size=NSTAT)
+        std = xrfi.MedianFilterModeler(size=64).get_std(None, resids, np.ones(NSTAT))
+        assert np.mean(std) == pytest.approx(1.0, abs=0.05)
+
+
+def _false_positive_check(std_modeler, freqs, threshold: float = 2.5):
+    """Run xrfi_iterative on pure noise and check the false-positive fraction.
+
+    xRFI flags only *positive* outliers, so the expected false-positive rate is the
+    one-sided Gaussian tail probability, ``norm.sf(threshold)``.
+    """
+    rng = np.random.default_rng(2024)
+    data = 10 + rng.normal(size=freqs.size)
+    flags, info = xrfi.xrfi_iterative(
+        data,
+        freqs=freqs,
+        data_modeler=_poly_modeler(3),
+        std_modeler=std_modeler,
+        threshold_setter=lambda i: threshold,
+        max_iter=20,
+    )
+    assert info.n_iters < 20
+    p = norm.sf(threshold)
+    tol = 4 * np.sqrt(p * (1 - p) / freqs.size)
+    assert abs(np.mean(flags) - p) < tol
+
+
+class TestFalsePositiveRate:
+    def test_linear_std_modeler(self, stat_freqs):
+        _false_positive_check(_poly_modeler(3), stat_freqs)
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            "FLT-1: MedianFilterModeler over-estimates the std by ~1.48x, so far too "
+            "few noise channels are flagged; fix pending (result-changing)"
+        ),
+    )
+    def test_median_std_modeler(self, stat_freqs):
+        _false_positive_check(xrfi.MedianFilterModeler(size=1001), stat_freqs)
+
+
+class TestSingleSpike:
+    """A single huge spike in pure noise should be the only flagged channel."""
+
+    def _run(self, spike: float):
+        n = 1000
+        freqs = np.linspace(50, 150, n)
+        rng = np.random.default_rng(7)
+        data = 10 + rng.normal(size=n)
+        data[400] += spike
+        return xrfi.xrfi_iterative(
+            data,
+            freqs=freqs,
+            data_modeler=_poly_modeler(3),
+            std_modeler=_poly_modeler(3),
+            threshold_setter=lambda i: 5.0,
+        )[0]
+
+    def test_positive_spike_flagged(self):
+        flags = self._run(100.0)
+        assert flags[400]
+        assert np.sum(flags) == 1
+
+    def test_negative_spike_not_flagged(self):
+        # xRFI is deliberately one-sided: only positive outliers are flagged.
+        flags = self._run(-100.0)
+        assert not np.any(flags)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "FLT-14: the convergence check compares the model params to the element just "
+        "appended, so term_increase never takes effect and the fit stops at "
+        "min_terms; fix pending (result-changing)"
+    ),
+)
+def test_term_increase_reaches_max_terms():
+    n = 500
+    freqs = np.linspace(50, 150, n)
+    rng = np.random.default_rng(0)
+    data = 1000 * (freqs / 75) ** -2.5 + rng.normal(scale=0.01, size=n)
+    _, info = xrfi.xrfi_iterative(
+        data,
+        freqs=freqs,
+        data_modeler=xrfi.LinearModeler(
+            model=mdl.LinLog(n_terms=5), min_terms=3, max_terms=5, term_increase=1
+        ),
+        std_modeler=_poly_modeler(2),
+        threshold_setter=lambda i: 5.0,
+    )
+    assert info.model_params[-1]["nterms"] == 5
