@@ -24,15 +24,6 @@ ITER_KWARGS = {
 }
 
 
-def _xrfi_warn_each_call(spectrum, *, freqs, weights, **kwargs):
-    """A fake xRFI method that emits the same warning on every call."""
-    warnings.warn("something odd happened", UserWarning, stacklevel=2)
-    return np.zeros_like(spectrum, dtype=bool), None
-
-
-_xrfi_warn_each_call.ndim = (1,)
-
-
 def _xrfi_raise(spectrum, *, freqs, weights, **kwargs):
     raise RuntimeError("boom")
 
@@ -74,19 +65,27 @@ class TestRunXRFI:
         assert np.all(flags[1])
 
     @pytest.mark.parametrize("n_threads", [1, 2])
-    def test_warnings_counted(self, monkeypatch, caplog, n_threads):
-        monkeypatch.setattr(
-            xrfi, "xrfi_warn_each_call", _xrfi_warn_each_call, raising=False
-        )
-        freqs, spec = _spectra(nrow=5)
+    def test_warnings_counted(self, caplog, n_threads):
+        # An 11-term data model on 20 channels is unfittable, so every call of the
+        # (real, importable) iterative method warns. Using a real method keeps this
+        # valid when pool workers are spawned rather than forked.
+        freqs = np.linspace(50, 150, 20)
+        rng = np.random.default_rng(10)
+        spec = 1000 * (freqs / 75) ** -2.5 + rng.normal(size=(5, 20))
         with caplog.at_level(logging.WARNING, logger=runners.logger.name):
             runners.run_xrfi(
-                method="warn_each_call",
+                method="iterative",
                 spectrum=spec,
                 freqs=freqs,
                 n_threads=n_threads,
+                data_modeler=xrfi.LinearModeler(model=mdl.Polynomial(n_terms=11)),
+                std_modeler=xrfi.LinearModeler(model=mdl.Polynomial(n_terms=2)),
+                flag_if_broken=False,
             )
-        assert "Received warning 'something odd happened' 5/5 times" in caplog.text
+        assert (
+            "Received warning 'Termination of iterative loop for model-specific "
+            "reasons' 5/5 times" in caplog.text
+        )
 
     def test_showwarning_restored_on_error(self, monkeypatch):
         monkeypatch.setattr(xrfi, "xrfi_raise", _xrfi_raise, raising=False)
