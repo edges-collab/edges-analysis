@@ -78,11 +78,19 @@ class Beam:
         """
         Create a Beam object from a HFSS file.
 
+        The file is a comma-separated table with a single header line, and columns
+        of azimuth (phi, degrees), zenith angle (theta, degrees) and power, for a
+        single frequency. Only the part of the beam above the horizon
+        (``theta <= 90``) is kept.
+
         Parameters
         ----------
         path
             Path to the file. Use :meth:`resolve_file` to get the absolute path
             from a a relative path (starting with ':').
+        frequency
+            The frequency of the beam in the file. If not a Quantity, it is assumed
+            to be in MHz.
         linear
             Whether the beam values are in linear units (or decibels)
         theta_min, theta_max
@@ -99,6 +107,10 @@ class Beam:
         beam
             The beam object.
         """
+        frequency = np.atleast_1d(u.Quantity(frequency, u.MHz))
+        if frequency.size != 1:
+            raise ValueError("A HFSS beam file holds a single frequency.")
+
         d = np.genfromtxt(path, skip_header=1, delimiter=",")
         theta = np.arange(theta_min, theta_max + theta_resolution, theta_resolution)
         phi = np.arange(phi_min, phi_max + phi_resolution, phi_resolution)
@@ -122,18 +134,34 @@ class Beam:
             this_power[np.isnan(this_power)] = 0
             beam_map[i, :] = this_power
 
+        # Convert zenith angle to (ascending) elevation, above the horizon only.
+        above = theta <= 90
+        elevation = (90 - theta[above])[::-1]
+        beam_map = beam_map[above][::-1]
+
         return Beam(
-            frequency=np.array([frequency]),
-            elevation=theta,
+            frequency=frequency,
+            elevation=elevation,
             azimuth=phi,
-            beam=beam_map,
+            beam=beam_map[None],
             simulator="hfss",
             raw_file=path,
         )
 
     @classmethod
-    def from_wipld(cls, path: tp.PathLike, az_antenna_axis: float = 0) -> Self:
+    def from_wipld(
+        cls,
+        path: tp.PathLike,
+        az_antenna_axis: float = 0,
+        frequency_unit: str | u.Unit = "MHz",
+    ) -> Self:
         """Read a WIPL-D beam.
+
+        The file contains a header line for each frequency (with a ``>`` as its third
+        character and the frequency in characters 19-32), each followed by
+        whitespace-separated rows whose first column is the azimuth (degrees), whose
+        second column is the elevation (degrees) and whose seventh column is the
+        (linear) gain. Only the part of the beam above the horizon is kept.
 
         Parameters
         ----------
@@ -141,6 +169,8 @@ class Beam:
             The path to the file.
         az_antenna_axis
             The azimuth of the primary antenna axis, in degrees.
+        frequency_unit
+            The unit of the frequencies given in the file.
         """
         with Path(path).open("r") as fn:
             file_length = 0
@@ -168,7 +198,7 @@ class Beam:
                 int(number_of_columns),
             ))
 
-        frequencies = np.array(frequencies_list)
+        frequencies = np.array(frequencies_list) * u.Unit(frequency_unit)
 
         with Path(path).open("r") as fn:
             i = -1
@@ -207,15 +237,14 @@ class Beam:
 
                 beam[i, j, :] = gp
 
-        # Flip beam from theta to elevation
-        beam_maps = beam[:, ::-1, :]
-
-        # Change coordinates from theta/phi, to AZ/EL
-        el = np.arange(0, 91)
-        az = np.arange(0, 360)
+        # Flip beam from theta to elevation, and keep only the part above the horizon
+        el = (90 - theta_a)[::-1]
+        beam_maps = beam[:, ::-1, :][:, el >= 0]
+        el = el[el >= 0]
+        az = phi_u
 
         # Shifting beam relative to true AZ (referenced at due North)
-        beam_maps_shifted = cls.shift_beam_maps(az_antenna_axis, beam_maps)
+        beam_maps_shifted = cls.shift_beam_maps(az_antenna_axis, beam_maps, azimuth=az)
 
         return Beam(
             frequency=frequencies,
@@ -484,10 +513,19 @@ class Beam:
 
     @classmethod
     def get_beam_path(cls, band: str, kind: str | None = None) -> Path:
-        """Get a standard path to a beam file."""
-        pth = f"{kind}.txt" if kind else BEAM_PATH / band / "default.txt"
+        """Get a standard path to a beam file.
+
+        Parameters
+        ----------
+        band
+            The band of the instrument (e.g. 'low').
+        kind
+            The name of the beam file (without extension) in the band's beam
+            directory. By default, 'default'.
+        """
+        pth = BEAM_PATH / band / f"{kind or 'default'}.txt"
         if not pth.exists():
-            raise FileNotFoundError(f"No beam exists for band={band}.")
+            raise FileNotFoundError(f"No beam exists for band={band}, kind={kind}.")
         return pth
 
     def select_freqs(self, indx: Sequence[int]) -> Self:
@@ -590,32 +628,59 @@ class Beam:
         )
 
     @staticmethod
-    def shift_beam_maps(az_antenna_axis: float, beam_maps: np.ndarray) -> np.ndarray:
-        """Rotate beam maps around an axis.
+    def shift_beam_maps(
+        az_antenna_axis: float,
+        beam_maps: np.ndarray,
+        azimuth: np.ndarray | None = None,
+    ) -> np.ndarray:
+        """Rotate beam maps in azimuth.
+
+        The output at azimuth ``az + az_antenna_axis`` is the input at ``az``.
 
         Parameters
         ----------
         az_antenna_axis
-            The aximuth angle of the antenna axis.
+            The azimuth angle of the antenna axis, in degrees. It must be an integer
+            multiple of the azimuth grid step.
         beam_maps
-            Beam maps as a function of frequency, za and az.
+            Beam maps as a function of frequency, elevation and azimuth. The azimuth
+            axis must be a regular grid covering the full circle.
+        azimuth
+            The azimuth grid (in degrees) of the beam maps. If given, it is checked to
+            be a regular grid covering the full circle. If not given, the grid is
+            assumed to have a step of ``360 / beam_maps.shape[-1]``.
 
         Returns
         -------
         beam maps
             Array of the same shape as the input, but rotated.
+
+        Raises
+        ------
+        ValueError
+            If the azimuth grid is not regular over the full circle, or the rotation
+            is not an integer multiple of the grid step.
         """
-        if az_antenna_axis < 0:
-            index = -az_antenna_axis
-            bm1 = beam_maps[:, :, index::]
-            bm2 = beam_maps[:, :, 0:index]
-            return np.append(bm1, bm2, axis=2)
-        if az_antenna_axis > 0:
-            index = az_antenna_axis
-            bm1 = beam_maps[:, :, 0:(-index)]
-            bm2 = beam_maps[:, :, (360 - index) :]
-            return np.append(bm2, bm1, axis=2)
-        return beam_maps
+        if az_antenna_axis % 360 == 0:
+            return beam_maps
+
+        naz = beam_maps.shape[-1]
+        step = 360 / naz
+        if azimuth is not None and (
+            len(azimuth) != naz or not np.allclose(np.diff(azimuth), step)
+        ):
+            raise ValueError(
+                "To rotate a beam, its azimuth grid must be regular and cover the "
+                f"full circle, i.e. have a step of 360/{naz} degrees."
+            )
+
+        nshift = az_antenna_axis / step
+        if not np.isclose(nshift, np.round(nshift), rtol=0, atol=1e-6):
+            raise ValueError(
+                f"Cannot rotate the beam by {az_antenna_axis} degrees: it is not an "
+                f"integer multiple of the azimuth grid step ({step} degrees)."
+            )
+        return np.roll(beam_maps, int(np.round(nshift)), axis=-1)
 
     @classmethod
     def resolve_file(
@@ -650,8 +715,25 @@ class Beam:
         beam_file: tp.PathLike = ":",
         configuration: str = "default",
         rotation_from_north: float = 90,
+        frequency: tp.FreqType | None = None,
     ) -> Self:
-        """Read a beam from file."""
+        """Read a beam from file.
+
+        Parameters
+        ----------
+        band
+            The band of the instrument.
+        simulator
+            The simulator that produced the file: 'feko', 'wipl-d' or 'hfss'.
+        beam_file
+            The path to the beam file. See :meth:`resolve_file`.
+        configuration
+            The configuration of the default beam file of the band.
+        rotation_from_north
+            The azimuth of the antenna axis, in degrees (not used for 'hfss').
+        frequency
+            The frequency of the beam. Required (and only used) for 'hfss' files.
+        """
         beam_file = cls.resolve_file(beam_file, band, configuration, simulator)
 
         if simulator == "feko":
@@ -659,7 +741,9 @@ class Beam:
         elif simulator == "wipl-d":  # Beams from WIPL-D
             out = cls.from_wipld(beam_file, rotation_from_north)
         elif simulator == "hfss":
-            out = cls.from_hfss(beam_file)
+            if frequency is None:
+                raise ValueError("frequency must be given to read a HFSS beam.")
+            out = cls.from_hfss(beam_file, frequency=frequency)
         else:
             raise ValueError(f"Unknown value for simulator: '{simulator}'")
 
