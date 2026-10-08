@@ -20,14 +20,16 @@ def plot_raw_spectrum(
     xlabel: bool = True,
     ylabel: bool = True,
     **kwargs,
-):
+) -> plt.Figure:
     """
-    Make a plot of the averaged uncalibrated spectrum associated with this load.
+    Make a plot of the averaged uncalibrated spectrum (Q) associated with this load.
 
     Parameters
     ----------
     spectrum
         The LoadSpectrum object to plot.
+    freq
+        The frequencies, required if ``spectrum`` is an array.
     fig : Figure
         Optionally, pass a matplotlib figure handle which will be used to plot.
     ax : Axis
@@ -38,6 +40,11 @@ def plot_raw_spectrum(
         Whether to plot the y-axis label
     kwargs :
         All other arguments are passed to `plt.subplots()`.
+
+    Returns
+    -------
+    fig : :class:`plt.Figure`
+        The figure on which the plot was made.
     """
     if isinstance(spectrum, LoadSpectrum):
         freq = spectrum.freqs
@@ -45,16 +52,20 @@ def plot_raw_spectrum(
     else:
         assert freq is not None
 
-    if fig is None:
+    if ax is None:
         fig, ax = plt.subplots(1, 1, **kwargs)
+    elif fig is None:
+        fig = ax.get_figure()
 
     ax.plot(freq, spectrum)
     if ylabel:
-        ax.set_ylabel("$T^*$ [K]")
+        ax.set_ylabel("$Q$")
 
     ax.grid(True)
     if xlabel:
         ax.set_xlabel("Frequency [MHz]")
+
+    return fig
 
 
 def plot_raw_spectra(calobs: CalibrationObservation, fig=None, ax=None) -> plt.Figure:
@@ -151,7 +162,7 @@ def plot_s11_residual(
         title = f"{lname} Reflection Coefficient Models"
 
     if title:
-        fig.suptitle(f"{lname} Reflection Coefficient Models", fontsize=14)
+        fig.suptitle(title, fontsize=14)
     if label:
         ax[0].legend()
 
@@ -169,8 +180,9 @@ def plot_s11_models(
 
     Returns
     -------
-    dict:
-        Each entry has a key of the source name, and the value is a matplotlib fig.
+    ax : np.ndarray
+        The array of matplotlib axes, of shape ``(4, len(calobs.loads) + 1)``. Each
+        column holds one source, and the last column holds the receiver.
     """
     _fig, ax = plt.subplots(
         4,
@@ -238,8 +250,10 @@ def plot_calibrated_temp(
     """
     load = calobs._load_str_to_load(load)
 
-    if fig is None and ax is None:
+    if ax is None:
         fig, ax = plt.subplots(1, 1, facecolor="w")
+    elif fig is None:
+        fig = ax.get_figure()
 
     # binning
     temp_calibrated = calibrator.calibrate_load(load)
@@ -279,11 +293,11 @@ def plot_calibrated_temp(
     if ylabel:
         ax.set_ylabel("Temperature [K]")
 
-    plt.ticklabel_format(useOffset=False)
+    ax.ticklabel_format(useOffset=False)
     ax.grid()
     ax.legend()
 
-    return plt.gcf()
+    return fig
 
 
 def plot_calibrated_temps(
@@ -348,8 +362,8 @@ def plot_cal_coefficients(calibrator: Calibrator, fig=None, ax=None):
         )
 
     labels = [
-        "Scale ($C_1$)",
-        "Offset ($C_2$) [K]",
+        r"$T_{\rm sca}$ [K]",
+        r"$T_{\rm off}$ [K]",
         r"$T_{\rm unc}$ [K]",
         r"$T_{\rm cos}$ [K]",
         r"$T_{\rm sin}$ [K]",
@@ -360,7 +374,7 @@ def plot_cal_coefficients(calibrator: Calibrator, fig=None, ax=None):
         ax[i].plot(calibrator.freqs, getattr(calibrator, kind))
         ax[i].set_ylabel(label, fontsize=13)
         ax[i].grid()
-        plt.ticklabel_format(useOffset=False)
+        ax[i].ticklabel_format(useOffset=False)
 
         if i == 4:
             ax[i].set_xlabel("Frequency [MHz]", fontsize=13)

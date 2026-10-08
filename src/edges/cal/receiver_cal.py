@@ -122,22 +122,32 @@ def perform_term_sweep(
     max_cterms: int = 15,
     max_wterms: int = 15,
     **kwargs,
-) -> CalibrationObservation:
+) -> Calibrator:
     """For a given calibration definition, perform a sweep over number of terms.
 
     Parameters
     ----------
     calobs: :class:`CalibrationObservation` instance
-        The definition calibration class. The `cterms` and `wterms` in this instance
-        should define the *lowest* values of the parameters to sweep over.
+        The calibration observation to calibrate.
     delta_rms_thresh : float
         The threshold in change in RMS between one set of parameters and the next that
         will define where to cut off. If zero, will run all sets of parameters up to
         the maximum terms specified.
+    min_cterms : int
+        The minimum number of cterms to trial.
+    min_wterms : int
+        The minimum number of wterms to trial.
     max_cterms : int
         The maximum number of cterms to trial.
     max_wterms : int
         The maximum number of wterms to trial.
+    kwargs
+        Passed through to :func:`get_noise_wave_calibration_iterative`.
+
+    Returns
+    -------
+    calibrator
+        The calibrator with the lowest RMS found in the sweep.
     """
     cterms = range(min_cterms, max_cterms)
     wterms = range(min_wterms, max_wterms)
@@ -146,6 +156,7 @@ def perform_term_sweep(
     rms = np.ones((len(cterms), len(wterms))) * np.inf
 
     best_rms = np.inf
+    best_calibrator = None
 
     for i, c in enumerate(cterms):
         for j, w in enumerate(wterms):
@@ -172,6 +183,12 @@ def perform_term_sweep(
 
         if i > 0 and rms[i, winner[i]] >= rms[i - 1, winner[i - 1]] - delta_rms_thresh:
             break
+
+    if best_calibrator is None:
+        raise RuntimeError(
+            "No finite RMS was found for any number of terms in the sweep "
+            f"(cterms in {cterms}, wterms in {wterms})."
+        )
 
     logger.info(
         f"Best parameters found for Nc={cterms[i - 1]}, "

@@ -1,11 +1,10 @@
 """Module with routines for simulating calibration datasets."""
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 
 import numpy as np
 from astropy import units as un
 
-from .. import modeling as mdl
 from .. import types as tp
 from ..cal import Calibrator, InputSource, noise_waves
 
@@ -108,19 +107,29 @@ def simulate_qant_from_calibrator(
     ant_temp: np.ndarray,
     scale_model: Callable | None = None,
     loss: np.ndarray | float = 1,
-    t_amb: float = 296,
+    t_amb: tp.TemperatureType | float = 296 * un.K,
     bm_corr: float | np.ndarray = 1,
 ) -> np.ndarray:
     """Simulate antenna Q from a calibration observation.
 
     Parameters
     ----------
-    calobs : :class:`~edges.cal.cal_coefficients.CalibrationObservation`
-        The calibration observation that contains the solutions.
+    calibrator
+        The calibrator that contains the noise-wave solutions.
     ant_s11
         The S11 of the antenna.
     ant_temp
         The true temperature of the beam-weighted sky.
+    scale_model
+        An optional model of the scale temperature, evaluated at the calibrator's
+        frequencies. By default, use ``calibrator.Tsca``.
+    loss
+        The (antenna/balun/ground) loss, as a power gain between 0 and 1.
+    t_amb
+        The ambient temperature of the lossy components. Floats are interpreted as
+        being in K.
+    bm_corr
+        The beam-chromaticity correction factor applied to ``ant_temp``.
 
     Returns
     -------
@@ -130,6 +139,11 @@ def simulate_qant_from_calibrator(
     freq = calibrator.freqs
 
     t_sca = scale_model(freq) if scale_model is not None else calibrator.Tsca
+
+    if isinstance(t_amb, un.Quantity):
+        t_amb = t_amb.to(un.K, equivalencies=un.temperature())
+    else:
+        t_amb = t_amb * un.K
 
     ant_temp = loss * ant_temp * bm_corr + (1 - loss) * t_amb
 
@@ -145,28 +159,3 @@ def simulate_qant_from_calibrator(
         t_cos=calibrator.Tcos,
         t_sin=calibrator.Tsin,
     )
-
-
-def get_data_from_calobs(
-    srcs: Sequence[str],
-    calobs,
-    tns: mdl.Model | None = None,
-    sim: bool = False,
-    loads: dict | None = None,
-) -> np.ndarray:
-    """Generate input data to fit from a calibration observation."""
-    if loads is None:
-        loads = calobs.loads
-
-    data = []
-    for src in srcs:
-        load = loads[src]
-        scale = calobs.Tsca if tns is None else tns(x=calobs.freqs)
-        q = (
-            simulate_q_from_calibrator(calobs, load=src)
-            if sim
-            else load.spectrum.averaged_q
-        )
-        c = calobs.get_K()[src][0]
-        data.append(scale * q - c * load.temp_ave)
-    return np.concatenate(tuple(data))
