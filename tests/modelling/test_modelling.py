@@ -67,18 +67,46 @@ def test_simple_fit(method: str):
     assert fit.hessian.shape == (3, 3)
 
 
-@pytest.mark.parametrize("method", ["lstsq", "qr", "alan-qrd", "qrd-c"])
+@pytest.mark.parametrize(
+    "method",
+    [
+        pytest.param(
+            "lstsq",
+            marks=pytest.mark.xfail(
+                strict=True,
+                reason=(
+                    "MOD-1: the 'lstsq' solver applies the weights to both A and y, "
+                    "minimising sum(w^2 r^2) (i.e. treating w as 1/sigma) instead of "
+                    "sum(w r^2) with w = 1/sigma^2; fix pending (result-changing)"
+                ),
+            ),
+        ),
+        "qr",
+        "alan-qrd",
+        "qrd-c",
+    ],
+)
 def test_weighted_fit(method: str):
+    """Weighted fits with inverse-variance weights must give the exact WLS solution.
+
+    Weights are 1/sigma^2 and strongly non-uniform, so that a solver using any other
+    weighting convention gives a measurably different answer.
+    """
     rng = np.random.default_rng(1234)
     four = mdl.Fourier(parameters=[1, 2, 3])
-    model = four.at(x=np.linspace(50, 100, 10))
+    model = four.at(x=np.linspace(50, 100, 30))
 
-    sigmas = np.abs(model() / 100)
+    sigmas = np.exp(rng.normal(size=model.x.size))
     data = model() + rng.normal(scale=sigmas)
+    weights = 1 / sigmas**2
 
-    fit = mdl.ModelFit(model, ydata=data, weights=1 / sigmas)
+    fit = mdl.ModelFit(model, ydata=data, weights=weights, method=method)
 
-    assert np.allclose(fit.model_parameters, [1, 2, 3], rtol=0.05)
+    # Exact weighted-least-squares solution: (A^T W A)^-1 A^T W y.
+    a = model.basis.T
+    expected = np.linalg.solve(a.T @ (weights[:, None] * a), a.T @ (weights * data))
+
+    np.testing.assert_allclose(fit.model_parameters, expected, rtol=1e-8, atol=0)
 
 
 def test_wrong_params():
