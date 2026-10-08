@@ -5,6 +5,7 @@ The models here are preferably *not* interpolated over frequency, as that gives 
 control to us to interpolate how we wish.
 """
 
+import functools
 import logging
 import warnings
 from abc import ABC, abstractmethod
@@ -20,6 +21,17 @@ from astropy.io import fits
 from astropy.utils.data import download_file
 
 logger = logging.getLogger(__name__)
+
+
+def _skycoord_eq(a: apc.SkyCoord, b: apc.SkyCoord) -> bool:
+    """Whether two SkyCoord arrays are exactly equal (in the same frame)."""
+    if a.shape != b.shape:
+        return False
+    try:
+        return bool(np.all(a == b))
+    except (TypeError, ValueError):
+        # Raised by astropy when the frames are not equivalent.
+        return False
 
 
 class IndexModel(ABC):
@@ -112,11 +124,12 @@ class SkyModel:
     Parameters
     ----------
     frequency
-        The frequency of the sky model in Hz.
+        The frequency of the sky model in MHz.
     temperature
         The temperature of the sky model in K, shape (Nsky,).
     coords
-        The coordinates of the sky model, shape (Nsky,).
+        The coordinates of the sky model, shape (Nsky,). They may be in any frame,
+        but spectral-index models are evaluated in Galactic coordinates.
     name
         The name of the sky model.
     healpix
@@ -131,8 +144,11 @@ class SkyModel:
     """
 
     frequency: float = attrs.field(converter=float, validator=attrs.validators.gt(0))
-    temperature: np.ndarray = attrs.field(converter=np.asarray)
-    coords: apc.SkyCoord = attrs.field()
+    temperature: np.ndarray = attrs.field(
+        converter=np.asarray,
+        eq=attrs.cmp_using(eq=functools.partial(np.array_equal, equal_nan=True)),
+    )
+    coords: apc.SkyCoord = attrs.field(eq=attrs.cmp_using(eq=_skycoord_eq))
     name: str = attrs.field(default="SkyModel")
     healpix: ahp.HEALPix | None = attrs.field(default=None, eq=False)
     pixel_res: float | np.ndarray = attrs.field(eq=attrs.cmp_using(eq=np.allclose))
@@ -168,8 +184,8 @@ class SkyModel:
         Parameters
         ----------
         freq
-            The frequencies at which to evaluate the model (can be a single float or
-            an array of floats).
+            The frequencies (in MHz) at which to evaluate the model (can be a single
+            float or an array of floats).
         index_model
             A spectral index model to shift to the new frequencies.
 
@@ -178,9 +194,12 @@ class SkyModel:
         temperature
             The sky maps as numpy arrays at the new frequencies, shape (Nsky, Nfreq).
         """
-        index = index_model.get_index(
-            lon=self.coords.l.deg, lat=self.coords.b.deg, sky_model=self
+        gal = (
+            self.coords
+            if isinstance(self.coords.frame, Galactic)
+            else self.coords.galactic
         )
+        index = index_model.get_index(lon=gal.l.deg, lat=gal.b.deg, sky_model=self)
         f = freq / self.frequency
         t_cmb = 2.725
         scale = np.power.outer(f, -index)
@@ -259,8 +278,8 @@ class SkyModel:
             temperature=temperature.flatten(),
             coords=coords,
             name=name,
-            pixel_res=(np.pi / 512.0)
-            * (2 * np.pi / 1024.0)
+            pixel_res=(np.pi / nlat)
+            * (2 * np.pi / nlon)
             * np.cos(glat.flatten() * np.pi / 180.0),
         )
 
@@ -402,11 +421,17 @@ def Guzman45(min_nside=2**0, max_nside=2**100):  # ruff: ignore[invalid-function
         name="Guzman45",
     )
 
-    # Process the bad values in the map
-    new_temp = np.zeros_like(out.temperature)
-    new_temp[out.coords.dec.deg > 68.0] = np.mean(
-        out.temperature[(out.coords.dec.deg < 68.0) & (out.coords.dec.deg > 60.0)]
-    )
+    # Process the bad values in the map. Blank pixels are stored as -32768, both
+    # around the north celestial pole and around the south celestial pole (which is
+    # always above the horizon for EDGES). Mark all of them as NaN, so that they are
+    # excluded from simulations.
+    new_temp = out.temperature.astype(float)
+    new_temp[new_temp <= -1e4] = np.nan
+
+    # Fill the region around the NCP that is not covered by the survey with the mean
+    # of a band just below it.
+    dec = out.coords.icrs.dec.deg
+    new_temp[dec > 68.0] = np.nanmean(new_temp[(dec < 68.0) & (dec > 60.0)])
     return attrs.evolve(out, temperature=new_temp)
 
 
