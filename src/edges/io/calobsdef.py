@@ -92,7 +92,7 @@ class CalkitFileSpec:
 
         if not open_.exists():
             if allow_other:
-                open_ = next(direc.glob(f"{prefix}Open*.s1p"))
+                open_ = sorted(direc.glob(f"{prefix}Open*.s1p"))[0]
 
                 warnings.warn(
                     f"Could not find {prefix}Open{repeat_num:02} in {direc}, using"
@@ -197,8 +197,8 @@ class LoadDefEDGES2:
         assert (root / "Spectra").exists()
 
         # Get Resistance
-        res = next((root / "Resistance").glob(f"{loadname}_{run_num:02}_*.csv"))
-        spec = list((root / "Spectra").glob(f"{loadname}_{run_num:02}_*.acq"))
+        res = sorted((root / "Resistance").glob(f"{loadname}_{run_num:02}_*.csv"))[0]
+        spec = sorted((root / "Spectra").glob(f"{loadname}_{run_num:02}_*.acq"))
 
         s11dir = root / "S11" / f"{loadname}{run_num:02}"
         clk = CalkitFileSpec.from_edges2_layout(s11dir, rep_num)
@@ -432,7 +432,7 @@ class CalObsDefEDGES2:
         swstate = rootdir / "S11" / f"SwitchingState{run_num:02}"
         if not swstate.exists():
             # Try any run num:
-            swstate = next((rootdir / "S11").glob("SwitchingState*"))
+            swstate = sorted((rootdir / "S11").glob("SwitchingState*"))[0]
             warnings.warn(
                 f"Could not find SwitchingState{run_num:02}, using {swstate.name}",
                 stacklevel=2,

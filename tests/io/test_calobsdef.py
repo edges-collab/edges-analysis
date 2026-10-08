@@ -168,3 +168,38 @@ def test_standard_layout_hot_load_has_semirigid_sparams(
     calio: calobsdef.CalObsDefEDGES2,
 ):
     assert calio.hot_load.sparams_file is not None
+
+
+@pytest.fixture
+def reversed_glob(monkeypatch):
+    """Make Path.glob yield its matches in reverse-sorted order."""
+    original = Path.glob
+
+    def _glob(self, pattern, *args, **kwargs):
+        return iter(sorted(original(self, pattern, *args, **kwargs), reverse=True))
+
+    monkeypatch.setattr(Path, "glob", _glob)
+
+
+class TestGlobOrderIndependence:
+    """File discovery must not depend on the order the filesystem lists files."""
+
+    def test_standard_layout(self, datadir: Path, request):
+        direc = datadir / "Receiver01_25C_2019_11_26_040_to_200MHz"
+        forward = calobsdef.CalObsDefEDGES2.from_standard_layout(direc)
+        request.getfixturevalue("reversed_glob")
+        backward = calobsdef.CalObsDefEDGES2.from_standard_layout(direc)
+
+        assert backward == forward
+        assert len(forward.hot_load.spectra) == 4
+        for load in forward.loads.values():
+            assert load.spectra == sorted(load.spectra)
+
+    def test_calkit_fallback_repeat(self, datadir: Path, request):
+        direc = datadir / "Receiver01_25C_2019_11_26_040_to_200MHz/S11/Ambient01"
+        with pytest.warns(UserWarning, match="using Open01.s1p"):
+            forward = calobsdef.CalkitFileSpec.from_edges2_layout(direc, repeat_num=5)
+        request.getfixturevalue("reversed_glob")
+        with pytest.warns(UserWarning, match="using Open01.s1p"):
+            backward = calobsdef.CalkitFileSpec.from_edges2_layout(direc, repeat_num=5)
+        assert backward == forward
