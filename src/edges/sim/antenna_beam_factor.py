@@ -7,6 +7,7 @@ import attrs
 import numpy as np
 import scipy.interpolate as spi
 from astropy import units as u
+from astropy.coordinates import Longitude
 
 from edges import const
 from edges import modeling as mdl
@@ -41,7 +42,11 @@ class BeamFactor:
     antenna_temp_ref: np.ndarray
         The beam-weighted sky integrals at the reference frequency and each LST.
     loss_fraction: np.ndarray
-        The fraction of the sky signal lost below the horizon.
+        One minus the mean (pixel-resolution weighted) beam over the sky, at each
+        LST and frequency, as computed by :func:`compute_antenna_beam_factor`. When
+        the beam is normalised, this is simply ``1 - ground_loss`` (i.e. zero if no
+        ground loss was given). Note that it is *not* the fraction of the sky signal
+        that is lost below the horizon.
     meta
         A dictionary of metadata.
     """
@@ -55,6 +60,10 @@ class BeamFactor:
     antenna_temp_ref: np.ndarray = attrs.field(converter=np.asarray)
     loss_fraction: np.ndarray | None = attrs.field(default=None)
     meta: dict = attrs.field(factory=dict, converter=dict)
+
+    # The attributes that have a leading LST axis (and get interpolated/selected
+    # when changing LSTs).
+    _per_lst_fields = ("antenna_temp", "antenna_temp_ref", "loss_fraction")
 
     @property
     def nfreq(self) -> int:
@@ -129,29 +138,56 @@ class BeamFactor:
             )
 
     def at_lsts(self, lsts: np.ndarray, interp_kind: int | str = "cubic") -> Self:
-        """Return a new BeamFactor at the given LSTs."""
-        d = attrs.asdict(self)
+        """Return a new BeamFactor interpolated to the given LSTs.
 
-        lst_like = [
-            k
-            for k, v in d.items()
-            if isinstance(v, np.ndarray) and v.shape[0] == self.nlst
-            if k != "lsts"
-        ]
+        If the LSTs of this object cover the full day (i.e. the gap from the last LST
+        around to the first is no more than 1.5 times the largest spacing between
+        consecutive LSTs), the interpolation wraps around 24 hours. Otherwise, the
+        requested LSTs must lie within the range of LSTs covered by this object.
+
+        Parameters
+        ----------
+        lsts
+            The LSTs (in hours) at which to evaluate the beam factor.
+        interp_kind
+            The kind of interpolation, passed to :class:`scipy.interpolate.interp1d`.
+
+        Raises
+        ------
+        ValueError
+            If the LSTs of this object do not cover the full day, and some of the
+            requested LSTs are outside the covered range.
+        """
+        tol = 1e-10
+        lsts = np.asarray(lsts)
 
         these_lsts = self.lsts % 24
         while np.any(these_lsts < these_lsts[0]):
             these_lsts[these_lsts < these_lsts[0]] += 24
 
-        use_lsts = lsts % 24
-        use_lsts[use_lsts < these_lsts[0]] += 24
-        these_lsts = np.append(these_lsts, these_lsts[0] + 24)
+        use_lsts = np.array(lsts % 24, dtype=float)
+        use_lsts[use_lsts < these_lsts[0] - tol] += 24
+
+        wrap_gap = these_lsts[0] + 24 - these_lsts[-1]
+        full_day = self.nlst > 1 and wrap_gap <= 1.5 * np.max(np.diff(these_lsts))
+
+        if full_day:
+            these_lsts = np.append(these_lsts, these_lsts[0] + 24)
+        elif np.any(use_lsts > these_lsts[-1] + tol):
+            raise ValueError(
+                "The LSTs of this BeamFactor do not cover the full day, and some "
+                "requested LSTs are outside the covered range "
+                f"({these_lsts[0]:.4f}h to {these_lsts[-1] % 24:.4f}h)."
+            )
+        use_lsts = np.clip(use_lsts, these_lsts[0], these_lsts[-1])
+
         out = {}
-        for k in lst_like:
-            if d[k].ndim == 2:
-                val = np.vstack((d[k], d[k][0]))
-            elif d[k].ndim == 1:
-                val = np.concatenate((d[k], [d[k][0]]))
+        for k in self._per_lst_fields:
+            val = getattr(self, k)
+            if val is None:
+                continue
+            if full_day:
+                val = np.concatenate((val, val[:1]), axis=0)
 
             out[k] = spi.interp1d(these_lsts, val, axis=0, kind=interp_kind)(use_lsts)
 
@@ -178,15 +214,11 @@ class BeamFactor:
             raise ValueError(
                 f"BeamFactor does not contain any LSTs between {lst0} and {lst1}."
             )
-        d = attrs.asdict(self)
-        lst_like = [
-            k
-            for k, v in d.items()
-            if isinstance(v, np.ndarray) and v.shape[0] == self.nlst  # and v.ndim == 2
-            if k != "lsts"
-        ]
-
-        out = {k: getattr(self, k)[mask] for k in lst_like}
+        out = {
+            k: getattr(self, k)[mask]
+            for k in self._per_lst_fields
+            if getattr(self, k) is not None
+        }
         return attrs.evolve(self, lsts=these_lsts[mask], **out)
 
     def get_beam_factor(
@@ -243,7 +275,7 @@ def compute_antenna_beam_factor(
     f_high: tp.FreqType = np.inf * u.MHz,
     normalize_beam: bool = True,
     index_model: sky_models.IndexModel = sky_models.GaussianIndex(),
-    lsts: np.ndarray | None = None,
+    lsts: Longitude | np.ndarray | None = None,
     reference_frequency: tp.FreqType | None = None,
     beam_smoothing: bool = True,
     smoothing_model: mdl.Model = mdl.Polynomial(n_terms=12),
@@ -270,6 +302,8 @@ def compute_antenna_beam_factor(
     ----------
     beam
         A :class:`Beam` object.
+    sky_model
+        A sky model to use.
     ground_loss
         An array of ground-loss values for the beam, shape (Nfreq,).
     f_low
@@ -279,27 +313,38 @@ def compute_antenna_beam_factor(
         Maximum frequency to keep in the simulation (frequencies otherwise defined by
         the beam).
     normalize_beam
-        Whether to normalize the beam to be maximum unity.
-    sky_model
-        A sky model to use.
+        Whether to normalize the beam to unit integral over the visible sky.
     index_model
         An :class:`IndexModel` to use to generate different frequencies of the sky
         model.
-    twenty_min_per_lst
-        How many periods of twenty minutes fit into each LST bin.
-    save_dir
-        The directory in which to save the output beam factor.
-    save_fname
-        The filename to save the output beam factor.
+    lsts
+        The LSTs at which to compute the beam factor. Plain numbers are interpreted
+        as hours. By default, every half hour over the full day.
     reference_frequency
         The frequency to take as the "reference", i.e. where the chromaticity will
-        be by construction unity.
+        be by construction unity. By default, ``(f_low + f_high) / 2``, or, if that
+        is not finite (e.g. with the default ``f_high``), the mid-point of the range
+        of beam frequencies between ``f_low`` and ``f_high``.
+    beam_smoothing
+        Whether to smooth the beam over frequency before interpolating.
+    smoothing_model
+        The model used to smooth the beam over frequency, if ``beam_smoothing``.
+    interp_kind
+        The kind of angular interpolation of the beam. See
+        :func:`~edges.sim.simulate.sky_convolution_generator`.
     lst_progress
         Whether to show a progress bar over the LSTs.
     freq_progress
         Whether to show a progress bar over the frequencies.
     location
         The location of the telescope.
+    sky_at_reference_frequency
+        Whether to compute the reference antenna temperature with the sky (as well as
+        the beam) at the reference frequency (Eq. 4 of Sims+23), or with the
+        reference beam and the sky at each frequency (Eq. A1 of Sims+23).
+    use_astropy_azel
+        Whether to use astropy to compute the azimuth and elevation of the sky
+        pixels. If False, use Alan's method.
 
     Returns
     -------
@@ -308,11 +353,17 @@ def compute_antenna_beam_factor(
     beam = beam.between_freqs(f_low, f_high)
 
     if lsts is None:
-        lsts = np.arange(0, 24, 0.5)
+        lsts = Longitude(np.arange(0, 24, 0.5) * u.hour)
+    elif isinstance(lsts, u.Quantity):
+        lsts = Longitude(lsts)
+    else:
+        lsts = Longitude(np.asarray(lsts, dtype=float) * u.hour)
 
     # Get index of reference frequency
     if reference_frequency is None:
         reference_frequency = (f_high + f_low) / 2
+        if not np.isfinite(reference_frequency):
+            reference_frequency = (beam.frequency.min() + beam.frequency.max()) / 2
 
     indx_ref_freq = np.argmin(np.abs(beam.frequency - reference_frequency))
     # Don't reset the reference frequency. Alan uses the discrete ref frequency
@@ -385,7 +436,7 @@ def compute_antenna_beam_factor(
 
     return BeamFactor(
         frequencies=beam.frequency.to_value("MHz").astype(float),
-        lsts=np.array(lsts).astype(float),
+        lsts=lsts.hour,
         antenna_temp=(
             antenna_temperature_above_horizon
             if normalize_beam
