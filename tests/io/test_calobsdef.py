@@ -154,3 +154,17 @@ def test_metadata(calio: calobsdef.CalObsDefEDGES2):
 
     assert isw.temperature is None
     assert isw.external_calkit == "calkit-name"
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "The EDGES-2 standard layout names the hot load 'HotLoad', but the default "
+        "semi-rigid cable S-parameter file is only set for a load named 'hot_load', "
+        "so no hot-load cable loss is ever applied; fix pending (result-changing)"
+    ),
+)
+def test_standard_layout_hot_load_has_semirigid_sparams(
+    calio: calobsdef.CalObsDefEDGES2,
+):
+    assert calio.hot_load.sparams_file is not None

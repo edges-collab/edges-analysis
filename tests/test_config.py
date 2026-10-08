@@ -1,5 +1,6 @@
 """Test config class."""
 
+import copy
 from pathlib import Path
 
 import pytest
@@ -13,12 +14,22 @@ def cfg():
 
 
 def test_use(cfg):
-    assert cfg == config
+    # Compare against a fresh default Config rather than the global config, which
+    # is loaded from the user's config file (if any) and so is machine-dependent.
+    assert cfg == Config()
 
     with cfg.use(beams=Path("/a/path")):
         assert cfg.beams == Path("/a/path")
 
-    assert cfg == config  # returned to normal
+    assert cfg == Config()  # returned to normal
+
+
+def test_use_global_config_restores():
+    before = copy.deepcopy(config)
+    with config.use(beams=Path("/a/path"), raw_lab_data=Path("/b")):
+        assert config.beams == Path("/a/path")
+        assert config.raw_lab_data == Path("/b")
+    assert config == before
 
 
 def test_write_and_load(cfg, tmpdir):
