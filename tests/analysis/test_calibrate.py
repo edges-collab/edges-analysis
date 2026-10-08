@@ -18,6 +18,31 @@ def get_ideal_s11model(freqs):
     )
 
 
+def get_random_calibrator(freqs, seed: int = 1234) -> Calibrator:
+    """A calibrator with random (but physically-sized) noise-wave coefficients."""
+    rng = np.random.default_rng(seed)
+    n = freqs.size
+    return Calibrator(
+        freqs=freqs,
+        Tsca=rng.uniform(800, 1200, n),
+        Toff=rng.uniform(250, 350, n),
+        Tunc=rng.uniform(-50, 50, n),
+        Tcos=rng.uniform(-50, 50, n),
+        Tsin=rng.uniform(-50, 50, n),
+        receiver_s11=rng.uniform(0, 0.1, n) * np.exp(2j * np.pi * rng.uniform(size=n)),
+    )
+
+
+def get_random_s11(freqs, seed: int = 4321) -> ReflectionCoefficient:
+    rng = np.random.default_rng(seed)
+    n = freqs.size
+    return ReflectionCoefficient(
+        reflection_coefficient=rng.uniform(0.05, 0.5, n)
+        * np.exp(2j * np.pi * rng.uniform(size=n)),
+        freqs=freqs,
+    )
+
+
 class TestApplyNoiseWaveCalibration:
     def test_bad_inputs(
         self,
@@ -78,6 +103,24 @@ class TestApplyNoiseWaveCalibration:
 
         assert np.all(new.data == new2.data)
 
+    def test_round_trip_random_calibrator(self, gsd_ones: GSData):
+        """Calibrating de-calibrated temperatures recovers them, for non-zero S11s."""
+        calibrator = get_random_calibrator(gsd_ones.freqs)
+        ant_s11 = get_random_s11(gsd_ones.freqs)
+
+        rng = np.random.default_rng(0)
+        temp = rng.uniform(1000, 5000, gsd_ones.data.shape) * un.K
+        q = calibrator.decalibrate(
+            temp, ant_s11=ant_s11.reflection_coefficient, freqs=gsd_ones.freqs
+        )
+        data = gsd_ones.update(data=q.to_value(""), data_unit="uncalibrated")
+
+        out = calibrate.apply_noise_wave_calibration(
+            data, calibrator=calibrator, antenna_s11=ant_s11
+        )
+        assert out.data_unit == "temperature"
+        np.testing.assert_allclose(out.data, temp.to_value("K"), rtol=1e-12, atol=0)
+
 
 class TestApplyLossCorrection:
     def test_explicit_unity_loss(self, mock: GSData):
@@ -98,6 +141,39 @@ class TestApplyLossCorrection:
         loss = np.ones(mock.nfreqs) * 2
         data = calibrate.apply_loss_correction(mock, ambient_temp=0 * un.K, loss=loss)
         np.testing.assert_array_equal(data.data, mock.data / 2)
+
+    @pytest.mark.parametrize("loss_value", [1e-3, 0.3, 0.9, 1.0])
+    def test_ambient_is_invariant(self, mock: GSData, loss_value: float):
+        """A measurement at the ambient temperature is unchanged by any loss."""
+        tamb = 295.0 * un.K
+        data = mock.update(data=np.full_like(mock.data, tamb.to_value("K")))
+        loss = np.full(mock.nfreqs, loss_value)
+        out = calibrate.apply_loss_correction(data, ambient_temp=tamb, loss=loss)
+        np.testing.assert_allclose(out.data, tamb.to_value("K"), rtol=1e-12, atol=0)
+
+    def test_inverts_forward_model(self, mock: GSData):
+        """Correcting T_meas = L T + (1 - L) T_amb gives back T."""
+        rng = np.random.default_rng(1)
+        tamb = 290.0 * un.K
+        loss = rng.uniform(0.5, 1.0, mock.nfreqs)
+        measured = loss * mock.data + (1 - loss) * tamb.to_value("K")
+
+        out = calibrate.apply_loss_correction(
+            mock.update(data=measured), ambient_temp=tamb, loss=loss
+        )
+        np.testing.assert_allclose(out.data, mock.data, rtol=1e-12, atol=0)
+
+    def test_per_time_ambient_temp(self, mock: GSData):
+        """A different ambient temperature can be given for each time."""
+        rng = np.random.default_rng(2)
+        tamb = rng.uniform(280, 310, mock.ntimes) * un.K
+        loss = rng.uniform(0.5, 1.0, mock.nfreqs)
+        measured = loss * mock.data + (1 - loss) * tamb.to_value("K")[:, None]
+
+        out = calibrate.apply_loss_correction(
+            mock.update(data=measured), ambient_temp=tamb, loss=loss
+        )
+        np.testing.assert_allclose(out.data, mock.data, rtol=1e-12, atol=0)
 
     def test_bad_data_unit(self, mock_power: GSData):
         loss = np.ones(mock_power.nfreqs)

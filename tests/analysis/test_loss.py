@@ -8,6 +8,7 @@ from astropy import units as un
 
 from edges.analysis import loss
 from edges.cal.sparams import ReflectionCoefficient
+from edges.data import DATA_PATH
 
 
 def test_no_band():
@@ -42,3 +43,63 @@ class TestLow2BalunConnectorLoss:
         s11.write(tmp_path / "tmp-ant.h5")
         bcloss2 = loss.low2_balun_connector_loss(tmp_path / "tmp-ant.h5")
         assert np.allclose(bcloss, bcloss2)
+
+
+def _read_tabulated_loss(instrument: str, name: str) -> np.ndarray:
+    return np.genfromtxt(DATA_PATH / "loss" / instrument / f"{name}.txt")
+
+
+@pytest.mark.filterwarnings("ignore:Ground loss file .* does not exist")
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "ANA-1: built-in loss files are looked up in edges/analysis/data/loss instead "
+        "of edges/data/loss, so a warning is raised and a loss of 1 (no correction) is "
+        "returned; fix pending (result-changing)"
+    ),
+)
+@pytest.mark.parametrize(
+    ("instrument", "configuration"), [("low", ""), ("low", "45deg"), ("mid", "")]
+)
+def test_builtin_ground_loss_matches_tabulated(instrument: str, configuration: str):
+    name = f"ground_{configuration}" if configuration else "ground"
+    table = _read_tabulated_loss(instrument, name)
+
+    gl = loss.ground_loss(
+        table[:, 0], ":", instrument=instrument, configuration=configuration
+    )
+    assert not np.allclose(gl, 1.0)
+    # Tabulated losses are ~1e-3; the polynomial fit reproduces them to <3e-5.
+    np.testing.assert_allclose(gl, 1 - table[:, 1], atol=5e-5, rtol=0)
+
+
+@pytest.mark.filterwarnings("ignore:Ground loss file .* does not exist")
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "ANA-2: antenna_loss passes loss_type='ground', so it reads the ground-loss "
+        "file instead of antenna.txt (and ANA-1 means no built-in file is found at "
+        "all); fix pending (result-changing)"
+    ),
+)
+def test_builtin_antenna_loss_reads_antenna_file():
+    table = _read_tabulated_loss("mid", "antenna")
+    al = loss.antenna_loss(table[:, 0], ":", instrument="mid")
+    np.testing.assert_allclose(al, 1 - table[:, 1], atol=5e-5, rtol=0)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "ANA-2: antenna_loss uses its n_terms=11 as the polynomial degree (12 terms) "
+        "rather than the number of terms; fix pending (result-changing)"
+    ),
+)
+def test_antenna_loss_uses_n_terms():
+    fname = DATA_PATH / "loss" / "mid" / "antenna.txt"
+    table = np.genfromtxt(fname)
+    freq = np.linspace(50, 150, 101)
+
+    expected = 1 - np.polyval(np.polyfit(table[:, 0], table[:, 1], 10), freq)
+    al = loss.antenna_loss(freq, fname)
+    np.testing.assert_allclose(al, expected, rtol=0, atol=1e-12)
