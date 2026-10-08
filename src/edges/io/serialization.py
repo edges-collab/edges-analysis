@@ -171,13 +171,23 @@ def _qtable_unstructure_hook(val: QTable) -> dict[str, np.ndarray | Quantity]:
 
 
 def write_object_to_hdf5(obj: Any, path: tp.PathLike | h5py.Group):
-    """Write an attrs class to HDF5."""
-    if not isinstance(path, h5py.Group):
-        path = h5py.File(path, "w")
+    """Write an attrs class to HDF5.
 
+    Parameters
+    ----------
+    obj
+        The object to write.
+    path
+        The file to write to (it is overwritten, and closed afterwards), or an
+        open h5py group to write into (which is left open).
+    """
     dct = converter.unstructure(obj)
 
-    hickle.dump(dct, path)
+    if isinstance(path, h5py.Group):
+        hickle.dump(dct, path)
+    else:
+        with h5py.File(path, "w") as fl:
+            hickle.dump(dct, fl)
 
 
 def load_hdf5(struc, path: tp.PathLike | h5py.Group):

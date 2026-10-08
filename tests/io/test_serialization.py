@@ -243,3 +243,27 @@ def test_hickleable_rejects_untyped_fields():
 
     with pytest.raises(TypeError, match="untyped fields"):
         hickleable(HasUntyped)
+
+
+def _n_open_h5_files() -> int:
+    return h5py.h5f.get_obj_count(h5py.h5f.OBJ_ALL, h5py.h5f.OBJ_FILE)
+
+
+def test_write_object_to_hdf5_closes_file_on_error(tmp_path, monkeypatch):
+    def _fail(*args, **kwargs):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(hickle, "dump", _fail)
+    before = _n_open_h5_files()
+    with pytest.raises(RuntimeError, match="boom") as excinfo:
+        _HickleChild(x=3, y=2.5).write(tmp_path / "obj.h5")
+
+    # The traceback (kept alive by excinfo) must not keep the file open.
+    assert excinfo.traceback
+    assert _n_open_h5_files() == before
+
+    monkeypatch.undo()
+    obj = _HickleChild(x=3, y=2.5)
+    obj.write(tmp_path / "obj.h5")
+    assert _n_open_h5_files() == before
+    assert _HickleBase.from_file(tmp_path / "obj.h5") == obj
