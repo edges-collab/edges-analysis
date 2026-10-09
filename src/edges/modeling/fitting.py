@@ -155,9 +155,24 @@ class ModelFit:
         return self._apply_mask(self.weights)
 
     @cached_property
+    def n_used(self) -> int:
+        """The number of data points that constrain the fit.
+
+        These are the points with finite data and a positive weight. For a full
+        weight matrix (where all data must be finite), it is the number of data points.
+        """
+        if self._has_weight_matrix:
+            return int(np.sum(self._mask))
+        return int(np.sum(self._mask & (np.asarray(self.weights) > 0)))
+
+    @cached_property
     def degrees_of_freedom(self) -> int:
-        """The number of degrees of freedom of the fit."""
-        return self.model.x.size - self.model.model.n_terms - 1
+        """The number of degrees of freedom of the fit.
+
+        This is the number of used data points (see :attr:`n_used`) minus the number
+        of fitted parameters.
+        """
+        return self.n_used - self.model.model.n_terms
 
     @cached_property
     def fit(self) -> core.FixedLinearModel:

@@ -227,14 +227,6 @@ def test_weighted_rms_matches_noise_level():
     np.testing.assert_allclose(fit.weighted_rms, np.sqrt(x.size / w.sum()), rtol=0.03)
 
 
-MOD6_REASON = (
-    "degrees_of_freedom is N - M - 1 and counts NaN and zero-weight points; "
-    "it should be N - M over finite, positive-weight points; fix pending "
-    "(result-changing)"
-)
-
-
-@pytest.mark.xfail(strict=True, reason=MOD6_REASON)
 def test_degrees_of_freedom_counts_only_used_points():
     """The dof is the number of used (finite, w>0) points minus the parameters."""
     x = np.linspace(50, 100, 30)
@@ -248,7 +240,21 @@ def test_degrees_of_freedom_counts_only_used_points():
     assert fit.degrees_of_freedom == 30 - 4 - 2 - 3
 
 
-@pytest.mark.xfail(strict=True, reason=MOD6_REASON)
+def test_degrees_of_freedom_scalar_weight_and_weight_matrix():
+    """Scalar weights and full weight matrices count all finite points."""
+    x = np.linspace(50, 100, 30)
+    fm = mdl.Polynomial(n_terms=3, transform=mdl.UnitTransform(range=(50, 100))).at(x=x)
+    y = fm(parameters=[1.0, 2.0, 3.0])
+
+    assert fm.fit(ydata=y, weights=2.0).degrees_of_freedom == 30 - 3
+    assert fm.fit(ydata=y, weights=4 * np.eye(30)).degrees_of_freedom == 30 - 3
+
+    y[[0, 5]] = np.nan
+    fit = fm.fit(ydata=y, weights=2.0)
+    assert fit.n_used == 28
+    assert fit.degrees_of_freedom == 28 - 3
+
+
 def test_mean_reduced_chi2_is_one():
     """For correctly-weighted Gaussian noise, <chi^2 / dof> = 1."""
     rng = np.random.default_rng(11)
