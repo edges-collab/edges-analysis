@@ -766,3 +766,25 @@ def test_freq_fit_general_path(coarse_feko_beam, fit_kwargs, with_nan):
         bm.smoothed(model, **fit_kwargs).beam,
         _reference_freq_fit(bm, model, None, **fit_kwargs),
     )
+
+
+@pytest.mark.parametrize("interp_kind", beams.Beam._MULTI_FREQ_INTERP_KINDS)
+def test_multi_freq_angular_interpolator(beam, interp_kind):
+    """Interpolating several frequencies at once is exactly the same as one by one."""
+    rng = np.random.default_rng(7)
+    npts = 300 if interp_kind == "pchip" else 5000
+    az = np.concatenate([[0, 359.9999, 360, 180, 0.5, 359], rng.uniform(0, 360, npts)])
+    el = np.concatenate([[0, 90, 89.9999, 1e-9, 90, 0], rng.uniform(0, 90, npts)])
+    freqs = [4, 0, 17, 5]
+
+    multi = beam._multi_freq_angular_interpolator(freqs, interp_kind)(az, el)
+    assert multi.shape == (len(az), len(freqs))
+    for i, f in enumerate(freqs):
+        np.testing.assert_array_equal(
+            multi[:, i], beam.angular_interpolator(f, interp_kind)(az, el)
+        )
+
+
+def test_multi_freq_angular_interpolator_bad_kind(beam):
+    with pytest.raises(ValueError, match="Cannot interpolate several frequencies"):
+        beam._multi_freq_angular_interpolator([0, 1], "linear")

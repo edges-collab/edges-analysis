@@ -922,6 +922,49 @@ class Beam:
         )
         return lambda az, el: spl(np.array([az, el]).T)
 
+    #: Interpolation kinds for which :meth:`_multi_freq_angular_interpolator` gives
+    #: exactly the same values as :meth:`angular_interpolator` at each frequency.
+    _MULTI_FREQ_INTERP_KINDS = ("nearest", "slinear", "cubic", "quintic", "pchip")
+
+    def _multi_freq_angular_interpolator(
+        self,
+        freq_indx: Sequence[int],
+        interp_kind: Literal["nearest", "slinear", "cubic", "quintic", "pchip"],
+    ) -> Callable[[np.ndarray, np.ndarray], np.ndarray]:
+        """Return a callable that interpolates the beam at several frequencies at once.
+
+        This is the same as :meth:`angular_interpolator` (for the interpolation kinds
+        in ``_MULTI_FREQ_INTERP_KINDS``), but the interpolation weights are computed
+        once for all the frequencies, which is much faster than interpolating each
+        frequency separately.
+
+        Parameters
+        ----------
+        freq_indx
+            The indices of the frequencies at which to interpolate.
+        interp_kind
+            The ``method`` of :class:`scipy.interpolate.RegularGridInterpolator`.
+
+        Returns
+        -------
+        interp
+            A function ``interp(az, el)`` (in degrees) returning the beam at each of
+            the given frequencies, shape ``(len(az), len(freq_indx))``.
+        """
+        if interp_kind not in self._MULTI_FREQ_INTERP_KINDS:
+            raise ValueError(
+                f"Cannot interpolate several frequencies at once with '{interp_kind}'."
+            )
+        az = np.concatenate([self.azimuth, [self.azimuth[0] + 360]])
+        beam = self.beam[np.asarray(freq_indx)]
+        beam = np.concatenate((beam, beam[:, :, :1]), axis=2)
+        spl = spi.RegularGridInterpolator(
+            (az, self.elevation),
+            np.transpose(beam, (2, 1, 0)),
+            method=interp_kind,
+        )
+        return lambda az, el: spl(np.array([az, el]).T)
+
     def between_freqs(
         self, low: tp.FreqType = 0 * u.MHz, high: tp.FreqType = np.inf * u.MHz
     ) -> Self:

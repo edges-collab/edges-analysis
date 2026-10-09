@@ -221,3 +221,55 @@ def test_time_independent_coords(frame):
     hoisted = simulate._time_independent_coords(coords).transform_to(altaz)
     np.testing.assert_array_equal(hoisted.az.deg, direct.az.deg)
     np.testing.assert_array_equal(hoisted.alt.deg, direct.alt.deg)
+
+
+@pytest.mark.parametrize("batch_bytes", [1, 8 * 768 * 2])
+@pytest.mark.parametrize("interp_kind", ["cubic", "nearest"])
+def test_generator_matches_reference_freq_chunks(
+    batch_bytes, interp_kind, feko_beam, monkeypatch
+):
+    """Interpolating the beam in chunks of frequencies gives exact results too."""
+    # With a sky of 768 pixels, chunks of one and two frequencies.
+    monkeypatch.setattr(simulate, "_MAX_BEAM_BATCH_BYTES", batch_bytes)
+    kw = {
+        "lsts": Longitude([4.0, 20.0] * un.hour),
+        "beam": feko_beam,
+        "sky_model": make_galaxy_sky(nside=8),
+        "index_model": ConstantIndex(),
+        "normalize_beam": True,
+        "beam_smoothing": False,
+        "smoothing_model": None,
+        "interp_kind": interp_kind,
+        "ref_freq_idx": 3,
+    }
+    _assert_same_output(
+        sky_convolution_generator(**kw, lst_progress=False, freq_progress=False),
+        _reference_generator(**kw),
+    )
+
+
+@pytest.mark.parametrize("interp_kind", ["linear", "cubic"])
+def test_generator_out_of_bounds_beam(interp_kind):
+    """A beam that does not cover the sky above the horizon gives a clear error."""
+    el = np.arange(0, 81, 10.0)
+    az = np.arange(0, 360, 10.0)
+    beam = Beam(
+        frequency=np.array([50.0, 60.0]) * un.MHz,
+        azimuth=az,
+        elevation=el,
+        beam=np.ones((2, len(el), len(az))),
+    )
+    gen = sky_convolution_generator(
+        lsts=Longitude([1.0] * un.hour),
+        beam=beam,
+        sky_model=make_galaxy_sky(nside=8),
+        index_model=ConstantIndex(),
+        normalize_beam=True,
+        beam_smoothing=False,
+        smoothing_model=None,
+        interp_kind=interp_kind,
+        lst_progress=False,
+        freq_progress=False,
+    )
+    with pytest.raises(ValueError, match="el min/max"):
+        next(gen)
