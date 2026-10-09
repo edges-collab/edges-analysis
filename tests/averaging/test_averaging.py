@@ -458,17 +458,18 @@ class TestWeightedMean:
 
 
 class TestWeightedVariance:
-    # Calculate weighted variance with provided data and nsamples
     def test_weighted_variance_with_samples(self):
         data = np.array([1.0, 2.0, 3.0, 4.0])
         nsamples = np.array([2, 1, 2, 1])
 
         variance = averaging.weighted_variance(data, nsamples)
 
-        expected_variance = 1.177777777
-        np.testing.assert_almost_equal(variance, expected_variance, decimal=5)
+        mean = np.sum(nsamples * data) / nsamples.sum()
+        expected = np.sum(nsamples * (data - mean) ** 2) / 3
+        np.testing.assert_allclose(variance, expected, rtol=1e-12)
 
-        # Handle empty arrays for data input
+        mean_var = averaging.weighted_variance(data, nsamples, of="mean")
+        np.testing.assert_allclose(mean_var, expected / nsamples.sum(), rtol=1e-12)
 
     def test_weighted_variance_empty_array(self):
         data = np.array([])
@@ -478,14 +479,93 @@ class TestWeightedVariance:
 
         assert np.isnan(variance)
 
+    def test_single_valid_datum_is_fill_value(self):
+        data = np.array([1.0, 2.0, 3.0])
+        nsamples = np.array([0.0, 2.0, 0.0])
+        assert np.isnan(averaging.weighted_variance(data, nsamples))
+        assert averaging.weighted_variance(data, nsamples, fill_value=-1.0) == -1.0
+
     def test_default_nsamples(self):
         rng = np.random.default_rng(1)
         data = rng.normal(size=(3, 20))
         default = averaging.weighted_variance(data)
         ones = averaging.weighted_variance(data, np.ones_like(data))
         np.testing.assert_allclose(default, ones, rtol=1e-12)
-        # With uniform weights this is the (biased, ddof=0) sample variance.
-        np.testing.assert_allclose(default, np.var(data, axis=-1), rtol=1e-12)
+        # With uniform weights this is the unbiased (ddof=1) sample variance.
+        np.testing.assert_allclose(default, np.var(data, axis=-1, ddof=1), rtol=1e-12)
+
+    @pytest.mark.parametrize("n", [1.0, 7.0])
+    def test_uniform_nsamples(self, n: float):
+        rng = np.random.default_rng(2)
+        data = rng.normal(size=(4, 15))
+        var = averaging.weighted_variance(data, np.full_like(data, n), axis=0)
+        # Each datum has variance sigma0^2 / n, so sigma0^2 = n * var(data).
+        np.testing.assert_allclose(var, n * np.var(data, axis=0, ddof=1), rtol=1e-12)
+        var_mean = averaging.weighted_variance(
+            data, np.full_like(data, n), axis=0, of="mean"
+        )
+        np.testing.assert_allclose(
+            var_mean, np.var(data, axis=0, ddof=1) / data.shape[0], rtol=1e-12
+        )
+
+    def test_zero_and_nan_excluded(self):
+        rng = np.random.default_rng(3)
+        data = rng.normal(size=10)
+        nsamples = rng.uniform(1, 3, size=10)
+        good = np.ones(10, dtype=bool)
+        good[[2, 5, 7]] = False
+
+        data_bad = data.copy()
+        nsamples_bad = nsamples.copy()
+        nsamples_bad[2] = 0
+        nsamples_bad[5] = np.nan
+        data_bad[7] = np.nan
+        data_bad[2] = 1e10  # zero nsamples: its value must not matter
+
+        for of in ("sample", "mean"):
+            np.testing.assert_allclose(
+                averaging.weighted_variance(data_bad, nsamples_bad, of=of),
+                averaging.weighted_variance(data[good], nsamples[good], of=of),
+                rtol=1e-12,
+            )
+
+    def test_keepdims_and_axis(self):
+        rng = np.random.default_rng(4)
+        data = rng.normal(size=(3, 4, 5))
+        nsamples = rng.uniform(1, 2, size=data.shape)
+        var = averaging.weighted_variance(data, nsamples, axis=1, keepdims=True)
+        assert var.shape == (3, 1, 5)
+        np.testing.assert_allclose(
+            var[:, 0], averaging.weighted_variance(data, nsamples, axis=1), rtol=1e-12
+        )
+
+    def test_bad_of(self):
+        with pytest.raises(ValueError, match="'of' must be"):
+            averaging.weighted_variance(np.ones(3), of="population")
+
+    def test_unbiased_for_nonuniform_nsamples(self):
+        """Over many realisations, the estimates average to sigma0^2 (and /sum n)."""
+        rng = np.random.default_rng(310)
+        nreal = 40000
+        sigma0 = 2.0
+        nsamples = np.array([1.0, 2.0, 5.0, 0.5, 3.0, 10.0])
+        data = 7.0 + sigma0 * rng.normal(size=(nreal, nsamples.size)) / np.sqrt(
+            nsamples
+        )
+        nn = np.broadcast_to(nsamples, data.shape)
+
+        var = averaging.weighted_variance(data, nn, axis=-1)
+        # Tolerance: 5 standard errors of the Monte-Carlo mean.
+        tol = 5 * np.std(var) / np.sqrt(nreal)
+        assert abs(np.mean(var) - sigma0**2) < tol
+
+        var_mean = averaging.weighted_variance(data, nn, axis=-1, of="mean")
+        tol = 5 * np.std(var_mean) / np.sqrt(nreal)
+        assert abs(np.mean(var_mean) - sigma0**2 / nsamples.sum()) < tol
+
+        # The variance of the weighted mean is also the scatter of the means.
+        means, _ = averaging.weighted_mean(data, nn, axis=-1)
+        assert np.var(means, ddof=1) == pytest.approx(np.mean(var_mean), rel=0.03)
 
     def test_with_pregenerated_average(self):
         data = np.array([1.0, 2.0, 3.0, 4.0])
@@ -493,9 +573,8 @@ class TestWeightedVariance:
         avg, _ = averaging.weighted_mean(data, nsamples, keepdims=True)
 
         variance = averaging.weighted_variance(data, nsamples)
-        print(data.shape, nsamples.shape, avg.shape)
         variance1 = averaging.weighted_variance(data, nsamples, avg=avg)
-        np.testing.assert_equal(variance, variance1)
+        np.testing.assert_allclose(variance, variance1, rtol=1e-12)
 
 
 class TestBinData:

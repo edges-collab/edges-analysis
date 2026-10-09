@@ -378,18 +378,9 @@ def test_standard_layout_missing_rootdir(tmp_path: Path):
         )
 
 
-_IO3_REASON = (
-    "Each S11 label (O, S, L, input) is searched for independently, so one calkit "
-    "can mix files from different sweeps, and the receiver device path is rebuilt "
-    "from the open-standard name instead of using the input file that was found; "
-    "fix pending (result-changing)"
-)
-
-
 class TestS11SweepMatching:
     """All the S11 files of one calkit must come from the same sweep."""
 
-    @pytest.mark.xfail(strict=True, reason=_IO3_REASON)
     @pytest.mark.parametrize("load", ["amb", "lna"])
     def test_stray_earlier_hour(self, tmp_path: Path, load: str):
         prefix = "lna_" if load == "lna" else ""
@@ -402,7 +393,6 @@ class TestS11SweepMatching:
         files = calobsdef3.get_s1p_files(load, 2023, 70, tmp_path)
         assert {fl.name[:11] for fl in files.values()} == {"2023_070_11"}
 
-    @pytest.mark.xfail(strict=True, reason=_IO3_REASON)
     def test_open_only_on_another_day(self, tmp_path: Path):
         # Day 70 has an incomplete sweep (no open); day 71 has a complete one.
         _make_s11s(tmp_path, "2023_070_11", labels=("S", "L", "amb"))
@@ -411,7 +401,6 @@ class TestS11SweepMatching:
         files = calobsdef3.get_s1p_files("amb", 2023, 70, tmp_path)
         assert {fl.name[:11] for fl in files.values()} == {"2023_071_11"}
 
-    @pytest.mark.xfail(strict=True, reason=_IO3_REASON)
     def test_receiver_device_is_found_input_file(self, custom_layout: Path):
         s11dir = custom_layout / "s11" / "2023"
         (s11dir / "2023_070_09_lna_O.s1p").touch()
@@ -425,3 +414,51 @@ class TestS11SweepMatching:
         )
         assert caldef.receiver_s11.device == s11dir / "2023_070_11_lna.s1p"
         assert caldef.receiver_s11.calkit.open == s11dir / "2023_070_11_lna_O.s1p"
+
+    def test_last_complete_sweep(self, tmp_path: Path):
+        # The 14h sweep is incomplete (no short), so "last" is the 11h sweep.
+        _make_s11s(tmp_path, "2023_070_02", labels=("O", "S", "L", "amb"))
+        _make_s11s(tmp_path, "2023_070_11", labels=("O", "S", "L", "amb"))
+        _make_s11s(tmp_path, "2023_070_14", labels=("O", "L", "amb"))
+
+        files = calobsdef3.get_s1p_files("amb", 2023, 70, tmp_path, hour="last")
+        assert {fl.name[:11] for fl in files.values()} == {"2023_070_11"}
+        assert files["input"] == tmp_path / "2023_070_11_amb.s1p"
+
+        files = calobsdef3.get_s1p_files("amb", 2023, 70, tmp_path)
+        assert {fl.name[:11] for fl in files.values()} == {"2023_070_02"}
+
+    def test_explicit_hour_must_be_complete(self, tmp_path: Path):
+        _make_s11s(tmp_path, "2023_070_11", labels=("O", "S", "L", "amb"))
+        _make_s11s(tmp_path, "2023_070_14", labels=("O", "L", "amb"))
+
+        with pytest.raises(FileNotFoundError, match="all at the same hour"):
+            calobsdef3.get_s1p_files(
+                "amb", 2023, 70, tmp_path, hour=14, allow_closest_s11_within=0
+            )
+
+    def test_no_complete_sweep(self, tmp_path: Path):
+        # Every label exists, but never all at the same hour.
+        _make_s11s(tmp_path, "2023_070_09", labels=("O", "S"))
+        _make_s11s(tmp_path, "2023_070_11", labels=("L", "amb"))
+
+        with pytest.raises(FileNotFoundError, match="within 1 days of 2023_070"):
+            calobsdef3.get_s1p_files(
+                "amb", 2023, 70, tmp_path, allow_closest_s11_within=1
+            )
+
+    def test_load_external_is_found_input_file(self, custom_layout: Path):
+        s11dir = custom_layout / "s11" / "2023"
+        (s11dir / "2023_070_09_O.s1p").touch()
+
+        caldef = CalObsDefEDGES3.from_standard_layout(
+            rootdir=custom_layout,
+            year=2023,
+            day=70,
+            s11_dir="s11/{year}",
+            spectrum_dir="spectra/{load}",
+        )
+        for name, load in caldef.loads.items():
+            short = calobsdef3.LOADMAP.inverse[name]
+            assert load.s11.external == s11dir / f"2023_070_11_{short}.s1p"
+            assert load.s11.calkit.open == s11dir / "2023_070_11_O.s1p"

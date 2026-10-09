@@ -37,6 +37,26 @@ ANTSIM_REVERSE = {
 }
 
 
+def _canonical_load_name(name: str) -> str:
+    """Return the canonical (snake-case) name of a calibration load.
+
+    Both the EDGES-2 file-layout names (e.g. ``HotLoad``) and their known variants
+    (e.g. ``Hot_Load``) are mapped to the canonical alias (e.g. ``hot_load``), as
+    defined in ``calibration_loads.toml``. Unknown names are returned unchanged.
+
+    Parameters
+    ----------
+    name
+        The name of the load.
+
+    Returns
+    -------
+    str
+        The canonical name of the load.
+    """
+    return LOAD_ALIASES.inverse.get(LOAD_MAPPINGS.get(name, name), name)
+
+
 def _list_of_path(x: Sequence[tp.PathLike]) -> list[Path]:
     return [Path(xx) for xx in x]
 
@@ -213,7 +233,10 @@ class LoadDefEDGES2:
             The repeat number to search for.
         sparams_file
             An optional file containing S-parameters of the load device (e.g. the
-            semi-rigid cable for a hot load).
+            semi-rigid cable for a hot load). For the hot load (named ``HotLoad`` in
+            the standard layout, or any alias of it), this defaults to the built-in
+            semi-rigid cable file ``semi_rigid_s_parameters_WITH_HEADER.txt``, so that
+            the hot-load cable loss is applied.
 
         Raises
         ------
@@ -247,7 +270,7 @@ class LoadDefEDGES2:
         s11 = LoadS11(calkit=clk, external=s11dir / f"External{repnum}.s1p")
 
         # By default, the hot load uses a semi-rigid cable S-parameter file.
-        if loadname == "hot_load" and sparams_file is None:
+        if _canonical_load_name(loadname) == "hot_load" and sparams_file is None:
             sparams_file = DATA_PATH / "semi_rigid_s_parameters_WITH_HEADER.txt"
 
         return cls(

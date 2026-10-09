@@ -59,6 +59,94 @@ def _resolve_dir(root: Path, template: tp.PathLike, **kwargs) -> Path:
     return root / str(template).format(**kwargs)
 
 
+def _get_s1p_sweep(
+    root: Path,
+    year: int,
+    day: int,
+    labels: Sequence[str],
+    hour: int | str = "first",
+    allow_closest: int = 30,
+    s11_dir: tp.PathLike = DEFAULT_S11_DIR,
+) -> dict[str, Path]:
+    """Find one S11 sweep: a file for each label, all at the same (year, day, hour).
+
+    The days are searched in the order day, day+1, day-1, day+2, ... out to
+    ``allow_closest`` days either side (across year boundaries). On each day, only the
+    hours at which *every* label has a file are considered. Of those, ``hour``
+    selects either a specific hour, or the "first" or "last" of the day.
+
+    Parameters
+    ----------
+    root
+        The root directory of the data.
+    year, day
+        The year and day-of-year around which to search.
+    labels
+        The labels (the part of the file name after ``YYYY_DDD_HH_``) that must all
+        exist in the sweep.
+    hour
+        An integer hour, or "first"/"last". Any other value requires there to be a
+        single complete sweep on the day.
+    allow_closest
+        The number of days either side of ``day`` to search.
+    s11_dir
+        Directory holding the ``.s1p`` files, relative to ``root`` (or absolute). It
+        can contain a ``{year}`` placeholder.
+
+    Returns
+    -------
+    dict
+        The file for each label.
+
+    Raises
+    ------
+    FileNotFoundError
+        If no day within ``allow_closest`` days has a complete sweep.
+    OSError
+        If there is more than one complete sweep on the day and ``hour`` is not an
+        integer, "first" or "last".
+    """
+    # Search the given day first, then day+1, day-1, day+2, ... out to allow_closest.
+    offsets = [0]
+    for dday in range(1, allow_closest + 1):
+        offsets += [dday, -dday]
+
+    hourglob = f"{hour:02d}" if isinstance(hour, int) else "??"
+
+    for offset in offsets:
+        this_year, this_day = _shift_day(year, day, offset)
+        direc = _resolve_dir(root, s11_dir, year=this_year)
+        prefix = f"{this_year:04d}_{this_day:03d}_"
+
+        # For each label, the files on this day keyed by their (two-digit) hour.
+        by_hour = {
+            label: {
+                fl.name[len(prefix) : len(prefix) + 2]: fl
+                for fl in direc.glob(f"{prefix}{hourglob}_{label}.s1p")
+            }
+            for label in labels
+        }
+        hours = sorted(set.intersection(*(set(v) for v in by_hour.values())))
+        if not hours:
+            continue
+        if len(hours) == 1 or hour == "first":
+            this_hour = hours[0]
+        elif hour == "last":
+            this_hour = hours[-1]
+        else:
+            raise OSError(
+                f"More than one file found for {this_year}, {this_day}, labels "
+                f"{list(labels)} (hours {hours})"
+            )
+        return {label: by_hour[label][this_hour] for label in labels}
+
+    raise FileNotFoundError(
+        f"No s1p files found for label(s) {list(labels)} (all at the same hour) within "
+        f"{allow_closest} days of {year:04d}_{day:03d} (searched with "
+        f"s11_dir='{s11_dir}' under {root})"
+    )
+
+
 def _get_single_s1p_file(
     root: Path,
     year: int,
@@ -68,30 +156,10 @@ def _get_single_s1p_file(
     allow_closest: int = 30,
     s11_dir: tp.PathLike = DEFAULT_S11_DIR,
 ) -> Path:
-    # Search the given day first, then day+1, day-1, day+2, ... out to allow_closest.
-    offsets = [0]
-    for dday in range(1, allow_closest + 1):
-        offsets += [dday, -dday]
-
-    for offset in offsets:
-        this_year, this_day = _shift_day(year, day, offset)
-        direc = _resolve_dir(root, s11_dir, year=this_year)
-        hourglob = f"{hour:02d}" if isinstance(hour, int) else "??"
-        glob = f"{this_year:04d}_{this_day:03d}_{hourglob}_{label}.s1p"
-
-        files = sorted(direc.glob(glob))
-        if not files:
-            continue
-        if len(files) == 1 or hour == "first":
-            return files[0]
-        if hour == "last":
-            return files[-1]
-        raise OSError(f"More than one file found for {this_year}, {this_day}, {label}")
-
-    raise FileNotFoundError(
-        f"No s1p files found for label '{label}' within {allow_closest} days of "
-        f"{year:04d}_{day:03d} (searched with s11_dir='{s11_dir}' under {root})"
-    )
+    """Find the S11 file for a single label (see :func:`_get_s1p_sweep`)."""
+    return _get_s1p_sweep(
+        root, year, day, [label], hour, allow_closest, s11_dir=s11_dir
+    )[label]
 
 
 def get_s1p_files(
@@ -105,6 +173,10 @@ def get_s1p_files(
 ) -> dict[str, Path]:
     """Take the load and return a dict of .s1p files for that load.
 
+    All the files are from the same sweep, i.e. they share a single
+    ``YYYY_DDD_HH`` timestamp: the first day (in the search order) and hour at which
+    the load's input file *and* all three calkit standards exist.
+
     Parameters
     ----------
     load
@@ -117,11 +189,11 @@ def get_s1p_files(
         The root directory of the data.
     hour
         The hour of the S11 measurement, or "first"/"last" to take the first/last
-        measurement of the day.
+        complete sweep of the day.
     allow_closest_s11_within
-        If no file exists for the given day, search up to this many days either
-        side of it (across year boundaries) for the closest day that has one. Days
-        are tried in the order day+1, day-1, day+2, ..., so the later day wins a
+        If no complete sweep exists for the given day, search up to this many days
+        either side of it (across year boundaries) for the closest day that has one.
+        Days are tried in the order day+1, day-1, day+2, ..., so the later day wins a
         tie.
     s11_dir
         Directory holding the ``.s1p`` files, relative to ``root_dir`` (or absolute).
@@ -131,19 +203,29 @@ def get_s1p_files(
     -------
     dict
         Paths keyed by "input", "open", "short" and "match".
+
+    Raises
+    ------
+    FileNotFoundError
+        If no complete sweep is found.
     """
-    root_dir = Path(root_dir)
-
-    def _get(label: str) -> Path:
-        return _get_single_s1p_file(
-            root_dir, year, day, label, hour, allow_closest_s11_within, s11_dir=s11_dir
-        )
-
-    files = {"input": _get(load)}
-    for name, label in {"open": "O", "short": "S", "match": "L"}.items():
-        files[name] = _get(f"lna_{label}" if load == "lna" else label)
-
-    return files
+    prefix = "lna_" if load == "lna" else ""
+    labels = {
+        "input": load,
+        "open": f"{prefix}O",
+        "short": f"{prefix}S",
+        "match": f"{prefix}L",
+    }
+    files = _get_s1p_sweep(
+        Path(root_dir),
+        year,
+        day,
+        list(labels.values()),
+        hour,
+        allow_closest_s11_within,
+        s11_dir=s11_dir,
+    )
+    return {name: files[label] for name, label in labels.items()}
 
 
 def from_edges3_layout(
@@ -189,6 +271,13 @@ def from_edges3_layout(
     )
     del files["input"]
     return cls(**files)
+
+
+def _calkit_from_s1p_files(files: dict[str, Path]) -> CalkitFileSpec:
+    """Build a calkit spec from the output of :func:`get_s1p_files`."""
+    return CalkitFileSpec(
+        open=files["open"], short=files["short"], match=files["match"]
+    )
 
 
 CalkitFileSpec.from_edges3_layout = classmethod(from_edges3_layout)
@@ -413,18 +502,20 @@ class LoadDefEDGES3:
         if s11_day is None:
             s11_day = day
 
-        # First Get the S11s
-        calkit = CalkitFileSpec.from_edges3_layout(
-            root_dir=root,
+        # First Get the S11s (all from the same sweep).
+        files = get_s1p_files(
             load=loadname,
             year=s11_year,
             day=s11_day,
+            root_dir=root,
             hour=s11_hour,
             allow_closest_s11_within=allow_closest_s11_within,
             s11_dir=s11_dir,
         )
-        external = calkit.open.parent / calkit.open.name.replace("_O", f"_{loadname}")
-        s11 = LoadS11(calkit=calkit, external=external)
+        s11 = LoadS11(
+            calkit=_calkit_from_s1p_files(files),
+            external=files["input"],
+        )
 
         # Now get spectra
         spectra = get_spectrum_files(
@@ -679,20 +770,20 @@ class CalObsDefEDGES3:
         if not rootdir.is_dir():
             raise FileNotFoundError(f"rootdir {rootdir} does not exist")
 
-        # Get the ReceiverS11
-        rcv_calkit = CalkitFileSpec.from_edges3_layout(
-            rootdir,
+        # Get the ReceiverS11 (all from the same sweep).
+        rcv_files = get_s1p_files(
             load="lna",
             year=s11_year,
             day=s11_day,
+            root_dir=rootdir,
             hour=s11_hour,
             allow_closest_s11_within=allow_closest_s11_within,
             s11_dir=s11_dir,
         )
 
         rcv = ReceiverS11(
-            calkit=rcv_calkit,
-            device=rcv_calkit.open.parent / rcv_calkit.open.name.replace("_O", ""),
+            calkit=_calkit_from_s1p_files(rcv_files),
+            device=rcv_files["input"],
             metadata=_receiver_metadata(receiver_metadata),
         )
 

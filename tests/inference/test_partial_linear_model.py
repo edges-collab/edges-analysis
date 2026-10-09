@@ -46,14 +46,6 @@ def test_marginal_lnl_brute_force_homoscedastic():
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "The marginal likelihood uses the chi^2 of the default 'lstsq' fit, "
-        "which squares the inverse-variance weights, so lnL is wrong for "
-        "non-uniform variance; fix pending (result-changing)"
-    ),
-)
 def test_marginal_lnl_brute_force_heteroscedastic():
     """Marginal log-likelihood equals brute-force integration (varying variance)."""
     rng = np.random.default_rng(1)

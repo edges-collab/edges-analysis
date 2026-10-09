@@ -11,15 +11,6 @@ from edges.modeling.models import PhysicalIono
 
 ALL_METHODS = ("lstsq", "qr", "alan-qrd", "qrd-c")
 
-MOD1_REASON = (
-    "The default 'lstsq' solver applies the weights to both A and y, "
-    "minimising sum(w^2 r^2) (treating w as 1/sigma) instead of sum(w r^2) with "
-    "w = 1/sigma^2; fix pending (result-changing)"
-)
-LSTSQ_XFAIL = pytest.param(
-    "lstsq", marks=pytest.mark.xfail(strict=True, reason=MOD1_REASON)
-)
-
 # One instance of every concrete linear-model class, with "realistic" parameters.
 MODEL_CASES = {
     "PhysicalLin": (mdl.PhysicalLin(n_terms=5), [1750, -90, 30, -8, 5]),
@@ -79,7 +70,7 @@ def test_noise_free_recovery_all_solvers(method: str):
     np.testing.assert_allclose(fit.model_parameters, params, rtol=1e-7)
 
 
-@pytest.mark.parametrize("method", [LSTSQ_XFAIL, "qr", "alan-qrd", "qrd-c"])
+@pytest.mark.parametrize("method", ALL_METHODS)
 def test_residuals_w_orthogonal_to_basis(method: str):
     """The WLS normal equations: A^T W r = 0 at the best fit."""
     rng, x, sigma, w = _heteroscedastic_setup()
@@ -91,6 +82,22 @@ def test_residuals_w_orthogonal_to_basis(method: str):
     # Compare to the size of the individual terms in the sum.
     scale = np.abs(fm.basis) @ np.abs(w * fit.residual)
     np.testing.assert_array_less(np.abs(normal_eq), 1e-8 * scale)
+
+
+def test_default_method_weights_are_inverse_variance_not_polyfit():
+    """The default solver's weights are 1/sigma^2, i.e. np.polyfit's w squared."""
+    rng, x, sigma, w = _heteroscedastic_setup()
+    fm = mdl.Polynomial(n_terms=4).at(x=x)
+    y = fm(parameters=[1, 2, -3, 0.5]) + rng.normal(scale=sigma)
+    fit = fm.fit(ydata=y, weights=w)
+
+    # np.polyfit's weights multiply the residuals, so w_polyfit = 1/sigma = sqrt(w).
+    expected = np.polyfit(x, y, deg=3, w=np.sqrt(w))[::-1]
+    np.testing.assert_allclose(fit.model_parameters, expected, rtol=1e-8)
+
+    # Passing 1/sigma (the polyfit convention) gives a measurably different answer.
+    wrong = fm.fit(ydata=y, weights=np.sqrt(w)).model_parameters
+    assert not np.allclose(wrong, expected, rtol=1e-3)
 
 
 @pytest.mark.parametrize("method", ALL_METHODS)
@@ -159,20 +166,12 @@ def test_mc_scatter_matches_covariance_qr():
     np.testing.assert_allclose(pars.std(axis=0), np.sqrt(np.diag(cov)), rtol=0.08)
 
 
-@pytest.mark.xfail(strict=True, reason=MOD1_REASON)
 def test_mc_scatter_matches_covariance_default_method():
     """The reported covariance matches the MC scatter for the default solver."""
     pars, cov = _mc_parameters("lstsq")
     np.testing.assert_allclose(pars.std(axis=0), np.sqrt(np.diag(cov)), rtol=0.08)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "weighted_rms computes sqrt(sum(w r^2)) / sum(w) instead of "
-        "sqrt(sum(w r^2) / sum(w)); fix pending (result-changing)"
-    ),
-)
 def test_weighted_rms_unit_weights_is_rms():
     """With unit weights, the weighted RMS is the plain RMS of the residuals."""
     rng = np.random.default_rng(0)
@@ -185,14 +184,49 @@ def test_weighted_rms_unit_weights_is_rms():
     )
 
 
-MOD6_REASON = (
-    "degrees_of_freedom is N - M - 1 and counts NaN and zero-weight points; "
-    "it should be N - M over finite, positive-weight points; fix pending "
-    "(result-changing)"
-)
+@pytest.mark.parametrize("method", ALL_METHODS)
+def test_weighted_rms_formula(method: str):
+    """The weighted RMS is sqrt(sum(w r^2) / sum(w)), ignoring NaN data."""
+    rng, x, sigma, w = _heteroscedastic_setup()
+    fm = mdl.Polynomial(n_terms=3, transform=mdl.UnitTransform(range=(50, 100))).at(x=x)
+    y = fm(parameters=[1.0, 2.0, 3.0]) + rng.normal(scale=sigma)
+    y[[4, 30]] = np.nan
+    w[[10, 11]] = 0.0
+    fit = fm.fit(ydata=y, weights=w, method=method)
+
+    ok = np.isfinite(y)
+    r = fit.residual[ok]
+    expected = np.sqrt(np.sum(w[ok] * r**2) / np.sum(w[ok]))
+    np.testing.assert_allclose(fit.weighted_rms, expected, rtol=1e-12)
 
 
-@pytest.mark.xfail(strict=True, reason=MOD6_REASON)
+@pytest.mark.parametrize("c", [1e-3, 1.0, 7.0])
+def test_weighted_rms_scalar_weight_is_rms_of_finite_points(c: float):
+    """A scalar weight gives the plain RMS over the finite data, whatever its value."""
+    rng = np.random.default_rng(3)
+    x = np.linspace(50, 100, 40)
+    fm = mdl.Polynomial(n_terms=2).at(x=x)
+    y = fm(parameters=[1.0, 0.01]) + rng.normal(size=x.size)
+    y[[0, 7, 21]] = np.nan
+    fit = fm.fit(ydata=y, weights=c)
+    np.testing.assert_allclose(
+        fit.weighted_rms, np.sqrt(np.nanmean(fit.residual**2)), rtol=1e-12
+    )
+
+
+def test_weighted_rms_matches_noise_level():
+    """For inverse-variance weights, the weighted RMS ~ the harmonic-mean sigma."""
+    rng = np.random.default_rng(8)
+    x = np.linspace(50, 100, 4000)
+    fm = mdl.Polynomial(n_terms=3, transform=mdl.UnitTransform(range=(50, 100))).at(x=x)
+    sigma = np.exp(rng.normal(size=x.size) * 0.3)
+    w = 1 / sigma**2
+    y = fm(parameters=[1.0, 2.0, 3.0]) + rng.normal(scale=sigma)
+    fit = fm.fit(ydata=y, weights=w)
+    # E[sum w r^2] ~ N, so weighted_rms^2 ~ N / sum(w).
+    np.testing.assert_allclose(fit.weighted_rms, np.sqrt(x.size / w.sum()), rtol=0.03)
+
+
 def test_degrees_of_freedom_counts_only_used_points():
     """The dof is the number of used (finite, w>0) points minus the parameters."""
     x = np.linspace(50, 100, 30)
@@ -206,7 +240,21 @@ def test_degrees_of_freedom_counts_only_used_points():
     assert fit.degrees_of_freedom == 30 - 4 - 2 - 3
 
 
-@pytest.mark.xfail(strict=True, reason=MOD6_REASON)
+def test_degrees_of_freedom_scalar_weight_and_weight_matrix():
+    """Scalar weights and full weight matrices count all finite points."""
+    x = np.linspace(50, 100, 30)
+    fm = mdl.Polynomial(n_terms=3, transform=mdl.UnitTransform(range=(50, 100))).at(x=x)
+    y = fm(parameters=[1.0, 2.0, 3.0])
+
+    assert fm.fit(ydata=y, weights=2.0).degrees_of_freedom == 30 - 3
+    assert fm.fit(ydata=y, weights=4 * np.eye(30)).degrees_of_freedom == 30 - 3
+
+    y[[0, 5]] = np.nan
+    fit = fm.fit(ydata=y, weights=2.0)
+    assert fit.n_used == 28
+    assert fit.degrees_of_freedom == 28 - 3
+
+
 def test_mean_reduced_chi2_is_one():
     """For correctly-weighted Gaussian noise, <chi^2 / dof> = 1."""
     rng = np.random.default_rng(11)
@@ -272,7 +320,7 @@ def test_nan_masking_does_not_change_finite_results():
 
     r = fit.residual
     assert fit.weighted_chi2 == np.dot(r.T, w * r)
-    assert fit.weighted_rms == np.sqrt(np.dot(r.T, w * r)) / np.sum(w)
+    assert fit.weighted_rms == np.sqrt(np.dot(r.T, w * r) / np.sum(w))
     np.testing.assert_array_equal(fit.hessian, (fm.basis * w).dot(fm.basis.T))
 
 

@@ -122,10 +122,11 @@ class CalibrationObservation:
             :func:`edges.cal.sparams.get_gamma_receiver_from_filespec`). The key
             "model_params" may hold the :class:`S11ModelParams` used to model it.
         restrict_s11_model_freqs
-            Whether to restrict the S11 modelling (i.e. smoothing) to the given freq
-            range. The final output will be calibrated only between the given freq
-            range, but the S11 models themselves can be fit over a broader set of
-            frequencies.
+            Whether to fit the S11 models (of the receiver and of each input source)
+            only to the measured S11 frequencies within ``[f_low, f_high]``, as
+            Alan's C code does for its ``fstart``/``fstop``. If False, the S11 models
+            are fit over the full measured (VNA) band. Either way, the final output is
+            calibrated only between the given freq range.
         loss_models
             A dictionary of loss models for each source. If a particular source has no
             loss its entry can be missing or None. By default, the hot load uses the
@@ -227,10 +228,11 @@ class CalibrationObservation:
             the EDGES-3 defaults. The key "model_params" may hold the
             :class:`S11ModelParams` used to model it.
         restrict_s11_model_freqs
-            Whether to restrict the S11 modelling (i.e. smoothing) to the given freq
-            range. The final output will be calibrated only between the given freq
-            range, but the S11 models themselves can be fit over a broader set of
-            frequencies.
+            Whether to fit the S11 models (of the receiver and of each input source)
+            only to the measured S11 frequencies within ``[f_low, f_high]``, as
+            Alan's C code does for its ``fstart``/``fstop``. If False, the S11 models
+            are fit over the full measured (VNA) band. Either way, the final output is
+            calibrated only between the given freq range.
         loss_models
             A dictionary of loss models for each source. If a particular source has no
             loss its entry can be missing or None. By default, the only source with loss
@@ -315,10 +317,11 @@ class CalibrationObservation:
             :func:`edges.cal.sparams.get_gamma_receiver_from_filespec`). The key
             "model_params" may hold the :class:`S11ModelParams` used to model it.
         restrict_s11_model_freqs
-            Whether to restrict the S11 modelling (i.e. smoothing) to the given freq
-            range. The final output will be calibrated only between the given freq
-            range, but the S11 models themselves can be fit over a broader set of
-            frequencies.
+            Whether to fit the S11 models (of the receiver and of each input source)
+            only to the measured S11 frequencies within ``[f_low, f_high]``, as
+            Alan's C code does for its ``fstart``/``fstop``. If False, the S11 models
+            are fit over the full measured (VNA) band. Either way, the final output is
+            calibrated only between the given freq range.
         loss_models
             A dictionary of loss models for each source. If a particular source has no
             loss its entry can be missing or None.
@@ -381,8 +384,13 @@ class CalibrationObservation:
             for src in ("hot_load", "open", "short")
         }
 
-        # Smooth the receiver s11
-        receiver = raw_receiver.smoothed(rcv_model_params, freqs=amb.freqs)
+        # Smooth the receiver s11 (optionally fitting only within [f_low, f_high]).
+        receiver_to_fit = (
+            raw_receiver.select_frequencies(f_low, f_high)
+            if restrict_s11_model_freqs
+            else raw_receiver
+        )
+        receiver = receiver_to_fit.smoothed(rcv_model_params, freqs=amb.freqs)
 
         return cls(
             loads=loads,

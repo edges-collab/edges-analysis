@@ -85,14 +85,23 @@ class TestCalibrationObservation:
                 name: load.averaged_q * 2 for name, load in calobs.loads.items()
             },
             thermistor_temp_ave={
-                name: load.temp_ave * 2 for name, load in calobs.loads.items()
+                name: load.spectrum.temp_ave * 2 for name, load in calobs.loads.items()
             },
         )
 
         np.testing.assert_allclose(new.receiver_s11, 2 * calobs.receiver_s11)
 
+        # The injected thermistor temperatures are the physical temperatures, before
+        # the loss (e.g. of the hot-load cable) is applied.
         for name, tmp in new.source_thermistor_temps.items():
-            assert np.allclose(tmp, 2 * calobs.source_thermistor_temps[name])
+            load = calobs.loads[name]
+            expected = (
+                load.loss * 2 * load.spectrum.temp_ave
+                + (1 - load.loss) * load.ambient_temperature
+            )
+            np.testing.assert_allclose(
+                tmp.to_value("K"), expected.to_value("K"), rtol=1e-12, atol=0
+            )
 
     def test_load_str_to_load(self, calobs):
         assert calobs._load_str_to_load("ambient") == calobs.ambient
@@ -145,6 +154,17 @@ class TestCalibrationObservation:
             rtol=0,
             atol=0,
         )
+
+
+def test_standard_layout_applies_hot_load_cable_loss(calobs: CalibrationObservation):
+    """The EDGES-2 standard layout applies the hot-load semi-rigid cable loss."""
+    loss = calobs.hot_load.loss
+    # The semi-rigid cable loses ~0.3-0.6% at 50-100 MHz (a squared loss would be
+    # ~0.7-1.2%, i.e. below 0.993 at 100 MHz).
+    assert np.all(loss > 0.993)
+    assert np.all(loss < 0.998)
+    for name in ("ambient", "open", "short"):
+        np.testing.assert_allclose(calobs.loads[name].loss, 1, rtol=0, atol=0)
 
 
 def _caldef_with_hot_load_sparams(caldef: CalObsDefEDGES2) -> CalObsDefEDGES2:
@@ -221,7 +241,10 @@ def test_kwargs_reach_all_loads_and_are_not_mutated(caldef: CalObsDefEDGES2):
     )
 
     for name, load in calobs.loads.items():
-        expected = load._raw_s11.smoothed(custom, freqs=load.freqs)
+        # By default, the S11 models are fit only within [f_low, f_high].
+        expected = load._raw_s11.select_frequencies(50 * un.MHz, 100 * un.MHz).smoothed(
+            custom, freqs=load.freqs
+        )
         np.testing.assert_allclose(
             load.reflection_coefficient.s11,
             expected.s11,
@@ -237,15 +260,6 @@ def test_kwargs_reach_all_loads_and_are_not_mutated(caldef: CalObsDefEDGES2):
     assert loss_models == {"open": None}
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "restrict_s11_freqs writes f_low/f_high into s11_kwargs that nothing reads, "
-        "so S11 models are always fit over the full measured band; fix pending "
-        "(result-changing: restrict_s11_model_freqs defaults to True in "
-        "CalibrationObservation)"
-    ),
-)
 def test_restrict_s11_freqs(caldef: CalObsDefEDGES2):
     f_low, f_high = 50 * un.MHz, 100 * un.MHz
     load = InputSource.from_caldef(
@@ -262,3 +276,64 @@ def test_restrict_s11_freqs(caldef: CalObsDefEDGES2):
     np.testing.assert_allclose(
         load.reflection_coefficient.s11, expected.s11, rtol=0, atol=1e-10
     )
+
+    # The raw S11 is kept over the full measured band.
+    assert load._raw_s11.freqs.min() < f_low
+    assert load._raw_s11.freqs.max() > f_high
+
+
+def test_unrestricted_s11_freqs_fit_full_band(caldef: CalObsDefEDGES2):
+    f_low, f_high = 50 * un.MHz, 100 * un.MHz
+    kw = {
+        "load_name": "ambient",
+        "f_low": f_low,
+        "f_high": f_high,
+        "ambient_temperature": 300 * un.K,
+    }
+    full = InputSource.from_caldef(caldef, restrict_s11_freqs=False, **kw)
+    expected = full._raw_s11.smoothed(
+        sp.input_source_model_params(name="ambient"), freqs=full.freqs
+    )
+    np.testing.assert_allclose(
+        full.reflection_coefficient.s11, expected.s11, rtol=0, atol=1e-10
+    )
+
+    # The fit range makes a (small) difference.
+    restricted = InputSource.from_caldef(caldef, restrict_s11_freqs=True, **kw)
+    assert not np.allclose(
+        full.reflection_coefficient.s11,
+        restricted.reflection_coefficient.s11,
+        rtol=0,
+        atol=1e-10,
+    )
+
+
+def test_restrict_s11_model_freqs_receiver(
+    calobs: CalibrationObservation, caldef: CalObsDefEDGES2
+):
+    """The receiver S11 model is also fit only within [f_low, f_high] if requested."""
+    f_low, f_high = 50 * un.MHz, 100 * un.MHz
+    raw = calobs._raw_receiver
+    assert raw.freqs.min() < f_low
+    rcv_params = sp.receiver_model_params()
+
+    # The session calobs uses the default, restrict_s11_model_freqs=True.
+    expected = raw.select_frequencies(f_low, f_high).smoothed(
+        rcv_params, freqs=calobs.freqs
+    )
+    np.testing.assert_allclose(calobs.receiver.s11, expected.s11, rtol=0, atol=1e-10)
+
+    unrestricted = CalibrationObservation.from_edges2_caldef(
+        caldef, f_low=f_low, f_high=f_high, restrict_s11_model_freqs=False
+    )
+    expected = raw.smoothed(rcv_params, freqs=calobs.freqs)
+    np.testing.assert_allclose(
+        unrestricted.receiver.s11, expected.s11, rtol=0, atol=1e-10
+    )
+    for name, load in unrestricted.loads.items():
+        expected = load._raw_s11.smoothed(
+            sp.input_source_model_params(name=name), freqs=calobs.freqs
+        )
+        np.testing.assert_allclose(
+            load.reflection_coefficient.s11, expected.s11, rtol=0, atol=1e-10
+        )

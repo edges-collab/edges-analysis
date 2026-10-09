@@ -4,6 +4,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from astropy import constants
 from astropy import units as un
 from astropy.coordinates import Longitude
 
@@ -459,31 +460,27 @@ def test_shift_beam_maps_inverse_and_roll(angle, random_beam_maps):
     np.testing.assert_array_equal(shifted, np.roll(random_beam_maps, angle, axis=2))
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Beam.gaussian divides a zenith angle in degrees by a width in radians, "
-        "so the beam is ~57x too narrow; fix pending (result-changing)"
-    ),
-)
 def test_gaussian_beam_value_at_known_zenith_angle():
+    """The Gaussian beam has FWHM = 1.22 wavelength / dish_size."""
     dish_size = 3.0
     beam = beams.Beam.gaussian(dish_size=dish_size, f_low=50, f_high=52, delta_f=2)
-    sigma = 1.22 * (3e8 / 50e6) / dish_size  # radians, as in the constructor
+    fwhm = 1.22 * (constants.c.to_value("m/s") / 50e6) / dish_size  # radians
+    sigma = fwhm / (2 * np.sqrt(2 * np.log(2)))
     za = 20.0
     el_indx = np.where(beam.elevation == 90 - za)[0][0]
     expected = np.exp(-0.5 * (np.radians(za) / sigma) ** 2)
-    np.testing.assert_allclose(beam.beam[0, el_indx], expected, rtol=1e-6)
+    np.testing.assert_allclose(beam.beam[0, el_indx], expected, rtol=1e-10)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "The sphere-spline interpolator uses the 89 deg row as the zenith pole "
-        "value, so the interpolated zenith response is wrong; "
-        "fix pending (result-changing)"
-    ),
-)
+def test_gaussian_beam_half_power_at_half_fwhm():
+    """B(za = FWHM / 2) = 0.5, for a dish sized to give a FWHM of 20 degrees."""
+    fwhm = np.radians(20.0)
+    dish_size = 1.22 * (constants.c.to_value("m/s") / 50e6) / fwhm
+    beam = beams.Beam.gaussian(dish_size=dish_size, f_low=50, f_high=52, delta_f=2)
+    np.testing.assert_allclose(beam.beam[0, beam.elevation == 90], 1.0, rtol=1e-12)
+    np.testing.assert_allclose(beam.beam[0, beam.elevation == 80], 0.5, rtol=1e-10)
+
+
 def test_sphere_spline_zenith_value():
     az = np.arange(0, 360, 2.0)
     el = np.arange(0, 91, 1.0)
@@ -502,18 +499,64 @@ def test_sphere_spline_zenith_value():
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "get_beam_solid_angle uses a rectangle rule that includes both "
-        "elevation endpoints, biasing the solid angle high by ~d_el/2 (0.9% at 1 deg, "
-        "4.3% at 5 deg); fix pending (result-changing)"
-    ),
-)
+def test_sphere_spline_without_zenith_row():
+    """Without a zenith row, the pole is not pinned to the highest row's values."""
+    az = np.arange(0, 360, 2.0)
+    el = np.arange(0, 81, 2.0)
+    pattern = np.repeat((1 + el / 90)[:, None], len(az), axis=1)
+    beam = beams.Beam(
+        frequency=np.array([50.0]) * un.MHz,
+        azimuth=az,
+        elevation=el,
+        beam=pattern[None],
+    )
+    interp = beam.angular_interpolator(0, "sphere-spline")
+    azz, ell = np.meshgrid(az, el)
+    np.testing.assert_allclose(
+        interp(azz.ravel(), ell.ravel()), pattern.ravel(), rtol=1e-6
+    )
+    # Between the last row and the zenith, the (linear) trend continues, rather than
+    # flattening to the last row's value at the zenith.
+    np.testing.assert_allclose(
+        interp(np.array([0.0, 90.0]), np.array([85.0, 85.0])), 1 + 85 / 90, rtol=1e-4
+    )
+
+
 @pytest.mark.parametrize("delta", [1, 5])
 def test_isotropic_beam_solid_angle_coarse_grid(delta):
     beam = beams.Beam.uniform(f_low=50, f_high=54, delta_el=delta, delta_az=delta)
-    np.testing.assert_allclose(beam.get_beam_solid_angle(), 2 * np.pi, rtol=2e-3)
+    omega = beam.get_beam_solid_angle()
+    assert omega.shape == (2,)
+    np.testing.assert_allclose(omega, 2 * np.pi, rtol=1e-12)
+
+
+def test_beam_solid_angle_dipole_like():
+    """The hemisphere integral of sin(el)^2 (1 + 0.3 cos 2az) dOmega is 2pi/3."""
+    az = np.arange(0, 360, 2.0)
+    el = np.arange(0, 91, 2.0)
+    pattern = np.sin(np.radians(el))[:, None] ** 2 * (
+        1 + 0.3 * np.cos(2 * np.radians(az))
+    )
+    beam = beams.Beam(
+        frequency=np.array([50.0, 60.0]) * un.MHz,
+        azimuth=az,
+        elevation=el,
+        beam=np.array([pattern, 2 * pattern]),
+    )
+    np.testing.assert_allclose(
+        beam.get_beam_solid_angle(), [2 * np.pi / 3, 4 * np.pi / 3], rtol=5e-4
+    )
+
+
+def test_beam_solid_angle_closed_azimuth_grid():
+    """An azimuth grid that includes both 0 and 360 deg is not double counted."""
+    beam = beams.Beam(
+        frequency=np.array([50.0]) * un.MHz,
+        azimuth=np.arange(0, 361, 5.0),
+        elevation=np.arange(0, 91, 5.0),
+        beam=np.ones((1, 19, 73)),
+    )
+    np.testing.assert_allclose(beam.get_beam_solid_angle(), 2 * np.pi, rtol=1e-12)
 
 
 def test_shift_beam_maps_float_angle(random_beam_maps):

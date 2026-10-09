@@ -24,7 +24,9 @@ def freq_bin(
     data
         The input GSData object to be binned.
     bins
-        The bin *edges* (lower inclusive, upper not inclusive). If an ``int``, simply
+        The bin *edges* (lower inclusive, upper not inclusive, except for the last bin,
+        whose upper edge is also inclusive, as in :func:`numpy.histogram`). Each
+        channel is therefore in at most one bin. If an ``int``, simply
         use ``bins`` coords per bin, starting from the first bin. If a float or
         Quantity, use equi-spaced bin edges, starting from the start of coords, and
         ending past the end of coords. If an array, assumed to be the bin edges.
@@ -48,9 +50,15 @@ def freq_bin(
     be maintained if they have no frquency axis (though flags will be utilized
     appropriately in the averaging process).
     """
-    bins = avg.get_bin_edges(data.freqs, bins)
+    edges = avg.get_bin_edges(data.freqs, bins)
+    nbins = len(edges) - 1
+    # Each bin includes its lower edge and excludes its upper edge, except the last
+    # bin, which includes both (like numpy.histogram), so that every channel within
+    # [edges[0], edges[-1]] is in exactly one bin.
     bins = [
-        (data.freqs >= b[0]) & (data.freqs <= b[1]) for b in itertools.pairwise(bins)
+        (data.freqs >= lo)
+        & ((data.freqs < hi) | ((i == nbins - 1) & (data.freqs == hi)))
+        for i, (lo, hi) in enumerate(itertools.pairwise(edges))
     ]
 
     if debias is None:
@@ -107,10 +115,15 @@ def gauss_smooth(
         ``size//2``.
     flag_threshold
         The threshold of flagged samples to flag a channel. Set to 0.25 to flag in the
-        same way as Alan's C-Code. In detail, for a dataset with uniform weights (but
-        potentially some flagged bins), any smoothed channel whose integrated window
-        *not* counting flagged channels is smaller than ``size*flag_threshold`` will be
-        flagged.
+        same way as Alan's C-Code. In detail, the weights that are convolved (the
+        flagged nsamples if ``use_nsamples`` is True, otherwise unity for each
+        unflagged channel) are normalised by their maximum over frequency (for each
+        load, polarization and time), and any smoothed channel whose kernel-weighted
+        sum of these normalised weights is less than or equal to
+        ``size*flag_threshold`` is flagged. For a dataset with uniform weights (but
+        potentially some flagged bins), this is the integrated kernel window *not*
+        counting flagged channels. The result is independent of the overall scale of
+        nsamples.
     maintain_flags
         Whether to maintain the flags in the data. If ``True``, any fine-channels
         that were originally flagged will be flagged in the output. The default
@@ -124,19 +137,36 @@ def gauss_smooth(
         length (i.e. ``size``).
     use_nsamples
         Whether to weight the data by nsamples when performing the smoothing kernel
-        convolution. Note that even if this is set to ``False``, the Nsamples in the
-        output will be the kernel-weighted sum of the input samples to each resulting
-        channel.
+        convolution. If ``False``, each unflagged channel is given unit weight (times
+        the kernel). Either way, the output nsamples account for the input nsamples
+        (see Notes).
 
     Returns
     -------
     GSData
-        The smoothed and potentially decimated GSData object.
+        The smoothed and potentially decimated GSData object. Output channels with no
+        unflagged data in their window (or flagged by ``flag_threshold`` or
+        ``maintain_flags``) have NaN data and zero nsamples.
 
     Raises
     ------
     ValueError
         If the residuals are to be smoothed and are not present in the data.
+
+    Notes
+    -----
+    Each output channel is a weighted mean of the input channels, with weights
+    ``w_i = k_i * u_i``, where ``k`` is the Gaussian kernel and ``u_i`` is the
+    flagged nsamples ``n_i`` (if ``use_nsamples``) or unity for unflagged channels.
+    If each input channel has variance ``sigma^2 / n_i``, the variance of the output
+    is ``sigma^2 * sum(w_i^2 / n_i) / sum(w_i)^2``. The output nsamples is the
+    corresponding effective number of samples, ``sum(w_i)^2 / sum(w_i^2 / n_i)``
+    (for ``use_nsamples=True`` this is ``sum(k n)^2 / sum(k^2 n)``), so that it can be
+    used as an inverse-variance weight downstream. Note that it is *not* the plain
+    kernel-weighted sum of nsamples, ``sum(k n)``, which under-estimates the inverse
+    variance (by a factor of ~1.4 in the interior of the band, for the kernel
+    used here, whose peak is unity). Adjacent output
+    channels are correlated if the kernel is wider than the decimation factor.
     """
     if use_residuals is None:
         use_residuals = data.residuals is not None
@@ -164,7 +194,9 @@ def gauss_smooth(
     inflags = (data.flagged_nsamples == 0) | np.isnan(dd)
 
     data_mask = np.where(np.isnan(dd), 0, dd)
-    nsamples = data.flagged_nsamples if use_nsamples else (~inflags).astype(float)
+    # The true number of samples in each channel (zero where flagged or NaN).
+    true_nsamples = np.where(inflags, 0, data.flagged_nsamples)
+    nsamples = true_nsamples if use_nsamples else (~inflags).astype(float)
 
     f_nsamples = np.where(np.isnan(dd), 0, nsamples)
 
@@ -172,6 +204,15 @@ def gauss_smooth(
         ..., decimate_at::decimate
     ]
     nsamples = convolve1d(f_nsamples, window, mode="constant", cval=0)
+
+    # The output is a weighted mean with weights w = k * f_nsamples, so its variance
+    # is sigma^2 * sum(w^2 / n) / sum(w)^2 (for per-sample variance sigma^2 and n
+    # samples in each channel). The effective number of samples is the inverse.
+    with np.errstate(divide="ignore", invalid="ignore"):
+        w2_over_n = np.where(true_nsamples > 0, f_nsamples**2 / true_nsamples, 0)
+    sum_w2_over_n = convolve1d(w2_over_n, window**2, mode="constant", cval=0)[
+        ..., decimate_at::decimate
+    ]
 
     if maintain_flags > 0:
         if maintain_flags == 1:
@@ -183,19 +224,21 @@ def gauss_smooth(
             nsamples[flags == 0] = 0
 
     nsamples = nsamples[..., decimate_at::decimate]
+    sums_of_w = nsamples.copy()
 
-    maxn = np.max(data.nsamples, axis=-1)[:, :, :, None]
-    nsamples[nsamples / maxn <= size * flag_threshold] = 0
-    mask = nsamples == 0
+    # Normalise the smoothed weights by the maximum weight that was convolved, so
+    # that the threshold does not depend on the overall scale of the weights.
+    maxw = np.max(f_nsamples, axis=-1, keepdims=True)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        frac = np.where(maxw > 0, nsamples / maxw, 0)
+    nsamples[frac <= size * flag_threshold] = 0
+    mask = (nsamples == 0) | (sum_w2_over_n <= 0)
     sums[~mask] /= nsamples[~mask]
-    sums[mask] = dd[..., decimate_at::decimate][mask]
+    # Channels with no (or too little) unflagged data in the window are empty.
+    sums[mask] = np.nan
 
-    if not use_nsamples:
-        # We have to still get the proper nsamples for the output.
-        nsamples_ = convolve1d(data.flagged_nsamples, window, mode="constant", cval=0)
-        nsamples_ = nsamples_[..., decimate_at::decimate]
-        nsamples_[nsamples == 0] = 0
-        nsamples = nsamples_
+    nsamples = np.zeros_like(nsamples)
+    nsamples[~mask] = sums_of_w[~mask] ** 2 / sum_w2_over_n[~mask]
 
     models = data.model[..., decimate_at::decimate] if use_residuals else 0
 

@@ -608,17 +608,32 @@ def maxfm_filter(*, data: GSData, threshold: float = 200):
 def filter_150mhz(*, data: GSData, threshold: float):
     """Filter data based on power around 150 MHz.
 
-    This takes the RMS of the power around 153.5 MHz (in a 1.5 MHz bin), after
-    subtracting the mean, then compares this to the mean power of a 1.5 MHz bin around
-    157 MHz (which is expected to be cleaner). If this ratio (RMS to mean) is greater
-    than 200 times the threshold given, the integration will be flagged.
+    For each integration (and each load and polarization), this computes the RMS of
+    the data in the band 152.75--154.25 MHz about its mean in that band (i.e. its
+    standard deviation over frequency), and the mean of the data in the band
+    156.25--157.75 MHz (which is expected to be cleaner). The integration is
+    flagged if::
+
+        200 * sqrt(rms) / mean > threshold
+
+    Note that, since the square root of the RMS is used, this statistic is not
+    dimensionless: the threshold depends on the units (and scale) of the data. If the
+    data does not extend to 157 MHz, nothing is flagged.
+
+    Parameters
+    ----------
+    data
+        The data to filter.
+    threshold
+        The threshold on the statistic above, beyond which integrations are flagged.
     """
     if data.freqs.max() < 157 * un.MHz:
         return GSFlag(flags=np.zeros(data.ntimes, dtype=bool), axes=("time",))
 
     freq_mask = (data.freqs >= 152.75 * un.MHz) & (data.freqs <= 154.25 * un.MHz)
-    mean = np.mean(data.data[..., freq_mask], axis=-1)
-    rms = np.sqrt(np.mean((data.data[..., freq_mask].T - mean.T) ** 2)).T
+    band = data.data[..., freq_mask]
+    mean = np.mean(band, axis=-1, keepdims=True)
+    rms = np.sqrt(np.mean((band - mean) ** 2, axis=-1))
 
     freq_mask2 = (data.freqs >= 156.25 * un.MHz) & (data.freqs <= 157.75 * un.MHz)
     av = np.mean(data.data[..., freq_mask2], axis=-1)

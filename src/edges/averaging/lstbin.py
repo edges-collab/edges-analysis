@@ -59,11 +59,48 @@ def get_lst_bins(
     return bins
 
 
+def _circular_mean_hours(hours: np.ndarray, axis: int = 0) -> np.ndarray:
+    """Compute the circular mean of times-of-day (in hours, period 24 h).
+
+    Parameters
+    ----------
+    hours
+        The input times-of-day (e.g. LSTs) in hours.
+    axis
+        The axis over which to take the mean.
+
+    Returns
+    -------
+    np.ndarray
+        The circular mean, in hours, in the range [0, 24).
+    """
+    phase = np.exp(1j * 2 * np.pi * np.asarray(hours) / 24)
+    return (np.angle(np.mean(phase, axis=axis)) * 24 / (2 * np.pi)) % 24
+
+
+def _wrap_hours(hours: np.ndarray, reference: np.ndarray | float) -> np.ndarray:
+    """Wrap times-of-day (in hours) into (reference - 12, reference + 12].
+
+    Parameters
+    ----------
+    hours
+        The input times-of-day (e.g. LSTs) in hours.
+    reference
+        The reference time-of-day, in hours. Must be broadcastable against ``hours``.
+
+    Returns
+    -------
+    np.ndarray
+        The wrapped hours, as a new array.
+    """
+    return reference + 12 - (reference + 12 - np.asarray(hours)) % 24
+
+
 @gsregister("reduce")
 def average_over_times(
     data: GSData,
     nsamples_strategy: NsamplesStrategy = NsamplesStrategy.FLAGGED_NSAMPLES,
-    reference_lst: Longitude = Longitude(12 * un.hour),
+    reference_lst: Longitude | None = None,
     use_resids: bool | None = None,
     fill_value: float = np.nan,
 ) -> GSData:
@@ -77,8 +114,12 @@ def average_over_times(
         The strategy to use when defining the weights of each sample. See
         :class:`~edges.analysis.averaging.NsamplesStrategy` for more information.
     reference_lst
-        An LST set as the central LST when finding the new mean LST. All LSTs will
-        be wrapped within 12 hours of this reference before taking the mean.
+        An LST set as the central LST when finding the new mean LST. All LSTs (and
+        LST ranges) are wrapped to within 12 hours of this reference before taking
+        their mean (and min/max). By default, the circular mean of the unflagged LSTs
+        (for each load) is used, so that the result is correct for data spanning any
+        LST range shorter than 24 hours, including those that cross LST midnight
+        (0/24 h).
     use_resids : bool, optional
         Whether to average the residuals and add them back to the mean model, or simply
         average the data directly.
@@ -127,17 +168,22 @@ def average_over_times(
         format="jd",
     )
 
-    # Wrap the LSTs into +-12 hours of the reference LST.
-    # Note that we de-unit the quantities to do the wrapping
-    # because astropy does weird things when trying to wrap
-    # a Longitude/Angle
-    lsts = data.lsts.hour.copy()
-    lsts[lsts <= reference_lst.hour - 12] += 24
-    lsts[lsts > reference_lst.hour + 12] -= 24
+    # Wrap the LSTs into +-12 hours of the reference LST (by default, their circular
+    # mean), so that a simple mean/min/max of them is meaningful even when the data
+    # spans LST midnight. Note that we de-unit the quantities to do the wrapping
+    # because astropy does weird things when trying to wrap a Longitude/Angle.
+    if reference_lst is None:
+        ref = _circular_mean_hours(data.lsts.hour[ww], axis=0)  # shape (nloads,)
+    else:
+        ref = np.full(data.nloads, reference_lst.hour)
 
-    lst_ranges = data.lst_ranges.hour.copy()
-    lst_ranges[lst_ranges <= reference_lst.hour - 12] += 24
-    lst_ranges[lst_ranges > reference_lst.hour + 12] -= 24
+    lsts = _wrap_hours(data.lsts.hour, ref)  # (ntimes, nloads)
+    lst_ranges = data.lst_ranges.hour.copy()  # (ntimes, nloads, 2)
+    lst_ranges[..., 0] = _wrap_hours(lst_ranges[..., 0], ref)
+    # The end of each range is placed after its start.
+    lst_ranges[..., 1] = lst_ranges[..., 0] + (
+        (data.lst_ranges.hour[..., 1] - data.lst_ranges.hour[..., 0]) % 24
+    )
 
     if data.auxiliary_measurements is not None:
         new_aux = {

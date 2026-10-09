@@ -9,7 +9,8 @@ from sim_helpers import make_achromatic_beam
 from edges import modeling as mdl
 from edges.sim import compute_antenna_beam_factor
 from edges.sim.antenna_beam_factor import BeamFactor
-from edges.sim.sky_models import ConstantIndex
+from edges.sim.beams import Beam
+from edges.sim.sky_models import ConstantIndex, SkyModel
 
 FAST = {
     "lst_progress": False,
@@ -41,20 +42,64 @@ def test_achromatic_beam_factor_is_unity_eq_a1(galaxy_sky):
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "With sky_at_reference_frequency=True the numerator uses T_sky(nu) "
-        "instead of T_sky(nu_ref) (Sims+23 Eq. 4), so an achromatic beam gives "
-        "(nu/nu_ref)^-beta instead of 1; fix pending (result-changing)"
-    ),
-)
 def test_achromatic_beam_factor_is_unity_eq_4(galaxy_sky):
     """With sky_at_reference_frequency=True, an achromatic beam also gives BF == 1."""
     bf = _achromatic_bf(galaxy_sky, sky_at_reference_frequency=True)
+    assert bf.antenna_temp_ref.shape == (bf.nlst,)
+    assert bf.meta["sky_at_reference_frequency"]
+    np.testing.assert_allclose(
+        bf.antenna_temp / bf.antenna_temp_ref[:, None], 1.0, rtol=1e-12
+    )
     np.testing.assert_allclose(
         bf.get_beam_factor(mdl.Polynomial(n_terms=4)), 1.0, rtol=1e-8
     )
+
+
+def _chromatic_beam(freqs: np.ndarray) -> Beam:
+    """A beam that narrows with frequency (and is azimuthally asymmetric)."""
+    az = np.arange(0, 360, 5.0)
+    el = np.arange(0, 91, 5.0)
+    power = 2 * (freqs / 75.0)
+    pattern = np.sin(np.radians(el))[None, :, None] ** power[:, None, None] * (
+        1 + 0.3 * np.cos(2 * np.radians(az))
+    )
+    return Beam(
+        frequency=freqs * un.MHz,
+        azimuth=az,
+        elevation=el,
+        beam=pattern,
+        simulator="analytic",
+    )
+
+
+@pytest.mark.parametrize("normalize_beam", [True, False])
+def test_eq_4_beam_factor_independent_of_sky_spectrum(galaxy_sky, normalize_beam):
+    """With the sky at the reference frequency, the sky's spectral index is irrelevant.
+
+    The beam factor is int B(nu) T_sky(nu_ref) / int B(nu_ref) T_sky(nu_ref), which
+    contains no foreground spectrum, so it is the same for any spectral index (but
+    not identically one, since the beam is chromatic). The reference frequency is
+    the sky model's own frequency, so that the CMB offset in the sky model does not
+    make the reference sky depend on the spectral index.
+    """
+    out = {}
+    for beta in (2.0, 2.5, 3.0):
+        bf = compute_antenna_beam_factor(
+            beam=_chromatic_beam(np.arange(55.0, 96.0, 10.0)),
+            sky_model=galaxy_sky,
+            lsts=Longitude([0.0, 17.76] * un.hour),
+            reference_frequency=galaxy_sky.frequency * un.MHz,
+            sky_at_reference_frequency=True,
+            normalize_beam=normalize_beam,
+            use_astropy_azel=False,
+            **{**FAST, "index_model": ConstantIndex(index=beta)},
+        )
+        out[beta] = bf.antenna_temp / bf.antenna_temp_ref[:, None]
+
+    np.testing.assert_allclose(out[2.0], out[2.5], rtol=1e-12)
+    np.testing.assert_allclose(out[3.0], out[2.5], rtol=1e-12)
+    np.testing.assert_allclose(out[2.5][:, 2], 1.0, rtol=1e-12)  # nu_ref = 75 MHz
+    assert np.ptp(out[2.5]) > 0.01
 
 
 def test_default_lsts_and_reference_frequency(galaxy_sky):
@@ -111,6 +156,62 @@ def test_lsts_stored_in_hours(lsts, use_astropy_azel, galaxy_sky):
         **FAST,
     )
     np.testing.assert_allclose(bf.antenna_temp, ref.antenna_temp, rtol=1e-12)
+
+
+@pytest.mark.parametrize("nside", [4, 8])
+def test_unnormalised_loss_fraction_is_one_minus_mean_beam(nside):
+    """Without normalisation, a unit beam above the horizon covers half the sky."""
+    sky = SkyModel.uniform_healpix(408.0, temperature=1000.0, nside=nside)
+    bf = compute_antenna_beam_factor(
+        beam=Beam.uniform(f_low=50, f_high=56, delta_f=2, delta_az=2, delta_el=2),
+        sky_model=sky,
+        lsts=[2.0],
+        reference_frequency=52 * un.MHz,
+        normalize_beam=False,
+        use_astropy_azel=False,
+        **FAST,
+    )
+    # The fraction of HEALPix pixel centres above the horizon is ~1/2.
+    np.testing.assert_allclose(bf.loss_fraction, 0.5, atol=0.01)
+    np.testing.assert_allclose(bf.antenna_temp / bf.antenna_temp_ref[:, None], 1.0)
+
+
+@pytest.mark.parametrize("normalize_beam", [True, False])
+def test_ground_loss_aligned_in_beam_factor(normalize_beam):
+    """The ground loss is cut with the beam, and multiplies the beam.
+
+    For a normalised beam, it enters the beam factor as g(nu)/g(nu_ref); for an
+    unnormalised beam it cancels in the beam factor. Either way it enters the loss
+    fraction.
+    """
+    beam = Beam.uniform(f_low=50, f_high=58, delta_f=2, delta_az=2, delta_el=2)
+    sky = SkyModel.uniform_healpix(408.0, temperature=1000.0, nside=4)
+    kw = {
+        "beam": beam,
+        "sky_model": sky,
+        "lsts": [2.0],
+        "f_low": 52 * un.MHz,
+        "reference_frequency": 54 * un.MHz,
+        "normalize_beam": normalize_beam,
+        "use_astropy_azel": False,
+        **FAST,
+    }
+    ground_loss = np.array([1.0, 0.9, 0.8, 0.7])  # at 50, 52, 54, 56 MHz
+    with_loss = compute_antenna_beam_factor(ground_loss=ground_loss, **kw)
+    without = compute_antenna_beam_factor(**kw)
+
+    np.testing.assert_allclose(with_loss.frequencies, [52, 54, 56])
+    gain_ratio = ground_loss[1:] / 0.8 if normalize_beam else 1.0
+    np.testing.assert_allclose(
+        with_loss.antenna_temp / with_loss.antenna_temp_ref[:, None],
+        gain_ratio * without.antenna_temp / without.antenna_temp_ref[:, None],
+        rtol=1e-12,
+    )
+    np.testing.assert_allclose(
+        1 - with_loss.loss_fraction,
+        ground_loss[1:] * (1 - without.loss_fraction),
+        rtol=1e-12,
+    )
 
 
 def _square_bf(lsts: np.ndarray, *, with_extras: bool = True) -> BeamFactor:

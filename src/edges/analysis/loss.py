@@ -1,6 +1,5 @@
 """Functions defining expected losses from the instruments."""
 
-import warnings
 from pathlib import Path
 
 import attrs
@@ -11,6 +10,7 @@ from astropy import units as un
 from ..cal import loss
 from ..cal import sparams as sp
 from ..config import config
+from ..data import LOSS_PATH
 
 
 def low2_balun_connector_loss(
@@ -55,11 +55,16 @@ def low2_balun_connector_loss(
 
 
 def _get_loss(fname: str | Path, freq: np.ndarray, n_terms: int) -> np.ndarray:
+    """Fit a polynomial with ``n_terms`` terms to a tabulated loss, and evaluate it.
+
+    The file has two columns: frequency (MHz) and the fractional loss. The returned
+    value is the gain, ``1 - loss``.
+    """
     gr = np.genfromtxt(fname)
     fr = gr[:, 0]
     dr = gr[:, 1]
 
-    par = np.polyfit(fr, dr, n_terms)
+    par = np.polyfit(fr, dr, n_terms - 1)
     model = np.polyval(par, freq)
 
     return 1 - model
@@ -82,19 +87,16 @@ def _get_loss_from_datafile(
             # Use the built-in loss files
             if configuration:
                 loss_type += f"_{configuration}"
-            filename = (
-                Path(__file__).parent
-                / "data"
-                / "loss"
-                / instrument
-                / f"{loss_type}.txt"
-            )
+            filename = LOSS_PATH / instrument / f"{loss_type}.txt"
             if not filename.exists():
-                warnings.warn(
-                    f"Ground loss file {filename} does not exist. Returning ones.",
-                    stacklevel=2,
+                available = sorted(
+                    str(p.relative_to(LOSS_PATH)) for p in LOSS_PATH.glob("*/*.txt")
                 )
-                return np.ones(freq.shape)
+                raise FileNotFoundError(
+                    f"No built-in {loss_type} loss file for instrument "
+                    f"'{instrument}' ({filename} does not exist). Available built-in "
+                    f"loss files: {available}."
+                )
         else:
             # Find the file in the standard directory structure
             filename = config.antenna / instrument / "loss" / str(filename)[1:]
@@ -113,20 +115,36 @@ def ground_loss(
     """
     Calculate ground loss of a particular antenna at given frequencies.
 
+    The tabulated loss is fit with a 9-term (degree-8) polynomial in frequency.
+
     Parameters
     ----------
-    filename : path
-        File in which value of the ground loss for this instrument are tabulated.
     freq : array-like
         Frequency in MHz. For mid-band (low-band), between 50 and 150 (120) MHz.
+    filename : path
+        File in which value of the ground loss for this instrument are tabulated.
+        If it is exactly ``":"``, the built-in file for ``instrument`` (and
+        ``configuration``) is used, from ``edges/data/loss/<instrument>/``. If it
+        starts with ``":"``, the rest of it is a filename in the standard directory
+        structure for the instrument.
     instrument : str, optional
-        The instrument to find the ground loss for. Only required if `filename`
-        doesn't exist and isn't an absolute path (in which case the standard directory
-        structure will be searched using ``band``).
+        The instrument to find the ground loss for (e.g. ``"low"`` or ``"mid"``).
+        Only required if ``filename`` starts with ``":"``.
     configuration : str, optional
         The configuration of the instrument. A string, such as "45deg", which defines
         the orientation or other configuration parameters of the instrument, which may
         affect the ground loss.
+
+    Returns
+    -------
+    np.ndarray
+        The ground gain, ``1 - loss``, at each frequency.
+
+    Raises
+    ------
+    FileNotFoundError
+        If a built-in loss file is requested (``filename=":"``) that does not exist
+        for the given instrument and configuration.
     """
     return _get_loss_from_datafile(
         filename,
@@ -134,7 +152,7 @@ def ground_loss(
         instrument=instrument,
         configuration=configuration,
         loss_type="ground",
-        n_terms=8,
+        n_terms=9,
     )
 
 
@@ -143,30 +161,46 @@ def antenna_loss(
     filename: str | Path,
     instrument: str | None = None,
     configuration: str = "",
-):
+) -> np.ndarray:
     """
     Calculate antenna loss of a particular antenna at given frequencies.
 
+    The tabulated loss is fit with an 11-term (degree-10) polynomial in frequency.
+
     Parameters
     ----------
-    filename : path
-        File in which value of the antenna loss for this instrument are tabulated.
     freq : array-like
         Frequency in MHz. For mid-band (low-band), between 50 and 150 (120) MHz.
+    filename : path
+        File in which value of the antenna loss for this instrument are tabulated.
+        If it is exactly ``":"``, the built-in antenna-loss file for ``instrument``
+        (and ``configuration``) is used, from ``edges/data/loss/<instrument>/``. If
+        it starts with ``":"``, the rest of it is a filename in the standard
+        directory structure for the instrument.
     instrument
-        The instrument to find the antenna loss for. Only required if `filename`
-        starts with the magic ':' (in which case the standard directory
-        structure will be searched using ``band``).
+        The instrument to find the antenna loss for (e.g. ``"mid"``). Only required
+        if ``filename`` starts with ``":"``.
     configuration : str, optional
         The configuration of the instrument. A string, such as "45deg", which defines
         the orientation or other configuration parameters of the instrument, which may
         affect the antenna loss.
+
+    Returns
+    -------
+    np.ndarray
+        The antenna gain, ``1 - loss``, at each frequency.
+
+    Raises
+    ------
+    FileNotFoundError
+        If a built-in loss file is requested (``filename=":"``) that does not exist
+        for the given instrument and configuration (only ``"mid"`` has one).
     """
     return _get_loss_from_datafile(
         filename,
         freq=freq,
         instrument=instrument,
         configuration=configuration,
-        loss_type="ground",
+        loss_type="antenna",
         n_terms=11,
     )

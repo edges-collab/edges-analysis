@@ -1,5 +1,4 @@
 import numpy as np
-import pytest
 from astropy import units as un
 
 from edges import modeling as mdl
@@ -114,14 +113,12 @@ class TestSmoothSparamsPhaseWrap:
         smoothed = smooth_sparams(self.sparams, params=self._params(True))
         np.testing.assert_allclose(smoothed.s12 * smoothed.s21, self.s12s21, atol=1e-6)
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "S12 and S21 from OSL are the principal-branch sqrt of S12*S21, which "
-            "flips sign where the phase crosses pi, so smoothing them separately "
-            "(combine_s12s21=False) cannot fit them; fix pending (result-changing)"
-        ),
-    )
     def test_separate(self):
         smoothed = smooth_sparams(self.sparams, params=self._params(False))
         np.testing.assert_allclose(smoothed.s12 * smoothed.s21, self.s12s21, atol=1e-6)
+
+    def test_combined_s12_is_continuous(self):
+        """The square root of the smoothed product follows a continuous branch."""
+        smoothed = smooth_sparams(self.sparams, params=self._params(True))
+        np.testing.assert_array_equal(smoothed.s12, smoothed.s21)
+        assert np.all(np.real(smoothed.s12[1:] * np.conj(smoothed.s12[:-1])) > 0)

@@ -157,18 +157,28 @@ def test_metadata(calio: calobsdef.CalObsDefEDGES2):
     assert isw.external_calkit == "calkit-name"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "The EDGES-2 standard layout names the hot load 'HotLoad', but the default "
-        "semi-rigid cable S-parameter file is only set for a load named 'hot_load', "
-        "so no hot-load cable loss is ever applied; fix pending (result-changing)"
-    ),
-)
 def test_standard_layout_hot_load_has_semirigid_sparams(
     calio: calobsdef.CalObsDefEDGES2,
 ):
+    """The standard layout names the hot load 'HotLoad'; it gets the cable file."""
     assert calio.hot_load.sparams_file is not None
+    assert calio.hot_load.sparams_file.name == "semi_rigid_s_parameters_WITH_HEADER.txt"
+    for name in ("open", "short", "ambient"):
+        assert calio.loads[name].sparams_file is None
+
+
+@pytest.mark.parametrize("name", ["HotLoad", "hot_load", "Hot_Load"])
+def test_canonical_load_name_hot_load(name: str):
+    assert calobsdef._canonical_load_name(name) == "hot_load"
+
+
+@pytest.mark.parametrize(
+    ("name", "canonical"),
+    [("Ambient", "ambient"), ("LongCableOpen", "open"), ("cable_short", "short")],
+)
+def test_canonical_load_name_others(name: str, canonical: str):
+    assert calobsdef._canonical_load_name(name) == canonical
+    assert calobsdef._canonical_load_name("not-a-load") == "not-a-load"
 
 
 def _reverse_glob(monkeypatch: pytest.MonkeyPatch) -> None:

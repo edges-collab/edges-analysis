@@ -137,9 +137,11 @@ class InputSource:
             S-parameters at different frequencies. If None (default), use
             :func:`edges.cal.sparams.hot_load_cable_model_params`.
         restrict_s11_freqs
-            Whether to restrict the S11 frequencies to f_low/f_high when calibrating
-            and modelling (they will always be restricted to the spectrum frequencies
-            after modelling).
+            Whether to fit the S11 model only to the measured S11 frequencies within
+            ``[f_low, f_high]``. If False, the model is fit to the full measured
+            (VNA) band. Either way, the model is evaluated at the spectrum
+            frequencies, and the raw (un-modelled) S11 that is stored covers the full
+            measured band.
 
         Returns
         -------
@@ -170,10 +172,6 @@ class InputSource:
             **spec_kwargs,
         )
 
-        # Fill up kwargs with keywords from this instance
-        s11_kwargs["f_low"] = f_low if restrict_s11_freqs else 0 * un.MHz
-        s11_kwargs["f_high"] = f_high if restrict_s11_freqs else np.inf * un.MHz
-
         s11_model_params = s11_kwargs.get("model_params")
         if s11_model_params is None:
             s11_model_params = sp.input_source_model_params(name=load_name)
@@ -193,8 +191,12 @@ class InputSource:
             internal_calkit=internal_calkit,
         )
 
-        # Now, model the S11
-        s11 = raw_s11.smoothed(s11_model_params, freqs=spec.freqs)
+        # Now, model the S11, optionally fitting only the measurements within
+        # [f_low, f_high]. The raw (calibrated, un-modelled) S11 is kept in full.
+        s11_to_fit = (
+            raw_s11.select_frequencies(f_low, f_high) if restrict_s11_freqs else raw_s11
+        )
+        s11 = s11_to_fit.smoothed(s11_model_params, freqs=spec.freqs)
 
         if loss_model is not None:
             if (
