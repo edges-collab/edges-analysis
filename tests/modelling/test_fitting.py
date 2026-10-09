@@ -11,15 +11,6 @@ from edges.modeling.models import PhysicalIono
 
 ALL_METHODS = ("lstsq", "qr", "alan-qrd", "qrd-c")
 
-MOD1_REASON = (
-    "The default 'lstsq' solver applies the weights to both A and y, "
-    "minimising sum(w^2 r^2) (treating w as 1/sigma) instead of sum(w r^2) with "
-    "w = 1/sigma^2; fix pending (result-changing)"
-)
-LSTSQ_XFAIL = pytest.param(
-    "lstsq", marks=pytest.mark.xfail(strict=True, reason=MOD1_REASON)
-)
-
 # One instance of every concrete linear-model class, with "realistic" parameters.
 MODEL_CASES = {
     "PhysicalLin": (mdl.PhysicalLin(n_terms=5), [1750, -90, 30, -8, 5]),
@@ -79,7 +70,7 @@ def test_noise_free_recovery_all_solvers(method: str):
     np.testing.assert_allclose(fit.model_parameters, params, rtol=1e-7)
 
 
-@pytest.mark.parametrize("method", [LSTSQ_XFAIL, "qr", "alan-qrd", "qrd-c"])
+@pytest.mark.parametrize("method", ALL_METHODS)
 def test_residuals_w_orthogonal_to_basis(method: str):
     """The WLS normal equations: A^T W r = 0 at the best fit."""
     rng, x, sigma, w = _heteroscedastic_setup()
@@ -91,6 +82,22 @@ def test_residuals_w_orthogonal_to_basis(method: str):
     # Compare to the size of the individual terms in the sum.
     scale = np.abs(fm.basis) @ np.abs(w * fit.residual)
     np.testing.assert_array_less(np.abs(normal_eq), 1e-8 * scale)
+
+
+def test_default_method_weights_are_inverse_variance_not_polyfit():
+    """The default solver's weights are 1/sigma^2, i.e. np.polyfit's w squared."""
+    rng, x, sigma, w = _heteroscedastic_setup()
+    fm = mdl.Polynomial(n_terms=4).at(x=x)
+    y = fm(parameters=[1, 2, -3, 0.5]) + rng.normal(scale=sigma)
+    fit = fm.fit(ydata=y, weights=w)
+
+    # np.polyfit's weights multiply the residuals, so w_polyfit = 1/sigma = sqrt(w).
+    expected = np.polyfit(x, y, deg=3, w=np.sqrt(w))[::-1]
+    np.testing.assert_allclose(fit.model_parameters, expected, rtol=1e-8)
+
+    # Passing 1/sigma (the polyfit convention) gives a measurably different answer.
+    wrong = fm.fit(ydata=y, weights=np.sqrt(w)).model_parameters
+    assert not np.allclose(wrong, expected, rtol=1e-3)
 
 
 @pytest.mark.parametrize("method", ALL_METHODS)
@@ -159,7 +166,6 @@ def test_mc_scatter_matches_covariance_qr():
     np.testing.assert_allclose(pars.std(axis=0), np.sqrt(np.diag(cov)), rtol=0.08)
 
 
-@pytest.mark.xfail(strict=True, reason=MOD1_REASON)
 def test_mc_scatter_matches_covariance_default_method():
     """The reported covariance matches the MC scatter for the default solver."""
     pars, cov = _mc_parameters("lstsq")

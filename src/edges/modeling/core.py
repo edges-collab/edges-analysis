@@ -297,7 +297,8 @@ class FixedLinearModel(yaml.YAMLObject):
         ydata
             The data to fit.
         weights
-            The weights to apply to the data.
+            The inverse-variance (1/sigma^2) weights of the data (or an
+            inverse-covariance matrix); see :class:`~edges.modeling.fitting.ModelFit`.
         xdata
             The co-ordinates at which to fit the data. If not given, use ``self.x``.
 

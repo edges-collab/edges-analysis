@@ -86,13 +86,6 @@ def test_covariance_fit_recovers_signal():
     np.testing.assert_allclose(best.x, [0.3], atol=1e-4)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "1D sigma uses ModelFit's default 'lstsq' solver, which squares the weights; "
-        "fix pending (result-changing)"
-    ),
-)
 def test_diagonal_covariance_matches_array_sigma():
     """Non-uniform per-channel sigma and diag(sigma**2) give the same FG fit."""
     freqs, fg, eor, data = _setup()

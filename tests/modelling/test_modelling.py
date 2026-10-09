@@ -67,25 +67,7 @@ def test_simple_fit(method: str):
     assert fit.hessian.shape == (3, 3)
 
 
-@pytest.mark.parametrize(
-    "method",
-    [
-        pytest.param(
-            "lstsq",
-            marks=pytest.mark.xfail(
-                strict=True,
-                reason=(
-                    "The 'lstsq' solver applies the weights to both A and y, "
-                    "minimising sum(w^2 r^2) (i.e. treating w as 1/sigma) instead of "
-                    "sum(w r^2) with w = 1/sigma^2; fix pending (result-changing)"
-                ),
-            ),
-        ),
-        "qr",
-        "alan-qrd",
-        "qrd-c",
-    ],
-)
+@pytest.mark.parametrize("method", ["lstsq", "qr", "alan-qrd", "qrd-c"])
 def test_weighted_fit(method: str):
     """Weighted fits with inverse-variance weights must give the exact WLS solution.
 

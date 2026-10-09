@@ -53,12 +53,9 @@ class ModelFit:
         matrix. The matrix must be symmetric and positive definite, all the data must
         be finite, and the 'qrd-c' method is not supported.
 
-        .. warning:: The default ``"lstsq"`` method currently applies the weights to
-           both the basis and the data before solving, i.e. it minimises
-           :math:`\sum w^2 r^2` rather than :math:`\sum w r^2` (it treats ``w``
-           as :math:`1/\sigma`). The other methods, and the Hessian, covariance and
-           chi^2, treat ``w`` as :math:`1/\sigma^2`. Results agree when the weights
-           are uniform. A fix is pending.
+        All methods minimise :math:`\sum w r^2` (or :math:`r^T W r`), consistent with
+        the Hessian, parameter covariance and chi^2. Note that this differs from the
+        convention of :func:`numpy.polyfit`, whose ``w`` is :math:`1/\sigma`.
     method
         The method to solve the linear least squares problem. This can be 'lstsq',
         'qr', 'alan-qrd' or 'qrd-c'. The 'lstsq' method uses the np.linalg.lstsq
@@ -271,19 +268,23 @@ class ModelFit:
         return np.linalg.lstsq(lt @ van.T, lt @ y, rcond=None)[0]
 
     def _wls(self, van, y, w):
-        """Ripped straight outta numpy for speed.
+        """Weighted least squares with inverse-variance weights, minimising sum(w r^2).
 
-        Note: this function is written purely for speed, and is intended to *not*
-        be highly generic. Don't replace this by statsmodels or even np.polyfit. They
-        are significantly slower (>4x for statsmodels, 1.5x for polyfit).
+        Ripped straight outta numpy for speed. Note: this function is written purely
+        for speed, and is intended to *not* be highly generic. Don't replace this by
+        statsmodels or even np.polyfit. They are significantly slower (>4x for
+        statsmodels, 1.5x for polyfit). Unlike np.polyfit (whose weights are
+        1/sigma), the basis and data are multiplied by ``sqrt(w)``, since ``w`` is
+        1/sigma^2.
         """
         # set up the least squares matrices and apply weights.
         # Don't use inplace operations as they
         # can cause problems with NA.
         mask = w > 0
+        sqrtw = np.sqrt(w[mask])
 
-        lhs = van[:, mask] * w[mask]
-        rhs = y[mask] * w[mask]
+        lhs = van[:, mask] * sqrtw
+        rhs = y[mask] * sqrtw
 
         rcond = y.size * np.finfo(y.dtype).eps
 
