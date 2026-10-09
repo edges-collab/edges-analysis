@@ -200,7 +200,8 @@ class ModelFit:
         """
         if self.method == "lstsq" and self._has_weight_matrix:
             return self.model.basis, self.ydata
-        return self.model.basis[:, self._mask], self.ydata[self._mask]
+
+        return _select_columns(self.model.basis, self._mask), self.ydata[self._mask]
 
     def _alan_qrd(self, basis: np.ndarray, y: np.ndarray, w: np.ndarray) -> np.ndarray:
         """Solve a linear system using QR decomposition implemented in C.
@@ -405,9 +406,12 @@ class _LinearSolver:
         else:
             # Set up the least squares matrices and apply weights. Don't use
             # in-place operations as they can cause problems with NA.
-            self._wmask = w > 0
+            # Select the points with positive weight (a slice, rather than a copy,
+            # of the 1D arrays when all of them are, giving identical results).
+            wmask = w > 0
+            self._wmask = slice(None) if np.all(wmask) else wmask
             self._sqrtw = np.sqrt(w[self._wmask])
-            lhs = van[:, self._wmask] * self._sqrtw
+            lhs = _select_columns(van, wmask) * self._sqrtw
 
             # Determine the norms of the design matrix columns.
             scl = np.sqrt(np.square(lhs).sum(1))
@@ -555,6 +559,18 @@ class _RepeatedFit:
         if pars is None:
             return self.fit(ydata).residual
         return d - self.model(parameters=pars)
+
+
+def _select_columns(arr: np.ndarray, mask: np.ndarray) -> np.ndarray:
+    """Select the columns ``mask`` of a 2D array, i.e. ``arr[:, mask]``.
+
+    The result is identical to ``arr[:, mask]``, including its (Fortran-ordered)
+    memory layout, which matters for the summation order of later reductions; but
+    when all columns are selected, the copy is made much faster.
+    """
+    if np.all(mask) and (arr.flags.c_contiguous or arr.flags.f_contiguous):
+        return np.asfortranarray(arr)
+    return arr[:, mask]
 
 
 def _c_qrd(a: np.ndarray, b: np.ndarray):

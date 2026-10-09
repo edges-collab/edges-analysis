@@ -9,7 +9,7 @@ import pytest
 import scipy as sp
 
 from edges import modeling as mdl
-from edges.modeling.fitting import _c_qrd, _RepeatedFit
+from edges.modeling.fitting import _c_qrd, _RepeatedFit, _select_columns
 
 
 def _ref_qr(basis: np.ndarray, y: np.ndarray, w: np.ndarray | float) -> np.ndarray:
@@ -210,6 +210,8 @@ def _weights(kind: str, n: int, rng: np.random.Generator):
     if kind == "scalar":
         return 4.0
     sig = rng.uniform(0.5, 2, size=n)
+    if kind == "1D-positive":
+        return 1 / sig**2
     if kind == "1D":
         w = 1 / sig**2
         w[::17] = 0
@@ -229,7 +231,7 @@ def _fit_data(n: int, nan: bool, rng: np.random.Generator):
 
 
 @pytest.mark.parametrize("method", ["lstsq", "qr"])
-@pytest.mark.parametrize("wkind", ["scalar", "1D", "matrix"])
+@pytest.mark.parametrize("wkind", ["scalar", "1D", "1D-positive", "matrix"])
 @pytest.mark.parametrize("nan", [False, True])
 def test_modelfit_solve_is_bit_identical_to_original(method, wkind, nan):
     """ModelFit's lstsq/qr solves are exactly the original algorithms."""
@@ -245,7 +247,7 @@ def test_modelfit_solve_is_bit_identical_to_original(method, wkind, nan):
 
 
 @pytest.mark.parametrize("method", ["lstsq", "qr", "alan-qrd"])
-@pytest.mark.parametrize("wkind", ["scalar", "1D", "matrix"])
+@pytest.mark.parametrize("wkind", ["scalar", "1D", "1D-positive", "matrix"])
 @pytest.mark.parametrize("nan", [False, True])
 def test_repeated_fit_is_bit_identical_to_modelfit(method, wkind, nan):
     """Cached repeated fits give exactly the parameters/residuals of full fits."""
@@ -291,3 +293,35 @@ def test_repeated_fit_validates_weights():
     w[3] = -1
     with pytest.raises(ValueError, match="non-negative"):
         _RepeatedFit(fm, weights=w).residual(y)
+
+
+@pytest.mark.parametrize("order", ["C", "F"])
+@pytest.mark.parametrize("shape", [(5, 300), (1, 300), (5, 1)])
+@pytest.mark.parametrize("all_used", [True, False])
+def test_select_columns_matches_boolean_indexing(order, shape, all_used):
+    """Column selection equals arr[:, mask], including its memory layout."""
+    arr = np.asarray(np.random.default_rng(7).normal(size=shape), order=order)
+    mask = np.ones(shape[1], dtype=bool)
+    if not all_used:
+        mask[::3] = False
+    ref = arr[:, mask]
+    out = _select_columns(arr, mask)
+    np.testing.assert_array_equal(out, ref)
+    assert out.flags.f_contiguous == ref.flags.f_contiguous
+    assert out.flags.c_contiguous == ref.flags.c_contiguous
+
+
+@pytest.mark.parametrize("n_terms", [1, 5])
+@pytest.mark.parametrize("wkind", ["scalar", "1D-positive"])
+def test_modelfit_all_used_points_bit_identical(n_terms: int, wkind: str):
+    """Fits using all the points are exactly the original algorithms."""
+    rng = np.random.default_rng(8)
+    x = np.linspace(50, 100, 2000)
+    fm = mdl.LinLog(n_terms=n_terms).at(x=x)
+    y = fm(parameters=[2000, 10, -10, 5, -5][:n_terms]) + rng.normal(size=x.size)
+    w = _weights(wkind, x.size, rng)
+    for method in ("lstsq", "qr"):
+        fit = fm.fit(ydata=y, weights=w, method=method)
+        np.testing.assert_array_equal(
+            np.array(fit.model_parameters), _ref_params(fm, y, w, method)
+        )
