@@ -108,10 +108,10 @@ def get_bin_edges(
         The input co-ordinates to bin. These must be regular and monotonically
         increasing.
     bins
-        The bin *edges* (lower inclusive, upper not inclusive). If an integer (including
-        numpy integer types), simply use ``bins`` coords per bin, starting from the
-        first bin. If the number of coords is not divisible by ``bins``, the trailing
-        coords that do not fill a whole bin are dropped (and a warning is logged).
+        The bin *edges* (lower inclusive, upper not inclusive). If an integer, simply
+        use ``bins`` coords per bin, starting from the first bin. If the number of
+        coords is not divisible by ``bins``, the trailing coords that do not fill a
+        whole bin are dropped (and a warning is logged).
         If a float, use equi-spaced bin edges, starting from the start of coords, and
         ending past the end of coords. If an array, assumed to be the bin edges.
         If not provided, assume a single bin encompassing all the data.
@@ -312,8 +312,7 @@ def weighted_variance(
     Returns
     -------
     var
-        The weighted variance of the data over the given axis. Only this array is
-        returned (not the sum of the weights).
+        The weighted variance of the data over the given axis.
 
     Notes
     -----
