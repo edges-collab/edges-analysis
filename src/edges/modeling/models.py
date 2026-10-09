@@ -1,5 +1,6 @@
 """Specific linear models for edges-cal."""
 
+from collections.abc import Sequence
 from functools import cached_property
 from typing import ClassVar
 
@@ -151,6 +152,19 @@ class LinLog(Foreground):
         """Define the basis functions of the model."""
         term = self._poly.get_basis_term_transformed(indx, x)
         return term * x**self.beta
+
+    def _get_basis_terms_at(
+        self, indices: Sequence[int], xt: np.ndarray
+    ) -> list[np.ndarray]:
+        """Get the basis terms ``indices`` at the transformed coordinates ``xt``.
+
+        Identical to calling :meth:`get_basis_term` for each index, but the
+        logarithm and the ``x**beta`` factor are computed once for all the terms.
+        """
+        poly = self._poly
+        logx = poly.xtransform(xt)
+        xbeta = xt**self.beta
+        return [poly.get_basis_term(indx, logx) * xbeta for indx in indices]
 
 
 def LogPoly(**kwargs):  # ruff: ignore[invalid-function-name]

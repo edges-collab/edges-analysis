@@ -139,3 +139,19 @@ def test_basis_scaler_evaluated_once_per_sub_model():
     model = _basis_models(scalers)["composite"]
     _ = model.at(x=np.linspace(50, 100, 50)).basis
     assert [s.calls for s in scalers] == [1, 1]
+
+
+@pytest.mark.parametrize("n_terms", [1, 5, 10])
+@pytest.mark.parametrize("beta", [-2.5, -2.57])
+def test_linlog_shared_terms_match_per_term(n_terms: int, beta: float):
+    """LinLog's terms computed together equal its per-term construction exactly."""
+    model = mdl.LinLog(n_terms=n_terms, beta=beta, f_center=80.0)
+    x = np.random.default_rng(1).uniform(40, 200, size=4000)
+    ref = _ref_basis(model, x)
+    np.testing.assert_array_equal(model.get_basis_terms(x), ref)
+    np.testing.assert_array_equal(model.at(x=x).basis, ref)
+
+    xt = model.xtransform(x)
+    for indx, term in zip([3, 0], model._get_basis_terms_at([3, 0], xt), strict=False):
+        if indx < n_terms:
+            np.testing.assert_array_equal(term, model.get_basis_term(indx, xt))
