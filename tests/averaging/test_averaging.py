@@ -139,6 +139,51 @@ class TestGetBinnedWeights:
         np.testing.assert_array_equal(result, np.tile([3, 2], (3, 1)))
 
 
+def _reference_binned_weights(x, bins, weights, include_left, include_right):
+    """Bin weights one leading index at a time, after dropping unbinned x."""
+    if include_right:
+        mask = np.isfinite(x)
+        x = x[mask]
+        weights = weights[..., mask]
+    out = np.zeros((*weights.shape[:-1], len(bins) - 1))
+    indices = np.digitize(x, bins) - 1
+    if include_left:
+        indices[indices < 0] = 0
+    if include_right:
+        indices[indices >= (len(bins) - 1)] = len(bins) - 2
+    in_range = (indices >= 0) & (indices < len(bins) - 1)
+    indices = indices[in_range]
+    weights = weights[..., in_range]
+    for indx in np.ndindex(*out.shape[:-1]):
+        out[indx] = np.bincount(indices, weights=weights[indx], minlength=out.shape[-1])
+    return out
+
+
+@pytest.mark.parametrize("seed", range(6))
+@pytest.mark.parametrize("include_left", [True, False])
+@pytest.mark.parametrize("include_right", [True, False])
+@pytest.mark.parametrize("shape", [(), (7,), (3, 5), (0, 2)])
+def test_binned_weights_match_reference(seed, include_left, include_right, shape):
+    """Binned weights are identical to binning each leading index separately."""
+    rng = np.random.default_rng(seed)
+    nx = int(rng.integers(1, 400))
+    x = rng.uniform(-10, 110, nx)
+    if seed % 2:
+        x = np.sort(x)
+    x[rng.choice(nx, size=nx // 20)] = rng.choice([np.nan, np.inf, -np.inf])
+    bins = np.sort(
+        rng.choice(np.arange(101), size=int(rng.integers(2, 30)), replace=False)
+    )
+    weights = rng.uniform(0, 3, (*shape, nx)) * (rng.uniform(size=(*shape, nx)) > 0.2)
+
+    result = averaging.get_binned_weights(
+        x, bins, weights, include_left=include_left, include_right=include_right
+    )
+    expected = _reference_binned_weights(x, bins, weights, include_left, include_right)
+    assert result.shape == expected.shape
+    np.testing.assert_array_equal(result, expected)
+
+
 class TestGetBinEdges:
     def test_numpy_integer_bins(self):
         """A numpy integer is a number of channels per bin, just like an int."""
