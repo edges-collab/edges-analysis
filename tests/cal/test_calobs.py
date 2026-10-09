@@ -85,14 +85,23 @@ class TestCalibrationObservation:
                 name: load.averaged_q * 2 for name, load in calobs.loads.items()
             },
             thermistor_temp_ave={
-                name: load.temp_ave * 2 for name, load in calobs.loads.items()
+                name: load.spectrum.temp_ave * 2 for name, load in calobs.loads.items()
             },
         )
 
         np.testing.assert_allclose(new.receiver_s11, 2 * calobs.receiver_s11)
 
+        # The injected thermistor temperatures are the physical temperatures, before
+        # the loss (e.g. of the hot-load cable) is applied.
         for name, tmp in new.source_thermistor_temps.items():
-            assert np.allclose(tmp, 2 * calobs.source_thermistor_temps[name])
+            load = calobs.loads[name]
+            expected = (
+                load.loss * 2 * load.spectrum.temp_ave
+                + (1 - load.loss) * load.ambient_temperature
+            )
+            np.testing.assert_allclose(
+                tmp.to_value("K"), expected.to_value("K"), rtol=1e-12, atol=0
+            )
 
     def test_load_str_to_load(self, calobs):
         assert calobs._load_str_to_load("ambient") == calobs.ambient
@@ -145,6 +154,17 @@ class TestCalibrationObservation:
             rtol=0,
             atol=0,
         )
+
+
+def test_standard_layout_applies_hot_load_cable_loss(calobs: CalibrationObservation):
+    """The EDGES-2 standard layout applies the hot-load semi-rigid cable loss."""
+    loss = calobs.hot_load.loss
+    # The semi-rigid cable loses ~0.3-0.6% at 50-100 MHz (a squared loss would be
+    # ~0.7-1.2%, i.e. below 0.993 at 100 MHz).
+    assert np.all(loss > 0.993)
+    assert np.all(loss < 0.998)
+    for name in ("ambient", "open", "short"):
+        np.testing.assert_allclose(calobs.loads[name].loss, 1, rtol=0, atol=0)
 
 
 def _caldef_with_hot_load_sparams(caldef: CalObsDefEDGES2) -> CalObsDefEDGES2:

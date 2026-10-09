@@ -27,11 +27,14 @@ def read_semi_rigid_cable_sparams_file(
     S-parameters in the subsequent columns. Two layouts are supported:
 
     * 7 columns (the original file from 2015): frequency, then the real and
-      imaginary parts of S11, S12*S21 and S22. The S12*S21 column is stored as
-      ``s12`` (and hence also ``s21``).
+      imaginary parts of S11, the *product* S12*S21, and S22. Since the cable is
+      reciprocal, both ``s12`` and ``s21`` of the output are set to the (principal)
+      complex square root of the product, so that ``s12 * s21`` reproduces the
+      tabulated product exactly, and ``|s12 * s21| = |S21|^2``.
     * 6 columns (the file from 2017): frequency, real and imaginary parts of S11,
       ``|S21|`` (stored as ``s12``, and hence also ``s21``), then the real and
-      imaginary parts of S22.
+      imaginary parts of S22. Here ``|s12 * s21| = |S21|^2`` as well. The phase of
+      the transmission is not given in this file, so it is taken to be zero.
 
     Parameters
     ----------
@@ -39,6 +42,11 @@ def read_semi_rigid_cable_sparams_file(
         Path to the S-parameters file.
     f_low, f_high
         The min/max frequencies to use in the modelling.
+
+    Returns
+    -------
+    SParams
+        The S-parameters of the cable.
 
     Raises
     ------
@@ -60,6 +68,8 @@ def read_semi_rigid_cable_sparams_file(
 
     if data.shape[1] == 7:  # Original file from 2015
         data = data[:, 1::2] + 1j * data[:, 2::2]
+        # The middle column is the product S12*S21, not S12 itself.
+        data[:, 1] = np.sqrt(data[:, 1])
     elif data.shape[1] == 6:  # File from 2017
         data = np.array([
             data[:, 1] + 1j * data[:, 2],
@@ -67,7 +77,9 @@ def read_semi_rigid_cable_sparams_file(
             data[:, 4] + 1j * data[:, 5],
         ]).T
 
-    return SParams(freqs=freq, s11=data[:, 0], s12=data[:, 1], s22=data[:, 2])
+    return SParams(
+        freqs=freq, s11=data[:, 0], s12=data[:, 1], s21=data[:, 1], s22=data[:, 2]
+    )
 
 
 def get_hot_load_semi_rigid_from_filespec(
