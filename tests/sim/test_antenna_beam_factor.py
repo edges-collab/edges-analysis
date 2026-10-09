@@ -9,6 +9,7 @@ from sim_helpers import make_achromatic_beam
 from edges import modeling as mdl
 from edges.sim import compute_antenna_beam_factor
 from edges.sim.antenna_beam_factor import BeamFactor
+from edges.sim.beams import Beam
 from edges.sim.sky_models import ConstantIndex
 
 FAST = {
@@ -41,20 +42,64 @@ def test_achromatic_beam_factor_is_unity_eq_a1(galaxy_sky):
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "With sky_at_reference_frequency=True the numerator uses T_sky(nu) "
-        "instead of T_sky(nu_ref) (Sims+23 Eq. 4), so an achromatic beam gives "
-        "(nu/nu_ref)^-beta instead of 1; fix pending (result-changing)"
-    ),
-)
 def test_achromatic_beam_factor_is_unity_eq_4(galaxy_sky):
     """With sky_at_reference_frequency=True, an achromatic beam also gives BF == 1."""
     bf = _achromatic_bf(galaxy_sky, sky_at_reference_frequency=True)
+    assert bf.antenna_temp_ref.shape == (bf.nlst,)
+    assert bf.meta["sky_at_reference_frequency"]
+    np.testing.assert_allclose(
+        bf.antenna_temp / bf.antenna_temp_ref[:, None], 1.0, rtol=1e-12
+    )
     np.testing.assert_allclose(
         bf.get_beam_factor(mdl.Polynomial(n_terms=4)), 1.0, rtol=1e-8
     )
+
+
+def _chromatic_beam(freqs: np.ndarray) -> Beam:
+    """A beam that narrows with frequency (and is azimuthally asymmetric)."""
+    az = np.arange(0, 360, 5.0)
+    el = np.arange(0, 91, 5.0)
+    power = 2 * (freqs / 75.0)
+    pattern = np.sin(np.radians(el))[None, :, None] ** power[:, None, None] * (
+        1 + 0.3 * np.cos(2 * np.radians(az))
+    )
+    return Beam(
+        frequency=freqs * un.MHz,
+        azimuth=az,
+        elevation=el,
+        beam=pattern,
+        simulator="analytic",
+    )
+
+
+@pytest.mark.parametrize("normalize_beam", [True, False])
+def test_eq_4_beam_factor_independent_of_sky_spectrum(galaxy_sky, normalize_beam):
+    """With the sky at the reference frequency, the sky's spectral index is irrelevant.
+
+    The beam factor is int B(nu) T_sky(nu_ref) / int B(nu_ref) T_sky(nu_ref), which
+    contains no foreground spectrum, so it is the same for any spectral index (but
+    not identically one, since the beam is chromatic). The reference frequency is
+    the sky model's own frequency, so that the CMB offset in the sky model does not
+    make the reference sky depend on the spectral index.
+    """
+    out = {}
+    for beta in (2.0, 2.5, 3.0):
+        bf = compute_antenna_beam_factor(
+            beam=_chromatic_beam(np.arange(55.0, 96.0, 10.0)),
+            sky_model=galaxy_sky,
+            lsts=Longitude([0.0, 17.76] * un.hour),
+            reference_frequency=galaxy_sky.frequency * un.MHz,
+            sky_at_reference_frequency=True,
+            normalize_beam=normalize_beam,
+            use_astropy_azel=False,
+            **{**FAST, "index_model": ConstantIndex(index=beta)},
+        )
+        out[beta] = bf.antenna_temp / bf.antenna_temp_ref[:, None]
+
+    np.testing.assert_allclose(out[2.0], out[2.5], rtol=1e-12)
+    np.testing.assert_allclose(out[3.0], out[2.5], rtol=1e-12)
+    np.testing.assert_allclose(out[2.5][:, 2], 1.0, rtol=1e-12)  # nu_ref = 75 MHz
+    assert np.ptp(out[2.5]) > 0.01
 
 
 def test_default_lsts_and_reference_frequency(galaxy_sky):

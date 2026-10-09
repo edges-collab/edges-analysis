@@ -38,9 +38,18 @@ class BeamFactor:
     reference_frequency: float
         The reference frequency.
     antenna_temp: np.ndarray
-        The beam-weighted sky integrals at each frequency and LST.
+        The beam-weighted sky integrals at each frequency and LST, i.e. the numerator
+        of the beam factor. The beam is always at each frequency. As computed by
+        :func:`compute_antenna_beam_factor`, the sky is at the reference frequency if
+        ``sky_at_reference_frequency`` is True (Eq. 4 of Sims+23; so this is *not*
+        the antenna temperature that would be observed), and at each frequency
+        otherwise (Eq. A1 of Sims+23; the observed antenna temperature).
     antenna_temp_ref: np.ndarray
-        The beam-weighted sky integrals at the reference frequency and each LST.
+        The beam-weighted sky integrals with the beam at the reference frequency,
+        i.e. the denominator of the beam factor. As computed by
+        :func:`compute_antenna_beam_factor`, this has shape ``(nlst,)`` (with the sky
+        at the reference frequency) if ``sky_at_reference_frequency`` is True, and
+        shape ``(nlst, nfreq)`` (with the sky at each frequency) otherwise.
     loss_fraction: np.ndarray
         One minus the mean (pixel-resolution weighted) beam over the sky, at each
         LST and frequency, as computed by :func:`compute_antenna_beam_factor`. When
@@ -339,9 +348,13 @@ def compute_antenna_beam_factor(
     location
         The location of the telescope.
     sky_at_reference_frequency
-        Whether to compute the reference antenna temperature with the sky (as well as
-        the beam) at the reference frequency (Eq. 4 of Sims+23), or with the
-        reference beam and the sky at each frequency (Eq. A1 of Sims+23).
+        Whether to hold the sky at the reference frequency (Eq. 4 of Sims+23), or to
+        use the sky at each frequency (Eq. A1 of Sims+23). If True, the beam factor
+        at frequency ``nu`` is ``int B(nu) T_sky(nu_ref) dOmega / int B(nu_ref)
+        T_sky(nu_ref) dOmega``. If False, it is ``int B(nu) T_sky(nu) dOmega /
+        int B(nu_ref) T_sky(nu) dOmega``. Either way, an achromatic beam gives a
+        beam factor of exactly one. See :class:`BeamFactor` for what is stored in
+        each case.
     use_astropy_azel
         Whether to use astropy to compute the azimuth and elevation of the sky
         pixels. If False, use Alan's method.
@@ -412,21 +425,26 @@ def compute_antenna_beam_factor(
         #               normalized by the integral of the beam (at each freq)
         # 'sky' is the full sky model for this LST and freq
         # 'bm' is the full beam model for this freq (same for all LSTs)
-        antenna_temperature_above_horizon[lst_idx, freq_idx] = temperature
-
+        # The generator starts each LST at the reference frequency, so the reference
+        # beam and sky are always set before they are used below.
         if freq_idx == indx_ref_freq:
             ref_bm = bm.copy()
             ref_sky = sky.copy()
 
-            # This updates once per LST, on the first frequency iteration
-            """
-            sky_at_reference_frequency is a toggle between Eq-4 and Eq-A1 from Sims+23
-
-            """
-            if sky_at_reference_frequency:
+        # sky_at_reference_frequency toggles between Eq. 4 and Eq. A1 of Sims+23.
+        if sky_at_reference_frequency:
+            # Eq. 4: the sky is held at the reference frequency in both the numerator
+            # (beam at each frequency) and the denominator (beam at the reference
+            # frequency), so that the beam factor contains no foreground spectrum.
+            antenna_temperature_above_horizon[lst_idx, freq_idx] = (
+                np.nansum(bm * ref_sky) / npix_no_nan
+            )
+            if freq_idx == indx_ref_freq:
                 convolution_ref[lst_idx] = np.nansum(ref_bm * ref_sky) / npix_no_nan
-
-        if not sky_at_reference_frequency:
+        else:
+            # Eq. A1: the sky is at each frequency in both the numerator (beam at each
+            # frequency) and the denominator (beam at the reference frequency).
+            antenna_temperature_above_horizon[lst_idx, freq_idx] = temperature
             convolution_ref[lst_idx, freq_idx] = np.nansum(ref_bm * sky) / npix_no_nan
 
         beamsums[lst_idx, freq_idx] = np.nansum(bm) / npix_no_nan
@@ -455,6 +473,7 @@ def compute_antenna_beam_factor(
             "f_low": f_low.to_value("MHz"),
             "f_high": f_high.to_value("MHz"),
             "normalize_beam": bool(normalize_beam),
+            "sky_at_reference_frequency": bool(sky_at_reference_frequency),
             "sky_model": sky_model.name,
             "index_model": str(index_model),
             "rotation_from_north": float(90),
