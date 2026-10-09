@@ -247,8 +247,7 @@ class PartialLinearModel(Chi2, Likelihood):
         linear = linear_model(parameters=linear_params)
 
         resid = data - linear
-        nm = stats.norm(loc=0, scale=np.sqrt(var))
-        return np.sum(nm.logpdf(resid))
+        return np.sum(stats.norm.logpdf(resid, loc=0, scale=np.sqrt(var)))
 
 
 def _logdet(mat: np.ndarray) -> float:

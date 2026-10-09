@@ -141,8 +141,8 @@ class SemiLinearFit:
         resid = self.get_resid(p)
         if self._is_cov:
             return -self._mvn.logpdf(resid)
-        norm_obj = stats.norm(loc=0, scale=self.sigma)
-        return -np.sum(norm_obj.logpdf(resid))
+        # Not a frozen distribution: freezing re-builds its docstrings on every call.
+        return -np.sum(stats.norm.logpdf(resid, loc=0, scale=self.sigma))
 
     def __call__(self, dual_annealing_kw=None, **kwargs):
         """Perform the fit to the data."""

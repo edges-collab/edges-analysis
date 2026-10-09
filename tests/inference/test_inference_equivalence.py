@@ -6,9 +6,10 @@ implementation (the original algorithm) on realistic random inputs.
 
 import numpy as np
 import pytest
+from scipy import stats
 
 from edges import modeling as mdl
-from edges.inference import FlattenedGaussian, SemiLinearFit
+from edges.inference import FlattenedGaussian, LinearFG, SemiLinearFit
 
 
 def _slf_setup(n: int, sigma_kind: str, nan: bool = False):
@@ -62,3 +63,51 @@ def test_semi_linear_fit_cached_fg_fit_is_bit_identical(sigma_kind: str, nan: bo
         fit = slf.fg_fit(p)
         assert fit.model_parameters == ref.model_parameters
         np.testing.assert_array_equal(fit.residual, ref.residual)
+
+
+@pytest.mark.parametrize("sigma_kind", ["scalar", "1D"])
+def test_semi_linear_fit_neg_lk_matches_frozen_distribution(sigma_kind: str):
+    """neg_lk equals the log-pdf of a frozen normal distribution, exactly."""
+    fg, eor, data, sigma, ps = _slf_setup(150, sigma_kind)
+    slf = SemiLinearFit(fg=fg, eor=eor, spectrum=data, sigma=sigma)
+    for p in ps:
+        resid = _ref_fg_fit(slf, p).residual
+        ref = -np.sum(stats.norm(loc=0, scale=sigma).logpdf(resid))
+        assert slf.neg_lk(p) == ref
+
+
+def _plm_setup(n: int = 150, var_kind: str = "1D"):
+    rng = np.random.default_rng(12)
+    freqs = np.linspace(50, 100, n)
+    fgm = mdl.LinLog(n_terms=5)
+    eor = FlattenedGaussian(freqs=freqs, params=("amp", "w", "tau", "nu0"))
+    var = rng.uniform(0.005, 0.02, size=n) ** 2
+    if var_kind == "flagged":
+        var[::23] = np.inf
+    elif var_kind == "zero":
+        var = np.zeros(n)
+    t_sky = fgm.at(x=freqs)(parameters=[2000, 10, -10, 5, -5]) + rng.normal(
+        scale=0.01, size=n
+    )
+    lfg = LinearFG(
+        freqs=freqs, t_sky=t_sky, data_variance=var, fg=fgm, cosmic_signal=eor
+    )
+    p0 = np.array([a.fiducial for a in eor.child_active_params])
+    names = ["amp", "w", "tau", "nu0"]
+    return lfg.partial_linear_model, [
+        dict(zip(names, p0 * f, strict=True)) for f in (1, 1.1, 0.9)
+    ]
+
+
+def test_unmarginalized_lnl_matches_frozen_distribution():
+    """The unmarginalized log-likelihood equals that of a frozen normal, exactly."""
+    plm, params = _plm_setup()
+    lin = [2000, 10, -10, 5, -5]
+    for p in params:
+        ctx = plm.get_ctx(params=p)
+        resid = (
+            plm.data["t_sky"] - ctx["eor_spectrum"] - plm.linear_model(parameters=lin)
+        )
+        sig = np.sqrt(plm.data["data_variance"])
+        ref = np.sum(stats.norm(loc=0, scale=sig).logpdf(resid))
+        assert plm.get_unmarginalized_lnl(lin, p) == ref
