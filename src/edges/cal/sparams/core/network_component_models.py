@@ -884,23 +884,64 @@ class TwoPortNetwork:
     def as_sparams(
         self,
         freqs: tp.FreqType,
-        source_impedance: float,
-        load_impedance: float | None = None,
+        source_impedance: float | tp.ImpedanceType,
+        load_impedance: float | tp.ImpedanceType | None = None,
     ) -> SParams:
-        """Convert the TwoPortNetwork to an SParams instance."""
+        """Convert the TwoPortNetwork to an SParams instance.
+
+        The returned S-parameters are power-wave S-parameters referenced to a real
+        impedance ``source_impedance`` at port 1 and ``load_impedance`` at port 2.
+        With unequal reference impedances, the transmission terms carry a factor
+        of ``2*sqrt(zs*zl)``, so that a reciprocal network has ``S12 == S21`` and a
+        lossless network has a unitary S-matrix.
+
+        Parameters
+        ----------
+        freqs
+            The frequencies of the network.
+        source_impedance
+            The (real, positive) reference impedance of port 1. Plain numbers are
+            interpreted as Ohms; Quantities are converted to Ohms.
+        load_impedance
+            The (real, positive) reference impedance of port 2. Defaults to
+            ``source_impedance``.
+
+        Returns
+        -------
+        SParams
+            The scattering parameters of the network.
+
+        Raises
+        ------
+        ValueError
+            If either reference impedance is complex or not positive. Complex
+            reference impedances are not supported.
+        """
         if load_impedance is None:
             load_impedance = source_impedance
 
+        zs = un.Quantity(source_impedance, "ohm").value
+        zl = un.Quantity(load_impedance, "ohm").value
+        for name, z in (("source_impedance", zs), ("load_impedance", zl)):
+            if np.iscomplexobj(z) and np.any(np.imag(z) != 0):
+                raise ValueError(
+                    f"{name} must be real; complex reference impedances are not "
+                    "supported."
+                )
+            if np.any(np.real(z) <= 0):
+                raise ValueError(f"{name} must be positive.")
+        zs = np.real(zs)
+        zl = np.real(zl)
+
         a, b, c, d = self.A, self.B, self.C, self.D
-        zs = source_impedance
-        zl = load_impedance
         denom = (b + c * zs * zl) + (a * zl + d * zs)
+        transmission = 2 * np.sqrt(zs * zl) / denom
 
         return SParams(
             freqs=freqs,
             s11=((b - c * zs * zl) + (a * zl - d * zs)) / denom,
-            s12=2 * zs * self.determinant / denom,
-            s21=2 * zl / denom,
+            s12=self.determinant * transmission,
+            s21=transmission,
             s22=((b - c * zs * zl) - (a * zl - d * zs)) / denom,
         )
 

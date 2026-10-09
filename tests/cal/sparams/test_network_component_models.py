@@ -748,14 +748,6 @@ class TestTwoPortNetworkPhysics:
         assert s.is_reciprocal()
         assert s.is_lossless()
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "TwoPortNetwork.as_sparams uses 2*zs and 2*zl instead of 2*sqrt(zs*zl) "
-            "in S12/S21, so it is wrong when source and load impedances differ; "
-            "fix pending (result-changing)"
-        ),
-    )
     def test_lossless_unequal_impedances_unitary(self):
         """With zs != zl a reciprocal lossless network still has a unitary S."""
         s = self._lossless_network().as_sparams(
@@ -766,6 +758,43 @@ class TestTwoPortNetworkPhysics:
             np.abs(s.s11) ** 2 + np.abs(s.s21) ** 2, 1, rtol=1e-12
         )
         assert s.is_lossless()
+
+    def test_unequal_impedances_roundtrip_through_reference_change(self):
+        """S with (zs, zl) equals the 50-ohm S renormalised to the new references."""
+        rng = np.random.default_rng(7)
+        n = len(self.freqs)
+        abcd = rng.normal(size=(2, 2, n)) + 1j * rng.normal(size=(2, 2, n))
+        abcd[0, 1] *= 50
+        abcd[1, 0] /= 50
+        net = ncm.TwoPortNetwork(abcd)
+        zs, zl = 50.0, 75.0
+        s = net.as_sparams(self.freqs, source_impedance=zs, load_impedance=zl)
+
+        # Independent route: Z-matrix -> S = F (Z - R)(Z + R)^-1 F^-1 with
+        # F = diag(1 / (2 sqrt(R))), valid for real reference impedances.
+        z = np.moveaxis(net.zmatrix, -1, 0)
+        r = np.diag([zs, zl])
+        f = np.diag(1 / (2 * np.sqrt([zs, zl])))
+        expected = f @ (z - r) @ np.linalg.inv(z + r) @ np.linalg.inv(f)
+        np.testing.assert_allclose(s.s11, expected[:, 0, 0], rtol=1e-10)
+        np.testing.assert_allclose(s.s12, expected[:, 0, 1], rtol=1e-10)
+        np.testing.assert_allclose(s.s21, expected[:, 1, 0], rtol=1e-10)
+        np.testing.assert_allclose(s.s22, expected[:, 1, 1], rtol=1e-10)
+
+    def test_quantity_impedances(self):
+        net = self._lossless_network()
+        s1 = net.as_sparams(self.freqs, 50.0, 75.0)
+        s2 = net.as_sparams(self.freqs, 50 * un.ohm, 0.075 * un.kohm)
+        np.testing.assert_allclose(s1.s, s2.s, rtol=1e-14)
+
+    @pytest.mark.parametrize("bad", [50 + 5j, -50.0, 0.0])
+    def test_bad_reference_impedance(self, bad):
+        with pytest.raises(ValueError, match="source_impedance must be"):
+            self._lossless_network().as_sparams(self.freqs, source_impedance=bad)
+        with pytest.raises(ValueError, match="load_impedance must be"):
+            self._lossless_network().as_sparams(
+                self.freqs, source_impedance=50.0, load_impedance=bad
+            )
 
     @pytest.mark.parametrize("z0", [50.0, 50 * un.ohm, 0.05 * un.kohm])
     def test_from_smatrix_z0_units(self, z0):
