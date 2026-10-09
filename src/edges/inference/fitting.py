@@ -1,22 +1,56 @@
 """Provides extra routines for fitting that are not in yabf."""
 
+from copy import copy
+
+import attrs
 import numpy as np
-from scipy import stats
+from scipy import linalg, stats
 from scipy.optimize import dual_annealing, minimize
 from yabf import Component
 
 from edges.modeling import FixedLinearModel
+from edges.modeling.data_transforms import IdentityTransform
+
+
+@attrs.define(frozen=True)
+class _GLSFit:
+    """The generalised least-squares fit of a linear model (correlated noise).
+
+    Provides the subset of the :class:`edges.modeling.ModelFit` interface used by
+    :class:`SemiLinearFit`.
+    """
+
+    model: FixedLinearModel
+    ydata: np.ndarray
+
+    @property
+    def model_parameters(self) -> np.ndarray:
+        """The best-fit model parameters."""
+        return copy(self.model.parameters)
+
+    def evaluate(self, x: np.ndarray | None = None) -> np.ndarray:
+        """Evaluate the best-fit model (by default at the data co-ordinates)."""
+        return self.model(x=x)
+
+    @property
+    def residual(self) -> np.ndarray:
+        """Residuals of the data to the best-fit model."""
+        return self.ydata - self.evaluate()
 
 
 class SemiLinearFit:
     """A class for performing a fit to sky data composed of a 21cm and FG component.
 
     In this model, the FG component is assumed to be a linear model, while the
-    21cm component is modeled as a non-linear function. The linear component is
-    *profiled* (not marginalized): for each set of non-linear parameters, the linear
-    parameters are set to their weighted least-squares best fit, and the likelihood
-    is evaluated there. For analytic marginalization over the linear parameters, use
-    :class:`~edges.inference.PartialLinearModel`.
+    21cm component is modeled as a non-linear function. For each set of non-linear
+    parameters, the linear (FG) parameters are set to their (generalised) weighted
+    least-squares best fit and the likelihood is evaluated there. Because the FG basis
+    and the noise do not depend on the non-linear parameters, this is equivalent, up
+    to a constant, to analytically marginalizing over the linear parameters with a
+    flat prior: the likelihood surface (and its optimum) for the non-linear
+    parameters is the same. The constant (needed e.g. for Bayesian evidences) is not
+    computed; see :class:`~edges.inference.PartialLinearModel` for the full
+    marginal likelihood.
 
     Parameters
     ----------
@@ -28,14 +62,20 @@ class SemiLinearFit:
     spectrum
         The sky data to fit to.
     sigma
-        The noise standard deviation: either a 1D array with the same shape as the
-        spectrum, or a float indicating a constant noise level for all frequencies.
-        A 2D covariance matrix is not supported.
+        The noise: either a float (a constant standard deviation for all
+        frequencies), a 1D array of per-frequency standard deviations with the same
+        shape as the spectrum, or a 2D covariance matrix of shape
+        ``(nfreq, nfreq)``. With a covariance matrix, the FG fit is a generalised
+        least-squares fit and the likelihood is a multivariate normal.
 
     Raises
     ------
+    ValueError
+        If ``sigma`` is a 2D array that is not a square, symmetric, positive-definite
+        matrix matching the spectrum, or has more than two dimensions.
     NotImplementedError
-        If ``sigma`` is two-dimensional (a covariance matrix).
+        If ``sigma`` is a covariance matrix and the FG model has a non-identity data
+        transform.
     """
 
     def __init__(
@@ -50,16 +90,45 @@ class SemiLinearFit:
         Useful for fitting foregrounds and EoR at the same time, where the EoR model is
         not linear, but the foreground model is.
         """
-        if np.ndim(sigma) > 1:
-            raise NotImplementedError(
-                "SemiLinearFit does not support a covariance matrix for sigma; pass "
-                "the per-channel noise standard deviation (1D array or float)."
-            )
-
         self.fg = fg
         self.eor = eor
         self.spectrum = spectrum
         self.sigma = sigma
+
+        ndim = np.ndim(sigma)
+        if ndim > 2:
+            raise ValueError(
+                "sigma must be a 1D array, a float, or a 2D covariance matrix; got an "
+                f"array with {ndim} dimensions."
+            )
+        self._is_cov = ndim == 2
+        if self._is_cov:
+            self._setup_covariance(np.asarray(sigma, dtype=float))
+
+    def _setup_covariance(self, cov: np.ndarray):
+        """Validate the covariance and precompute the GLS normal equations."""
+        nfreq = np.shape(self.spectrum)[-1]
+        if cov.shape != (nfreq, nfreq):
+            raise ValueError(
+                f"A covariance sigma must have shape ({nfreq}, {nfreq}) to match the "
+                f"spectrum; got {cov.shape}."
+            )
+        if not np.allclose(cov, cov.T):
+            raise ValueError("A covariance sigma must be symmetric.")
+        if not isinstance(self.fg.model.data_transform, IdentityTransform):
+            raise NotImplementedError(
+                "A covariance sigma is only supported for FG models without a data "
+                "transform."
+            )
+        try:
+            self._cov_cho = linalg.cho_factor(cov, lower=True)
+        except linalg.LinAlgError as e:
+            raise ValueError("A covariance sigma must be positive definite.") from e
+
+        basis = self.fg.basis.T  # (nfreq, nterms)
+        self._cinv_basis = linalg.cho_solve(self._cov_cho, basis)
+        self._normal_cho = linalg.cho_factor(basis.T @ self._cinv_basis, lower=True)
+        self._mvn = stats.multivariate_normal(mean=np.zeros(nfreq), cov=cov)
 
     def get_eor(self, p):
         """Compute the EOR model given EOR parameters p."""
@@ -69,6 +138,9 @@ class SemiLinearFit:
         """Compute the best FG fit, given EOR parameters p."""
         eor = self.get_eor(p)
         resid = self.spectrum - eor
+        if self._is_cov:
+            params = linalg.cho_solve(self._normal_cho, self._cinv_basis.T @ resid)
+            return _GLSFit(model=self.fg.with_params(params), ydata=resid)
         return self.fg.fit(
             ydata=resid,
             weights=1 / self.sigma**2 if hasattr(self.sigma, "__len__") else 1.0,
@@ -85,6 +157,8 @@ class SemiLinearFit:
     def neg_lk(self, p):
         """Comptue the negative log-likelihood given parameters p."""
         resid = self.get_resid(p)
+        if self._is_cov:
+            return -self._mvn.logpdf(resid)
         norm_obj = stats.norm(loc=0, scale=self.sigma)
         return -np.sum(norm_obj.logpdf(resid))
 
