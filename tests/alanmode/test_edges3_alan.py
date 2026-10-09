@@ -96,7 +96,7 @@ _ACQPARAMS = am.ACQPlot7aMoonParams(
 # calibrated_<load>.txt files. Ambient and hot agree to better than 0.1 mK. The open
 # and short agree less well (2022_316: up to 1.3-1.5 mK at the 50 MHz edge and
 # ~0.5-0.7 mK elsewhere, RMS ~0.25 mK; 2023_210: up to 0.08 mK for the open and 0.22
-# mK for the short). The reason is not understood (see
+# mK for the short). The reason is not understood (see issue #311 and
 # test_calibrated_temps_open_short_tight below), so they are tested at a realistic
 # tolerance here that is still far below the noise in the calibration.
 DATASETS = {
@@ -466,7 +466,7 @@ def test_calibrated_temps(
         "Calibrated open/short temperatures differ from Alan's C code by up to "
         "~1.5 mK (2022_316, largest at the 50 MHz edge) and ~0.1-0.2 mK (2023_210), "
         "much more than the <0.1 mK agreement of the ambient and hot loads. The cause "
-        "is not yet understood."
+        "is not yet understood (issue #311)."
     ),
 )
 @pytest.mark.parametrize("key", ["open", "short"])
