@@ -81,6 +81,29 @@ class Model(ABC):
         s = self.basis_scaler(x) if with_scaler and self.basis_scaler is not None else 1
         return self.get_basis_term(indx=indx, x=self.xtransform(x)) * s
 
+    def _get_basis_terms_at(
+        self, indices: Sequence[int], xt: np.ndarray
+    ) -> list[np.ndarray]:
+        """Get the basis terms ``indices`` at the *transformed* coordinates ``xt``.
+
+        This is equivalent to calling :meth:`get_basis_term` for each index, but
+        subclasses may override it to share work between the terms.
+        """
+        return [self.get_basis_term(indx, xt) for indx in indices]
+
+    def _get_scaled_basis_terms(
+        self, indices: Sequence[int], x: np.ndarray, with_scaler: bool = True
+    ) -> list[np.ndarray]:
+        """Get the basis terms ``indices`` at ``x``, including the ``basis_scaler``.
+
+        Each term is identical to :meth:`get_basis_term_transformed`, but the
+        coordinate transform and the basis scaler are evaluated only once for all
+        the terms.
+        """
+        s = self.basis_scaler(x) if with_scaler and self.basis_scaler is not None else 1
+        xt = self.xtransform(x)
+        return [term * s for term in self._get_basis_terms_at(indices, xt)]
+
     def get_basis_terms(self, x: np.ndarray, with_scaler: bool = True) -> np.ndarray:
         """Get a 2D array of all basis terms at ``x``.
 
@@ -88,12 +111,9 @@ class Model(ABC):
         ``basis_scaler`` (if any) is evaluated at the raw coordinates ``x``, exactly
         as in :meth:`get_basis_term_transformed`.
         """
-        s = self.basis_scaler(x) if with_scaler and self.basis_scaler is not None else 1
-        xt = self.xtransform(x)
-
-        return np.array([
-            self.get_basis_term(indx, xt) * s for indx in range(self.n_terms)
-        ])
+        return np.array(
+            self._get_scaled_basis_terms(range(self.n_terms), x, with_scaler)
+        )
 
     def with_nterms(
         self, n_terms: int | None = None, parameters: Sequence | None = None
@@ -243,12 +263,20 @@ class FixedLinearModel(yaml.YAMLObject):
 
         Shape ``(n_terms, x)``.
         """
-        out = np.zeros((self.model.n_terms, len(self.x)))
-        for indx in range(self.model.n_terms):
-            if self._init_basis is not None and indx < len(self._init_basis):
-                out[indx] = self._init_basis[indx]
-            else:
-                out[indx] = self.model.get_basis_term_transformed(indx, self.x)
+        n_terms = self.model.n_terms
+        out = np.zeros((n_terms, len(self.x)))
+
+        n_init = 0 if self._init_basis is None else min(len(self._init_basis), n_terms)
+        if n_init:
+            out[:n_init] = self._init_basis[:n_init]
+
+        if n_init < n_terms:
+            # Compute the remaining terms together, so that the coordinate transform
+            # and basis scaler are evaluated once rather than once per term.
+            missing = range(n_init, n_terms)
+            terms = self.model._get_scaled_basis_terms(missing, self.x)
+            for indx, term in zip(missing, terms, strict=True):
+                out[indx] = term
 
         return out
 
