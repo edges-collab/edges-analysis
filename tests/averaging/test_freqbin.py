@@ -107,14 +107,6 @@ def test_gauss_smooth_flag_threshold_flags_sparse_windows(gsd_ones: GSData):
     assert np.all(out.nsamples > 0)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "gauss_smooth reports nsamples as sum(k*n) rather than the effective "
-        "inverse variance (sum k)^2/sum(k^2/n), which is ~sqrt(2) larger; fix pending "
-        "(result-changing)"
-    ),
-)
 def test_gauss_smooth_nsamples_is_inverse_variance():
     template = create_mock_edges_data(ntime=100, flow=50 * un.MHz, fhigh=52 * un.MHz)
     rng = np.random.default_rng(5)
@@ -141,3 +133,41 @@ def test_gauss_smooth_maintains_nan_flags_with_any_nsamples(gsd_ones: GSData):
     assert np.all(out.nsamples[..., 10] == 0)
     assert np.all(out.nsamples[..., 9] > 0)
     assert np.all(out.nsamples[..., 11] > 0)
+
+
+@pytest.mark.parametrize("use_nsamples", [False, True])
+def test_gauss_smooth_nsamples_effective_formula(gsd_ones: GSData, use_nsamples: bool):
+    rng = np.random.default_rng(12)
+    n = rng.uniform(1, 4, size=gsd_ones.nsamples.shape)
+    data = gsd_ones.update(nsamples=n)
+    size, nsmooth = 1, 4
+    out = freqbin.gauss_smooth(
+        data, size=size, decimate=False, nsmooth=nsmooth, use_nsamples=use_nsamples
+    )
+    y = np.arange(-size * nsmooth, size * nsmooth + 1) * 2 / size
+    k = np.exp(-(y**2) * 0.69)
+    u = n if use_nsamples else np.ones_like(n)
+    # Check one channel in the interior of the band, where the kernel is complete.
+    ich = 12
+    sl = slice(ich - size * nsmooth, ich + size * nsmooth + 1)
+    w = k * u[..., sl]
+    expected = np.sum(w, axis=-1) ** 2 / np.sum(w**2 / n[..., sl], axis=-1)
+    np.testing.assert_allclose(out.nsamples[..., ich], expected, rtol=1e-10)
+
+
+def test_gauss_smooth_empty_channels_are_nan(gsd_ones: GSData):
+    nsamples = gsd_ones.nsamples.copy()
+    data = gsd_ones.data.copy()
+    # A wide gap of flagged channels filled with "RFI": the windows entirely within
+    # the gap (the kernel spans +-2 channels) have no unflagged data and must not take
+    # on the RFI values.
+    nsamples[..., 5:20] = 0
+    data[..., 5:20] = 1e6
+    out = freqbin.gauss_smooth(
+        gsd_ones.update(data=data, nsamples=nsamples), size=1, decimate=False, nsmooth=2
+    )
+    empty = out.nsamples == 0
+    assert np.all(empty[..., 9:16])
+    assert not np.any(empty[..., :5])
+    assert np.all(np.isnan(out.data[empty]))
+    assert np.all(out.data[~empty] < 2)
