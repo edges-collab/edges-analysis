@@ -18,8 +18,10 @@ from .. import (
     CalkitReadings,
     S11ModelParams,
     SParams,
+    average_sparams,
     get_calkit,
 )
+from ..core.sparam_calibration import align_transmission_signs, continuous_sqrt
 
 
 def get_internal_switch_sparams(
@@ -41,7 +43,8 @@ def get_internal_switch_sparams(
         provided, the S-parameters will be averaged.
     external_osl
         The external OSL measurements of the switch. If multiple measurements are
-        provided, the S-parameters will be averaged.
+        provided, the S-parameters will be averaged with :func:`average_sparams`,
+        which aligns the sign of each repeat's S12 and S21 before averaging.
     external_calkit
         The calkit model for the external OSL measurements.
     internal_calkit
@@ -83,13 +86,7 @@ def get_internal_switch_sparams(
             )
         )
 
-    return SParams(
-        freqs=freqs,
-        s11=np.mean([sp.s11 for sp in sparams_sp2t], axis=0),
-        s12=np.mean([sp.s12 for sp in sparams_sp2t], axis=0),
-        s21=np.mean([sp.s21 for sp in sparams_sp2t], axis=0),
-        s22=np.mean([sp.s22 for sp in sparams_sp2t], axis=0),
-    )
+    return average_sparams(sparams_sp2t)
 
 
 def combine_internal_switch_sparams(
@@ -98,7 +95,30 @@ def combine_internal_switch_sparams(
     measured_temperature: tp.TemperatureType,
     combine_s12s21: bool = True,
 ) -> SParams:
-    """Linearly interpolate internal switch S-parameters to the desired temperature."""
+    """Linearly interpolate internal switch S-parameters to the desired temperature.
+
+    Parameters
+    ----------
+    sparams
+        The S-parameters of the internal switch at each of ``temperatures``.
+    temperatures
+        The temperatures at which each of ``sparams`` was measured.
+    measured_temperature
+        The temperature to which to interpolate.
+    combine_s12s21
+        If True, interpolate the product S12*S21 and set S12 and S21 to its square
+        root (on the branch continuous across frequency). Otherwise, interpolate
+        S12 and S21 separately, after aligning their signs across temperatures
+        with :func:`.align_transmission_signs`.
+
+    Returns
+    -------
+    SParams
+        The interpolated S-parameters.
+    """
+    if not combine_s12s21:
+        sparams = align_transmission_signs(sparams)
+
     interp_x = np.array([
         np.ones(len(sparams[0].freqs))
         * measured_temperature.to_value("K", un.temperature()),
@@ -123,7 +143,7 @@ def combine_internal_switch_sparams(
             values=np.array([sp.s12 * sp.s21 for sp in sparams]),
             bounds_error=True,
         )(interp_x)
-        s12_s21 = np.sqrt(s12_s21)
+        s12_s21 = continuous_sqrt(s12_s21)
         interpolated["s12"] = s12_s21
         interpolated["s21"] = s12_s21
 

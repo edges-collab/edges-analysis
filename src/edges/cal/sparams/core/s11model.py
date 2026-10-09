@@ -18,6 +18,7 @@ from edges.modeling import (
 from edges.modeling.xtransforms import UnitTransform
 
 from .datatypes import ReflectionCoefficient, SParams
+from .sparam_calibration import continuous_sqrt
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +60,9 @@ class S11ModelParams:
         The fitting method to use when fitting the model to the data, see
         :func:`edges.modeling.fitting.ModelFit`.
     combine_s12s21
-        Whether to fit to s12*s21 instead of fitting s12 and s21 separately.
+        Whether to fit to s12*s21 instead of fitting s12 and s21 separately. If
+        True, the smoothed S12 and S21 are both set to the square root of the
+        smoothed product, on the branch continuous across frequency.
     """
 
     model: Model = attrs.field(
@@ -169,7 +172,7 @@ def new_s11_modelled(
         The input ReflectionCoefficient object.
     params
         The set of parameters defining the model used to smooth/interpolate.
-    new_freqs
+    freqs
         Optional new frequencies onto which to interpolate. If not given, retain
         the same set of frequencies.
 
@@ -201,7 +204,7 @@ def smooth_sparams(
         The input SParams object.
     params
         The set of parameters defining the model used to smooth/interpolate.
-    new_freqs
+    freqs
         Optional new frequencies onto which to interpolate. If not given, retain
         the same set of frequencies.
 
@@ -243,10 +246,8 @@ def smooth_sparams(
             freqs=freqs,
         ).reflection_coefficient
 
-        out |= {
-            "s12": np.sqrt(s12_s21_smoothed),
-            "s21": np.sqrt(s12_s21_smoothed),
-        }
+        s12 = continuous_sqrt(s12_s21_smoothed)
+        out |= {"s12": s12, "s21": s12}
 
     return SParams(freqs=freqs, **out)
 

@@ -4,9 +4,14 @@ import pytest
 
 from edges.cal import sparams as sp
 from edges.cal.sparams.core.sparam_calibration import (
+    align_transmission_signs,
+    continuous_sqrt,
     sparams_from_calkit_measurements,
 )
-from edges.cal.sparams.devices.internal_switch import get_internal_switch_sparams
+from edges.cal.sparams.devices.internal_switch import (
+    combine_internal_switch_sparams,
+    get_internal_switch_sparams,
+)
 
 
 class TestGammaEmbed:
@@ -86,6 +91,85 @@ class TestAverageSparams:
             sp_avg.s22,
             0.5 * (s22_1 + s22_2),
         )
+
+    def test_average_sparams_aligns_transmission_signs(self):
+        """Sets differing only by the sign of S12 and S21 average to that set."""
+        freqs = np.linspace(50, 100, 10) * un.MHz
+        rng = np.random.default_rng(1)
+        s11, s12, s22 = (
+            rng.normal(size=10) + 1j * rng.normal(size=10) for _ in range(3)
+        )
+        sp1 = sp.SParams(s11=s11, s12=s12, s21=1.1 * s12, s22=s22, freqs=freqs)
+        sign = np.where(np.arange(10) % 3 == 0, -1, 1)
+        sp2 = sp.SParams(
+            s11=s11, s12=sign * s12, s21=1.1 * sign * s12, s22=s22, freqs=freqs
+        )
+
+        avg = sp.average_sparams([sp1, sp2])
+        np.testing.assert_allclose(avg.s11, s11, rtol=1e-14)
+        np.testing.assert_allclose(avg.s12, s12, rtol=1e-14)
+        np.testing.assert_allclose(avg.s21, 1.1 * s12, rtol=1e-14)
+        np.testing.assert_allclose(avg.s22, s22, rtol=1e-14)
+
+    def test_align_transmission_signs_keeps_products(self):
+        freqs = np.linspace(50, 100, 10) * un.MHz
+        rng = np.random.default_rng(2)
+        sets = [
+            sp.SParams(
+                s11=rng.normal(size=10) + 0j,
+                s12=rng.normal(size=10) + 1j * rng.normal(size=10),
+                s21=rng.normal(size=10) + 1j * rng.normal(size=10),
+                s22=rng.normal(size=10) + 0j,
+                freqs=freqs,
+            )
+            for _ in range(3)
+        ]
+        aligned = align_transmission_signs(sets)
+        for a, s0 in zip(aligned, sets, strict=True):
+            np.testing.assert_array_equal(a.s11, s0.s11)
+            np.testing.assert_array_equal(a.s22, s0.s22)
+            np.testing.assert_allclose(a.s12 * a.s21, s0.s12 * s0.s21, rtol=1e-14)
+            assert np.all(np.real(a.s21 * np.conj(aligned[0].s21)) >= 0)
+
+
+class TestContinuousSqrt:
+    freqs = np.linspace(40, 200, 161) * un.MHz
+    # The phase of this product crosses +-pi several times.
+    product = 0.9 * np.exp(-2j * np.pi * (freqs * 5 * un.ns).to_value(""))
+
+    def test_squares_to_input(self):
+        root = continuous_sqrt(self.product)
+        np.testing.assert_array_equal(root**2, np.sqrt(self.product) ** 2)
+        assert np.all(np.abs(root) == np.abs(np.sqrt(self.product)))
+
+    def test_continuous(self):
+        root = continuous_sqrt(self.product)
+        assert root[0] == np.sqrt(self.product[0])
+        # Truth: half the (unwrapped) phase of the product.
+        expected = np.sqrt(0.9) * np.exp(
+            -1j * np.pi * (self.freqs * 5 * un.ns).to_value("")
+        )
+        np.testing.assert_allclose(root, expected, rtol=1e-12)
+        # The principal branch is not continuous here.
+        principal = np.sqrt(self.product)
+        assert np.any(np.real(principal[1:] * np.conj(principal[:-1])) < 0)
+
+    def test_skips_nans(self):
+        product = self.product.copy()
+        product[50:53] = np.nan
+        root = continuous_sqrt(product)
+        assert np.all(np.isnan(root[50:53]))
+        good = np.isfinite(product)
+        np.testing.assert_allclose(
+            root[good], continuous_sqrt(self.product)[good], rtol=1e-14
+        )
+
+    def test_multidimensional_and_scalar(self):
+        stacked = np.array([self.product, -self.product])
+        root = continuous_sqrt(stacked)
+        np.testing.assert_array_equal(root[0], continuous_sqrt(self.product))
+        np.testing.assert_array_equal(root[1], continuous_sqrt(-self.product))
+        assert continuous_sqrt(-4.0 + 0j) == 2j
 
 
 def _error_network(freqs, rng, delay_ns: float = 2.0, reciprocal: bool = True):
@@ -177,15 +261,42 @@ class TestOSLCalibration:
 class TestInternalSwitchAveraging:
     freqs = np.arange(40, 200.01, 0.25) * un.MHz
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "S12 and S21 are taken as the principal-branch sqrt of S12*S21, which "
-            "flips sign where the phase of S12*S21 crosses pi; averaging repeats whose "
-            "flips fall at different frequencies cancels S12/S21 there; "
-            "fix pending (result-changing)"
-        ),
-    )
+    def test_calkit_sparams_are_continuous(self):
+        """S12 and S21 from OSL follow the continuous square-root branch."""
+        err = _error_network(self.freqs, np.random.default_rng(4), delay_ns=5.0)
+        kit = sp.AGILENT_85033E.at_freqs(self.freqs)
+        est = sparams_from_calkit_measurements(_measure(kit, err), kit)
+        np.testing.assert_allclose(
+            est.s12, continuous_sqrt(err.s12 * err.s21), rtol=1e-10
+        )
+        np.testing.assert_array_equal(est.s12, est.s21)
+        assert np.all(np.real(est.s12[1:] * np.conj(est.s12[:-1])) > 0)
+
+    def test_repeats_starting_on_different_branches(self):
+        """Repeats whose S12/S21 differ only in sign average to the same S12/S21."""
+        sp2t = _error_network(self.freqs, np.random.default_rng(4), delay_ns=5.0)
+        flipped = sp.SParams(
+            freqs=self.freqs, s11=sp2t.s11, s12=-sp2t.s12, s21=-sp2t.s21, s22=sp2t.s22
+        )
+        avg = sp.average_sparams([sp2t, flipped])
+        np.testing.assert_allclose(avg.s12 * avg.s21, sp2t.s12 * sp2t.s21, rtol=1e-12)
+
+    @pytest.mark.parametrize("combine", [True, False])
+    def test_temperature_interpolation_across_branches(self, combine):
+        """Interpolating sign-flipped S12/S21 between temperatures does not cancel."""
+        sp2t = _error_network(self.freqs, np.random.default_rng(4), delay_ns=5.0)
+        flipped = sp.SParams(
+            freqs=self.freqs, s11=sp2t.s11, s12=-sp2t.s12, s21=-sp2t.s21, s22=sp2t.s22
+        )
+        out = combine_internal_switch_sparams(
+            [sp2t, flipped],
+            temperatures=[20, 30] * un.deg_C,
+            measured_temperature=25 * un.deg_C,
+            combine_s12s21=combine,
+        )
+        np.testing.assert_allclose(out.s12 * out.s21, sp2t.s12 * sp2t.s21, rtol=1e-12)
+        np.testing.assert_allclose(out.s11, sp2t.s11, rtol=1e-12)
+
     def test_repeat_averaging_across_branch_cut(self):
         """Averaged repeats of a long (5 ns) SP2T keep S12*S21 near the truth."""
         rng = np.random.default_rng(3)
