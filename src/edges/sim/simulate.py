@@ -79,6 +79,29 @@ def _ground_loss_in_band(
     )
 
 
+def _time_independent_coords(coords: apc.SkyCoord) -> apc.SkyCoord:
+    """Transform coordinates to the frame from which they are transformed to AltAz.
+
+    Astropy transforms Galactic coordinates to AltAz via ICRS, and the Galactic to
+    ICRS step does not depend on the observation time. Doing it once, rather than
+    for every LST, gives the same az/el. Coordinates in other frames are returned
+    unchanged.
+
+    Parameters
+    ----------
+    coords
+        The coordinates of the sky model.
+
+    Returns
+    -------
+    coords
+        The same coordinates, in ICRS if they were Galactic.
+    """
+    if isinstance(coords.frame, apc.Galactic):
+        return coords.icrs
+    return coords
+
+
 def sky_convolution_generator(
     lsts: Longitude,
     beam: Beam,
@@ -215,22 +238,30 @@ def sky_convolution_generator(
 
     interpolators = {}
 
+    # The parts of the transformation to local coordinates that do not depend on
+    # time are done only once, before looping over the LSTs.
+    if use_astropy_azel:
+        coords = _time_independent_coords(sky_model.coords)
+    else:
+        gal = sky_model.coords.galactic
+        ra, dec = crda.galactic_to_radec(gal.b.deg, gal.l.deg)
+        sin_dec, cos_dec = np.sin(dec), np.cos(dec)
+        lat = location.lat.rad
+        sin_lat, cos_lat = np.sin(lat), np.cos(lat)
+
     for lst_idx, time in track(
         enumerate(times), description="LSTs", disable=not lst_progress, total=len(times)
     ):
         # Transform Galactic coordinates of Sky Model to Local coordinates
         if use_astropy_azel:
-            altaz = sky_model.coords.transform_to(
-                apc.AltAz(location=location, obstime=time)
-            )
+            altaz = coords.transform_to(apc.AltAz(location=location, obstime=time))
             az = np.asarray(altaz.az.deg)
             el = np.asarray(altaz.alt.deg)
         else:
-            ra, dec = crda.galactic_to_radec(
-                sky_model.coords.galactic.b.deg, sky_model.coords.galactic.l.deg
-            )
-            az, el = crda.radec_azel_from_lst(
-                lsts[lst_idx].rad, ra, dec, location.lat.rad
+            # This is crda.radec_azel_from_lst, with the sines and cosines of the
+            # declination computed once for all LSTs.
+            az, el = crda.radec_azel2(
+                lsts[lst_idx].rad - ra, sin_dec, cos_dec, sin_lat, cos_lat
             )
             az *= 180 / np.pi
             el *= 180 / np.pi
