@@ -364,14 +364,6 @@ class TestStdModelers:
         std = modeler.get_std(model, resids, np.ones(NSTAT))
         assert np.mean(std) == pytest.approx(1.0, abs=0.05)
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "MedianFilterModeler.get_std divides sqrt(median(r^2)) by 0.456, "
-            "but median(chi2_1)=0.4549 belongs inside the sqrt, so the std is ~1.48x "
-            "too large; fix pending (result-changing)"
-        ),
-    )
     def test_median_get_std_unit_noise(self):
         rng = np.random.default_rng(1234)
         resids = rng.normal(size=NSTAT)
@@ -405,14 +397,9 @@ class TestFalsePositiveRate:
     def test_linear_std_modeler(self, stat_freqs):
         _false_positive_check(_poly_modeler(3), stat_freqs)
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "MedianFilterModeler over-estimates the std by ~1.48x, so far too "
-            "few noise channels are flagged; fix pending (result-changing)"
-        ),
-    )
     def test_median_std_modeler(self, stat_freqs):
+        # A wide window is used: with narrow windows (e.g. 64 channels) the rolling
+        # median std estimate is noisy enough to raise the false-positive rate.
         _false_positive_check(xrfi.MedianFilterModeler(size=1001), stat_freqs)
 
 

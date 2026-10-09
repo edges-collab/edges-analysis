@@ -218,6 +218,11 @@ class FilterModeler(Modeler):
         return cls(kernel=Box1DKernel(size))
 
 
+# Median of the chi-squared distribution with one degree of freedom,
+# i.e. scipy.stats.chi2(1).median().
+_MEDIAN_CHI2_1DOF = 0.454936423119572
+
+
 @attrs.define
 class MedianFilterModeler(Modeler):
     """A :class:`Modeler` that uses a median filter to model data or std."""
@@ -234,9 +239,19 @@ class MedianFilterModeler(Modeler):
         )
 
     def get_std(self, model, resids: np.ndarray, weights: np.ndarray) -> np.ndarray:
-        """Calculate the rolling median-absolute-deviation."""
+        """Calculate a rolling median-based estimate of the standard deviation.
+
+        For Gaussian residuals with standard deviation sigma, ``r**2 / sigma**2``
+        follows a chi-squared distribution with one degree of freedom, whose median
+        is ~0.4549. The rolling median of ``r**2`` is therefore divided by this value
+        before taking the square root (equivalently, the rolling median absolute
+        deviation is divided by ~0.6745).
+
+        Note that for small window sizes, the estimate is noisy, which
+        increases the false-positive rate of flagging somewhat.
+        """
         smooth_rsq = self.get_model(model, resids**2, weights)
-        return np.sqrt(smooth_rsq) / 0.456
+        return np.sqrt(smooth_rsq / _MEDIAN_CHI2_1DOF)
 
 
 def xrfi_iterative(
