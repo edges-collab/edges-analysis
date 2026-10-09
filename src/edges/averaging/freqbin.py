@@ -115,10 +115,15 @@ def gauss_smooth(
         ``size//2``.
     flag_threshold
         The threshold of flagged samples to flag a channel. Set to 0.25 to flag in the
-        same way as Alan's C-Code. In detail, for a dataset with uniform weights (but
-        potentially some flagged bins), any smoothed channel whose integrated window
-        *not* counting flagged channels is smaller than ``size*flag_threshold`` will be
-        flagged.
+        same way as Alan's C-Code. In detail, the weights that are convolved (the
+        flagged nsamples if ``use_nsamples`` is True, otherwise unity for each
+        unflagged channel) are normalised by their maximum over frequency (for each
+        load, polarization and time), and any smoothed channel whose kernel-weighted
+        sum of these normalised weights is less than or equal to
+        ``size*flag_threshold`` is flagged. For a dataset with uniform weights (but
+        potentially some flagged bins), this is the integrated kernel window *not*
+        counting flagged channels. The result is independent of the overall scale of
+        nsamples.
     maintain_flags
         Whether to maintain the flags in the data. If ``True``, any fine-channels
         that were originally flagged will be flagged in the output. The default
@@ -192,8 +197,12 @@ def gauss_smooth(
 
     nsamples = nsamples[..., decimate_at::decimate]
 
-    maxn = np.max(data.nsamples, axis=-1)[:, :, :, None]
-    nsamples[nsamples / maxn <= size * flag_threshold] = 0
+    # Normalise the smoothed weights by the maximum weight that was convolved, so
+    # that the threshold does not depend on the overall scale of the weights.
+    maxw = np.max(f_nsamples, axis=-1, keepdims=True)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        frac = np.where(maxw > 0, nsamples / maxw, 0)
+    nsamples[frac <= size * flag_threshold] = 0
     mask = nsamples == 0
     sums[~mask] /= nsamples[~mask]
     sums[mask] = dd[..., decimate_at::decimate][mask]

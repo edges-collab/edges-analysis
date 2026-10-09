@@ -77,22 +77,34 @@ def test_freq_bin_int_bins_unchanged(gsd_ones: GSData):
     np.testing.assert_allclose(new.nsamples, 2, rtol=1e-12)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "gauss_smooth compares nsamples/max(nsamples) against "
-        "size*flag_threshold, mixing units, so scaling nsamples changes which "
-        "channels are flagged (nsamples=10 flags everything); fix pending "
-        "(result-changing)"
-    ),
-)
-def test_gauss_smooth_flag_threshold_nsamples_scale_invariant(gsd_ones: GSData):
-    out1 = freqbin.gauss_smooth(gsd_ones, size=2, flag_threshold=0.25)
+@pytest.mark.parametrize("use_nsamples", [False, True])
+def test_gauss_smooth_flag_threshold_nsamples_scale_invariant(
+    gsd_ones: GSData, use_nsamples: bool
+):
+    out1 = freqbin.gauss_smooth(
+        gsd_ones, size=2, flag_threshold=0.25, use_nsamples=use_nsamples
+    )
     out10 = freqbin.gauss_smooth(
-        gsd_ones.update(nsamples=10 * gsd_ones.nsamples), size=2, flag_threshold=0.25
+        gsd_ones.update(nsamples=10 * gsd_ones.nsamples),
+        size=2,
+        flag_threshold=0.25,
+        use_nsamples=use_nsamples,
     )
     assert np.any(out1.nsamples > 0)
     np.testing.assert_array_equal(out10.nsamples == 0, out1.nsamples == 0)
+
+
+def test_gauss_smooth_flag_threshold_flags_sparse_windows(gsd_ones: GSData):
+    # Flag all but every 8th channel: each smoothed window then contains only a small
+    # fraction of the unflagged weight, so a high threshold flags everything, while a
+    # zero threshold flags nothing.
+    nsamples = np.zeros_like(gsd_ones.nsamples)
+    nsamples[..., ::8] = 3.0
+    data = gsd_ones.update(nsamples=nsamples)
+    out = freqbin.gauss_smooth(data, size=4, decimate=False, flag_threshold=0.9)
+    assert np.all(out.nsamples[..., 8:-8] == 0)
+    out = freqbin.gauss_smooth(data, size=4, decimate=False, flag_threshold=0)
+    assert np.all(out.nsamples > 0)
 
 
 @pytest.mark.xfail(
