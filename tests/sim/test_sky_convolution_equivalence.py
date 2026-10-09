@@ -184,8 +184,13 @@ def test_generator_matches_reference(
 
 @pytest.mark.parametrize("index_model", [ConstantIndex(), StepIndex()])
 @pytest.mark.parametrize("normalize_beam", [True, False])
-def test_generator_matches_reference_options(index_model, normalize_beam, feko_beam):
+@pytest.mark.parametrize("cache_sky_maps", [True, False])
+def test_generator_matches_reference_options(
+    index_model, normalize_beam, cache_sky_maps, feko_beam, monkeypatch
+):
     """Other options (smoothing, ground loss, index models) also give exact results."""
+    if not cache_sky_maps:
+        monkeypatch.setattr(simulate, "_MAX_SKY_CACHE_BYTES", 0)
     rng = np.random.default_rng(1)
     kw = {
         "lsts": Longitude([1.0, 13.5] * un.hour),

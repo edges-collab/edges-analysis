@@ -194,12 +194,45 @@ class SkyModel:
         temperature
             The sky maps as numpy arrays at the new frequencies, shape (Nsky, Nfreq).
         """
+        return self._at_freq_with_index(freq, self._spectral_index(index_model))
+
+    def _spectral_index(self, index_model: IndexModel) -> np.ndarray:
+        """Evaluate a spectral-index model at the (Galactic) pixel coordinates.
+
+        Parameters
+        ----------
+        index_model
+            The spectral index model.
+
+        Returns
+        -------
+        index
+            The spectral index of each pixel, shape (Nsky,).
+        """
         gal = (
             self.coords
             if isinstance(self.coords.frame, Galactic)
             else self.coords.galactic
         )
-        index = index_model.get_index(lon=gal.l.deg, lat=gal.b.deg, sky_model=self)
+        return index_model.get_index(lon=gal.l.deg, lat=gal.b.deg, sky_model=self)
+
+    def _at_freq_with_index(
+        self, freq: float | np.ndarray, index: np.ndarray
+    ) -> np.ndarray:
+        """Scale the sky model to new frequencies with a given spectral index map.
+
+        Parameters
+        ----------
+        freq
+            The frequencies (in MHz) at which to evaluate the model.
+        index
+            The spectral index of each pixel (see :meth:`_spectral_index`).
+
+        Returns
+        -------
+        temperature
+            The sky maps at the new frequencies, shape (Nsky, Nfreq).
+        """
         f = freq / self.frequency
         t_cmb = 2.725
         scale = np.power.outer(f, -index)

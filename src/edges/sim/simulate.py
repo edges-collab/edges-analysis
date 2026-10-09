@@ -24,6 +24,10 @@ from .beams import Beam
 # it is used.
 REFERENCE_TIME = apt.Time("2014-01-01T09:39:42", location=const.edges_location)
 
+# Maximum memory (in bytes) used to keep the sky maps at every frequency between LSTs
+# in sky_convolution_generator. Above this, they are re-computed for every LST.
+_MAX_SKY_CACHE_BYTES = 2**29
+
 
 def _ground_loss_in_band(
     ground_loss: np.ndarray | None,
@@ -238,6 +242,14 @@ def sky_convolution_generator(
 
     interpolators = {}
 
+    # The sky maps do not depend on LST: compute them once per frequency, and keep
+    # them for the next LSTs unless that would take too much memory.
+    spectral_index = sky_model._spectral_index(index_model)
+    sky_maps = {}
+    cache_sky_maps = (
+        len(beam.frequency) * sky_model.temperature.size * 8 <= _MAX_SKY_CACHE_BYTES
+    )
+
     # The parts of the transformation to local coordinates that do not depend on
     # time are done only once, before looping over the LSTs.
     if use_astropy_azel:
@@ -289,10 +301,15 @@ def sky_convolution_generator(
                     freq_idx, interp_kind=interp_kind
                 )
 
-            sky_map = sky_model.at_freq(
-                beam.frequency[freq_idx].to_value("MHz"),
-                index_model=index_model,
-            )
+            if freq_idx in sky_maps:
+                sky_map = sky_maps[freq_idx].copy()
+            else:
+                # The same as sky_model.at_freq(), with the index map computed once.
+                sky_map = sky_model._at_freq_with_index(
+                    beam.frequency[freq_idx].to_value("MHz"), spectral_index
+                )
+                if cache_sky_maps:
+                    sky_maps[freq_idx] = sky_map.copy()
             sky_map[~horizon_mask] = np.nan
 
             # A fresh array on every iteration, so that the yielded arrays are not
