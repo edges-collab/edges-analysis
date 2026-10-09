@@ -462,7 +462,7 @@ def test_shift_beam_maps_inverse_and_roll(angle, random_beam_maps):
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "SIM-6: Beam.gaussian divides a zenith angle in degrees by a width in radians, "
+        "Beam.gaussian divides a zenith angle in degrees by a width in radians, "
         "so the beam is ~57x too narrow; fix pending (result-changing)"
     ),
 )
@@ -479,7 +479,7 @@ def test_gaussian_beam_value_at_known_zenith_angle():
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "SIM-7: the sphere-spline interpolator uses the 89 deg row as the zenith pole "
+        "The sphere-spline interpolator uses the 89 deg row as the zenith pole "
         "value, so the interpolated zenith response is wrong; "
         "fix pending (result-changing)"
     ),
@@ -505,7 +505,7 @@ def test_sphere_spline_zenith_value():
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "SIM-13: get_beam_solid_angle uses a rectangle rule that includes both "
+        "get_beam_solid_angle uses a rectangle rule that includes both "
         "elevation endpoints, biasing the solid angle high by ~d_el/2 (0.9% at 1 deg, "
         "4.3% at 5 deg); fix pending (result-changing)"
     ),

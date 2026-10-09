@@ -75,7 +75,7 @@ def test_simple_fit(method: str):
             marks=pytest.mark.xfail(
                 strict=True,
                 reason=(
-                    "MOD-1: the 'lstsq' solver applies the weights to both A and y, "
+                    "The 'lstsq' solver applies the weights to both A and y, "
                     "minimising sum(w^2 r^2) (i.e. treating w as 1/sigma) instead of "
                     "sum(w r^2) with w = 1/sigma^2; fix pending (result-changing)"
                 ),
@@ -364,7 +364,7 @@ def _x_dependent_scaler(x):
 
 @pytest.mark.parametrize("with_scaler", [True, False])
 def test_call_without_x_equals_call_at_x(with_scaler: bool):
-    """MOD-9: the basis scaler always receives the raw (untransformed) coordinates."""
+    """The basis scaler always receives the raw (untransformed) coordinates."""
     x = np.linspace(50, 100, 30)
     model = mdl.Polynomial(
         parameters=[1.0, 2.0, -3.0],
@@ -384,7 +384,7 @@ def test_call_without_x_equals_call_at_x(with_scaler: bool):
 
 
 def test_composite_call_without_x_equals_call_at_x():
-    """MOD-9 for composite models with transforms and basis scalers."""
+    """The basis scaler receives raw coordinates in composite models too."""
     x = np.linspace(50, 100, 30)
     cmp = mdl.CompositeModel(
         models={
@@ -406,7 +406,7 @@ def test_composite_call_without_x_equals_call_at_x():
 
 
 def test_composite_get_basis_term_uses_submodel_transform():
-    """MOD-21: CompositeModel.get_basis_term applies each sub-model's transform."""
+    """CompositeModel.get_basis_term applies each sub-model's transform."""
     x = np.linspace(50, 100, 30)
     poly = mdl.Polynomial(n_terms=3, transform=mdl.ScaleTransform(scale=75.0))
     four = mdl.Fourier(n_terms=3, transform=mdl.ShiftTransform(shift=50.0))

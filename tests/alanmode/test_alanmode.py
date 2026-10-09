@@ -51,7 +51,7 @@ def _make_spec_gsd(nfreq: int = 64, flagged=(3, 10, 11), scale: float = 300.0):
 
 
 def test_spec_txt_roundtrip_keeps_flags(tmp_path: Path):
-    """Regression test for ANA-10: written weights were always 1."""
+    """Regression test: written weights were always 1."""
     gsd = _make_spec_gsd()
     am.write_spec_txt_gsd(gsd, tmp_path / "sp.txt")
     new = am.read_spec_txt(tmp_path / "sp.txt")
@@ -78,7 +78,7 @@ def test_write_spec_txt_weights(tmp_path: Path):
 
 
 def test_read_spec_txt_wide_values(tmp_path: Path):
-    """Regression test for ANA-10: n was read from a fixed column of the first line."""
+    """Regression test: n was read from a fixed column of the first line."""
     gsd = _make_spec_gsd(flagged=(), scale=1.0e7)
     am.write_spec_txt_gsd(gsd, tmp_path / "sp.txt")
     new = am.read_spec_txt(tmp_path / "sp.txt")
@@ -180,7 +180,7 @@ class TestACQPlot7AMoon:
         np.testing.assert_allclose(meanspec.data, 1300)
 
     def test_params_and_kwargs(self, unity_acq):
-        """Regression test for ANA-9: kwargs used to replace params entirely."""
+        """Regression test: kwargs used to replace params entirely."""
         params = am.ACQPlot7aMoonParams(smooth=0, tload=300, tcal=1000)
         meanspec = am.acqplot7amoon(unity_acq, params=params, fstart=0, fstop=np.inf)
 
@@ -190,7 +190,7 @@ class TestACQPlot7AMoon:
 
 
 class TestEdgesParams:
-    """Regression tests for ANA-9: params given with kwargs were silently dropped."""
+    """Regression tests: params given with kwargs were silently dropped."""
 
     class _Stop(Exception):  # ruff: ignore[error-suffix-on-exception-name]
         pass
@@ -245,7 +245,7 @@ class TestCorrcsv:
 
 
 class TestGetLoadS11s:
-    """Regression tests for ANA-7: polynomial load-S11 models used to crash."""
+    """Regression tests: polynomial load-S11 models used to crash."""
 
     def _inputs(self):
         s11freq = np.linspace(50, 190, 141) * un.MHz
@@ -286,7 +286,7 @@ def test_edges3_calobs_params_datadir_from_config(tmp_path: Path):
 
 
 class TestReadSpeFile:
-    """Regression tests for ANA-11: read_spe_file couldn't read the repo's spe0.txt."""
+    """Regression tests: read_spe_file couldn't read the repo's spe0.txt."""
 
     @pytest.mark.parametrize("day", ["2022-316", "2023-210"])
     def test_read_edges3_spe0(self, alanmode_data_path: Path, day: str):

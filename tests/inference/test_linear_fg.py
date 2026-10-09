@@ -17,7 +17,7 @@ def _mock(eor_func=flattened_gaussian, **eor_params):
 
 
 def test_linear_fg_defaults_construct_and_evaluate():
-    """MOD-3: LinearFG works with its default (flattened-Gaussian) cosmic signal."""
+    """LinearFG works with its default (flattened-Gaussian) cosmic signal."""
     freqs, fg, t_sky, var = _mock(**TRUTH)
     lfg = LinearFG(freqs=freqs, t_sky=t_sky, data_variance=var, fg=fg)
     plm = lfg.partial_linear_model

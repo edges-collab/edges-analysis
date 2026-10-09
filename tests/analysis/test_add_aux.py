@@ -88,7 +88,7 @@ def _copy_aux_file(src: Path, dest: Path, old_day: str = "", new_day: str = ""):
 
 
 class TestAuxFileResolution:
-    """Regression tests for ANA-6: default and relative aux paths were unreachable."""
+    """Regression tests: default and relative aux paths were unreachable."""
 
     def test_weather_relative_to_raw_field_data(self):
         gsd = _mock("2020:107:14:00")

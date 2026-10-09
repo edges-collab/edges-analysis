@@ -53,7 +53,7 @@ def _read_tabulated_loss(instrument: str, name: str) -> np.ndarray:
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "ANA-1: built-in loss files are looked up in edges/analysis/data/loss instead "
+        "Built-in loss files are looked up in edges/analysis/data/loss instead "
         "of edges/data/loss, so a warning is raised and a loss of 1 (no correction) is "
         "returned; fix pending (result-changing)"
     ),
@@ -77,9 +77,9 @@ def test_builtin_ground_loss_matches_tabulated(instrument: str, configuration: s
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "ANA-2: antenna_loss passes loss_type='ground', so it reads the ground-loss "
-        "file instead of antenna.txt (and ANA-1 means no built-in file is found at "
-        "all); fix pending (result-changing)"
+        "antenna_loss passes loss_type='ground', so it reads the ground-loss "
+        "file instead of antenna.txt (and no built-in loss file is found at all); "
+        "fix pending (result-changing)"
     ),
 )
 def test_builtin_antenna_loss_reads_antenna_file():
@@ -91,7 +91,7 @@ def test_builtin_antenna_loss_reads_antenna_file():
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "ANA-2: antenna_loss uses its n_terms=11 as the polynomial degree (12 terms) "
+        "antenna_loss uses its n_terms=11 as the polynomial degree (12 terms) "
         "rather than the number of terms; fix pending (result-changing)"
     ),
 )

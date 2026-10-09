@@ -162,7 +162,7 @@ class TestAcrossMidnight:
     @pytest.mark.xfail(
         strict=True,
         reason=(
-            "FLT-2: average_over_times wraps LSTs to within 12h of reference_lst and "
+            "average_over_times wraps LSTs to within 12h of reference_lst and "
             "takes an arithmetic mean, so data spanning LST midnight gets a mean LST "
             "near 12h; fix pending (result-changing)"
         ),

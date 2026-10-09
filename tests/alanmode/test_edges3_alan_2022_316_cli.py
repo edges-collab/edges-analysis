@@ -85,7 +85,7 @@ def edges3_2022_316(tmp_path_factory, alanmode_data_path):
 
 
 def test_no_redo_cal_second_run(edges3_2022_316: Path, alanmode_data_path: Path):
-    """Regression test for ANA-8: a second run with --no-redo-cal used to crash."""
+    """Regression test: a second run with --no-redo-cal used to crash."""
     specal = edges3_2022_316 / "specal.txt"
     mtime = specal.stat().st_mtime_ns
 

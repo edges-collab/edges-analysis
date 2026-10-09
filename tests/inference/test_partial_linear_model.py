@@ -49,8 +49,8 @@ def test_marginal_lnl_brute_force_homoscedastic():
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "MOD-2: the marginal likelihood uses the chi^2 of the default 'lstsq' fit, "
-        "which squares the inverse-variance weights (MOD-1), so lnL is wrong for "
+        "The marginal likelihood uses the chi^2 of the default 'lstsq' fit, "
+        "which squares the inverse-variance weights, so lnL is wrong for "
         "non-uniform variance; fix pending (result-changing)"
     ),
 )
@@ -84,7 +84,7 @@ def _static_plm(var: np.ndarray, n_terms: int = 3, seed: int = 3, **kw):
 
 @pytest.mark.parametrize("bad", [0.0, -1.0, np.nan])
 def test_bad_variance_raises(bad: float):
-    """MOD-8: a single zero, negative or NaN variance gives a clear error."""
+    """A single zero, negative or NaN variance gives a clear error."""
     var = np.ones(20)
     var[7] = bad
     plm = _static_plm(var)
@@ -117,7 +117,7 @@ def test_infinite_variance_flags_channel():
 
 
 def test_logdet_cinv_no_overflow():
-    """MOD-20: log|Q| is computed with slogdet, so it does not overflow."""
+    """log|Q| is computed with slogdet, so it does not overflow."""
     n_terms = 12
     plm1 = _static_plm(np.full(200, 1.0), n_terms=n_terms)
     plm_tiny = _static_plm(np.full(200, 1e-30), n_terms=n_terms)
@@ -142,7 +142,7 @@ def test_logdet_cinv_from_hessian_no_overflow():
 
 
 def test_sigma_plus_v_inverse_flat_prior_limit():
-    """MOD-4: (Sigma + A^T V A)^-1 in the limit of an uninformative prior V -> inf.
+    """sigma_plus_v_inverse is (Sigma + A^T V A)^-1 for an uninformative prior V.
 
     Compared to a brute-force inverse with a very broad prior on a well-conditioned
     problem, and checked to annihilate the foreground basis and to reproduce the

@@ -216,7 +216,7 @@ def test_galactic_centre_transit_lst(use_astropy_azel):
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "SIM-2: with normalize_beam=False the output is sum(B*dOmega*T)/Npix, which "
+        "With normalize_beam=False the output is sum(B*dOmega*T)/Npix, which "
         "depends on the sky resolution and is not (1/4pi) * int(B*T dOmega); "
         "fix pending (result-changing)"
     ),
@@ -247,7 +247,7 @@ def test_unnormalised_beam_is_resolution_independent():
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "SIM-4: ground_loss is indexed by the frequency index after the f_low cut, so "
+        "ground_loss is indexed by the frequency index after the f_low cut, so "
         "it is misaligned with the beam frequencies; fix pending (result-changing)"
     ),
 )
@@ -274,7 +274,7 @@ def test_ground_loss_aligned_after_flow_cut():
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "SIM-4: ground_loss is silently ignored when normalize_beam=False; "
+        "ground_loss is silently ignored when normalize_beam=False; "
         "fix pending (result-changing)"
     ),
 )

@@ -166,7 +166,7 @@ class Test150MHzFilter:
     @pytest.mark.xfail(
         strict=True,
         reason=(
-            "FLT-3: filter_150mhz takes np.mean without an axis, so the RMS is a "
+            "filter_150mhz takes np.mean without an axis, so the RMS is a "
             "single scalar over all loads/pols/times and one bad integration flags all "
             "integration; fix pending (result-changing)"
         ),

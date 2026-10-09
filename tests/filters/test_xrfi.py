@@ -367,7 +367,7 @@ class TestStdModelers:
     @pytest.mark.xfail(
         strict=True,
         reason=(
-            "FLT-1: MedianFilterModeler.get_std divides sqrt(median(r^2)) by 0.456, "
+            "MedianFilterModeler.get_std divides sqrt(median(r^2)) by 0.456, "
             "but median(chi2_1)=0.4549 belongs inside the sqrt, so the std is ~1.48x "
             "too large; fix pending (result-changing)"
         ),
@@ -408,7 +408,7 @@ class TestFalsePositiveRate:
     @pytest.mark.xfail(
         strict=True,
         reason=(
-            "FLT-1: MedianFilterModeler over-estimates the std by ~1.48x, so far too "
+            "MedianFilterModeler over-estimates the std by ~1.48x, so far too "
             "few noise channels are flagged; fix pending (result-changing)"
         ),
     )
@@ -447,7 +447,7 @@ class TestSingleSpike:
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "FLT-14: the convergence check compares the model params to the element just "
+        "The convergence check compares the model params to the element just "
         "appended, so term_increase never takes effect and the fit stops at "
         "min_terms; fix pending (result-changing)"
     ),

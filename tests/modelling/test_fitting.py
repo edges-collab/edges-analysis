@@ -12,7 +12,7 @@ from edges.modeling.models import PhysicalIono
 ALL_METHODS = ("lstsq", "qr", "alan-qrd", "qrd-c")
 
 MOD1_REASON = (
-    "MOD-1: the default 'lstsq' solver applies the weights to both A and y, "
+    "The default 'lstsq' solver applies the weights to both A and y, "
     "minimising sum(w^2 r^2) (treating w as 1/sigma) instead of sum(w r^2) with "
     "w = 1/sigma^2; fix pending (result-changing)"
 )
@@ -169,7 +169,7 @@ def test_mc_scatter_matches_covariance_default_method():
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "MOD-5: weighted_rms computes sqrt(sum(w r^2)) / sum(w) instead of "
+        "weighted_rms computes sqrt(sum(w r^2)) / sum(w) instead of "
         "sqrt(sum(w r^2) / sum(w)); fix pending (result-changing)"
     ),
 )
@@ -186,7 +186,7 @@ def test_weighted_rms_unit_weights_is_rms():
 
 
 MOD6_REASON = (
-    "MOD-6: degrees_of_freedom is N - M - 1 and counts NaN and zero-weight points; "
+    "degrees_of_freedom is N - M - 1 and counts NaN and zero-weight points; "
     "it should be N - M over finite, positive-weight points; fix pending "
     "(result-changing)"
 )
@@ -234,7 +234,7 @@ def test_mean_reduced_chi2_is_one():
 @pytest.mark.parametrize("method", ALL_METHODS)
 @pytest.mark.parametrize("weighted", [True, False])
 def test_nan_data_is_masked_consistently(method: str, weighted: bool):
-    """MOD-7: NaN data is excluded from fit, chi^2, rms, Hessian and covariance."""
+    """NaN data is excluded from fit, chi^2, rms, Hessian and covariance."""
     rng, x, sigma, w = _heteroscedastic_setup()
     if not weighted:
         w = 1.0
@@ -279,7 +279,7 @@ def test_nan_masking_does_not_change_finite_results():
 @pytest.mark.parametrize("bad", [np.inf, np.nan, -1.0])
 @pytest.mark.parametrize("method", ALL_METHODS)
 def test_bad_weights_raise(bad: float, method: str):
-    """MOD-8: a single infinite, NaN or negative weight gives a clear error."""
+    """A single infinite, NaN or negative weight gives a clear error."""
     x = np.linspace(50, 100, 20)
     fm = mdl.Polynomial(n_terms=3).at(x=x)
     w = np.ones(x.size)
@@ -297,7 +297,7 @@ def test_bad_scalar_weight_raises(bad: float):
 
 @pytest.mark.parametrize("weights", [None, 1, 3, np.float32(2.0)])
 def test_weights_converter(weights):
-    """MOD-19: None, int and numpy scalars are accepted as weights."""
+    """None, int and numpy scalars are accepted as weights."""
     x = np.linspace(50, 100, 20)
     fm = mdl.Polynomial(n_terms=3, transform=mdl.UnitTransform(range=(50, 100))).at(x=x)
     y = fm(parameters=[1.0, 2.0, 3.0])

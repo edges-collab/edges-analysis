@@ -176,7 +176,7 @@ class TestGetS11Paths:
 
 
 class TestDirectoryModeDefaults:
-    """Regression tests for directory mode with default arguments (SP-17)."""
+    """Regression tests for directory mode with default arguments."""
 
     def test_no_parseable_files(self, tmp_path):
         for i in range(4):

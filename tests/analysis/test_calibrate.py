@@ -131,7 +131,7 @@ class TestApplyNoiseWaveCalibration:
         return temp, temp_model, q, qmodel
 
     def test_residuals_are_calibrated(self, gsd_ones: GSData):
-        """Regression test for ANA-3: data with a model used to crash."""
+        """Regression test: data with a model used to crash."""
         calibrator = get_random_calibrator(gsd_ones.freqs)
         ant_s11 = get_random_s11(gsd_ones.freqs)
         temp, temp_model, q, qmodel = self._decalibrated(gsd_ones, calibrator, ant_s11)
@@ -146,7 +146,7 @@ class TestApplyNoiseWaveCalibration:
         )
 
     def test_residuals_uncalibrated_temp(self, gsd_ones: GSData):
-        """Residuals of approximate-temperature data are calibrated too (ANA-3)."""
+        """Residuals of approximate-temperature data are calibrated too."""
         calibrator = get_random_calibrator(gsd_ones.freqs)
         ant_s11 = get_random_s11(gsd_ones.freqs)
         temp, temp_model, q, qmodel = self._decalibrated(gsd_ones, calibrator, ant_s11)
@@ -166,7 +166,7 @@ class TestApplyNoiseWaveCalibration:
         )
 
     def test_calibrator_from_path(self, gsd_ones: GSData, tmp_path):
-        """A path to a calibrator file can be given instead of the object (ANA-3)."""
+        """A path to a calibrator file can be given instead of the object."""
         calibrator = get_random_calibrator(gsd_ones.freqs)
         ant_s11 = get_random_s11(gsd_ones.freqs)
         temp, _, q, _ = self._decalibrated(gsd_ones, calibrator, ant_s11)
@@ -181,7 +181,7 @@ class TestApplyNoiseWaveCalibration:
             np.testing.assert_allclose(out.data, temp.to_value("K"), rtol=1e-12, atol=0)
 
     def test_antenna_s11_interpolated_to_data_freqs(self, gsd_ones: GSData):
-        """An antenna S11 on a different frequency grid is modelled (ANA-3)."""
+        """An antenna S11 on a different frequency grid is modelled."""
         calibrator = get_random_calibrator(gsd_ones.freqs)
         gamma = 0.2 * np.exp(0.3j)
         exact = ReflectionCoefficient(
@@ -290,7 +290,7 @@ class TestApplyLossCorrection:
         np.testing.assert_allclose(out.data, mock.data, rtol=1e-12, atol=0)
 
     def test_ambient_temp_in_celsius(self, mock: GSData):
-        """Regression test for ANA-12: thermlog temperatures in deg C used to crash."""
+        """Regression test: thermlog temperatures in deg C used to crash."""
         loss = np.linspace(0.9, 0.99, mock.nfreqs)
         in_kelvin = calibrate.apply_loss_correction(
             mock, ambient_temp=298.15 * un.K, loss=loss

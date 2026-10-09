@@ -49,7 +49,7 @@ def test_freq_bin_size_one_is_identity(gsd_ones: GSData):
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "FLT-5: freq_bin includes both bin edges, so a channel lying exactly on an "
+        "freq_bin includes both bin edges, so a channel lying exactly on an "
         "edge is counted in two bins and total nsamples is not conserved; fix pending "
         "(result-changing)"
     ),
@@ -66,7 +66,7 @@ def test_freq_bin_conserves_nsamples(gsd_ones: GSData):
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "FLT-6: gauss_smooth compares nsamples/max(nsamples) against "
+        "gauss_smooth compares nsamples/max(nsamples) against "
         "size*flag_threshold, mixing units, so scaling nsamples changes which "
         "channels are flagged (nsamples=10 flags everything); fix pending "
         "(result-changing)"
@@ -84,7 +84,7 @@ def test_gauss_smooth_flag_threshold_nsamples_scale_invariant(gsd_ones: GSData):
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "FLT-8: gauss_smooth reports nsamples as sum(k*n) rather than the effective "
+        "gauss_smooth reports nsamples as sum(k*n) rather than the effective "
         "inverse variance (sum k)^2/sum(k^2/n), which is ~sqrt(2) larger; fix pending "
         "(result-changing)"
     ),

@@ -485,7 +485,7 @@ def test_calibrated_temps_open_short_tight(
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "CAL-1 (on hold pending a hardware check): CalibrationObservation."
+        "On hold pending a hardware check: CalibrationObservation."
         "from_edges3_caldef passes cable_loss_percent and cable_dielectric_percent "
         "as percent Quantities, which are converted to fractions twice (lossf 0.99085 "
         "instead of Alan's 0.085), and defaults the match resistance to 49.962 Ohm "

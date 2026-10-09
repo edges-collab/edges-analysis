@@ -76,7 +76,7 @@ class TestAverageFilesPairwise:
     @pytest.mark.xfail(
         strict=True,
         reason=(
-            "FLT-4: the pairwise fold is only correct for additive weights; with "
+            "The pairwise fold is only correct for additive weights; with "
             "residuals the model ends up weighted (mA+mB)/4 + mC/2; fix pending "
             "(result-changing)"
         ),
@@ -94,7 +94,7 @@ class TestAverageFilesPairwise:
     @pytest.mark.xfail(
         strict=True,
         reason=(
-            "FLT-4: with non-additive weight strategies (FLAGS_ONLY, uniform) the "
+            "With non-additive weight strategies (FLAGS_ONLY, uniform) the "
             "pairwise fold gives the first files too little weight; fix pending "
             "(result-changing)"
         ),

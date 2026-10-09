@@ -44,7 +44,7 @@ def test_achromatic_beam_factor_is_unity_eq_a1(galaxy_sky):
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "SIM-1: with sky_at_reference_frequency=True the numerator uses T_sky(nu) "
+        "With sky_at_reference_frequency=True the numerator uses T_sky(nu) "
         "instead of T_sky(nu_ref) (Sims+23 Eq. 4), so an achromatic beam gives "
         "(nu/nu_ref)^-beta instead of 1; fix pending (result-changing)"
     ),

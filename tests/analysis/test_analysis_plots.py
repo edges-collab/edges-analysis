@@ -49,7 +49,7 @@ def test_plot_daily_residuals(step, request):
 
 
 def test_plot_daily_residuals_forwards_load_and_pol(mock_season, monkeypatch):
-    """Regression test for ANA-13: load/pol were not passed to plot_time_average."""
+    """Regression test: load/pol were not passed to plot_time_average."""
     # Three-load (power) data, so that a non-zero load index can be chosen.
     modelled = [add_model(m, model=LinLog(n_terms=2)) for m in mock_season]
     calls = []
