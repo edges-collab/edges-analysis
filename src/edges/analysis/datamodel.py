@@ -168,11 +168,7 @@ def _plain_values(arr: np.ndarray) -> np.ndarray | None:
 
 
 def _group_equal_rows(*arrays: np.ndarray) -> list[list[int]]:
-    """Group the row indices for which the rows of all ``arrays`` are exactly equal.
-
-    Rows are first bucketed by a cheap fingerprint (a random projection), and the
-    rows in a bucket are then compared exactly, so the grouping does not rely on the
-    fingerprint being collision-free.
+    """Group the row indices for which the rows of all ``arrays`` are bitwise equal.
 
     Parameters
     ----------
@@ -184,24 +180,11 @@ def _group_equal_rows(*arrays: np.ndarray) -> list[list[int]]:
     groups
         The row indices of each group, in order of first appearance.
     """
-    rng = np.random.default_rng(0)
-    fingerprint = sum(
-        np.asarray(arr, dtype=float) @ rng.uniform(1, 2, size=arr.shape[1])
-        for arr in arrays
-    )
-
-    buckets: dict[float, list[list[int]]] = {}
-    groups: list[list[int]] = []
-    for i, fp in enumerate(fingerprint.tolist()):
-        candidates = buckets.setdefault(fp, [])
-        for group in candidates:
-            if all(np.array_equal(arr[i], arr[group[0]]) for arr in arrays):
-                group.append(i)
-                break
-        else:
-            candidates.append([i])
-            groups.append(candidates[-1])
-    return groups
+    groups: dict[bytes, list[int]] = {}
+    for i in range(len(arrays[0]) if arrays else 0):
+        key = b"".join(np.ascontiguousarray(arr[i]).tobytes() for arr in arrays)
+        groups.setdefault(key, []).append(i)
+    return list(groups.values())
 
 
 def _fit_spectra_grouped(
