@@ -9,6 +9,7 @@ for averaging, in order to make the average unbiased (given flags).
 import contextlib
 import logging
 import numbers
+from typing import Literal
 
 import numpy as np
 from astropy import units as un
@@ -284,52 +285,90 @@ def weighted_variance(
     data: np.ndarray,
     nsamples: np.ndarray | None = None,
     avg: np.ndarray | None = None,
+    of: Literal["sample", "mean"] = "sample",
     **kwargs,
-):
-    """Calculate a careful weighted variance.
+) -> np.ndarray:
+    """Calculate a careful, unbiased variance of data with varying nsamples.
 
-    This computes::
+    The data are assumed to be independent, with a common mean and variances
+    ``var(data_i) = sigma0**2 / n_i``, where ``n_i`` is ``nsamples`` (i.e. each datum
+    is itself the average of ``n_i`` samples with variance ``sigma0**2``). This
+    returns the unbiased estimate of the per-sample variance::
 
-        sum(n**2 * (data - avg)**2) / sum(n**2)
+        sigma0**2 = sum(n * (data - avg)**2) / (N - 1)
 
-    over the given axis, where ``n`` is ``nsamples`` and ``avg`` is the
-    ``nsamples``-weighted mean of the data (unless given).
+    where ``avg`` is the ``nsamples``-weighted mean of the data and ``N`` is the
+    number of data with non-zero (and finite) ``nsamples`` and finite data along the
+    axis. With ``of="mean"``, it instead returns ``sigma0**2 / sum(n)``, the variance
+    of the ``nsamples``-weighted mean.
 
     Parameters
     ----------
     data : array-like
         The data over which to calculate the variance.
     nsamples
-        The number of samples corresponding to each datum. The mean is weighted by
-        ``nsamples``, while the squared deviations are weighted by ``nsamples**2``.
-        Default is all unity.
+        The number of samples corresponding to each datum, with the same shape as
+        ``data``. Data with zero, negative or non-finite ``nsamples`` (or non-finite
+        data) are excluded. Default is all unity, in which case the result is
+        ``np.var(data, ddof=1)``.
     avg
-        The weighted average of the data over the given axis (with ``keepdims=True``).
-        By default, compute this internally.
+        The ``nsamples``-weighted average of the data over the given axis (with
+        ``keepdims=True``). By default, compute this internally. If given, it is used
+        as is (still with ``N - 1`` degrees of freedom).
+    of
+        Whether to return the variance of a single sample (``"sample"``, i.e.
+        ``sigma0**2``) or of the ``nsamples``-weighted mean (``"mean"``, i.e.
+        ``sigma0**2 / sum(n)``).
     **kwargs
-        Passed to :func:`weighted_mean` (e.g. ``axis`` and ``fill_value``).
+        ``axis`` (default -1), ``keepdims`` (default False) and ``fill_value``
+        (default NaN), as for :func:`weighted_mean`.
 
     Returns
     -------
     var
-        The weighted variance of the data over the given axis.
+        The variance over the given axis. Where fewer than two data are valid, it is
+        ``fill_value``.
 
     Notes
     -----
-    This is a plain weighted mean of the squared deviations. No correction is made for
-    the degree of freedom used in estimating the mean (it is the analogue of
-    ``np.var(..., ddof=0)``), so it is a biased estimator of the variance. Also, since
-    the weights are ``nsamples**2``, it is not the inverse-variance-weighted estimate of
-    the variance of a single sample when ``nsamples`` varies. With uniform
-    ``nsamples``, it reduces to ``np.var(data, axis=axis)``.
+    The estimator is unbiased: since ``var(data_i - avg) = sigma0**2 (1/n_i -
+    1/sum(n))``, the expectation of ``sum(n (data - avg)**2)`` is ``sigma0**2
+    (N - 1)``. The variance is computed about the data, so it includes any real
+    (non-noise) variation of the data along the axis.
     """
-    if nsamples is None:
-        nsamples = np.ones_like(data)
+    if of not in ("sample", "mean"):
+        raise ValueError(f"'of' must be 'sample' or 'mean', got {of!r}")
 
-    if avg is None:
-        avg, _ = weighted_mean(data, weights=nsamples, keepdims=True, **kwargs)
+    axis = kwargs.pop("axis", -1)
+    keepdims = kwargs.pop("keepdims", False)
+    fill_value = kwargs.pop("fill_value", np.nan)
+    if kwargs:
+        raise TypeError(f"Unexpected keyword arguments: {sorted(kwargs)}")
 
-    return weighted_mean((data - avg) ** 2, nsamples**2, **kwargs)[0]
+    data = np.asarray(data, dtype=float)
+    nsamples = np.ones_like(data) if nsamples is None else np.asarray(nsamples, float)
+
+    valid = np.isfinite(data) & np.isfinite(nsamples) & (nsamples > 0)
+    n = np.where(valid, nsamples, 0.0)
+    d = np.where(valid, data, 0.0)
+
+    nvalid = np.sum(valid, axis=axis, keepdims=True)
+    ntot = np.sum(n, axis=axis, keepdims=True)
+
+    with np.errstate(divide="ignore", invalid="ignore"):
+        if avg is None:
+            avg = np.sum(n * d, axis=axis, keepdims=True) / ntot
+
+        sumsq = np.sum(n * (d - avg) ** 2, axis=axis, keepdims=True)
+        var = sumsq / (nvalid - 1)
+        if of == "mean":
+            var /= ntot
+
+    var = np.where(nvalid > 1, var, fill_value)
+
+    if not keepdims:
+        var = np.squeeze(var, axis=axis)
+    return var
 
 
 def bin_data(
