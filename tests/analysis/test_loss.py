@@ -49,15 +49,6 @@ def _read_tabulated_loss(instrument: str, name: str) -> np.ndarray:
     return np.genfromtxt(DATA_PATH / "loss" / instrument / f"{name}.txt")
 
 
-@pytest.mark.filterwarnings("ignore:Ground loss file .* does not exist")
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Built-in loss files are looked up in edges/analysis/data/loss instead "
-        "of edges/data/loss, so a warning is raised and a loss of 1 (no correction) is "
-        "returned; fix pending (result-changing)"
-    ),
-)
 @pytest.mark.parametrize(
     ("instrument", "configuration"), [("low", ""), ("low", "45deg"), ("mid", "")]
 )
@@ -73,28 +64,12 @@ def test_builtin_ground_loss_matches_tabulated(instrument: str, configuration: s
     np.testing.assert_allclose(gl, 1 - table[:, 1], atol=5e-5, rtol=0)
 
 
-@pytest.mark.filterwarnings("ignore:Ground loss file .* does not exist")
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "antenna_loss passes loss_type='ground', so it reads the ground-loss "
-        "file instead of antenna.txt (and no built-in loss file is found at all); "
-        "fix pending (result-changing)"
-    ),
-)
 def test_builtin_antenna_loss_reads_antenna_file():
     table = _read_tabulated_loss("mid", "antenna")
     al = loss.antenna_loss(table[:, 0], ":", instrument="mid")
     np.testing.assert_allclose(al, 1 - table[:, 1], atol=5e-5, rtol=0)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "antenna_loss uses its n_terms=11 as the polynomial degree (12 terms) "
-        "rather than the number of terms; fix pending (result-changing)"
-    ),
-)
 def test_antenna_loss_uses_n_terms():
     fname = DATA_PATH / "loss" / "mid" / "antenna.txt"
     table = np.genfromtxt(fname)
@@ -103,3 +78,25 @@ def test_antenna_loss_uses_n_terms():
     expected = 1 - np.polyval(np.polyfit(table[:, 0], table[:, 1], 10), freq)
     al = loss.antenna_loss(freq, fname)
     np.testing.assert_allclose(al, expected, rtol=0, atol=1e-12)
+
+
+def test_ground_loss_is_degree_8_fit():
+    """The ground loss is a 9-term (degree-8) polynomial fit to the tabulated loss."""
+    fname = DATA_PATH / "loss" / "low" / "ground.txt"
+    table = np.genfromtxt(fname)
+    freq = np.linspace(50, 120, 71)
+
+    expected = 1 - np.polyval(np.polyfit(table[:, 0], table[:, 1], 8), freq)
+    gl = loss.ground_loss(freq, fname)
+    np.testing.assert_allclose(gl, expected, rtol=0, atol=1e-12)
+
+
+def test_builtin_loss_file_missing_raises():
+    # There is no built-in antenna-loss file for the low-band instrument.
+    with pytest.raises(FileNotFoundError, match="No built-in antenna loss file"):
+        loss.antenna_loss(np.linspace(50, 100, 11), ":", instrument="low")
+
+    with pytest.raises(FileNotFoundError, match="ground_90deg"):
+        loss.ground_loss(
+            np.linspace(50, 100, 11), ":", instrument="low", configuration="90deg"
+        )
