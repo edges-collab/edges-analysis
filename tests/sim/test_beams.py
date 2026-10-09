@@ -673,3 +673,96 @@ def test_beam_from_wipld(tmp_path, az_antenna_axis):
         rotation_from_north=az_antenna_axis,
     )
     np.testing.assert_allclose(beam2.beam, beam.beam)
+
+
+def _reference_freq_fit(
+    beam: beams.Beam, model: mdl.Model, freq: np.ndarray | None, **fit_kwargs
+) -> np.ndarray:
+    """Fit ``model`` to each beam pixel with a ModelFit object, one by one."""
+    out = np.zeros((
+        len(beam.frequency) if freq is None else len(freq),
+        *beam.beam.shape[1:],
+    ))
+    cached_model = model.at(x=beam.frequency.to_value("MHz"))
+    for i, bm in enumerate(beam.beam.T):
+        for j, b in enumerate(bm):
+            out[:, j, i] = cached_model.fit(ydata=b, **fit_kwargs).evaluate(freq)
+    return out
+
+
+@pytest.fixture(scope="module")
+def coarse_feko_beam(beam) -> beams.Beam:
+    """A sub-sampled version of the FEKO low-band beam (to keep the tests fast)."""
+    return beams.Beam(
+        frequency=beam.frequency,
+        azimuth=beam.azimuth[::12],
+        elevation=beam.elevation[::6],
+        beam=beam.beam[:, ::6, ::12],
+    )
+
+
+@pytest.mark.parametrize(
+    "model",
+    [
+        mdl.Polynomial(n_terms=12),
+        mdl.Polynomial(n_terms=13, transform=mdl.ScaleTransform(scale=75.0)),
+        mdl.LinLog(n_terms=5),
+    ],
+)
+def test_smoothed_matches_per_pixel_fits(coarse_feko_beam, model):
+    """The smoothed beam is bit-for-bit the per-pixel ModelFit result."""
+    expected = _reference_freq_fit(coarse_feko_beam, model, None)
+    np.testing.assert_array_equal(coarse_feko_beam.smoothed(model).beam, expected)
+
+
+@pytest.mark.parametrize(
+    "model",
+    [
+        mdl.Polynomial(n_terms=13, transform=mdl.ScaleTransform(scale=75.0)),
+        mdl.Polynomial(n_terms=6),
+    ],
+)
+def test_at_freq_matches_per_pixel_fits(coarse_feko_beam, model):
+    """The frequency-interpolated beam is bit-for-bit the per-pixel ModelFit result."""
+    freq = np.linspace(52.3, 98.1, 17) * un.MHz
+    expected = _reference_freq_fit(coarse_feko_beam, model, freq.to_value("MHz"))
+    np.testing.assert_array_equal(coarse_feko_beam.at_freq(freq, model).beam, expected)
+
+
+def test_smoothed_matches_per_pixel_fits_random_beam():
+    """The fast fit agrees with the per-pixel fits for a random (noisy) beam."""
+    rng = np.random.default_rng(42)
+    freq = np.linspace(40, 120, 41) * un.MHz
+    raw = rng.uniform(0.5, 8.0, size=(41, 7, 9))
+    bm = beams.Beam(
+        frequency=freq,
+        azimuth=np.arange(0, 360, 40),
+        elevation=np.arange(0, 91, 15),
+        beam=raw,
+    )
+    model = mdl.Polynomial(n_terms=7)
+    np.testing.assert_array_equal(
+        bm.smoothed(model).beam, _reference_freq_fit(bm, model, None)
+    )
+
+
+@pytest.mark.parametrize(
+    ("fit_kwargs", "with_nan"),
+    [({"method": "qr"}, False), ({}, True)],
+)
+def test_freq_fit_general_path(coarse_feko_beam, fit_kwargs, with_nan):
+    """Non-default fit options and NaN beam values still use per-pixel ModelFits."""
+    raw = coarse_feko_beam.beam.copy()
+    if with_nan:
+        raw[3, 2, 4] = np.nan
+    bm = beams.Beam(
+        frequency=coarse_feko_beam.frequency,
+        azimuth=coarse_feko_beam.azimuth,
+        elevation=coarse_feko_beam.elevation,
+        beam=raw,
+    )
+    model = mdl.Polynomial(n_terms=6, transform=mdl.ScaleTransform(scale=75.0))
+    np.testing.assert_array_equal(
+        bm.smoothed(model, **fit_kwargs).beam,
+        _reference_freq_fit(bm, model, None, **fit_kwargs),
+    )
