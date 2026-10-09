@@ -236,13 +236,6 @@ def test_unnormalised_beam_is_resolution_independent():
     np.testing.assert_allclose(out[4], out[8], rtol=0.02)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "ground_loss is indexed by the frequency index after the f_low cut, so "
-        "it is misaligned with the beam frequencies; fix pending (result-changing)"
-    ),
-)
 def test_ground_loss_aligned_after_flow_cut():
     beam = Beam.uniform(f_low=50, f_high=58, delta_f=2)  # 50, 52, 54, 56 MHz
     sky = SkyModel.uniform_healpix(408.0, temperature=1000.0, nside=4)
@@ -263,13 +256,6 @@ def test_ground_loss_aligned_after_flow_cut():
     np.testing.assert_allclose(spectra.data[0, 0, 0], 0.5 * expected, rtol=1e-6)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "ground_loss is silently ignored when normalize_beam=False; "
-        "fix pending (result-changing)"
-    ),
-)
 def test_ground_loss_applied_when_unnormalised():
     beam = Beam.uniform(f_low=50, f_high=54, delta_f=2)
     sky = SkyModel.uniform_healpix(408.0, temperature=1000.0, nside=4)
@@ -285,6 +271,57 @@ def test_ground_loss_applied_when_unnormalised():
     with_loss = simulate_spectra(ground_loss=np.array([0.5, 0.5]), **kw)
     without = simulate_spectra(ground_loss=None, **kw)
     np.testing.assert_allclose(with_loss.data, 0.5 * without.data, rtol=1e-10)
+
+
+def test_ground_loss_already_in_band_is_accepted():
+    """A ground loss given only at the kept frequencies is used as is."""
+    beam = Beam.uniform(f_low=50, f_high=58, delta_f=2)  # 50, 52, 54, 56 MHz
+    sky = SkyModel.uniform_healpix(408.0, temperature=1000.0, nside=4)
+    kw = {
+        "beam": beam,
+        "lsts": Longitude([2.0] * un.hour),
+        "sky_model": sky,
+        "f_low": 52 * un.MHz,
+        "index_model": ConstantIndex(),
+        "use_astropy_azel": False,
+        **FAST,
+    }
+    full = simulate_spectra(ground_loss=np.array([1.0, 0.9, 0.8, 0.7]), **kw)
+    in_band = simulate_spectra(ground_loss=np.array([0.9, 0.8, 0.7]), **kw)
+    np.testing.assert_allclose(full.data, in_band.data, rtol=1e-12)
+
+
+@pytest.mark.parametrize("n", [2, 5])
+def test_ground_loss_wrong_length_raises(n):
+    beam = Beam.uniform(f_low=50, f_high=58, delta_f=2)  # 50, 52, 54, 56 MHz
+    sky = SkyModel.uniform_healpix(408.0, temperature=1000.0, nside=4)
+    with pytest.raises(ValueError, match="ground_loss must have shape"):
+        simulate_spectra(
+            beam=beam,
+            lsts=Longitude([2.0] * un.hour),
+            sky_model=sky,
+            ground_loss=np.ones(n),
+            f_low=52 * un.MHz,
+            **FAST,
+        )
+
+
+def test_generator_ground_loss_wrong_length_raises():
+    beam = Beam.uniform(f_low=50, f_high=54, delta_f=2)
+    gen = sky_convolution_generator(
+        lsts=Longitude([1.0] * un.hour),
+        beam=beam,
+        sky_model=SkyModel.uniform_healpix(408.0, nside=4),
+        index_model=ConstantIndex(),
+        normalize_beam=True,
+        beam_smoothing=False,
+        smoothing_model=None,
+        ground_loss=np.ones(3),
+        lst_progress=False,
+        freq_progress=False,
+    )
+    with pytest.raises(ValueError, match="ground_loss must have shape"):
+        next(gen)
 
 
 def test_generator_yields_independent_beam_arrays():

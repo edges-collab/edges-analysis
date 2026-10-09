@@ -25,6 +25,60 @@ from .beams import Beam
 REFERENCE_TIME = apt.Time("2014-01-01T09:39:42", location=const.edges_location)
 
 
+def _ground_loss_in_band(
+    ground_loss: np.ndarray | None,
+    beam: Beam,
+    f_low: FreqType = 0 * un.MHz,
+    f_high: FreqType = np.inf * un.MHz,
+) -> np.ndarray | None:
+    """Select the ground loss at the beam frequencies kept between f_low and f_high.
+
+    This uses the same frequency selection as :meth:`Beam.between_freqs`, so that the
+    output is aligned with ``beam.between_freqs(f_low, f_high).frequency``.
+
+    Parameters
+    ----------
+    ground_loss
+        The ground loss (as a multiplicative factor, i.e. one for no loss) at each
+        frequency of ``beam``, shape ``(Nfreq,)``. An array that already has one entry
+        per frequency kept between ``f_low`` and ``f_high`` (and not one per beam
+        frequency) is assumed to be aligned with the kept frequencies, and returned
+        as is.
+    beam
+        The beam, *before* restricting it to the frequency range.
+    f_low
+        Minimum frequency to keep.
+    f_high
+        Maximum frequency to keep.
+
+    Returns
+    -------
+    ground_loss
+        The ground loss at the kept frequencies, or None if ``ground_loss`` is None.
+
+    Raises
+    ------
+    ValueError
+        If ``ground_loss`` is not 1D with one entry per beam frequency (or per kept
+        frequency).
+    """
+    if ground_loss is None:
+        return None
+
+    ground_loss = np.asarray(ground_loss, dtype=float)
+    mask = (beam.frequency >= f_low) & (beam.frequency <= f_high)
+    if ground_loss.shape == (len(beam.frequency),):
+        return ground_loss[mask]
+    if ground_loss.shape == (np.sum(mask),):
+        return ground_loss
+
+    raise ValueError(
+        f"ground_loss must have shape ({len(beam.frequency)},), one entry per beam "
+        f"frequency (or ({np.sum(mask)},), one per frequency between f_low and "
+        f"f_high). Got shape {ground_loss.shape}."
+    )
+
+
 def sky_convolution_generator(
     lsts: Longitude,
     beam: Beam,
@@ -61,7 +115,9 @@ def sky_convolution_generator(
     lsts
         The LSTs at which to evaluate the convolution.
     ground_loss
-        An array of ground-loss values for the beam, shape (Nfreq,).
+        The ground loss (as a multiplicative factor, i.e. one for no loss) at each
+        frequency of ``beam``, shape ``(Nfreq,)``. It multiplies the beam, whether or
+        not the beam is normalised.
     beam
         The beam to convolve.
     sky_model
@@ -147,7 +203,12 @@ def sky_convolution_generator(
     if ground_loss is None:
         ground_gain = np.ones(len(beam.frequency))
     else:
-        ground_gain = np.asarray(ground_loss)
+        ground_gain = np.asarray(ground_loss, dtype=float)
+        if ground_gain.shape != (len(beam.frequency),):
+            raise ValueError(
+                f"ground_loss must have shape ({len(beam.frequency)},), one entry per "
+                f"beam frequency. Got shape {ground_gain.shape}."
+            )
 
     # Get the local times corresponding to the given LSTs
     times = gscrd.lsts_to_times(lsts, ref_time, location)
@@ -236,9 +297,11 @@ def sky_convolution_generator(
                 solid_angle = np.nansum(beam_above_horizon) / n_pix_tot_no_nan
                 beam_above_horizon *= ground_gain[freq_idx] / solid_angle
             else:
-                # Scale so that the mean over pixels below gives
-                # (1/4pi) * int B T dOmega, independent of the sky resolution.
-                beam_above_horizon *= n_pix_tot_no_nan / (4 * np.pi)
+                # Apply the ground loss, and scale so that the mean over pixels below
+                # gives (1/4pi) * int B T dOmega, independent of the sky resolution.
+                beam_above_horizon *= (
+                    ground_gain[freq_idx] * n_pix_tot_no_nan / (4 * np.pi)
+                )
 
             antenna_temperature_above_horizon = beam_above_horizon * sky_map
             yield (
@@ -293,7 +356,11 @@ def simulate_spectra(
     sky_model
         A sky model to use.
     ground_loss
-        An array of ground-loss values for the beam, shape (Nfreq,).
+        The ground loss (as a multiplicative factor, i.e. one for no loss) at each
+        frequency of ``beam``, shape ``(Nfreq,)``. It is restricted to the
+        frequencies between ``f_low`` and ``f_high`` along with the beam (an array
+        with one entry per kept frequency is also accepted). It multiplies the beam,
+        whether or not the beam is normalised.
     f_low
         Minimum frequency to keep in the simulation (frequencies otherwise defined by
         the beam).
@@ -340,6 +407,7 @@ def simulate_spectra(
         but only those between ``f_low`` and ``f_high`` are kept.
 
     """
+    ground_loss = _ground_loss_in_band(ground_loss, beam, f_low, f_high)
     beam = beam.between_freqs(f_low, f_high)
 
     antenna_temperature_above_horizon = np.zeros((len(lsts), len(beam.frequency)))

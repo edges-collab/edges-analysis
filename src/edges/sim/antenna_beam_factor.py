@@ -16,7 +16,7 @@ from edges.sim import sky_models
 from edges.sim.beams import Beam
 
 from .. import types as tp
-from .simulate import sky_convolution_generator
+from .simulate import _ground_loss_in_band, sky_convolution_generator
 
 
 @hickleable
@@ -51,12 +51,13 @@ class BeamFactor:
         at the reference frequency) if ``sky_at_reference_frequency`` is True, and
         shape ``(nlst, nfreq)`` (with the sky at each frequency) otherwise.
     loss_fraction: np.ndarray
-        One minus the mean beam over the whole sky, ``1 - (1/4pi) int B dOmega``
-        (with the beam zero below the horizon and at blank sky pixels), at each LST
-        and frequency, as computed by :func:`compute_antenna_beam_factor`. When the
-        beam is normalised, it is instead simply ``1 - ground_loss`` (i.e. zero if
-        no ground loss was given). Note that it is *not* the fraction of the sky
-        signal that is lost below the horizon.
+        One minus the ground loss times the mean beam over the whole sky,
+        ``1 - ground_loss * (1/4pi) int B dOmega`` (with the beam zero below the
+        horizon and at blank sky pixels), at each LST and frequency, as computed by
+        :func:`compute_antenna_beam_factor`. When the beam is normalised, it is
+        instead simply ``1 - ground_loss`` (i.e. zero if no ground loss was given).
+        Note that it is *not* the fraction of the sky signal that is lost below the
+        horizon.
     meta
         A dictionary of metadata.
     """
@@ -315,7 +316,13 @@ def compute_antenna_beam_factor(
     sky_model
         A sky model to use.
     ground_loss
-        An array of ground-loss values for the beam, shape (Nfreq,).
+        The ground loss (as a multiplicative factor, i.e. one for no loss) at each
+        frequency of ``beam``, shape ``(Nfreq,)``. It is restricted to the
+        frequencies between ``f_low`` and ``f_high`` along with the beam (an array
+        with one entry per kept frequency is also accepted). It multiplies the beam
+        and enters ``loss_fraction``. With ``normalize_beam=True`` it also enters the
+        beam factor (as ``ground_loss(nu) / ground_loss(nu_ref)``); with
+        ``normalize_beam=False`` it cancels in the beam factor.
     f_low
         Minimum frequency to keep in the simulation (frequencies otherwise defined by
         the beam).
@@ -364,6 +371,7 @@ def compute_antenna_beam_factor(
     -------
     beam_factor : :class`BeamFactor` instance
     """
+    ground_loss = _ground_loss_in_band(ground_loss, beam, f_low, f_high)
     beam = beam.between_freqs(f_low, f_high)
 
     if lsts is None:

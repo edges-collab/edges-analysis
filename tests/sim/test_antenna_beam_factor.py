@@ -176,6 +176,44 @@ def test_unnormalised_loss_fraction_is_one_minus_mean_beam(nside):
     np.testing.assert_allclose(bf.antenna_temp / bf.antenna_temp_ref[:, None], 1.0)
 
 
+@pytest.mark.parametrize("normalize_beam", [True, False])
+def test_ground_loss_aligned_in_beam_factor(normalize_beam):
+    """The ground loss is cut with the beam, and multiplies the beam.
+
+    For a normalised beam, it enters the beam factor as g(nu)/g(nu_ref); for an
+    unnormalised beam it cancels in the beam factor. Either way it enters the loss
+    fraction.
+    """
+    beam = Beam.uniform(f_low=50, f_high=58, delta_f=2, delta_az=2, delta_el=2)
+    sky = SkyModel.uniform_healpix(408.0, temperature=1000.0, nside=4)
+    kw = {
+        "beam": beam,
+        "sky_model": sky,
+        "lsts": [2.0],
+        "f_low": 52 * un.MHz,
+        "reference_frequency": 54 * un.MHz,
+        "normalize_beam": normalize_beam,
+        "use_astropy_azel": False,
+        **FAST,
+    }
+    ground_loss = np.array([1.0, 0.9, 0.8, 0.7])  # at 50, 52, 54, 56 MHz
+    with_loss = compute_antenna_beam_factor(ground_loss=ground_loss, **kw)
+    without = compute_antenna_beam_factor(**kw)
+
+    np.testing.assert_allclose(with_loss.frequencies, [52, 54, 56])
+    gain_ratio = ground_loss[1:] / 0.8 if normalize_beam else 1.0
+    np.testing.assert_allclose(
+        with_loss.antenna_temp / with_loss.antenna_temp_ref[:, None],
+        gain_ratio * without.antenna_temp / without.antenna_temp_ref[:, None],
+        rtol=1e-12,
+    )
+    np.testing.assert_allclose(
+        1 - with_loss.loss_fraction,
+        ground_loss[1:] * (1 - without.loss_fraction),
+        rtol=1e-12,
+    )
+
+
 def _square_bf(lsts: np.ndarray, *, with_extras: bool = True) -> BeamFactor:
     """A BeamFactor with nfreq == nlst, varying smoothly in LST and frequency."""
     n = len(lsts)
