@@ -176,7 +176,9 @@ class TestACQPlot7AMoon:
         )
 
         assert meanspec.nfreqs == FREQS.size // 8
-        assert np.isclose(meanspec.nsamples.mean(), NTIME * 8, rtol=0.08)
+        # Effective nsamples of the Gaussian-weighted mean, (sum k)^2 / sum(k^2),
+        # is 12.0705 per spectrum for smooth=8 in the band interior.
+        assert np.isclose(np.median(meanspec.nsamples), NTIME * 12.0705, rtol=1e-3)
         np.testing.assert_allclose(meanspec.data, 1300)
 
     def test_params_and_kwargs(self, unity_acq):
