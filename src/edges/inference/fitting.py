@@ -1,8 +1,5 @@
 """Provides extra routines for fitting that are not in yabf."""
 
-from copy import copy
-
-import attrs
 import numpy as np
 from scipy import linalg, stats
 from scipy.optimize import dual_annealing, minimize
@@ -10,32 +7,6 @@ from yabf import Component
 
 from edges.modeling import FixedLinearModel
 from edges.modeling.data_transforms import IdentityTransform
-
-
-@attrs.define(frozen=True)
-class _GLSFit:
-    """The generalised least-squares fit of a linear model (correlated noise).
-
-    Provides the subset of the :class:`edges.modeling.ModelFit` interface used by
-    :class:`SemiLinearFit`.
-    """
-
-    model: FixedLinearModel
-    ydata: np.ndarray
-
-    @property
-    def model_parameters(self) -> np.ndarray:
-        """The best-fit model parameters."""
-        return copy(self.model.parameters)
-
-    def evaluate(self, x: np.ndarray | None = None) -> np.ndarray:
-        """Evaluate the best-fit model (by default at the data co-ordinates)."""
-        return self.model(x=x)
-
-    @property
-    def residual(self) -> np.ndarray:
-        """Residuals of the data to the best-fit model."""
-        return self.ydata - self.evaluate()
 
 
 class SemiLinearFit:
@@ -106,7 +77,7 @@ class SemiLinearFit:
             self._setup_covariance(np.asarray(sigma, dtype=float))
 
     def _setup_covariance(self, cov: np.ndarray):
-        """Validate the covariance and precompute the GLS normal equations."""
+        """Validate the covariance and precompute its inverse (the GLS weights)."""
         nfreq = np.shape(self.spectrum)[-1]
         if cov.shape != (nfreq, nfreq):
             raise ValueError(
@@ -121,13 +92,13 @@ class SemiLinearFit:
                 "transform."
             )
         try:
-            self._cov_cho = linalg.cho_factor(cov, lower=True)
+            cov_cho = linalg.cho_factor(cov, lower=True)
         except linalg.LinAlgError as e:
             raise ValueError("A covariance sigma must be positive definite.") from e
 
-        basis = self.fg.basis.T  # (nfreq, nterms)
-        self._cinv_basis = linalg.cho_solve(self._cov_cho, basis)
-        self._normal_cho = linalg.cho_factor(basis.T @ self._cinv_basis, lower=True)
+        # The FG fit is a generalised least-squares fit with weights = C^-1.
+        cinv = linalg.cho_solve(cov_cho, np.eye(nfreq))
+        self._cov_inverse = (cinv + cinv.T) / 2
         self._mvn = stats.multivariate_normal(mean=np.zeros(nfreq), cov=cov)
 
     def get_eor(self, p):
@@ -139,8 +110,7 @@ class SemiLinearFit:
         eor = self.get_eor(p)
         resid = self.spectrum - eor
         if self._is_cov:
-            params = linalg.cho_solve(self._normal_cho, self._cinv_basis.T @ resid)
-            return _GLSFit(model=self.fg.with_params(params), ydata=resid)
+            return self.fg.fit(ydata=resid, weights=self._cov_inverse, method="qr")
         return self.fg.fit(
             ydata=resid,
             weights=1 / self.sigma**2 if hasattr(self.sigma, "__len__") else 1.0,

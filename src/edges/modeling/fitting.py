@@ -47,6 +47,12 @@ class ModelFit:
         ``None`` means uniform weights. Weights must be finite and non-negative; a
         weight of zero excludes the point from the fit.
 
+        For correlated noise, ``weights`` may instead be an ``(n, n)`` matrix: the
+        *inverse covariance* of the data. The fit is then a generalised least-squares
+        fit, minimising :math:`r^T W r`, and the chi^2 and Hessian use the full
+        matrix. The matrix must be symmetric and positive definite, all the data must
+        be finite, and the 'qrd-c' method is not supported.
+
         .. warning:: The default ``"lstsq"`` method currently applies the weights to
            both the basis and the data before solving, i.e. it minimises
            :math:`\sum w^2 r^2` rather than :math:`\sum w r^2` (it treats ``w``
@@ -86,16 +92,50 @@ class ModelFit:
 
     @weights.validator
     def _weights_vld(self, att, val):
-        if isinstance(val, np.ndarray):
-            assert val.shape == self.model.x.shape
-
         if not np.all(np.isfinite(val)):
             raise ValueError(
                 "Weights must be finite (got NaN or inf). To exclude a data point, "
                 "give it a weight of zero (or set its data to NaN)."
             )
-        if np.any(np.asarray(val) < 0):
-            raise ValueError("Weights must be non-negative.")
+
+        ndim = np.ndim(val)
+        if ndim == 2:
+            self._validate_weight_matrix(val)
+        elif ndim > 2:
+            raise ValueError(
+                "Weights must be a scalar, a 1D array or a 2D (inverse-covariance) "
+                f"matrix; got an array with {ndim} dimensions."
+            )
+        else:
+            if isinstance(val, np.ndarray):
+                assert val.shape == self.model.x.shape
+            if np.any(np.asarray(val) < 0):
+                raise ValueError("Weights must be non-negative.")
+
+    def _validate_weight_matrix(self, val: np.ndarray):
+        """Check that a 2D weight matrix is a valid inverse covariance for the data."""
+        n = self.model.x.size
+        if val.shape != (n, n):
+            raise ValueError(
+                f"A weight matrix must have shape ({n}, {n}); got {val.shape}."
+            )
+        if not np.allclose(val, val.T):
+            raise ValueError("A weight matrix must be symmetric.")
+        try:
+            np.linalg.cholesky(val)
+        except np.linalg.LinAlgError as e:
+            raise ValueError("A weight matrix must be positive definite.") from e
+        if not np.all(np.isfinite(self.ydata)):
+            raise ValueError(
+                "A weight matrix cannot be used with non-finite data: masking points "
+                "requires the covariance of the remaining data. Remove the points (and "
+                "the corresponding rows/columns of the covariance) before inverting."
+            )
+
+    @property
+    def _has_weight_matrix(self) -> bool:
+        """Whether the weights are a full (inverse-covariance) matrix."""
+        return np.ndim(self.weights) == 2
 
     @cached_property
     def _mask(self) -> np.ndarray:
@@ -132,6 +172,8 @@ class ModelFit:
         if self.method == "lstsq":
             if np.isscalar(self.weights):
                 pars = self._ls(self.model.basis[:, mask], self.ydata[mask])
+            elif self._has_weight_matrix:
+                pars = self._gls_lstsq(self.model.basis, self.ydata, w)
             else:
                 pars = self._wls(self.model.basis[:, mask], self.ydata[mask], w=w)
         elif self.method == "qr":
@@ -157,8 +199,9 @@ class ModelFit:
         elif np.ndim(w) == 1:
             w = np.diag(w)
 
-        # sqrt of weight matrix
-        sqrtw = np.sqrt(w)
+        # sqrt of weight matrix. For a full matrix w = L L^T, use L^T so that
+        # |L^T r|^2 = r^T w r (an elementwise sqrt is only valid when w is diagonal).
+        sqrtw = np.linalg.cholesky(w).T if self._has_weight_matrix else np.sqrt(w)
 
         # A and ydata "tilde"
         sqrt_wa = np.dot(sqrtw, basis.T)
@@ -217,6 +260,15 @@ class ModelFit:
         a, b = _get_a_and_b(basis, y, w)
         _, bb = _c_qrd(a, b)
         return bb
+
+    def _gls_lstsq(self, van, y, w):
+        """Generalised least squares with a full weight (inverse-covariance) matrix.
+
+        The system is whitened with the Cholesky factor of ``w`` (``w = L L^T``) and
+        solved with ``np.linalg.lstsq``.
+        """
+        lt = np.linalg.cholesky(w).T
+        return np.linalg.lstsq(lt @ van.T, lt @ y, rcond=None)[0]
 
     def _wls(self, van, y, w):
         """Ripped straight outta numpy for speed.
@@ -290,6 +342,8 @@ class ModelFit:
     def weighted_chi2(self) -> float:
         """The chi^2 of the weighted fit (over the finite data points)."""
         resid = self._apply_mask(self.residual)
+        if self._has_weight_matrix:
+            return resid @ self.weights @ resid
         return np.dot(resid.T, self._masked_weights * resid)
 
     @cached_property
@@ -300,6 +354,11 @@ class ModelFit:
     @cached_property
     def weighted_rms(self) -> float:
         """The weighted root-mean-square of the residuals."""
+        if self._has_weight_matrix:
+            raise NotImplementedError(
+                "weighted_rms is not defined for a full weight matrix; use "
+                "weighted_chi2 or reduced_weighted_chi2."
+            )
         return np.sqrt(self.weighted_chi2) / np.sum(self._masked_weights)
 
     @cached_property
@@ -307,6 +366,8 @@ class ModelFit:
         """The Hessian matrix of the linear parameters (over the finite data)."""
         b = self._apply_mask(self.model.basis)
         w = self._masked_weights
+        if self._has_weight_matrix:
+            return b @ w @ b.T
         return (b * w).dot(b.T)
 
     @cached_property

@@ -313,3 +313,112 @@ def test_weights_list_converted_to_array():
     fit = fm.fit(ydata=x.copy(), weights=[1, 2, 3, 4, 5])
     assert isinstance(fit.weights, np.ndarray)
     assert fit.weights.dtype == float
+
+
+# ---------------------------------------------------------------------------------
+# Generalised least squares: a full (n, n) inverse-covariance weight matrix.
+# ---------------------------------------------------------------------------------
+GLS_METHODS = ("lstsq", "qr", "alan-qrd")
+
+
+def _gls_setup(n: int = 50, seed: int = 11):
+    """A polynomial model with correlated, heteroscedastic Gaussian noise."""
+    x = np.linspace(50, 100, n)
+    fm = mdl.Polynomial(n_terms=4, transform=mdl.UnitTransform(range=(50, 100))).at(x=x)
+    sigma = np.linspace(0.5, 2.0, n)
+    cov = np.outer(sigma, sigma) * np.exp(-np.abs(x[:, None] - x[None, :]) / 3.0)
+    truth = np.array([1.0, 2.0, -3.0, 0.5])
+    rng = np.random.default_rng(seed)
+    y = fm(parameters=truth) + rng.multivariate_normal(np.zeros(n), cov)
+    return fm, cov, np.linalg.inv(cov), y, truth
+
+
+@pytest.mark.parametrize("method", GLS_METHODS)
+def test_gls_matches_explicit_formula(method: str):
+    fm, _, winv, y, _ = _gls_setup()
+    a = fm.basis
+    expected = np.linalg.solve(a @ winv @ a.T, a @ winv @ y)
+    fit = mdl.ModelFit(fm, ydata=y, weights=winv, method=method)
+    np.testing.assert_allclose(fit.model_parameters, expected, rtol=1e-8)
+    # The residual is W-orthogonal to the basis.
+    np.testing.assert_allclose(a @ winv @ fit.residual, 0, atol=1e-7)
+
+
+@pytest.mark.parametrize("method", ["qr", "alan-qrd"])
+def test_diagonal_weight_matrix_equals_1d_weights(method: str):
+    fm, _, _, y, _ = _gls_setup()
+    w = np.linspace(0.2, 3.0, y.size)
+    fit1d = mdl.ModelFit(fm, ydata=y, weights=w, method=method)
+    fit2d = mdl.ModelFit(fm, ydata=y, weights=np.diag(w), method=method)
+    np.testing.assert_allclose(
+        fit2d.model_parameters, fit1d.model_parameters, rtol=1e-10
+    )
+    np.testing.assert_allclose(fit2d.weighted_chi2, fit1d.weighted_chi2, rtol=1e-10)
+    np.testing.assert_allclose(fit2d.hessian, fit1d.hessian, rtol=1e-10)
+
+
+def test_gls_chi2_and_hessian():
+    fm, _, winv, y, _ = _gls_setup()
+    fit = mdl.ModelFit(fm, ydata=y, weights=winv, method="qr")
+    r = fit.residual
+    np.testing.assert_allclose(fit.weighted_chi2, r @ winv @ r, rtol=1e-12)
+    a = fm.basis
+    np.testing.assert_allclose(fit.hessian, a @ winv @ a.T, rtol=1e-12)
+
+
+def test_gls_parameter_covariance_matches_monte_carlo():
+    fm, cov, winv, _, truth = _gls_setup()
+    rng = np.random.default_rng(3)
+    model = fm(parameters=truth)
+    params = np.array([
+        mdl.ModelFit(
+            fm,
+            ydata=model + rng.multivariate_normal(np.zeros(model.size), cov),
+            weights=winv,
+            method="qr",
+        ).model_parameters
+        for _ in range(2000)
+    ])
+    predicted = mdl.ModelFit(fm, ydata=model, weights=winv, method="qr")
+    np.testing.assert_allclose(
+        np.std(params, axis=0),
+        np.sqrt(np.diag(predicted.parameter_covariance)),
+        rtol=0.08,
+    )
+
+
+@pytest.mark.parametrize(
+    ("weights", "match"),
+    [
+        (np.eye(49), "shape"),
+        (np.triu(np.ones((50, 50))) + np.eye(50), "symmetric"),
+        (-np.eye(50), "positive definite"),
+        (np.full((50, 50), np.nan), "finite"),
+        (np.ones((2, 50, 50)), "scalar, a 1D array or a 2D"),
+    ],
+)
+def test_bad_weight_matrix_raises(weights, match):
+    fm, _, _, y, _ = _gls_setup()
+    with pytest.raises(ValueError, match=match):
+        mdl.ModelFit(fm, ydata=y, weights=weights, method="qr")
+
+
+def test_weight_matrix_not_supported_by_qrd_c():
+    fm, _, winv, y, _ = _gls_setup()
+    with pytest.raises(ValueError, match="qrd_c"):
+        _ = mdl.ModelFit(fm, ydata=y, weights=winv, method="qrd-c").model_parameters
+
+
+def test_weight_matrix_with_nan_data_raises():
+    fm, _, winv, y, _ = _gls_setup()
+    y = y.copy()
+    y[3] = np.nan
+    with pytest.raises(ValueError, match="non-finite data"):
+        mdl.ModelFit(fm, ydata=y, weights=winv, method="qr")
+
+
+def test_weight_matrix_weighted_rms_not_defined():
+    fm, _, winv, y, _ = _gls_setup()
+    fit = mdl.ModelFit(fm, ydata=y, weights=winv, method="qr")
+    with pytest.raises(NotImplementedError, match="weighted_rms"):
+        _ = fit.weighted_rms
