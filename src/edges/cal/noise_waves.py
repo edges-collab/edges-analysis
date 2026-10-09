@@ -747,9 +747,21 @@ class NoiseWaves:
         return out[indx * len(self.freq) : (indx + 1) * len(self.freq)]
 
     def get_fitted(
-        self, data: np.ndarray, weights: np.ndarray | None = None, **kwargs
+        self, data: np.ndarray, weights: np.ndarray | float | None = 1.0, **kwargs
     ) -> Self:
-        """Get a new noise wave model with fitted parameters."""
+        """Get a new noise wave model with fitted parameters.
+
+        Parameters
+        ----------
+        data
+            The data to fit, concatenated over input sources.
+        weights
+            The weights of the data. None means uniform weights.
+        kwargs
+            Passed through to the fit (e.g. ``method``).
+        """
+        if weights is None:
+            weights = 1.0
         fit = self.linear_model.fit(ydata=data, weights=weights, **kwargs)
         return attrs.evolve(self, parameters=fit.model_parameters)
 

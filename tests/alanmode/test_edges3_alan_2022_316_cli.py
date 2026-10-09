@@ -26,23 +26,16 @@ def alandata(alanmode_data_path: Path) -> Path:
     return alanmode_data_path / "edges3-2022-316-alan"
 
 
-@pytest.fixture(scope="module")
-def edges3_2022_316(tmp_path_factory, alanmode_data_path):
-    out = tmp_path_factory.mktemp("day316")
-
+def _datadir(alanmode_data_path: Path) -> Path:
     datadir = Path("/data5/edges/data/EDGES3_data/MRO")
     if not datadir.exists():
         # We're not on enterprise, so we can only do the S11 stuff.
         datadir = alanmode_data_path / "edges3-2022-316-raw"
+    return datadir
 
-    on_enterprise = "/data5/" in str(datadir)
 
-    if not on_enterprise:
-        avg_spec_files = sorted(datadir.glob("sp*.txt"))
-        for fl in avg_spec_files:
-            shutil.copy(fl, out / fl.name)
-
-    amode(
+def _cal_edges3_command(out: Path, datadir: Path) -> str:
+    return (
         "cal-edges3 "
         f"--out '{out.absolute()}' "
         f"--data.datadir '{datadir}' "
@@ -73,7 +66,36 @@ def edges3_2022_316(tmp_path_factory, alanmode_data_path):
         "--cal.nfit2 27 "
         "--no-plot "
     )
+
+
+@pytest.fixture(scope="module")
+def edges3_2022_316(tmp_path_factory, alanmode_data_path):
+    out = tmp_path_factory.mktemp("day316")
+
+    datadir = _datadir(alanmode_data_path)
+    on_enterprise = "/data5/" in str(datadir)
+
+    if not on_enterprise:
+        avg_spec_files = sorted(datadir.glob("sp*.txt"))
+        for fl in avg_spec_files:
+            shutil.copy(fl, out / fl.name)
+
+    amode(_cal_edges3_command(out, datadir))
     return out
+
+
+def test_no_redo_cal_second_run(edges3_2022_316: Path, alanmode_data_path: Path):
+    """Regression test: a second run with --no-redo-cal used to crash."""
+    specal = edges3_2022_316 / "specal.txt"
+    mtime = specal.stat().st_mtime_ns
+
+    amode(
+        _cal_edges3_command(edges3_2022_316, _datadir(alanmode_data_path))
+        + "--no-redo-cal"
+    )
+
+    # The existing calibration was left alone.
+    assert specal.stat().st_mtime_ns == mtime
 
 
 @pytest.mark.parametrize("load", am.LOADMAP.keys())

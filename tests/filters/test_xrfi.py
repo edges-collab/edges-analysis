@@ -7,6 +7,7 @@ import pytest
 import yaml
 from pytest_cases import fixture_ref as fxref
 from pytest_cases import parametrize
+from scipy.stats import norm
 
 from edges import modeling as mdl
 from edges.filters import xrfi
@@ -331,3 +332,324 @@ class TestXRFIIterativeSlidingWindow:
         print(sky)
 
         assert len(wrong) == 0
+
+
+# ---------------------------------------------------------------------------
+# Statistical tests of the xRFI noise model and flagging.
+# ---------------------------------------------------------------------------
+NSTAT = 10000
+
+
+@pytest.fixture(scope="module")
+def stat_freqs():
+    return np.linspace(50, 150, NSTAT)
+
+
+def _poly_modeler(n_terms: int = 3) -> xrfi.LinearModeler:
+    return xrfi.LinearModeler(model=mdl.Polynomial(n_terms=n_terms))
+
+
+class TestStdModelers:
+    """Each std modeler should return ~1 when fed unit-variance Gaussian residuals."""
+
+    @pytest.mark.parametrize(
+        "modeler",
+        [_poly_modeler(3), xrfi.FilterModeler.gaussian(size=64)],
+        ids=["linear", "gaussian-filter"],
+    )
+    def test_base_get_std_unit_noise(self, modeler, stat_freqs):
+        rng = np.random.default_rng(1234)
+        resids = rng.normal(size=NSTAT)
+        model = modeler.init_model(modeler.set_params(0), stat_freqs)
+        std = modeler.get_std(model, resids, np.ones(NSTAT))
+        assert np.mean(std) == pytest.approx(1.0, abs=0.05)
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            "MedianFilterModeler.get_std divides sqrt(median(r^2)) by 0.456, "
+            "but median(chi2_1)=0.4549 belongs inside the sqrt, so the std is ~1.48x "
+            "too large; fix pending (result-changing)"
+        ),
+    )
+    def test_median_get_std_unit_noise(self):
+        rng = np.random.default_rng(1234)
+        resids = rng.normal(size=NSTAT)
+        std = xrfi.MedianFilterModeler(size=64).get_std(None, resids, np.ones(NSTAT))
+        assert np.mean(std) == pytest.approx(1.0, abs=0.05)
+
+
+def _false_positive_check(std_modeler, freqs, threshold: float = 2.5):
+    """Run xrfi_iterative on pure noise and check the false-positive fraction.
+
+    xRFI flags only *positive* outliers, so the expected false-positive rate is the
+    one-sided Gaussian tail probability, ``norm.sf(threshold)``.
+    """
+    rng = np.random.default_rng(2024)
+    data = 10 + rng.normal(size=freqs.size)
+    flags, info = xrfi.xrfi_iterative(
+        data,
+        freqs=freqs,
+        data_modeler=_poly_modeler(3),
+        std_modeler=std_modeler,
+        threshold_setter=lambda i: threshold,
+        max_iter=20,
+    )
+    assert info.n_iters < 20
+    p = norm.sf(threshold)
+    tol = 4 * np.sqrt(p * (1 - p) / freqs.size)
+    assert abs(np.mean(flags) - p) < tol
+
+
+class TestFalsePositiveRate:
+    def test_linear_std_modeler(self, stat_freqs):
+        _false_positive_check(_poly_modeler(3), stat_freqs)
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            "MedianFilterModeler over-estimates the std by ~1.48x, so far too "
+            "few noise channels are flagged; fix pending (result-changing)"
+        ),
+    )
+    def test_median_std_modeler(self, stat_freqs):
+        _false_positive_check(xrfi.MedianFilterModeler(size=1001), stat_freqs)
+
+
+class TestSingleSpike:
+    """A single huge spike in pure noise should be the only flagged channel."""
+
+    def _run(self, spike: float):
+        n = 1000
+        freqs = np.linspace(50, 150, n)
+        rng = np.random.default_rng(7)
+        data = 10 + rng.normal(size=n)
+        data[400] += spike
+        return xrfi.xrfi_iterative(
+            data,
+            freqs=freqs,
+            data_modeler=_poly_modeler(3),
+            std_modeler=_poly_modeler(3),
+            threshold_setter=lambda i: 5.0,
+        )[0]
+
+    def test_positive_spike_flagged(self):
+        flags = self._run(100.0)
+        assert flags[400]
+        assert np.sum(flags) == 1
+
+    def test_negative_spike_not_flagged(self):
+        # xRFI is deliberately one-sided: only positive outliers are flagged.
+        flags = self._run(-100.0)
+        assert not np.any(flags)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "The convergence check compares the model params to the element just "
+        "appended, so term_increase never takes effect and the fit stops at "
+        "min_terms; fix pending (result-changing)"
+    ),
+)
+def test_term_increase_reaches_max_terms():
+    n = 500
+    freqs = np.linspace(50, 150, n)
+    rng = np.random.default_rng(0)
+    data = 1000 * (freqs / 75) ** -2.5 + rng.normal(scale=0.01, size=n)
+    _, info = xrfi.xrfi_iterative(
+        data,
+        freqs=freqs,
+        data_modeler=xrfi.LinearModeler(
+            model=mdl.LinLog(n_terms=5), min_terms=3, max_terms=5, term_increase=1
+        ),
+        std_modeler=_poly_modeler(2),
+        threshold_setter=lambda i: 5.0,
+    )
+    assert info.model_params[-1]["nterms"] == 5
+
+
+# ---------------------------------------------------------------------------
+# Input mutation, signatures and info containers.
+# ---------------------------------------------------------------------------
+def _noisy_spectrum(n: int = 200, seed: int = 0):
+    freqs = np.linspace(50, 150, n)
+    rng = np.random.default_rng(seed)
+    data = 100 + 3 * (freqs / 75) ** 2 + rng.normal(size=n)
+    data[50] += 1000
+    return freqs, data
+
+
+class TestNoInputMutation:
+    """xRFI functions must not modify the arrays they are given."""
+
+    def _check(self, fnc, **kwargs):
+        copies = {k: v.copy() for k, v in kwargs.items() if isinstance(v, np.ndarray)}
+        fnc(**kwargs)
+        for k, v in copies.items():
+            np.testing.assert_array_equal(kwargs[k], v, err_msg=f"{k} was mutated")
+
+    def test_iterative(self):
+        freqs, data = _noisy_spectrum()
+        flags = np.zeros(data.size, dtype=bool)
+        flags[10] = True
+        weights = np.ones(data.size)
+        weights[20] = 0
+        self._check(
+            xrfi.xrfi_iterative,
+            data=data,
+            freqs=freqs,
+            flags=flags,
+            weights=weights,
+            data_modeler=_poly_modeler(5),
+            std_modeler=_poly_modeler(2),
+        )
+
+    def test_sliding_window(self):
+        freqs, data = _noisy_spectrum()
+        flags = np.zeros(data.size, dtype=bool)
+        flags[10] = True
+        weights = np.ones(data.size)
+        weights[20] = 0
+        self._check(
+            xrfi.xrfi_iterative_sliding_window,
+            spectrum=data,
+            freqs=freqs,
+            model=mdl.Polynomial(n_terms=5),
+            flags=flags,
+            weights=weights,
+        )
+
+    def test_explicit(self):
+        freqs, data = _noisy_spectrum()
+        flags = np.zeros(data.size, dtype=bool)
+        self._check(
+            xrfi.xrfi_explicit,
+            spectrum=data,
+            freq=freqs,
+            flags=flags,
+            extra_rfi=[(60, 70)],
+        )
+
+    def test_watershed(self):
+        flags = np.zeros((4, 10), dtype=bool)
+        flags[0, :8] = True
+        weights = np.ones((4, 10))
+        weights[1, 3] = 0
+        self._check(xrfi.xrfi_watershed, flags=flags, weights=weights)
+
+
+class TestWatershed1D:
+    def test_mostly_flagged(self):
+        flags = np.zeros(10, dtype=bool)
+        flags[:6] = True
+        out, _ = xrfi.xrfi_watershed(flags=flags, tol=0.5)
+        assert out.shape == (10,)
+        assert np.all(out)
+
+    def test_few_flags(self):
+        flags = np.zeros(10, dtype=bool)
+        flags[:2] = True
+        out, _ = xrfi.xrfi_watershed(flags=flags, tol=0.5)
+        np.testing.assert_array_equal(out, flags)
+
+    def test_weights_count_as_flags(self):
+        weights = np.ones(10)
+        weights[:6] = 0
+        out, _ = xrfi.xrfi_watershed(flags=np.zeros(10, dtype=bool), weights=weights)
+        assert np.all(out)
+
+
+class TestXRFIExplicitSignature:
+    def test_freqs_alias(self, freq):
+        a = xrfi.xrfi_explicit(freq=freq, extra_rfi=[(60, 70)])
+        b = xrfi.xrfi_explicit(freqs=freq, extra_rfi=[(60, 70)])
+        np.testing.assert_array_equal(a, b)
+
+    def test_both_freq_and_freqs(self, freq):
+        with pytest.raises(ValueError, match="only one of"):
+            xrfi.xrfi_explicit(freq=freq, freqs=freq, extra_rfi=[(60, 70)])
+
+    def test_no_freqs(self):
+        with pytest.raises(ValueError, match="must provide"):
+            xrfi.xrfi_explicit(extra_rfi=[(60, 70)])
+
+    def test_accepts_weights(self, freq, sky_pl_1d):
+        flags = xrfi.xrfi_explicit(
+            sky_pl_1d, freqs=freq, weights=np.ones_like(sky_pl_1d), extra_rfi=[(60, 70)]
+        )
+        assert flags.shape == sky_pl_1d.shape
+
+    def test_range_ends_are_exclusive(self):
+        freqs = np.arange(50.0, 80.0, 1.0)
+        flags = xrfi.xrfi_explicit(freqs=freqs, extra_rfi=[(60, 70)])
+        np.testing.assert_array_equal(freqs[flags], np.arange(61.0, 70.0, 1.0))
+
+    def test_2d(self, freq):
+        spec = np.ones((3, freq.size))
+        flags = xrfi.xrfi_explicit(spec, freqs=freq, extra_rfi=[(60, 70)])
+        assert flags.shape == spec.shape
+        assert np.all(flags[:, (freq > 60) & (freq < 70)])
+
+
+class TestInfoContainers:
+    def _two_infos(self):
+        out = []
+        for seed in (1, 2):
+            freqs, data = _noisy_spectrum(n=150, seed=seed)
+            out.append(
+                xrfi.xrfi_iterative(
+                    data,
+                    freqs=freqs,
+                    data_modeler=_poly_modeler(5),
+                    std_modeler=_poly_modeler(2),
+                    threshold_setter=lambda i: 4.0,
+                )[1]
+            )
+        return out
+
+    def test_iterative_get_std_model(self):
+        info = self._two_infos()[0]
+        np.testing.assert_array_equal(info.get_std_model(), info.stds[-1])
+        np.testing.assert_array_equal(info.get_std_model(0), info.stds[0])
+
+    def test_container(self):
+        infos = self._two_infos()
+        cont = xrfi.ModelFilterInfoContainer()
+        for info in infos:
+            cont = cont.append(info)
+
+        ntot = sum(info.data.size for info in infos)
+        n_iters = max(info.n_iters for info in infos)
+        assert cont.n_iters == n_iters
+        assert cont.x.shape == (ntot,)
+
+        assert len(cont.flags) == n_iters
+        assert all(f.shape == (ntot,) for f in cont.flags)
+        np.testing.assert_array_equal(
+            cont.flags[-1], np.concatenate([info.flags[-1] for info in infos])
+        )
+
+        assert len(cont.stds) == n_iters
+        assert all(s.shape == (ntot,) for s in cont.stds)
+
+        std_model = cont.get_std_model()
+        np.testing.assert_array_equal(
+            std_model, np.concatenate([info.stds[-1] for info in infos])
+        )
+        np.testing.assert_array_equal(cont.get_absres_model(), std_model)
+
+        assert cont.get_model().shape == (ntot,)
+        assert cont.get_residual().shape == (ntot,)
+        assert len(cont.thresholds) == n_iters
+
+    def test_sliding_window_info_lengths(self):
+        freqs, data = _noisy_spectrum()
+        _, info = xrfi.xrfi_iterative_sliding_window(
+            data, freqs=freqs, model=mdl.Polynomial(n_terms=5), threshold=3.0
+        )
+        assert info.n_iters == len(info.data_models)
+        assert info.n_iters >= 1
+        assert len(info.thresholds) == info.n_iters
+        assert len(info.stds) == info.n_iters
+        assert len(info.flags) == info.n_iters

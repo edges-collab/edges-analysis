@@ -433,3 +433,200 @@ def test_beam_factor_alan_azel(beam):
         alanazel.get_mean_beam_factor(poly, np.array([55.0])),
         atol=1e-2,
     )
+
+
+@pytest.fixture(scope="module")
+def random_beam_maps() -> np.ndarray:
+    rng = np.random.default_rng(42)
+    return rng.uniform(size=(2, 91, 360))
+
+
+def test_shift_beam_maps_full_rotation_is_identity(random_beam_maps):
+    np.testing.assert_array_equal(
+        beams.Beam.shift_beam_maps(360, random_beam_maps), random_beam_maps
+    )
+    np.testing.assert_array_equal(
+        beams.Beam.shift_beam_maps(0, random_beam_maps), random_beam_maps
+    )
+
+
+@pytest.mark.parametrize("angle", [1, 37, 90, 271])
+def test_shift_beam_maps_inverse_and_roll(angle, random_beam_maps):
+    shifted = beams.Beam.shift_beam_maps(angle, random_beam_maps)
+    np.testing.assert_array_equal(
+        beams.Beam.shift_beam_maps(-angle, shifted), random_beam_maps
+    )
+    np.testing.assert_array_equal(shifted, np.roll(random_beam_maps, angle, axis=2))
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "Beam.gaussian divides a zenith angle in degrees by a width in radians, "
+        "so the beam is ~57x too narrow; fix pending (result-changing)"
+    ),
+)
+def test_gaussian_beam_value_at_known_zenith_angle():
+    dish_size = 3.0
+    beam = beams.Beam.gaussian(dish_size=dish_size, f_low=50, f_high=52, delta_f=2)
+    sigma = 1.22 * (3e8 / 50e6) / dish_size  # radians, as in the constructor
+    za = 20.0
+    el_indx = np.where(beam.elevation == 90 - za)[0][0]
+    expected = np.exp(-0.5 * (np.radians(za) / sigma) ** 2)
+    np.testing.assert_allclose(beam.beam[0, el_indx], expected, rtol=1e-6)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "The sphere-spline interpolator uses the 89 deg row as the zenith pole "
+        "value, so the interpolated zenith response is wrong; "
+        "fix pending (result-changing)"
+    ),
+)
+def test_sphere_spline_zenith_value():
+    az = np.arange(0, 360, 2.0)
+    el = np.arange(0, 91, 1.0)
+    pattern = np.repeat((el / 90)[:, None], len(az), axis=1)  # 1 at zenith
+    beam = beams.Beam(
+        frequency=np.array([50.0]) * un.MHz,
+        azimuth=az,
+        elevation=el,
+        beam=pattern[None],
+    )
+    interp = beam.angular_interpolator(0, "sphere-spline")
+    np.testing.assert_allclose(
+        interp(np.array([0.0, 123.0]), np.array([90.0, 90.0])),
+        beam.beam[0, -1, 0],
+        rtol=1e-4,
+    )
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "get_beam_solid_angle uses a rectangle rule that includes both "
+        "elevation endpoints, biasing the solid angle high by ~d_el/2 (0.9% at 1 deg, "
+        "4.3% at 5 deg); fix pending (result-changing)"
+    ),
+)
+@pytest.mark.parametrize("delta", [1, 5])
+def test_isotropic_beam_solid_angle_coarse_grid(delta):
+    beam = beams.Beam.uniform(f_low=50, f_high=54, delta_el=delta, delta_az=delta)
+    np.testing.assert_allclose(beam.get_beam_solid_angle(), 2 * np.pi, rtol=2e-3)
+
+
+def test_shift_beam_maps_float_angle(random_beam_maps):
+    np.testing.assert_array_equal(
+        beams.Beam.shift_beam_maps(90.0, random_beam_maps),
+        np.roll(random_beam_maps, 90, axis=2),
+    )
+
+
+def test_shift_beam_maps_non_unit_grid():
+    maps = np.arange(72.0)[None, None, :] * np.ones((2, 3, 1))  # 5 deg az grid
+    az = np.arange(0, 360, 5.0)
+    np.testing.assert_array_equal(
+        beams.Beam.shift_beam_maps(90, maps, azimuth=az), np.roll(maps, 18, axis=2)
+    )
+    with pytest.raises(ValueError, match="integer multiple"):
+        beams.Beam.shift_beam_maps(92.5, maps, azimuth=az)
+    with pytest.raises(ValueError, match="full circle"):
+        beams.Beam.shift_beam_maps(90, maps[..., :-1], azimuth=az[:-1])
+
+
+def test_get_beam_path():
+    default = beams.Beam.get_beam_path("low")
+    assert default.name == "default.txt"
+    assert default.parent.name == "low"
+    assert default.exists()
+
+    other = beams.Beam.get_beam_path("low", kind="45deg")
+    assert other.name == "45deg.txt"
+    assert other.parent.name == "low"
+
+    with pytest.raises(FileNotFoundError, match="No beam exists"):
+        beams.Beam.get_beam_path("low", kind="nonexistent")
+    with pytest.raises(FileNotFoundError, match="No beam exists"):
+        beams.Beam.get_beam_path("nonexistent-band")
+
+
+def _pattern(az_deg: np.ndarray, el_deg: np.ndarray) -> np.ndarray:
+    """Dipole-like pattern, zero below the horizon."""
+    return np.clip(np.sin(np.radians(el_deg)), 0, None) ** 2 * (
+        1 + 0.3 * np.cos(2 * np.radians(az_deg))
+    )
+
+
+@pytest.mark.parametrize("linear", [True, False])
+def test_beam_from_hfss(tmp_path, linear):
+    phi = np.arange(-180, 180, 1.0)
+    theta = np.arange(0, 181, 1.0)
+    pp, tt = np.meshgrid(phi, theta)
+    power = _pattern(pp, 90 - tt) + 1e-3
+    if not linear:
+        power = 10 * np.log10(power)
+
+    fname = tmp_path / "beam.csv"
+    np.savetxt(
+        fname,
+        np.c_[pp.ravel(), tt.ravel(), power.ravel()],
+        delimiter=",",
+        header="phi,theta,power",
+    )
+    beam = beams.Beam.from_hfss(fname, frequency=75 * un.MHz, linear=linear)
+
+    assert beam.frequency.shape == (1,)
+    assert beam.frequency[0] == 75 * un.MHz
+    np.testing.assert_array_equal(beam.elevation, np.arange(0, 91))
+    np.testing.assert_array_equal(beam.azimuth, np.arange(0, 360))
+    az, el = np.meshgrid(beam.azimuth, beam.elevation)
+    np.testing.assert_allclose(beam.beam[0], _pattern(az, el) + 1e-3, rtol=1e-6)
+
+    if linear:  # from_file always reads HFSS files as linear
+        beam2 = beams.Beam.from_file(
+            None, simulator="hfss", beam_file=fname, frequency=75 * un.MHz
+        )
+        np.testing.assert_allclose(beam2.beam, beam.beam, rtol=1e-12)
+
+
+def test_beam_from_file_hfss_needs_frequency(tmp_path):
+    with pytest.raises(ValueError, match="frequency must be given"):
+        beams.Beam.from_file(None, simulator="hfss", beam_file=tmp_path / "x.csv")
+
+
+@pytest.mark.parametrize("az_antenna_axis", [0, 90])
+def test_beam_from_wipld(tmp_path, az_antenna_axis):
+    phi = np.arange(0, 360, 10.0)
+    el = np.arange(-90, 91, 10.0)
+    freqs = [50.0, 60.0]
+
+    fname = tmp_path / "beam.wipld"
+    with fname.open("w") as fl:
+        for i, fr in enumerate(freqs):
+            fl.write(f"  > Frequency =    {fr:12.6f}\n")
+            for e in el:
+                for p in phi:
+                    gain = (1 + i) * _pattern(p, e)
+                    fl.write(f"{p} {e} 0 0 0 0 {gain}\n")
+
+    beam = beams.Beam.from_wipld(fname, az_antenna_axis=az_antenna_axis)
+    np.testing.assert_allclose(beam.frequency.to_value("MHz"), freqs)
+    np.testing.assert_array_equal(beam.elevation, np.arange(0, 91, 10))
+    np.testing.assert_array_equal(beam.azimuth, phi)
+    azz, ell = np.meshgrid(phi, beam.elevation)
+    expected = np.array([(1 + i) * _pattern(azz, ell) for i in range(2)])
+    np.testing.assert_allclose(
+        beam.beam,
+        np.roll(expected, az_antenna_axis // 10, axis=2),
+        rtol=1e-6,
+        atol=1e-12,
+    )
+
+    beam2 = beams.Beam.from_file(
+        None,
+        simulator="wipl-d",
+        beam_file=fname,
+        rotation_from_north=az_antenna_axis,
+    )
+    np.testing.assert_allclose(beam2.beam, beam.beam)

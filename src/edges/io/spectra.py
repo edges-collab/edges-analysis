@@ -13,6 +13,7 @@ from pygsdata.utils import time_concat
 from read_acq.gsdata import read_acq_to_gsdata
 from read_acq.read_acq import Ancillary
 
+from .. import types as tp
 from ..const import KNOWN_TELESCOPES
 
 logger = logging.getLogger(__name__)
@@ -106,16 +107,21 @@ def get_acq_integration_time(meta: dict) -> un.Quantity[un.s] | None:
     return (nsamples / (rate * un.MHz)).to(un.s)
 
 
+# Spectrum file formats, keyed by file suffix.
+_SPECTRUM_FORMATS = {".h5": "gsh5", ".gsh5": "gsh5", ".acq": "acq"}
+
+
 def read_spectra(
-    files: Sequence[Path], telescope: Telescope | str | None = None
+    files: tp.PathLike | Sequence[tp.PathLike],
+    telescope: Telescope | str | None = None,
 ) -> GSData:
     """Read common spectrum file formats.
 
     Parameters
     ----------
     files
-        The files to read. All must have the same format, and they are concatenated
-        along the time axis.
+        The file, or files, to read. All must have the same format, and they are
+        concatenated along the time axis.
     telescope
         The telescope that took the data, either as a :class:`pygsdata.Telescope` or
         the name of one in ``KNOWN_TELESCOPES``. Only used for ``.acq`` files (other
@@ -130,14 +136,31 @@ def read_spectra(
         stamps (see :func:`acq_time_ranges`), and for files written by fastspec the
         effective integration time is read from the header. Neither is taken from
         the telescope, except as a fallback.
-    """
-    fmt = files[0].suffix
 
-    if fmt in (".h5", ".gsh5"):
+    Raises
+    ------
+    ValueError
+        If no files are given, a file format is not supported, or the files have
+        different formats.
+    """
+    files = [Path(files)] if isinstance(files, str | Path) else list(map(Path, files))
+    if not files:
+        raise ValueError("No spectrum files given.")
+
+    if unsupported := sorted({
+        fl.suffix for fl in files if fl.suffix not in _SPECTRUM_FORMATS
+    }):
+        raise ValueError(f"File format(s) {unsupported} not supported.")
+
+    if len(fmts := {_SPECTRUM_FORMATS[fl.suffix] for fl in files}) > 1:
+        raise ValueError(
+            f"Spectrum files must all have the same format, got {sorted(fmts)}. "
+            "Read them separately."
+        )
+
+    if fmts.pop() == "gsh5":
         return GSData.from_file(files, concat_axis="time")
-    if fmt == ".acq":
-        return _read_acq_spectra(files, telescope)
-    raise ValueError(f"File format '{fmt}' not supported.")
+    return _read_acq_spectra(files, telescope)
 
 
 def _read_acq_spectra(

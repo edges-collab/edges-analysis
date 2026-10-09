@@ -84,16 +84,14 @@ def corrcsv(
     cablen: float,
     cabdiel: float,
     cabloss: float,
-):
+) -> sp.ReflectionCoefficient:
     """Corrects the S11 data (LNA) for cable effects.
 
     This function is a direct translation of the C-code function corrcsv.
 
     Parameters
     ----------
-    freq : np.ndarray
-        The frequency array.
-    s11 : np.ndarray
+    s11
         The S11 data.
     cablen : float
         The cable length, in inches.
@@ -186,9 +184,15 @@ def acqplot7amoon(
         The path to the ACQ file to process.
     params
         The parameters for the ACQPlot7aMoon function.
+
+    Other Parameters
+    ----------------
+    kwargs
+        Any field of :class:`ACQPlot7aMoonParams`, overriding its value in
+        ``params``.
     """
     if kwargs:
-        params = ACQPlot7aMoonParams(**kwargs)
+        params = attrs.evolve(params, **kwargs)
 
     data = read_acq_to_gsdata(acqfile, telescope="edges-low")
 
@@ -226,7 +230,11 @@ class EdgesScriptParams:
     Parameters
     ----------
     Lh
-        The mode in which to calculate the loss function.
+        The mode in which to calculate the hot-load loss. -1 uses the model of the
+        UT-141C-SP cable (as for EDGES-3). -2 models the loss from the semi-rigid
+        cable S-parameters (``s11rig``, ``s12rig`` and ``s22rig``, as for EDGES-2).
+        From Python, a path to a file tabulating the loss can also be given. Any
+        other value means no hot-load loss.
     wfstart
         The lowest frequency included for fitting the calibration functions, and the
         antenna S11.
@@ -356,6 +364,21 @@ def _get_specs(
     return specs
 
 
+def _fourier_or_polynomial(
+    n_terms: int,
+    fourier: bool,
+    fourier_transform: mdl.XTransform,
+    polynomial_transform: mdl.XTransform,
+) -> mdl.Model:
+    """Return the S11 model of the C code: a Fourier series or a polynomial.
+
+    Only the Fourier series takes a period (1.5, as in the C code).
+    """
+    if fourier:
+        return mdl.Fourier(n_terms=n_terms, transform=fourier_transform, period=1.5)
+    return mdl.Polynomial(n_terms=n_terms, transform=polynomial_transform)
+
+
 def _get_load_s11s(
     params: EdgesScriptParams,
     s11cold,
@@ -378,16 +401,12 @@ def _get_load_s11s(
         )
     }
 
-    mdltype = mdl.Fourier if params.nfit2 > 16 else mdl.Polynomial
     s11_modelling_params = S11ModelParams(
-        model=mdltype(
+        model=_fourier_or_polynomial(
             n_terms=params.nfit2,
-            transform=(
-                mdl.ZerotooneTransform(range=(1, 2))
-                if params.nfit2 > 16
-                else mdl.Log10Transform(scale=1)
-            ),
-            period=1.5,
+            fourier=params.nfit2 > 16,
+            fourier_transform=mdl.ZerotooneTransform(range=(1, 2)),
+            polynomial_transform=mdl.Log10Transform(scale=1),
         ),
         complex_model_type=mdl.ComplexRealImagModel,
         set_transform_range=True,
@@ -404,20 +423,17 @@ def _get_load_s11s(
 
 
 def _get_receiver_s11(params: EdgesScriptParams, s11lna, s11mask, s11freq, spec_fq):
-    mt = mdl.Fourier if (params.nfit3 > 16 or params.lna_poly == 0) else mdl.Polynomial
-
     raw_receiver = ReflectionCoefficient(
         reflection_coefficient=s11lna[s11mask],
         freqs=s11freq,
     )
-    model_transform = (
-        mdl.ZerotooneTransform(range=(1, 2))
-        if mt == mdl.Fourier
-        else mdl.Log10Transform(scale=120)
-    )
-    model_kwargs = {"period": 1.5} if mt == mdl.Fourier else {}
     receiver_model = S11ModelParams(
-        model=mt(n_terms=params.nfit3, transform=model_transform, **model_kwargs),
+        model=_fourier_or_polynomial(
+            n_terms=params.nfit3,
+            fourier=params.nfit3 > 16 or params.lna_poly == 0,
+            fourier_transform=mdl.ZerotooneTransform(range=(1, 2)),
+            polynomial_transform=mdl.Log10Transform(scale=120),
+        ),
         complex_model_type=mdl.ComplexRealImagModel,
         set_transform_range=True,
         fit_method="alan-qrd",
@@ -442,23 +458,15 @@ def _get_hotload_loss(
         if s11rig is None or s12rig is None or s22rig is None:
             raise ValueError("must provide rigid cable s11/s12/s22 if Lh=-2")
 
-        mdltype = mdl.Fourier if params.nfit2 > 16 else mdl.Polynomial
-
-        mdlopts = {
-            "transform": (
-                mdl.ZerotooneTransform(
-                    range=(s11freq.min().to_value("MHz"), s11freq.max().to_value("MHz"))
-                )
-                if params.nfit2 > 16
-                else mdl.Log10Transform(scale=1)
-            ),
-            "n_terms": params.nfit2,
-        }
-        if params.nfit2 > 16:
-            mdlopts["period"] = 1.5
-
         hlc_model_params = S11ModelParams(
-            model=mdltype(**mdlopts),
+            model=_fourier_or_polynomial(
+                n_terms=params.nfit2,
+                fourier=params.nfit2 > 16,
+                fourier_transform=mdl.ZerotooneTransform(
+                    range=(s11freq.min().to_value("MHz"), s11freq.max().to_value("MHz"))
+                ),
+                polynomial_transform=mdl.Log10Transform(scale=1),
+            ),
             set_transform_range=False,
             complex_model_type=mdl.ComplexRealImagModel,
             fit_method="lstsq",
@@ -494,15 +502,15 @@ def edges(
     sphot: GSData,
     spopen: GSData,
     spshort: GSData,
-    s11freq: np.ndarray,
+    s11freq: tp.FreqType,
     s11hot: np.ndarray,
     s11cold: np.ndarray,
     s11lna: np.ndarray,
     s11open: np.ndarray,
     s11short: np.ndarray,
-    tload: float,
-    tcal: float,
-    params: EdgesScriptParams = EdgesScriptParams(),
+    tload: tp.TemperatureType,
+    tcal: tp.TemperatureType,
+    params: EdgesScriptParams | None = None,
     s11rig: np.ndarray | None = None,
     s12rig: np.ndarray | None = None,
     s22rig: np.ndarray | None = None,
@@ -526,15 +534,19 @@ def edges(
         The S11 measurements for the hot, ambient, LNA, open, and short loads
         respectively.
     tload
-        A guess of the internal load temperature, used as the initial guess for the
-        optimization. **MUST MATCH** tload used to generate the time-averaged spectra.
+        A guess of the internal load temperature (a temperature Quantity), used as the
+        initial guess for the optimization. **MUST MATCH** tload used to generate the
+        time-averaged spectra.
     tcal
         Like tload, but for the internal load + noise source.
     params
-        An object defining the parameters used in determining the calibration.
+        An object defining the parameters used in determining the calibration. By
+        default, ``EdgesScriptParams(**kwargs)``.
     s11rig, s12rig, s22rig
         The S11, S12, and S22 measurements for the semi-rigid cable respectively.
         Optional -- generally required for EDGES-2.
+    **kwargs
+        Any field of :class:`EdgesScriptParams`, overriding its value in ``params``.
 
     Returns
     -------
@@ -550,8 +562,10 @@ def edges(
     hot_loss_model
         The model used to account for losses in the hot load.
     """
-    if kwargs:
+    if params is None:
         params = EdgesScriptParams(**kwargs)
+    elif kwargs:
+        params = attrs.evolve(params, **kwargs)
 
     # First set up the S11 models
     specs = _get_specs(spcold, sphot, spopen, spshort, params, tload, tcal)
@@ -611,7 +625,7 @@ def _average_spectra(
     fstop,
     telescope: str,
     **kwargs,
-) -> GSData:
+) -> dict[str, GSData]:
     spectra = {}
     for load, files in specfiles.items():
         outfile = out / f"sp{load}.txt"
@@ -662,7 +676,6 @@ class Edges3CalobsParams:
     calkit_delays
         The delays of the three calkit standards. To set each individually, use
         the ``load_delay``, ``open_delay``, and ``short_delay`` parameters.
-    lna_cable_length
     load_delay
         The delay of the "load" calkit stsandard. By default the same as
         ``calkit_delays``.
@@ -814,9 +827,16 @@ def alancal(
     redo_cal: bool = True,
     acqparams: ACQPlot7aMoonParams = ACQPlot7aMoonParams(),
     calparams: EdgesScriptParams = EdgesScriptParams(),
-) -> tuple[
-    CalibrationObservation, Calibrator, S11ModelParams, S11ModelParams, Callable | None
-]:
+) -> (
+    tuple[
+        CalibrationObservation,
+        Calibrator,
+        S11ModelParams,
+        S11ModelParams,
+        Callable | None,
+    ]
+    | None
+):
     """Run a calibration in as close a manner to Alan's code as possible.
 
     This exists mostly for being able to compare to Alan's memos etc in an easy way. It
@@ -837,7 +857,10 @@ def alancal(
     redo_spectra
         Whether to re-average the spectra if they already exist in the output directory.
     redo_cal
-        Whether to re-compute the calibration coefficients if they already exist.
+        Whether to re-compute the calibration coefficients if they already exist
+        (i.e. if ``out`` contains a ``specal.txt`` file). If False and they exist,
+        nothing is computed (except for re-averaging the spectra, if
+        ``redo_spectra`` is True) and None is returned.
     acqparams
         Parameters governing how to average the spectrum files.
     calparams
@@ -856,8 +879,17 @@ def alancal(
         The parameters used to create models of the receiver S11.
     hot_loss_model
         The model used to account for losses in the hot load.
+
+    If the calibration is not re-run (see ``redo_cal``), None is returned instead.
     """
     out = Path(out)
+
+    # If the calibration exists and is not to be redone, the only thing left to do
+    # is to re-average the spectra (if requested).
+    skip_cal = not redo_cal and (out / "specal.txt").exists()
+    if skip_cal and not redo_spectra:
+        logger.info(f"Calibration already exists in {out}, not re-running it.")
+        return None
 
     s11freq, raws11s = defparams.get_raw_s11s()
     specfiles = defparams.get_spectrum_files()
@@ -886,8 +918,8 @@ def alancal(
     )
 
     # Now do the calibration
-    outfile = out / "specal.txt"
-    if not redo_cal and outfile.exists():
+    if skip_cal:
+        logger.info(f"Calibration already exists in {out}, not re-running it.")
         return None
 
     logger.info("Performing calibration")

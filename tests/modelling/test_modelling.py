@@ -67,18 +67,46 @@ def test_simple_fit(method: str):
     assert fit.hessian.shape == (3, 3)
 
 
-@pytest.mark.parametrize("method", ["lstsq", "qr", "alan-qrd", "qrd-c"])
+@pytest.mark.parametrize(
+    "method",
+    [
+        pytest.param(
+            "lstsq",
+            marks=pytest.mark.xfail(
+                strict=True,
+                reason=(
+                    "The 'lstsq' solver applies the weights to both A and y, "
+                    "minimising sum(w^2 r^2) (i.e. treating w as 1/sigma) instead of "
+                    "sum(w r^2) with w = 1/sigma^2; fix pending (result-changing)"
+                ),
+            ),
+        ),
+        "qr",
+        "alan-qrd",
+        "qrd-c",
+    ],
+)
 def test_weighted_fit(method: str):
+    """Weighted fits with inverse-variance weights must give the exact WLS solution.
+
+    Weights are 1/sigma^2 and strongly non-uniform, so that a solver using any other
+    weighting convention gives a measurably different answer.
+    """
     rng = np.random.default_rng(1234)
     four = mdl.Fourier(parameters=[1, 2, 3])
-    model = four.at(x=np.linspace(50, 100, 10))
+    model = four.at(x=np.linspace(50, 100, 30))
 
-    sigmas = np.abs(model() / 100)
+    sigmas = np.exp(rng.normal(size=model.x.size))
     data = model() + rng.normal(scale=sigmas)
+    weights = 1 / sigmas**2
 
-    fit = mdl.ModelFit(model, ydata=data, weights=1 / sigmas)
+    fit = mdl.ModelFit(model, ydata=data, weights=weights, method=method)
 
-    assert np.allclose(fit.model_parameters, [1, 2, 3], rtol=0.05)
+    # Exact weighted-least-squares solution: (A^T W A)^-1 A^T W y.
+    a = model.basis.T
+    expected = np.linalg.solve(a.T @ (weights[:, None] * a), a.T @ (weights * data))
+
+    np.testing.assert_allclose(fit.model_parameters, expected, rtol=1e-8, atol=0)
 
 
 def test_wrong_params():
@@ -327,3 +355,85 @@ def test_sample_from_posterior():
 
     mean_params = np.mean(samples, axis=0)
     assert np.allclose(mean_params, fit.model_parameters, atol=1e-1)
+
+
+def _x_dependent_scaler(x):
+    # A scaler that depends on the (raw) coordinate values, not only their number.
+    return 1 + (x - 50) / 100
+
+
+@pytest.mark.parametrize("with_scaler", [True, False])
+def test_call_without_x_equals_call_at_x(with_scaler: bool):
+    """The basis scaler always receives the raw (untransformed) coordinates."""
+    x = np.linspace(50, 100, 30)
+    model = mdl.Polynomial(
+        parameters=[1.0, 2.0, -3.0],
+        transform=mdl.ScaleTransform(scale=75.0),
+        basis_scaler=_x_dependent_scaler if with_scaler else None,
+    )
+    fm = model.at(x=x)
+
+    np.testing.assert_allclose(fm(), fm(x=fm.x), rtol=1e-14)
+    np.testing.assert_allclose(model.get_basis_terms(x), fm.basis, rtol=1e-14)
+
+    # The scaler multiplies the un-scaled basis evaluated at the transformed x.
+    expected = np.array([(x / 75.0) ** i for i in range(3)])
+    if with_scaler:
+        expected = expected * _x_dependent_scaler(x)
+    np.testing.assert_allclose(fm.basis, expected, rtol=1e-14)
+
+
+def test_composite_call_without_x_equals_call_at_x():
+    """The basis scaler receives raw coordinates in composite models too."""
+    x = np.linspace(50, 100, 30)
+    cmp = mdl.CompositeModel(
+        models={
+            "a": mdl.Polynomial(
+                parameters=[1.0, 2.0],
+                transform=mdl.ScaleTransform(scale=75.0),
+                basis_scaler=_x_dependent_scaler,
+            ),
+            "b": mdl.PhysicalLin(parameters=[3.0, 0.5]),
+        }
+    )
+    fm = cmp.at(x=x)
+    np.testing.assert_allclose(fm(), fm(x=fm.x), rtol=1e-14)
+    np.testing.assert_allclose(
+        cmp.get_model("a", x=x),
+        (1 + 2 * x / 75.0) * _x_dependent_scaler(x),
+        rtol=1e-14,
+    )
+
+
+def test_composite_get_basis_term_uses_submodel_transform():
+    """CompositeModel.get_basis_term applies each sub-model's transform."""
+    x = np.linspace(50, 100, 30)
+    poly = mdl.Polynomial(n_terms=3, transform=mdl.ScaleTransform(scale=75.0))
+    four = mdl.Fourier(n_terms=3, transform=mdl.ShiftTransform(shift=50.0))
+    cmp = mdl.CompositeModel(models={"poly": poly, "four": four})
+
+    for i in range(cmp.n_terms):
+        np.testing.assert_allclose(
+            cmp.get_basis_term(i, x), cmp.get_basis_term_transformed(i, x)
+        )
+    np.testing.assert_allclose(cmp.get_basis_term(2, x), (x / 75.0) ** 2)
+    np.testing.assert_allclose(
+        cmp.get_basis_term(4, x), four.get_basis_term(1, x - 50.0)
+    )
+
+
+def test_fourier_day_is_24_hour_periodic():
+    """FourierDay has a fundamental period of 24 hours."""
+    x = np.linspace(0, 24, 97)
+    fd = mdl.FourierDay(n_terms=7, parameters=[1.0, 2.0, -1.0, 0.5, 0.3, -0.2, 0.1])
+    np.testing.assert_allclose(fd(x=x + 24), fd(x=x), atol=1e-12)
+    np.testing.assert_allclose(fd(x=x - 48), fd(x=x), atol=1e-12)
+
+    # The n-th cosine/sine pair has period 24/n hours.
+    for n in (1, 2, 3):
+        np.testing.assert_allclose(
+            fd.get_basis_term(2 * n - 1, x), np.cos(2 * np.pi * n * x / 24), atol=1e-12
+        )
+        np.testing.assert_allclose(
+            fd.get_basis_term(2 * n, x), np.sin(2 * np.pi * n * x / 24), atol=1e-12
+        )

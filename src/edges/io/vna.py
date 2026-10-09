@@ -12,67 +12,172 @@ from astropy.table import QTable
 from .. import types as tp
 from ..frequencies import get_mask
 
+_FREQ_UNITS = {"HZ": un.Hz, "KHZ": un.kHz, "MHZ": un.MHz, "GHZ": un.GHz}
+_FORMATS = ("DB", "MA", "RI")
+_DEFAULT_Z0 = 50.0
 
-def _get_s1p_kind(path: Path) -> tuple[np.ndarray, str]:
-    # identifying the format
 
-    with path.open("r") as d:
-        comment_rows = 0
-        uses_commas = False
-        flag = None
-        lines = d.readlines()
-        if lines[0].startswith("BEGIN") and lines[1].strip() in ["DB", "MA", "RI"]:
-            # This is a format that has a BEGIN line, then a FLAG line, then data
-            # then END
-            flag = lines[1].strip()
-            comment_rows = 2
-            footer_lines = 1
-        else:
-            for line in lines:
-                # checking settings line
-                if line.startswith("#"):
-                    if "DB" in line or "dB" in line:
-                        flag = "DB"
-                    if "MA" in line:
-                        flag = "MA"
-                    if "RI" in line:
-                        flag = "RI"
+def _strip_comment(line: str) -> str:
+    """Remove a trailing '!' comment and surrounding whitespace from a line."""
+    return line.split("!", 1)[0].strip()
 
-                    comment_rows += 1
-                elif line.startswith(("!", "BEGIN")):
-                    comment_rows += 1
-                elif flag is not None:
-                    if "," in line:
-                        uses_commas = True
-                    break
-                else:
+
+def _parse_option_line(
+    line: str, path: Path
+) -> tuple[un.Unit | None, str | None, float, list[str]]:
+    """Parse a Touchstone option line, e.g. ``# MHz S RI R 50``.
+
+    Options are case-insensitive and may come in any order.
+
+    Returns
+    -------
+    unit
+        The frequency unit, or None if not specified.
+    flag
+        The data format (one of DB, MA, RI), or None if not specified.
+    z0
+        The reference impedance in Ohms (default 50).
+    unknown
+        Any tokens that were not recognized.
+    """
+    tokens = line.lstrip("#").upper().split()
+    unit = None
+    flag = None
+    z0 = _DEFAULT_Z0
+    unknown = []
+
+    i = 0
+    while i < len(tokens):
+        tok = tokens[i]
+        if tok in _FREQ_UNITS:
+            unit = _FREQ_UNITS[tok]
+        elif tok in _FORMATS:
+            flag = tok
+        elif tok == "R" and i + 1 < len(tokens):
+            z0 = float(tokens[i + 1])
+            i += 1
+        elif tok in ("Y", "Z", "H", "G"):
+            raise ValueError(
+                f"Only S-parameter Touchstone files are supported, but {path} "
+                f"contains '{tok}' parameters."
+            )
+        elif tok != "S":
+            unknown.append(tok)
+        i += 1
+
+    return unit, flag, z0, unknown
+
+
+def _get_s1p_kind(path: Path) -> tuple[np.ndarray, str, un.Unit, float]:
+    """Read the data and format options of a Touchstone (or similar) VNA file.
+
+    Two layouts are supported:
+
+    1. Standard Touchstone v1: optional ``!`` comment lines, then an option line
+       (``# <freq-unit> S <DB|MA|RI> R <z0>``), then data lines. Inline ``!``
+       comments and blank lines are ignored.
+    2. A ``BEGIN`` line, followed by a line containing only the format flag
+       (``DB``, ``MA`` or ``RI``), then data lines (with frequency in Hz), then an
+       ``END`` line.
+
+    Returns
+    -------
+    data
+        A 2D array of shape (Nfreq, Ncolumns).
+    flag
+        The data format: one of DB, MA or RI.
+    unit
+        The unit of the frequency column.
+    z0
+        The reference impedance, in Ohms.
+    """
+    with path.open("r") as fl:
+        lines = [_strip_comment(line) for line in fl]
+
+    flag = None
+    unit = None
+    z0 = _DEFAULT_Z0
+    data_lines = []
+
+    nonempty = [line for line in lines if line]
+    if (
+        len(nonempty) > 1
+        and nonempty[0].upper().startswith("BEGIN")
+        and nonempty[1].upper() in _FORMATS
+    ):
+        # A format with a BEGIN line, then a FLAG line, then data then END.
+        flag = nonempty[1].upper()
+        unit = un.Hz
+        candidates = nonempty[2:]
+    else:
+        candidates = []
+        for line in lines:
+            if not line:
+                continue
+            if line.startswith("#"):
+                if flag is not None:
+                    # Only the first option line is used (as per the standard).
+                    continue
+
+                opt_unit, opt_flag, opt_z0, unknown = _parse_option_line(line, path)
+                if opt_flag is None:
+                    # Not a valid option line (some VNAs write lines like
+                    # "#48062!..." before the real option line): ignore it.
+                    continue
+
+                flag, z0 = opt_flag, opt_z0
+                if unknown:
+                    warnings.warn(
+                        f"Unrecognized tokens {unknown} in Touchstone option line "
+                        f"of {path}.",
+                        stacklevel=3,
+                    )
+                if opt_unit is None:
+                    warnings.warn(
+                        f"No frequency unit in the option line of {path}. Assuming Hz.",
+                        stacklevel=3,
+                    )
+                    opt_unit = un.Hz
+                unit = opt_unit
+                continue
+            if flag is None:
+                if not line.upper().startswith("BEGIN"):
                     warnings.warn(
                         f"Non standard line in S11 file {path}: '{line}'\n"
                         "...Treating as a comment line.",
-                        stacklevel=1,
+                        stacklevel=3,
                     )
-                    comment_rows += 1
-
-            # Also check the the last lines for stupid entries like "END"
-            footer_lines = 0
-            for line in lines[::-1]:
-                if line.startswith("#") or ("END" in line) or not line:
-                    footer_lines += 1
-                else:
-                    break
+                continue
+            candidates.append(line)
 
     if flag is None:
         raise OSError(f"The file {path} has incorrect format.")
 
-    #  loading data
-    d = np.genfromtxt(
-        path,
-        skip_header=comment_rows,
-        skip_footer=footer_lines,
-        delimiter="," if uses_commas else None,
-    )
+    for line in candidates:
+        if line.upper().startswith(("BEGIN", "END")):
+            continue
+        data_lines.append([float(x) for x in line.replace(",", " ").split()])
 
-    return d, flag
+    if not data_lines:
+        raise ValueError(f"The file {path} contains no data.")
+
+    ncols = {len(row) for row in data_lines}
+    if len(ncols) != 1:
+        raise ValueError(
+            f"The file {path} has data rows with differing numbers of columns: "
+            f"{sorted(ncols)}."
+        )
+
+    return np.array(data_lines, dtype=float), flag, unit, z0
+
+
+def _to_complex(a: np.ndarray, b: np.ndarray, flag: str) -> np.ndarray:
+    """Convert a pair of data columns in the given format to complex numbers."""
+    if flag == "RI":
+        return a + 1j * b
+
+    mag = 10 ** (a / 20) if flag == "DB" else a
+    return mag * (np.cos((np.pi / 180) * b) + 1j * np.sin((np.pi / 180) * b))
 
 
 def read_s1p(
@@ -82,6 +187,10 @@ def read_s1p(
 ) -> QTable:
     """Read a file in either s1p or s2p format, recorded by a VNA.
 
+    The frequency unit, data format (RI, MA or DB) and reference impedance are read
+    (case-insensitively) from the Touchstone option line. For two-port files, the
+    columns are read in the Touchstone v1 order: f, S11, S21, S12, S22.
+
     Parameters
     ----------
     path
@@ -90,35 +199,42 @@ def read_s1p(
         Minimum frequency to keep
     f_high
         Maximum frequency to keep
-    """
-    d, flag = _get_s1p_kind(Path(path))
 
-    f = d[:, 0] * un.Hz
+    Returns
+    -------
+    table
+        A table with a ``frequency`` column (in Hz) and an ``s11`` column, and also
+        ``s21``, ``s12`` and ``s22`` columns for two-port files. The reference
+        impedance of the S-parameters is stored in
+        ``table.meta["reference_impedance"]``.
+    """
+    path = Path(path)
+    d, flag, unit, z0 = _get_s1p_kind(path)
+
+    if d.shape[1] not in (3, 9):
+        raise ValueError(
+            f"The file {path} has {d.shape[1]} columns, but only one-port (3 columns)"
+            " and two-port (9 columns) files are supported."
+        )
+
+    if z0 != _DEFAULT_Z0:
+        warnings.warn(
+            f"The file {path} has a reference impedance of {z0:g} Ohm. Note that "
+            "the S-parameters are not renormalized to 50 Ohm.",
+            stacklevel=2,
+        )
+
+    f = (d[:, 0] * unit).to(un.Hz)
 
     # Restrict to frequency range.
     mask = get_mask(f, f_low, f_high)
     d = d[mask]
 
-    table = QTable({"frequency": f[mask]})
+    table = QTable({"frequency": f[mask]}, meta={"reference_impedance": z0 * un.ohm})
 
-    if flag == "DB":
-        table["s11"] = 10 ** (d[:, 1] / 20) * (
-            np.cos((np.pi / 180) * d[:, 2]) + 1j * np.sin((np.pi / 180) * d[:, 2])
-        )
-    elif flag == "MA":
-        table["s11"] = d[:, 1] * (
-            np.cos((np.pi / 180) * d[:, 2]) + 1j * np.sin((np.pi / 180) * d[:, 2])
-        )
-    elif flag == "RI":
-        table["s11"] = d[:, 1] + 1j * d[:, 2]
-
-        if d.shape[1] > 3:
-            table["s12"] = d[:, 3] + 1j * d[:, 4]
-            table["s21"] = d[:, 5] + 1j * d[:, 6]
-            table["s22"] = d[:, 7] + 1j * d[:, 8]
-
-    else:
-        raise ValueError("file had no flags set!")
+    names = ["s11"] if d.shape[1] == 3 else ["s11", "s21", "s12", "s22"]
+    for i, name in enumerate(names):
+        table[name] = _to_complex(d[:, 2 * i + 1], d[:, 2 * i + 2], flag)
 
     return table
 

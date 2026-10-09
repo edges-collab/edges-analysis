@@ -344,3 +344,84 @@ class TestFromFiles:
         del spectra["short"]
         with pytest.raises(FileNotFoundError, match="short"):
             CalObsDefEDGES3.from_files(s11_files=s11_files, spectra=spectra)
+
+    def test_receiver_metadata_merged_with_defaults(self, s11_files, spectra):
+        caldef = CalObsDefEDGES3.from_files(
+            s11_files=s11_files,
+            spectra=spectra,
+            receiver_metadata={"calkit_match_resistance": 50.1},
+        )
+        assert caldef.receiver_s11.calkit_match_resistance == 50.1
+        assert (
+            caldef.receiver_s11.calkit_name
+            == calobsdef3.DEFAULT_RECEIVER_METADATA["calkit"]
+        )
+
+
+def test_standard_layout_receiver_metadata_merged(mockroot: Path):
+    caldef = CalObsDefEDGES3.from_standard_layout(
+        rootdir=mockroot, year=2023, day=70, receiver_metadata={"calkit": "MYKIT"}
+    )
+    assert caldef.receiver_s11.calkit_name == "MYKIT"
+    assert (
+        caldef.receiver_s11.calkit_match_resistance
+        == calobsdef3.DEFAULT_RECEIVER_METADATA["calkit_match_resistance"]
+    )
+    # The module default must not be mutated.
+    assert calobsdef3.DEFAULT_RECEIVER_METADATA["calkit"] == "AGILENT_ALAN"
+
+
+def test_standard_layout_missing_rootdir(tmp_path: Path):
+    with pytest.raises(FileNotFoundError, match="does not exist"):
+        CalObsDefEDGES3.from_standard_layout(
+            rootdir=tmp_path / "nonexistent", year=2023, day=70
+        )
+
+
+_IO3_REASON = (
+    "Each S11 label (O, S, L, input) is searched for independently, so one calkit "
+    "can mix files from different sweeps, and the receiver device path is rebuilt "
+    "from the open-standard name instead of using the input file that was found; "
+    "fix pending (result-changing)"
+)
+
+
+class TestS11SweepMatching:
+    """All the S11 files of one calkit must come from the same sweep."""
+
+    @pytest.mark.xfail(strict=True, reason=_IO3_REASON)
+    @pytest.mark.parametrize("load", ["amb", "lna"])
+    def test_stray_earlier_hour(self, tmp_path: Path, load: str):
+        prefix = "lna_" if load == "lna" else ""
+        _make_s11s(tmp_path, "2023_070_09", labels=(f"{prefix}O",))
+        _make_s11s(
+            tmp_path, "2023_070_11", labels=(f"{prefix}O", f"{prefix}S", f"{prefix}L")
+        )
+        (tmp_path / f"2023_070_11_{load}.s1p").touch()
+
+        files = calobsdef3.get_s1p_files(load, 2023, 70, tmp_path)
+        assert {fl.name[:11] for fl in files.values()} == {"2023_070_11"}
+
+    @pytest.mark.xfail(strict=True, reason=_IO3_REASON)
+    def test_open_only_on_another_day(self, tmp_path: Path):
+        # Day 70 has an incomplete sweep (no open); day 71 has a complete one.
+        _make_s11s(tmp_path, "2023_070_11", labels=("S", "L", "amb"))
+        _make_s11s(tmp_path, "2023_071_11", labels=("O", "S", "L", "amb"))
+
+        files = calobsdef3.get_s1p_files("amb", 2023, 70, tmp_path)
+        assert {fl.name[:11] for fl in files.values()} == {"2023_071_11"}
+
+    @pytest.mark.xfail(strict=True, reason=_IO3_REASON)
+    def test_receiver_device_is_found_input_file(self, custom_layout: Path):
+        s11dir = custom_layout / "s11" / "2023"
+        (s11dir / "2023_070_09_lna_O.s1p").touch()
+
+        caldef = CalObsDefEDGES3.from_standard_layout(
+            rootdir=custom_layout,
+            year=2023,
+            day=70,
+            s11_dir="s11/{year}",
+            spectrum_dir="spectra/{load}",
+        )
+        assert caldef.receiver_s11.device == s11dir / "2023_070_11_lna.s1p"
+        assert caldef.receiver_s11.calkit.open == s11dir / "2023_070_11_lna_O.s1p"

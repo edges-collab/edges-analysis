@@ -23,11 +23,9 @@ def low2_balun_connector_loss(
 
     Parameters
     ----------
-    freq
-        An array of frequencies at which to calculate the balun+connector loss.
     ants11
-        The antenna S11, either as a numpy array, a path to a file containing the
-        S11, or a S11Model instance.
+        The antenna S11, either as a :class:`edges.cal.sparams.ReflectionCoefficient`
+        or a path to a file containing one. The loss is computed at its frequencies.
     use_approx_eps0 : bool, optional
         Whether to approximate the vacuum electric permittivity as 8.854e-12 F/m
         instead of the ~10-digit accuracy it has from astropy.
@@ -42,7 +40,7 @@ def low2_balun_connector_loss(
     -------
     loss : np.ndarray
         The balun+connector loss as a function of frequency (same length
-        as `freq`).
+        as the frequencies of ``ants11``).
     """
     if use_approx_eps0:
         connector = attrs.evolve(connector, eps0=8.854e-12 * un.F / un.m)

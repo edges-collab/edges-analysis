@@ -73,17 +73,26 @@ class Model(ABC):
     def get_basis_term_transformed(
         self, indx: int, x: np.ndarray, with_scaler: bool = True
     ) -> np.ndarray:
-        """Get the basis term after coordinate transformation."""
+        """Get the basis term after coordinate transformation.
+
+        The basis term is evaluated at the transformed coordinates, while the
+        ``basis_scaler`` (if any) is evaluated at the raw coordinates ``x``.
+        """
         s = self.basis_scaler(x) if with_scaler and self.basis_scaler is not None else 1
         return self.get_basis_term(indx=indx, x=self.xtransform(x)) * s
 
     def get_basis_terms(self, x: np.ndarray, with_scaler: bool = True) -> np.ndarray:
-        """Get a 2D array of all basis terms at ``x``."""
-        x = self.xtransform(x)
+        """Get a 2D array of all basis terms at ``x``.
+
+        The basis terms are evaluated at the transformed coordinates, while the
+        ``basis_scaler`` (if any) is evaluated at the raw coordinates ``x``, exactly
+        as in :meth:`get_basis_term_transformed`.
+        """
         s = self.basis_scaler(x) if with_scaler and self.basis_scaler is not None else 1
+        xt = self.xtransform(x)
 
         return np.array([
-            self.get_basis_term(indx, x) * s for indx in range(self.n_terms)
+            self.get_basis_term(indx, xt) * s for indx in range(self.n_terms)
         ])
 
     def with_nterms(

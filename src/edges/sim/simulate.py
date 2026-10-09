@@ -70,14 +70,29 @@ def sky_convolution_generator(
         The spectral index model of the sky model.
     normalize_beam
         Whether to ensure the beam is properly normalised.
-    beam_interpolation
-        Whether to smooth over freq axis
+    beam_smoothing
+        Whether to smooth the beam over the frequency axis (with
+        ``smoothing_model``) before interpolating it.
+    smoothing_model
+        The model used to smooth the beam over frequency. Only used if
+        ``beam_smoothing`` is True.
+    location
+        The location of the telescope.
+    ref_time
+        A reference time around which the times corresponding to ``lsts`` are found.
     interp_kind
         The kind of interpolation to use for the beam. "spline" uses
         :class:`scipy.interpolate.RectBivariateSpline` and "sphere-spline" uses
         :class:`scipy.interpolate.RectSphereBivariateSpline`. All other options use
         :class:`scipy.interpolate.RegularGridInterpolator`. with the given kind as
         ``method``.
+    lst_progress
+        Whether to show a progress bar over LSTs.
+    freq_progress
+        Whether to show a progress bar over frequencies.
+    ref_freq_idx
+        The index of the frequency at which to start the frequency loop (the
+        frequencies are iterated cyclically starting from this index).
     use_astropy_azel
         Whether to use the astropy coordinate system for azimuth and elevation. If
         False, compute the az/el using Alan's method.
@@ -96,18 +111,28 @@ def sky_convolution_generator(
     sky
         An array containing the sky temperature in pixel above the horizon.
     beam
-        An array containing the interpolatedbeam in pixels above the horizon
+        An array containing the interpolated beam in pixels above the horizon (NaN
+        elsewhere, and where the sky is NaN). A new array is yielded on every
+        iteration.
     time
         The local time at each LST.
     n_pixels
         The total number of pixels that are not masked.
+    az
+        The azimuth (degrees) of every sky pixel at this LST.
+    el
+        The elevation (degrees) of every sky pixel at this LST.
+    interpolator
+        The angular beam interpolator used for this frequency.
 
     Examples
     --------
     Use this function as follows:
 
-    >>> for i, j, mean_t, conv_t, sky, bm, time, npix in sky_convolution_generator():
-    >>>     print(conv_t)
+    >>> for i, j, mean_t, conv_t, sky, bm, time, npix, az, el, interp in (
+    ...     sky_convolution_generator(...)
+    ... ):
+    ...     print(conv_t)
     """
     if beam_smoothing:
         beam = beam.smoothed(smoothing_model)
@@ -120,7 +145,6 @@ def sky_convolution_generator(
     # Get the local times corresponding to the given LSTs
     times = gscrd.lsts_to_times(lsts, ref_time, location)
 
-    beam_above_horizon = np.full(sky_model.coords.shape, np.nan)
     interpolators = {}
 
     for lst_idx, time in track(
@@ -172,7 +196,9 @@ def sky_convolution_generator(
             )
             sky_map[~horizon_mask] = np.nan
 
-            beam_above_horizon *= np.nan
+            # A fresh array on every iteration, so that the yielded arrays are not
+            # overwritten by later iterations (e.g. when calling ``list()`` on this).
+            beam_above_horizon = np.full(sky_model.coords.shape, np.nan)
 
             try:
                 beam_above_horizon[horizon_mask] = interpolators[freq_idx](
@@ -184,6 +210,11 @@ def sky_convolution_generator(
                     f" el min/max: {np.min(el_above_horizon), np.max(el_above_horizon)}"
                 ) from e
 
+            # Blank (NaN) sky pixels are excluded from the beam as well, so that they
+            # are consistently left out of both the beam normalisation and the
+            # beam-weighted sky.
+            beam_above_horizon[np.isnan(sky_map)] = np.nan
+
             # Weight the beam by the pixel resolution of the sky model.
             beam_above_horizon *= sky_model.pixel_res
 
@@ -191,7 +222,7 @@ def sky_convolution_generator(
             n_pix_ok = np.sum(~np.isnan(beam_above_horizon))
 
             # Number of pixels in the whole sky, but not counting pixels that are
-            # above horizon and nan.
+            # above horizon and nan (in either the beam or the sky).
             n_pix_tot_no_nan = n_pix_tot - (len(el_above_horizon) - n_pix_ok)
 
             if normalize_beam:
@@ -259,7 +290,7 @@ def simulate_spectra(
         Maximum frequency to keep in the simulation (frequencies otherwise defined by
         the beam).
     normalize_beam
-        Whether to normalize the beam to be maximum unity.
+        Whether to normalize the beam to unit integral over the visible sky.
     index_model
         An :class:`IndexModel` to use to generate different frequencies of the sky
         model.

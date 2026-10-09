@@ -113,10 +113,15 @@ class CompositeModel:
         return model(x=x, parameters=p, with_scaler=with_scaler)
 
     def get_basis_term(self, indx: int, x: np.ndarray) -> np.ndarray:
-        """Define the basis terms for the model."""
-        model, indx = self._index_map[indx]
+        """Get the basis term ``indx`` of the composite model at ``x``.
 
-        return self[model].get_basis_term(indx, x)
+        The composite model has no coordinate transform of its own, so ``x`` is the
+        raw coordinate, and each sub-model's own transform is applied. The
+        sub-model's ``basis_scaler`` is *not* applied (as for
+        :meth:`Model.get_basis_term`); use :meth:`get_basis_term_transformed` to
+        include it.
+        """
+        return self.get_basis_term_transformed(indx, x, with_scaler=False)
 
     def get_basis_term_transformed(
         self, indx: int, x: np.ndarray, with_scaler: bool = True

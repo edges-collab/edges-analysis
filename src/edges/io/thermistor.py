@@ -18,6 +18,7 @@ def read_new_style_csv(path: tp.PathLike) -> QTable:
         path,
         skip_header=1,
         delimiter=",",
+        ndmin=1,  # a file with a single row must still give a 1-D array
         dtype=np.dtype([
             ("date", "S10"),
             ("time", "S8"),

@@ -1,5 +1,6 @@
 from types import SimpleNamespace
 
+import attrs
 import numpy as np
 import pytest
 from astropy import units as un
@@ -12,18 +13,45 @@ def freqs_mhz(n=3):
     return np.arange(1, n + 1) * un.MHz
 
 
+def _write_s1p(path, freqs_mhz, gamma):
+    """Write a minimal Touchstone v1 one-port file (MHz, RI)."""
+    lines = ["! test file", "# MHz S RI R 50"]
+    lines += [
+        f"{f} {np.real(g)} {np.imag(g)}"
+        for f, g in zip(freqs_mhz, np.asarray(gamma, dtype=complex), strict=True)
+    ]
+    path.write_text("\n".join(lines) + "\n")
+
+
+def _random_sparams(rng, n=10, reciprocal=False) -> dt.SParams:
+    """A random, passive-ish, non-symmetric S-matrix."""
+
+    def rand(scale):
+        return scale * (rng.uniform(-1, 1, size=n) + 1j * rng.uniform(-1, 1, size=n))
+
+    s12 = 0.8 + rand(0.1)
+    return dt.SParams(
+        freqs=np.linspace(50, 100, n) * un.MHz,
+        s11=rand(0.3),
+        s12=s12,
+        s21=s12 if reciprocal else 0.6 + rand(0.1),
+        s22=rand(0.3),
+    )
+
+
 class TestSParams:
     def setup_class(self):
-        rng = np.random.default_rng()
-        s11 = rng.uniform(0, 1, size=10) + rng.uniform(0, 1, size=10) * 1j
-        s12 = rng.uniform(0, 1, size=10) + rng.uniform(0, 1, size=10) * 1j
-        freqs = np.linspace(50, 100, 10) * un.MHz
-
-        self.smatrix = dt.SParams(s11=s11, s12=s12, freqs=freqs)
+        rng = np.random.default_rng(1234)
+        self.smatrix = _random_sparams(rng)
+        self.rng = rng
 
     def test_from_sparams(self):
-        assert np.allclose(self.smatrix.s21, self.smatrix.s12)
-        assert np.allclose(self.smatrix.s22, self.smatrix.s11)
+        """s21 and s22 default to s12 and s11 respectively."""
+        sp = dt.SParams(
+            freqs=self.smatrix.freqs, s11=self.smatrix.s11, s12=self.smatrix.s12
+        )
+        assert np.allclose(sp.s21, sp.s12)
+        assert np.allclose(sp.s22, sp.s11)
 
     def test_roundtrip_transfer_matrix(self):
         transfer_matrix = self.smatrix.as_transfer_matrix()
@@ -43,8 +71,48 @@ class TestSParams:
         assert isinstance(new, dt.SParams)
         assert new.s11.shape == self.smatrix.s11.shape
 
+    def test_cascade_equals_sequential_embedding(self):
+        """Embedding through A.cascade_with(B) == embedding through B, then A."""
+        a = self.smatrix
+        b = _random_sparams(self.rng)
+        dut = dt.ReflectionCoefficient(
+            freqs=a.freqs,
+            reflection_coefficient=0.5 * np.exp(1j * np.linspace(0, 5, a.nfreqs)),
+        )
+        lhs = dut.embed(a.cascade_with(b)).reflection_coefficient
+        rhs = dut.embed(b).embed(a).reflection_coefficient
+        np.testing.assert_allclose(lhs, rhs, rtol=1e-12)
+
+    def test_cascade_with_identity_is_noop(self):
+        n = self.smatrix.nfreqs
+        ident = dt.SParams(
+            freqs=self.smatrix.freqs,
+            s11=np.zeros(n, dtype=complex),
+            s12=np.ones(n, dtype=complex),
+        )
+        for casc in (
+            self.smatrix.cascade_with(ident),
+            ident.cascade_with(self.smatrix),
+        ):
+            np.testing.assert_allclose(casc.s, self.smatrix.s, rtol=1e-14, atol=1e-15)
+
+    def test_cascade_line_with_negative_line_is_identity(self):
+        """A lossy line followed by its negative-length inverse is the identity."""
+        freqs = self.smatrix.freqs
+        line = sp.KNOWN_CABLES["UT-141C-SP"].as_transmission_line(freqs)
+        fwd = line.scattering_parameters(line_length=0.7 * un.m)
+        bwd = line.scattering_parameters(line_length=-0.7 * un.m)
+        casc = fwd.cascade_with(bwd)
+        np.testing.assert_allclose(casc.s11, 0, atol=1e-12)
+        np.testing.assert_allclose(casc.s22, 0, atol=1e-12)
+        np.testing.assert_allclose(casc.s12, 1, rtol=1e-12)
+        np.testing.assert_allclose(casc.s21, 1, rtol=1e-12)
+
     def test_reciprocal(self):
-        assert self.smatrix.is_reciprocal()
+        assert not self.smatrix.is_reciprocal()
+
+        recip = attrs.evolve(self.smatrix, s21=self.smatrix.s12)
+        assert recip.is_reciprocal()
 
     def test_lossless(self):
         freqs = np.linspace(50, 100, 10) * un.MHz
@@ -56,7 +124,7 @@ class TestSParams:
         assert lossless_smatrix.is_lossless()
 
     def test_properties(self):
-        assert np.allclose(self.smatrix.complex_linear_gain, self.smatrix.s12)
+        assert np.allclose(self.smatrix.complex_linear_gain, self.smatrix.s21)
         assert np.allclose(self.smatrix.scalar_linear_gain, np.abs(self.smatrix.s21))
         assert np.allclose(
             self.smatrix.scalar_logarithmic_gain,
@@ -108,7 +176,19 @@ class TestSParams:
         )
 
         smatrix = dt.SParams.from_calkit_measurements(model=calkit, measurements=vna)
+
+        # The derived error network must map the calkit model onto the readings.
+        model = calkit.at_freqs(freq)
+        for kind in ("open", "short", "match"):
+            np.testing.assert_allclose(
+                getattr(model, kind).embed(smatrix).reflection_coefficient,
+                getattr(vna, kind).reflection_coefficient,
+                atol=1e-12,
+            )
+        # The solution only constrains S12*S21; it is returned symmetric.
         assert smatrix.is_reciprocal()
+        # Ideal readings of a non-ideal kit cannot give an identity network.
+        assert not np.allclose(smatrix.s11, 0, atol=1e-6)
 
     def test_basic_and_matrix_roundtrip(self):
         freqs = freqs_mhz(4)
@@ -206,9 +286,15 @@ class TestSParams:
             self.smatrix.cascade_with(diff_smatrix)
 
     def test_reverse_isolation(self):
-        assert np.allclose(
-            self.smatrix.reverse_isolation, -np.abs(self.smatrix.reverse_gain)
+        """Reverse isolation is -reverse_gain, i.e. positive dB when |S12| < 1."""
+        np.testing.assert_allclose(
+            self.smatrix.reverse_isolation, -self.smatrix.reverse_gain
         )
+        np.testing.assert_allclose(
+            self.smatrix.reverse_isolation,
+            -20 * np.log10(np.abs(self.smatrix.s12)),
+        )
+        assert np.all(self.smatrix.reverse_isolation > 0)
 
 
 class TestReflectionCoefficient:
@@ -278,11 +364,41 @@ class TestReflectionCoefficient:
             rc.reflection_coefficient, np.array([1 + 0j, 0 + 1j, -1 + 0j])
         )
 
+    @pytest.mark.parametrize("ext", [".csv", ".txt"])
+    def test_from_csv_accepts_path_objects(self, tmp_path, ext):
+        """Regression test: from_csv must accept pathlib.Path, not just str."""
+        p = tmp_path / f"gamma{ext}"
+        sep = "," if ext == ".csv" else " "
+        p.write_text(
+            "\n".join(
+                sep.join(row)
+                for row in [
+                    ("freq", "real", "imag"),
+                    ("1", "0.5", "0.0"),
+                    ("2", "0.0", "-0.5"),
+                ]
+            )
+            + "\n"
+        )
+        rc = dt.ReflectionCoefficient.from_csv(p, freq_unit=un.MHz)
+        np.testing.assert_allclose(rc.freqs.to_value("MHz"), [1.0, 2.0])
+        np.testing.assert_allclose(rc.reflection_coefficient, [0.5, -0.5j])
+
+    def test_from_s1p_frequency_range(self, tmp_path):
+        p = tmp_path / "gamma.s1p"
+        _write_s1p(p, np.array([40.0, 50.0, 60.0, 70.0]), [0.1, 0.2, 0.3, 0.4])
+        rc = dt.ReflectionCoefficient.from_s1p(p, f_low=45 * un.MHz, f_high=65 * un.MHz)
+        np.testing.assert_allclose(rc.freqs.to_value("MHz"), [50, 60])
+        np.testing.assert_allclose(rc.reflection_coefficient, [0.2, 0.3])
+
+        rc = dt.ReflectionCoefficient.from_s1p(p)
+        assert len(rc.freqs) == 4
+
     def test_from_s1p_and_from_filespec(self, monkeypatch):
         freqs = np.array([10, 20]) * un.MHz
         s11 = np.array([0.1 + 0j, -0.2 + 0j])
 
-        def fake_read_s1p(path):
+        def fake_read_s1p(path, **kwargs):
             return {"frequency": freqs, "s11": s11}
 
         monkeypatch.setattr(dt, "read_s1p", fake_read_s1p)
@@ -307,24 +423,15 @@ class TestCalkitReadings:
         freqs = np.array([1.0, 2.0, 3.0]) * un.MHz
         ideal = dt.CalkitReadings.ideal(freqs=freqs)
         for attr, expected in (
-            (
-                ideal.open.reflection_coefficient,
-                np.ones_like(freqs.value, dtype=complex),
-            ),
-            (
-                ideal.short.reflection_coefficient,
-                -1 * np.ones_like(freqs.value, dtype=complex),
-            ),
-            (
-                ideal.match.reflection_coefficient,
-                np.zeros_like(freqs.value, dtype=complex),
-            ),
+            (ideal.open.reflection_coefficient, 1),
+            (ideal.short.reflection_coefficient, -1),
+            (ideal.match.reflection_coefficient, 0),
         ):
-            if hasattr(attr, "unit"):
-                np.testing.assert_allclose(attr.value, expected)
-                assert attr.unit == freqs.unit
-            else:
-                np.testing.assert_allclose(attr, expected)
+            # Reflection coefficients are dimensionless plain complex arrays.
+            assert not isinstance(attr, un.Quantity)
+            assert np.iscomplexobj(attr)
+            assert attr.shape == freqs.shape
+            np.testing.assert_array_equal(attr, expected)
 
         wrong_short = dt.ReflectionCoefficient(
             freqs=np.array([1.0]) * un.MHz, reflection_coefficient=np.array([1.0 + 0j])
@@ -357,6 +464,21 @@ class TestCalkitReadings:
         assert isinstance(cr.open, dt.ReflectionCoefficient)
         assert isinstance(cr.short, dt.ReflectionCoefficient)
         assert isinstance(cr.match, dt.ReflectionCoefficient)
+
+    def test_from_filespec_frequency_range(self, tmp_path):
+        """Regression test: f_low/f_high are forwarded through to the reader."""
+        f = np.array([40.0, 50.0, 60.0, 70.0])
+        files = {}
+        for name, val in (("open", 1.0), ("short", -1.0), ("match", 0.0)):
+            files[name] = tmp_path / f"{name}.s1p"
+            _write_s1p(files[name], f, [val] * len(f))
+        filespec = SimpleNamespace(**files)
+
+        cr = dt.CalkitReadings.from_filespec(
+            filespec, f_low=45 * un.MHz, f_high=65 * un.MHz
+        )
+        np.testing.assert_allclose(cr.freqs.to_value("MHz"), [50, 60])
+        np.testing.assert_allclose(cr.short.reflection_coefficient, -1)
 
     def test_different_freqs_in_standards(self):
         freqs = np.linspace(50, 100, 100) * un.MHz

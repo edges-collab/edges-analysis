@@ -1,5 +1,6 @@
 """Functions for working with data from a thermistor."""
 
+import numbers
 from collections.abc import Sequence
 from typing import Self
 
@@ -13,22 +14,50 @@ from .. import types as tp
 from ..io.serialization import hickleable
 from ..io.thermistor import read_thermistor_csv
 
-IgnoreTimesType = int | un.Quantity[un.percent] | un.Quantity[un.s]
+IgnoreTimesType = int | float | un.Quantity[un.percent] | un.Quantity[un.s]
 
 
 def ignore_ntimes(times: Time, ignore_times: IgnoreTimesType) -> int:
-    """Number of time integrations to ignore from the start of the observation."""
-    if isinstance(ignore_times, int):
-        n = ignore_times
-    elif ignore_times.unit.is_equivalent(un.second):
-        time_since_start = (times - times[0]).to("second")
-        n = np.where(time_since_start > ignore_times)[0][0]
-    elif ignore_times.unit.is_equivalent(un.percent):
-        n = int(len(times) * ignore_times.to(un.dimensionless_unscaled))
-    else:
+    """Number of time integrations to ignore from the start of the observation.
+
+    Parameters
+    ----------
+    times
+        The times of each integration.
+    ignore_times
+        What to ignore. If a number (int, numpy integer, or a float with an integer
+        value), it is the number of integrations to ignore. If a Quantity with units
+        of time, all integrations up to (and including) that time after the first
+        integration are ignored (all integrations, if it is longer than the
+        observation). If a Quantity in percent, that percentage of the integrations
+        is ignored.
+
+    Returns
+    -------
+    int
+        The number of integrations to ignore.
+    """
+    if isinstance(ignore_times, un.Quantity):
+        if ignore_times.unit.is_equivalent(un.second):
+            time_since_start = (times - times[0]).to("second")
+            keep = np.where(time_since_start > ignore_times)[0]
+            return int(keep[0]) if len(keep) else len(times)
+        if ignore_times.unit.is_equivalent(un.percent):
+            return int(len(times) * ignore_times.to(un.dimensionless_unscaled))
         raise TypeError("ignore_times is not a valid type!")
 
-    return n
+    if isinstance(ignore_times, numbers.Integral):
+        return int(ignore_times)
+
+    if isinstance(ignore_times, numbers.Real):
+        if not float(ignore_times).is_integer():
+            raise ValueError(
+                "ignore_times given as a number must be a whole number of "
+                f"integrations, got {ignore_times}"
+            )
+        return int(ignore_times)
+
+    raise TypeError("ignore_times is not a valid type!")
 
 
 def get_temperature_thermistor(

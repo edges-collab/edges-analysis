@@ -31,3 +31,27 @@ class TestNewStyleRead:
         data = thermistor.read_new_style_csv(fl)
         assert len(data) == 9
         assert len(data.columns) == 11
+
+    def test_read_new_single_row(self, datadir: Path, tmp_path: Path):
+        full = datadir / (
+            "Receiver01_25C_2019_11_26_040_to_200MHz/Resistance/"
+            "Ambient_01_2019_329_16_02_35_lab.csv"
+        )
+        lines = full.read_text().splitlines(keepends=True)
+        fl = tmp_path / "one_row.csv"
+        fl.write_text("".join(lines[:2]))
+
+        data = thermistor.read_new_style_csv(fl)
+        expected = thermistor.read_new_style_csv(full)
+        assert len(data) == 1
+        assert len(data.columns) == 11
+        assert data["times"][0] == expected["times"][0]
+        np.testing.assert_allclose(
+            data["load_resistance"].value,
+            expected["load_resistance"][:1].value,
+            rtol=0,
+            atol=1e-12,
+        )
+
+        # Also through the generic reader.
+        assert len(thermistor.read_thermistor_csv(fl)) == 1

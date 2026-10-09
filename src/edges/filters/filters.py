@@ -2,6 +2,7 @@
 
 import functools
 import logging
+import numbers
 import warnings
 from collections.abc import Callable, Sequence
 
@@ -20,7 +21,6 @@ from edges import __version__
 from .. import modeling as mdl
 from .. import types as tp
 from ..averaging import NsamplesStrategy, averaging, get_weights_from_strategy
-from ..filters import xrfi as rfi
 from .runners import run_xrfi
 
 logger = logging.getLogger(__name__)
@@ -33,15 +33,22 @@ def gsdata_filter(multi_data: bool = False):
     signature::
 
         def fnc(
+            *,
             data: GSData | Sequence[GSData],
-            use_existing_flags: bool,
             **kwargs
-        ) -> GSFlag
+        ) -> GSFlag | Sequence[GSFlag]
 
     Where the ``data`` is either a single GSData object, or sequence of such
     objects.
 
-    The return value should be a :class:`GSFlag` object, which contains the flags.
+    The return value should be a :class:`GSFlag` object, which contains the flags (or
+    a sequence of them, one per input object, if ``multi_data`` is True).
+
+    The returned wrapper has the signature ``wrapper(data, *, flag_id=None, **kwargs)``.
+    It calls the filter function and adds the resulting flags to the data (under the
+    name ``flag_id``, which defaults to the name of the filter function), returning
+    the new :class:`GSData` object(s). Existing flags on the data are kept: the new
+    flags are added alongside them.
 
     Parameters
     ----------
@@ -81,16 +88,19 @@ def gsdata_filter(multi_data: bool = False):
                         f"{data.name} was fully flagged during {func.__name__} filter"
                     )
                 else:
-                    sz = flags.flags.size / 100
-                    new = np.sum(flags.flags)
+                    # All numbers are reported as percentages: the percentage of the
+                    # data flagged before this filter, the percentage of the new flag
+                    # array that is flagged, the percentage of data flagged after this
+                    # filter, and the increase.
+                    new = 100 * np.sum(flags.flags) / flags.flags.size
                     tot = np.sum(data.flagged_nsamples == 0)
-                    totsz = data.complete_flags.size
+                    totsz = data.complete_flags.size / 100
 
                     rep = data.get_initial_yearday(hours=True)
 
                     logger.info(
                         f"'{rep}': "
-                        f"{old / totsz:.2f} + {new / sz:.2f} → "
+                        f"{old / totsz:.2f}% + {new:.2f}% → "
                         f"{tot / totsz:.2f}% [bold]<+{(tot - old) / totsz:.2f}%>[/] "
                         f"flagged after [blue]{func.__name__}[/]"
                     )
@@ -267,17 +277,39 @@ def galaxy_filter(
     )
 
 
+_RFI_FILTER_DOC = """Flag RFI in a GSData object with an xRFI method.
+
+    This uses :func:`edges.filters.xrfi.xrfi_{method}`, applied independently to
+    each spectrum (i.e. each load, polarization and time) via
+    :func:`edges.filters.runners.run_xrfi`.
+
+    Parameters
+    ----------
+    data : GSData
+        The data to flag.
+    n_threads : int
+        The number of processes to use.
+    freq_range : tuple[float, float]
+        The range of frequencies (in MHz, inclusive) over which to flag. Data outside
+        this range is not flagged.
+    nsamples_strategy : NsamplesStrategy
+        The strategy used to obtain the weights passed to the xRFI method.
+    **kwargs
+        Passed through to :func:`edges.filters.xrfi.xrfi_{method}`.
+    """
+
+
 @define(frozen=False, slots=False)
 class _RFIFilterFactory:
     method: str
 
+    def __attrs_post_init__(self):
+        # Set a real docstring, so that the wrapped filter function has one.
+        self.__doc__ = _RFI_FILTER_DOC.format(method=self.method)
+
     @property
     def __name__(self):
         return f"rfi_{self.method}_filter"
-
-    @property
-    def __docstring__(self):
-        return getattr(rfi, self.method).__doc__
 
     def __call__(
         self,
@@ -438,10 +470,7 @@ def _peak_power_filter(
 
     mean, _ = averaging.weighted_mean(
         spec,
-        weights=(
-            (spec > 0)
-            & ((spec.transpose(0, 1, 3, 2) < peak_power / 10).transpose(0, 1, 3, 2))
-        ).astype(float),
+        weights=((spec > 0) & (spec < peak_power[..., None] / 10)).astype(float),
         axis=-1,
     )
     peak_power = 10 * np.log10(peak_power / mean)
@@ -768,42 +797,61 @@ def rms_rfi_filter(
     )
 
 
+def _utc_day_number(t: Time) -> np.ndarray:
+    """Get the Julian Day Number of the UTC calendar day containing each time.
+
+    A UTC calendar day runs from JD ``N - 0.5`` (midnight) to ``N + 0.5``, where ``N``
+    is its Julian Day Number (the JD at noon of that day).
+    """
+    return np.floor(t.utc.jd + 0.5).astype(int)
+
+
 @gsregister("filter")
 @gsdata_filter()
 def explicit_day_filter(
     data: GSData,
-    flag_days: list[tuple[int, int] | tuple[int, int, int] | int | Time],
+    flag_days: Sequence[tuple[int, int] | tuple[int, int, int] | int | Time],
 ) -> GSFlag:
-    """Filter out any data coming from specific days.
+    """Filter out any data coming from specific (UTC calendar) days.
+
+    Each day is a UTC calendar day, i.e. it runs from 00:00 to 24:00 UTC.
 
     Parameters
     ----------
     flag_days
         A list of days to flag. Each entry can be a 2-tuple, 3-tuple, astropy.Time or an
-        int. If a 2-tuple, it is interpreted as ``(year, day_of_year)``. If a 3-tuple,
-        it is interpreted as ``(year, month, day)``. If an int, it is interpreted as a
-        Julian day.
+        integer. If a 2-tuple, it is interpreted as ``(year, day_of_year)``. If a
+        3-tuple, it is interpreted as ``(year, month, day)``. If an astropy Time, the
+        day(s) containing the time(s) are flagged. If an integer (including numpy
+        integer types), it is interpreted as a Julian Day Number, i.e. the day whose
+        noon (12:00 UTC) has a JD equal to that integer. This list is not modified.
     """
-    for i, day in enumerate(flag_days):
-        if hasattr(day, "__len__"):
+    day_numbers = []
+    for day in flag_days:
+        if isinstance(day, Time):
+            day_numbers.extend(np.atleast_1d(_utc_day_number(day)).tolist())
+        elif isinstance(day, numbers.Integral):
+            day_numbers.append(int(day))
+        elif isinstance(day, tuple | list) and len(day) in (2, 3):
             if len(day) == 2:
-                t = Time(f"{day[0]:04}:{day[1]:03}:00:00:00.000", format="yday")
-            elif len(day) == 3:
                 t = Time(
-                    f"{day[0]:04}-{day[1]:02}-{day[2]:02} 00:00:00.000", format="iso"
+                    f"{day[0]:04}:{day[1]:03}:00:00:00.000", format="yday", scale="utc"
                 )
             else:
-                raise ValueError("Day must be a 2-tuple, 3-tuple, Time or an int.")
-
-            flag_days[i] = int(t.jd)
-        elif isinstance(day, Time):
-            flag_days[i] = int(day.jd)
-
-    if not all(isinstance(day, int) for day in flag_days):
-        raise ValueError("All entries in flag_days must be integers.")
+                t = Time(
+                    f"{day[0]:04}-{day[1]:02}-{day[2]:02} 00:00:00.000",
+                    format="iso",
+                    scale="utc",
+                )
+            day_numbers.append(int(_utc_day_number(t)))
+        else:
+            raise ValueError(
+                "Each entry in flag_days must be a 2-tuple, 3-tuple, astropy Time or "
+                f"an integer, got {day!r}."
+            )
 
     return GSFlag(
-        flags=np.any(np.isin(data.times.jd.astype(int), flag_days), axis=-1),
+        flags=np.any(np.isin(_utc_day_number(data.times), day_numbers), axis=-1),
         axes=("time",),
     )
 

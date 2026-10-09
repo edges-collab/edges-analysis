@@ -37,6 +37,44 @@ def _interpolate_times(thing: QTable, times: Time) -> QTable:
     return QTable(interpolated)
 
 
+def _resolve_aux_file(aux_file: tp.PathLike | None, default: str) -> Path:
+    """Find an auxiliary data file, possibly within the ``raw_field_data`` directory.
+
+    Parameters
+    ----------
+    aux_file
+        The given path to the file. If None, use ``default``. If relative and not
+        found from the current directory, it is looked for in the configured
+        ``raw_field_data`` directory.
+    default
+        The name of the file to use (in the configured ``raw_field_data`` directory)
+        if ``aux_file`` is None.
+
+    Returns
+    -------
+    Path
+        The path to the existing auxiliary file.
+    """
+    root = config.raw_field_data
+
+    if aux_file is None:
+        if root is None:
+            raise ValueError(
+                "No auxiliary file given, and the raw_field_data configuration option "
+                "(which says where the raw data is) is not set."
+            )
+        aux_file = root / default
+    else:
+        aux_file = Path(aux_file)
+        if not aux_file.exists() and not aux_file.is_absolute() and root is not None:
+            aux_file = root / aux_file
+
+    if not aux_file.exists():
+        raise FileNotFoundError(f"Auxiliary file '{aux_file}' does not exist.")
+
+    return aux_file
+
+
 @gsregister("supplement")
 def add_weather_data(data: GSData, weather_file: tp.PathLike | None = None) -> GSData:
     """Add weather data to a :class`GSData` object.
@@ -50,28 +88,21 @@ def add_weather_data(data: GSData, weather_file: tp.PathLike | None = None) -> G
     weather_file
         Path to a weather file from which to read the weather data. Must be
         formatted appropriately. By default, will choose an appropriate file from
-        the configured `raw_field_data` directory. If provided, will search in
-        the current directory and the `raw_field_data` directory for the given
-        file (if not an absolute path).
+        the configured `raw_field_data` directory (``weather_upto_20171125.txt``
+        for data starting on or before 2017-11-25, otherwise ``weather2.txt``).
+        If provided, will search in the current directory and the
+        `raw_field_data` directory for the given file (if not an absolute path).
     """
     times = data.times[..., data.loads.index("ant")]
     start = min(times)
     end = max(times)
 
-    pth = config.raw_field_data
-    if (pth is None and weather_file is None) or not Path(weather_file).exists():
-        raise ValueError(
-            "weather file not given, but not configuration set to specify where "
-            "raw data is"
-        )
-
-    if weather_file is not None:
-        if not weather_file.exists() and not weather_file.is_absolute():
-            weather_file = pth / weather_file
-    elif (start.year, start.day) <= (2017, 329):
-        weather_file = pth / "weather_upto_20171125.txt"
+    start_dt = start.datetime
+    if (start_dt.year, start_dt.timetuple().tm_yday) <= (2017, 329):
+        default = "weather_upto_20171125.txt"
     else:
-        weather_file = pth / "weather2.txt"
+        default = "weather2.txt"
+    weather_file = _resolve_aux_file(weather_file, default)
 
     # Get all aux data covering our times, up to the next minute (so we have some
     # overlap).
@@ -111,32 +142,24 @@ def add_thermlog_data(
     Parameters
     ----------
     data
-        Object into which to add the weather data.
+        Object into which to add the thermlog data.
     band
-        The instrument taking the data. Only provide to automatically find the
-        correct data.
+        The instrument taking the data. Only required if ``thermlog_file`` is not
+        given, in which case the file ``thermlog_{band}.txt`` in the configured
+        `raw_field_data` directory is used.
     thermlog_file
-        Path to a weather file from which to read the weather data. Must be
-        formatted appropriately. By default, will choose an appropriate file from
-        the configured `raw_field_data` directory. If provided, will search in
-        the current directory and the `raw_field_data` directory for the given
-        file (if not an absolute path).
+        Path to a thermlog file from which to read the thermlog data. Must be
+        formatted appropriately. If provided, will search in the current directory
+        and the `raw_field_data` directory for the given file (if not an absolute
+        path).
     """
     times = data.times[..., data.loads.index("ant")]
     start = min(times)
     end = max(times)
 
-    pth = config.raw_field_data
-    if (pth is None and thermlog_file is None) or not Path(thermlog_file).exists():
-        raise ValueError(
-            "thermlog file not given, but not configuration set to specify where "
-            "raw data is"
-        )
-
-    if thermlog_file is None:
-        thermlog_file = pth / f"thermlog_{band}.txt"
-    elif not thermlog_file.exists() and not thermlog_file.is_absolute():
-        thermlog_file = pth / thermlog_file
+    if thermlog_file is None and band is None:
+        raise ValueError("Either thermlog_file or band must be given.")
+    thermlog_file = _resolve_aux_file(thermlog_file, f"thermlog_{band}.txt")
 
     # Get all aux data covering our times, up to the next minute (so we have some
     # overlap).

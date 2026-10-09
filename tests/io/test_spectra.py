@@ -240,3 +240,21 @@ def test_read_mixed_integration_times_raises(tmp_path):
 def test_read_bad_format():
     with pytest.raises(ValueError, match="not supported"):
         read_spectra([Path("file.txt")])
+
+
+def test_read_no_files():
+    with pytest.raises(ValueError, match="No spectrum files given"):
+        read_spectra([])
+
+
+def test_read_mixed_formats_raises(tmp_path):
+    with pytest.raises(ValueError, match="same format"):
+        read_spectra([EDGES3_AMB, tmp_path / "other.gsh5"])
+
+
+@pytest.mark.parametrize("as_list", [True, False])
+def test_read_str_paths(as_list: bool):
+    expected = read_spectra([EDGES3_AMB])
+    data = read_spectra([str(EDGES3_AMB)] if as_list else str(EDGES3_AMB))
+    np.testing.assert_array_equal(data.data, expected.data)
+    assert data.telescope.name == "edges3"

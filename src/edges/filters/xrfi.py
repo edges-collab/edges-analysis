@@ -24,22 +24,39 @@ T = TypeVar("T")
 def xrfi_explicit(
     spectrum: np.ndarray | None = None,
     *,
-    freq: np.ndarray,
+    freq: np.ndarray | None = None,
+    freqs: np.ndarray | None = None,
     flags: np.ndarray | None = None,
+    weights: np.ndarray | None = None,
     rfi_file=None,
     extra_rfi=None,
 ) -> np.ndarray[bool]:
     """
     Excise RFI from given data using an explicitly set list of flag ranges.
 
+    Each range ``(low, high)`` flags channels with ``low < freq < high``, i.e. both
+    ends of the range are *exclusive*. Note that this differs from
+    :func:`edges.filters.filters.flag_frequency_ranges`, which flags
+    ``low <= freq < high``.
+
     Parameters
     ----------
     spectrum
-        This parameter is unused in this function.
+        This parameter is only used to determine the shape of the output flags (if
+        ``flags`` is not given).
     freq
-        Frequencies, in MHz, of the data.
+        Frequencies, in MHz, of the data. Equivalent to ``freqs``; only one of them
+        may be given.
+    freqs
+        Frequencies, in MHz, of the data. This is an alias of ``freq`` that matches the
+        signature of the other xRFI functions (so that this function can be used with
+        :func:`edges.filters.runners.run_xrfi`).
     flags
-        Known flags.
+        Known flags. These are included in the output flags. The input array is not
+        modified.
+    weights
+        This parameter is unused in this function. It is accepted only for
+        compatibility with the signature of the other xRFI functions.
     rfi_file : str, optional
         A YAML file containing the key 'rfi_ranges', which should be a list of 2-tuples
         giving the (min, max) frequency range of known RFI channels (in MHz). By
@@ -55,11 +72,20 @@ def xrfi_explicit(
         Boolean array of the same shape as ``spectrum`` indicated which channels/times
         have flagged RFI.
     """
+    if freq is not None and freqs is not None:
+        raise ValueError("Provide only one of 'freq' and 'freqs'.")
+    if freq is None:
+        freq = freqs
+    if freq is None:
+        raise ValueError("You must provide the frequencies ('freq' or 'freqs').")
+
     if flags is None:
         if spectrum is None:
             flags = np.zeros(freq.shape, dtype=bool)
         else:
             flags = np.zeros(spectrum.shape, dtype=bool)
+    else:
+        flags = np.array(flags, dtype=bool)
 
     rfi_freqs = []
     if rfi_file:
@@ -233,6 +259,12 @@ def xrfi_iterative(
     This algorithm works by iteratively modeling the data and its standard deviation,
     flagging data points that are likely affected by RFI based on a z-score threshold.
 
+    Flagging is *one-sided*: only positive outliers, i.e. channels with
+    ``(data - model) / std > threshold``, are flagged. Negative outliers (however
+    large) are never flagged, since RFI only ever adds power. For pure Gaussian noise,
+    the expected fraction of falsely flagged channels is therefore
+    ``scipy.stats.norm.sf(threshold)`` (not twice that).
+
     Parameters
     ----------
     data : np.ndarray
@@ -252,7 +284,8 @@ def xrfi_iterative(
     threshold_setter : Callable
         A callable that sets the threshold for flagging on each iteration.
         This callable should take the current iteration number as input and return the
-        threshold value to use for that iteration.
+        threshold value to use for that iteration. The threshold is a number of
+        standard deviations *above* the model (flagging is one-sided).
     max_iter : int
         The maximum number of iterations to run.
     watershed : dict[float, int] | None
@@ -310,7 +343,6 @@ def xrfi_iterative(
     # Iterate until either no flags are changed between iterations, or we get to the
     # requested maximum iterations, or until we have too few unflagged data to fit
     # appropriately. keep iterating
-    n_flags_changed_all = [1]
     modelcls = None
     std_modelcls = None
 
@@ -334,10 +366,7 @@ def xrfi_iterative(
         if watershed is not None:
             new_flags |= _apply_watershed(new_flags, watershed, zscore / threshold)
 
-        n_flags_changed_all = [
-            np.sum(flags_f ^ new_flags) for flags_f in [*flag_list, flags]
-        ]
-        n_flags_changed = n_flags_changed_all[-1]
+        n_flags_changed = np.sum(flags ^ new_flags)
 
         flags = new_flags.copy()
 
@@ -430,7 +459,7 @@ class IterativeXRFIInfo:
     @property
     def n_iters(self) -> int:
         """The number of iterations."""
-        return len(self.model_params)
+        return len(self.data_models)
 
     def get_model(self, indx: int = -1):
         """Get the model values."""
@@ -441,8 +470,8 @@ class IterativeXRFIInfo:
         return self.data - self.get_model(indx)
 
     def get_std_model(self, indx: int = -1):
-        """Get the *model* of the absolute residuals."""
-        return self.stds[indx](self.x)
+        """Get the *model* of the standard deviation of the residuals."""
+        return self.stds[indx]
 
 
 @dataclass
@@ -475,7 +504,14 @@ class ModelFilterInfoContainer:
     @cached_property
     def flags(self):
         """The returned flags on each iteration."""
-        return np.concatenate(tuple(model.flags for model in self.models))
+        return [
+            np.concatenate(
+                tuple(
+                    model.flags[min(indx, model.n_iters - 1)] for model in self.models
+                )
+            )
+            for indx in range(self.n_iters)
+        ]
 
     @cached_property
     def n_iters(self):
@@ -520,15 +556,22 @@ class ModelFilterInfoContainer:
             )
         )
 
-    def get_absres_model(self, indx: int = -1):
-        """Get the *model* of the absolute residuals."""
+    def get_std_model(self, indx: int = -1):
+        """Get the *model* of the standard deviation of the residuals."""
         assert indx >= -1
         return np.concatenate(
             tuple(
-                model.get_absres_model(min(indx, model.n_iters - 1))
+                model.get_std_model(min(indx, model.n_iters - 1))
                 for model in self.models
             )
         )
+
+    def get_absres_model(self, indx: int = -1):
+        """Get the *model* of the standard deviation of the residuals.
+
+        This is an alias of :meth:`get_std_model`.
+        """
+        return self.get_std_model(indx)
 
     @cached_property
     def thresholds(self):
@@ -546,7 +589,7 @@ class ModelFilterInfoContainer:
             np.concatenate(
                 tuple(model.stds[min(indx, model.n_iters - 1)] for model in self.models)
             )
-            for indx in self.n_iters
+            for indx in range(self.n_iters)
         ]
 
 
@@ -579,7 +622,8 @@ def xrfi_iterative_sliding_window(
       get different results.
     * The watershedding (flagging channels around the "bad" one) only happens
       if the main central channel is far enough away from the edges of the band.
-    * It only flags positive outliers.
+
+    Like :func:`xrfi_iterative`, this function only flags *positive* outliers.
 
     Parameters
     ----------
@@ -718,7 +762,7 @@ def xrfi_iterative_sliding_window(
             data_models=model_list,
             std_params=[],
             stds=std_list,
-            thresholds=[threshold] * it,
+            thresholds=[threshold] * len(model_list),
             x=freqs,
             data=spectrum,
             flags=flags_list,
@@ -746,8 +790,14 @@ def xrfi_watershed(
     ----------
     spectrum
         Not used in this routine.
+    freqs
+        Not used in this routine.
     flags : ndarray of bool
-        The existing flags.
+        The existing flags, with shape ``(nfreq,)`` or ``(ntime, nfreq)``. This array
+        is only modified if ``inplace`` is True.
+    weights
+        Optional weights of the same shape as ``flags``. Entries with weight <= 0 are
+        treated as flagged. If ``flags`` is not given, it is derived from these.
     tol : float or tuple
         The tolerance -- i.e. the fraction of entries that must be flagged before
         flagging the whole axis. If a tuple, the first element is for the frequency
@@ -765,24 +815,25 @@ def xrfi_watershed(
     if flags is None:
         if weights is not None:
             flags = ~(weights.astype(bool))
+            inplace = True  # flags is a new array here, so no need to copy.
         else:
             raise ValueError("You must provide flags as an ndarray")
 
-    if weights is not None:
-        flags |= weights <= 0
-
     fl = flags if inplace else flags.copy()
+
+    if weights is not None:
+        fl |= weights <= 0
 
     if not hasattr(tol, "__len__"):
         tol = (tol, tol)
 
-    freq_coll = np.sum(flags, axis=-1)
-    freq_mask = freq_coll > tol[0] * flags.shape[1]
+    freq_coll = np.sum(fl, axis=-1)
+    freq_mask = freq_coll > tol[0] * fl.shape[-1]
     fl[freq_mask] = True
 
-    if flags.ndim == 2:
+    if fl.ndim == 2:
         time_coll = np.sum(fl, axis=0)
-        time_mask = time_coll > tol[1] * flags.shape[0]
+        time_mask = time_coll > tol[1] * fl.shape[0]
         fl[:, time_mask] = True
 
     return fl, {}

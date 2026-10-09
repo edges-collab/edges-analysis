@@ -340,3 +340,23 @@ def test_read_tmp_file_truncated_last_line(tmp_path):
     assert out["front_end_temperature"].to_value(un.K) == pytest.approx(
         30.0555 + 273.15
     )
+
+
+def test_celsius_to_kelvin_is_exact(tmp_path):
+    """25.00 degC is exactly 298.15 K in both the .log and .tmp readers."""
+    codes = dict(GOOD_CODES)
+    codes[101] = "+2.500000e+01"
+    codes[102] = "+25.00"
+    log = tmp_path / "temperature.log"
+    log.write_text(_entry("2023_069_00", "Fri Mar 10 00:05:07 UTC 2023", codes))
+    table = templogs.read_temperature_log(log)
+    for col in ("amb_load_temperature", "hot_load_temperature"):
+        assert table[col].unit == un.K
+        np.testing.assert_allclose(table[col].value, 298.15, rtol=0, atol=1e-9)
+
+    tmp = tmp_path / "2023_069_00.tmp"
+    tmp.write_text("101 +2.500000e+01\n102 +25.00\n")
+    out = templogs.read_tmp_file(tmp)
+    for col in ("amb_load_temperature", "hot_load_temperature"):
+        assert out[col].unit == un.K
+        np.testing.assert_allclose(out[col].value, 298.15, rtol=0, atol=1e-9)

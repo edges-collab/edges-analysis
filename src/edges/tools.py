@@ -3,6 +3,7 @@
 import functools
 import logging
 import operator
+import sys
 from collections.abc import Sequence
 from hashlib import md5
 from itertools import product
@@ -15,8 +16,26 @@ logger = logging.getLogger(__name__)
 
 
 def stable_hash(x) -> str:
-    """A simple hash function to string."""
-    return md5(str(x).encode()).hexdigest()
+    """Hash an object to a hex string that is stable across sessions.
+
+    This is the MD5 hash of ``str(x)``, computed with numpy arrays printed in full
+    and with every float printed to full precision. By default numpy abbreviates
+    large arrays with "..." and rounds floats to 8 digits, so different arrays
+    would get the same hash. Objects not containing arrays hash as ``str(x)``.
+
+    Parameters
+    ----------
+    x
+        The object to hash. Its ``str`` must identify it (as for tuples of
+        numbers, strings, paths and numpy arrays).
+
+    Returns
+    -------
+    str
+        The hexadecimal MD5 digest.
+    """
+    with np.printoptions(threshold=sys.maxsize, floatmode="unique"):
+        return md5(str(x).encode()).hexdigest()
 
 
 def linear_to_decibels(x: npt.NDArray) -> npt.NDArray[float]:

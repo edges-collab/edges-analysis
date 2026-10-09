@@ -28,10 +28,10 @@ def edges_raw_freqs(
     -----
     This is correct. The channel width is the important thing.
     The channel width is given by the FFT. We actually take
-    32678*2 samples of data at 400 Mega-samples per second.
+    32768*2 samples of data at 400 Mega-samples per second.
     We only use the first half of the samples (since it's real input).
     Regardless, the frequency channel width is thus
-    400 MHz / (32678*2) == 200 MHz / 32678 ~ 6.103 kHz
+    400 MHz / (32768*2) == 200 MHz / 32768 ~ 6.103 kHz
 
     """
     n_channels: int = 16384 * 2

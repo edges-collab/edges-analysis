@@ -126,3 +126,53 @@ class TestPlotCalCoefficients:
 
         outfig = plots.plot_cal_coefficients(calibrator, fig=fig, ax=ax)
         assert outfig is fig
+
+
+class TestPlotOutputs:
+    """Plot functions return their own figure and label axes correctly."""
+
+    def test_raw_spectrum_returns_fig_and_q_label(self, calobs):
+        fig = plots.plot_raw_spectrum(calobs.ambient.spectrum)
+        assert isinstance(fig, plt.Figure)
+        assert fig.axes[0].get_ylabel() == "$Q$"
+        plt.close(fig)
+
+    def test_raw_spectrum_with_ax(self, calobs):
+        fig, ax = plt.subplots(1, 1)
+        out = plots.plot_raw_spectrum(calobs.ambient.spectrum, ax=ax)
+        assert out is fig
+        plt.close(fig)
+
+    def test_s11_residual_user_title(self):
+        s11 = ReflectionCoefficient(
+            reflection_coefficient=0.1 * np.exp(-1j * np.linspace(0, 3, 100)),
+            freqs=np.linspace(100, 200, 100) * un.MHz,
+        )
+        fig = plots.plot_s11_residual(
+            raw_s11=s11, s11_model_params=S11ModelParams(), title="My Title"
+        )
+        assert fig._suptitle.get_text() == "My Title"
+        plt.close(fig)
+
+        fig = plots.plot_s11_residual(
+            raw_s11=s11, s11_model_params=S11ModelParams(), load_name="open"
+        )
+        assert fig._suptitle.get_text() == "open Reflection Coefficient Models"
+        plt.close(fig)
+
+    def test_calibrated_temp_returns_given_fig(self, calobs, calibrator):
+        fig, ax = plt.subplots(1, 1)
+        other, _ = plt.subplots(1, 1)  # becomes the "current" figure
+        out = plots.plot_calibrated_temp(
+            calobs=calobs, calibrator=calibrator, load="ambient", ax=ax
+        )
+        assert out is fig
+        plt.close(fig)
+        plt.close(other)
+
+    def test_cal_coefficients_labels(self, calibrator):
+        fig = plots.plot_cal_coefficients(calibrator)
+        labels = [ax.get_ylabel() for ax in fig.axes]
+        assert labels[0] == r"$T_{\rm sca}$ [K]"
+        assert labels[1] == r"$T_{\rm off}$ [K]"
+        plt.close(fig)

@@ -5,10 +5,14 @@ as well as generating S-parameters from calkit measurements.
 """
 
 from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 from .datatypes import CalkitReadings, ReflectionCoefficient, SParams
+
+if TYPE_CHECKING:
+    from .network_component_models import Calkit
 
 
 def impedance2gamma(
@@ -153,7 +157,7 @@ def gamma_embed(
 
 def sparams_from_calkit_measurements(
     measurements: CalkitReadings,
-    model: CalkitReadings | None = None,
+    model: "CalkitReadings | Calkit | None" = None,
 ) -> SParams:
     """Compute S-parameters of a 2-port network from calkit measurements.
 
@@ -164,7 +168,17 @@ def sparams_from_calkit_measurements(
     measurements
         The actual measurements of the calkit standards.
     model
-        A model of the calkit standards. If None, ideal standards are assumed.
+        A model of the calkit standards: either the model reflection coefficients
+        at the measured frequencies (:class:`CalkitReadings`), or a
+        :class:`~edges.cal.sparams.Calkit`, which is evaluated at the measured
+        frequencies. If None, ideal standards are assumed.
+
+    Returns
+    -------
+    sparams
+        The S-parameters of the network between the reference plane of the
+        measurements and the standards. Only the product S12*S21 is determined by
+        the calibration; S12 and S21 are both set to its (principal) square root.
     """
     from .network_component_models import Calkit
 
@@ -212,16 +226,21 @@ def sparams_from_calkit_measurements(
 def de_embed_network_from_calkit_measurements(
     measurements: CalkitReadings, sparams: SParams
 ) -> CalkitReadings:
-    """Compute the S-parameters of a 2-port network from calkit measurements.
+    """Remove the effect of a 2-port network from each calkit standard measurement.
 
-    This is a convenience wrapper around :func:`sparams_from_calkit_measurements`.
+    This applies :func:`gamma_de_embed` to each of the open, short and match readings.
 
     Parameters
     ----------
     measurements
-        The actual measurements of the calkit standards.
-    model
-        A model of the calkit standards. If None, ideal standards are assumed.
+        The measurements of the calkit standards.
+    sparams
+        The S-parameters of the 2-port network to de-embed.
+
+    Returns
+    -------
+    readings
+        The calkit readings referenced to the other side of the 2-port network.
     """
     return CalkitReadings(**{
         kind: getattr(measurements, kind).de_embed(sparams)
@@ -240,7 +259,7 @@ def average_reflection_coefficients(
 
 
 def average_sparams(s: Sequence[SParams]) -> SParams:
-    """Average multiple reflection coefficients."""
+    """Average multiple S-parameters, element-by-element."""
     return SParams(
         freqs=s[0].freqs,
         s11=np.mean([ss.s11 for ss in s], axis=0),

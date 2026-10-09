@@ -103,7 +103,27 @@ def read_spec_txt(
     telescope: str = "edges-low",
     name: str = "",
 ) -> GSData:
-    """Read an averaged-spectrum file, like the ones output by acqplot7amoon."""
+    """Read an averaged-spectrum file, like the ones output by acqplot7amoon.
+
+    Parameters
+    ----------
+    fname
+        The file to read. Each line holds the frequency (MHz), the spectrum and the
+        weight (0 for a flagged channel). The first line also holds the number of
+        integrations that were averaged.
+    time
+        The time to assign to the spectrum. By default, the current time.
+    telescope
+        The name of a known telescope.
+    name
+        A name for the returned object.
+
+    Returns
+    -------
+    GSData
+        The spectrum, with ``nsamples`` equal to the weight times the number of
+        integrations, and channels with zero weight flagged.
+    """
     out = np.genfromtxt(
         fname,
         names=["freq", "spectra", "weight"],
@@ -111,7 +131,7 @@ def read_spec_txt(
         usecols=[0, 1, 2],
     )
     with open(fname) as fl:
-        n = int(fl.readline()[31:].split(" ")[0])
+        n = int(fl.readline().split()[3])
 
     if time is None:
         time = Time.now()
@@ -131,27 +151,52 @@ def read_spec_txt(
 
 
 def write_spec_txt(
-    freq: np.ndarray | tp.FreqType, n: float, spec: np.ndarray, fname: tp.PathLike
+    freq: np.ndarray | tp.FreqType,
+    n: int,
+    spec: np.ndarray,
+    fname: tp.PathLike,
+    weights: np.ndarray | None = None,
 ):
-    """Write an averaged-spectrum file, like spe_<load>r.txt files from edges2k.c."""
+    """Write an averaged-spectrum file, like spe_<load>r.txt files from edges2k.c.
+
+    Parameters
+    ----------
+    freq
+        The frequencies of the spectrum (in MHz if not a Quantity).
+    n
+        The number of integrations that were averaged.
+    spec
+        The spectrum.
+    fname
+        The file to write.
+    weights
+        The weight of each channel (0 for a flagged channel). By default, all ones.
+    """
     if hasattr(freq, "unit"):
         freq = freq.to_value("MHz")
 
+    if weights is None:
+        weights = np.ones(len(spec))
+
     with open(fname, "w") as fl:
-        for i, (f, sp) in enumerate(zip(freq, spec, strict=False)):
+        for i, (f, sp, wt) in enumerate(zip(freq, spec, weights, strict=False)):
             if i == 0:
-                fl.write(f"{f:12.6f} {sp:12.6f} {1:4.0f} {n:d} // temp.acq\n")
+                fl.write(f"{f:12.6f} {sp:12.6f} {wt:4.0f} {n:d} // temp.acq\n")
             else:
-                fl.write(f"{f:12.6f} {sp:12.6f} {1:4.0f}\n")
+                fl.write(f"{f:12.6f} {sp:12.6f} {wt:4.0f}\n")
 
 
 def write_spec_txt_gsd(gsd: GSData, fname: tp.PathLike):
-    """Write a standard spe.txt file given a GSData object."""
+    """Write a standard spe.txt file given a GSData object.
+
+    Channels that are flagged (or have no samples) get a weight of zero.
+    """
     write_spec_txt(
         freq=gsd.freqs,
         n=int(np.mean(gsd.nsamples)),
         spec=gsd.data[0, 0, 0],
         fname=fname,
+        weights=(gsd.flagged_nsamples[0, 0, 0] > 0).astype(int),
     )
 
 
@@ -354,28 +399,77 @@ def read_modelled_s11s(pth: Path) -> QTable:
     return QTable(s11m)
 
 
+# Labels in spe files that precede the value of each quantity.
+_SPE_LABELS = {
+    "freq": "freq",
+    "tantenna": "tant",
+    "tant": "tant",
+    "skymodel": "model",
+    "model": "model",
+    "resid": "resid",
+    "wt": "weight",
+}
+
+
 def read_spe_file(
     filename: tp.PathLike,
-    time: Time = Time.now(),
+    time: Time | None = None,
     telescope: str = "edges-low",
     name: str = "",
-):
-    """Read Alan's spectrum files with formats like those of spe0.txt."""
+) -> GSData:
+    """Read Alan's spectrum files with formats like those of spe0.txt.
+
+    Each line holds labelled values, e.g.
+    ``freq 50.006 tantenna 308.22 K skymodel 306.19 K wt 1 ...``, optionally with a
+    ``resid <value> K`` entry. Columns are found from the labels on the first line.
+
+    Parameters
+    ----------
+    filename
+        The file to read.
+    time
+        The time to assign to the spectrum. By default, the current time.
+    telescope
+        The name of a known telescope.
+    name
+        A name for the returned object.
+
+    Returns
+    -------
+    GSData
+        The antenna temperature, with ``nsamples`` equal to the weights, channels
+        with zero weight flagged, and residuals if the file has them.
+    """
+    with open(filename) as fl:
+        first = fl.readline().split()
+
+    cols = {}
+    for i, token in enumerate(first[:-1]):
+        key = _SPE_LABELS.get(token)
+        if key is not None and key not in cols:
+            cols[key] = i + 1
+
+    missing = {"freq", "tant", "weight"} - cols.keys()
+    if missing:
+        raise ValueError(f"Could not find {sorted(missing)} in spe file {filename}")
+
+    names = sorted(cols, key=cols.get)
     out = np.genfromtxt(
-        filename,
-        usecols=(1, 3, 6, 9, 12),
-        names=("freq", "tant", "model", "resid", "weight"),
+        filename, usecols=[cols[k] for k in names], names=names, dtype=float
     )
+
+    if time is None:
+        time = Time.now()
 
     return GSData(
         telescope=KNOWN_TELESCOPES.get(telescope),
         data=out["tant"][None, None, None, :],
         freqs=out["freq"] * un.MHz,
-        times=[[time]],
+        times=time + np.zeros((1, 1)) * un.second,
         effective_integration_time=13.0 * un.second,
         nsamples=out["weight"][None, None, None, :],
-        residuals=out["resid"][None, None, None],
-        flags={"flags": ~(out["weight"].astype(bool))},
+        residuals=out["resid"][None, None, None] if "resid" in cols else None,
+        flags={"flags": GSFlag(~(out["weight"].astype(bool)), axes=("freq",))},
         history=History([Stamp(f"read from {filename}")]),
         data_unit="temperature",
         name=name,
