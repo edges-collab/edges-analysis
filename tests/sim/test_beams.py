@@ -481,14 +481,6 @@ def test_gaussian_beam_half_power_at_half_fwhm():
     np.testing.assert_allclose(beam.beam[0, beam.elevation == 80], 0.5, rtol=1e-10)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "The sphere-spline interpolator uses the 89 deg row as the zenith pole "
-        "value, so the interpolated zenith response is wrong; "
-        "fix pending (result-changing)"
-    ),
-)
 def test_sphere_spline_zenith_value():
     az = np.arange(0, 360, 2.0)
     el = np.arange(0, 91, 1.0)
@@ -504,6 +496,29 @@ def test_sphere_spline_zenith_value():
         interp(np.array([0.0, 123.0]), np.array([90.0, 90.0])),
         beam.beam[0, -1, 0],
         rtol=1e-4,
+    )
+
+
+def test_sphere_spline_without_zenith_row():
+    """Without a zenith row, the pole is not pinned to the highest row's values."""
+    az = np.arange(0, 360, 2.0)
+    el = np.arange(0, 81, 2.0)
+    pattern = np.repeat((1 + el / 90)[:, None], len(az), axis=1)
+    beam = beams.Beam(
+        frequency=np.array([50.0]) * un.MHz,
+        azimuth=az,
+        elevation=el,
+        beam=pattern[None],
+    )
+    interp = beam.angular_interpolator(0, "sphere-spline")
+    azz, ell = np.meshgrid(az, el)
+    np.testing.assert_allclose(
+        interp(azz.ravel(), ell.ravel()), pattern.ravel(), rtol=1e-6
+    )
+    # Between the last row and the zenith, the (linear) trend continues, rather than
+    # flattening to the last row's value at the zenith.
+    np.testing.assert_allclose(
+        interp(np.array([0.0, 90.0]), np.array([85.0, 85.0])), 1 + 85 / 90, rtol=1e-4
     )
 
 

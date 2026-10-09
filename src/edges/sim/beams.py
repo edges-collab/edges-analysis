@@ -826,18 +826,25 @@ class Beam:
         beam = self.beam[freq_indx]
 
         if interp_kind == "sphere-spline":
+            # Map elevation to a colatitude in (pi/2, pi], so that the zenith is the
+            # pole at u=pi.
             el = self.elevation * np.pi / 180 + np.pi / 2
 
             if el[-1] > 0.999 * np.pi:
+                # The spline cannot take data at the pole itself, so the zenith row
+                # (all azimuths at the same point) is given as the pole value instead.
+                zenith_value = float(np.mean(beam[-1]))
                 el = el[:-1]
                 beam = beam[:-1]
+                pole_kw = {"pole_values": (None, zenith_value), "pole_exact": True}
+            else:
+                pole_kw = {}
 
             spl = spi.RectSphereBivariateSpline(
                 el,
                 self.azimuth * np.pi / 180,
                 beam,
-                pole_values=(None, beam[-1]),
-                pole_exact=True,
+                **pole_kw,
             )
             return lambda az, el: spl(
                 el * np.pi / 180 + np.pi / 2, az * np.pi / 180, grid=False
