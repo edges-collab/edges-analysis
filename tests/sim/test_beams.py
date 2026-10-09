@@ -4,6 +4,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from astropy import constants
 from astropy import units as un
 from astropy.coordinates import Longitude
 
@@ -459,21 +460,25 @@ def test_shift_beam_maps_inverse_and_roll(angle, random_beam_maps):
     np.testing.assert_array_equal(shifted, np.roll(random_beam_maps, angle, axis=2))
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Beam.gaussian divides a zenith angle in degrees by a width in radians, "
-        "so the beam is ~57x too narrow; fix pending (result-changing)"
-    ),
-)
 def test_gaussian_beam_value_at_known_zenith_angle():
+    """The Gaussian beam has FWHM = 1.22 wavelength / dish_size."""
     dish_size = 3.0
     beam = beams.Beam.gaussian(dish_size=dish_size, f_low=50, f_high=52, delta_f=2)
-    sigma = 1.22 * (3e8 / 50e6) / dish_size  # radians, as in the constructor
+    fwhm = 1.22 * (constants.c.to_value("m/s") / 50e6) / dish_size  # radians
+    sigma = fwhm / (2 * np.sqrt(2 * np.log(2)))
     za = 20.0
     el_indx = np.where(beam.elevation == 90 - za)[0][0]
     expected = np.exp(-0.5 * (np.radians(za) / sigma) ** 2)
-    np.testing.assert_allclose(beam.beam[0, el_indx], expected, rtol=1e-6)
+    np.testing.assert_allclose(beam.beam[0, el_indx], expected, rtol=1e-10)
+
+
+def test_gaussian_beam_half_power_at_half_fwhm():
+    """B(za = FWHM / 2) = 0.5, for a dish sized to give a FWHM of 20 degrees."""
+    fwhm = np.radians(20.0)
+    dish_size = 1.22 * (constants.c.to_value("m/s") / 50e6) / fwhm
+    beam = beams.Beam.gaussian(dish_size=dish_size, f_low=50, f_high=52, delta_f=2)
+    np.testing.assert_allclose(beam.beam[0, beam.elevation == 90], 1.0, rtol=1e-12)
+    np.testing.assert_allclose(beam.beam[0, beam.elevation == 80], 0.5, rtol=1e-10)
 
 
 @pytest.mark.xfail(
