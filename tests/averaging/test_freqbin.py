@@ -46,21 +46,35 @@ def test_freq_bin_size_one_is_identity(gsd_ones: GSData):
     np.testing.assert_allclose(new.nsamples, data.nsamples, rtol=1e-12)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "freq_bin includes both bin edges, so a channel lying exactly on an "
-        "edge is counted in two bins and total nsamples is not conserved; fix pending "
-        "(result-changing)"
-    ),
-)
-def test_freq_bin_conserves_nsamples(gsd_ones: GSData):
+@pytest.mark.parametrize("last_edge", [101, 100], ids=["past-last", "on-last"])
+def test_freq_bin_conserves_nsamples(gsd_ones: GSData, last_edge: float):
     # Channels are at 50, 52, ..., 100 MHz; interior edges lie exactly on channels.
-    bins = np.array([49, 60, 70, 80, 90, 101]) * un.MHz
+    # A channel on the final edge is included in the last bin.
+    bins = np.array([49, 60, 70, 80, 90, last_edge]) * un.MHz
     new = freqbin.freq_bin(gsd_ones, bins=bins, debias=False)
     np.testing.assert_allclose(
         new.nsamples.sum(axis=-1), gsd_ones.nsamples.sum(axis=-1), rtol=1e-12
     )
+
+
+def test_freq_bin_edge_channel_in_upper_bin(gsd_ones: GSData):
+    # The channel at 60 MHz lies on an interior edge: it belongs to the upper bin.
+    bins = np.array([49, 60, 101]) * un.MHz
+    new = freqbin.freq_bin(gsd_ones, bins=bins, debias=False)
+    nlow = np.sum(gsd_ones.freqs < 60 * un.MHz)
+    np.testing.assert_allclose(new.nsamples[..., 0], nlow, rtol=1e-12)
+    np.testing.assert_allclose(
+        new.freqs[0].to_value("MHz"),
+        np.mean(gsd_ones.freqs[:nlow].to_value("MHz")),
+        rtol=1e-12,
+    )
+
+
+def test_freq_bin_int_bins_unchanged(gsd_ones: GSData):
+    # Integer bins have edges between channels, so each bin has exactly `bins`
+    # channels.
+    new = freqbin.freq_bin(gsd_ones, bins=2, debias=False)
+    np.testing.assert_allclose(new.nsamples, 2, rtol=1e-12)
 
 
 @pytest.mark.xfail(

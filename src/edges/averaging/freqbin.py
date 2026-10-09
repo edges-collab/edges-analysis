@@ -24,7 +24,9 @@ def freq_bin(
     data
         The input GSData object to be binned.
     bins
-        The bin *edges* (lower inclusive, upper not inclusive). If an ``int``, simply
+        The bin *edges* (lower inclusive, upper not inclusive, except for the last bin,
+        whose upper edge is also inclusive, as in :func:`numpy.histogram`). Each
+        channel is therefore in at most one bin. If an ``int``, simply
         use ``bins`` coords per bin, starting from the first bin. If a float or
         Quantity, use equi-spaced bin edges, starting from the start of coords, and
         ending past the end of coords. If an array, assumed to be the bin edges.
@@ -48,9 +50,15 @@ def freq_bin(
     be maintained if they have no frquency axis (though flags will be utilized
     appropriately in the averaging process).
     """
-    bins = avg.get_bin_edges(data.freqs, bins)
+    edges = avg.get_bin_edges(data.freqs, bins)
+    nbins = len(edges) - 1
+    # Each bin includes its lower edge and excludes its upper edge, except the last
+    # bin, which includes both (like numpy.histogram), so that every channel within
+    # [edges[0], edges[-1]] is in exactly one bin.
     bins = [
-        (data.freqs >= b[0]) & (data.freqs <= b[1]) for b in itertools.pairwise(bins)
+        (data.freqs >= lo)
+        & ((data.freqs < hi) | ((i == nbins - 1) & (data.freqs == hi)))
+        for i, (lo, hi) in enumerate(itertools.pairwise(edges))
     ]
 
     if debias is None:
