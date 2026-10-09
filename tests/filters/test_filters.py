@@ -163,14 +163,6 @@ class Test150MHzFilter:
         data = filters.filter_150mhz(mock, threshold=100)
         assert not np.any(data.complete_flags)
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "filter_150mhz takes np.mean without an axis, so the RMS is a "
-            "single scalar over all loads/pols/times and one bad integration flags all "
-            "integration; fix pending (result-changing)"
-        ),
-    )
     def test_single_bad_integration(self):
         mock = create_mock_edges_data(fhigh=200 * un.MHz, ntime=10)
         band = (mock.freqs >= 152.75 * un.MHz) & (mock.freqs <= 154.25 * un.MHz)
@@ -184,6 +176,22 @@ class Test150MHzFilter:
         expected = np.zeros(mock.ntimes, dtype=bool)
         expected[3] = True
         np.testing.assert_array_equal(out.complete_flags[0, 0, :, 0], expected)
+
+    def test_statistic_per_integration(self):
+        mock = create_mock_edges_data(fhigh=200 * un.MHz, ntime=4)
+        rng = np.random.default_rng(2)
+        data = mock.data * (1 + 0.01 * rng.normal(size=mock.data.shape))
+        band = (mock.freqs >= 152.75 * un.MHz) & (mock.freqs <= 154.25 * un.MHz)
+        band2 = (mock.freqs >= 156.25 * un.MHz) & (mock.freqs <= 157.75 * un.MHz)
+        stat = (
+            200
+            * np.sqrt(np.std(data[..., band], axis=-1))
+            / np.mean(data[..., band2], axis=-1)
+        )
+        # A threshold between the per-integration statistics splits them.
+        threshold = np.median(stat)
+        out = filters.filter_150mhz(mock.update(data=data), threshold=threshold)
+        np.testing.assert_array_equal(out.complete_flags[..., 0], stat > threshold)
 
 
 class TestPowerPercentFilter:
