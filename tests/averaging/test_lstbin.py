@@ -4,6 +4,7 @@ import attrs
 import numpy as np
 import pytest
 from astropy import units as un
+from astropy.coordinates import Longitude
 from astropy.time import Time
 from pygsdata import GSData, GSFlag
 
@@ -159,14 +160,40 @@ class TestAcrossMidnight:
         np.testing.assert_allclose(new.nsamples[:, :, 0], mock_midnight.ntimes)
         assert np.all(_hours_from_midnight(new.lsts.hour) < 1e-6)
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "average_over_times wraps LSTs to within 12h of reference_lst and "
-            "takes an arithmetic mean, so data spanning LST midnight gets a mean LST "
-            "near 12h; fix pending (result-changing)"
-        ),
-    )
     def test_average_over_times_across_midnight(self, mock_midnight: GSData):
         new = average_over_times(mock_midnight)
         assert np.all(_hours_from_midnight(new.lsts.hour) < 0.5)
+
+        # The mean LST is the mean of the LSTs unwrapped across midnight.
+        lsts = mock_midnight.lsts.hour
+        unwrapped = np.where(lsts > 12, lsts - 24, lsts)
+        expected = np.mean(unwrapped, axis=0) % 24
+        np.testing.assert_allclose(
+            _hours_from_midnight(new.lsts.hour[0] - expected), 0, atol=1e-8
+        )
+
+    def test_average_over_times_lst_range_across_midnight(self, mock_midnight: GSData):
+        new = average_over_times(mock_midnight)
+        lst_ranges = mock_midnight.lst_ranges.hour
+        start, end = new.lst_ranges.hour[0, :, 0], new.lst_ranges.hour[0, :, 1]
+        # The range runs from the first start (before midnight) to the last end
+        # (after midnight), i.e. it is short and crosses midnight.
+        np.testing.assert_allclose(start, lst_ranges[0, :, 0], atol=1e-8)
+        np.testing.assert_allclose(end, lst_ranges[-1, :, 1], atol=1e-8)
+        assert np.all((end - start) % 24 < 1.0)
+
+    def test_average_over_times_explicit_reference_lst(self, mock_midnight: GSData):
+        # With an explicit reference far from the data, all LSTs are wrapped to
+        # within 12 hours of it, and the plain mean of the wrapped LSTs is returned.
+        new = average_over_times(mock_midnight, reference_lst=Longitude(12 * un.hour))
+        lsts = mock_midnight.lsts.hour
+        np.testing.assert_allclose(
+            new.lsts.hour[0], np.mean(np.where(lsts <= 0, lsts + 24, lsts), axis=0)
+        )
+
+    def test_average_over_times_lst_away_from_midnight(self, mock: GSData):
+        # Data that does not cross midnight: the result is the plain mean.
+        new = average_over_times(mock.update(auxiliary_measurements=None))
+        lsts = mock.lsts.hour
+        assert np.ptp(lsts) < 12
+        np.testing.assert_allclose(new.lsts.hour[0], np.mean(lsts, axis=0), rtol=1e-10)
