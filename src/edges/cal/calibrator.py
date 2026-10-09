@@ -13,6 +13,7 @@ from edges.io import hickleable
 from edges.modeling import CompositeModel, Model
 
 from ..tools import ComplexSpline, Spline
+from ..units import vld_unit
 from .input_sources import InputSource
 from .noise_waves import get_linear_coefficients
 from .sparams import ReflectionCoefficient, S11ModelParams
@@ -20,11 +21,11 @@ from .sparams import ReflectionCoefficient, S11ModelParams
 _CALIBRATOR_QUANTITIES = ("Tsca", "Toff", "Tunc", "Tcos", "Tsin", "receiver_s11")
 
 
-def _freqs_to_mhz(freqs: tp.FreqType | np.ndarray) -> tp.FreqType:
-    """Convert frequencies to a Quantity in MHz (plain arrays are assumed in MHz)."""
-    if isinstance(freqs, un.Quantity):
+def _freqs_to_mhz(freqs: tp.FreqType) -> tp.FreqType:
+    """Express frequency Quantities in MHz, leaving anything else to the validator."""
+    if isinstance(freqs, un.Quantity) and freqs.unit.physical_type == "frequency":
         return freqs.to(un.MHz)
-    return np.asarray(freqs) * un.MHz
+    return freqs
 
 
 @hickleable
@@ -37,8 +38,8 @@ class Calibrator:
     Parameters
     ----------
     freqs
-        The frequencies at which the calibration quantities are defined. Plain arrays
-        are interpreted as being in MHz.
+        The frequencies at which the calibration quantities are defined, as an astropy
+        Quantity with frequency units (stored in MHz).
     Tsca, Toff, Tunc, Tcos, Tsin
         The scale, offset and noise-wave temperatures at each frequency.
     receiver_s11
@@ -48,7 +49,9 @@ class Calibrator:
     """
 
     freqs: tp.FreqType = attrs.field(
-        converter=_freqs_to_mhz, eq=attrs.cmp_using(eq=np.allclose)
+        converter=_freqs_to_mhz,
+        validator=vld_unit("frequency"),
+        eq=attrs.cmp_using(eq=np.allclose),
     )
 
     Tsca: tp.FloatArray = attrs.field(eq=attrs.cmp_using(eq=np.allclose))

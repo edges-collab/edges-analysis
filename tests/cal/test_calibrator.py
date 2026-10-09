@@ -124,20 +124,17 @@ class TestCalibratorPhysics:
 
 
 class TestCalibratorInputs:
-    def test_ndarray_freqs_coerced_to_mhz(self):
+    def test_ndarray_freqs_rejected(self):
         cal = _synthetic_calibrator()
-        cal2 = Calibrator(
-            freqs=FREQS.to_value("MHz"),
-            Tsca=cal.Tsca,
-            Toff=cal.Toff,
-            Tunc=cal.Tunc,
-            Tcos=cal.Tcos,
-            Tsin=cal.Tsin,
-            receiver_s11=cal.receiver_s11,
-        )
-        assert isinstance(cal2.freqs, un.Quantity)
-        assert cal2.freqs.unit == un.MHz
-        assert cal2 == cal
+        with pytest.raises(TypeError, match="freqs must be an astropy Quantity"):
+            cal.clone(freqs=FREQS.to_value("MHz"))
+
+    def test_non_frequency_freqs_rejected(self):
+        cal = _synthetic_calibrator()
+        with pytest.raises(
+            un.UnitConversionError, match="physical type of 'frequency'"
+        ):
+            cal.clone(freqs=FREQS.value * un.m)
 
     def test_quantity_freqs_converted_to_mhz(self):
         cal = _synthetic_calibrator().clone(freqs=FREQS.to("GHz"))

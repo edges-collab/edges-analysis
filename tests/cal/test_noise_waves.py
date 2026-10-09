@@ -92,7 +92,7 @@ def test_fit_perfect_receiver(
     }
 
     calibrator = Calibrator(
-        freqs=FREQ,
+        freqs=FREQ * un.MHz,
         Tsca=true_sca * 1000,
         Toff=300 - true_off,
         Tcos=true_t_cos,
