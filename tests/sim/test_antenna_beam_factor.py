@@ -10,7 +10,7 @@ from edges import modeling as mdl
 from edges.sim import compute_antenna_beam_factor
 from edges.sim.antenna_beam_factor import BeamFactor
 from edges.sim.beams import Beam
-from edges.sim.sky_models import ConstantIndex
+from edges.sim.sky_models import ConstantIndex, SkyModel
 
 FAST = {
     "lst_progress": False,
@@ -156,6 +156,24 @@ def test_lsts_stored_in_hours(lsts, use_astropy_azel, galaxy_sky):
         **FAST,
     )
     np.testing.assert_allclose(bf.antenna_temp, ref.antenna_temp, rtol=1e-12)
+
+
+@pytest.mark.parametrize("nside", [4, 8])
+def test_unnormalised_loss_fraction_is_one_minus_mean_beam(nside):
+    """Without normalisation, a unit beam above the horizon covers half the sky."""
+    sky = SkyModel.uniform_healpix(408.0, temperature=1000.0, nside=nside)
+    bf = compute_antenna_beam_factor(
+        beam=Beam.uniform(f_low=50, f_high=56, delta_f=2, delta_az=2, delta_el=2),
+        sky_model=sky,
+        lsts=[2.0],
+        reference_frequency=52 * un.MHz,
+        normalize_beam=False,
+        use_astropy_azel=False,
+        **FAST,
+    )
+    # The fraction of HEALPix pixel centres above the horizon is ~1/2.
+    np.testing.assert_allclose(bf.loss_fraction, 0.5, atol=0.01)
+    np.testing.assert_allclose(bf.antenna_temp / bf.antenna_temp_ref[:, None], 1.0)
 
 
 def _square_bf(lsts: np.ndarray, *, with_extras: bool = True) -> BeamFactor:

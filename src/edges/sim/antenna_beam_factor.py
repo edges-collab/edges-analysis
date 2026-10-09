@@ -51,11 +51,12 @@ class BeamFactor:
         at the reference frequency) if ``sky_at_reference_frequency`` is True, and
         shape ``(nlst, nfreq)`` (with the sky at each frequency) otherwise.
     loss_fraction: np.ndarray
-        One minus the mean (pixel-resolution weighted) beam over the sky, at each
-        LST and frequency, as computed by :func:`compute_antenna_beam_factor`. When
-        the beam is normalised, this is simply ``1 - ground_loss`` (i.e. zero if no
-        ground loss was given). Note that it is *not* the fraction of the sky signal
-        that is lost below the horizon.
+        One minus the mean beam over the whole sky, ``1 - (1/4pi) int B dOmega``
+        (with the beam zero below the horizon and at blank sky pixels), at each LST
+        and frequency, as computed by :func:`compute_antenna_beam_factor`. When the
+        beam is normalised, it is instead simply ``1 - ground_loss`` (i.e. zero if
+        no ground loss was given). Note that it is *not* the fraction of the sky
+        signal that is lost below the horizon.
     meta
         A dictionary of metadata.
     """

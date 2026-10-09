@@ -69,7 +69,11 @@ def sky_convolution_generator(
     index_model
         The spectral index model of the sky model.
     normalize_beam
-        Whether to ensure the beam is properly normalised.
+        Whether to normalise the beam to unit mean over the (non-blank) sky above the
+        horizon. If True, ``mean_conv_temp`` is the beam-weighted mean sky
+        temperature, ``int B T dOmega / int B dOmega``. If False, the beam is used
+        as given, and ``mean_conv_temp`` is ``(1/4pi) int B T dOmega``, which does
+        not depend on the resolution of the sky model.
     beam_smoothing
         Whether to smooth the beam over the frequency axis (with
         ``smoothing_model``) before interpolating it.
@@ -104,16 +108,19 @@ def sky_convolution_generator(
     j
         The frequency enumerator
     mean_conv_temp
-        The mean temperature after multiplying by the beam (above the horizon)
+        The beam-weighted sky temperature above the horizon (see ``normalize_beam``),
+        equal to ``nansum(conv_temp) / n_pixels``.
     conv_temp
-        An array containing the temperature after multiuplying by the beam in each pixel
+        An array containing the temperature after multiplying by the beam in each pixel
         above the horizon.
     sky
         An array containing the sky temperature in pixel above the horizon.
     beam
         An array containing the interpolated beam in pixels above the horizon (NaN
-        elsewhere, and where the sky is NaN). A new array is yielded on every
-        iteration.
+        elsewhere, and where the sky is NaN), weighted by the solid angle of each
+        pixel and scaled (see ``normalize_beam``) so that
+        ``nansum(beam * sky) / n_pixels`` is ``mean_conv_temp``. A new array is
+        yielded on every iteration.
     time
         The local time at each LST.
     n_pixels
@@ -228,6 +235,10 @@ def sky_convolution_generator(
             if normalize_beam:
                 solid_angle = np.nansum(beam_above_horizon) / n_pix_tot_no_nan
                 beam_above_horizon *= ground_gain[freq_idx] / solid_angle
+            else:
+                # Scale so that the mean over pixels below gives
+                # (1/4pi) * int B T dOmega, independent of the sky resolution.
+                beam_above_horizon *= n_pix_tot_no_nan / (4 * np.pi)
 
             antenna_temperature_above_horizon = beam_above_horizon * sky_map
             yield (
@@ -290,7 +301,10 @@ def simulate_spectra(
         Maximum frequency to keep in the simulation (frequencies otherwise defined by
         the beam).
     normalize_beam
-        Whether to normalize the beam to unit integral over the visible sky.
+        Whether to normalize the beam to unit integral over the visible sky. If True,
+        the spectra are the beam-weighted mean sky temperature,
+        ``int B T dOmega / int B dOmega``. If False, the beam is used as given, and
+        the spectra are ``(1/4pi) int B T dOmega``.
     index_model
         An :class:`IndexModel` to use to generate different frequencies of the sky
         model.

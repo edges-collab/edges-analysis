@@ -213,14 +213,6 @@ def test_galactic_centre_transit_lst(use_astropy_azel):
     assert np.max(az_el[:, 1]) > 85.0
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "With normalize_beam=False the output is sum(B*dOmega*T)/Npix, which "
-        "depends on the sky resolution and is not (1/4pi) * int(B*T dOmega); "
-        "fix pending (result-changing)"
-    ),
-)
 def test_unnormalised_beam_is_resolution_independent():
     """(1/4pi) int B T dOmega for B=1 above the horizon and uniform T is T/2."""
     beam = Beam.uniform(f_low=50, f_high=54, delta_f=2)
