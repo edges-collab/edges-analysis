@@ -1,5 +1,7 @@
 """Provides extra routines for fitting that are not in yabf."""
 
+from functools import cached_property
+
 import numpy as np
 from scipy import linalg, stats
 from scipy.optimize import dual_annealing, minimize
@@ -7,6 +9,7 @@ from yabf import Component
 
 from edges.modeling import FixedLinearModel
 from edges.modeling.data_transforms import IdentityTransform
+from edges.modeling.fitting import _RepeatedFit
 
 
 class SemiLinearFit:
@@ -47,6 +50,12 @@ class SemiLinearFit:
     NotImplementedError
         If ``sigma`` is a covariance matrix and the FG model has a non-identity data
         transform.
+
+    Notes
+    -----
+    The parts of the FG fit that depend only on the FG basis and the noise are
+    computed on the first fit and re-used, so ``fg`` and ``sigma`` should not be
+    changed after the first fit.
     """
 
     def __init__(
@@ -105,24 +114,27 @@ class SemiLinearFit:
         """Compute the EOR model given EOR parameters p."""
         return self.eor(params=p)["eor_spectrum"]
 
-    def fg_fit(self, p):
-        """Compute the best FG fit, given EOR parameters p."""
-        eor = self.get_eor(p)
-        resid = self.spectrum - eor
+    @cached_property
+    def _fg_fitter(self) -> _RepeatedFit:
+        """The FG fits, with the parts that depend only on the basis/noise cached."""
         if self._is_cov:
-            return self.fg.fit(ydata=resid, weights=self._cov_inverse, method="qr")
-        return self.fg.fit(
-            ydata=resid,
+            return _RepeatedFit(self.fg, weights=self._cov_inverse, method="qr")
+        return _RepeatedFit(
+            self.fg,
             weights=1 / self.sigma**2 if hasattr(self.sigma, "__len__") else 1.0,
         )
 
+    def fg_fit(self, p):
+        """Compute the best FG fit, given EOR parameters p."""
+        return self._fg_fitter.fit(self.spectrum - self.get_eor(p))
+
     def fg_params(self, p):
         """Compute the best-fit FG parameters, given EoR parameters p."""
-        return self.fg_fit(p).model_parameters
+        return tuple(self._fg_fitter.parameters(self.spectrum - self.get_eor(p)))
 
     def get_resid(self, p):
         """Comptue the residual for given parameters p."""
-        return self.fg_fit(p).residual
+        return self._fg_fitter.residual(self.spectrum - self.get_eor(p))
 
     def neg_lk(self, p):
         """Comptue the negative log-likelihood given parameters p."""

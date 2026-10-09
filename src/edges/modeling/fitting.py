@@ -181,15 +181,9 @@ class ModelFit:
 
         w = self._masked_weights
 
-        if self.method == "lstsq":
-            if np.isscalar(self.weights):
-                pars = self._ls(self.model.basis[:, mask], self.ydata[mask])
-            elif self._has_weight_matrix:
-                pars = self._gls_lstsq(self.model.basis, self.ydata, w)
-            else:
-                pars = self._wls(self.model.basis[:, mask], self.ydata[mask], w=w)
-        elif self.method == "qr":
-            pars = self._qr(self.model.basis[:, mask], self.ydata[mask], w=w)
+        if self.method in ("lstsq", "qr"):
+            basis, ydata = self._solver_inputs()
+            pars = _LinearSolver(basis, w, self.method).solve(ydata)
         elif self.method == "qrd-c":
             pars = self._qrd_c(self.model.basis[:, mask], self.ydata[mask], w=w)
         elif self.method == "alan-qrd":
@@ -198,39 +192,15 @@ class ModelFit:
         # Create a new model with the same parameters but specific parameters and xdata.
         return self.model.with_params(parameters=pars)
 
-    def _qr(self, basis: np.ndarray, y: np.ndarray, w: np.ndarray) -> np.ndarray:
-        """Solve a linear system using QR decomposition.
+    def _solver_inputs(self) -> tuple[np.ndarray, np.ndarray]:
+        """The basis and data of the used points, as passed to :class:`_LinearSolver`.
 
-        Here the system is defined as A*theta = y, where A is an (n, m) matrix of basis
-        vectors, y is an (n,) vector of data, and theta is an (m,) vector of parameters.
-
-        See: http://www2.imm.dtu.dk/pubdb/views/edoc_download.php/2804/pdf/imm2804.pdf
+        The data are masked to the finite points, except for the 'lstsq' method with
+        a full weight matrix (for which all the data must be finite).
         """
-        if self._has_weight_matrix:
-            # sqrt of weight matrix. For a full matrix w = L L^T, use L^T so that
-            # |L^T r|^2 = r^T w r (an elementwise sqrt is only valid when w is
-            # diagonal).
-            sqrtw = np.linalg.cholesky(w).T
-
-            # A and ydata "tilde"
-            sqrt_wa = np.dot(sqrtw, basis.T)
-            w_ydata = np.dot(sqrtw, y)
-        elif np.isscalar(w):
-            # A uniform weight does not change the solution: use unit weights.
-            sqrt_wa = basis.T
-            w_ydata = y
-        else:
-            # Diagonal weights: scale the rows rather than forming diag(sqrt(w)),
-            # which is O(n^2) in memory and time (and gives identical results, since
-            # the off-diagonal terms only ever add exact zeros).
-            sqrtw = np.sqrt(w)
-            sqrt_wa = sqrtw[:, None] * basis.T
-            w_ydata = sqrtw * y
-
-        # solving system using 'short' QR decomposition (see R. Butt, Num. Anal.
-        # Using MATLAB)
-        q, r = sp.linalg.qr(sqrt_wa, mode="economic")
-        return sp.linalg.solve(r, np.dot(q.T, w_ydata))
+        if self.method == "lstsq" and self._has_weight_matrix:
+            return self.model.basis, self.ydata
+        return self.model.basis[:, self._mask], self.ydata[self._mask]
 
     def _alan_qrd(self, basis: np.ndarray, y: np.ndarray, w: np.ndarray) -> np.ndarray:
         """Solve a linear system using QR decomposition implemented in C.
@@ -284,59 +254,6 @@ class ModelFit:
         a, b = _get_a_and_b(basis, y, w)
         _, bb = _c_qrd(a, b)
         return bb
-
-    def _gls_lstsq(self, van, y, w):
-        """Generalised least squares with a full weight (inverse-covariance) matrix.
-
-        The system is whitened with the Cholesky factor of ``w`` (``w = L L^T``) and
-        solved with ``np.linalg.lstsq``.
-        """
-        lt = np.linalg.cholesky(w).T
-        return np.linalg.lstsq(lt @ van.T, lt @ y, rcond=None)[0]
-
-    def _wls(self, van, y, w):
-        """Weighted least squares with inverse-variance weights, minimising sum(w r^2).
-
-        Ripped straight outta numpy for speed. Note: this function is written purely
-        for speed, and is intended to *not* be highly generic. Don't replace this by
-        statsmodels or even np.polyfit. They are significantly slower (>4x for
-        statsmodels, 1.5x for polyfit). Unlike np.polyfit (whose weights are
-        1/sigma), the basis and data are multiplied by ``sqrt(w)``, since ``w`` is
-        1/sigma^2.
-        """
-        # set up the least squares matrices and apply weights.
-        # Don't use inplace operations as they
-        # can cause problems with NA.
-        mask = w > 0
-        sqrtw = np.sqrt(w[mask])
-
-        lhs = van[:, mask] * sqrtw
-        rhs = y[mask] * sqrtw
-
-        rcond = y.size * np.finfo(y.dtype).eps
-
-        # Determine the norms of the design matrix columns.
-        scl = np.sqrt(np.square(lhs).sum(1))
-        scl[scl == 0] = 1
-
-        # Solve the least squares problem.
-        c, _resids, _rank, _s = np.linalg.lstsq((lhs.T / scl), rhs.T, rcond)
-        return (c.T / scl).T
-
-    def _ls(self, van, y):
-        """Ripped straight outta numpy for speed.
-
-        Note: this function is written purely for speed, and is intended to *not*
-        be highly generic. Don't replace this by statsmodels or even np.polyfit. They
-        are significantly slower (>4x for statsmodels, 1.5x for polyfit).
-        """
-        rcond = y.size * np.finfo(y.dtype).eps
-
-        # Determine the norms of the design matrix columns.
-        scl = np.sqrt(np.square(van.T).sum(axis=0))
-
-        # Solve the least squares problem.
-        return np.linalg.lstsq((van.T / scl), y.T, rcond)[0] / scl
 
     @cached_property
     def model_parameters(self):
@@ -427,6 +344,217 @@ class ModelFit:
         return rng.multivariate_normal(
             mean=self.model_parameters, cov=self.parameter_covariance, size=size
         )
+
+
+class _LinearSolver:
+    """The 'lstsq' and 'qr' weighted least-squares solves of :class:`ModelFit`.
+
+    Everything that depends only on the basis and the weights (the weighted, scaled
+    design matrix, or its QR decomposition) is computed on construction, so that
+    :meth:`solve` can be called for many data vectors with fixed basis and weights.
+    Each solve is bit-for-bit identical to a fresh solve.
+
+    Parameters
+    ----------
+    basis
+        The ``(n_terms, n)`` basis at the used data points.
+    w
+        The weights of the used data points: a scalar, a 1D array of inverse
+        variances, or an ``(n, n)`` inverse-covariance matrix.
+    method
+        Either 'lstsq' or 'qr' (see :class:`ModelFit`).
+    """
+
+    def __init__(
+        self,
+        basis: np.ndarray,
+        w: np.ndarray | float,
+        method: Literal["lstsq", "qr"],
+    ):
+        self.method = method
+        if method == "lstsq":
+            self._init_lstsq(basis, w)
+        elif method == "qr":
+            self._init_qr(basis, w)
+        else:
+            raise ValueError(f"Unsupported method for _LinearSolver: {method}")
+
+    def _init_lstsq(self, van: np.ndarray, w: np.ndarray | float):
+        """Prepare the design matrix for the ``np.linalg.lstsq`` based solves.
+
+        Ripped straight outta numpy for speed. Note: this is written purely for
+        speed, and is intended to *not* be highly generic. Don't replace this by
+        statsmodels or even np.polyfit. They are significantly slower (>4x for
+        statsmodels, 1.5x for polyfit). Unlike np.polyfit (whose weights are
+        1/sigma), the basis and data are multiplied by ``sqrt(w)``, since ``w`` is
+        1/sigma^2. The columns of the design matrix are normalised before solving.
+
+        A full weight matrix ``w = L L^T`` instead whitens the system with ``L^T``
+        (generalised least squares), without normalising the columns.
+        """
+        self._wmask = None
+        self._sqrtw = None
+        self._lt = None
+        if np.isscalar(w):
+            # Determine the norms of the design matrix columns.
+            self._scl = np.sqrt(np.square(van.T).sum(axis=0))
+            self._lhs = van.T / self._scl
+        elif np.ndim(w) == 2:
+            self._lt = np.linalg.cholesky(w).T
+            self._lhs = self._lt @ van.T
+        else:
+            # Set up the least squares matrices and apply weights. Don't use
+            # in-place operations as they can cause problems with NA.
+            self._wmask = w > 0
+            self._sqrtw = np.sqrt(w[self._wmask])
+            lhs = van[:, self._wmask] * self._sqrtw
+
+            # Determine the norms of the design matrix columns.
+            scl = np.sqrt(np.square(lhs).sum(1))
+            scl[scl == 0] = 1
+            self._scl = scl
+            self._lhs = lhs.T / scl
+
+    def _init_qr(self, basis: np.ndarray, w: np.ndarray | float):
+        """Prepare the QR decomposition of the whitened basis.
+
+        See: http://www2.imm.dtu.dk/pubdb/views/edoc_download.php/2804/pdf/imm2804.pdf
+        """
+        self._sqrtw = None
+        self._sqrtw_matrix = None
+        if np.ndim(w) == 2:
+            # sqrt of weight matrix. For a full matrix w = L L^T, use L^T so that
+            # |L^T r|^2 = r^T w r (an elementwise sqrt is only valid when w is
+            # diagonal).
+            self._sqrtw_matrix = np.linalg.cholesky(w).T
+
+            # A "tilde"
+            sqrt_wa = np.dot(self._sqrtw_matrix, basis.T)
+        elif np.isscalar(w):
+            # A uniform weight does not change the solution: use unit weights.
+            sqrt_wa = basis.T
+        else:
+            # Diagonal weights: scale the rows rather than forming diag(sqrt(w)),
+            # which is O(n^2) in memory and time (and gives identical results, since
+            # the off-diagonal terms only ever add exact zeros).
+            self._sqrtw = np.sqrt(w)
+            sqrt_wa = self._sqrtw[:, None] * basis.T
+
+        # solving system using 'short' QR decomposition (see R. Butt, Num. Anal.
+        # Using MATLAB)
+        self._q, self._r = sp.linalg.qr(sqrt_wa, mode="economic")
+
+    def solve(self, y: np.ndarray) -> np.ndarray:
+        """Get the best-fit parameters for the data ``y`` (at the used points)."""
+        if self.method == "qr":
+            if self._sqrtw_matrix is not None:
+                w_ydata = np.dot(self._sqrtw_matrix, y)
+            elif self._sqrtw is not None:
+                w_ydata = self._sqrtw * y
+            else:
+                w_ydata = y
+            return sp.linalg.solve(self._r, np.dot(self._q.T, w_ydata))
+
+        if self._lt is not None:
+            return np.linalg.lstsq(self._lhs, self._lt @ y, rcond=None)[0]
+
+        rcond = y.size * np.finfo(y.dtype).eps
+        if self._wmask is None:
+            return np.linalg.lstsq(self._lhs, y.T, rcond)[0] / self._scl
+
+        rhs = y[self._wmask] * self._sqrtw
+        c, _resids, _rank, _s = np.linalg.lstsq(self._lhs, rhs.T, rcond)
+        return (c.T / self._scl).T
+
+
+class _RepeatedFit:
+    """Fits of a fixed linear model, with fixed weights, to many data vectors.
+
+    This is equivalent to calling ``model.fit(ydata, weights=weights,
+    method=method)`` for each data vector, but the parts of the solve that depend
+    only on the basis and the weights are computed once (see
+    :class:`_LinearSolver`), and no :class:`ModelFit` is needed to get the best-fit
+    parameters or residuals. The results are bit-for-bit identical to the full fits.
+
+    The solve is prepared for the data mask (finite data points) of the first data
+    vector; data with a different mask fall back to a full :class:`ModelFit`, as do
+    the 'alan-qrd' and 'qrd-c' methods.
+
+    Parameters
+    ----------
+    model
+        The linear model, fixed at the data coordinates.
+    weights
+        The weights of the data (see :class:`ModelFit`).
+    method
+        The solving method (see :class:`ModelFit`).
+    """
+
+    def __init__(
+        self,
+        model: core.FixedLinearModel,
+        weights: np.ndarray | float = 1.0,
+        method: Literal["lstsq", "qr", "alan-qrd", "qrd-c"] = "lstsq",
+    ):
+        self.model = model
+        self.weights = weights
+        self.method = method
+        self._mask: np.ndarray | None = None
+        self._solver: _LinearSolver | None = None
+        self._full_data = False
+
+    def _transform(self, ydata: np.ndarray) -> np.ndarray:
+        """Apply the model's data transform, as :meth:`FixedLinearModel.fit` does."""
+        return self.model.model.data_transform.transform(self.model.x, ydata)
+
+    def _cached_parameters(self, d: np.ndarray) -> np.ndarray | None:
+        """Best-fit parameters for the transformed data ``d`` from the cached solve.
+
+        Returns ``None`` if the cached solve does not apply to ``d``.
+        """
+        if self.method not in ("lstsq", "qr"):
+            return None
+
+        mask = np.isfinite(d)
+        if self._mask is None:
+            # A full fit validates the weights (and data), and gives the inputs of
+            # the solve exactly as ModelFit would pass them.
+            fit = ModelFit(
+                self.model, ydata=d, weights=self.weights, method=self.method
+            )
+            basis, _ = fit._solver_inputs()
+            self._solver = _LinearSolver(basis, fit._masked_weights, self.method)
+            self._full_data = self.method == "lstsq" and fit._has_weight_matrix
+            self._mask = mask
+        elif not np.array_equal(mask, self._mask):
+            return None
+
+        return self._solver.solve(d if self._full_data else d[mask])
+
+    def fit(self, ydata: np.ndarray) -> ModelFit:
+        """Get the :class:`ModelFit` of the data (as ``model.fit(ydata, ...)``)."""
+        d = self._transform(ydata)
+        out = ModelFit(self.model, ydata=d, weights=self.weights, method=self.method)
+        pars = self._cached_parameters(d)
+        if pars is not None:
+            # Pre-fill the (cached) best-fit model, so that it is not re-solved.
+            out.__dict__["fit"] = self.model.with_params(parameters=pars)
+        return out
+
+    def parameters(self, ydata: np.ndarray) -> np.ndarray:
+        """Get the best-fit parameters of the data, as an array."""
+        pars = self._cached_parameters(self._transform(ydata))
+        if pars is None:
+            return np.asarray(self.fit(ydata).model_parameters)
+        return pars
+
+    def residual(self, ydata: np.ndarray) -> np.ndarray:
+        """Get the residuals of the data to the best fit (see ModelFit.residual)."""
+        d = self._transform(ydata)
+        pars = self._cached_parameters(d)
+        if pars is None:
+            return self.fit(ydata).residual
+        return d - self.model(parameters=pars)
 
 
 def _c_qrd(a: np.ndarray, b: np.ndarray):
