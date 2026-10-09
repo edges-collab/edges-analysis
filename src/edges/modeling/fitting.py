@@ -206,18 +206,26 @@ class ModelFit:
 
         See: http://www2.imm.dtu.dk/pubdb/views/edoc_download.php/2804/pdf/imm2804.pdf
         """
-        if np.isscalar(w):
-            w = np.eye(len(y))
-        elif np.ndim(w) == 1:
-            w = np.diag(w)
+        if self._has_weight_matrix:
+            # sqrt of weight matrix. For a full matrix w = L L^T, use L^T so that
+            # |L^T r|^2 = r^T w r (an elementwise sqrt is only valid when w is
+            # diagonal).
+            sqrtw = np.linalg.cholesky(w).T
 
-        # sqrt of weight matrix. For a full matrix w = L L^T, use L^T so that
-        # |L^T r|^2 = r^T w r (an elementwise sqrt is only valid when w is diagonal).
-        sqrtw = np.linalg.cholesky(w).T if self._has_weight_matrix else np.sqrt(w)
-
-        # A and ydata "tilde"
-        sqrt_wa = np.dot(sqrtw, basis.T)
-        w_ydata = np.dot(sqrtw, y)
+            # A and ydata "tilde"
+            sqrt_wa = np.dot(sqrtw, basis.T)
+            w_ydata = np.dot(sqrtw, y)
+        elif np.isscalar(w):
+            # A uniform weight does not change the solution: use unit weights.
+            sqrt_wa = basis.T
+            w_ydata = y
+        else:
+            # Diagonal weights: scale the rows rather than forming diag(sqrt(w)),
+            # which is O(n^2) in memory and time (and gives identical results, since
+            # the off-diagonal terms only ever add exact zeros).
+            sqrtw = np.sqrt(w)
+            sqrt_wa = sqrtw[:, None] * basis.T
+            w_ydata = sqrtw * y
 
         # solving system using 'short' QR decomposition (see R. Butt, Num. Anal.
         # Using MATLAB)
@@ -238,14 +246,18 @@ class ModelFit:
         both A and b are dot-products, and the sum in numpy uses pairwise summation
         which is more accurate than a naive accumulation as would be done in C.
         """
-        if np.isscalar(w):
-            w = np.eye(len(y))
-        elif np.ndim(w) == 1:
-            w = np.diag(w)
-
         npar, _ = basis.shape
 
-        wa = np.dot(basis, w)
+        if self._has_weight_matrix:
+            wa = np.dot(basis, w)
+        else:
+            # A uniform weight does not change the solution, so use unit weights.
+            # 1D weights scale the columns of the basis, which is identical to (but
+            # O(n) rather than O(n^2) in memory and time) multiplying by diag(w).
+            # The result is a new C-ordered array (as the matrix product was), so
+            # that the dot products below sum in exactly the same order as before
+            # (the C code is sensitive to the last bits of the normal equations).
+            wa = np.multiply(basis, 1.0 if np.isscalar(w) else w, order="C")
 
         bbrr = np.dot(wa, y)
         aarr = np.dot(wa, basis.T)
