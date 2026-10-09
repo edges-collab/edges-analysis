@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import numpy as np
 import pytest
 from astropy import units as un
@@ -169,3 +171,27 @@ class TestSemiRigidCableLoss:
         loss = LossFunctionGivenSparams(hlc)(gamma)
         expected = _available_gain(g, s11, s21_abs**2 + 0j, s22)
         np.testing.assert_allclose(loss, expected, rtol=1e-12, atol=0)
+
+
+def test_2015_file_loss_close_to_alan_b18(testdata_path: Path):
+    """The default cable file gives a hot-load loss close to Alan's B18 loss.
+
+    Alan's B18 calibration uses a different measurement of the semi-rigid cable
+    (from his 2015-09-16 S11 file), so the two do not agree exactly: they differ
+    by up to 2.8e-4. A squared loss would differ by up to 5.6e-3, and no loss at all
+    by 6e-3.
+    """
+    data = testdata_path / "alanmode" / "b18_cal_test"
+    alan_loss = np.genfromtxt(data / "hot_load_loss.txt")
+    s11m = np.genfromtxt(data / "s11_modelled_alan.txt", names=True)
+    mask = (s11m["freq"] >= 50) & (s11m["freq"] <= 100)
+    gamma = sp.ReflectionCoefficient(
+        freqs=s11m["freq"][mask] * un.MHz,
+        reflection_coefficient=(s11m["hot_real"] + 1j * s11m["hot_imag"])[mask],
+    )
+
+    hlc = sp.read_semi_rigid_cable_sparams_file(
+        f_low=50 * un.MHz, f_high=100 * un.MHz
+    ).smoothed(params=sp.hot_load_cable_model_params(), freqs=gamma.freqs)
+    loss = LossFunctionGivenSparams(hlc)(gamma)
+    np.testing.assert_allclose(loss, alan_loss[mask, 1], atol=3e-4, rtol=0)
