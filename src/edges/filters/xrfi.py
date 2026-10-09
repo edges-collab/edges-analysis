@@ -398,10 +398,14 @@ def xrfi_iterative(
         std_list.append(std_model)
         model_list.append(model)
 
+        # Converged only if the flags did not change *and* the next iteration would
+        # use the same model parameters (e.g. number of terms) as this one, so that
+        # it would reproduce this iteration exactly. Otherwise, the parameters are
+        # still changing (e.g. with term_increase > 0) and we must keep iterating.
         if (
             n_flags_changed == 0
-            and model_params == model_params_list[-1]
-            and std_params == std_params_list[-1]
+            and data_modeler.set_params(counter) == model_params
+            and std_modeler.set_params(counter) == std_params
         ):
             logger.info(f"Converged after {counter} iterations.")
             break

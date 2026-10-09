@@ -431,14 +431,6 @@ class TestSingleSpike:
         assert not np.any(flags)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "The convergence check compares the model params to the element just "
-        "appended, so term_increase never takes effect and the fit stops at "
-        "min_terms; fix pending (result-changing)"
-    ),
-)
 def test_term_increase_reaches_max_terms():
     n = 500
     freqs = np.linspace(50, 150, n)
@@ -454,6 +446,24 @@ def test_term_increase_reaches_max_terms():
         threshold_setter=lambda i: 5.0,
     )
     assert info.model_params[-1]["nterms"] == 5
+    assert [p["nterms"] for p in info.model_params[:3]] == [3, 4, 5]
+
+
+def test_constant_params_converge_after_first_unchanged_iteration():
+    """With fixed model params, an iteration with no flag changes is final."""
+    n = 500
+    freqs = np.linspace(50, 150, n)
+    rng = np.random.default_rng(0)
+    data = 10 + rng.normal(scale=0.01, size=n)
+    flags, info = xrfi.xrfi_iterative(
+        data,
+        freqs=freqs,
+        data_modeler=_poly_modeler(2),
+        std_modeler=_poly_modeler(2),
+        threshold_setter=lambda i: 10.0,
+    )
+    assert not np.any(flags)
+    assert info.n_iters == 1
 
 
 # ---------------------------------------------------------------------------
