@@ -246,7 +246,16 @@ class NoiseWaveLinearModelFit:
         return self.modelfit.weighted_rms
 
 
-@attrs.define(slots=False)
+def _clear_source_k(instance, attribute, value):
+    """Attrs ``on_setattr`` hook: drop the cached K-factors when a field is set."""
+    instance.__dict__.pop("_source_k", None)
+    return value
+
+
+@attrs.define(
+    slots=False,
+    on_setattr=[attrs.setters.convert, attrs.setters.validate, _clear_source_k],
+)
 class NoiseWaveLinearModel:
     """
     A linear model for the noise wave terms.
@@ -262,6 +271,12 @@ class NoiseWaveLinearModel:
     -------
     model : :class:`np.poly1d`
         The linear model for the noise wave terms.
+
+    Notes
+    -----
+    The K-factors of each source (see :func:`get_K`) are computed once and cached;
+    the cache is cleared when any attribute is re-assigned, but not if the S11
+    arrays (or the ``gamma_src`` dict) are modified in place.
     """
 
     freq: np.ndarray = attrs.field()
@@ -271,36 +286,35 @@ class NoiseWaveLinearModel:
     n_terms: int = attrs.field(default=5)
     delay: float = attrs.field(default=0.0)
 
+    @cached_property
+    def _source_k(self) -> dict[str, tuple[np.ndarray, ...]]:
+        """The K-factors (see :func:`get_K`) of each calibration source."""
+        return {
+            name: get_K(self.gamma_rec, gamma) for name, gamma in self.gamma_src.items()
+        }
+
     def cos_kfactor(self, freq):
         """Compute the scaler to the Tcos basis function."""
         freq = freq[: len(freq) // len(self.gamma_src)]
 
         ph = np.exp(1j * 2 * np.pi * freq * self.delay * 1e6)
 
-        out = []
-        for gamma in self.gamma_src.values():
-            K = get_K(self.gamma_rec, gamma)
-            out.append(K[2] * ph.real - K[3] * ph.imag)
-
-        return np.concatenate(out)
+        return np.concatenate([
+            K[2] * ph.real - K[3] * ph.imag for K in self._source_k.values()
+        ])
 
     def sin_kfactor(self, freq):
         """Compute the scaler to the Tsin basis function."""
         freq = freq[: len(freq) // len(self.gamma_src)]
         ph = np.exp(1j * 2 * np.pi * freq * self.delay * 1e6)
 
-        out = []
-        for gamma in self.gamma_src.values():
-            K = get_K(self.gamma_rec, gamma)
-
-            out.append(K[2] * ph.imag + K[3] * ph.real)
-        return np.concatenate(out)
+        return np.concatenate([
+            K[2] * ph.imag + K[3] * ph.real for K in self._source_k.values()
+        ])
 
     def unc_kfactor(self, freq):
         """Compute the scaler to the Tunc basis function."""
-        return np.concatenate([
-            get_K(self.gamma_rec, gamma)[1] for gamma in self.gamma_src.values()
-        ])
+        return np.concatenate([K[1] for K in self._source_k.values()])
 
     def fit(
         self,
@@ -334,7 +348,7 @@ class NoiseWaveLinearModel:
             models={"unc": unc_model, "cos": cos_model, "sin": sin_model}
         )
 
-        K0 = {k: get_K(self.gamma_rec, self.gamma_src[k])[0] for k in self.gamma_src}
+        K0 = {k: K[0] for k, K in self._source_k.items()}
 
         data = np.concatenate([
             spectrum[k] - temp_thermistor[k] * K0[k] for k in self.gamma_src
