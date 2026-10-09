@@ -522,18 +522,41 @@ def test_sphere_spline_without_zenith_row():
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "get_beam_solid_angle uses a rectangle rule that includes both "
-        "elevation endpoints, biasing the solid angle high by ~d_el/2 (0.9% at 1 deg, "
-        "4.3% at 5 deg); fix pending (result-changing)"
-    ),
-)
 @pytest.mark.parametrize("delta", [1, 5])
 def test_isotropic_beam_solid_angle_coarse_grid(delta):
     beam = beams.Beam.uniform(f_low=50, f_high=54, delta_el=delta, delta_az=delta)
-    np.testing.assert_allclose(beam.get_beam_solid_angle(), 2 * np.pi, rtol=2e-3)
+    omega = beam.get_beam_solid_angle()
+    assert omega.shape == (2,)
+    np.testing.assert_allclose(omega, 2 * np.pi, rtol=1e-12)
+
+
+def test_beam_solid_angle_dipole_like():
+    """The hemisphere integral of sin(el)^2 (1 + 0.3 cos 2az) dOmega is 2pi/3."""
+    az = np.arange(0, 360, 2.0)
+    el = np.arange(0, 91, 2.0)
+    pattern = np.sin(np.radians(el))[:, None] ** 2 * (
+        1 + 0.3 * np.cos(2 * np.radians(az))
+    )
+    beam = beams.Beam(
+        frequency=np.array([50.0, 60.0]) * un.MHz,
+        azimuth=az,
+        elevation=el,
+        beam=np.array([pattern, 2 * pattern]),
+    )
+    np.testing.assert_allclose(
+        beam.get_beam_solid_angle(), [2 * np.pi / 3, 4 * np.pi / 3], rtol=5e-4
+    )
+
+
+def test_beam_solid_angle_closed_azimuth_grid():
+    """An azimuth grid that includes both 0 and 360 deg is not double counted."""
+    beam = beams.Beam(
+        frequency=np.array([50.0]) * un.MHz,
+        azimuth=np.arange(0, 361, 5.0),
+        elevation=np.arange(0, 91, 5.0),
+        beam=np.ones((1, 19, 73)),
+    )
+    np.testing.assert_allclose(beam.get_beam_solid_angle(), 2 * np.pi, rtol=1e-12)
 
 
 def test_shift_beam_maps_float_angle(random_beam_maps):

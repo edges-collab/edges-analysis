@@ -868,16 +868,36 @@ class Beam:
         mask = (self.frequency >= low) & (self.frequency <= high)
         return attrs.evolve(self, frequency=self.frequency[mask], beam=self.beam[mask])
 
-    def get_beam_solid_angle(self) -> float:
-        """Calculate the integrated beam solid angle."""
-        sin_theta = np.cos(self.elevation * (np.pi / 180))
-        sin_theta = np.tile(sin_theta, (len(self.azimuth), 1)).T
+    def get_beam_solid_angle(self) -> np.ndarray:
+        """Calculate the integrated beam solid angle, int B dOmega, at each frequency.
 
-        beam_integration = np.sum(self.beam * sin_theta, axis=(1, 2))
+        Each grid point is given the solid angle of the cell around it, bounded by
+        the mid-points to its neighbours (and by the first and last elevations of the
+        grid), so the result is exact for an isotropic beam. If the azimuth grid is
+        regular and covers the full circle, it is treated as periodic; otherwise it
+        is integrated between its first and last azimuths.
 
-        d_el = self.elevation[1] - self.elevation[0]
-        d_az = self.azimuth[1] - self.azimuth[0]
-        return d_el * d_az * (np.pi / 180) ** 2 * beam_integration
+        Returns
+        -------
+        solid_angle
+            The beam solid angle in steradians, shape ``(Nfreq,)``.
+        """
+        # Solid angle of each elevation band per radian of azimuth.
+        el_weights = np.diff(np.sin(np.radians(self._cell_edges(self.elevation))))
+
+        az = self.azimuth
+        d_az = 360 / len(az)
+        if np.allclose(np.diff(az), d_az):
+            az_weights = np.full(len(az), d_az)
+        else:
+            az_weights = np.diff(self._cell_edges(az))
+
+        return np.einsum("fea,e,a->f", self.beam, el_weights, np.radians(az_weights))
+
+    @staticmethod
+    def _cell_edges(x: np.ndarray) -> np.ndarray:
+        """Edges of the cells around each (sorted) grid point, from x[0] to x[-1]."""
+        return np.concatenate(([x[0]], (x[1:] + x[:-1]) / 2, [x[-1]]))
 
     def compute_ground_loss(self):
         """Compute the ground loss for the beam."""
