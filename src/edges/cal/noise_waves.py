@@ -246,15 +246,16 @@ class NoiseWaveLinearModelFit:
         return self.modelfit.weighted_rms
 
 
-def _clear_source_k(instance, attribute, value):
-    """Attrs ``on_setattr`` hook: drop the cached K-factors when a field is set."""
+def _clear_kfactor_cache(instance, attribute, value):
+    """Attrs ``on_setattr`` hook: drop cached K-factors and phase on assignment."""
     instance.__dict__.pop("_source_k", None)
+    instance.__dict__.pop("_phase_memo", None)
     return value
 
 
 @attrs.define(
     slots=False,
-    on_setattr=[attrs.setters.convert, attrs.setters.validate, _clear_source_k],
+    on_setattr=[attrs.setters.convert, attrs.setters.validate, _clear_kfactor_cache],
 )
 class NoiseWaveLinearModel:
     """
@@ -274,9 +275,10 @@ class NoiseWaveLinearModel:
 
     Notes
     -----
-    The K-factors of each source (see :func:`get_K`) are computed once and cached;
-    the cache is cleared when any attribute is re-assigned, but not if the S11
-    arrays (or the ``gamma_src`` dict) are modified in place.
+    The K-factors of each source (see :func:`get_K`) are computed once and cached,
+    as is the delay phase for the most recent frequencies. The cache is cleared when
+    any attribute is re-assigned, but not if the S11 arrays (or the ``gamma_src``
+    dict) are modified in place.
     """
 
     freq: np.ndarray = attrs.field()
@@ -293,21 +295,36 @@ class NoiseWaveLinearModel:
             name: get_K(self.gamma_rec, gamma) for name, gamma in self.gamma_src.items()
         }
 
-    def cos_kfactor(self, freq):
-        """Compute the scaler to the Tcos basis function."""
+    def _phase(self, freq: np.ndarray) -> np.ndarray:
+        """The delay phase ``exp(2 pi i f delay)`` for the frequencies of one source.
+
+        ``freq`` is the frequencies repeated for each source (as passed to the basis
+        scalers). The result for the most recent ``freq`` is memoised, since the
+        scalers are called with the same frequencies for every basis term.
+        """
         freq = freq[: len(freq) // len(self.gamma_src)]
+        memo = self.__dict__.get("_phase_memo")
+        if (
+            memo is not None
+            and memo[0].shape == freq.shape
+            and np.array_equal(memo[0], freq)
+        ):
+            return memo[1]
 
         ph = np.exp(1j * 2 * np.pi * freq * self.delay * 1e6)
+        self.__dict__["_phase_memo"] = (np.array(freq, copy=True), ph)
+        return ph
 
+    def cos_kfactor(self, freq):
+        """Compute the scaler to the Tcos basis function."""
+        ph = self._phase(freq)
         return np.concatenate([
             K[2] * ph.real - K[3] * ph.imag for K in self._source_k.values()
         ])
 
     def sin_kfactor(self, freq):
         """Compute the scaler to the Tsin basis function."""
-        freq = freq[: len(freq) // len(self.gamma_src)]
-        ph = np.exp(1j * 2 * np.pi * freq * self.delay * 1e6)
-
+        ph = self._phase(freq)
         return np.concatenate([
             K[2] * ph.imag + K[3] * ph.real for K in self._source_k.values()
         ])

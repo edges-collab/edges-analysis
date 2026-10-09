@@ -383,6 +383,37 @@ class TestCachedKFactors:
             nw.get_K(nwlm.gamma_rec, nwlm.gamma_src["open"])[1],
         )
 
+    def test_phase_follows_freq_and_delay(self):
+        rng = np.random.default_rng(5)
+        kw = {
+            "freq": FREQ,
+            "gamma_rec": _random_s11(rng, N, 0.1),
+            "gamma_src": {"open": _random_s11(rng, N, 0.9)},
+            "delay": -2e-9,
+        }
+        nwlm = nw.NoiseWaveLinearModel(**kw)
+        other_freq = FREQ + 0.5
+        for freq in (FREQ, other_freq, other_freq, FREQ):
+            ref = _UncachedNoiseWaveLinearModel(**kw)
+            np.testing.assert_array_equal(nwlm.cos_kfactor(freq), ref.cos_kfactor(freq))
+            np.testing.assert_array_equal(nwlm.sin_kfactor(freq), ref.sin_kfactor(freq))
+
+        # The memoised phase must not survive in-place changes to the input.
+        freq = FREQ.copy()
+        nwlm.cos_kfactor(freq)
+        freq += 1.0
+        np.testing.assert_array_equal(
+            nwlm.cos_kfactor(freq),
+            _UncachedNoiseWaveLinearModel(**kw).cos_kfactor(freq),
+        )
+
+        nwlm.delay = 5e-9
+        kw["delay"] = 5e-9
+        np.testing.assert_array_equal(
+            nwlm.sin_kfactor(FREQ),
+            _UncachedNoiseWaveLinearModel(**kw).sin_kfactor(FREQ),
+        )
+
     def test_noise_waves_linear_model_equal_reference(self, monkeypatch):
         rng = np.random.default_rng(3)
         gamma_src = {
