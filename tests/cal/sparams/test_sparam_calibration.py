@@ -319,3 +319,127 @@ class TestInternalSwitchAveraging:
         np.testing.assert_allclose(
             out.s12 * out.s21, np.mean(products, axis=0), rtol=1e-3
         )
+
+
+def _osl_reference(meas: sp.CalkitReadings, model: sp.CalkitReadings) -> np.ndarray:
+    """Straightforward per-frequency least-squares OSL solve.
+
+    Returns the solution vectors (e00, e01e10 - e00 e11, e11), shape (N, 3).
+    """
+    out = np.zeros((len(meas.freqs), 3), dtype=complex)
+    for i in range(len(meas.freqs)):
+        om, sm, mm = (
+            model.open.reflection_coefficient[i],
+            model.short.reflection_coefficient[i],
+            model.match.reflection_coefficient[i],
+        )
+        b = np.array([
+            meas.open.reflection_coefficient[i],
+            meas.short.reflection_coefficient[i],
+            meas.match.reflection_coefficient[i],
+        ])
+        a = np.array([
+            [1, om, om * b[0]],
+            [1, sm, sm * b[1]],
+            [1, mm, mm * b[2]],
+        ])
+        out[i] = np.linalg.lstsq(a, b, rcond=None)[0]
+    return out
+
+
+def _assert_matches_osl_reference(
+    est: sp.SParams, ref: np.ndarray, rtol: float, atol: float = 0
+):
+    np.testing.assert_allclose(est.s11, ref[:, 0], rtol=rtol, atol=atol)
+    np.testing.assert_allclose(est.s22, ref[:, 2], rtol=rtol, atol=atol)
+    np.testing.assert_allclose(
+        est.s12 * est.s21, ref[:, 1] + ref[:, 0] * ref[:, 2], rtol=rtol, atol=atol
+    )
+
+
+class TestBatchedOSLSolve:
+    """The batched OSL solve reproduces a per-frequency least-squares solve."""
+
+    freqs = np.linspace(40, 200, 2000) * un.MHz
+
+    @pytest.mark.parametrize("seed", [0, 1, 2, 3])
+    def test_matches_per_frequency_lstsq(self, seed):
+        """Random (non-smooth) error terms on the non-ideal 85033E kit."""
+        rng = np.random.default_rng(seed)
+        n = len(self.freqs)
+
+        def cplx(scale):
+            return scale * (rng.normal(size=n) + 1j * rng.normal(size=n))
+
+        err = sp.SParams(
+            freqs=self.freqs,
+            s11=cplx(0.1),
+            s12=rng.uniform(0.3, 1, n) * np.exp(2j * np.pi * rng.uniform(size=n)),
+            s21=rng.uniform(0.3, 1, n) * np.exp(2j * np.pi * rng.uniform(size=n)),
+            s22=cplx(0.1),
+        )
+        kit = sp.AGILENT_85033E.at_freqs(self.freqs)
+        meas = _measure(kit, err)
+        # Add some measurement noise so that the readings are not exactly
+        # consistent with the model.
+        meas = sp.CalkitReadings(**{
+            k: sp.ReflectionCoefficient(
+                freqs=self.freqs,
+                reflection_coefficient=getattr(meas, k).reflection_coefficient
+                + cplx(1e-4),
+            )
+            for k in ("open", "short", "match")
+        })
+
+        # LU- and SVD-based solves of these well-conditioned 3x3 systems agree to
+        # rounding (a few hundred ulps at most).
+        _assert_matches_osl_reference(
+            sparams_from_calkit_measurements(meas, kit),
+            _osl_reference(meas, kit),
+            rtol=1e-11,
+        )
+
+    def test_rank_deficient_frequencies_use_least_squares(self):
+        """Frequencies with a singular system give lstsq's minimum-norm solution."""
+        freqs = self.freqs[:6]
+        ideal = sp.CalkitReadings.ideal(freqs)
+        # The "short" model equals the "open" model at two frequencies, making
+        # those systems singular.
+        short = ideal.short.reflection_coefficient.copy()
+        short[[1, 4]] = 1.0
+        model = sp.CalkitReadings(
+            open=ideal.open,
+            short=sp.ReflectionCoefficient(freqs=freqs, reflection_coefficient=short),
+            match=ideal.match,
+        )
+        rng = np.random.default_rng(5)
+        meas = sp.CalkitReadings(**{
+            k: sp.ReflectionCoefficient(
+                freqs=freqs,
+                reflection_coefficient=0.5
+                * (rng.normal(size=6) + 1j * rng.normal(size=6)),
+            )
+            for k in ("open", "short", "match")
+        })
+        # S12*S21 at the singular frequencies is zero up to rounding (it is
+        # computed with cancellation, and squared after a square root), hence atol.
+        _assert_matches_osl_reference(
+            sparams_from_calkit_measurements(meas, model),
+            _osl_reference(meas, model),
+            rtol=1e-12,
+            atol=1e-14,
+        )
+
+    def test_nonfinite_readings_raise(self):
+        """Non-finite readings raise, as a per-frequency lstsq does."""
+        freqs = self.freqs[:5]
+        ideal = sp.CalkitReadings.ideal(freqs)
+        gamma = np.full(5, 0.3 + 0.1j)
+        gamma[2] = np.nan
+        meas = sp.CalkitReadings(
+            open=sp.ReflectionCoefficient(freqs=freqs, reflection_coefficient=gamma),
+            short=ideal.short,
+            match=ideal.match,
+        )
+        with pytest.raises(np.linalg.LinAlgError):
+            sparams_from_calkit_measurements(meas)
