@@ -111,3 +111,21 @@ def test_unmarginalized_lnl_matches_frozen_distribution():
         sig = np.sqrt(plm.data["data_variance"])
         ref = np.sum(stats.norm(loc=0, scale=sig).logpdf(resid))
         assert plm.get_unmarginalized_lnl(lin, p) == ref
+
+
+@pytest.mark.parametrize("var_kind", ["1D", "flagged", "zero"])
+def test_partial_linear_model_cached_fit_is_bit_identical(var_kind: str):
+    """The static-basis linear fit equals a fresh fit, and so does the likelihood."""
+    plm, params = _plm_setup(var_kind=var_kind)
+    var = plm.data["data_variance"]
+    wght = 1.0 if var_kind == "zero" else 1 / var
+    for p in params:
+        ctx = plm.get_ctx(params=p)
+        fit, data, var_out = plm._reduce(ctx)
+        ref = plm.linear_model.fit(ydata=data, weights=wght)
+        assert var_out is var
+        assert fit.model_parameters == ref.model_parameters
+        np.testing.assert_array_equal(fit.residual, ref.residual)
+        cached, fresh = (fit, data, var), (ref, data, var)
+        assert plm.rms(cached, None) == plm.rms(fresh, None)
+        assert plm.lnl(cached) == plm.lnl(fresh)
