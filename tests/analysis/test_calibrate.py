@@ -8,7 +8,7 @@ from pygsdata import GSData
 from edges import modeling as mdl
 from edges.analysis import calibrate
 from edges.cal import Calibrator, apply
-from edges.cal.sparams import ReflectionCoefficient
+from edges.cal.sparams import ReflectionCoefficient, S11ModelParams
 from edges.sim.antenna_beam_factor import BeamFactor
 
 
@@ -198,6 +198,42 @@ class TestApplyNoiseWaveCalibration:
             data, calibrator=calibrator, antenna_s11=fine
         )
         np.testing.assert_allclose(out.data, temp.to_value("K"), rtol=1e-9, atol=0)
+
+    def test_s11_model_params_forwarded(self, gsd_ones: GSData):
+        """A custom S11 model is used for an off-grid antenna S11, data and resids."""
+        calibrator = get_random_calibrator(gsd_ones.freqs)
+        fine_freqs = np.linspace(40, 110, 301) * un.MHz
+        fq = fine_freqs.to_value("MHz")
+        fine = ReflectionCoefficient(
+            reflection_coefficient=0.3 * (fq / 75) ** -0.5 * np.exp(-1j * fq / 7),
+            freqs=fine_freqs,
+        )
+        params = S11ModelParams(
+            model=mdl.Fourier(n_terms=7, transform=mdl.UnitTransform(range=(0, 1)))
+        )
+        on_grid = fine.smoothed(params=params, freqs=gsd_ones.freqs)
+
+        rng = np.random.default_rng(1)
+        q = rng.uniform(0.1, 0.9, gsd_ones.data.shape)
+        qmodel = q + rng.normal(scale=0.01, size=q.shape)
+        data = gsd_ones.update(data=q, data_unit="uncalibrated")
+        data = data.update(residuals=q - qmodel)
+
+        got = calibrate.apply_noise_wave_calibration(
+            data, calibrator=calibrator, antenna_s11=fine, s11_model_params=params
+        )
+        expected = calibrate.apply_noise_wave_calibration(
+            data, calibrator=calibrator, antenna_s11=on_grid
+        )
+        np.testing.assert_allclose(got.data, expected.data, rtol=1e-12, atol=0)
+        np.testing.assert_allclose(
+            got.residuals, expected.residuals, rtol=1e-10, atol=1e-9
+        )
+
+        default = calibrate.apply_noise_wave_calibration(
+            data, calibrator=calibrator, antenna_s11=fine
+        )
+        assert not np.allclose(default.data, got.data, rtol=1e-6)
 
 
 class TestApplyLossCorrection:

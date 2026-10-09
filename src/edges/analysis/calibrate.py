@@ -24,6 +24,7 @@ def apply_noise_wave_calibration(
     antenna_s11: ReflectionCoefficient,
     tload: float | tp.TemperatureType | None = None,
     tns: float | tp.TemperatureType | None = None,
+    s11_model_params: S11ModelParams | None = None,
 ) -> GSData:
     """Apply noise-wave calibration to data.
 
@@ -42,15 +43,18 @@ def apply_noise_wave_calibration(
         written by :meth:`edges.cal.Calibrator.write`).
     antenna_s11
         The reflection coefficient of the antenna. If it is not defined at the
-        frequencies of the data, it is modelled (with the default
-        :class:`edges.cal.sparams.S11ModelParams`) and evaluated at those
-        frequencies.
+        frequencies of the data, it is modelled (with ``s11_model_params``) and
+        evaluated at those frequencies.
     tload
         The load temperature used to compute the approximate temperature. Required
         if the ``data_unit`` is "uncalibrated_temp".
     tns
         The noise-source temperature used to compute the approximate temperature.
         Required if the ``data_unit`` is "uncalibrated_temp".
+    s11_model_params
+        How to model ``antenna_s11`` if it is not defined at the frequencies of the
+        data. By default, :class:`edges.cal.sparams.S11ModelParams` with its
+        default settings.
 
     Returns
     -------
@@ -76,25 +80,19 @@ def apply_noise_wave_calibration(
     else:
         q = data.data
 
-    # Calibrator.get_linear_coefficients would model the S11 itself, but cannot
-    # currently take a ReflectionCoefficient that is already on the right grid.
-    if antenna_s11.freqs.size != data.freqs.size or not np.allclose(
-        antenna_s11.freqs, data.freqs
-    ):
-        antenna_s11 = antenna_s11.smoothed(params=S11ModelParams(), freqs=data.freqs)
-    ant_s11 = antenna_s11.reflection_coefficient
-
-    new_data = calibrator.calibrate_q(q, ant_s11=ant_s11, freqs=data.freqs)
+    # Compute the linear coefficients once (modelling the antenna S11 onto the data
+    # frequencies if required) and use them for both the data and the model.
+    a, b = calibrator.get_linear_coefficients(
+        ant_s11=antenna_s11, freqs=data.freqs, s11_model_params=s11_model_params
+    )
+    new_data = q * a + b
     if data.model is not None:
         qmodel = (
             (data.model - tload) / tns
             if data.data_unit == "uncalibrated_temp"
             else data.model
         )
-        resids = new_data - calibrator.calibrate_q(
-            qmodel, ant_s11=ant_s11, freqs=data.freqs
-        )
-        resids = resids.to_value("K")
+        resids = (new_data - (qmodel * a + b)).to_value("K")
     else:
         resids = None
 

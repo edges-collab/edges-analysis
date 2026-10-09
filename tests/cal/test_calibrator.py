@@ -7,6 +7,7 @@ from astropy import units as un
 from edges import modeling as mdl
 from edges.cal import CalibrationObservation, Calibrator, ReflectionCoefficient
 from edges.cal import noise_waves as nw
+from edges.cal.sparams import S11ModelParams
 
 NFREQ = 101
 FREQS = np.linspace(50, 100, NFREQ) * un.MHz
@@ -179,6 +180,35 @@ class TestCalibratorInputs:
         )
         out = cal.get_modelled("Tsin", FREQS[::3], model=model)
         np.testing.assert_allclose(out, cal.Tsin[::3], rtol=1e-10)
+
+    def test_s11_model_params_used_for_off_grid_s11(self):
+        """s11_model_params controls how an off-grid antenna S11 is modelled."""
+        cal = _synthetic_calibrator()
+        fine = np.linspace(48, 102, 271) * un.MHz
+        fq = fine.to_value("MHz")
+        rc = ReflectionCoefficient(
+            freqs=fine,
+            reflection_coefficient=0.3 * (fq / 75) ** -0.5 * np.exp(-1j * fq / 7),
+        )
+        params = S11ModelParams(
+            model=mdl.Fourier(n_terms=7, transform=mdl.UnitTransform(range=(0, 1)))
+        )
+        q = np.linspace(0.1, 0.9, NFREQ)
+
+        on_grid = rc.smoothed(params=params, freqs=FREQS).s11
+        expected = cal.calibrate_q(q, ant_s11=on_grid, freqs=FREQS)
+        got = cal.calibrate_q(q, ant_s11=rc, freqs=FREQS, s11_model_params=params)
+        np.testing.assert_allclose(
+            got.to_value("K"), expected.to_value("K"), rtol=1e-12, atol=0
+        )
+
+        # The parameters actually matter: the default model gives a different answer.
+        default = cal.calibrate_q(q, ant_s11=rc, freqs=FREQS)
+        assert not np.allclose(default.to_value("K"), got.to_value("K"), rtol=1e-6)
+
+        # decalibrate uses the same S11 model, so it inverts calibrate_q.
+        back = cal.decalibrate(got, ant_s11=rc, freqs=FREQS, s11_model_params=params)
+        np.testing.assert_allclose(back, q, rtol=1e-12, atol=0)
 
     def test_reflection_coefficient_on_same_grid(self):
         """An ant_s11 ReflectionCoefficient on the calibrator's grid is used as-is."""

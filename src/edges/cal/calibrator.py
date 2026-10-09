@@ -119,13 +119,30 @@ class Calibrator:
         ant_s11: ReflectionCoefficient | tp.ComplexArray,
         freqs: tp.FreqType | None = None,
         models: dict[str, Callable | Model | None] | None = None,
-        s11_model_params: S11ModelParams = S11ModelParams(),
+        s11_model_params: S11ModelParams | None = None,
     ):
         """Return the frequency-dependent linear coefficients required to calibrate.
 
         The returned coefficients a and b are such that
 
         T_cal = a*Q + b
+
+        Parameters
+        ----------
+        ant_s11
+            The antenna reflection coefficient. Either an array defined at ``freqs``,
+            or a :class:`ReflectionCoefficient`. A ``ReflectionCoefficient`` on a
+            different frequency grid is modelled with ``s11_model_params`` and
+            evaluated at ``freqs``.
+        freqs
+            The frequencies at which to compute the coefficients. By default, the
+            frequencies of the calibrator.
+        models
+            A dictionary of models to use to interpolate the calibration
+            coefficients. If None, interpolate with splines.
+        s11_model_params
+            How to model ``ant_s11`` if it is a ``ReflectionCoefficient`` that is not
+            defined at ``freqs``. By default, ``S11ModelParams()``.
         """
         if models is None:
             models = {}
@@ -196,6 +213,7 @@ class Calibrator:
         ant_s11: ReflectionCoefficient | tp.ComplexArray,
         freqs: tp.FreqType | None = None,
         models: dict[str, Callable | Model | None] | None = None,
+        s11_model_params: S11ModelParams | None = None,
     ) -> tp.TemperatureType:
         """
         Calibrate power-ratio measurements.
@@ -211,13 +229,21 @@ class Calibrator:
         models
             A dictionary of models to use to interpolate the calibration
             coefficients. If None, interpolate with splines.
+        s11_model_params
+            How to model ``ant_s11`` if it is a :class:`ReflectionCoefficient` that is
+            not defined at ``freqs``. By default, ``S11ModelParams()``.
 
         Returns
         -------
         temp : np.ndarray
             The calibrated temperature.
         """
-        a, b = self.get_linear_coefficients(freqs=freqs, ant_s11=ant_s11, models=models)
+        a, b = self.get_linear_coefficients(
+            freqs=freqs,
+            ant_s11=ant_s11,
+            models=models,
+            s11_model_params=s11_model_params,
+        )
         return q * a + b
 
     def decalibrate(
@@ -226,6 +252,7 @@ class Calibrator:
         ant_s11: ReflectionCoefficient | tp.ComplexArray,
         freqs: tp.FreqType | None = None,
         models: dict[str, Callable | Model | None] | None = None,
+        s11_model_params: S11ModelParams | None = None,
     ) -> tp.TemperatureType:
         """
         De-calibrate given calibrated spectrum.
@@ -241,6 +268,9 @@ class Calibrator:
         models
             A dictionary of models to use to interpolate the calibration
             coefficients. If None, interpolate with splines.
+        s11_model_params
+            How to model ``ant_s11`` if it is a :class:`ReflectionCoefficient` that is
+            not defined at ``freqs``. By default, ``S11ModelParams()``.
 
         Returns
         -------
@@ -252,7 +282,12 @@ class Calibrator:
         Using this and then :meth:`calibrate_q` immediately should be an identity
         operation.
         """
-        a, b = self.get_linear_coefficients(freqs=freqs, ant_s11=ant_s11, models=models)
+        a, b = self.get_linear_coefficients(
+            freqs=freqs,
+            ant_s11=ant_s11,
+            models=models,
+            s11_model_params=s11_model_params,
+        )
         return (temp - b) / a
 
     def calibrate_approximate_temperature(
