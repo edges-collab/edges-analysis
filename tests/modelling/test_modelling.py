@@ -420,3 +420,20 @@ def test_composite_get_basis_term_uses_submodel_transform():
     np.testing.assert_allclose(
         cmp.get_basis_term(4, x), four.get_basis_term(1, x - 50.0)
     )
+
+
+def test_fourier_day_is_24_hour_periodic():
+    """FourierDay has a fundamental period of 24 hours."""
+    x = np.linspace(0, 24, 97)
+    fd = mdl.FourierDay(n_terms=7, parameters=[1.0, 2.0, -1.0, 0.5, 0.3, -0.2, 0.1])
+    np.testing.assert_allclose(fd(x=x + 24), fd(x=x), atol=1e-12)
+    np.testing.assert_allclose(fd(x=x - 48), fd(x=x), atol=1e-12)
+
+    # The n-th cosine/sine pair has period 24/n hours.
+    for n in (1, 2, 3):
+        np.testing.assert_allclose(
+            fd.get_basis_term(2 * n - 1, x), np.cos(2 * np.pi * n * x / 24), atol=1e-12
+        )
+        np.testing.assert_allclose(
+            fd.get_basis_term(2 * n, x), np.sin(2 * np.pi * n * x / 24), atol=1e-12
+        )
