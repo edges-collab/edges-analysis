@@ -354,13 +354,24 @@ class ModelFit:
 
     @cached_property
     def weighted_rms(self) -> float:
-        """The weighted root-mean-square of the residuals."""
+        r"""The weighted root-mean-square of the residuals.
+
+        This is :math:`\sqrt{\sum w r^2 / \sum w}` over the used data points (those
+        with finite data). For uniform weights it is the plain RMS of the residuals.
+
+        Raises
+        ------
+        NotImplementedError
+            If the weights are a full (inverse-covariance) matrix.
+        """
         if self._has_weight_matrix:
             raise NotImplementedError(
                 "weighted_rms is not defined for a full weight matrix; use "
                 "weighted_chi2 or reduced_weighted_chi2."
             )
-        return np.sqrt(self.weighted_chi2) / np.sum(self._masked_weights)
+        w = self._masked_weights
+        sum_w = w * np.sum(self._mask) if np.isscalar(w) else np.sum(w)
+        return np.sqrt(self.weighted_chi2 / sum_w)
 
     @cached_property
     def hessian(self):

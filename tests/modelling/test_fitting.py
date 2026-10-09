@@ -172,13 +172,6 @@ def test_mc_scatter_matches_covariance_default_method():
     np.testing.assert_allclose(pars.std(axis=0), np.sqrt(np.diag(cov)), rtol=0.08)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "weighted_rms computes sqrt(sum(w r^2)) / sum(w) instead of "
-        "sqrt(sum(w r^2) / sum(w)); fix pending (result-changing)"
-    ),
-)
 def test_weighted_rms_unit_weights_is_rms():
     """With unit weights, the weighted RMS is the plain RMS of the residuals."""
     rng = np.random.default_rng(0)
@@ -189,6 +182,49 @@ def test_weighted_rms_unit_weights_is_rms():
     np.testing.assert_allclose(
         fit.weighted_rms, np.sqrt(np.mean(fit.residual**2)), rtol=1e-12
     )
+
+
+@pytest.mark.parametrize("method", ALL_METHODS)
+def test_weighted_rms_formula(method: str):
+    """The weighted RMS is sqrt(sum(w r^2) / sum(w)), ignoring NaN data."""
+    rng, x, sigma, w = _heteroscedastic_setup()
+    fm = mdl.Polynomial(n_terms=3, transform=mdl.UnitTransform(range=(50, 100))).at(x=x)
+    y = fm(parameters=[1.0, 2.0, 3.0]) + rng.normal(scale=sigma)
+    y[[4, 30]] = np.nan
+    w[[10, 11]] = 0.0
+    fit = fm.fit(ydata=y, weights=w, method=method)
+
+    ok = np.isfinite(y)
+    r = fit.residual[ok]
+    expected = np.sqrt(np.sum(w[ok] * r**2) / np.sum(w[ok]))
+    np.testing.assert_allclose(fit.weighted_rms, expected, rtol=1e-12)
+
+
+@pytest.mark.parametrize("c", [1e-3, 1.0, 7.0])
+def test_weighted_rms_scalar_weight_is_rms_of_finite_points(c: float):
+    """A scalar weight gives the plain RMS over the finite data, whatever its value."""
+    rng = np.random.default_rng(3)
+    x = np.linspace(50, 100, 40)
+    fm = mdl.Polynomial(n_terms=2).at(x=x)
+    y = fm(parameters=[1.0, 0.01]) + rng.normal(size=x.size)
+    y[[0, 7, 21]] = np.nan
+    fit = fm.fit(ydata=y, weights=c)
+    np.testing.assert_allclose(
+        fit.weighted_rms, np.sqrt(np.nanmean(fit.residual**2)), rtol=1e-12
+    )
+
+
+def test_weighted_rms_matches_noise_level():
+    """For inverse-variance weights, the weighted RMS ~ the harmonic-mean sigma."""
+    rng = np.random.default_rng(8)
+    x = np.linspace(50, 100, 4000)
+    fm = mdl.Polynomial(n_terms=3, transform=mdl.UnitTransform(range=(50, 100))).at(x=x)
+    sigma = np.exp(rng.normal(size=x.size) * 0.3)
+    w = 1 / sigma**2
+    y = fm(parameters=[1.0, 2.0, 3.0]) + rng.normal(scale=sigma)
+    fit = fm.fit(ydata=y, weights=w)
+    # E[sum w r^2] ~ N, so weighted_rms^2 ~ N / sum(w).
+    np.testing.assert_allclose(fit.weighted_rms, np.sqrt(x.size / w.sum()), rtol=0.03)
 
 
 MOD6_REASON = (
@@ -278,7 +314,7 @@ def test_nan_masking_does_not_change_finite_results():
 
     r = fit.residual
     assert fit.weighted_chi2 == np.dot(r.T, w * r)
-    assert fit.weighted_rms == np.sqrt(np.dot(r.T, w * r)) / np.sum(w)
+    assert fit.weighted_rms == np.sqrt(np.dot(r.T, w * r) / np.sum(w))
     np.testing.assert_array_equal(fit.hessian, (fm.basis * w).dot(fm.basis.T))
 
 
