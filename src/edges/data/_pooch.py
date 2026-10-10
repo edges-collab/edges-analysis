@@ -10,12 +10,19 @@ from platformdirs import PlatformDirs
 
 dirs = PlatformDirs("edges", "edges-collab")
 
+# The number of times a failed download is retried. Zenodo intermittently returns
+# server errors (e.g. 502) or drops connections mid-download; pooch retries on any
+# requests exception or hash mismatch (including the DOI lookup), waiting 1, 2, 3, ...
+# seconds in between, and raises if the last attempt fails too.
+DOWNLOAD_RETRIES = 5
+
 # Don't "auto" populate the registry, because that requires an API call, and sometimes
 # we want to be running this in massive parallel.
 _S11FILE = "s11_calibration_low_band_LNA25degC_2015-09-16-12-30-29_simulator2_long.txt"
 B18CAL_REPO = pooch.create(
     path=dirs.user_cache_dir,
     base_url="doi:10.5281/zenodo.18091240",
+    retry_if_failed=DOWNLOAD_RETRIES,
     registry={
         "LegacyPipelineOutputs.7z": "md5:df5f573d390f0cff46157ce157849925",
         "Resistance.7z": "md5:9ac40bdd7a009ec722af4235dadc6162",
