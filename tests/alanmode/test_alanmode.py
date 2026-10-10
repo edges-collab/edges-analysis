@@ -286,11 +286,10 @@ class TestQualityCuts:
         )
         assert n == NTIME
 
-    def test_negative_pkpwrm_keeps_only_peaky_spectra(self, tmp_path):
-        """As in the C-code, a negative pkpwrm keeps spectra above its magnitude."""
-        acq = _write_unity_acq(tmp_path / "orbcomm.acq", _orbcomm_spike)
-        _, n = self._average(acq, pkpwrm=-40.0)
-        assert n == 1
+    def test_negative_pkpwrm_not_supported(self):
+        """The C-code's inverted cut for negative pkpwrm is not supported."""
+        with pytest.raises(ValueError, match="pkpwrm"):
+            am.ACQPlot7aMoonParams(pkpwrm=-40.0)
 
     def test_all_spectra_cut(self, unity_acq):
         with pytest.raises(ValueError, match="No spectra pass the quality cuts"):

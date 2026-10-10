@@ -34,6 +34,5 @@ from .alanmode import (
     acqplot7amoon,
     alancal,
     corrcsv,
-    dicke_cycle_quality_stats,
     edges,
 )
