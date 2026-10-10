@@ -8,7 +8,7 @@ import attrs
 import numpy as np
 from astropy import units as un
 from astropy.table import QTable
-from astropy.time import Time, TimeDelta
+from astropy.time import TIME_DELTA_SCALES, Time, TimeDelta
 
 from .. import types as tp
 from ..io.serialization import hickleable
@@ -106,6 +106,97 @@ def get_temperature_thermistor(
     )
 
 
+def _is_well_ordered(times: Time, min_spacing: un.Quantity = 1 * un.us) -> bool:
+    """Whether ``times`` are non-decreasing with no near-coincident distinct entries.
+
+    Consecutive entries must either be identical (same internal representation) or
+    increase by more than ``min_spacing``. This guarantees that comparisons of the
+    form ``t - times[i] <= dt`` are monotonic in ``i`` despite the (sub-picosecond)
+    rounding of astropy's two-double time arithmetic.
+    """
+    if len(times) < 2:
+        return True
+    identical = (times.jd1[1:] == times.jd1[:-1]) & (times.jd2[1:] == times.jd2[:-1])
+    return bool(np.all(identical | ((times[1:] - times[:-1]) > min_spacing)))
+
+
+def _first_true(predicate, n_items: int, n_queries: int) -> np.ndarray:
+    """Vectorised binary search for the first index at which a predicate is true.
+
+    ``predicate(idx)`` takes an integer array of length ``n_queries`` (one candidate
+    index per query) and returns a boolean array of the same length. For each query
+    the predicate must be monotonic in the index (False ... False True ... True).
+    Returns, per query, the first index in ``[0, n_items)`` where it is True, or
+    ``n_items`` if it is never True.
+    """
+    lo = np.zeros(n_queries, dtype=int)
+    hi = np.full(n_queries, n_items, dtype=int)
+    while np.any(lo < hi):
+        active = lo < hi
+        mid = (lo + hi) // 2
+        ptrue = predicate(np.minimum(mid, n_items - 1))
+        lo = np.where(active & ~ptrue, mid + 1, lo)
+        hi = np.where(active & ptrue, mid, hi)
+    return lo
+
+
+def _thermistor_indices_sorted(
+    spec: Time, therm: Time, deltat: TimeDelta
+) -> np.ndarray:
+    """Thermistor matching for well-ordered readings, by binary search.
+
+    Equivalent to :func:`_thermistor_indices_scan` (and to the original sequential
+    scan) when ``therm`` satisfies :func:`_is_well_ordered`. Every comparison is the
+    same astropy ``TimeDelta`` comparison as in the scan, so results are identical.
+
+    For each spectrum time ``d`` the readings split into three contiguous runs:
+    more than ``deltat`` before ``d`` (indices ``< a``), within ``[0, deltat]``
+    before ``d`` (``a <= i < c``) and after ``d`` (``>= c``). The scan's running
+    start index after processing ``d`` is the running maximum of ``min(a, c)``,
+    and ``d`` is matched to ``max(start, a)`` if that is below ``c``.
+    """
+    zero = TimeDelta(0 * un.s)
+    n_therm = len(therm)
+    n_spec = len(spec)
+
+    first_recent = _first_true(lambda i: (spec - therm[i]) <= deltat, n_therm, n_spec)
+    first_future = _first_true(lambda i: ~((spec - therm[i]) >= zero), n_therm, n_spec)
+
+    passed = np.minimum(first_recent, first_future)
+    start = np.concatenate(([0], np.maximum.accumulate(passed)[:-1]))
+    candidate = np.maximum(start, first_recent)
+    return np.where(candidate < first_future, candidate, -1)
+
+
+def _thermistor_indices_scan(spec: Time, therm: Time, deltat: TimeDelta) -> np.ndarray:
+    """Thermistor matching by a sequential scan, vectorised over the readings.
+
+    This reproduces the original algorithm exactly for arbitrary (even unsorted)
+    reading times: for each spectrum time ``d`` in turn, scan the readings from a
+    running start index and take the first with ``0 <= d - t <= deltat``; the start
+    index is advanced by one for each scanned reading with ``d - t > deltat``.
+    Returns ``-1`` where there is no match.
+    """
+    zero = TimeDelta(0 * un.s)
+    n_therm = len(therm)
+    out = np.full(len(spec), -1, dtype=int)
+    indx = 0
+    for k in range(len(spec)):
+        if indx >= n_therm:
+            continue
+        diff = spec[k] - therm[indx:]
+        ge0 = diff >= zero
+        within = diff <= deltat
+        too_old = ge0 & ~within
+        hits = np.flatnonzero(ge0 & within)
+        if hits.size:
+            out[k] = indx + hits[0]
+            indx += int(np.count_nonzero(too_old[: hits[0]]))
+        else:
+            indx += int(np.count_nonzero(too_old))
+    return out
+
+
 def voltage_to_resistance(
     voltage: tp.VoltageType,
     load_resistance: tp.OhmType,
@@ -170,26 +261,43 @@ class ThermistorReadings:
         return get_temperature_thermistor(self.data["load_resistance"])
 
     def get_thermistor_indices(self, timestamps: Time) -> list[int | None]:
-        """Get the index of the closest therm measurement for each spectrum."""
-        closest = []
-        indx = 0
+        """Get the index of the closest therm measurement for each spectrum.
+
+        For each timestamp (in the order given), this returns the index of the first
+        thermistor reading, at or after a running start index, that is at most one
+        reading interval (``times[1] - times[0]``) *before* the timestamp (or at the
+        same time). The running start index only moves forward, past readings that
+        were more than one interval before some earlier timestamp. Timestamps with no
+        such reading get ``np.nan``.
+
+        Parameters
+        ----------
+        timestamps
+            The times (e.g. of spectra) for which to find a thermistor reading.
+
+        Returns
+        -------
+        list
+            For each timestamp, the integer index of the matched reading, or
+            ``np.nan`` if there is none.
+        """
         thermistor_timestamps = self.data["times"]
 
+        # Raises IndexError for fewer than two readings, as it always has.
         deltat = thermistor_timestamps[1] - thermistor_timestamps[0]
 
-        for d in timestamps:
-            if indx >= len(thermistor_timestamps):
-                closest.append(np.nan)
-                continue
+        if len(timestamps) == 0:
+            return []
 
-            for i, td in enumerate(thermistor_timestamps[indx:], start=indx):
-                if d - td >= TimeDelta(0 * un.s):
-                    if d - td <= deltat:
-                        closest.append(i)
-                        break
-                    indx += 1
+        # Do the time subtractions in the scale astropy itself uses for Time - Time
+        # (e.g. TAI for UTC times), converting each array only once.
+        scale = timestamps.scale if timestamps.scale in TIME_DELTA_SCALES else "tai"
+        spec = getattr(timestamps, scale)
+        therm = getattr(thermistor_timestamps, scale)
 
-            else:
-                closest.append(np.nan)
+        if _is_well_ordered(therm):
+            closest = _thermistor_indices_sorted(spec, therm, deltat)
+        else:
+            closest = _thermistor_indices_scan(spec, therm, deltat)
 
-        return closest
+        return [np.nan if c < 0 else int(c) for c in closest]

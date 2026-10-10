@@ -650,3 +650,154 @@ class TestInfoContainers:
         assert len(info.thresholds) == info.n_iters
         assert len(info.stds) == info.n_iters
         assert len(info.flags) == info.n_iters
+
+
+# ---------------------------------------------------------------------------
+# Equivalence of the sliding-window xRFI with a direct implementation.
+# ---------------------------------------------------------------------------
+def _reference_sliding_window(
+    spectrum,
+    *,
+    freqs,
+    model,
+    flags=None,
+    window_frac=16,
+    min_window_size=10,
+    max_iter=100,
+    threshold=2.5,
+    watershed=None,
+    reflag_thresh=1.01,
+    weights=None,
+):
+    """Direct implementation of the sliding-window xRFI, one window at a time."""
+    fmod = model.at(x=freqs)
+    if flags is None:
+        flags = np.zeros(len(spectrum), dtype=bool)
+    weights = (~flags).astype(float) if weights is None else np.where(flags, 0, weights)
+    orig_weights = weights.copy()
+
+    n = len(spectrum)
+    m = max(n // window_frac, min_window_size)
+    prev_n_flags = 0
+    out = {"stds": [], "flags": [], "models": [], "total_flags": []}
+    potential_reflags = set()
+
+    for it in range(max_iter):
+        fit = fmod.fit(ydata=spectrum, weights=weights)
+        out["models"].append(fit.evaluate())
+
+        rms = np.zeros(n)
+        for i in range(n):
+            rng = slice(max(i - m, 0), min(n, i + m + 1))
+            size = np.sum(weights[rng])
+            av = np.sum(fit.residual[rng] * weights[rng]) / size
+            rms[i] = np.sqrt(
+                np.sum((fit.residual[rng] - av) ** 2 * weights[rng]) / size
+            )
+            nsig = fit.residual[i] / (threshold * rms[i])
+
+            if i in potential_reflags and nsig <= 1:
+                weights[i] = 1
+                if watershed:
+                    for mult, nbins in watershed.items():
+                        if mult < reflag_thresh and i + nbins < n and i - nbins >= 0:
+                            weights[i - nbins : i + nbins + 1] = orig_weights[
+                                i - nbins : i + nbins + 1
+                            ]
+                potential_reflags.remove(i)
+
+            if nsig > 1:
+                weights[i] = 0
+                if nsig < reflag_thresh and it < 2:
+                    potential_reflags.add(i)
+                if watershed:
+                    for mult, nbins in watershed.items():
+                        if nsig > mult and i + nbins < n and i - nbins >= 0:
+                            weights[i - nbins : i + nbins + 1] = 0
+
+        n_flags = np.sum(weights == 0)
+        out["stds"].append(rms)
+        out["total_flags"].append(n_flags)
+        out["flags"].append(~(weights.astype(bool)))
+        if n_flags <= prev_n_flags:
+            break
+        prev_n_flags = n_flags
+
+    return ~(weights.astype(bool)), out
+
+
+def _sliding_window_case(seed: int):
+    """Get a random spectrum and random settings for the sliding-window xRFI."""
+    rng = np.random.default_rng(seed)
+    n = int(rng.choice([60, 300, 1000, 2500]))
+    freqs = np.linspace(50, 100, n)
+    # A smooth spectrum that the model may not fit perfectly (so that the
+    # residuals have structure and offsets within the windows).
+    data = 1750 * (freqs / 75) ** rng.uniform(-2.6, -2.4) + rng.normal(
+        scale=10 ** rng.uniform(-3, 0), size=n
+    )
+    rfi = rng.choice(n, size=int(rng.integers(0, n // 10 + 1)), replace=False)
+    data[rfi] += rng.exponential(10 ** rng.uniform(-2, 1), size=rfi.size)
+
+    kwargs = {
+        "freqs": freqs,
+        "model": [mdl.Polynomial(n_terms=3), mdl.EdgesPoly(n_terms=5)][rng.integers(2)],
+        "window_frac": int(rng.choice([4, 16, 64])),
+        "threshold": float(rng.uniform(2, 4)),
+        "max_iter": 10,
+        "reflag_thresh": float(rng.choice([1.0, 1.01, 1.2])),
+    }
+    if rng.uniform() < 0.5:
+        kwargs["watershed"] = {float(rng.uniform(1, 2)): 1, 3.0: 2}
+    if rng.uniform() < 0.5:
+        kwargs["flags"] = rng.uniform(size=n) < 0.05
+    if rng.uniform() < 0.5:
+        kwargs["weights"] = rng.uniform(0.2, 2, size=n)
+    return data, kwargs
+
+
+def _assert_same_sliding_window(data, kwargs):
+    ref_flags, ref = _reference_sliding_window(data.copy(), **kwargs)
+    flags, info = xrfi.xrfi_iterative_sliding_window(data.copy(), **kwargs)
+
+    np.testing.assert_array_equal(flags, ref_flags)
+    assert info.n_iters == len(ref["flags"])
+    assert info.total_flags == ref["total_flags"]
+    for this, expected in zip(info.flags, ref["flags"], strict=True):
+        np.testing.assert_array_equal(this, expected)
+    for this, expected in zip(info.data_models, ref["models"], strict=True):
+        np.testing.assert_array_equal(this, expected)
+    for this, expected in zip(info.stds, ref["stds"], strict=True):
+        np.testing.assert_array_equal(this, expected)
+
+
+@pytest.mark.filterwarnings("ignore:.*encountered in (scalar )?divide:RuntimeWarning")
+@pytest.mark.parametrize("seed", range(40))
+def test_sliding_window_matches_reference(seed: int):
+    """Chunked windows give exactly the flags and stds of one window at a time."""
+    data, kwargs = _sliding_window_case(seed)
+    _assert_same_sliding_window(data, kwargs)
+
+
+@pytest.mark.filterwarnings("ignore:.*encountered in (scalar )?divide:RuntimeWarning")
+@pytest.mark.parametrize("seed", range(10))
+@pytest.mark.parametrize("half_width", [1, 5, 40, 300])
+def test_window_rms_matches_per_channel(seed: int, half_width: int):
+    """The window RMS of a range of channels is identical to one channel at a time."""
+    rng = np.random.default_rng(seed)
+    n = 500
+    residual = rng.normal(size=n) * 10 ** rng.uniform(-3, 3) + rng.uniform(-1e3, 1e3)
+    weights = (rng.uniform(size=n) > 0.1) * rng.uniform(0.1, 2, size=n)
+    start, stop = sorted(rng.choice(n + 1, size=2, replace=False))
+
+    expected = np.zeros(stop - start)
+    for i in range(start, stop):
+        rng_i = slice(max(i - half_width, 0), min(n, i + half_width + 1))
+        size = np.sum(weights[rng_i])
+        av = np.sum(residual[rng_i] * weights[rng_i]) / size
+        expected[i - start] = np.sqrt(
+            np.sum((residual[rng_i] - av) ** 2 * weights[rng_i]) / size
+        )
+
+    rms = xrfi._window_rms(residual, weights, half_width, start, stop)
+    np.testing.assert_array_equal(rms, expected)

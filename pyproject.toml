@@ -65,6 +65,7 @@ dependencies = [
     'deprecation',
     "platformdirs>=4.5.1",
     "yabf>=2.1.4",
+    "threadpoolctl>=3.1",
 ]
 dynamic = ["version"]
 

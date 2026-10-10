@@ -612,6 +612,79 @@ class ModelFilterInfoContainer:
         ]
 
 
+# The number of sliding windows computed at once: initially, and at most. The chunk
+# is also limited so that it holds at most _MAX_WINDOW_CHUNK_SIZE window elements.
+_MIN_WINDOW_CHUNK = 32
+_MAX_WINDOW_CHUNK = 256
+_MAX_WINDOW_CHUNK_SIZE = 2**17
+
+
+def _set_weights(weights: np.ndarray, rng: slice, value) -> bool:
+    """Set ``weights[rng] = value``, returning whether any weight changed (bitwise)."""
+    old = weights[rng].tobytes()
+    weights[rng] = value
+    return weights[rng].tobytes() != old
+
+
+def _window_rms(
+    residual: np.ndarray, weights: np.ndarray, half_width: int, start: int, stop: int
+) -> np.ndarray:
+    """Get the weighted RMS of residuals about their mean in the windows of channels.
+
+    The window of channel ``i`` is ``[i - half_width, i + half_width]``, clipped to
+    the band. Windows that fit in the band are computed together, with the same
+    element-wise operations and per-window sums as computing each one separately
+    (so the result is identical), and clipped windows one at a time.
+
+    Parameters
+    ----------
+    residual
+        The residuals.
+    weights
+        The weights of the residuals.
+    half_width
+        The number of channels on either side of a channel in its window.
+    start, stop
+        The range of channels whose windows to compute.
+
+    Returns
+    -------
+    rms
+        The RMS in the window of each channel in ``range(start, stop)``.
+    """
+    n = len(residual)
+    width = 2 * half_width + 1
+    rms = np.empty(stop - start)
+
+    lo = min(max(start, half_width), stop)
+    hi = max(min(stop, n - half_width), lo)
+    if hi > lo:
+        # Windows of channels lo to hi, as rows.
+        band = slice(lo - half_width, hi + half_width)
+        r = np.lib.stride_tricks.sliding_window_view(residual[band], width)
+        w = np.lib.stride_tricks.sliding_window_view(weights[band], width)
+        # The products of residuals and weights are the same in every window.
+        rw = np.lib.stride_tricks.sliding_window_view(
+            residual[band] * weights[band], width
+        )
+        size = w.sum(axis=1)
+        av = rw.sum(axis=1) / size
+        sq = r - av[:, None]
+        np.square(sq, out=sq)
+        sq *= w
+        rms[lo - start : hi - start] = np.sqrt(sq.sum(axis=1) / size)
+
+    for i in (*range(start, lo), *range(hi, stop)):
+        rng = slice(max(i - half_width, 0), min(n, i + half_width + 1))
+        size = np.sum(weights[rng])
+        av = np.sum(residual[rng] * weights[rng]) / size
+        rms[i - start] = np.sqrt(
+            np.sum((residual[rng] - av) ** 2 * weights[rng]) / size
+        )
+
+    return rms
+
+
 def xrfi_iterative_sliding_window(
     spectrum: np.ndarray,
     *,
@@ -715,6 +788,10 @@ def xrfi_iterative_sliding_window(
     flags_list = []
     potential_reflags = set()
 
+    max_chunk = max(
+        _MIN_WINDOW_CHUNK, min(_MAX_WINDOW_CHUNK, _MAX_WINDOW_CHUNK_SIZE // (2 * m + 1))
+    )
+
     for it in range(max_iter):
         # TODO: pass through fit_kwargs
         fit = fmod.fit(ydata=spectrum, weights=weights, **fit_kwargs)
@@ -722,45 +799,63 @@ def xrfi_iterative_sliding_window(
         model_list.append(fit.evaluate())
 
         rms = np.zeros(n)
-        avs = np.zeros(n)
-        for i in range(n):
-            rng = slice(max(i - m, 0), min(n, i + m + 1))
-            size = np.sum(weights[rng])
-            av = np.sum(fit.residual[rng] * weights[rng]) / size
+        residual = fit.residual
 
-            rms[i] = np.sqrt(
-                np.sum((fit.residual[rng] - av) ** 2 * weights[rng]) / size
-            )
-            avs[i] = av
+        # The windows of a chunk of channels are computed at once. Since flags are
+        # applied *inside* the loop over channels, once a weight changes the rest of
+        # the chunk is discarded and recomputed with the new weights (starting again
+        # with a small chunk, as flags tend to cluster).
+        start = 0
+        chunk = _MIN_WINDOW_CHUNK
+        while start < n:
+            stop = min(n, start + chunk)
+            rms[start:stop] = _window_rms(residual, weights, m, start, stop)
+            nsigs = residual[start:stop] / (threshold * rms[start:stop])
 
-            # Now while *INSIDE* the loop over frequencies, apply new flags.
-            nsig = fit.residual[i] / (threshold * rms[i])
+            changed = False
+            for i in range(start, stop):
+                nsig = nsigs[i - start]
 
-            # If this channel was previously flagged, but only *just*,
-            # give it a chance to get un-flagged. This is useful when
-            # trying to reproduce Alan's results, because the model fit
-            # on the first iteration is much harder to get the same as Alan.
-            if i in potential_reflags and nsig <= 1:
-                weights[i] = 1  # unflag
+                # If this channel was previously flagged, but only *just*,
+                # give it a chance to get un-flagged. This is useful when
+                # trying to reproduce Alan's results, because the model fit
+                # on the first iteration is much harder to get the same as Alan.
+                if i in potential_reflags and nsig <= 1:
+                    changed |= _set_weights(weights, slice(i, i + 1), 1)  # unflag
 
-                if watershed:
-                    for mult, nbins in watershed.items():
-                        if mult < reflag_thresh and i + nbins < n and i - nbins >= 0:
-                            weights[i - nbins : i + nbins + 1] = orig_weights[
-                                i - nbins : i + nbins + 1
-                            ]
-                potential_reflags.remove(i)
+                    if watershed:
+                        for mult, nbins in watershed.items():
+                            if (
+                                mult < reflag_thresh
+                                and i + nbins < n
+                                and i - nbins >= 0
+                            ):
+                                rng = slice(i - nbins, i + nbins + 1)
+                                changed |= _set_weights(weights, rng, orig_weights[rng])
+                    potential_reflags.remove(i)
 
-            if nsig > 1:
-                weights[i] = 0
+                if nsig > 1:
+                    changed |= _set_weights(weights, slice(i, i + 1), 0)
 
-                if nsig < reflag_thresh and it < 2:
-                    potential_reflags.add(i)
+                    if nsig < reflag_thresh and it < 2:
+                        potential_reflags.add(i)
 
-                if watershed:
-                    for mult, nbins in watershed.items():
-                        if nsig > mult and i + nbins < n and i - nbins >= 0:
-                            weights[i - nbins : i + nbins + 1] = 0
+                    if watershed:
+                        for mult, nbins in watershed.items():
+                            if nsig > mult and i + nbins < n and i - nbins >= 0:
+                                changed |= _set_weights(
+                                    weights, slice(i - nbins, i + nbins + 1), 0
+                                )
+
+                if changed:
+                    break
+
+            if changed:
+                start = i + 1
+                chunk = _MIN_WINDOW_CHUNK
+            else:
+                start = stop
+                chunk = min(2 * chunk, max_chunk)
         n_flags = np.sum(weights == 0)
         std_list.append(rms)
         n_flags_changed_list.append(n_flags - prev_n_flags)

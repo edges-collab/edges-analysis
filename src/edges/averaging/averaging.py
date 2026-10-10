@@ -68,29 +68,29 @@ def get_binned_weights(
     if weights.shape[-1] != len(x):
         raise ValueError("Weights must have the same last axis shape as x.")
 
-    if include_right:
-        # In this case, NaNs and Infs will get put in the right-most bin,
-        # which is not what we want.
-        mask = np.isfinite(x)
-        x = x[mask]
-        weights = weights[..., mask]
-
-    out = np.zeros((*weights.shape[:-1], len(bins) - 1))
+    nbins = len(bins) - 1
+    out = np.zeros((*weights.shape[:-1], nbins))
 
     indices = np.digitize(x, bins) - 1
 
     if include_left:
         indices[indices < 0] = 0
     if include_right:
-        indices[indices >= (len(bins) - 1)] = len(bins) - 2
+        indices[indices >= nbins] = nbins - 1
 
-    # Drop any coordinates that remain outside the bins.
-    in_range = (indices >= 0) & (indices < len(bins) - 1)
-    indices = indices[in_range]
-    weights = weights[..., in_range]
+    # Coordinates that remain outside the bins (and, if include_right, NaNs and
+    # Infs, which would otherwise be put in the right-most bin) are dropped by
+    # collecting them in an extra bin. This avoids copying the weights, and each
+    # bin still sums its weights in the same order.
+    dropped = (indices < 0) | (indices >= nbins)
+    if include_right:
+        dropped |= ~np.isfinite(x)
+    indices[dropped] = nbins
 
     for indx in np.ndindex(*out.shape[:-1]):
-        out[indx] = np.bincount(indices, weights=weights[indx], minlength=out.shape[-1])
+        out[indx] = np.bincount(indices, weights=weights[indx], minlength=nbins + 1)[
+            :nbins
+        ]
 
     return out
 

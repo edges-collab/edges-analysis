@@ -301,3 +301,196 @@ def test_noise_waves_get_fitted_default_weights():
 
     fitted_none = nwm.get_fitted(data, weights=None)
     np.testing.assert_allclose(fitted_none.parameters, params, rtol=0, atol=1e-8)
+
+
+class _UncachedNoiseWaveLinearModel(nw.NoiseWaveLinearModel):
+    """Reference: the original k-factors, recomputing ``get_K`` on every call."""
+
+    def cos_kfactor(self, freq):
+        freq = freq[: len(freq) // len(self.gamma_src)]
+        ph = np.exp(1j * 2 * np.pi * freq * self.delay * 1e6)
+        out = []
+        for gamma in self.gamma_src.values():
+            K = nw.get_K(self.gamma_rec, gamma)
+            out.append(K[2] * ph.real - K[3] * ph.imag)
+        return np.concatenate(out)
+
+    def sin_kfactor(self, freq):
+        freq = freq[: len(freq) // len(self.gamma_src)]
+        ph = np.exp(1j * 2 * np.pi * freq * self.delay * 1e6)
+        out = []
+        for gamma in self.gamma_src.values():
+            K = nw.get_K(self.gamma_rec, gamma)
+            out.append(K[2] * ph.imag + K[3] * ph.real)
+        return np.concatenate(out)
+
+    def unc_kfactor(self, freq):
+        return np.concatenate([
+            nw.get_K(self.gamma_rec, gamma)[1] for gamma in self.gamma_src.values()
+        ])
+
+    @property
+    def _source_k(self):
+        return {k: nw.get_K(self.gamma_rec, g) for k, g in self.gamma_src.items()}
+
+
+def _random_s11(rng, n, scale):
+    return scale * rng.uniform(0.2, 1, n) * np.exp(2j * np.pi * rng.uniform(size=n))
+
+
+class TestCachedKFactors:
+    """Caching the K-factors must not change any result (bit-for-bit)."""
+
+    @pytest.mark.parametrize("delay", [0.0, -3.5e-9, 1e-8])
+    def test_kfactors_equal_reference(self, delay):
+        rng = np.random.default_rng(1)
+        kw = {
+            "freq": FREQ,
+            "gamma_rec": _random_s11(rng, N, 0.1),
+            "gamma_src": {
+                "open": _random_s11(rng, N, 0.9),
+                "short": -gamma_decay(FREQ),
+            },
+            "delay": delay,
+        }
+        new = nw.NoiseWaveLinearModel(**kw)
+        ref = _UncachedNoiseWaveLinearModel(**kw)
+        x = np.tile(FREQ, 2)
+        for name in ("unc_kfactor", "cos_kfactor", "sin_kfactor"):
+            # Call twice so that the second call uses the cache.
+            for _ in range(2):
+                np.testing.assert_array_equal(
+                    getattr(new, name)(x), getattr(ref, name)(x)
+                )
+
+    def test_cache_cleared_on_reassignment(self):
+        rng = np.random.default_rng(2)
+        nwlm = nw.NoiseWaveLinearModel(
+            freq=FREQ,
+            gamma_rec=_random_s11(rng, N, 0.1),
+            gamma_src={"open": _random_s11(rng, N, 0.9)},
+        )
+        first = nwlm.unc_kfactor(FREQ)
+        nwlm.gamma_rec = _random_s11(rng, N, 0.1)
+        second = nwlm.unc_kfactor(FREQ)
+        assert not np.array_equal(first, second)
+        np.testing.assert_array_equal(
+            second, nw.get_K(nwlm.gamma_rec, nwlm.gamma_src["open"])[1]
+        )
+        nwlm.gamma_src = {"open": _random_s11(rng, N, 0.9)}
+        np.testing.assert_array_equal(
+            nwlm.unc_kfactor(FREQ),
+            nw.get_K(nwlm.gamma_rec, nwlm.gamma_src["open"])[1],
+        )
+
+    def test_phase_follows_freq_and_delay(self):
+        rng = np.random.default_rng(5)
+        kw = {
+            "freq": FREQ,
+            "gamma_rec": _random_s11(rng, N, 0.1),
+            "gamma_src": {"open": _random_s11(rng, N, 0.9)},
+            "delay": -2e-9,
+        }
+        nwlm = nw.NoiseWaveLinearModel(**kw)
+        other_freq = FREQ + 0.5
+        for freq in (FREQ, other_freq, other_freq, FREQ):
+            ref = _UncachedNoiseWaveLinearModel(**kw)
+            np.testing.assert_array_equal(nwlm.cos_kfactor(freq), ref.cos_kfactor(freq))
+            np.testing.assert_array_equal(nwlm.sin_kfactor(freq), ref.sin_kfactor(freq))
+
+        # The memoised phase must not survive in-place changes to the input.
+        freq = FREQ.copy()
+        nwlm.cos_kfactor(freq)
+        freq += 1.0
+        np.testing.assert_array_equal(
+            nwlm.cos_kfactor(freq),
+            _UncachedNoiseWaveLinearModel(**kw).cos_kfactor(freq),
+        )
+
+        nwlm.delay = 5e-9
+        kw["delay"] = 5e-9
+        np.testing.assert_array_equal(
+            nwlm.sin_kfactor(FREQ),
+            _UncachedNoiseWaveLinearModel(**kw).sin_kfactor(FREQ),
+        )
+
+    def test_noise_waves_linear_model_equal_reference(self, monkeypatch):
+        rng = np.random.default_rng(3)
+        gamma_src = {
+            "ambient": _random_s11(rng, N, 0.01),
+            "hot_load": _random_s11(rng, N, 0.02),
+            "open": gamma_decay_flip(FREQ),
+            "short": gamma_decay(FREQ),
+        }
+        kw = {
+            "freq": FREQ,
+            "gamma_src": gamma_src,
+            "gamma_rec": _random_s11(rng, N, 0.1),
+            "c_terms": 4,
+            "w_terms": 5,
+        }
+        basis = nw.NoiseWaves(**kw).linear_model.basis
+        monkeypatch.setattr(nw, "NoiseWaveLinearModel", _UncachedNoiseWaveLinearModel)
+        np.testing.assert_array_equal(basis, nw.NoiseWaves(**kw).linear_model.basis)
+
+    @pytest.mark.parametrize("smooth", [True, False])
+    def test_iterative_calibration_equal_reference(self, monkeypatch, smooth):
+        rng = np.random.default_rng(4)
+        gamma_rec = _random_s11(rng, N, 0.05)
+        gamma_ant = {
+            "ambient": _random_s11(rng, N, 0.01),
+            "hot_load": _random_s11(rng, N, 0.02),
+            "short": gamma_decay(FREQ),
+            "open": gamma_decay_flip(FREQ),
+        }
+        x = FREQ / 75.0
+        calibrator = Calibrator(
+            freqs=FREQ * un.MHz,
+            Tsca=_poly([1500, 60, -20], x),
+            Toff=_poly([310, -12, 3], x),
+            Tunc=_poly([25, -5, 2], x),
+            Tcos=_poly([8, 4, -3], x),
+            Tsin=_poly([-12, 3, 1], x),
+            receiver_s11=gamma_rec,
+        )
+        temps = {
+            "ambient": 298.0 * un.K,
+            "hot_load": 370.0 * un.K,
+            "short": 300 * un.K,
+            "open": 300 * un.K,
+        }
+        q = {
+            k: calibrator.decalibrate(temp=t, ant_s11=gamma_ant[k])
+            * (1 + 1e-4 * rng.normal(size=N))
+            for k, t in temps.items()
+        }
+
+        def run():
+            return list(
+                nw.get_calibration_quantities_iterative(
+                    freqs=FREQ * un.MHz,
+                    source_q=q,
+                    receiver_s11=gamma_rec,
+                    source_s11s=gamma_ant,
+                    source_true_temps=temps,
+                    cterms=4,
+                    wterms=5,
+                    niter=4,
+                    smooth_scale_offset_within_loop=smooth,
+                    delays_to_fit=np.array([0.0, -1e-9, -2e-9]),
+                )
+            )
+
+        new = run()
+        monkeypatch.setattr(nw, "NoiseWaveLinearModel", _UncachedNoiseWaveLinearModel)
+        ref = run()
+
+        assert len(new) == len(ref) == 4
+        for (sca, off, nwv), (sca_r, off_r, nwv_r) in zip(new, ref, strict=True):
+            np.testing.assert_array_equal(sca.parameters, sca_r.parameters)
+            np.testing.assert_array_equal(off.parameters, off_r.parameters)
+            assert nwv.delay == nwv_r.delay
+            np.testing.assert_array_equal(nwv.get_tunc(), nwv_r.get_tunc())
+            np.testing.assert_array_equal(nwv.get_tcos(), nwv_r.get_tcos())
+            np.testing.assert_array_equal(nwv.get_tsin(), nwv_r.get_tsin())
+            assert nwv.rms == nwv_r.rms

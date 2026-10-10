@@ -1,5 +1,6 @@
 """Module defining EDGES-specific reading functions for weather and auxiliary data."""
 
+import calendar
 import re
 import warnings
 from datetime import datetime, time, timedelta
@@ -49,6 +50,32 @@ _UNITS = {
 
 _PATTERNS = (_NEW_WEATHER_PATTERN, _OLD_WEATHER_PATTERN, _THERMLOG_PATTERN)
 
+_STAMP_FORMAT = "%Y:%j:%H:%M:%S"
+_STAMP_LENGTH = 17
+
+# A fixed-width YYYY:DDD:HH:MM:SS stamp of an ordinary second (day 366 must also be
+# in a leap year). Such stamps sort lexically in time order, and can be converted
+# to times without strptime. Other stamps that strptime accepts (e.g. leap seconds,
+# day 366 of other years or non-ASCII digits) are rare, and are parsed one at a
+# time with strptime.
+_CANONICAL_STAMP = re.compile(
+    r"[1-9][0-9]{3}:(?:00[1-9]|0[1-9][0-9]|[12][0-9]{2}|3[0-5][0-9]|36[0-6]):"
+    r"(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]"
+)
+
+
+def _is_canonical(stamp: str) -> bool:
+    """Whether a time stamp is canonical (see ``_CANONICAL_STAMP``)."""
+    return _CANONICAL_STAMP.fullmatch(stamp) is not None and (
+        stamp[5:8] != "366" or calendar.isleap(int(stamp[:4]))
+    )
+
+
+# Lines whose stamps are this far outside the requested range are decided by string
+# comparison of their stamps, without converting them to times. It is generous so
+# that time scales other than UTC and sub-second times are safely covered.
+_STAMP_MARGIN = 1 * un.day
+
 
 def _get_end_time(
     start_time: Time,
@@ -73,6 +100,61 @@ def _parse_aux_line(line: str) -> dict[str, float] | None:
             except ValueError:
                 return None
     return None
+
+
+def _canonical_stamp(t: Time) -> str | None:
+    """Get the canonical ``YYYY:DDD:HH:MM:SS`` stamp of a scalar time.
+
+    The stamp is of the UTC time, truncated to the second. None is returned if the
+    time cannot be written as a canonical stamp (or is not scalar).
+    """
+    try:
+        stamp = t.utc.yday[:_STAMP_LENGTH] if t.isscalar else None
+    except Exception:  # ruff: ignore[blind-except] -- any failure just disables the shortcut
+        return None
+    return stamp if stamp and _is_canonical(stamp) else None
+
+
+def _stamps_to_time(stamps: list[str], slow: dict[int, Time]) -> Time:
+    """Convert time stamps of aux file lines to a single Time object.
+
+    The result is identical to concatenating ``Time.strptime(stamp, _STAMP_FORMAT)``
+    for each stamp: canonical stamps are converted to the same ISOT strings that
+    ``Time.strptime`` would create, and parsed with a single Time construction.
+
+    Parameters
+    ----------
+    stamps
+        The stamps.
+    slow
+        Times already parsed with ``Time.strptime``, for the (non-canonical) stamps
+        at the given indices. If there are any, every stamp is parsed with
+        ``Time.strptime``.
+
+    Returns
+    -------
+    Time
+        The times of the stamps.
+    """
+    if slow:
+        return Time([
+            slow[i] if i in slow else Time.strptime(stamp, _STAMP_FORMAT)
+            for i, stamp in enumerate(stamps)
+        ])
+
+    digits = np.array(stamps, dtype=f"S{_STAMP_LENGTH}").view(np.uint8).reshape(
+        len(stamps), _STAMP_LENGTH
+    ).astype(np.int64) - ord("0")
+
+    def field(start: int, length: int) -> np.ndarray:
+        return sum(digits[:, start + i] * 10 ** (length - 1 - i) for i in range(length))
+
+    days = (field(0, 4) - 1970).astype("datetime64[Y]").astype("datetime64[D]")
+    days += field(5, 3) - 1
+    seconds = days.astype("datetime64[s]") + (
+        field(9, 2) * 3600 + field(12, 2) * 60 + field(15, 2)
+    )
+    return Time(np.datetime_as_string(seconds, unit="us"), format="isot")
 
 
 def _read_aux_file(
@@ -119,30 +201,72 @@ def _read_aux_file(
     if end is None:
         end = Time(_get_end_time(start_time=start, n_hours=n_hours))
 
-    auxdata = []
+    # Lines with canonical stamps before `lo` are before `start`, and the first one
+    # at or after `hi` is after both `start` and `end` (so reading stops there).
+    # These are decided without parsing times.
+    lo = _canonical_stamp(start - _STAMP_MARGIN)
+    hi_end = _canonical_stamp(end + _STAMP_MARGIN)
+    hi_start = _canonical_stamp(start + _STAMP_MARGIN)
+    hi = None if hi_end is None or hi_start is None else max(hi_end, hi_start)
+
+    # The remaining lines with a valid stamp are "candidates", whose times are
+    # compared to start and end exactly once they are all read. Lines with
+    # non-canonical stamps are compared as they are read (as they are rare).
+    stamps: list[str] = []
+    rests: list[str] = []
+    slow: dict[int, Time] = {}  # times of candidates with non-canonical stamps
+    n_bad_before: list[int] = []  # number of blank/bad-stamp lines before each
     n_bad = 0
     with aux_file.open("r") as fl:
         for line in fl:
-            if not line.strip():
+            stamp = line[:_STAMP_LENGTH]
+            if _is_canonical(stamp):
+                if lo is not None and stamp < lo:
+                    continue
+                if hi is not None and stamp >= hi:
+                    break
+            elif not line.strip():
                 n_bad += 1
                 continue
+            else:
+                try:
+                    t = Time.strptime(stamp, _STAMP_FORMAT)
+                except ValueError:
+                    n_bad += 1
+                    continue
+                if t < start:
+                    continue
+                if t >= end:
+                    break
+                slow[len(stamps)] = t
 
-            try:
-                t = Time.strptime(line[:17], "%Y:%j:%H:%M:%S")
-            except ValueError:
-                n_bad += 1
-                continue
+            stamps.append(stamp)
+            rests.append(line[_STAMP_LENGTH:])
+            n_bad_before.append(n_bad)
 
-            if t < start:
-                continue
-            if t >= end:
-                break
+    auxdata = []
+    keep = []
+    if stamps:
+        times = _stamps_to_time(stamps, slow)
+        before = np.atleast_1d(times < start)
+        after = np.atleast_1d(times >= end)
 
-            values = _parse_aux_line(line[17:])
+        # Lines after the first one past the end (that is not before the start)
+        # are not read at all.
+        past_end = np.flatnonzero(after & ~before)
+        if past_end.size:
+            n_stop = past_end[0]
+            n_bad = n_bad_before[n_stop]
+        else:
+            n_stop = len(stamps)
+
+        for i in np.flatnonzero(~before[:n_stop]):
+            values = _parse_aux_line(rests[i])
             if values is None:
                 n_bad += 1
                 continue
-            auxdata.append(values | {"time": t})
+            auxdata.append(values)
+            keep.append(i)
 
     if n_bad:
         if not auxdata:
@@ -169,7 +293,7 @@ def _read_aux_file(
     out = QTable()
     for name in names:
         out[name] = [row.get(name, np.nan) for row in auxdata] * _UNITS[name]
-    out["time"] = Time([row["time"] for row in auxdata])
+    out["time"] = times[keep]
     return out
 
 

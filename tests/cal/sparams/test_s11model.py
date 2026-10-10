@@ -1,14 +1,73 @@
+from pathlib import Path
+
 import numpy as np
+import pytest
 from astropy import units as un
 
 from edges import modeling as mdl
 from edges.cal.sparams import (
     AGILENT_85033E,
     CalkitReadings,
+    ReflectionCoefficient,
     S11ModelParams,
     SParams,
+    get_delay,
     smooth_sparams,
 )
+from edges.cal.sparams.core.s11model import _delay_objective
+
+_DATA = Path(__file__).parents[2] / "data"
+_REAL_S1P_FILES = sorted(
+    list(_DATA.glob("alanmode/edges3-*-raw/*.s1p"))
+    + list(_DATA.glob("cal/Receiver01_25C_2019_11_26_040_to_200MHz/S11/*/*.s1p"))
+)
+_DELAY_GRID = np.arange(-1e-3, 0.1, 1e-4)
+
+
+def _delay_objective_reference(gamma: ReflectionCoefficient) -> np.ndarray:
+    """The delay-search objective, evaluated one trial delay at a time."""
+    return np.array([
+        -np.abs(np.sum(gamma.remove_delay(d * un.microsecond).reflection_coefficient))
+        for d in _DELAY_GRID
+    ])
+
+
+def _get_delay_reference(gamma: ReflectionCoefficient) -> un.Quantity:
+    return _DELAY_GRID[np.argmin(_delay_objective_reference(gamma))] * un.microsecond
+
+
+class TestGetDelay:
+    """The vectorised delay search reproduces the delay-by-delay grid search."""
+
+    def test_real_data_files_found(self):
+        assert len(_REAL_S1P_FILES) >= 40
+
+    @pytest.mark.parametrize(
+        "path", _REAL_S1P_FILES, ids=lambda p: f"{p.parent.name}/{p.name}"
+    )
+    def test_real_data(self, path: Path):
+        gamma = ReflectionCoefficient.from_s1p(path)
+        assert get_delay(gamma) == _get_delay_reference(gamma)
+
+    @pytest.mark.parametrize("seed", range(5))
+    def test_random(self, seed: int):
+        rng = np.random.default_rng(seed)
+        nf = rng.integers(10, 3000)
+        freqs = np.sort(rng.uniform(10, 300, nf)) * un.MHz
+        delay = rng.uniform(-0.002, 0.11)
+        gamma = ReflectionCoefficient(
+            freqs=freqs,
+            reflection_coefficient=np.exp(-2j * np.pi * freqs.to_value("MHz") * delay)
+            + 0.3 * (rng.normal(size=nf) + 1j * rng.normal(size=nf)),
+        )
+        ref = _delay_objective_reference(gamma)
+        # Small blocks exercise the chunking over trial delays.
+        for block in (2**20, 1000, 1):
+            obj = _delay_objective(
+                gamma, _DELAY_GRID * un.microsecond, max_block_size=block
+            )
+            np.testing.assert_allclose(obj, ref, rtol=1e-14, atol=0)
+        assert get_delay(gamma) == _get_delay_reference(gamma)
 
 
 class TestS11ModelParams:

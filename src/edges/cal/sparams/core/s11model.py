@@ -24,15 +24,61 @@ logger = logging.getLogger(__name__)
 
 
 def get_delay(gamma: ReflectionCoefficient) -> un.Quantity[un.microsecond]:
-    """Find the delay of an S11 with a grid search."""
+    """Find the delay of an S11 with a grid search.
 
-    def _objfun(delay, gamma):
-        reph = gamma.remove_delay(delay * un.microsecond)
-        return -np.abs(np.sum(reph.reflection_coefficient))
+    The delay is chosen from a grid from -1 ns up to (but excluding) 100 ns in steps
+    of 0.1 ns, as the one that maximises the magnitude of the frequency-summed S11
+    after the delay is removed (see :meth:`ReflectionCoefficient.remove_delay`).
 
+    Parameters
+    ----------
+    gamma
+        The reflection coefficient.
+
+    Returns
+    -------
+    delay
+        The selected delay, in microseconds.
+    """
     delays = np.arange(-1e-3, 0.1, 1e-4)
-    obj = [_objfun(d, gamma) for d in delays]
+    obj = _delay_objective(gamma, delays * un.microsecond)
     return delays[np.argmin(obj)] * un.microsecond
+
+
+def _delay_objective(
+    gamma: ReflectionCoefficient, delays: tp.TimeType, max_block_size: int = 2**20
+) -> np.ndarray:
+    """Evaluate the delay-search objective on a grid of trial delays.
+
+    For each delay, this is the negative magnitude of the sum over frequency of the
+    reflection coefficient with that delay removed, computed element by element
+    exactly as :meth:`ReflectionCoefficient.remove_delay` does, but for many delays
+    at once.
+
+    Parameters
+    ----------
+    gamma
+        The reflection coefficient.
+    delays
+        The 1D array of trial delays.
+    max_block_size
+        The maximum number of (delay, frequency) elements to evaluate at once, to
+        bound the memory used.
+
+    Returns
+    -------
+    obj
+        The objective for each delay, shape ``(len(delays),)``.
+    """
+    freqs = gamma.freqs[None, :]
+    rc = gamma.reflection_coefficient
+    block = max(1, max_block_size // max(1, len(rc)))
+    obj = np.empty(len(delays))
+    for start in range(0, len(delays), block):
+        d = delays[start : start + block, None]
+        phase_shift = np.exp(2j * np.pi * freqs * d).to_value("")
+        obj[start : start + block] = -np.abs(np.sum(rc * phase_shift, axis=-1))
+    return obj
 
 
 @hickleable

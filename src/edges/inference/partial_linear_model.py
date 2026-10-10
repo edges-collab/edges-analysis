@@ -11,6 +11,7 @@ from yabf import Likelihood
 from yabf.chi2 import Chi2
 
 from ..modeling import FixedLinearModel
+from ..modeling.fitting import _RepeatedFit
 
 logger = logging.getLogger(__name__)
 
@@ -98,25 +99,31 @@ class PartialLinearModel(Chi2, Likelihood):
             else self.data_func(ctx, self.data)
         )
 
+        if self._static_linear_fitter is not None:
+            # The basis and the variance are fixed: re-use the solve setup.
+            return self._static_linear_fitter.fit(data), data, var
+
         linear_model = (
             self.linear_model
             if self.basis_func is None
             else self.basis_func(self.linear_model, ctx, self.data)
         )
 
-        if np.all(var == 0):
-            wght = 1.0
-        else:
-            bad = np.isnan(var) | (np.asarray(var) <= 0)
-            if np.any(bad):
-                raise ValueError(
-                    "The data variance must be positive (use inf to flag a channel), "
-                    f"but got {np.sum(bad)} zero, negative or NaN value(s)."
-                )
-            wght = 1 / var
-
-        linear_fit = linear_model.fit(ydata=data, weights=wght)
+        linear_fit = linear_model.fit(ydata=data, weights=_variance_weights(var))
         return linear_fit, data, var
+
+    @cached_property
+    def _static_linear_fitter(self) -> _RepeatedFit | None:
+        """Fitter of the linear model when its basis and the variance are static.
+
+        It is ``None`` when the basis or the variance depend on the parameters.
+        """
+        if self.basis_func is not None or self.variance_func is not None:
+            return None
+        return _RepeatedFit(
+            self.linear_model,
+            weights=_variance_weights(self.data["data_variance"]),
+        )
 
     @cached_property
     def Q(self):  # ruff: ignore[invalid-function-name]
@@ -247,8 +254,29 @@ class PartialLinearModel(Chi2, Likelihood):
         linear = linear_model(parameters=linear_params)
 
         resid = data - linear
-        nm = stats.norm(loc=0, scale=np.sqrt(var))
-        return np.sum(nm.logpdf(resid))
+        return np.sum(stats.norm.logpdf(resid, loc=0, scale=np.sqrt(var)))
+
+
+def _variance_weights(var: np.ndarray) -> np.ndarray | float:
+    """The fit weights (inverse variance) of the data variance.
+
+    All-zero variances mean an unweighted fit (unit weights).
+
+    Raises
+    ------
+    ValueError
+        If any variance is zero (but not all), negative or NaN.
+    """
+    if np.all(var == 0):
+        return 1.0
+
+    bad = np.isnan(var) | (np.asarray(var) <= 0)
+    if np.any(bad):
+        raise ValueError(
+            "The data variance must be positive (use inf to flag a channel), "
+            f"but got {np.sum(bad)} zero, negative or NaN value(s)."
+        )
+    return 1 / var
 
 
 def _logdet(mat: np.ndarray) -> float:

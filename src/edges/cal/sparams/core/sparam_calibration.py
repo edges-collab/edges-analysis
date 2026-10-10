@@ -197,6 +197,9 @@ def continuous_sqrt(product: np.ndarray) -> np.ndarray:
     return flat.reshape(root.shape)
 
 
+_STANDARDS = ("open", "short", "match")
+
+
 def sparams_from_calkit_measurements(
     measurements: CalkitReadings,
     model: "CalkitReadings | Calkit | None" = None,
@@ -233,38 +236,63 @@ def sparams_from_calkit_measurements(
     elif model is None:
         model = CalkitReadings.ideal(freqs=freq)
 
-    n = len(freq)
+    # One 3x3 linear system per frequency: rows are the (open, short, match)
+    # standards, with model reflection m and measured reflection b,
+    # [1, m, m*b] @ [e00, e01e10 - e00 e11, e11] = b.
+    m = np.stack(
+        [np.asarray(getattr(model, k).reflection_coefficient) for k in _STANDARDS],
+        axis=-1,
+    )
+    b = np.stack(
+        [
+            np.asarray(getattr(measurements, k).reflection_coefficient)
+            for k in _STANDARDS
+        ],
+        axis=-1,
+    )
+    a = np.stack([np.ones_like(m), m, m * b], axis=-1)
+    x = _solve_osl_systems(a, b)
 
-    s11 = np.zeros(n, dtype=complex)
-    s12s21 = np.zeros(n, dtype=complex)
-    s22 = np.zeros(n, dtype=complex)
-
-    for i in range(n):
-        om, sm, mm = (
-            model.open.reflection_coefficient[i],
-            model.short.reflection_coefficient[i],
-            model.match.reflection_coefficient[i],
-        )
-
-        b = np.array([
-            measurements.open.reflection_coefficient[i],
-            measurements.short.reflection_coefficient[i],
-            measurements.match.reflection_coefficient[i],
-        ])
-
-        A = np.array([
-            [1, om, om * b[0]],
-            [1, sm, sm * b[1]],
-            [1, mm, mm * b[2]],
-        ])
-        x = np.linalg.lstsq(A, b, rcond=None)[0]
-
-        s11[i] = x[0]
-        s12s21[i] = x[1] + x[0] * x[2]
-        s22[i] = x[2]
+    s11 = x[:, 0]
+    s12s21 = x[:, 1] + x[:, 0] * x[:, 2]
+    s22 = x[:, 2]
 
     s12 = continuous_sqrt(s12s21)
     return SParams(freqs=freq, s11=s11, s12=s12, s21=s12, s22=s22)
+
+
+def _solve_osl_systems(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """Solve a stack of square linear systems ``a[i] @ x[i] = b[i]``.
+
+    Each system is solved by LU decomposition (:func:`numpy.linalg.solve`) in one
+    batched call. Systems that are rank-deficient by the criterion that
+    :func:`numpy.linalg.lstsq` uses with ``rcond=None`` (smallest singular value
+    at most ``eps * n`` times the largest) are instead solved individually with
+    :func:`numpy.linalg.lstsq`, so that they get the same minimum-norm solution as
+    a per-system least-squares solve. Non-finite inputs raise a
+    :class:`numpy.linalg.LinAlgError`, as :func:`numpy.linalg.lstsq` does.
+
+    Parameters
+    ----------
+    a
+        The coefficient matrices, shape ``(N, n, n)``.
+    b
+        The right-hand sides, shape ``(N, n)``.
+
+    Returns
+    -------
+    x
+        The solutions, shape ``(N, n)``.
+    """
+    sv = np.linalg.svd(a, compute_uv=False)
+    rcond = np.finfo(sv.dtype).eps * a.shape[-1]
+    full_rank = sv[:, -1] > rcond * sv[:, 0]
+
+    x = np.empty(b.shape, dtype=np.result_type(a, b))
+    x[full_rank] = np.linalg.solve(a[full_rank], b[full_rank, :, None])[..., 0]
+    for i in np.flatnonzero(~full_rank):
+        x[i] = np.linalg.lstsq(a[i], b[i], rcond=None)[0]
+    return x
 
 
 def de_embed_network_from_calkit_measurements(

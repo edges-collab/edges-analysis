@@ -1,5 +1,6 @@
 """Simulation functions for ideal sky observations."""
 
+from collections.abc import Callable, Sequence
 from typing import Literal
 
 import astropy.coordinates as apc
@@ -23,6 +24,14 @@ from .beams import Beam
 # EDGES location. NOTE: this is used by default, but can be changed by the user anywhere
 # it is used.
 REFERENCE_TIME = apt.Time("2014-01-01T09:39:42", location=const.edges_location)
+
+# Maximum memory (in bytes) of the beam values interpolated at once for several
+# frequencies in sky_convolution_generator.
+_MAX_BEAM_BATCH_BYTES = 2**28
+
+# Maximum memory (in bytes) used to keep the sky maps at every frequency between LSTs
+# in sky_convolution_generator. Above this, they are re-computed for every LST.
+_MAX_SKY_CACHE_BYTES = 2**29
 
 
 def _ground_loss_in_band(
@@ -77,6 +86,139 @@ def _ground_loss_in_band(
         f"frequency (or ({np.sum(mask)},), one per frequency between f_low and "
         f"f_high). Got shape {ground_loss.shape}."
     )
+
+
+def _time_independent_coords(coords: apc.SkyCoord) -> apc.SkyCoord:
+    """Transform coordinates to the frame from which they are transformed to AltAz.
+
+    Astropy transforms Galactic coordinates to AltAz via ICRS, and the Galactic to
+    ICRS step does not depend on the observation time. Doing it once, rather than
+    for every LST, gives the same az/el. Coordinates in other frames are returned
+    unchanged.
+
+    Parameters
+    ----------
+    coords
+        The coordinates of the sky model.
+
+    Returns
+    -------
+    coords
+        The same coordinates, in ICRS if they were Galactic.
+    """
+    if isinstance(coords.frame, apc.Galactic):
+        return coords.icrs
+    return coords
+
+
+def _lazy_angular_interpolator(
+    beam: Beam, freq_idx: int, interp_kind: str
+) -> Callable[[np.ndarray, np.ndarray], np.ndarray]:
+    """Return ``beam.angular_interpolator(freq_idx, interp_kind)``, built on first use.
+
+    Parameters
+    ----------
+    beam
+        The beam to interpolate.
+    freq_idx
+        The index of the frequency at which to interpolate.
+    interp_kind
+        The kind of interpolation.
+
+    Returns
+    -------
+    interp
+        A function ``interp(az, el)`` (in degrees) returning the beam.
+    """
+    interpolator = None
+
+    def interp(az, el):
+        nonlocal interpolator
+        if interpolator is None:
+            interpolator = beam.angular_interpolator(freq_idx, interp_kind=interp_kind)
+        return interpolator(az, el)
+
+    return interp
+
+
+class _BeamInterpolation:
+    """Interpolate a beam at given (az, el) points, one frequency at a time.
+
+    For the interpolation kinds that support it (see
+    ``Beam._MULTI_FREQ_INTERP_KINDS``), the beam is interpolated at several
+    frequencies at once (in chunks of frequencies, in the order in which they are
+    requested, so as to bound the memory), which gives the same values as
+    interpolating each frequency separately, but much faster.
+
+    Parameters
+    ----------
+    beam
+        The beam to interpolate.
+    interp_kind
+        The kind of interpolation (see :meth:`Beam.angular_interpolator`).
+    freq_order
+        The order in which the frequencies will be requested.
+    max_points
+        The maximum number of points at which the beam will be interpolated.
+    """
+
+    def __init__(
+        self,
+        beam: Beam,
+        interp_kind: str,
+        freq_order: Sequence[int],
+        max_points: int,
+    ):
+        self.beam = beam
+        self.interp_kind = interp_kind
+        self.multi_freq = interp_kind in beam._MULTI_FREQ_INTERP_KINDS
+        self._interpolators = {}
+
+        size = max(1, _MAX_BEAM_BATCH_BYTES // (8 * max(max_points, 1)))
+        chunks = [
+            tuple(int(i) for i in freq_order[i : i + size])
+            for i in range(0, len(freq_order), size)
+        ]
+        self._chunk_of = {f: c for c in chunks for f in c}
+        self._multi_interpolators = {}
+        self._values = {}
+
+    def interpolator(
+        self, freq_idx: int
+    ) -> Callable[[np.ndarray, np.ndarray], np.ndarray]:
+        """Return the interpolator of the beam at one frequency."""
+        if freq_idx not in self._interpolators:
+            if self.multi_freq:
+                # Only built if it is used outside of this class.
+                self._interpolators[freq_idx] = _lazy_angular_interpolator(
+                    self.beam, freq_idx, self.interp_kind
+                )
+            else:
+                self._interpolators[freq_idx] = self.beam.angular_interpolator(
+                    freq_idx, interp_kind=self.interp_kind
+                )
+        return self._interpolators[freq_idx]
+
+    def set_points(self, az: np.ndarray, el: np.ndarray):
+        """Set the points (az, el in degrees) at which to interpolate."""
+        self.az = az
+        self.el = el
+        self._values = {}
+
+    def __call__(self, freq_idx: int) -> np.ndarray:
+        """Interpolate the beam at one frequency, at the current points."""
+        if not self.multi_freq:
+            return self.interpolator(freq_idx)(self.az, self.el)
+
+        if freq_idx not in self._values:
+            chunk = self._chunk_of[int(freq_idx)]
+            if chunk not in self._multi_interpolators:
+                self._multi_interpolators[chunk] = (
+                    self.beam._multi_freq_angular_interpolator(chunk, self.interp_kind)
+                )
+            values = self._multi_interpolators[chunk](self.az, self.el)
+            self._values = {f: values[:, i] for i, f in enumerate(chunk)}
+        return self._values[freq_idx]
 
 
 def sky_convolution_generator(
@@ -213,24 +355,46 @@ def sky_convolution_generator(
     # Get the local times corresponding to the given LSTs
     times = gscrd.lsts_to_times(lsts, ref_time, location)
 
-    interpolators = {}
+    # Using np.roll means we start at the reference frequency and loop around.
+    # Starting at ref freq (if there is one) means that we can use the
+    # reference beam with other frequencies.
+    freq_order = np.roll(range(len(beam.frequency)), -ref_freq_idx)
+    beam_interp = _BeamInterpolation(
+        beam, interp_kind, freq_order, max_points=sky_model.coords.size
+    )
+
+    # The sky maps do not depend on LST: compute them once per frequency, and keep
+    # them for the next LSTs unless that would take too much memory.
+    spectral_index = sky_model._spectral_index(index_model)
+    sky_maps = {}
+    cache_sky_maps = (
+        len(beam.frequency) * sky_model.temperature.size * 8 <= _MAX_SKY_CACHE_BYTES
+    )
+
+    # The parts of the transformation to local coordinates that do not depend on
+    # time are done only once, before looping over the LSTs.
+    if use_astropy_azel:
+        coords = _time_independent_coords(sky_model.coords)
+    else:
+        gal = sky_model.coords.galactic
+        ra, dec = crda.galactic_to_radec(gal.b.deg, gal.l.deg)
+        sin_dec, cos_dec = np.sin(dec), np.cos(dec)
+        lat = location.lat.rad
+        sin_lat, cos_lat = np.sin(lat), np.cos(lat)
 
     for lst_idx, time in track(
         enumerate(times), description="LSTs", disable=not lst_progress, total=len(times)
     ):
         # Transform Galactic coordinates of Sky Model to Local coordinates
         if use_astropy_azel:
-            altaz = sky_model.coords.transform_to(
-                apc.AltAz(location=location, obstime=time)
-            )
+            altaz = coords.transform_to(apc.AltAz(location=location, obstime=time))
             az = np.asarray(altaz.az.deg)
             el = np.asarray(altaz.alt.deg)
         else:
-            ra, dec = crda.galactic_to_radec(
-                sky_model.coords.galactic.b.deg, sky_model.coords.galactic.l.deg
-            )
-            az, el = crda.radec_azel_from_lst(
-                lsts[lst_idx].rad, ra, dec, location.lat.rad
+            # This is crda.radec_azel_from_lst, with the sines and cosines of the
+            # declination computed once for all LSTs.
+            az, el = crda.radec_azel2(
+                lsts[lst_idx].rad - ra, sin_dec, cos_dec, sin_lat, cos_lat
             )
             az *= 180 / np.pi
             el *= 180 / np.pi
@@ -241,27 +405,25 @@ def sky_convolution_generator(
         horizon_mask = el > 0
         az_above_horizon = az[horizon_mask]
         el_above_horizon = el[horizon_mask]
+        beam_interp.set_points(az_above_horizon, el_above_horizon)
 
         # Loop over frequency
-        # Using np.roll means we start at the reference frequency and loop around.
-        # Starting at ref freq (if there is one) means that we can use the
-        # reference beam with other frequencies.
         for freq_idx in track(
-            np.roll(range(len(beam.frequency)), -ref_freq_idx),
+            freq_order,
             description="Frequencies",
             disable=not freq_progress,
             total=len(beam.frequency),
             transient=True,
         ):
-            if freq_idx not in interpolators:
-                interpolators[freq_idx] = beam.angular_interpolator(
-                    freq_idx, interp_kind=interp_kind
+            if freq_idx in sky_maps:
+                sky_map = sky_maps[freq_idx].copy()
+            else:
+                # The same as sky_model.at_freq(), with the index map computed once.
+                sky_map = sky_model._at_freq_with_index(
+                    beam.frequency[freq_idx].to_value("MHz"), spectral_index
                 )
-
-            sky_map = sky_model.at_freq(
-                beam.frequency[freq_idx].to_value("MHz"),
-                index_model=index_model,
-            )
+                if cache_sky_maps:
+                    sky_maps[freq_idx] = sky_map.copy()
             sky_map[~horizon_mask] = np.nan
 
             # A fresh array on every iteration, so that the yielded arrays are not
@@ -269,9 +431,7 @@ def sky_convolution_generator(
             beam_above_horizon = np.full(sky_model.coords.shape, np.nan)
 
             try:
-                beam_above_horizon[horizon_mask] = interpolators[freq_idx](
-                    az_above_horizon, el_above_horizon
-                )
+                beam_above_horizon[horizon_mask] = beam_interp(freq_idx)
             except ValueError as e:
                 raise ValueError(
                     f"az min/max: {np.min(az_above_horizon), np.max(az_above_horizon)}."
@@ -315,7 +475,7 @@ def sky_convolution_generator(
                 n_pix_tot_no_nan,
                 az,
                 el,
-                interpolators[freq_idx],
+                beam_interp.interpolator(freq_idx),
             )
 
 

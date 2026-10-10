@@ -17,6 +17,7 @@ from edges.data import BEAM_PATH
 from .. import modeling as mdl
 from .. import types as tp
 from ..config import config
+from ..modeling import data_transforms as mdt
 from ..units import vld_unit
 
 logger = logging.getLogger(__name__)
@@ -630,12 +631,7 @@ class Beam:
             )
 
         # Frequency interpolation
-        interp_beam = np.zeros((len(freq), len(self.elevation), len(self.azimuth)))
-        cached_model = model.at(x=self.frequency.to_value("MHz"))
-        for i, bm in enumerate(self.beam.T):
-            for j, b in enumerate(bm):
-                model_fit = cached_model.fit(ydata=b, **fit_kwargs)
-                interp_beam[:, j, i] = model_fit.evaluate(freq.to_value("MHz"))
+        interp_beam = self._fit_over_frequency(model, freq.to_value("MHz"), fit_kwargs)
 
         return Beam(
             frequency=freq,
@@ -643,6 +639,76 @@ class Beam:
             elevation=self.elevation,
             beam=interp_beam,
         )
+
+    def _fit_over_frequency(
+        self, model: mdl.Model, freq: np.ndarray | None, fit_kwargs: dict
+    ) -> np.ndarray:
+        """Fit a model over frequency to every (elevation, azimuth) pixel of the beam.
+
+        Parameters
+        ----------
+        model
+            The model to fit to the beam at each pixel, as a function of frequency.
+        freq
+            The frequencies (in MHz) at which to evaluate the fitted models. If None,
+            evaluate them at the beam frequencies.
+        fit_kwargs
+            Keyword arguments to pass to the model fit.
+
+        Returns
+        -------
+        beam
+            The fitted beam, shape ``(Nfreq, Nel, Naz)``, where ``Nfreq`` is the length
+            of ``freq`` (or of the beam frequencies).
+
+        Notes
+        -----
+        In the common case (a plain linear model, default fit options and finite
+        beam values), every pixel is fit with the same least-squares solve as
+        :class:`~edges.modeling.ModelFit`, but without building a fit object per
+        pixel, giving bit-for-bit the same result much faster. Otherwise, a
+        :class:`~edges.modeling.ModelFit` is used for each pixel.
+        """
+        nfreq, nel, naz = self.beam.shape
+        cached_model = model.at(x=self.frequency.to_value("MHz"))
+        eval_basis = (
+            cached_model.basis
+            if freq is None
+            else cached_model.model.get_basis_terms(np.asarray(freq))
+        )
+
+        fast = (
+            not fit_kwargs
+            and isinstance(model, mdl.Model)
+            and type(model.data_transform) is mdt.IdentityTransform
+            and self.beam.dtype == np.float64
+            and np.all(np.isfinite(self.beam))
+        )
+        if not fast:
+            out = np.zeros((eval_basis.shape[1], nel, naz))
+            for i, bm in enumerate(self.beam.T):
+                for j, b in enumerate(bm):
+                    model_fit = cached_model.fit(ydata=b, **fit_kwargs)
+                    out[:, j, i] = model_fit.evaluate(freq)
+            return out
+
+        # This mirrors ModelFit._ls exactly. The basis is indexed with a (full) mask
+        # as in ModelFit, which gives it the same memory layout, so that the column
+        # norms are summed in the same order.
+        van = cached_model.basis[:, np.ones(nfreq, dtype=bool)]
+        rcond = nfreq * np.finfo(np.float64).eps
+        scl = np.sqrt(np.square(van.T).sum(axis=0))
+        lhs = van.T / scl
+
+        # Solve and evaluate one pixel at a time: solving for all pixels at once (or
+        # evaluating all of them with one matrix product) rounds differently, and
+        # the ill-conditioned basis amplifies that well beyond rounding.
+        ydata = self.beam.reshape(nfreq, nel * naz)
+        out = np.empty((nel * naz, eval_basis.shape[1]))
+        for k in range(nel * naz):
+            params = np.linalg.lstsq(lhs, ydata[:, k], rcond)[0] / scl
+            out[k] = np.dot(params, eval_basis)
+        return out.T.reshape(-1, nel, naz)
 
     def smoothed(
         self, model: mdl.Model = mdl.Polynomial(n_terms=12), **fit_kwargs
@@ -668,12 +734,7 @@ class Beam:
             )
 
         # Frequency smoothing
-        smooth_beam = np.zeros_like(self.beam)
-        cached_model = model.at(x=self.frequency.to_value("MHz"))
-        for i, bm in enumerate(self.beam.T):
-            for j, b in enumerate(bm):
-                model_fit = cached_model.fit(ydata=b, **fit_kwargs)
-                smooth_beam[:, j, i] = model_fit.evaluate()
+        smooth_beam = self._fit_over_frequency(model, None, fit_kwargs)
         return Beam(
             frequency=self.frequency,
             azimuth=self.azimuth,
@@ -857,6 +918,49 @@ class Beam:
         spl = spi.RegularGridInterpolator(
             (az, self.elevation),
             beam.T,
+            method=interp_kind,
+        )
+        return lambda az, el: spl(np.array([az, el]).T)
+
+    #: Interpolation kinds for which :meth:`_multi_freq_angular_interpolator` gives
+    #: exactly the same values as :meth:`angular_interpolator` at each frequency.
+    _MULTI_FREQ_INTERP_KINDS = ("nearest", "slinear", "cubic", "quintic", "pchip")
+
+    def _multi_freq_angular_interpolator(
+        self,
+        freq_indx: Sequence[int],
+        interp_kind: Literal["nearest", "slinear", "cubic", "quintic", "pchip"],
+    ) -> Callable[[np.ndarray, np.ndarray], np.ndarray]:
+        """Return a callable that interpolates the beam at several frequencies at once.
+
+        This is the same as :meth:`angular_interpolator` (for the interpolation kinds
+        in ``_MULTI_FREQ_INTERP_KINDS``), but the interpolation weights are computed
+        once for all the frequencies, which is much faster than interpolating each
+        frequency separately.
+
+        Parameters
+        ----------
+        freq_indx
+            The indices of the frequencies at which to interpolate.
+        interp_kind
+            The ``method`` of :class:`scipy.interpolate.RegularGridInterpolator`.
+
+        Returns
+        -------
+        interp
+            A function ``interp(az, el)`` (in degrees) returning the beam at each of
+            the given frequencies, shape ``(len(az), len(freq_indx))``.
+        """
+        if interp_kind not in self._MULTI_FREQ_INTERP_KINDS:
+            raise ValueError(
+                f"Cannot interpolate several frequencies at once with '{interp_kind}'."
+            )
+        az = np.concatenate([self.azimuth, [self.azimuth[0] + 360]])
+        beam = self.beam[np.asarray(freq_indx)]
+        beam = np.concatenate((beam, beam[:, :, :1]), axis=2)
+        spl = spi.RegularGridInterpolator(
+            (az, self.elevation),
+            np.transpose(beam, (2, 1, 0)),
             method=interp_kind,
         )
         return lambda az, el: spl(np.array([az, el]).T)

@@ -130,12 +130,34 @@ class CompositeModel:
         model, indx = self._index_map[indx]
         return self[model].get_basis_term_transformed(indx, x, with_scaler=with_scaler)
 
+    def _get_scaled_basis_terms(
+        self, indices: Sequence[int], x: np.ndarray, with_scaler: bool = True
+    ) -> list[np.ndarray]:
+        """Get the basis terms ``indices`` at ``x``, including the basis scalers.
+
+        Each term is identical to :meth:`get_basis_term_transformed`, but the terms
+        of each sub-model are computed together, so that its coordinate transform
+        and basis scaler are evaluated only once.
+        """
+        by_model: dict[str, list[tuple[int, int]]] = {}
+        for indx in indices:
+            name, sub_indx = self._index_map[indx]
+            by_model.setdefault(name, []).append((indx, sub_indx))
+
+        terms = {}
+        for name, pairs in by_model.items():
+            sub_terms = self[name]._get_scaled_basis_terms(
+                [sub_indx for _, sub_indx in pairs], x, with_scaler=with_scaler
+            )
+            terms.update(zip((indx for indx, _ in pairs), sub_terms, strict=True))
+
+        return [terms[indx] for indx in indices]
+
     def get_basis_terms(self, x: np.ndarray, with_scaler: bool = True) -> np.ndarray:
         """Get a 2D array of all basis terms at ``x``."""
-        return np.array([
-            self.get_basis_term_transformed(indx, x, with_scaler=with_scaler)
-            for indx in range(self.n_terms)
-        ])
+        return np.array(
+            self._get_scaled_basis_terms(range(self.n_terms), x, with_scaler)
+        )
 
     def with_nterms(
         self, model: str, n_terms: int | None = None, parameters: Sequence | None = None
