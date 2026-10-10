@@ -3,6 +3,7 @@ from pathlib import Path
 
 import py7zr
 import pytest
+import requests
 
 from edges.data import _pooch
 from edges.data.cli import app
@@ -115,3 +116,66 @@ def test_calibrated_s11_uses_registry_name(monkeypatch, tmp_path, calobs_dir):
     assert _pooch._S11FILE in _pooch.B18CAL_REPO.registry
     assert out == calobs_dir / "S11" / _pooch._S11FILE
     assert out.read_text() == "s11"
+
+
+class _FlakyDownloader:
+    """A pooch downloader that fails ``nfail`` times, then writes ``content``."""
+
+    def __init__(self, nfail: int, content: bytes, error: Exception):
+        self.nfail = nfail
+        self.content = content
+        self.error = error
+        self.calls = 0
+
+    def __call__(self, url, output_file, pooch_obj):
+        self.calls += 1
+        if self.calls <= self.nfail:
+            raise self.error
+        Path(output_file).write_bytes(self.content)
+
+
+@pytest.fixture
+def b18_repo(tmp_path: Path, monkeypatch):
+    """A repository like the B18 one (same retries), with a single small file."""
+    import hashlib
+
+    import pooch
+
+    monkeypatch.setattr(pooch.core.time, "sleep", lambda _: None)
+    content = b"some data"
+    repo = pooch.create(
+        path=tmp_path,
+        base_url=_pooch.B18CAL_REPO.base_url,
+        registry={"file.txt": f"md5:{hashlib.md5(content).hexdigest()}"},
+        retry_if_failed=_pooch.B18CAL_REPO.retry_if_failed,
+    )
+    return repo, content
+
+
+def test_b18_repo_retries_failed_downloads():
+    assert _pooch.B18CAL_REPO.retry_if_failed == _pooch.DOWNLOAD_RETRIES >= 3
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        requests.exceptions.HTTPError("502 Server Error: Bad Gateway"),
+        requests.exceptions.ChunkedEncodingError("Connection broken: IncompleteRead"),
+        requests.exceptions.ConnectionError("Remote end closed connection"),
+    ],
+)
+def test_transient_download_failures_are_retried(b18_repo, error):
+    repo, content = b18_repo
+    downloader = _FlakyDownloader(_pooch.DOWNLOAD_RETRIES, content, error)
+    path = repo.fetch("file.txt", downloader=downloader)
+    assert Path(path).read_bytes() == content
+    assert downloader.calls == _pooch.DOWNLOAD_RETRIES + 1
+
+
+def test_persistent_download_failure_raises(b18_repo):
+    repo, content = b18_repo
+    error = requests.exceptions.HTTPError("502 Server Error: Bad Gateway")
+    downloader = _FlakyDownloader(_pooch.DOWNLOAD_RETRIES + 1, content, error)
+    with pytest.raises(requests.exceptions.HTTPError, match="502"):
+        repo.fetch("file.txt", downloader=downloader)
+    assert downloader.calls == _pooch.DOWNLOAD_RETRIES + 1
