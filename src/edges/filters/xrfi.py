@@ -6,7 +6,7 @@ from abc import abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from functools import cached_property
-from typing import Any, Self, TypeVar
+from typing import Any, Literal, Self, TypeVar
 
 import attrs
 import numpy as np
@@ -142,12 +142,33 @@ class Modeler:
 
 @attrs.define
 class LinearModeler(Modeler):
-    """A :class:`Modeler` that uses a linear model to fit either data or std."""
+    """A :class:`Modeler` that uses a linear model to fit either data or std.
+
+    Parameters
+    ----------
+    model
+        The linear model.
+    min_terms
+        The number of terms in the model on the first iteration. By default, the
+        number of terms of ``model``.
+    max_terms
+        The maximum number of terms in the model. By default, ``min_terms``.
+    term_increase
+        The number of terms added to the model on each iteration.
+    fit_method
+        The method used to solve the linear fit (see
+        :class:`~edges.modeling.ModelFit`). The methods agree to rounding error times
+        the condition number of the (weighted) basis, which can be large.
+    """
 
     model: mdl.Model = attrs.field(validator=attrs.validators.instance_of(mdl.Model))
     min_terms: int = attrs.field(converter=int)
     max_terms: int = attrs.field(converter=int)
     term_increase: int = 0
+    fit_method: Literal["lstsq", "qr", "alan-qrd", "qrd-c"] = attrs.field(
+        default="lstsq",
+        validator=attrs.validators.in_(("lstsq", "qr", "alan-qrd", "qrd-c")),
+    )
 
     @min_terms.default
     def _min_terms_default(self) -> int:
@@ -178,7 +199,7 @@ class LinearModeler(Modeler):
         self, model: mdl.FixedLinearModel, data: np.ndarray, weights: np.ndarray
     ) -> np.ndarray:
         """Perform a model fit and evaluate it."""
-        fit = model.fit(ydata=data, weights=weights)
+        fit = model.fit(ydata=data, weights=weights, method=self.fit_method)
         return fit.evaluate()
 
     def stopping_condition(self, flags: np.ndarray, iteration: int) -> bool:
