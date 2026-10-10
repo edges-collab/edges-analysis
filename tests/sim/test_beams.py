@@ -61,6 +61,23 @@ def test_bad_beam_shapes():
         )
 
 
+def test_default_low_beam_integrates_to_about_4pi(beam):
+    """The bundled low-band gain integrates to ~4pi over the sky above the horizon.
+
+    A lossless antenna on an infinite ground plane gives exactly 4pi (a lossy one
+    less). The file is within 1% at all frequencies, but exceeds 4pi by up to 0.1%
+    below ~47 MHz, which makes the unnormalised loss fraction slightly negative.
+    """
+    el = np.deg2rad(beam.elevation.astype(float))
+    ring = beam.beam.sum(axis=2) * np.deg2rad(1.0)  # periodic in azimuth
+    frac = np.trapezoid(ring * np.cos(el), el, axis=1) / (4 * np.pi)
+
+    np.testing.assert_allclose(frac, 1.0, atol=0.01)
+    low = beam.frequency < 47 * un.MHz
+    assert np.all(frac[low] > 1.0)
+    assert np.all(frac[~low] < 1.0)
+
+
 def test_beam_from_feko(beam):
     assert beam.frequency.min() == 40.0 * un.MHz
     assert beam.frequency.max() == 100.0 * un.MHz
