@@ -1,14 +1,17 @@
 """Fitting routines for models."""
 
+import contextlib
 from copy import copy
 from ctypes import CDLL, POINTER, c_double, c_int, c_longdouble
-from functools import cached_property
+from functools import cache, cached_property
 from pathlib import Path
 from typing import Literal
 
 import attrs
 import numpy as np
 import scipy as sp
+import scipy.linalg
+from threadpoolctl import ThreadpoolController
 
 from ..io.serialization import hickleable
 from . import core
@@ -347,6 +350,30 @@ class ModelFit:
         )
 
 
+# Fits with scalar or 1D weights solve a tall, thin system, which gains nothing from
+# multiple BLAS threads, and is much slower when those threads compete for cores
+# (e.g. when fits run in parallel processes). From this size of the design matrix,
+# such solves run on a single BLAS thread. The number of threads does not change the
+# results.
+_SINGLE_BLAS_THREAD_MIN_SIZE = 10_000
+
+
+@cache
+def _threadpool_controller() -> ThreadpoolController:
+    """Get the controller of the BLAS thread pools.
+
+    It is created once, since inspecting the loaded libraries is slow.
+    """
+    return ThreadpoolController()
+
+
+def _blas_thread_limit(single_thread: bool) -> contextlib.AbstractContextManager:
+    """Get a context that limits BLAS to one thread, if ``single_thread`` is True."""
+    if not single_thread:
+        return contextlib.nullcontext()
+    return _threadpool_controller().limit(limits=1, user_api="blas")
+
+
 class _LinearSolver:
     """The 'lstsq' and 'qr' weighted least-squares solves of :class:`ModelFit`.
 
@@ -372,13 +399,19 @@ class _LinearSolver:
         w: np.ndarray | float,
         method: Literal["lstsq", "qr"],
     ):
-        self.method = method
-        if method == "lstsq":
-            self._init_lstsq(basis, w)
-        elif method == "qr":
-            self._init_qr(basis, w)
-        else:
+        if method not in ("lstsq", "qr"):
             raise ValueError(f"Unsupported method for _LinearSolver: {method}")
+        self.method = method
+        # A full weight matrix is factorised, which benefits from multiple threads.
+        self._single_thread = (
+            np.ndim(w) < 2 and np.size(basis) >= _SINGLE_BLAS_THREAD_MIN_SIZE
+        )
+
+        with _blas_thread_limit(self._single_thread):
+            if method == "lstsq":
+                self._init_lstsq(basis, w)
+            else:
+                self._init_qr(basis, w)
 
     def _init_lstsq(self, van: np.ndarray, w: np.ndarray | float):
         """Prepare the design matrix for the ``np.linalg.lstsq`` based solves.
@@ -450,6 +483,11 @@ class _LinearSolver:
 
     def solve(self, y: np.ndarray) -> np.ndarray:
         """Get the best-fit parameters for the data ``y`` (at the used points)."""
+        with _blas_thread_limit(self._single_thread):
+            return self._solve(y)
+
+    def _solve(self, y: np.ndarray) -> np.ndarray:
+        """Get the best-fit parameters, without limiting the BLAS threads."""
         if self.method == "qr":
             if self._sqrtw_matrix is not None:
                 w_ydata = np.dot(self._sqrtw_matrix, y)

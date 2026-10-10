@@ -7,8 +7,10 @@ implementation (the original algorithm) on realistic random inputs.
 import numpy as np
 import pytest
 import scipy as sp
+from threadpoolctl import threadpool_info
 
 from edges import modeling as mdl
+from edges.modeling import fitting
 from edges.modeling.fitting import _c_qrd, _RepeatedFit, _select_columns
 
 
@@ -325,3 +327,58 @@ def test_modelfit_all_used_points_bit_identical(n_terms: int, wkind: str):
         np.testing.assert_array_equal(
             np.array(fit.model_parameters), _ref_params(fm, y, w, method)
         )
+
+
+def _blas_threads() -> list[int]:
+    return [
+        lib["num_threads"] for lib in threadpool_info() if lib["user_api"] == "blas"
+    ]
+
+
+@pytest.mark.parametrize("method", ["lstsq", "qr"])
+@pytest.mark.parametrize(
+    ("n", "wkind", "single"),
+    [
+        (2100, "scalar", True),
+        (2100, "1D", True),
+        (300, "1D", False),  # too small to limit
+        (2100, "matrix", False),  # the factorisation benefits from threads
+    ],
+)
+def test_blas_threads_limited_for_large_diagonal_solves(
+    monkeypatch, method, n, wkind, single
+):
+    """Large solves with scalar/1D weights run on one BLAS thread; others don't."""
+    outside = _blas_threads()
+    seen = []
+    solve = fitting._LinearSolver._solve
+
+    def spy(self, y):
+        seen.append(_blas_threads())
+        return solve(self, y)
+
+    monkeypatch.setattr(fitting._LinearSolver, "_solve", spy)
+    rng = np.random.default_rng(5)
+    fm, y = _fit_data(n, nan=False, rng=rng)
+    params = fm.fit(
+        ydata=y, weights=_weights(wkind, n, rng), method=method
+    ).model_parameters
+
+    assert len(params) == 5
+    assert seen == [[1] * len(outside) if single else outside]
+    assert _blas_threads() == outside
+
+
+@pytest.mark.parametrize("method", ["lstsq", "qr"])
+@pytest.mark.parametrize("wkind", ["scalar", "1D", "1D-positive"])
+def test_blas_thread_limit_does_not_change_results(monkeypatch, method, wkind):
+    """The solve is bit-identical with and without the BLAS thread limit."""
+    rng = np.random.default_rng(6)
+    fm, y = _fit_data(4000, nan=False, rng=rng)
+    w = _weights(wkind, 4000, rng)
+
+    def params(min_size):
+        monkeypatch.setattr(fitting, "_SINGLE_BLAS_THREAD_MIN_SIZE", min_size)
+        return np.array(fm.fit(ydata=y, weights=w, method=method).model_parameters)
+
+    np.testing.assert_array_equal(params(0), params(np.inf))
