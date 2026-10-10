@@ -1,0 +1,55 @@
+name: Cache Test Data
+
+# Downloads the data the tests need from Zenodo into the pooch cache, and saves it
+# with actions/cache. Pull requests can only restore caches saved on their own branch
+# or on the base branch, so this also runs on pushes to main (and weekly, so that the
+# cache is never evicted for being unused). The tests then rarely touch Zenodo.
+on:
+  workflow_call:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+jobs:
+  cache_data:
+    name: Get Cache Data
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@master
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version-file: pyproject.toml
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Install
+        run: uv sync --locked
+
+      - name: Get Platform Cache Directory
+        id: usercache
+        run: |
+          usercache=$(uv run python -c "from platformdirs import user_cache_dir; print(user_cache_dir('edges'))")
+          echo "usercache=${usercache}" >> $GITHUB_OUTPUT
+
+      # The key changes with the data registry, so a new file or hash gives a new
+      # cache, seeded from the previous one (only missing files are downloaded).
+      - name: Setup Cached Data Files
+        uses: actions/cache@v6
+        with:
+          path: "${{ steps.usercache.outputs.usercache }}/**/*"
+          key: "pooch-cache-${{ runner.os }}-${{ hashFiles('src/edges/data/_pooch.py') }}"
+          restore-keys: "pooch-cache-${{ runner.os }}-"
+
+      - name: Download Test Data
+        run: uv run edges data fetch-b18 --dataset testing
