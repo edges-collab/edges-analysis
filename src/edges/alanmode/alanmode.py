@@ -40,6 +40,12 @@ from ..cal.sparams import (
 )
 from ..cal.spectra import LoadSpectrum
 from ..config import config
+from ..filters.filters import (
+    maxfm_filter,
+    peak_orbcomm_filter,
+    power_percent_filter,
+    rms_filter,
+)
 from . import alanio
 
 logger = logging.getLogger(__name__)
@@ -135,6 +141,38 @@ class ACQPlot7aMoonParams:
         The number of seconds to delay before including spectra from the files.
         Can be useful to ignore beginning of files as the system may still be
         warming up.
+    peakpwr
+        Spectra are only averaged if the percentage of the total antenna-state power
+        that lies above 100 MHz is below this (see
+        :func:`edges.filters.power_percent_filter`). Off by default.
+    minpwr
+        Spectra are only averaged if the percentage of the total antenna-state power
+        that lies above 100 MHz is above this (see
+        :func:`edges.filters.power_percent_filter`). Off by default.
+    pkpwrm
+        Spectra are only averaged if the peak power (in dB) in the ORBCOMM band
+        (137.5 +/- 1 MHz), relative to the mean above 80 MHz, is below this (see
+        :func:`edges.filters.peak_orbcomm_filter`). If negative, spectra are instead
+        only averaged if it is above the magnitude of this. Off by default.
+    maxrmsf
+        Spectra are only averaged if the RMS of the residuals (in K) of a
+        :math:`f^{-2.5}` fit to the spectrum between 60 and 80 MHz is below this (see
+        :func:`edges.filters.rms_filter`). As in the C-code, the band is defined by
+        channel index on a grid of 32768 channels over 0-200 MHz. Off by default.
+    maxfm
+        Spectra are only averaged if the largest single-channel spike (in K) in the
+        FM band (88-120 MHz) is below this (see :func:`edges.filters.maxfm_filter`).
+        Off by default.
+
+    Notes
+    -----
+    The quality cuts (``peakpwr``, ``minpwr``, ``pkpwrm``, ``maxrmsf`` and
+    ``maxfm``) are those of the C-code, with the same names as its command-line
+    options, and are applied with the corresponding filters of :mod:`edges.filters`.
+    They are computed on each (Dicke-switched) spectrum at full resolution over the
+    whole band (not just ``fstart``-``fstop``). All but ``peakpwr`` and ``minpwr``
+    are computed on the uncalibrated temperature ``Q * tcal + tload``, which (as in
+    the C-code) is set to zero where the noise source adds no power.
     """
 
     fstart: float = 50.0
@@ -145,6 +183,11 @@ class ACQPlot7aMoonParams:
     tstart: int = 0
     tstop: int = 23
     delaystart: int = 0
+    peakpwr: float = np.inf
+    minpwr: float = 0.0
+    pkpwrm: float = np.inf
+    maxrmsf: float = np.inf
+    maxfm: float = np.inf
 
     @classmethod
     def bowman_2018_defaults(
@@ -197,6 +240,60 @@ def acqplot7amoon(
     return _acqplot7amoon(acqfile, params)[0]
 
 
+# The band of the -maxrmsf cut of the C-code, which takes channels 9830-13106
+# (i.e. int(60 * 32768 / 200) up to, but not including, int(80 * 32768 / 200)) of a
+# 32768-channel grid over 0-200 MHz. Padded by half a channel, to select by frequency.
+_RMSF_CHANNEL_WIDTH = 200.0 / 32768
+_RMSF_FREQ_RANGE = (
+    (int(60.0 / _RMSF_CHANNEL_WIDTH) - 0.5) * _RMSF_CHANNEL_WIDTH * un.MHz,
+    (int(80.0 / _RMSF_CHANNEL_WIDTH) - 0.5) * _RMSF_CHANNEL_WIDTH * un.MHz,
+)
+
+
+def _passes_quality_cuts(data: GSData, params: ACQPlot7aMoonParams) -> np.ndarray:
+    """Return whether each integration passes the quality cuts of the C-code.
+
+    Parameters
+    ----------
+    data
+        The raw (three-position switch) power spectra, at full resolution over the
+        whole band.
+    params
+        The parameters defining the cuts.
+
+    Returns
+    -------
+    passed
+        Boolean array, True for each integration that passes all the cuts.
+    """
+    data = power_percent_filter(
+        data, min_threshold=params.minpwr, max_threshold=params.peakpwr
+    )
+    temp = approximate_temperature(
+        data=dicke_calibration(data), tload=params.tload, tns=params.tcal
+    )
+    # As in the C-code, the temperature is zero where the noise source adds no power.
+    iload = data.loads.index("internal_load")
+    ilns = data.loads.index("internal_load_plus_noise_source")
+    defined = (data.data[ilns] - data.data[iload]) > 1e-99
+    temp = temp.update(data=np.where(defined[None], temp.data, 0.0))
+
+    if np.isfinite(params.pkpwrm):
+        temp = peak_orbcomm_filter(
+            temp, threshold=params.pkpwrm, mean_freq_range=(80.0, 200.0)
+        )
+    if np.isfinite(params.maxfm):
+        temp = maxfm_filter(temp, threshold=params.maxfm)
+    if np.isfinite(params.maxrmsf):
+        temp = rms_filter(
+            temp,
+            threshold=params.maxrmsf,
+            freq_range=_RMSF_FREQ_RANGE,
+            model=mdl.LinLog(n_terms=1, beta=-2.5),
+        )
+    return ~np.all(temp.complete_flags, axis=(0, 1, 3))
+
+
 def _acqplot7amoon(
     acqfile: tp.PathLike | Sequence[tp.PathLike], params: ACQPlot7aMoonParams
 ) -> tuple[GSData, int]:
@@ -207,8 +304,9 @@ def _acqplot7amoon(
     spectrum
         The averaged spectrum.
     n
-        The number of (Dicke-switched) spectra that were averaged, as written in the
-        header of the averaged-spectrum files of the C-code.
+        The number of (Dicke-switched) spectra that were averaged (i.e. that pass the
+        time selection and the quality cuts), as written in the header of the
+        averaged-spectrum files of the C-code.
     """
     data = read_acq_to_gsdata(acqfile, telescope="edges-low")
 
@@ -223,6 +321,14 @@ def _acqplot7amoon(
         secs = (data.times - data.times.min()).sec
         idx = np.all(secs > params.delaystart, axis=1)
         data = select_times(data, indx=idx)
+
+    # The quality cuts are computed on the whole band, so before selecting freqs.
+    passed = _passes_quality_cuts(data, params)
+    if not np.any(passed):
+        raise ValueError(f"No spectra pass the quality cuts in {acqfile}.")
+    if not np.all(passed):
+        logger.info(f"{np.sum(~passed)} of {passed.size} spectra fail quality cuts.")
+        data = select_times(data, indx=passed)
 
     data = select_freqs(
         data, freq_range=(params.fstart * un.MHz, params.fstop * un.MHz)

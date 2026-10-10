@@ -427,13 +427,21 @@ def _peak_power_filter(
     """
     Filter out whole integrations that have high power in a given frequency range.
 
+    The statistic is that of the ``-pkpwrm`` option of Alan's C-code: the ratio
+    (in dB) of the peak in ``peak_freq_range`` to the mean in ``mean_freq_range``.
+    The mean only includes channels that are positive and below a tenth of the peak
+    in ``mean_freq_range``. If there are no such channels, the mean is unity, so
+    the statistic is just the peak in dB (in the units of the data). Non-finite
+    channels are treated as zero.
+
     Parameters
     ----------
     threshold
-        This is the threshold beyond which the peak power causes the integration to be
-        flagged. The units of the threhsold are 10*log10(peak_power / mean), where the
-        mean is the mean power of spectrum in the same frequency range (omitting
-        power spikes > peak_power/10)
+        The threshold (in dB) at or beyond which the peak power causes the
+        integration to be flagged. If negative, integrations are instead flagged if
+        their peak power is at or below the magnitude of the threshold (and not
+        below the threshold itself), i.e. only integrations with high peak power are
+        kept.
     peak_freq_range
         The range of frequencies over which to search for the peak.
     mean_freq_range
@@ -457,8 +465,9 @@ def _peak_power_filter(
     if not np.any(mask):
         return np.zeros(shape=(data.nloads, data.npols, data.ntimes), dtype=bool)
 
-    spec = data.data[..., mask]
-    peak_power = spec.max(axis=-1)
+    # As in the C-code, the maxima start at zero and ignore undefined channels.
+    spec = np.where(np.isfinite(data.data), data.data, 0.0)
+    peak_power = np.max(spec[..., mask], axis=-1, initial=0.0)
 
     if mean_freq_range is not None:
         mask = (freqs > mean_freq_range[0]) & (freqs <= mean_freq_range[1])
@@ -466,15 +475,17 @@ def _peak_power_filter(
         if not np.any(mask):
             return np.zeros(data.ntimes, dtype=bool)
 
-        spec = data.data[..., mask]
+    spec = spec[..., mask]
+    ref = np.max(spec, axis=-1, initial=0.0)
+    use = (spec > 0) & (spec < ref[..., None] / 10)
 
-    mean, _ = averaging.weighted_mean(
-        spec,
-        weights=((spec > 0) & (spec < peak_power[..., None] / 10)).astype(float),
-        axis=-1,
-    )
-    peak_power = 10 * np.log10(peak_power / mean)
-    return peak_power > threshold
+    # The tiny offsets make the mean unity if there are no usable channels.
+    mean = (1e-99 + np.sum(spec * use, axis=-1)) / (1e-99 + np.sum(use, axis=-1))
+    with np.errstate(divide="ignore"):
+        peak_power = 10 * np.log10(peak_power / mean)
+
+    keep = (peak_power < threshold) | ((threshold < 0) & (peak_power > abs(threshold)))
+    return ~keep
 
 
 @gsregister("filter")
@@ -492,10 +503,12 @@ def peak_power_filter(
     Parameters
     ----------
     threshold
-        This is the threshold beyond which the peak power causes the integration to be
-        flagged. The units of the threhsold are 10*log10(peak_power / mean), where the
-        mean is the mean power of spectrum in the same frequency range (omitting
-        power spikes > peak_power/10)
+        This is the threshold (in dB) at or beyond which the peak power causes the
+        integration to be flagged. The units of the threshold are
+        10*log10(peak_power / mean), where the mean is the mean power of the
+        spectrum in ``mean_freq_range``, omitting power spikes above a tenth of the
+        peak in that range (and unity if there are no other channels). If negative,
+        only the integrations with peak power above its magnitude are kept.
     peak_freq_range
         The range of frequencies over which to search for the peak.
     mean_freq_range
@@ -528,23 +541,28 @@ def peak_orbcomm_filter(
     mean_freq_range: tuple[float, float] | None = (80, 200),
 ):
     """
-    Filter out whole integrations that have high power between (137, 138) MHz.
+    Filter out whole integrations that have high power in the ORBCOMM band.
+
+    This is the ``-pkpwrm`` cut of Alan's C-code: the peak is searched for within
+    1 MHz of 137.5 MHz.
 
     Parameters
     ----------
     threshold
-        This is the threshold beyond which the peak power causes the integration to be
-        flagged. The units of the threhsold are 10*log10(peak_power / mean), where the
-        mean is the mean power of spectrum in the ``mean_freq_range`` (omitting
-        power spikes > peak_power/10)
+        This is the threshold (in dB) at or beyond which the peak power causes the
+        integration to be flagged. The units of the threshold are
+        10*log10(peak_power / mean), where the mean is the mean power of the
+        spectrum in ``mean_freq_range``, omitting power spikes above a tenth of the
+        peak in that range (and unity if there are no other channels). If negative,
+        only the integrations with peak power above its magnitude are kept.
     mean_freq_range
         The range of frequencies over which to take a mean to compare to the peak.
-        By default, the same as the ``peak_freq_range``.
+        If None, the same as the ORBCOMM band.
     """
     flags = _peak_power_filter(
         data=data,
         threshold=threshold,
-        peak_freq_range=(137.0, 138.0),
+        peak_freq_range=(136.5, 138.5),
         mean_freq_range=mean_freq_range,
     )
     return GSFlag(
@@ -564,6 +582,7 @@ def single_channel_spike_filter(
     data: GSData,
     threshold: float = 200,
     freq_range: tuple[tp.FreqType, tp.FreqType] = (88 * un.MHz, 120 * un.MHz),
+    absolute: bool = True,
 ):
     """Filter data based on single channel spikes.
 
@@ -571,17 +590,31 @@ def single_channel_spike_filter(
     [0.5, 0, 0.5], which makes single channel spikes stand out.
     The entire spectrum is flagged if the residual of the original spectrum to the
     de-trended is larger than the threshold.
+
+    Parameters
+    ----------
+    data
+        The data to filter.
+    threshold
+        The threshold on the residual beyond which the spectrum is flagged.
+    freq_range
+        The range of frequencies in which to search for spikes. The channels at the
+        edges of the range are compared to their neighbours outside it, if any.
+    absolute
+        Whether to flag on the absolute value of the residual (so that dips are
+        also flagged), or only on positive residuals (spikes).
     """
     freqs = data.freqs
-    mask = (freqs >= freq_range[0]) & (freqs <= freq_range[1])
+    idx = np.flatnonzero((freqs >= freq_range[0]) & (freqs <= freq_range[1]))
+    idx = idx[(idx > 0) & (idx < data.nfreqs - 1)]
 
-    if not np.any(mask):
+    if idx.size == 0:
         return GSFlag(flags=np.zeros(data.ntimes, dtype=bool), axes=("time",))
 
-    power = data.data[..., mask]
-
-    avg = (power[..., 2:] + power[..., :-2]) / 2
-    deviation_power = np.abs(power[..., 1:-1] - avg)
+    power = data.data
+    deviation_power = power[..., idx] - (power[..., idx + 1] + power[..., idx - 1]) / 2
+    if absolute:
+        deviation_power = np.abs(deviation_power)
 
     return GSFlag(
         flags=np.max(deviation_power, axis=-1) > threshold,
@@ -595,11 +628,15 @@ def maxfm_filter(*, data: GSData, threshold: float = 200):
     """Filter data based on large single-channel spikes in FM band.
 
     This function is only provided as a convenience when comparing to the legacy code
-    that had the same filter with this name. It is really just a very thin wrapper
-    around `single_channel_spike_filter`, focusing on the FM band.
+    that had the same filter with this name (``-maxfm``). It is really just a very
+    thin wrapper around `single_channel_spike_filter`, focusing on the FM band, and
+    (as in the legacy code) only flagging positive spikes.
     """
     return single_channel_spike_filter.func(
-        data=data, threshold=threshold, freq_range=(88 * un.MHz, 120 * un.MHz)
+        data=data,
+        threshold=threshold,
+        freq_range=(88 * un.MHz, 120 * un.MHz),
+        absolute=False,
     )
 
 

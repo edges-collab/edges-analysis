@@ -140,8 +140,68 @@ class TestPeakPowerFilter:
             np.testing.assert_array_equal(multi[iload], single[0])
 
 
-def test_peak_orbcomm_filter(mock):
-    run_filter_check(mock, filters.peak_orbcomm_filter)
+def _flat(value: float = 1000.0, ntime: int = 4) -> GSData:
+    """Flat spectra over 40-200 MHz, to be perturbed by the tests."""
+    mock = create_mock_edges_data(flow=40 * un.MHz, fhigh=200 * un.MHz, ntime=ntime)
+    return mock.update(data=np.full(mock.data.shape, value))
+
+
+def _set(data: GSData, itime: int, freq: float, value: float) -> GSData:
+    """Set the value of the channel nearest ``freq`` (MHz) in one integration."""
+    arr = data.data.copy()
+    arr[..., itime, np.argmin(np.abs(data.freqs.to_value("MHz") - freq))] = value
+    return data.update(data=arr)
+
+
+class TestPeakOrbcommFilter:
+    """The ORBCOMM peak-power filter follows the C-code's -pkpwrm cut."""
+
+    def test_basic(self, mock):
+        run_filter_check(mock, filters.peak_orbcomm_filter)
+
+    @staticmethod
+    def _flags(data: GSData, **kwargs) -> np.ndarray:
+        out = filters.peak_orbcomm_filter(data, **kwargs)
+        return out.flags["peak_orbcomm_filter"].flags.reshape(-1, data.ntimes)[0]
+
+    def test_band_is_137p5_plus_minus_1mhz(self):
+        data = _set(_flat(), 2, 136.7, 1e9)
+        np.testing.assert_array_equal(
+            self._flags(data, threshold=40.0), [False, False, True, False]
+        )
+
+    def test_unity_mean_without_low_channels(self):
+        """With no channel below a tenth of the peak, the mean is unity.
+
+        So the statistic is just the peak in dB: 30 dB for a flat 1000 K spectrum.
+        """
+        assert np.all(self._flags(_flat(1000.0), threshold=29.0))
+        assert not np.any(self._flags(_flat(1000.0), threshold=31.0))
+
+    def test_mean_cut_relative_to_peak_above_80mhz(self):
+        """Channels above a tenth of the peak *above 80 MHz* are left out of the mean.
+
+        A spike at 90 MHz (outside the ORBCOMM band) sets that peak, so the flat
+        spectrum is in the mean and the ORBCOMM peak is 0 dB above it. The other
+        (flat) spectra have no channels in the mean, so they are at 30 dB.
+        """
+        data = _set(_flat(1000.0), 1, 90.0, 1e5)
+        np.testing.assert_array_equal(
+            self._flags(data, threshold=10.0), [True, False, True, True]
+        )
+
+    def test_negative_threshold_keeps_only_peaky_spectra(self):
+        """As in the C-code, a negative threshold flags spectra below its magnitude."""
+        data = _set(_flat(1000.0), 2, 137.5, 1e9)  # 60 dB above the flat mean
+        np.testing.assert_array_equal(
+            self._flags(data, threshold=-40.0), [True, True, False, True]
+        )
+
+    def test_nonfinite_channels_ignored(self):
+        """Undefined channels (e.g. 0/0 in Dicke calibration) count as zero."""
+        data = _set(_flat(1000.0), 1, 137.5, np.inf)
+        data = _set(data, 2, 137.5, np.nan)
+        assert not np.any(self._flags(data, threshold=40.0))
 
 
 class TestMaxFM:
@@ -152,6 +212,30 @@ class TestMaxFM:
         new = select_freqs(mock, freq_range=(50 * un.MHz, 70 * un.MHz))
         out = filters.maxfm_filter(new)
         assert not np.any(out.complete_flags)
+
+    @staticmethod
+    def _flags(data: GSData, fnc=filters.maxfm_filter, **kwargs) -> np.ndarray:
+        out = fnc(data, **kwargs)
+        return out.flags[fnc.__name__].flags.reshape(-1, data.ntimes)[0]
+
+    def test_only_positive_spikes(self):
+        """As in the C-code, a dip is not a spike (its neighbours stick out by half)."""
+        data = _set(_flat(1000.0), 1, 100.0, 500.0)
+        assert not np.any(self._flags(data, threshold=300.0))
+        # The generic filter flags both by default.
+        flags = self._flags(
+            data, fnc=filters.single_channel_spike_filter, threshold=300.0
+        )
+        np.testing.assert_array_equal(flags, [False, True, False, False])
+
+    def test_band_edge_channel(self):
+        """The channels at the edges of the band use their neighbours outside it."""
+        freqs = _flat().freqs.to_value("MHz")
+        first = freqs[freqs >= 88.0][0]
+        data = _set(_flat(1000.0), 3, first, 1500.0)
+        np.testing.assert_array_equal(
+            self._flags(data, threshold=300.0), [False, False, False, True]
+        )
 
 
 class Test150MHzFilter:

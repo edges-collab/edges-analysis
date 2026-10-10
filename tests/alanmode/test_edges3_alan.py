@@ -82,15 +82,22 @@ def _datadir(name: str) -> Path:
     return DATA_PATH / f"edges3-{name.replace('_', '-')}-raw"
 
 
+# The parameters of acqplot7amoon in the docal scripts of the C-code, including its
+# quality cuts (which drop one spectrum of the 2023_210 short).
 _ACQPARAMS = am.ACQPlot7aMoonParams(
     fstart=48.0,
     fstop=198.0,
     smooth=8,
     tload=300,
-    tcal=400,
+    tcal=1000,
     tstart=0,
     tstop=23,
     delaystart=0,
+    peakpwr=10,
+    minpwr=1,
+    pkpwrm=40,
+    maxrmsf=400,
+    maxfm=200,
 )
 
 # Tolerances (in K) for the comparison of calibrated temperatures with Alan's
@@ -367,7 +374,10 @@ def test_spectrum_averaging(
 
     np.testing.assert_allclose(legacy_averaged_spectra[load].freqs, ours.freqs)
     np.testing.assert_allclose(
-        legacy_averaged_spectra[load].data[20:-20], ours.data[20:-20], atol=1e-6
+        legacy_averaged_spectra[load].data[..., 20:-20],
+        ours.data[..., 20:-20],
+        atol=1e-6,
+        rtol=0,
     )
     # The number of averaged spectra in the file header.
     assert np.max(ours.nsamples) == np.max(legacy_averaged_spectra[load].nsamples)
