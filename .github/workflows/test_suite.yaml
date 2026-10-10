@@ -11,47 +11,7 @@ jobs:
   # that reproduce B18. This is cached for later jobs to use, and between sessions,
   # so we don't put as much strain on the Zenodo repo.
   get_cache_data:
-    env:
-      ENV_NAME: get_cache_data
-    name: Get Cache Data
-    strategy:
-      matrix:
-          os: [ubuntu-latest, macos-latest]
-
-    runs-on: ${{ matrix.os }}
-    outputs:
-      usercache: ${{ steps.usercache.outputs.usercache }}
-    steps:
-      - uses: actions/checkout@master
-        with:
-          fetch-depth: 0
-
-      - uses: actions/setup-python@v7
-        with:
-          python-version-file: pyproject.toml
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v7
-        with:
-          enable-cache: true
-
-      - name: Install
-        run:  uv sync --locked
-
-      - name: Get Platform Cache Directory
-        id: usercache
-        run: |
-          usercache=$(uv run python -c "from platformdirs import user_cache_dir; print(user_cache_dir('edges'))")
-          echo "usercache=${usercache}" >> $GITHUB_OUTPUT
-
-      - name: Setup Cached Data Files
-        uses: actions/cache@v6
-        with:
-          path: "${{ steps.usercache.outputs.usercache }}/**/*"
-          key: "pooch-cache-${{ runner.os }}"
-
-      - name: Download Cached Files
-        run: uv run edges data fetch-b18 --dataset testing
+    uses: ./.github/workflows/cache-data.yaml
 
   tests:
     needs: get_cache_data
@@ -89,11 +49,20 @@ jobs:
       - name: Install
         run:  uv sync --locked --all-extras --dev
 
-      - name: Setup Cached Data Files
-        uses: actions/cache@v6
+      # The cache directory differs between OSes, so get it here rather than from
+      # the (matrix) cache job.
+      - name: Get Platform Cache Directory
+        id: usercache
+        run: |
+          usercache=$(uv run python -c "from platformdirs import user_cache_dir; print(user_cache_dir('edges'))")
+          echo "usercache=${usercache}" >> $GITHUB_OUTPUT
+
+      - name: Restore Cached Data Files
+        uses: actions/cache/restore@v6
         with:
-          path: "${{ needs.get_cache_data.outputs.usercache }}/**/*"
-          key: "pooch-cache-${{ runner.os }}"
+          path: "${{ steps.usercache.outputs.usercache }}/**/*"
+          key: "pooch-cache-${{ runner.os }}-${{ hashFiles('src/edges/data/_pooch.py') }}"
+          restore-keys: "pooch-cache-${{ runner.os }}-"
 
       - name: Setup Astropy Download Cache
         uses: actions/cache@v6

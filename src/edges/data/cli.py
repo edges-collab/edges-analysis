@@ -7,6 +7,7 @@ from rich.console import Console
 
 from ..cli import app
 from ._pooch import (
+    fetch_b18_cal_outputs,
     fetch_b18cal_calibrated_s11s,
     fetch_b18cal_full,
     fetch_b18cal_resistances,
@@ -26,10 +27,11 @@ def fetch_b18(
 
     Parameters
     ----------
-    testing
-        If True, fetch only the files required for testing.
-    all
-        If True, fetch all B18CAL data files.
+    dataset
+        Which files to fetch: 'testing' fetches the files the test suite uses (the
+        calibrated and raw S11s, the resistances and the legacy pipeline outputs),
+        'full' fetches the whole B18 calibration observation, and 'none' fetches
+        nothing.
     """
     if dataset == "full":
         out = fetch_b18cal_full()
@@ -39,6 +41,7 @@ def fetch_b18(
             fetch_b18cal_calibrated_s11s(),
             fetch_b18cal_resistances(),
             fetch_b18cal_s11s(),
+            fetch_b18_cal_outputs(),
         ]
         cns.print("Fetched B18 calibration testing data files:")
         for fl in fls:
