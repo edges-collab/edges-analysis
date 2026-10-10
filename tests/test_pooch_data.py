@@ -14,6 +14,7 @@ def test_fetch_b18_testing(capsys):
     out = capsys.readouterr().out
     assert "/S11" in out
     assert "/Resistance" in out
+    assert "/LegacyPipelineOutputs" in out
     assert "Fetched B18 calibration testing data files:" in out
 
 
