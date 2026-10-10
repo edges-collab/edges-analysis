@@ -52,6 +52,11 @@ def _cal_edges3_command(out: Path, datadir: Path) -> str:
         "--avg.smooth 8 "
         "--avg.tload 300 "
         "--avg.tcal 1000 "
+        "--avg.peakpwr 10 "
+        "--avg.minpwr 1 "
+        "--avg.pkpwrm 40 "
+        "--avg.maxrmsf 400 "
+        "--avg.maxfm 200 "
         "--cal.Lh -1 "
         "--cal.wfstart 50.0 "
         "--cal.wfstop 190.0 "
@@ -110,7 +115,9 @@ def test_spectra(edges3_2022_316: Path, load, alandata: Path):
 
     # We don't currently get the very edges of the smoothing correct, but it doesn't
     # matter because we never use the very edges anyway. We test within these edges.
-    np.testing.assert_allclose(alanspec[20:-20], ourspec[20:-20], atol=1e-6)
+    np.testing.assert_allclose(
+        alanspec[..., 20:-20], ourspec[..., 20:-20], atol=1e-6, rtol=0
+    )
 
 
 @pytest.mark.parametrize("load", [*list(am.LOADMAP.keys()), "lna"])

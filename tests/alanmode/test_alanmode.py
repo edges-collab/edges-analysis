@@ -1,5 +1,6 @@
 """Unit-tests of functions in alanmode."""
 
+from collections.abc import Callable
 from pathlib import Path
 
 import attrs
@@ -12,7 +13,7 @@ from read_acq.gsdata import write_gsdata_to_acq
 
 from edges import alanmode as am
 from edges import modeling as mdl
-from edges.alanmode.alanmode import _average_spectra
+from edges.alanmode.alanmode import _acqplot7amoon, _average_spectra
 from edges.cal import ReflectionCoefficient
 from edges.config import config
 from edges.data import fetch_b18_cal_outputs
@@ -91,11 +92,18 @@ NTIME = 24
 FREQS = edges_raw_freqs()
 
 
-@pytest.fixture(scope="module")
-def unity_acq(tmpdir):
+def _write_unity_acq(path: Path, perturb: Callable | None = None) -> Path:
+    """Write an ACQ file whose spectra all calibrate to Q=1.
+
+    ``perturb``, if given, is called with the power array (of shape
+    ``(3, 1, NTIME, nfreq)``, with the switch states as the first axis) and the
+    frequencies in MHz, and modifies the powers in place.
+    """
     data = np.ones((3, 1, NTIME, len(FREQS))) / 1000.0
     data[0] *= 4.0
     data[2] *= 4.0
+    if perturb is not None:
+        perturb(data, FREQS.to_value("MHz"))
 
     times = np.linspace(2459856, 2459857, NTIME + 1)[:-1]
     times = np.array([times, times + 0.1, times + 0.2]).T
@@ -111,9 +119,13 @@ def unity_acq(tmpdir):
             "adcmin": np.zeros_like(times),
         },
     )
-    write_gsdata_to_acq(data, tmpdir / "unity.acq")
+    write_gsdata_to_acq(data, path)
+    return path
 
-    return tmpdir / "unity.acq"
+
+@pytest.fixture(scope="module")
+def unity_acq(tmpdir):
+    return _write_unity_acq(tmpdir / "unity.acq")
 
 
 def test_read_all_spec_text():
@@ -190,6 +202,99 @@ class TestACQPlot7AMoon:
         # smooth=0 from params is kept (the default would be smooth=8).
         assert meanspec.nfreqs == FREQS.size
         np.testing.assert_allclose(meanspec.data, 1300)
+
+
+# The integration that is perturbed to fail one of the C-code's quality cuts.
+BAD = 5
+
+
+def _scale_above_100mhz(factor: float) -> Callable:
+    """Scale all switch states above 100 MHz, changing the power percentage only."""
+
+    def perturb(data, freqs):
+        data[:, :, BAD, freqs > 100] *= factor
+
+    return perturb
+
+
+def _orbcomm_spike(data, freqs):
+    """A huge spike (~70 dB) in the ORBCOMM band (137.5 MHz).
+
+    ACQ files cannot store powers above unity, so the spike is made by boosting the
+    antenna state and making the noise-source state barely exceed the load state.
+    """
+    ch = np.argmin(np.abs(freqs - 137.5))
+    data[0, :, BAD, ch] = 0.5
+    data[2, :, BAD, ch] = 1.0001e-3
+
+
+def _fm_spike(data, freqs):
+    """A single-channel spike in the FM band of the antenna state."""
+    data[0, :, BAD, np.argmin(np.abs(freqs - 100.0))] *= 2.0
+
+
+def _ripple_60_80mhz(data, freqs):
+    """Raise the antenna state in 60-80 MHz, so it fits a power-law badly."""
+    data[0, :, BAD, (freqs >= 60) & (freqs < 80)] *= 2.0
+
+
+class TestQualityCuts:
+    """The per-spectrum quality cuts of the C-code (-peakpwr, -minpwr, etc.).
+
+    In each case, one integration is perturbed so that it fails exactly one cut.
+    With the cut, it is dropped (so the average is exactly that of the other,
+    unperturbed, spectra), and without it, it is kept.
+    """
+
+    CASES = {
+        "peakpwr": (_scale_above_100mhz(10.0), {"peakpwr": 80.0}),
+        "minpwr": (_scale_above_100mhz(0.1), {"minpwr": 20.0}),
+        "pkpwrm": (_orbcomm_spike, {"pkpwrm": 40.0}),
+        "maxfm": (_fm_spike, {"maxfm": 200.0}),
+        "maxrmsf": (_ripple_60_80mhz, {"maxrmsf": 400.0}),
+    }
+
+    @pytest.fixture(scope="class", params=list(CASES))
+    def case(self, request, tmp_path_factory) -> tuple[Path, dict]:
+        perturb, cut = self.CASES[request.param]
+        path = tmp_path_factory.mktemp("acq") / f"{request.param}.acq"
+        return _write_unity_acq(path, perturb), cut
+
+    def _average(self, acq: Path, **kwargs) -> tuple[GSData, int]:
+        params = am.ACQPlot7aMoonParams(
+            fstart=0, fstop=np.inf, smooth=0, tload=300, tcal=1000, **kwargs
+        )
+        return _acqplot7amoon(acq, params)
+
+    def test_cut_drops_bad_spectrum(self, case):
+        acq, cut = case
+        meanspec, n = self._average(acq, **cut)
+
+        assert n == NTIME - 1
+        assert meanspec.nsamples.max() == NTIME - 1
+        np.testing.assert_allclose(meanspec.data, 1300, rtol=0, atol=1e-9)
+
+    def test_no_cut_keeps_all_spectra(self, case):
+        acq, _ = case
+        _, n = self._average(acq)
+        assert n == NTIME
+
+    def test_clean_spectra_pass_c_code_cuts(self, unity_acq):
+        """No unperturbed spectrum fails the cuts used for EDGES-3 by the C-code."""
+        _, n = self._average(
+            unity_acq, peakpwr=80, minpwr=20, pkpwrm=40, maxfm=200, maxrmsf=400
+        )
+        assert n == NTIME
+
+    def test_negative_pkpwrm_keeps_only_peaky_spectra(self, tmp_path):
+        """As in the C-code, a negative pkpwrm keeps spectra above its magnitude."""
+        acq = _write_unity_acq(tmp_path / "orbcomm.acq", _orbcomm_spike)
+        _, n = self._average(acq, pkpwrm=-40.0)
+        assert n == 1
+
+    def test_all_spectra_cut(self, unity_acq):
+        with pytest.raises(ValueError, match="No spectra pass the quality cuts"):
+            self._average(unity_acq, peakpwr=10.0)
 
 
 @pytest.mark.parametrize(

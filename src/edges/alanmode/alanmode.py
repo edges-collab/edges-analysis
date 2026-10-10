@@ -135,6 +135,31 @@ class ACQPlot7aMoonParams:
         The number of seconds to delay before including spectra from the files.
         Can be useful to ignore beginning of files as the system may still be
         warming up.
+    peakpwr
+        Spectra are only averaged if the percentage of the total antenna-state power
+        that lies above 100 MHz is below this. Off by default.
+    minpwr
+        Spectra are only averaged if the percentage of the total antenna-state power
+        that lies above 100 MHz is above this. Off by default.
+    pkpwrm
+        Spectra are only averaged if the peak power (in dB) in the ORBCOMM band
+        (137.5 MHz) is below this. If negative, spectra are instead only averaged if
+        it is above the magnitude of this. Off by default.
+    maxrmsf
+        Spectra are only averaged if the RMS of the residuals (in K) of a
+        :math:`f^{-2.5}` fit to the spectrum between 60 and 80 MHz is below this. Off
+        by default.
+    maxfm
+        Spectra are only averaged if the largest single-channel spike (in K) in the
+        FM band (88-120 MHz) is below this. Off by default.
+
+    Notes
+    -----
+    The quality cuts (``peakpwr``, ``minpwr``, ``pkpwrm``, ``maxrmsf`` and
+    ``maxfm``) are those of the C-code, with the same names as its command-line
+    options. They are computed on each (Dicke-switched) spectrum at full resolution
+    over the whole band (not just ``fstart``-``fstop``), from the uncalibrated
+    temperature ``Q * tcal + tload``. See :func:`dicke_cycle_quality_stats`.
     """
 
     fstart: float = 50.0
@@ -145,6 +170,37 @@ class ACQPlot7aMoonParams:
     tstart: int = 0
     tstop: int = 23
     delaystart: int = 0
+    peakpwr: float = np.inf
+    minpwr: float = 0.0
+    pkpwrm: float = np.inf
+    maxrmsf: float = np.inf
+    maxfm: float = np.inf
+
+    def passes_quality_cuts(self, stats: dict[str, np.ndarray]) -> np.ndarray:
+        """Return whether each spectrum passes the quality cuts of the C-code.
+
+        Parameters
+        ----------
+        stats
+            The quality statistics of each spectrum, as returned by
+            :func:`dicke_cycle_quality_stats`.
+
+        Returns
+        -------
+        passed
+            Boolean array, True for each spectrum that passes all the cuts.
+        """
+        pkpwr = stats["pkpwr"]
+        pkpwr_ok = (pkpwr < self.pkpwrm) | (
+            (self.pkpwrm < 0) & (pkpwr > abs(self.pkpwrm))
+        )
+        return (
+            (stats["ppercent"] < self.peakpwr)
+            & (stats["ppercent"] > self.minpwr)
+            & pkpwr_ok
+            & (stats["rmsf"] < self.maxrmsf)
+            & (stats["fmpwr"] < self.maxfm)
+        )
 
     @classmethod
     def bowman_2018_defaults(
@@ -197,6 +253,83 @@ def acqplot7amoon(
     return _acqplot7amoon(acqfile, params)[0]
 
 
+def dicke_cycle_quality_stats(
+    data: GSData, tload: float = 300.0, tcal: float = 1000.0
+) -> dict[str, np.ndarray]:
+    """Compute the per-spectrum quality statistics of the acqplot7amoon C-code.
+
+    These are the statistics that the C-code cuts on to decide which spectra to
+    average (see :class:`ACQPlot7aMoonParams`). They are computed exactly as in the
+    C-code, including its quirks.
+
+    Parameters
+    ----------
+    data
+        The raw (three-position switch) power spectra, at full resolution over the
+        whole band, with the antenna, internal load and internal load plus noise
+        source as its three loads.
+    tload
+        The load temperature used to compute the uncalibrated temperature
+        ``Q * tcal + tload`` on which most statistics are computed.
+    tcal
+        The noise-source temperature used to compute the uncalibrated temperature.
+
+    Returns
+    -------
+    stats
+        A dictionary of arrays with one value per spectrum (i.e. per time), with keys:
+
+        ``ppercent``
+            The percentage of the total power of the antenna state above 100 MHz.
+        ``pkpwr``
+            The ratio (in dB) of the peak temperature in the ORBCOMM band (137.5 +/- 1
+            MHz) to the mean temperature above 80 MHz. As in the C-code, the mean only
+            includes channels below a tenth of the peak temperature above 80 MHz, and
+            is unity if there are none. So, for a spectrum without strong RFI, this is
+            just the temperature at 137.5 MHz in dB.
+        ``rmsf``
+            The RMS of the residuals (in K) of a :math:`f^{-2.5}` fit to the spectrum
+            between 60 and 80 MHz.
+        ``fmpwr``
+            The largest excess (in K) of a channel over the mean of its two
+            neighbours in the FM band (88-120 MHz), or zero if there is none.
+    """
+    p0, p1, p2 = (data.data[i, 0] for i in range(3))
+    freqs = data.freqs.to_value("MHz")
+    nspec = data.nfreqs
+
+    ppercent = 100.0 * p0[:, freqs > 100.0].sum(axis=1) / p0.sum(axis=1)
+
+    # The uncalibrated temperature, set to zero where it is undefined and (as in the
+    # C-code) in the lowest 1000/32768 of the band.
+    denom = p2 - p1
+    with np.errstate(divide="ignore", invalid="ignore"):
+        temp = np.where(denom > 1e-99, (p0 - p1) / denom * tcal + tload, 0.0)
+    temp[:, : (1000 * nspec) // 32768] = 0.0
+
+    above80 = freqs > 80.0
+    peak = np.max(temp[:, above80], axis=1, initial=0.0)
+    orbpwr = np.max(temp[:, np.abs(freqs - 137.5) < 1.0], axis=1, initial=0.0)
+    usable = (temp > 0) & (temp < peak[:, None] / 10.0) & above80
+    mean = (1e-99 + np.sum(temp * usable, axis=1)) / (1e-99 + np.sum(usable, axis=1))
+    with np.errstate(divide="ignore"):
+        pkpwr = 10.0 * np.log10(orbpwr / mean)
+
+    # Fit a power law over 60-80 MHz. As in the C-code, the channels are given by
+    # index, assuming 32768 channels over 0-200 MHz.
+    idx = np.arange(int(60.0 * 32768 / 200.0), int(80.0 * 32768 / 200.0))
+    fun = (200.0 * idx / 32768.0) ** -2.5
+    seg = temp[:, idx]
+    amp = (seg @ fun) / (fun @ fun)
+    rmsf = np.sqrt(np.mean((seg - amp[:, None] * fun) ** 2, axis=1))
+
+    fm = np.flatnonzero((freqs > 88.0) & (freqs < 120.0))
+    spike = temp[:, fm] - 0.5 * (temp[:, fm + 1] + temp[:, fm - 1])
+    fmpwr = np.max(spike, axis=1, initial=0.0)
+
+    return {"ppercent": ppercent, "pkpwr": pkpwr, "rmsf": rmsf, "fmpwr": fmpwr}
+
+
 def _acqplot7amoon(
     acqfile: tp.PathLike | Sequence[tp.PathLike], params: ACQPlot7aMoonParams
 ) -> tuple[GSData, int]:
@@ -207,8 +340,9 @@ def _acqplot7amoon(
     spectrum
         The averaged spectrum.
     n
-        The number of (Dicke-switched) spectra that were averaged, as written in the
-        header of the averaged-spectrum files of the C-code.
+        The number of (Dicke-switched) spectra that were averaged (i.e. that pass the
+        time selection and the quality cuts), as written in the header of the
+        averaged-spectrum files of the C-code.
     """
     data = read_acq_to_gsdata(acqfile, telescope="edges-low")
 
@@ -223,6 +357,15 @@ def _acqplot7amoon(
         secs = (data.times - data.times.min()).sec
         idx = np.all(secs > params.delaystart, axis=1)
         data = select_times(data, indx=idx)
+
+    # The quality cuts are computed on the whole band, so before selecting freqs.
+    stats = dicke_cycle_quality_stats(data, tload=params.tload, tcal=params.tcal)
+    passed = params.passes_quality_cuts(stats)
+    if not np.any(passed):
+        raise ValueError(f"No spectra pass the quality cuts in {acqfile}.")
+    if not np.all(passed):
+        logger.info(f"{np.sum(~passed)} of {passed.size} spectra fail quality cuts.")
+        data = select_times(data, indx=passed)
 
     data = select_freqs(
         data, freq_range=(params.fstart * un.MHz, params.fstop * un.MHz)
