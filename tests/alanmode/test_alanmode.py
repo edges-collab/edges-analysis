@@ -12,6 +12,7 @@ from read_acq.gsdata import write_gsdata_to_acq
 
 from edges import alanmode as am
 from edges import modeling as mdl
+from edges.alanmode.alanmode import _average_spectra
 from edges.cal import ReflectionCoefficient
 from edges.config import config
 from edges.data import fetch_b18_cal_outputs
@@ -189,6 +190,42 @@ class TestACQPlot7AMoon:
         # smooth=0 from params is kept (the default would be smooth=8).
         assert meanspec.nfreqs == FREQS.size
         np.testing.assert_allclose(meanspec.data, 1300)
+
+
+@pytest.mark.parametrize(
+    ("smooth", "delaystart", "n"), [(8, 0, NTIME), (0, 1, NTIME - 1)]
+)
+def test_averaged_spectrum_file_holds_number_of_spectra(
+    unity_acq, tmp_path: Path, smooth: int, delaystart: int, n: int
+):
+    """The header of the averaged-spectrum file holds the number of spectra.
+
+    As in the C-code, it is the number of spectra that were averaged, not their
+    effective number of samples (which frequency smoothing increases).
+    """
+    spectra = _average_spectra(
+        {"ambient": [unity_acq]},
+        out=tmp_path,
+        redo_spectra=True,
+        fstart=0,
+        fstop=np.inf,
+        telescope="edges-low",
+        smooth=smooth,
+        tload=300,
+        tcal=1000,
+        delaystart=delaystart,
+    )
+
+    with (tmp_path / "spambient.txt").open() as fl:
+        assert int(fl.readline().split()[3]) == n
+    assert np.max(spectra["ambient"].nsamples) == n
+
+
+def test_write_spec_txt_gsd_explicit_n(tmp_path: Path):
+    gsd = _make_spec_gsd()
+    am.write_spec_txt_gsd(gsd, tmp_path / "sp.txt", n=7)
+    new = am.read_spec_txt(tmp_path / "sp.txt")
+    np.testing.assert_allclose(new.flagged_nsamples, 7.0 * (gsd.flagged_nsamples > 0))
 
 
 class TestEdgesParams:

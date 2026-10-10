@@ -194,6 +194,22 @@ def acqplot7amoon(
     if kwargs:
         params = attrs.evolve(params, **kwargs)
 
+    return _acqplot7amoon(acqfile, params)[0]
+
+
+def _acqplot7amoon(
+    acqfile: tp.PathLike | Sequence[tp.PathLike], params: ACQPlot7aMoonParams
+) -> tuple[GSData, int]:
+    """Do what :func:`acqplot7amoon` does, also returning the number of spectra.
+
+    Returns
+    -------
+    spectrum
+        The averaged spectrum.
+    n
+        The number of (Dicke-switched) spectra that were averaged, as written in the
+        header of the averaged-spectrum files of the C-code.
+    """
     data = read_acq_to_gsdata(acqfile, telescope="edges-low")
 
     if params.tstart > 0 or params.tstop < 23:
@@ -216,8 +232,9 @@ def acqplot7amoon(
     if params.smooth > 0:
         q = gauss_smooth(q, size=params.smooth, decimate_at=0)
 
+    n = q.ntimes
     q = average_over_times(q)
-    return approximate_temperature(data=q, tload=params.tload, tns=params.tcal)
+    return approximate_temperature(data=q, tload=params.tload, tns=params.tcal), n
 
 
 @attrs.define(kw_only=True, frozen=True)
@@ -634,11 +651,10 @@ def _average_spectra(
                 raise ValueError(f"{load} has no spectrum files!")
 
             logger.info(f"Averaging {load} spectra")
-            spectra[load] = acqplot7amoon(
-                acqfile=files, fstart=fstart, fstop=fstop, **kwargs
-            )
+            params = ACQPlot7aMoonParams(fstart=fstart, fstop=fstop, **kwargs)
+            spectra[load], n = _acqplot7amoon(files, params)
 
-            alanio.write_spec_txt_gsd(spectra[load], outfile)
+            alanio.write_spec_txt_gsd(spectra[load], outfile, n=n)
 
         # Always read the spectra back in, because that's what Alan's C-code does.
         # This has the small effect of reducing the precision of the spectra.
