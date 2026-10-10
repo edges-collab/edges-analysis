@@ -151,14 +151,14 @@ class ACQPlot7aMoonParams:
         :func:`edges.filters.power_percent_filter`). Off by default.
     pkpwrm
         Spectra are only averaged if the peak power (in dB) in the ORBCOMM band
-        (137-138 MHz), relative to the mean above 80 MHz, is below this (see
-        :func:`edges.filters.peak_orbcomm_filter`). Off by default. Unlike in the
-        C-code, negative values (which keep *only* the spectra above the magnitude)
-        are not supported.
+        (137.5 +/- 1 MHz), relative to the mean above 80 MHz, is below this (see
+        :func:`edges.filters.peak_orbcomm_filter`). If negative, spectra are instead
+        only averaged if it is above the magnitude of this. Off by default.
     maxrmsf
         Spectra are only averaged if the RMS of the residuals (in K) of a
         :math:`f^{-2.5}` fit to the spectrum between 60 and 80 MHz is below this (see
-        :func:`edges.filters.rms_filter`). Off by default.
+        :func:`edges.filters.rms_filter`). As in the C-code, the band is defined by
+        channel index on a grid of 32768 channels over 0-200 MHz. Off by default.
     maxfm
         Spectra are only averaged if the largest single-channel spike (in K) in the
         FM band (88-120 MHz) is below this (see :func:`edges.filters.maxfm_filter`).
@@ -171,7 +171,8 @@ class ACQPlot7aMoonParams:
     options, and are applied with the corresponding filters of :mod:`edges.filters`.
     They are computed on each (Dicke-switched) spectrum at full resolution over the
     whole band (not just ``fstart``-``fstop``). All but ``peakpwr`` and ``minpwr``
-    are computed on the uncalibrated temperature ``Q * tcal + tload``.
+    are computed on the uncalibrated temperature ``Q * tcal + tload``, which (as in
+    the C-code) is set to zero where the noise source adds no power.
     """
 
     fstart: float = 50.0
@@ -184,7 +185,7 @@ class ACQPlot7aMoonParams:
     delaystart: int = 0
     peakpwr: float = np.inf
     minpwr: float = 0.0
-    pkpwrm: float = attrs.field(default=np.inf, validator=attrs.validators.ge(0))
+    pkpwrm: float = np.inf
     maxrmsf: float = np.inf
     maxfm: float = np.inf
 
@@ -239,6 +240,16 @@ def acqplot7amoon(
     return _acqplot7amoon(acqfile, params)[0]
 
 
+# The band of the -maxrmsf cut of the C-code, which takes channels 9830-13106
+# (i.e. int(60 * 32768 / 200) up to, but not including, int(80 * 32768 / 200)) of a
+# 32768-channel grid over 0-200 MHz. Padded by half a channel, to select by frequency.
+_RMSF_CHANNEL_WIDTH = 200.0 / 32768
+_RMSF_FREQ_RANGE = (
+    (int(60.0 / _RMSF_CHANNEL_WIDTH) - 0.5) * _RMSF_CHANNEL_WIDTH * un.MHz,
+    (int(80.0 / _RMSF_CHANNEL_WIDTH) - 0.5) * _RMSF_CHANNEL_WIDTH * un.MHz,
+)
+
+
 def _passes_quality_cuts(data: GSData, params: ACQPlot7aMoonParams) -> np.ndarray:
     """Return whether each integration passes the quality cuts of the C-code.
 
@@ -261,6 +272,12 @@ def _passes_quality_cuts(data: GSData, params: ACQPlot7aMoonParams) -> np.ndarra
     temp = approximate_temperature(
         data=dicke_calibration(data), tload=params.tload, tns=params.tcal
     )
+    # As in the C-code, the temperature is zero where the noise source adds no power.
+    iload = data.loads.index("internal_load")
+    ilns = data.loads.index("internal_load_plus_noise_source")
+    defined = (data.data[ilns] - data.data[iload]) > 1e-99
+    temp = temp.update(data=np.where(defined[None], temp.data, 0.0))
+
     if np.isfinite(params.pkpwrm):
         temp = peak_orbcomm_filter(
             temp, threshold=params.pkpwrm, mean_freq_range=(80.0, 200.0)
@@ -271,7 +288,7 @@ def _passes_quality_cuts(data: GSData, params: ACQPlot7aMoonParams) -> np.ndarra
         temp = rms_filter(
             temp,
             threshold=params.maxrmsf,
-            freq_range=(60 * un.MHz, 80 * un.MHz),
+            freq_range=_RMSF_FREQ_RANGE,
             model=mdl.LinLog(n_terms=1, beta=-2.5),
         )
     return ~np.all(temp.complete_flags, axis=(0, 1, 3))

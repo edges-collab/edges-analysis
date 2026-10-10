@@ -13,7 +13,11 @@ from read_acq.gsdata import write_gsdata_to_acq
 
 from edges import alanmode as am
 from edges import modeling as mdl
-from edges.alanmode.alanmode import _acqplot7amoon, _average_spectra
+from edges.alanmode.alanmode import (
+    _RMSF_FREQ_RANGE,
+    _acqplot7amoon,
+    _average_spectra,
+)
 from edges.cal import ReflectionCoefficient
 from edges.config import config
 from edges.data import fetch_b18_cal_outputs
@@ -286,10 +290,19 @@ class TestQualityCuts:
         )
         assert n == NTIME
 
-    def test_negative_pkpwrm_not_supported(self):
-        """The C-code's inverted cut for negative pkpwrm is not supported."""
-        with pytest.raises(ValueError, match="pkpwrm"):
-            am.ACQPlot7aMoonParams(pkpwrm=-40.0)
+    def test_negative_pkpwrm_keeps_only_peaky_spectra(self, tmp_path):
+        """As in the C-code, a negative pkpwrm keeps spectra above its magnitude."""
+        acq = _write_unity_acq(tmp_path / "orbcomm.acq", _orbcomm_spike)
+        _, n = self._average(acq, pkpwrm=-40.0)
+        assert n == 1
+
+    def test_rmsf_band_matches_c_code_channels(self):
+        """The -maxrmsf band is channels 9830-13106 of the raw grid, as in C."""
+        lo, hi = _RMSF_FREQ_RANGE
+        idx = np.flatnonzero((lo <= FREQS) & (hi >= FREQS))
+        assert idx[0] == 9830
+        assert idx[-1] == 13106
+        assert idx.size == 13106 - 9830 + 1
 
     def test_all_spectra_cut(self, unity_acq):
         with pytest.raises(ValueError, match="No spectra pass the quality cuts"):
