@@ -801,3 +801,52 @@ def test_window_rms_matches_per_channel(seed: int, half_width: int):
 
     rms = xrfi._window_rms(residual, weights, half_width, start, stop)
     np.testing.assert_array_equal(rms, expected)
+
+
+class TestLinearModelerFitMethod:
+    def _data(self):
+        freqs = np.linspace(50, 150, 300)
+        rng = np.random.default_rng(4)
+        spec = 1000 * (freqs / 75) ** -2.5 + rng.normal(size=freqs.size)
+        weights = rng.uniform(0.5, 2, size=freqs.size)
+        return freqs, spec, weights
+
+    @pytest.mark.parametrize("fit_method", ["lstsq", "qr"])
+    def test_fit_method_is_used(self, fit_method):
+        freqs, spec, weights = self._data()
+        model = mdl.Polynomial(n_terms=5, transform=ScaleTransform(scale=75.0))
+        modeler = xrfi.LinearModeler(model=model, fit_method=fit_method)
+        fixed = modeler.init_model({"nterms": 5}, freqs)
+        expected = fixed.fit(ydata=spec, weights=weights, method=fit_method)
+        np.testing.assert_array_equal(
+            modeler.get_model(fixed, spec, weights), expected.evaluate()
+        )
+
+    def test_default_is_lstsq(self):
+        assert xrfi.LinearModeler(model=mdl.Polynomial(n_terms=3)).fit_method == "lstsq"
+
+    def test_unknown_fit_method(self):
+        with pytest.raises(ValueError, match="fit_method"):
+            xrfi.LinearModeler(model=mdl.Polynomial(n_terms=3), fit_method="svd")
+
+    def test_xrfi_iterative_with_qr(self):
+        """A well-conditioned case flags the same channels with either solver."""
+        freqs = np.linspace(50, 150, 200)
+        rng = np.random.default_rng(10)
+        spec = 1000 * (freqs / 75) ** -2.5 + rng.normal(size=freqs.size)
+        spec[[37, 120]] += 500
+        flags = {}
+        for method in ("lstsq", "qr"):
+            flags[method], _ = xrfi.xrfi_iterative(
+                spec,
+                freqs=freqs,
+                data_modeler=xrfi.LinearModeler(
+                    model=mdl.Polynomial(n_terms=5), fit_method=method
+                ),
+                std_modeler=xrfi.LinearModeler(
+                    model=mdl.Polynomial(n_terms=2), fit_method=method
+                ),
+            )
+        assert flags["qr"][37]
+        assert flags["qr"][120]
+        np.testing.assert_array_equal(flags["qr"], flags["lstsq"])

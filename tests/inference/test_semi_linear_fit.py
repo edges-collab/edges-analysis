@@ -121,3 +121,46 @@ def test_semi_linear_fit_array_sigma():
 
     best = SemiLinearFit(fg=fg, eor=eor, spectrum=data, sigma=sigma)()
     np.testing.assert_allclose(best.x, [0.3], atol=1e-4)
+
+
+@pytest.mark.parametrize("sigma_kind", ["scalar", "array", "cov"])
+@pytest.mark.parametrize("fit_method", ["lstsq", "qr"])
+def test_fit_method_is_used_for_the_fg_fit(sigma_kind, fit_method):
+    """The FG fit uses the requested solver (exactly as a direct fit with it)."""
+    freqs, fg, eor, data = _setup()
+    sigmas = np.linspace(0.05, 0.2, freqs.size)
+    sigma, weights = {
+        "scalar": (0.1, 1.0),
+        "array": (sigmas, 1 / sigmas**2),
+        "cov": (np.diag(sigmas**2), np.diag(1 / sigmas**2)),
+    }[sigma_kind]
+    slf = SemiLinearFit(
+        fg=fg, eor=eor, spectrum=data, sigma=sigma, fit_method=fit_method
+    )
+    resid = data - slf.get_eor([0.2])
+    if sigma_kind == "cov":
+        weights = slf._cov_inverse
+    ref = fg.fit(ydata=resid, weights=weights, method=fit_method)
+    np.testing.assert_array_equal(
+        np.array(slf.fg_params([0.2])), np.array(ref.model_parameters)
+    )
+
+
+@pytest.mark.parametrize(("sigma", "default"), [(0.1, "lstsq"), ("cov", "qr")])
+def test_default_fit_method_unchanged(sigma, default):
+    freqs, fg, eor, data = _setup()
+    if sigma == "cov":
+        sigma = 0.01 * np.eye(freqs.size)
+    default_fit = SemiLinearFit(fg=fg, eor=eor, spectrum=data, sigma=sigma)
+    explicit = SemiLinearFit(
+        fg=fg, eor=eor, spectrum=data, sigma=sigma, fit_method=default
+    )
+    np.testing.assert_array_equal(
+        default_fit.fg_params([0.2]), explicit.fg_params([0.2])
+    )
+
+
+def test_unknown_fit_method():
+    _, fg, eor, data = _setup()
+    with pytest.raises(ValueError, match="Unknown fit_method"):
+        SemiLinearFit(fg=fg, eor=eor, spectrum=data, sigma=0.1, fit_method="svd")

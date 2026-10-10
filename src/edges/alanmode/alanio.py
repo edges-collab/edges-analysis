@@ -186,14 +186,26 @@ def write_spec_txt(
                 fl.write(f"{f:12.6f} {sp:12.6f} {wt:4.0f}\n")
 
 
-def write_spec_txt_gsd(gsd: GSData, fname: tp.PathLike):
+def write_spec_txt_gsd(gsd: GSData, fname: tp.PathLike, n: int | None = None):
     """Write a standard spe.txt file given a GSData object.
 
     Channels that are flagged (or have no samples) get a weight of zero.
+
+    Parameters
+    ----------
+    gsd
+        The averaged spectrum.
+    fname
+        The file to write.
+    n
+        The number of spectra that were averaged, written in the file header. By
+        default, the mean ``nsamples`` of the spectrum. That equals the number of
+        spectra only if they were not smoothed in frequency: smoothing increases the
+        (effective) number of samples of each channel.
     """
     write_spec_txt(
         freq=gsd.freqs,
-        n=int(np.mean(gsd.nsamples)),
+        n=int(np.mean(gsd.nsamples)) if n is None else n,
         spec=gsd.data[0, 0, 0],
         fname=fname,
         weights=(gsd.flagged_nsamples[0, 0, 0] > 0).astype(int),

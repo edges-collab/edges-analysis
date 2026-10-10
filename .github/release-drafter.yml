@@ -41,6 +41,33 @@ categories:
 name-template: 'v$RESOLVED_VERSION'
 tag-template: 'v$RESOLVED_VERSION'
 
+# The next version is resolved from the labels of the PRs merged since the last
+# release: the highest bump wins. Fixes that change results (type: accuracy) are a
+# minor bump; only API Breaking is a major one.
+version-resolver:
+  major:
+    labels:
+      - "API Breaking"
+  minor:
+    labels:
+      - "type: feature: ui"
+      - "type: feature: physical"
+      - "type: accuracy"
+      - "type: maint: removal"
+  patch:
+    labels:
+      - "type: bug"
+      - "type: performance: memory"
+      - "type: performance: cpu"
+      - "type: testing"
+      - "type: ci"
+      - "type: maint: documentation"
+      - "type: maint: refactoring"
+      - "type: maint: style"
+      - "type: maint: dependencies"
+      - "type: maint: build"
+  default: patch
+
 autolabeler:
   - label: 'type: maint: documentation'
     files:

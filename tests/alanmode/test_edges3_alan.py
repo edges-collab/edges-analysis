@@ -44,6 +44,7 @@ from astropy.table import QTable
 from pygsdata import GSData
 
 from edges import alanmode as am
+from edges.alanmode.alanmode import _acqplot7amoon
 from edges.cal import Calibrator
 from edges.cal import sparams as sp
 from edges.cal.calobs import CalibrationObservation
@@ -215,8 +216,8 @@ def alanmode_averaged_spectra(
         specfiles = dataset.defparams.get_spectrum_files()
         for load, files in specfiles.items():
             outfile = avg_spectrum_files[load]
-            gsd = am.acqplot7amoon(files, params=dataset.acqparams)
-            am.write_spec_txt_gsd(gsd, outfile)
+            gsd, n = _acqplot7amoon(files, dataset.acqparams)
+            am.write_spec_txt_gsd(gsd, outfile, n=n)
 
     return {
         k: am.read_spec_txt(pth, telescope="edges3", name=k)
@@ -368,6 +369,8 @@ def test_spectrum_averaging(
     np.testing.assert_allclose(
         legacy_averaged_spectra[load].data[20:-20], ours.data[20:-20], atol=1e-6
     )
+    # The number of averaged spectra in the file header.
+    assert np.max(ours.nsamples) == np.max(legacy_averaged_spectra[load].nsamples)
 
 
 @pytest.mark.parametrize("legacy_key", [*list(am.LOADMAP.keys()), "lna"])

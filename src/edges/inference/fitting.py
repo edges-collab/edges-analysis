@@ -1,6 +1,7 @@
 """Provides extra routines for fitting that are not in yabf."""
 
 from functools import cached_property
+from typing import Literal
 
 import numpy as np
 from scipy import linalg, stats
@@ -41,12 +42,19 @@ class SemiLinearFit:
         shape as the spectrum, or a 2D covariance matrix of shape
         ``(nfreq, nfreq)``. With a covariance matrix, the FG fit is a generalised
         least-squares fit and the likelihood is a multivariate normal.
+    fit_method
+        The method used to solve the linear FG fit (see
+        :class:`~edges.modeling.ModelFit`). By default, 'lstsq' for a float or 1D
+        ``sigma``, and 'qr' for a covariance matrix. The methods agree to rounding
+        error times the condition number of the (weighted) FG basis, which can be
+        large.
 
     Raises
     ------
     ValueError
         If ``sigma`` is a 2D array that is not a square, symmetric, positive-definite
-        matrix matching the spectrum, or has more than two dimensions.
+        matrix matching the spectrum, or has more than two dimensions, or if
+        ``fit_method`` is not a known method.
     NotImplementedError
         If ``sigma`` is a covariance matrix and the FG model has a non-identity data
         transform.
@@ -64,6 +72,7 @@ class SemiLinearFit:
         eor: Component,
         spectrum: np.ndarray,
         sigma: np.ndarray | float,
+        fit_method: Literal["lstsq", "qr", "alan-qrd", "qrd-c"] | None = None,
     ):
         """Perform a quick fit to data with a sum of linear and non-linear models.
 
@@ -74,6 +83,10 @@ class SemiLinearFit:
         self.eor = eor
         self.spectrum = spectrum
         self.sigma = sigma
+
+        if fit_method not in (None, "lstsq", "qr", "alan-qrd", "qrd-c"):
+            raise ValueError(f"Unknown fit_method: {fit_method!r}.")
+        self.fit_method = fit_method
 
         ndim = np.ndim(sigma)
         if ndim > 2:
@@ -118,10 +131,13 @@ class SemiLinearFit:
     def _fg_fitter(self) -> _RepeatedFit:
         """The FG fits, with the parts that depend only on the basis/noise cached."""
         if self._is_cov:
-            return _RepeatedFit(self.fg, weights=self._cov_inverse, method="qr")
+            return _RepeatedFit(
+                self.fg, weights=self._cov_inverse, method=self.fit_method or "qr"
+            )
         return _RepeatedFit(
             self.fg,
             weights=1 / self.sigma**2 if hasattr(self.sigma, "__len__") else 1.0,
+            method=self.fit_method or "lstsq",
         )
 
     def fg_fit(self, p):

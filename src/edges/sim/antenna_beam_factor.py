@@ -57,7 +57,9 @@ class BeamFactor:
         :func:`compute_antenna_beam_factor`. When the beam is normalised, it is
         instead simply ``1 - ground_loss`` (i.e. zero if no ground loss was given).
         Note that it is *not* the fraction of the sky signal that is lost below the
-        horizon.
+        horizon. It can be slightly negative if the simulated gain integrates to more
+        than 4pi above the horizon (as for the bundled FEKO low-band beam below
+        ~47 MHz, by up to 0.1%).
     meta
         A dictionary of metadata.
     """
