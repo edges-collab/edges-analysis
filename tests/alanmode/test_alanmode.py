@@ -91,11 +91,16 @@ NTIME = 24
 FREQS = edges_raw_freqs()
 
 
-@pytest.fixture(scope="module")
-def unity_acq(tmpdir):
+def _write_unity_acq(path: Path, dead: tuple[int, ...] = ()) -> Path:
+    """Write an ACQ file whose spectra all calibrate to Q=1.
+
+    The integrations in ``dead`` have zero power in all three switch states, so
+    they calibrate to NaN and contribute nothing to an average.
+    """
     data = np.ones((3, 1, NTIME, len(FREQS))) / 1000.0
     data[0] *= 4.0
     data[2] *= 4.0
+    data[:, :, list(dead)] = 0.0
 
     times = np.linspace(2459856, 2459857, NTIME + 1)[:-1]
     times = np.array([times, times + 0.1, times + 0.2]).T
@@ -111,9 +116,18 @@ def unity_acq(tmpdir):
             "adcmin": np.zeros_like(times),
         },
     )
-    write_gsdata_to_acq(data, tmpdir / "unity.acq")
+    write_gsdata_to_acq(data, path)
+    return path
 
-    return tmpdir / "unity.acq"
+
+@pytest.fixture(scope="module")
+def unity_acq(tmpdir):
+    return _write_unity_acq(tmpdir / "unity.acq")
+
+
+@pytest.fixture(scope="module")
+def dead_integration_acq(tmpdir):
+    return _write_unity_acq(tmpdir / "dead.acq", dead=(5,))
 
 
 def test_read_all_spec_text():
@@ -193,18 +207,26 @@ class TestACQPlot7AMoon:
 
 
 @pytest.mark.parametrize(
-    ("smooth", "delaystart", "n"), [(8, 0, NTIME), (0, 1, NTIME - 1)]
+    ("acq", "smooth", "delaystart", "n"),
+    [
+        ("unity_acq", 8, 0, NTIME),
+        ("unity_acq", 0, 1, NTIME - 1),
+        ("dead_integration_acq", 8, 0, NTIME - 1),
+        ("dead_integration_acq", 0, 0, NTIME - 1),
+    ],
 )
 def test_averaged_spectrum_file_holds_number_of_spectra(
-    unity_acq, tmp_path: Path, smooth: int, delaystart: int, n: int
+    request, tmp_path: Path, acq: str, smooth: int, delaystart: int, n: int
 ):
     """The header of the averaged-spectrum file holds the number of spectra.
 
     As in the C-code, it is the number of spectra that were averaged, not their
-    effective number of samples (which frequency smoothing increases).
+    effective number of samples (which frequency smoothing increases). Spectra
+    without any usable data (which do not contribute to the average) are not
+    counted.
     """
     spectra = _average_spectra(
-        {"ambient": [unity_acq]},
+        {"ambient": [request.getfixturevalue(acq)]},
         out=tmp_path,
         redo_spectra=True,
         fstart=0,

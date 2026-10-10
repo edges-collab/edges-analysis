@@ -208,7 +208,8 @@ def _acqplot7amoon(
         The averaged spectrum.
     n
         The number of (Dicke-switched) spectra that were averaged, as written in the
-        header of the averaged-spectrum files of the C-code.
+        header of the averaged-spectrum files of the C-code. Spectra without any
+        usable data (which contribute nothing to the average) are not counted.
     """
     data = read_acq_to_gsdata(acqfile, telescope="edges-low")
 
@@ -229,10 +230,14 @@ def _acqplot7amoon(
     )
     q = dicke_calibration(data)
 
+    # Like the C-code, count only the spectra that contribute to the average: those
+    # with any finite, unflagged data (e.g. not a dead switching cycle).
+    usable = np.isfinite(q.data) & (q.flagged_nsamples > 0)
+    n = int(np.sum(np.any(usable, axis=(0, 1, 3))))
+
     if params.smooth > 0:
         q = gauss_smooth(q, size=params.smooth, decimate_at=0)
 
-    n = q.ntimes
     q = average_over_times(q)
     return approximate_temperature(data=q, tload=params.tload, tns=params.tcal), n
 
