@@ -1,3 +1,4 @@
+import inspect
 from types import SimpleNamespace
 
 import attrs
@@ -508,3 +509,82 @@ class TestCalkitReadings:
             ValueError, match="match standard does not have same frequencies"
         ):
             dt.CalkitReadings(open=vna1, short=vna1, match=vna3)
+
+
+@pytest.mark.parametrize(
+    ("cls", "name"),
+    [
+        (dt.ReflectionCoefficient, "de_embed"),
+        (dt.ReflectionCoefficient, "embed"),
+        (dt.ReflectionCoefficient, "smoothed"),
+        (dt.SParams, "smoothed"),
+        (dt.SParams, "from_calkit_measurements"),
+        (dt.CalkitReadings, "de_embed"),
+    ],
+)
+def test_methods_defined_in_class_body(cls: type, name: str):
+    """The methods are real class members, not patched on by other modules.
+
+    Methods patched onto a class after its definition keep the qualified name of
+    the original free function, so this checks that each is defined in the class
+    body itself (where IDEs, type checkers and autodoc can see it).
+    """
+    attr = inspect.getattr_static(cls, name)
+    func = getattr(attr, "__func__", attr)
+    assert func.__module__ == dt.__name__
+    assert func.__qualname__ == f"{cls.__name__}.{name}"
+    assert func.__doc__
+
+
+class TestFreeFunctionDelegates:
+    """The free functions give bit-identical results to the class methods."""
+
+    def setup_method(self):
+        rng = np.random.default_rng(1234)
+        self.sparams = _random_sparams(rng, n=10)
+        freqs = self.sparams.freqs
+
+        def rc():
+            return dt.ReflectionCoefficient(
+                freqs=freqs,
+                reflection_coefficient=rng.uniform(-1, 1, 10)
+                + 1j * rng.uniform(-1, 1, 10),
+            )
+
+        self.gamma = rc()
+        self.readings = dt.CalkitReadings(open=rc(), short=rc(), match=rc())
+
+    def test_gamma_de_embed(self):
+        np.testing.assert_array_equal(
+            sp.gamma_de_embed(self.gamma, self.sparams).reflection_coefficient,
+            self.gamma.de_embed(self.sparams).reflection_coefficient,
+        )
+
+    def test_gamma_embed(self):
+        np.testing.assert_array_equal(
+            sp.gamma_embed(self.gamma, self.sparams).reflection_coefficient,
+            self.gamma.embed(self.sparams).reflection_coefficient,
+        )
+
+    def test_calkit_de_embed(self):
+        from edges.cal.sparams.core.sparam_calibration import (
+            de_embed_network_from_calkit_measurements,
+        )
+
+        func = de_embed_network_from_calkit_measurements(self.readings, self.sparams)
+        meth = self.readings.de_embed(self.sparams)
+        assert isinstance(meth, dt.CalkitReadings)
+        for kind in ("open", "short", "match"):
+            np.testing.assert_array_equal(
+                getattr(func, kind).reflection_coefficient,
+                getattr(meth, kind).reflection_coefficient,
+            )
+
+    def test_from_calkit_measurements(self):
+        from edges.cal.sparams.core.sparam_calibration import (
+            sparams_from_calkit_measurements,
+        )
+
+        func = sparams_from_calkit_measurements(self.readings)
+        meth = dt.SParams.from_calkit_measurements(measurements=self.readings)
+        np.testing.assert_array_equal(func.s, meth.s)

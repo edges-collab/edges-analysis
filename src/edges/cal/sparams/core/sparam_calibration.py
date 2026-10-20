@@ -91,6 +91,8 @@ def gamma_de_embed(
     --------
     gamma_embed
         The inverse function to this one.
+    ReflectionCoefficient.de_embed
+        The equivalent method, to which this function delegates.
 
     Notes
     -----
@@ -107,12 +109,7 @@ def gamma_de_embed(
              PLANE               PLANE
 
     """
-    gamma_in = gamma.reflection_coefficient
-    return ReflectionCoefficient(
-        freqs=gamma.freqs,
-        reflection_coefficient=(gamma_in - sparams.s11)
-        / (sparams.s22 * (gamma_in - sparams.s11) + sparams.s12 * sparams.s21),
-    )
+    return gamma.de_embed(sparams)
 
 
 def gamma_embed(
@@ -144,15 +141,10 @@ def gamma_embed(
     --------
     gamma_de_embed
         The inverse function to this one.
+    ReflectionCoefficient.embed
+        The equivalent method, to which this function delegates.
     """
-    gamma_in = gamma.reflection_coefficient
-    return ReflectionCoefficient(
-        freqs=gamma.freqs,
-        reflection_coefficient=(
-            sparams.s11
-            + (sparams.s12 * sparams.s21 * gamma_in) / (1 - sparams.s22 * gamma_in)
-        ),
-    )
+    return gamma.embed(sparams)
 
 
 def continuous_sqrt(product: np.ndarray) -> np.ndarray:
@@ -301,6 +293,7 @@ def de_embed_network_from_calkit_measurements(
     """Remove the effect of a 2-port network from each calkit standard measurement.
 
     This applies :func:`gamma_de_embed` to each of the open, short and match readings.
+    It is equivalent to (and delegates to) :meth:`CalkitReadings.de_embed`.
 
     Parameters
     ----------
@@ -314,10 +307,7 @@ def de_embed_network_from_calkit_measurements(
     readings
         The calkit readings referenced to the other side of the 2-port network.
     """
-    return CalkitReadings(**{
-        kind: getattr(measurements, kind).de_embed(sparams)
-        for kind in ("open", "short", "match")
-    })
+    return measurements.de_embed(sparams)
 
 
 def average_reflection_coefficients(
@@ -396,10 +386,3 @@ def average_sparams(s: Sequence[SParams]) -> SParams:
         s21=np.mean([ss.s21 for ss in s], axis=0),
         s22=np.mean([ss.s22 for ss in s], axis=0),
     )
-
-
-# Patch some of these functions onto the class definitions, for convenience.
-ReflectionCoefficient.de_embed = gamma_de_embed
-ReflectionCoefficient.embed = gamma_embed
-SParams.from_calkit_measurements = staticmethod(sparams_from_calkit_measurements)
-CalkitReadings.de_embed = de_embed_network_from_calkit_measurements
