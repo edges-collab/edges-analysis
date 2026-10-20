@@ -12,7 +12,7 @@ from edges.cal.calibrator import Calibrator
 
 from ..cal import plots
 from ..cal.calobs import CalibrationObservation
-from ..cli import app
+from ..cli import app  # noqa: F401  (kept for backwards compatibility)
 from . import (
     alancal as acal,
 )
@@ -30,7 +30,9 @@ from .alanmode import (
 
 console = Console()
 
-app.command(amode := App(name="alanmode", help="Run scripts similar to legacy C code"))
+# Registered (lazily) as the ``alanmode`` sub-command of the ``edges`` CLI in
+# :mod:`edges.cli`.
+amode = App(name="alanmode", help="Run scripts similar to legacy C code")
 
 
 def _make_plots(
