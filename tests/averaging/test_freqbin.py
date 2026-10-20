@@ -245,3 +245,18 @@ def test_gauss_smooth_bad_channel_correlation():
     gsd = _gsd(np.ones(64), np.ones(64))
     with pytest.raises(ValueError, match="channel_correlation"):
         freqbin.gauss_smooth(gsd, size=8, channel_correlation=np.array([0.5, 0.2]))
+
+
+def test_gauss_smooth_channel_correlation_with_zero_lags():
+    """Lags with zero correlation are skipped without changing the result."""
+    from edges.cal import noise_model as nm
+
+    nf = 200
+    n = np.full(nf, 2.0)
+    rho = np.array([1.0, 0.0, 0.3])
+    sm = freqbin.gauss_smooth(
+        _gsd(np.zeros(nf), n), size=8, decimate_at=0, channel_correlation=rho
+    )
+    mat = nm.smoothing_matrix(nf, 8, kind="gauss", decimate_at=0, mask=np.ones(nf))
+    var_out = nm.propagate_channel_covariance(1 / n, mat, rho)
+    np.testing.assert_allclose(sm.nsamples[0, 0, 0], 1 / var_out, rtol=1e-10)
