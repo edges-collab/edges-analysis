@@ -1,5 +1,8 @@
 """Create very simple mock GSData objects for testing purposes."""
 
+import functools
+from typing import Any
+
 import numpy as np
 from astropy import units as un
 from astropy.time import Time
@@ -11,16 +14,33 @@ from .const import edges_location
 from .filters import DATA_PATH
 from .frequencies import edges_raw_freqs
 
-# To get "reasonable" data values, read the model of the haslam sky convolved with
-# the 30x30m ground-plane beam that we have in our data folder. This exact model is
-# used in the total_power_filter as a rough model to guide when to cut atrocious
-# things out.
-model = np.load(
-    DATA_PATH / "Lowband_30mx30m_Haslam_2p5_20minlst_50_100.npz", allow_pickle=True
-)
-msky = model["sky_temp"][:, 25]  # this is the 75 MHz slice
-mgha = model["lsts"]
-spl75 = interp1d(mgha, msky)
+# To get "reasonable" data values, we use a model of the Haslam sky convolved with
+# the 30x30m ground-plane beam that is shipped in the filters data folder. It is only
+# read (lazily) to generate mock data, and contains nothing but plain float arrays.
+_SKY_MODEL_FILE = DATA_PATH / "Lowband_30mx30m_Haslam_2p5_20minlst_50_100.npz"
+
+
+@functools.cache
+def _sky_model() -> dict[str, Any]:
+    """Load the sky model and a spline of its 75 MHz slice versus GHA (cached)."""
+    with np.load(_SKY_MODEL_FILE, allow_pickle=False) as fl:
+        model = {k: fl[k] for k in fl.files}
+
+    msky = model["sky_temp"][:, 25]  # this is the 75 MHz slice
+    mgha = model["lsts"]
+    return {
+        "model": model,
+        "msky": msky,
+        "mgha": mgha,
+        "spl75": interp1d(mgha, msky),
+    }
+
+
+def __getattr__(name: str) -> Any:
+    """Provide the (formerly eagerly-loaded) sky-model module attributes lazily."""
+    if name in ("model", "msky", "mgha", "spl75"):
+        return _sky_model()[name]
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def create_mock_edges_data(
@@ -43,7 +63,10 @@ def create_mock_edges_data(
     lsts = times.sidereal_time("apparent", longitude=edges_location.lon)
     gha = lst2gha(lsts)[:, 0]
 
-    skydata = spl75(gha.hour)[:, None] * ((freqs / (75 * un.MHz)) ** (-2.5))[None, :]
+    skydata = (
+        _sky_model()["spl75"](gha.hour)[:, None]
+        * ((freqs / (75 * un.MHz)) ** (-2.5))[None, :]
+    )
 
     if add_noise:
         rng = np.random.default_rng()
