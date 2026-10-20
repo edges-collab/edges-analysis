@@ -340,7 +340,7 @@ class NoiseWaveLinearModel:
         method="lstsq",
         weights: dict[str, np.ndarray] | None = None,
     ):
-        """Obtain a fit of the compositie model to given data.
+        """Obtain a fit of the composite model to given data.
 
         Parameters
         ----------
