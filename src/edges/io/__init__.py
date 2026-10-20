@@ -38,7 +38,11 @@ __all__ = [
     "read_tmp_file",
     "read_weather_file",
 ]
-from . import time_formats
+from ..serialization import hickleable
+from . import (
+    serialization,  # alias of edges.serialization, kept for compatibility
+    time_formats,
+)
 from .auxiliary import read_auxiliary_data, read_thermlog_file, read_weather_file
 from .calobsdef import (
     CalkitFileSpec,
@@ -50,7 +54,6 @@ from .calobsdef import (
     ReceiverS11,
 )
 from .calobsdef3 import CalObsDefEDGES3, LoadDefEDGES3
-from .serialization import hickleable
 from .templogs import get_mean_temperature, read_temperature_log, read_tmp_file
 from .thermistor import read_thermistor_csv
 from .vna import SParams, read_s1p

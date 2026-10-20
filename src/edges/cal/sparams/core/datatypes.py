@@ -14,7 +14,7 @@ from pygsdata.attrs import npfield
 from edges import types as tp
 from edges.frequencies import get_mask
 from edges.io import calobsdef, read_s1p
-from edges.io.serialization import hickleable
+from edges.serialization import hickleable
 from edges.tools import linear_to_decibels
 
 

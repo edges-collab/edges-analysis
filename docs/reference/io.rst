@@ -37,5 +37,4 @@ General Utilities
     :toctree: _autosummary
     :template: module.rst
 
-    edges.io.serialization
     edges.io.time_formats

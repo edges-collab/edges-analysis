@@ -8,7 +8,7 @@ import numpy as np
 from astropy import units as un
 
 from edges import types as tp
-from edges.io.serialization import hickleable
+from edges.serialization import hickleable
 from edges.modeling import (
     ComplexMagPhaseModel,
     ComplexRealImagModel,

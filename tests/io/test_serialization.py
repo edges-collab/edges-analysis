@@ -267,3 +267,71 @@ def test_write_object_to_hdf5_closes_file_on_error(tmp_path, monkeypatch):
     obj.write(tmp_path / "obj.h5")
     assert _n_open_h5_files() == before
     assert _HickleBase.from_file(tmp_path / "obj.h5") == obj
+
+
+def test_old_and_new_import_paths_are_the_same_module():
+    import edges
+    import edges.io
+    import edges.io.serialization as old
+    import edges.serialization as new
+
+    assert old is new
+    assert edges.io.serialization is new
+    assert edges.serialization is new
+    assert edges.io.hickleable is new.hickleable
+    assert old.converter is new.converter
+
+
+@hickleable
+@attrs.define
+class _OldPathThing:
+    """A class made hickleable via the old (``edges.io.serialization``) path."""
+
+    x: int
+    arr: np.ndarray
+
+
+def test_roundtrip_across_old_and_new_import_paths(tmp_path):
+    from edges import modeling as mdl
+    from edges import serialization as new
+    from edges.io import serialization as old
+
+    model = mdl.CompositeModel(
+        models={
+            "lin": mdl.PhysicalLin(
+                parameters=[0, 1, 2], xtransform=mdl.ScaleTransform(scale=1.5)
+            ),
+            "pl": mdl.Polynomial(n_terms=3, parameters=[0, 1, 2]),
+        }
+    )
+
+    # Written via the old path, read via the new path (and via the class).
+    old.write_object_to_hdf5(model, tmp_path / "old.h5")
+    assert new.load_hdf5(mdl.CompositeModel, tmp_path / "old.h5") == model
+    assert mdl.CompositeModel.from_file(tmp_path / "old.h5") == model
+
+    # And the other way around.
+    new.write_object_to_hdf5(model, tmp_path / "new.h5")
+    assert old.load_hdf5(mdl.CompositeModel, tmp_path / "new.h5") == model
+
+    # A class decorated through the old path.
+    thing = _OldPathThing(x=3, arr=np.arange(4.0))
+    thing.write(tmp_path / "thing.h5")
+    loaded = new.load_hdf5(_OldPathThing, tmp_path / "thing.h5")
+    assert loaded.x == 3
+    np.testing.assert_allclose(loaded.arr, thing.arr, rtol=0, atol=0)
+
+    # Classes are looked up by their bare ``__classname__`` (not a module path), so
+    # files do not depend on where the serialization module lives: no module path
+    # of the package appears anywhere in the raw file (incl. hickle's pickled type
+    # table), while the class names do.
+    for fname, clsname in [
+        ("old.h5", b"CompositeModel"),
+        ("new.h5", b"CompositeModel"),
+        ("thing.h5", b"_OldPathThing"),
+    ]:
+        raw = (tmp_path / fname).read_bytes()
+        assert clsname in raw
+        assert b"__classname__" in raw
+        assert b"edges" not in raw
+        assert b"serialization" not in raw
