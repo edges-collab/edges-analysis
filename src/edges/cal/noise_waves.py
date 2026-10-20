@@ -338,8 +338,21 @@ class NoiseWaveLinearModel:
         spectrum: dict[str, np.ndarray],
         temp_thermistor: dict[str, np.ndarray],
         method="lstsq",
+        weights: dict[str, np.ndarray] | None = None,
     ):
-        """Obtain a fit of the compositie model to given data."""
+        """Obtain a fit of the compositie model to given data.
+
+        Parameters
+        ----------
+        spectrum
+            The calibrated spectra of the sources, keyed as ``gamma_src``.
+        temp_thermistor
+            The true temperatures of the sources, keyed as ``gamma_src``.
+        method
+            The linear-least-squares method.
+        weights
+            Optional inverse-variance weights of the spectra, keyed as ``gamma_src``.
+        """
         x = np.concatenate([self.freq] * len(self.gamma_src))
         tr = mdl.ScaleTransform(scale=self.freq[len(self.freq) // 2])
 
@@ -375,7 +388,14 @@ class NoiseWaveLinearModel:
             freq=self.freq,
             gamma_rec=self.gamma_rec,
             gamma_src=self.gamma_src,
-            modelfit=model.fit(xdata=x, ydata=data, method=method),
+            modelfit=model.fit(
+                xdata=x,
+                ydata=data,
+                weights=1.0
+                if weights is None
+                else np.concatenate([weights[k] for k in self.gamma_src]),
+                method=method,
+            ),
             delay=self.delay,
         )
 
@@ -397,6 +417,7 @@ def get_calibration_quantities_iterative(
     fit_method="lstsq",
     poly_spacing: float = 1.0,
     return_early: bool = False,
+    source_q_variance: dict[str, np.ndarray] | None = None,
 ) -> Generator[tuple[mdl.Polynomial, mdl.Polynomial, NoiseWaveLinearModelFit]]:
     """
     Derive calibration parameters using the scheme laid out in Monsalve (2017).
@@ -447,6 +468,13 @@ def get_calibration_quantities_iterative(
     return_early
         Whether to return from the iterative loop early if the RMS of the residuals
         stops decreasing.
+    source_q_variance
+        Optional variances of the (time-averaged) ``source_q``, keyed as ``source_q``.
+        If given, the fits of the scale and offset and of the noise-wave parameters
+        are weighted by the inverse of the variances propagated to each fitted
+        quantity (to first order, per channel; correlations between the fitted
+        quantities and between channels are ignored). Otherwise the fits are
+        unweighted.
 
     Yields
     ------
@@ -488,6 +516,8 @@ def get_calibration_quantities_iterative(
     temp_ant_hot = source_true_temps["hot_load"]
     receiver_s11 = receiver_s11[mask]
     source_s11s = {k: v[mask] for k, v in source_s11s.items()}
+    if source_q_variance is not None:
+        source_q_variance = {k: v[mask] for k, v in source_q_variance.items()}
 
     # The denominator of each term in Eq. 7
     G = 1 - np.abs(receiver_s11) ** 2
@@ -549,9 +579,20 @@ def get_calibration_quantities_iterative(
         sca *= sca_new
         off += off_new
 
+        # Weights from the propagated variances
+        if source_q_variance is not None:
+            wts = _iterative_weights(
+                source_q,
+                source_q_variance,
+                a=sca * t_load_ns_guess,
+                raw_scale_offset=not smooth_scale_offset_within_loop,
+            )
+        else:
+            wts = {"sca": 1.0, "off": 1.0, "open": None, "short": None}
+
         # Model scale and offset
-        p_sca = sca_mdl.fit(ydata=sca, method=fit_method).fit
-        p_off = off_mdl.fit(ydata=off, method=fit_method).fit
+        p_sca = sca_mdl.fit(ydata=sca, weights=wts["sca"], method=fit_method).fit
+        p_off = off_mdl.fit(ydata=off, weights=wts["off"], method=fit_method).fit
 
         if smooth_scale_offset_within_loop:
             sca = p_sca(fmask)
@@ -575,6 +616,18 @@ def get_calibration_quantities_iterative(
         sca_off_chisq = new_sca_off_chisq
 
         # Step 4: computing NWP
+        if source_q_variance is not None:
+            # The scale and offset have been updated in step 2.
+            wts = _iterative_weights(
+                source_q,
+                source_q_variance,
+                a=sca * t_load_ns_guess,
+                raw_scale_offset=not smooth_scale_offset_within_loop,
+            )
+            nw_weights = {k: wts[k] for k in ("open", "short")}
+        else:
+            nw_weights = None
+
         best = None
         for delay in delays_to_fit:
             srcs = ["open", "short"]
@@ -590,6 +643,7 @@ def get_calibration_quantities_iterative(
                 {k: temp_cal_iter[k] for k in srcs},
                 {k: source_true_temps[k] for k in srcs},
                 method=fit_method,
+                weights=nw_weights,
             )
             if best is None or nwmfit.rms < best.rms:
                 best = nwmfit
@@ -611,6 +665,44 @@ def get_calibration_quantities_iterative(
         )
 
         yield (t_sca_model, t_off_model, best)
+
+
+def _iterative_weights(
+    source_q: dict[str, np.ndarray],
+    source_q_variance: dict[str, np.ndarray],
+    a: np.ndarray,
+    raw_scale_offset: bool,
+) -> dict[str, np.ndarray]:
+    r"""Inverse-variance weights for the fits of the iterative calibration.
+
+    Linearizes the fixed point of the iteration in the noise of the averaged Q of each
+    source. With :math:`a = T_{\rm NS,guess}\,{\rm sca}`, the calibrated spectrum of
+    each source is :math:`T_k = a Q_k - {\rm off} + c_k`, where :math:`c_k` does not
+    depend on the Q's. At the fixed point, :math:`T_{\rm amb}` and :math:`T_{\rm hot}`
+    are fixed, so :math:`a (Q_h - Q_a)` and :math:`{\rm off} - a Q_a` are constant:
+    :math:`\delta a/a = -(\delta Q_h - \delta Q_a)/(Q_h - Q_a)` and
+    :math:`\delta{\rm off} = a\,\delta Q_a + Q_a\,\delta a`. If the scale and
+    offset are not smoothed within the loop, the noise of the ambient and hot loads
+    therefore also enters the calibrated spectrum of every other source:
+    :math:`\delta T_k = a[\delta Q_k - (1 - x_k)\,\delta Q_a - x_k\,\delta Q_h]`,
+    with :math:`x_k = (Q_k - Q_a)/(Q_h - Q_a)`.
+    """
+    qa, qh = source_q["ambient"], source_q["hot_load"]
+    va, vh = source_q_variance["ambient"], source_q_variance["hot_load"]
+    d = qh - qa
+
+    # Var(sca)/sca^2 = Var(a)/a^2; the overall scale of the weights does not matter.
+    rel_var_a = (vh + va) / d**2
+    var_off = a**2 * ((1 + qa / d) ** 2 * va + (qa / d) ** 2 * vh)
+    out = {"sca": 1 / (a**2 * rel_var_a), "off": 1 / var_off}
+
+    for k in ("open", "short"):
+        var = a**2 * source_q_variance[k]
+        if raw_scale_offset:
+            x = (source_q[k] - qa) / d
+            var = var + a**2 * ((1 - x) ** 2 * va + x**2 * vh)
+        out[k] = 1 / var
+    return out
 
 
 def get_linear_coefficients(gamma_ant, gamma_rec, t_sca, t_off, t_unc, t_cos, t_sin):
