@@ -850,3 +850,30 @@ class TestLinearModelerFitMethod:
         assert flags["qr"][37]
         assert flags["qr"][120]
         np.testing.assert_array_equal(flags["qr"], flags["lstsq"])
+
+
+def test_flag_if_broken_does_not_alter_info_flags(freq, sky_pl_1d):
+    """Regression test: flagging everything when broken mutated info.flags[-1]."""
+
+    class AlwaysStop(xrfi.LinearModeler):
+        def stopping_condition(self, flags, iteration):
+            return True
+
+    rng = np.random.default_rng(12)
+    data = sky_pl_1d + rng.normal(scale=0.01, size=sky_pl_1d.size)
+    data[[100, 400, 700]] += 10.0
+
+    with pytest.warns(UserWarning, match="model-specific reasons"):
+        flags, info = xrfi.xrfi_iterative(
+            data,
+            freqs=freq,
+            data_modeler=AlwaysStop(model=mdl.EdgesPoly(n_terms=5)),
+            std_modeler=xrfi.LinearModeler(model=mdl.Polynomial(n_terms=3)),
+            flag_if_broken=True,
+        )
+
+    assert np.all(flags)
+    last = info.flags[-1]
+    assert last is not flags
+    assert not np.all(last)
+    assert info.total_flags[-1] == np.sum(last)
