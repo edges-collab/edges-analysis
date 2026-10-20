@@ -171,3 +171,77 @@ def test_gauss_smooth_empty_channels_are_nan(gsd_ones: GSData):
     assert not np.any(empty[..., :5])
     assert np.all(np.isnan(out.data[empty]))
     assert np.all(out.data[~empty] < 2)
+
+
+def _gsd(data, nsamples):
+    from astropy.time import Time
+
+    from edges import const
+
+    nfreq = data.shape[-1]
+    return GSData(
+        data=data[None, None, None],
+        nsamples=nsamples[None, None, None],
+        freqs=np.linspace(50, 100, nfreq) * un.MHz,
+        times=Time([[2459856.0]], format="jd", scale="utc"),
+        telescope=const.KNOWN_TELESCOPES["edges-low"],
+    )
+
+
+@pytest.mark.parametrize("use_nsamples", [False, True])
+@pytest.mark.parametrize("decimate_at", [0, 4])
+def test_gauss_smooth_nsamples_with_channel_correlation(use_nsamples, decimate_at):
+    """The output nsamples is the inverse variance, including channel correlations."""
+    from edges.cal import noise_model as nm
+
+    rng = np.random.default_rng(11)
+    nf = 240
+    n = rng.integers(1, 6, size=nf).astype(float)
+    n[100:110] = 0  # a flagged stretch
+    rho = nm.channel_power_correlation(nm.blackman_harris(4096), 6)
+
+    sm = freqbin.gauss_smooth(
+        _gsd(rng.normal(size=nf), n),
+        size=8,
+        decimate_at=decimate_at,
+        use_nsamples=use_nsamples,
+        channel_correlation=rho,
+    )
+    weights = n if use_nsamples else (n > 0).astype(float)
+    mat = nm.smoothing_matrix(
+        nf, 8, kind="gauss", decimate_at=decimate_at, nsmooth=4, mask=weights
+    )
+    with np.errstate(divide="ignore"):
+        var_in = np.where(n > 0, 1 / n, 0.0)
+    var_out = nm.propagate_channel_covariance(var_in, mat, rho)
+    ok = sm.nsamples[0, 0, 0] > 0
+    np.testing.assert_allclose(sm.nsamples[0, 0, 0][ok], 1 / var_out[ok], rtol=1e-10)
+
+
+def test_gauss_smooth_channel_correlation_defaults():
+    from edges.cal import noise_model as nm
+
+    nf = 400
+    gsd = _gsd(np.ones(nf), np.ones(nf))
+    indep = freqbin.gauss_smooth(gsd, size=8, decimate_at=0)
+    same = freqbin.gauss_smooth(
+        gsd, size=8, decimate_at=0, channel_correlation=np.array([1.0])
+    )
+    np.testing.assert_allclose(same.nsamples, indep.nsamples)
+
+    rho = nm.channel_power_correlation(nm.blackman_harris(65536), 8)
+    corr = freqbin.gauss_smooth(gsd, size=8, decimate_at=0, channel_correlation=rho)
+    # interior channels: variance 0.2232 (correlated) vs 0.0828 (independent) of a
+    # raw channel, i.e. nsamples smaller by a factor of 2.7
+    mid = slice(10, -10)
+    np.testing.assert_allclose(1 / corr.nsamples[0, 0, 0][mid], 0.2232, rtol=1e-3)
+    ratio = indep.nsamples[0, 0, 0][mid] / corr.nsamples[0, 0, 0][mid]
+    np.testing.assert_allclose(ratio, 2.70, rtol=0.01)
+    # the smoothed data themselves are unchanged
+    np.testing.assert_allclose(corr.data, indep.data)
+
+
+def test_gauss_smooth_bad_channel_correlation():
+    gsd = _gsd(np.ones(64), np.ones(64))
+    with pytest.raises(ValueError, match="channel_correlation"):
+        freqbin.gauss_smooth(gsd, size=8, channel_correlation=np.array([0.5, 0.2]))

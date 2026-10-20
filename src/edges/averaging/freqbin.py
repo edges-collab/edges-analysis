@@ -5,7 +5,7 @@ import itertools
 import numpy as np
 from astropy import units as un
 from pygsdata import GSData, gsregister
-from scipy.ndimage import convolve1d
+from scipy.ndimage import convolve1d, correlate1d
 
 from . import averaging as avg
 
@@ -84,6 +84,36 @@ def freq_bin(
     )
 
 
+def _correlated_terms(
+    f_nsamples: np.ndarray,
+    true_nsamples: np.ndarray,
+    window: np.ndarray,
+    channel_correlation: np.ndarray,
+) -> np.ndarray:
+    """Off-diagonal terms of sum_ij w_i w_j rho_|i-j| / sqrt(n_i n_j) in each window.
+
+    With ``w = k * f`` (``k`` the kernel centred on the output channel), this returns
+    ``sum_{l>=1} 2 rho_l sum_j k_j k_{j+l} s_x s_{x+l}`` for every output channel, where
+    ``s = f / sqrt(n)`` and ``x`` runs over the window.
+    """
+    rho = np.asarray(channel_correlation, dtype=float)
+    if rho.ndim != 1 or rho.size == 0 or not np.isclose(rho[0], 1):
+        raise ValueError("channel_correlation must be 1D with channel_correlation[0]=1")
+    with np.errstate(divide="ignore", invalid="ignore"):
+        s = np.where(true_nsamples > 0, f_nsamples / np.sqrt(true_nsamples), 0)
+    nwin = window.size
+    out = np.zeros(s.shape)
+    for lag in range(1, min(rho.size, nwin)):
+        if rho[lag] == 0:
+            continue
+        pairs = np.zeros(s.shape)
+        pairs[..., :-lag] = s[..., :-lag] * s[..., lag:]
+        kernel = np.zeros(nwin)
+        kernel[: nwin - lag] = window[: nwin - lag] * window[lag:]
+        out += 2 * rho[lag] * correlate1d(pairs, kernel, mode="constant", cval=0)
+    return out
+
+
 @gsregister("reduce")
 def gauss_smooth(
     data: GSData,
@@ -95,6 +125,7 @@ def gauss_smooth(
     use_residuals: bool | None = None,
     nsmooth: int = 4,
     use_nsamples: bool = False,
+    channel_correlation: np.ndarray | None = None,
 ) -> GSData:
     """Smooth data with a Gaussian function, and optionally decimate.
 
@@ -140,6 +171,15 @@ def gauss_smooth(
         convolution. If ``False``, each unflagged channel is given unit weight (times
         the kernel). Either way, the output nsamples account for the input nsamples
         (see Notes).
+    channel_correlation
+        The correlation between the noise of input channels ``0, 1, 2, ...`` apart
+        (so ``channel_correlation[0] == 1``), used for the output nsamples. By default
+        the input channels are taken to be independent. Neighbouring channels of a
+        windowed FFT are correlated: for the four-term Blackman-Harris window of the
+        EDGES-2 spectrometer the correlation of the channel powers is 0.666, 0.192 and
+        0.023 at lags 1-3 (see :func:`edges.cal.noise_model.channel_power_correlation`),
+        and ignoring it over-estimates the output nsamples of the B18 smoothing
+        (``size=8``, ``nsmooth=4``) by a factor of 2.7.
 
     Returns
     -------
@@ -167,6 +207,11 @@ def gauss_smooth(
     variance (by a factor of ~1.4 in the interior of the band, for the kernel
     used here, whose peak is unity). Adjacent output
     channels are correlated if the kernel is wider than the decimation factor.
+
+    If the input channels are correlated, with correlation ``rho_|i-j|`` between
+    channels ``i`` and ``j`` (``channel_correlation``), the variance of the output is
+    ``sigma^2 * sum_ij(w_i w_j rho_|i-j| / sqrt(n_i n_j)) / sum(w_i)^2``, and the
+    output nsamples is the corresponding effective number of samples.
     """
     if use_residuals is None:
         use_residuals = data.residuals is not None
@@ -210,9 +255,12 @@ def gauss_smooth(
     # samples in each channel). The effective number of samples is the inverse.
     with np.errstate(divide="ignore", invalid="ignore"):
         w2_over_n = np.where(true_nsamples > 0, f_nsamples**2 / true_nsamples, 0)
-    sum_w2_over_n = convolve1d(w2_over_n, window**2, mode="constant", cval=0)[
-        ..., decimate_at::decimate
-    ]
+    sum_w2_over_n = convolve1d(w2_over_n, window**2, mode="constant", cval=0)
+    if channel_correlation is not None:
+        sum_w2_over_n = sum_w2_over_n + _correlated_terms(
+            f_nsamples, true_nsamples, window, channel_correlation
+        )
+    sum_w2_over_n = sum_w2_over_n[..., decimate_at::decimate]
 
     if maintain_flags > 0:
         if maintain_flags == 1:
