@@ -1,3 +1,4 @@
+import inspect
 import re
 import shutil
 from itertools import pairwise
@@ -7,6 +8,7 @@ import numpy as np
 import pytest
 
 from edges.io import CalObsDefEDGES3, calobsdef3, templogs
+from edges.io.calobsdef import CalkitFileSpec
 
 
 @pytest.fixture(scope="module")
@@ -462,3 +464,45 @@ class TestS11SweepMatching:
             short = calobsdef3.LOADMAP.inverse[name]
             assert load.s11.external == s11dir / f"2023_070_11_{short}.s1p"
             assert load.s11.calkit.open == s11dir / "2023_070_11_O.s1p"
+
+
+class TestCalkitFromEdges3Layout:
+    @pytest.mark.parametrize(("load", "prefix"), [("amb", ""), ("lna", "lna_")])
+    def test_mock_root(self, mockroot: Path, load: str, prefix: str):
+        calkit = CalkitFileSpec.from_edges3_layout(
+            root_dir=mockroot, load=load, year=2023, day=70
+        )
+        assert type(calkit) is CalkitFileSpec
+        assert calkit.open == mockroot / f"2023_070_11_{prefix}O.s1p"
+        assert calkit.short == mockroot / f"2023_070_11_{prefix}S.s1p"
+        assert calkit.match == mockroot / f"2023_070_11_{prefix}L.s1p"
+
+    def test_same_as_internal_helper(self, mockroot: Path):
+        files = calobsdef3.get_s1p_files("amb", 2023, 70, mockroot)
+        assert calobsdef3._calkit_from_s1p_files(
+            files
+        ) == CalkitFileSpec.from_edges3_layout(mockroot, "amb", 2023, 70)
+
+    def test_free_function_alias(self, mockroot: Path):
+        assert calobsdef3.from_edges3_layout(
+            CalkitFileSpec, mockroot, "amb", 2023, 70
+        ) == CalkitFileSpec.from_edges3_layout(mockroot, "amb", 2023, 70)
+
+    def test_matches_standard_layout(self, mockroot: Path):
+        caldef = CalObsDefEDGES3.from_standard_layout(
+            rootdir=mockroot, year=2023, day=70
+        )
+        assert caldef.receiver_s11.calkit == CalkitFileSpec.from_edges3_layout(
+            mockroot, "lna", 2023, 70
+        )
+
+    def test_not_found(self, tmp_path: Path):
+        with pytest.raises(FileNotFoundError, match="all at the same hour"):
+            CalkitFileSpec.from_edges3_layout(
+                tmp_path, "amb", 2023, 70, allow_closest_s11_within=0
+            )
+
+    def test_defined_in_class_body(self):
+        attr = inspect.getattr_static(CalkitFileSpec, "from_edges3_layout")
+        assert isinstance(attr, classmethod)
+        assert attr.__func__.__qualname__ == "CalkitFileSpec.from_edges3_layout"

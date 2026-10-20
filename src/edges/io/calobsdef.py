@@ -9,7 +9,7 @@ import tomllib as toml
 import warnings
 from collections.abc import Sequence
 from pathlib import Path
-from typing import ClassVar, Self
+from typing import TYPE_CHECKING, ClassVar, Self
 
 import attrs
 import yaml
@@ -18,6 +18,12 @@ from bidict import bidict
 
 from .. import DATA_PATH
 from .. import types as tp
+
+if TYPE_CHECKING:
+    from .calobsdef3 import S11LoadName
+
+#: Default directory (relative to the root) holding the EDGES-3 ``.s1p`` files.
+DEFAULT_S11_DIR = "."
 
 with (DATA_PATH / "calibration_loads.toml").open("rb") as fl:
     data = toml.load(fl)
@@ -156,6 +162,69 @@ class CalkitFileSpec:
             short=direc / f"{prefix}Short{rep_num}.s1p",
             match=direc / f"{prefix}Match{rep_num}.s1p",
         )
+
+    @classmethod
+    def from_edges3_layout(
+        cls,
+        root_dir: tp.PathLike,
+        load: "S11LoadName",
+        year: int,
+        day: int,
+        hour: int | str = "first",
+        allow_closest_s11_within: int = 5,
+        s11_dir: tp.PathLike = DEFAULT_S11_DIR,
+    ) -> Self:
+        """Create a CalkitFileSpec from a standard EDGES-3 directory layout.
+
+        The open, short and match files are all taken from the same sweep (i.e. they
+        share a single ``YYYY_DDD_HH`` timestamp), as found by
+        :func:`edges.io.calobsdef3.get_s1p_files`.
+
+        Parameters
+        ----------
+        root_dir
+            The root directory to search in.
+        load
+            The name of the load for which the calkit observations were taken
+            (e.g. ``"amb"`` or ``"lna"``).
+        year
+            The year of observation.
+        day
+            The day of year of observation.
+        hour
+            The hour of observation, or "first"/"last" to take the first/last
+            complete sweep of the day.
+        allow_closest_s11_within
+            The number of surrounding days (either side) to search for S11. Days
+            are tried in the order day+1, day-1, day+2, ..., so the later day wins a
+            tie.
+        s11_dir
+            Directory holding the ``.s1p`` files, relative to ``root_dir`` (or
+            absolute). It can contain a ``{year}`` placeholder.
+
+        Returns
+        -------
+        CalkitFileSpec
+            The file specification of the calkit standards.
+
+        Raises
+        ------
+        FileNotFoundError
+            If no complete sweep is found.
+        """
+        # Imported here because calobsdef3 imports this module.
+        from .calobsdef3 import get_s1p_files
+
+        files = get_s1p_files(
+            load=load,
+            year=year,
+            day=day,
+            root_dir=root_dir,
+            hour=hour,
+            allow_closest_s11_within=allow_closest_s11_within,
+            s11_dir=s11_dir,
+        )
+        return cls(open=files["open"], short=files["short"], match=files["match"])
 
 
 @attrs.define()

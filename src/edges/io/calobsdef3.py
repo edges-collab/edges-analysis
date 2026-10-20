@@ -12,6 +12,7 @@ from bidict import bidict
 
 from .. import types as tp
 from .calobsdef import (
+    DEFAULT_S11_DIR,
     CalkitFileSpec,
     LoadS11,
     ReceiverS11,
@@ -31,8 +32,6 @@ LOADMAP = bidict({
     "lna": "lna",
 })
 
-#: Default directory (relative to the root) holding the ``.s1p`` files.
-DEFAULT_S11_DIR = "."
 #: Default directory template (relative to the root) holding the spectrum files.
 #: It is formatted with ``load`` and ``year``.
 DEFAULT_SPECTRUM_DIR = "mro/{load}/{year}"
@@ -229,7 +228,7 @@ def get_s1p_files(
 
 
 def from_edges3_layout(
-    cls,
+    cls: type[CalkitFileSpec],
     root_dir: Path | str,
     load: S11LoadName,
     year: int,
@@ -237,12 +236,17 @@ def from_edges3_layout(
     hour: int | str = "first",
     allow_closest_s11_within: int = 5,
     s11_dir: tp.PathLike = DEFAULT_S11_DIR,
-) -> Self:
-    """
-    Create a CalkitEdges3 object from a standard directory layout.
+) -> CalkitFileSpec:
+    """Create a CalkitFileSpec (or subclass) from a standard EDGES-3 layout.
+
+    This is a functional alias of :meth:`CalkitFileSpec.from_edges3_layout`, kept for
+    backwards compatibility.
 
     Parameters
     ----------
+    cls
+        The class to instantiate (:class:`~edges.io.calobsdef.CalkitFileSpec` or a
+        subclass of it).
     root_dir
         The root directory to search in
     load
@@ -260,27 +264,27 @@ def from_edges3_layout(
         Directory holding the ``.s1p`` files, relative to ``root_dir`` (or absolute).
         It can contain a ``{year}`` placeholder.
     """
-    files = get_s1p_files(
+    return cls.from_edges3_layout(
+        root_dir=root_dir,
         load=load,
         year=year,
         day=day,
-        root_dir=root_dir,
         hour=hour,
         allow_closest_s11_within=allow_closest_s11_within,
         s11_dir=s11_dir,
     )
-    del files["input"]
-    return cls(**files)
 
 
 def _calkit_from_s1p_files(files: dict[str, Path]) -> CalkitFileSpec:
-    """Build a calkit spec from the output of :func:`get_s1p_files`."""
+    """Build a calkit spec from the output of :func:`get_s1p_files`.
+
+    This builds the same object as :meth:`CalkitFileSpec.from_edges3_layout` would
+    for the same arguments, but from an already-found sweep, so that callers that
+    also need the load's ``"input"`` file search the directory only once.
+    """
     return CalkitFileSpec(
         open=files["open"], short=files["short"], match=files["match"]
     )
-
-
-CalkitFileSpec.from_edges3_layout = classmethod(from_edges3_layout)
 
 
 def get_spectrum_files(
