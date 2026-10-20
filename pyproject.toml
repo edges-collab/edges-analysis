@@ -208,14 +208,8 @@ ignore = [
 "src/edges/cal/calobs.py" = [
     "N802",
 ]
-"src/edges/cal/reflection_coefficient.py" = [
-    "A002",
-]
 "src/*/__init__.py" = [
     "F401", "E402",
-]
-"src/edges_/cal/alanmode.py" = [
-    "N803",
 ]
 "**/*.ipynb" = [
     "T201", "DTZ", "D", "PTH119", "ERA"
