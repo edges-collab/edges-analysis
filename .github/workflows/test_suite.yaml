@@ -18,6 +18,9 @@ jobs:
     env:
       ENV_NAME: tests
       PYTHON: ${{ matrix.python-version }}
+      # Make uv use the matrix Python rather than the newest one on the runner (the
+      # macOS images now ship CPython 3.15, for which h5py has no wheel).
+      UV_PYTHON: ${{ matrix.python-version }}
       OS: ${{ matrix.os }}
     name: Testing
     runs-on: ${{ matrix.os }}
