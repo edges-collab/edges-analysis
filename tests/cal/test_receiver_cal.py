@@ -118,3 +118,29 @@ def test_term_sweep_metric_counts_all_parameters(monkeypatch):
     assert receiver_cal._sweep_metric(
         calobs.get_rms((5, 4)), nfreq, 5, 4
     ) == pytest.approx(metric(5, 4), rel=1e-12)
+
+
+def test_weighted_calibration_from_spectra(calobs):
+    """Weighting by the variances stored with the load spectra."""
+    weighted = receiver_cal.get_noise_wave_calibration_iterative(
+        calobs, source_q_variance="spectra"
+    )
+    assert isinstance(weighted, Calibrator)
+    assert np.all(np.isfinite(weighted.Tsca))
+    # only relative weights matter: scaling all variances leaves the solution unchanged
+    scaled = receiver_cal.get_noise_wave_calibration_iterative(
+        calobs,
+        source_q_variance={
+            k: 3.0 * load.spectrum.variance_of_averaged_q
+            for k, load in calobs.loads.items()
+        },
+    )
+    np.testing.assert_allclose(scaled.Tsca, weighted.Tsca, rtol=1e-8)
+    np.testing.assert_allclose(scaled.Tunc, weighted.Tunc, rtol=1e-6, atol=1e-8)
+
+
+def test_weighted_calibration_bad_option(calobs):
+    with pytest.raises(ValueError, match="source_q_variance must be"):
+        receiver_cal.get_noise_wave_calibration_iterative(
+            calobs, source_q_variance="bad"
+        )

@@ -2,6 +2,7 @@
 
 import logging
 from collections import deque
+from typing import Literal
 
 import numpy as np
 from astropy import units as un
@@ -27,6 +28,7 @@ def get_noise_wave_calibration_iterative(
     scale_offset_poly_spacing: float = 1.0,
     t_load_guess: tp.TemperatureType = 400 * un.K,
     t_load_ns_guess: tp.TemperatureType = 300 * un.K,
+    source_q_variance: dict[str, np.ndarray] | Literal["spectra"] | None = None,
 ) -> Calibrator:
     """Determine noise-wave calibration coefficients iteratively.
 
@@ -61,6 +63,11 @@ def get_noise_wave_calibration_iterative(
         stable.
     t_load_ns_guess
         The same as t_load_guess but for the load+noise-source temperature.
+    source_q_variance
+        Optional variances of the time-averaged Q of each load, used to weight the
+        fits (see :func:`edges.cal.noise_waves.get_calibration_quantities_iterative`).
+        If 'spectra', use ``variance_of_averaged_q`` of each load's spectrum. If None
+        (default), the fits are unweighted.
 
     Returns
     -------
@@ -68,6 +75,13 @@ def get_noise_wave_calibration_iterative(
         A calibrator object with all the coefficients.
     """
     source_q = {k: source.averaged_q for k, source in calobs.loads.items()}
+    if isinstance(source_q_variance, str):
+        if source_q_variance != "spectra":
+            raise ValueError("source_q_variance must be a dict, 'spectra' or None")
+        source_q_variance = {
+            k: source.spectrum.variance_of_averaged_q
+            for k, source in calobs.loads.items()
+        }
 
     if apply_loss_to_true_temp:
         source_true_temps = calobs.source_thermistor_temps
@@ -97,6 +111,7 @@ def get_noise_wave_calibration_iterative(
             niter=ncal_iter,
             poly_spacing=scale_offset_poly_spacing,
             fit_method=fit_method,
+            source_q_variance=source_q_variance,
         ),
         maxlen=1,
     ).pop()

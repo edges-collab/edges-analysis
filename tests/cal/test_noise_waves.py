@@ -129,6 +129,50 @@ def test_fit_perfect_receiver(
     assert np.allclose(nwv.get_tcos(), calibrator.Tcos)
     assert np.allclose(nwv.get_tsin(), calibrator.Tsin)
 
+    # Noise-free data are fit exactly also with (non-uniform) variance weights.
+    variance = {k: 1e-8 * (FREQ / 50) ** -4 * (1 + i) for i, k in enumerate(Q)}
+    result = deque(
+        nw.get_calibration_quantities_iterative(
+            freqs=FREQ * un.MHz,
+            source_q=Q,
+            receiver_s11=gamma_rec(FREQ),
+            source_s11s=gamma_ant,
+            source_true_temps=temp,
+            cterms=5,
+            wterms=5,
+            source_q_variance=variance,
+        ),
+        maxlen=1,
+    )
+    sca, off, nwv = result.pop()
+
+    assert np.allclose(sca(FREQ), calibrator.Tsca)
+
+    # ... also when the scale and offset are kept per channel within the loop (B18),
+    # where the noise of the ambient and hot loads enters the weights of the cable fits.
+    result = deque(
+        nw.get_calibration_quantities_iterative(
+            freqs=FREQ * un.MHz,
+            source_q=Q,
+            receiver_s11=gamma_rec(FREQ),
+            source_s11s=gamma_ant,
+            source_true_temps=temp,
+            cterms=5,
+            wterms=5,
+            source_q_variance=variance,
+            smooth_scale_offset_within_loop=False,
+            niter=8,
+        ),
+        maxlen=1,
+    )
+    sca, off, nwv = result.pop()
+
+    assert np.allclose(sca(FREQ), calibrator.Tsca)
+    assert np.allclose(off(FREQ), calibrator.Toff)
+    assert np.allclose(nwv.get_tunc(), calibrator.Tunc)
+    assert np.allclose(nwv.get_tcos(), calibrator.Tcos)
+    assert np.allclose(nwv.get_tsin(), calibrator.Tsin)
+
 
 def test_noise_waves(calobs):
     print("RECEIVER S11:", calobs.receiver.s11)
