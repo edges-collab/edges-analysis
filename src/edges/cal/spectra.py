@@ -5,7 +5,7 @@ import inspect
 import logging
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Self
+from typing import Literal, Self
 
 import attrs
 import numpy as np
@@ -28,6 +28,7 @@ from ..io import (
 from ..io.serialization import hickleable
 from ..io.spectra import read_spectra
 from ..tools import stable_hash
+from . import noise_model
 from .dicke import dicke_calibration
 from .thermistor import IgnoreTimesType, ThermistorReadings, ignore_ntimes
 
@@ -90,6 +91,9 @@ def get_ave_and_var_spec(
     | tuple[tp.TemperatureType, tp.TemperatureType]
     | None = None,
     time_coordinate_swpos: int | tuple[int, int] = 0,
+    variance_model: Literal["empirical", "analytic"] = "empirical",
+    n_eff: float | None = None,
+    channel_correlation: np.ndarray | None = None,
 ) -> tuple[GSData, GSData]:
     """Get the mean and variance of the spectra.
 
@@ -99,6 +103,20 @@ def get_ave_and_var_spec(
         How to average frequency bins together (only used if ``freq_bin_size > 1``).
         The default, 'gauss', does Gaussian filtering (this is the same as Alan's C
         pipeline). The other option is 'bin', to merely bin them directly.
+    variance_model
+        How to obtain the variance of a single integration of Q. 'empirical' (the
+        default) uses the sample variance over the integrations. 'analytic' uses the
+        analytic noise model of :mod:`edges.cal.noise_model`, evaluated with the
+        time-averaged Q and R = P_L / (P_LNS - P_L) of each raw channel, and propagated
+        through the frequency averaging including the correlations between channels.
+    n_eff
+        The effective number of independent power estimates per switch position in
+        a single integration (required for ``variance_model='analytic'``; for the
+        EDGES-2 ``pxspec`` spectrometer, the number of accumulated FFT blocks).
+    channel_correlation
+        The correlation between the fluctuations of raw channels 0, 1, 2, ... apart,
+        used for ``variance_model='analytic'``. By default, that of the four-term
+        Blackman-Harris window.
     """
     data = select_freqs(data, freq_range=(f_low, f_high))
 
@@ -124,6 +142,14 @@ def get_ave_and_var_spec(
         data = select_times(data, indx=temp_mask)
 
     q = dicke_calibration(data)
+
+    if variance_model == "analytic":
+        if n_eff is None:
+            raise ValueError("n_eff is required for variance_model='analytic'")
+        var_raw = _analytic_variance_raw(data, q, n_eff)
+    elif variance_model != "empirical":
+        raise ValueError("variance_model must be 'empirical' or 'analytic'")
+
     if freq_bin_size > 1:
         if frequency_smoothing == "bin":
             q = freqbin.freq_bin(q, bins=freq_bin_size)
@@ -137,9 +163,35 @@ def get_ave_and_var_spec(
             raise ValueError("frequency_smoothing must be one of ('bin', 'gauss').")
 
     mean = lstbin.average_over_times(q)
-    variance = np.nanvar(q.data, axis=2)[:, :, None]
+    if variance_model == "analytic":
+        if channel_correlation is None:
+            channel_correlation = noise_model.channel_power_correlation(
+                noise_model.blackman_harris(65536)
+            )
+        variance = np.empty_like(mean.data)
+        for ipol, v in enumerate(var_raw):
+            if freq_bin_size > 1:
+                mat = noise_model.smoothing_matrix(
+                    v.size,
+                    freq_bin_size,
+                    kind="gauss" if frequency_smoothing == "gauss" else "bin",
+                    decimate_at=0,
+                    mask=np.isfinite(v),
+                )
+                variance[0, ipol, 0] = noise_model.propagate_channel_covariance(
+                    v, mat, channel_correlation
+                )
+            else:
+                variance[0, ipol, 0] = v
+    else:
+        variance = np.nanvar(q.data, axis=2)[:, :, None]
 
-    variance = mean.update(data=variance)
+    # The nsamples of the variance hold the number of (unflagged) integrations in each
+    # channel. The nsamples of the mean cannot be used for this: after Gaussian
+    # smoothing they are the kernel-weighted sum of the input nsamples (~8.5 times the
+    # number of integrations for the B18 kernel).
+    nint = np.sum(np.isfinite(q.data) & (q.flagged_nsamples > 0), axis=2)[:, :, None]
+    variance = mean.update(data=variance, nsamples=nint.astype(float))
     return mean, variance
 
 
@@ -159,6 +211,20 @@ def _file_signature(*paths) -> tuple[tuple[str, int, int], ...]:
                 st = fl.stat()
                 out.append((str(fl), st.st_mtime_ns, st.st_size))
     return tuple(out)
+
+
+def _analytic_variance_raw(data: GSData, q: GSData, n_eff: float) -> np.ndarray:
+    """Analytic variance of Q for a single integration, per polarization and channel.
+
+    Evaluated with the time-averaged Q and R = P_L / (P_LNS - P_L) of each channel.
+    """
+    iload = data.loads.index("internal_load")
+    ilns = data.loads.index("internal_load_plus_noise_source")
+    with np.errstate(invalid="ignore", divide="ignore"):
+        p_l = np.nanmean(data.data[iload], axis=-2)
+        r = p_l / (np.nanmean(data.data[ilns], axis=-2) - p_l)
+        qm = np.nanmean(q.data[0], axis=-2)
+    return noise_model.var_q(qm, r, n_eff)
 
 
 @hickleable
@@ -225,6 +291,9 @@ class LoadSpectrum:
         | None = None,
         frequency_smoothing: str = "bin",
         time_coordinate_swpos: int = 0,
+        variance_model: Literal["empirical", "analytic"] = "empirical",
+        n_eff: float | None = None,
+        channel_correlation: np.ndarray | None = None,
         invalidate_cache: bool = False,
         cache_dir: Path | None = None,
         temperature: tp.TemperatureType | None = None,
@@ -281,6 +350,13 @@ class LoadSpectrum:
             Which switch position to use when deciding whether to ignore a time
             according to the `ignore_times` parameter. Setting to 2 will ignore
             a full integration only if *all three* switch positions are to be ignored.
+        variance_model
+            'empirical' or 'analytic'; see :func:`get_ave_and_var_spec`.
+        n_eff
+            Required for ``variance_model='analytic'``; see
+            :func:`get_ave_and_var_spec`.
+        channel_correlation
+            See :func:`get_ave_and_var_spec`.
         invalidate_cache
             If True, do not use any cached spectra even if they exist.
         cache_dir
@@ -361,6 +437,9 @@ class LoadSpectrum:
             thermistor=thermistor,
             frequency_smoothing=frequency_smoothing,
             time_coordinate_swpos=time_coordinate_swpos,
+            variance_model=variance_model,
+            n_eff=n_eff,
+            channel_correlation=channel_correlation,
         )
 
         if temperature is None:
@@ -429,3 +508,12 @@ class LoadSpectrum:
     def variance_q(self) -> np.ndarray:
         """Variance of Q across time (see averaged_q)."""
         return self.variance.data[0, 0, 0]
+
+    @property
+    def variance_of_averaged_q(self) -> np.ndarray:
+        """Variance of averaged_q: variance_q over the number of integrations.
+
+        The number of integrations of each channel is held in the nsamples of the
+        variance. This assumes that the integrations are independent.
+        """
+        return self.variance.data[0, 0, 0] / self.variance.nsamples[0, 0, 0]
