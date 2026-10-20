@@ -16,8 +16,8 @@ import yaml
 from astropy import units as un
 from bidict import bidict
 
-from .. import DATA_PATH
 from .. import types as tp
+from ..data import DATA_PATH
 
 with (DATA_PATH / "calibration_loads.toml").open("rb") as fl:
     data = toml.load(fl)

@@ -16,8 +16,8 @@ from pygsdata import GSData
 from pygsdata.attrs import npfield
 from pygsdata.select import select_freqs, select_times
 
-from .. import __version__
 from .. import types as tp
+from .._version import __version__
 from ..averaging import freqbin, lstbin
 from ..io import (
     LoadDefEDGES2,
@@ -25,8 +25,8 @@ from ..io import (
     get_mean_temperature,
     read_temperature_log,
 )
-from ..io.serialization import hickleable
 from ..io.spectra import read_spectra
+from ..serialization import hickleable
 from ..tools import stable_hash
 from . import noise_model
 from .dicke import dicke_calibration

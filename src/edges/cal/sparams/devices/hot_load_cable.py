@@ -6,8 +6,8 @@ This can be used to compute the loss through the cable.
 import numpy as np
 from astropy import units as un
 
-from edges import get_data_path
 from edges import types as tp
+from edges.data import get_data_path
 from edges.frequencies import get_mask
 from edges.io.calobsdef import HotLoadSemiRigidCable
 from edges.modeling import ComplexRealImagModel, Fourier, ZerotooneTransform
