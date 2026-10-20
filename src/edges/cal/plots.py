@@ -1,6 +1,9 @@
 """Various plotting functions."""
 
-import matplotlib.pyplot as plt
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import numpy as np
 
 from edges.averaging.averaging import bin_array_unweighted
@@ -10,6 +13,9 @@ from .calobs import CalibrationObservation
 from .input_sources import InputSource
 from .sparams import ReflectionCoefficient, S11ModelParams
 from .spectra import LoadSpectrum
+
+if TYPE_CHECKING:
+    import matplotlib.pyplot as plt
 
 
 def plot_raw_spectrum(
@@ -46,6 +52,8 @@ def plot_raw_spectrum(
     fig : :class:`plt.Figure`
         The figure on which the plot was made.
     """
+    import matplotlib.pyplot as plt
+
     if isinstance(spectrum, LoadSpectrum):
         freq = spectrum.freqs
         spectrum = spectrum.q.data.squeeze()
@@ -84,6 +92,8 @@ def plot_raw_spectra(calobs: CalibrationObservation, fig=None, ax=None) -> plt.F
     fig : :class:`plt.Figure`
         The figure on which the plot was made.
     """
+    import matplotlib.pyplot as plt
+
     if fig is None and ax is None:
         fig, ax = plt.subplots(
             len(calobs.loads), 1, sharex=True, gridspec_kw={"hspace": 0.05}
@@ -120,6 +130,8 @@ def plot_s11_residual(
     fig :
         Matplotlib Figure handle.
     """
+    import matplotlib.pyplot as plt
+
     if ax is None or len(ax) != 4:
         fig, ax = plt.subplots(
             4, 1, sharex=True, gridspec_kw={"hspace": 0.05}, facecolor="w"
@@ -184,6 +196,8 @@ def plot_s11_models(
         The array of matplotlib axes, of shape ``(4, len(calobs.loads) + 1)``. Each
         column holds one source, and the last column holds the receiver.
     """
+    import matplotlib.pyplot as plt
+
     _fig, ax = plt.subplots(
         4,
         len(calobs.loads) + 1,
@@ -248,6 +262,8 @@ def plot_calibrated_temp(
     fig :
         The matplotlib figure that was created.
     """
+    import matplotlib.pyplot as plt
+
     load = calobs._load_str_to_load(load)
 
     if ax is None:
@@ -321,6 +337,8 @@ def plot_calibrated_temps(
     fig :
         Matplotlib figure that was created.
     """
+    import matplotlib.pyplot as plt
+
     if fig is None or ax is None or len(ax) != len(calobs.loads):
         fig, ax = plt.subplots(
             len(calobs.loads),
@@ -356,6 +374,8 @@ def plot_cal_coefficients(calibrator: Calibrator, fig=None, ax=None):
     ax : Axis
         Optionally pass a matplotlib axis to pass to. Must have 5 axes.
     """
+    import matplotlib.pyplot as plt
+
     if fig is None or ax is None:
         fig, ax = plt.subplots(
             5, 1, facecolor="w", gridspec_kw={"hspace": 0.05}, figsize=(10, 9)
