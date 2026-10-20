@@ -190,3 +190,68 @@ def test_n_eff_ratio_monte_carlo():
     acc = p.sum(axis=1)
     neff = acc.mean(axis=0) ** 2 / acc.var(axis=0)
     assert np.mean(neff) / nacc == pytest.approx(9 / 19, rel=0.03)
+
+
+def test_input_validation():
+    with pytest.raises(ValueError, match="multiple of nfft"):
+        nm.frame_correlation(np.ones(100), 64)
+    with pytest.raises(ValueError, match="kind must be"):
+        nm.smoothing_matrix(64, 8, kind="boxcar")
+
+
+def test_smoothing_matrix_defaults_and_flagged_rows():
+    # decimate_at defaults to size // 2, as in gauss_smooth
+    mat = nm.smoothing_matrix(64, 8)
+    assert mat.shape == (len(range(4, 64, 8)), 64)
+    # an output whose whole kernel support is flagged has an empty row
+    mask = np.ones(200, dtype=bool)
+    mask[:60] = False
+    mat = nm.smoothing_matrix(200, 8, kind="gauss", decimate_at=0, nsmooth=1, mask=mask)
+    assert mat[[0], :].nnz == 0
+    assert mat[[-1], :].nnz > 0
+
+
+def _three_position_data(ntime=200, nfreq=64, n_eff=20000, seed=10):
+    rng = np.random.default_rng(seed)
+    t = (500.0, 300.0, 1300.0)
+    p = np.stack([rng.gamma(n_eff, ti / n_eff, size=(1, ntime, nfreq)) for ti in t])
+    return _gsdata(
+        p,
+        loads=("ant", "internal_load", "internal_load_plus_noise_source"),
+        data_unit="power",
+    )
+
+
+def test_get_ave_and_var_spec_validation():
+    data = _three_position_data()
+    with pytest.raises(ValueError, match="n_eff is required"):
+        get_ave_and_var_spec(data, variance_model="analytic")
+    with pytest.raises(ValueError, match="variance_model must be"):
+        get_ave_and_var_spec(data, variance_model="other")
+
+
+def test_analytic_variance_gauss_default_correlation():
+    """Gaussian smoothing with the default (Blackman-Harris) channel correlation."""
+    data = _three_position_data()
+    _, var = get_ave_and_var_spec(
+        data,
+        variance_model="analytic",
+        n_eff=20000,
+        freq_bin_size=8,
+        frequency_smoothing="gauss",
+    )
+    raw = nm.var_q(500.0 / 1000 - 300.0 / 1000, 0.3, 20000)  # Q = 0.2, R = 0.3
+    # interior channels: 0.2232 of the raw-channel variance
+    np.testing.assert_allclose(var.data[0, 0, 0][2:-2] / raw, 0.2232, rtol=0.01)
+    assert np.all(var.nsamples == 200)
+
+
+def test_variance_of_averaged_q():
+    from edges.cal.spectra import LoadSpectrum
+
+    data = _three_position_data()
+    mean, var = get_ave_and_var_spec(
+        data, variance_model="analytic", n_eff=20000, channel_correlation=np.ones(1)
+    )
+    spec = LoadSpectrum(q=mean, variance=var, temp_ave=300 * un.K)
+    np.testing.assert_allclose(spec.variance_of_averaged_q, spec.variance_q / 200)
