@@ -59,12 +59,12 @@ and applying some pre-computed calibration solutions::
     from edges.averaging import lst_bin
     from edges.cal import ReflectionCoefficient
     from edges.analysis.calibrate import apply_noise_wave_calibration
-    from edges.modelling import LinLog
+    from edges.modeling import LinLog
 
     data = GSData.from_file("my_multi_integration_raw_file.acq")
 
     # Flag integrations with negative power
-    daa = negative_power_filter(data)
+    data = negative_power_filter(data)
 
     # Perform dicke-switch calibration
     data = dicke_calibration(data)

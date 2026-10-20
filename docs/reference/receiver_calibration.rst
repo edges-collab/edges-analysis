@@ -26,11 +26,9 @@ Low-Level Functions
     :template: module.rst
 
     edges.cal.dicke
-    edges.cal.ee
     edges.cal.loss
     edges.cal.noise_model
     edges.cal.noise_waves
-    edges.cal.reflection_coefficient
     edges.cal.thermistor
     edges.cal.sparams.core.datatypes
     edges.cal.sparams.core.s11model
