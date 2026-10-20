@@ -19,6 +19,10 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
+    env:
+      # Pin uv's Python: with requires-python ">=3.12", the newest Python on the runner
+      # (now CPython 3.15) is picked, for which some dependencies cannot be built.
+      UV_PYTHON: "3.13"
     steps:
       - uses: actions/checkout@master
         with:
