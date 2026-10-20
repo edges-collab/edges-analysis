@@ -1,6 +1,6 @@
 """Calibration of EDGES data."""
 
-from . import plots
+from . import noise_model, plots
 from .calibrator import Calibrator
 from .calobs import CalibrationObservation
 from .input_sources import InputSource
