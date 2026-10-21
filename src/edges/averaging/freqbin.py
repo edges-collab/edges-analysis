@@ -4,7 +4,7 @@ import itertools
 
 import numpy as np
 from astropy import units as un
-from pygsdata import GSData, gsregister
+from pygsdata import GSData, GSFlag, gsregister
 from scipy.ndimage import convolve1d, correlate1d
 
 from . import averaging as avg
@@ -185,13 +185,22 @@ def gauss_smooth(
     -------
     GSData
         The smoothed and potentially decimated GSData object. Output channels with no
-        unflagged data in their window (or flagged by ``flag_threshold`` or
-        ``maintain_flags``) have NaN data and zero nsamples.
+        unflagged data in their window, or flagged by ``flag_threshold`` or
+        ``maintain_flags``, are *empty*: they have zero nsamples and are flagged by a
+        ``"gauss_smooth"`` flag. Where the window holds some unflagged data, the data
+        of an empty channel is the smoothed value of that data (the flagged channel
+        itself does not contribute). Where it holds none, the residual is zero (so the
+        data equals the model) if ``use_residuals``, and the data is NaN otherwise.
+        The data are kept finite wherever a model is present because
+        :class:`pygsdata.GSData` derives the model as ``data - residuals``, so a NaN
+        in the data would also delete the model.
 
     Raises
     ------
     ValueError
-        If the residuals are to be smoothed and are not present in the data.
+        If the residuals are to be smoothed and are not present in the data, or if
+        the model is NaN at an output channel that has data (the model cannot then
+        be added back to the smoothed residuals).
 
     Notes
     -----
@@ -249,6 +258,9 @@ def gauss_smooth(
         ..., decimate_at::decimate
     ]
     nsamples = convolve1d(f_nsamples, window, mode="constant", cval=0)
+    # The total kernel weight of the unflagged data in each output window, before
+    # any channels are emptied by maintain_flags or flag_threshold.
+    window_w = nsamples[..., decimate_at::decimate].copy()
 
     # The output is a weighted mean with weights w = k * f_nsamples, so its variance
     # is sigma^2 * sum(w^2 / n) / sum(w)^2 (for per-sample variance sigma^2 and n
@@ -281,20 +293,40 @@ def gauss_smooth(
         frac = np.where(maxw > 0, nsamples / maxw, 0)
     nsamples[frac <= size * flag_threshold] = 0
     mask = (nsamples == 0) | (sum_w2_over_n <= 0)
-    sums[~mask] /= nsamples[~mask]
-    # Channels with no (or too little) unflagged data in the window are empty.
-    sums[mask] = np.nan
+
+    # Empty channels whose window holds some data take the smoothed value of that
+    # data, so that the data stay finite (and any model, which GSData derives as
+    # data - residuals, survives).
+    # Windows with no data at all have no estimate: the residual is zero (data equal
+    # to the model) if smoothing residuals, and NaN otherwise.
+    has_data = window_w > 0
+    sums[has_data] /= window_w[has_data]
+    sums[~has_data] = 0.0 if use_residuals else np.nan
 
     nsamples = np.zeros_like(nsamples)
     nsamples[~mask] = sums_of_w[~mask] ** 2 / sum_w2_over_n[~mask]
 
-    models = data.model[..., decimate_at::decimate] if use_residuals else 0
+    if use_residuals:
+        models = data.model[..., decimate_at::decimate]
+        if np.any(np.isnan(models) & ~mask):
+            raise ValueError(
+                "The model is NaN at output channels that have data, so it cannot be "
+                "added back to the smoothed residuals. GSData derives the model as "
+                "data - residuals: the input data are NaN where the model is needed "
+                "(e.g. from an earlier gauss_smooth of edges-analysis 8.5.0, which "
+                "returned NaN for empty channels)."
+            )
+    else:
+        models = 0
+
+    flags = {k: v for k, v in data.flags.items() if "freq" not in v.axes}
+    flags["gauss_smooth"] = GSFlag(flags=mask, axes=("load", "pol", "time", "freq"))
 
     return data.update(
         data=sums + models,
         nsamples=nsamples,
         residuals=sums if use_residuals else None,
-        flags={k: v for k, v in data.flags.items() if "freq" not in v.axes},
+        flags=flags,
         freqs=data.freqs[decimate_at::decimate],
         data_unit=data.data_unit,
     )

@@ -31,7 +31,12 @@ def test_freqbin_gaussian(gsd_ones):
     data2 = data.update(flags={"f0": GSFlag(flags, axes=("freq",))})
     new = freqbin.gauss_smooth(data2, size=2, maintain_flags=True, decimate=False)
 
-    assert np.all(new.complete_flags[:, :, :, 0] == 0)
+    # The input frequency flags do not carry over; the emptied output channel is
+    # flagged by gauss_smooth instead.
+    assert "f0" not in new.flags
+    assert np.all(new.complete_flags[:, :, :, 0])
+    assert not np.any(new.complete_flags[:, :, :, 1:])
+    assert np.all(new.nsamples[:, :, :, 0] == 0)
 
 
 def test_freq_bin_size_one_is_identity(gsd_ones: GSData):
@@ -155,22 +160,96 @@ def test_gauss_smooth_nsamples_effective_formula(gsd_ones: GSData, use_nsamples:
     np.testing.assert_allclose(out.nsamples[..., ich], expected, rtol=1e-10)
 
 
-def test_gauss_smooth_empty_channels_are_nan(gsd_ones: GSData):
+def test_gauss_smooth_empty_channels(gsd_ones: GSData):
     nsamples = gsd_ones.nsamples.copy()
     data = gsd_ones.data.copy()
     # A wide gap of flagged channels filled with "RFI": the windows entirely within
-    # the gap (the kernel spans +-2 channels) have no unflagged data and must not take
-    # on the RFI values.
+    # the gap (the kernel spans +-2 channels) have no unflagged data, and those that
+    # overlap its edges take the smoothed value of the unflagged data. Neither may
+    # take on the RFI values.
     nsamples[..., 5:20] = 0
     data[..., 5:20] = 1e6
     out = freqbin.gauss_smooth(
-        gsd_ones.update(data=data, nsamples=nsamples), size=1, decimate=False, nsmooth=2
+        gsd_ones.update(data=data, nsamples=nsamples),
+        size=1,
+        decimate=False,
+        nsmooth=2,
+        maintain_flags=1,
     )
     empty = out.nsamples == 0
-    assert np.all(empty[..., 9:16])
+    assert np.all(empty[..., 5:20])
     assert not np.any(empty[..., :5])
-    assert np.all(np.isnan(out.data[empty]))
-    assert np.all(out.data[~empty] < 2)
+    assert not np.any(empty[..., 20:])
+    np.testing.assert_array_equal(out.flags["gauss_smooth"].flags, empty)
+    np.testing.assert_array_equal(out.complete_flags, empty)
+    # Within two channels of the gap edges, the window holds unflagged data (all
+    # ones): the empty channels take its smoothed value.
+    edge = np.r_[5:7, 18:20]
+    np.testing.assert_allclose(out.data[..., edge], 1, rtol=1e-12)
+    # No unflagged data in the window, and no model: no estimate.
+    assert np.all(np.isnan(out.data[..., 7:18]))
+    assert np.all(out.data[~np.isnan(out.data)] < 2)
+
+
+def test_gauss_smooth_empty_channels_with_residuals_keep_model(gsd_ones: GSData):
+    rng = np.random.default_rng(5)
+    nsamples = gsd_ones.nsamples.copy()
+    nsamples[..., 5:20] = 0
+    model = 1000 * (gsd_ones.freqs.to_value("MHz") / 75.0) ** -2.5
+    resids = rng.normal(scale=0.1, size=gsd_ones.data.shape)
+    data = gsd_ones.update(data=model + resids, residuals=resids, nsamples=nsamples)
+    out = freqbin.gauss_smooth(
+        data, size=1, decimate=False, nsmooth=2, maintain_flags=1, use_residuals=True
+    )
+    empty = out.nsamples == 0
+    assert np.all(empty[..., 5:20])
+    assert np.all(np.isfinite(out.data))
+    np.testing.assert_allclose(out.model, np.broadcast_to(model, out.data.shape))
+    # Windows with no unflagged data: zero residual, so the data equal the model.
+    np.testing.assert_array_equal(out.residuals[..., 7:18], 0)
+
+
+def test_gauss_smooth_twice_keeps_good_channels():
+    """A smoothed spectrum with empty channels, refit and smoothed again (B18 style).
+
+    In 8.5.0 the empty channels of the first smoothing were NaN, which deleted the
+    model there (GSData derives it as data - residuals), and the second smoothing
+    added the NaN model back to output channels that had data.
+    """
+    from edges import modeling as mdl
+    from edges.analysis.datamodel import add_model
+    from edges.averaging import NsamplesStrategy
+
+    freqs = np.linspace(50, 100, 400)
+    rng = np.random.default_rng(7)
+    spec = 1000 * (freqs / 75.0) ** -2.5 + rng.normal(scale=0.1, size=freqs.size)
+    nsamples = np.ones(freqs.size)
+    for lo in (40, 101, 205, 290):  # RFI gaps wider than the first kernel
+        nsamples[lo : lo + 12] = 0
+        spec[lo : lo + 12] = 1e6
+    first = freqbin.gauss_smooth(
+        _gsd(spec, nsamples), size=2, decimate_at=0, maintain_flags=3
+    )
+    assert np.any(first.nsamples == 0)
+    fitted = add_model(
+        first,
+        model=mdl.PhysicalLin(n_terms=3, f_center=75.0, with_cmb=False),
+        nsamples_strategy=NsamplesStrategy.FLAGGED_NSAMPLES_UNIFORM,
+    )
+    second = freqbin.gauss_smooth(
+        fitted, size=8, nsmooth=2, decimate_at=0, maintain_flags=9, use_residuals=True
+    )
+    good = second.nsamples > 0
+    assert np.all(np.isfinite(second.data[good]))
+    assert np.all(np.isfinite(second.model))
+
+
+def test_gauss_smooth_nan_model_raises(gsd_ones: GSData):
+    data = gsd_ones.data.copy()
+    data[..., 10] = np.nan
+    gsd = gsd_ones.update(data=data, residuals=np.zeros_like(data))
+    with pytest.raises(ValueError, match="model is NaN"):
+        freqbin.gauss_smooth(gsd, size=1, decimate=False, use_residuals=True)
 
 
 def _gsd(data, nsamples):
