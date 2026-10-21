@@ -470,7 +470,7 @@ def platform_fingerprint() -> dict[str, str | list[str]]:
         architecture they use).
     """
     import scipy
-    import scipy.linalg  # noqa: F401 -- load scipy's BLAS, to list it below
+    import scipy.linalg  # ruff: ignore[unused-import] -- load scipy's BLAS, to list it below
     from threadpoolctl import threadpool_info
 
     try:
