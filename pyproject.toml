@@ -227,3 +227,7 @@ property-decorators = ["pytest.fixture"]
 
 [tool.ruff.lint.mccabe]
 max-complexity = 21
+
+[tool.uv.sources]
+# Until pygsdata 0.5 (which stores the model) is released: edges-collab/pygsdata#104.
+pygsdata = { git = "https://github.com/edges-collab/pygsdata", rev = "235ff8d6e9e9a8dccf0ead544cac37d257c5c29c" }

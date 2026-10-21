@@ -197,3 +197,31 @@ class TestAcrossMidnight:
         lsts = mock.lsts.hour
         assert np.ptp(lsts) < 12
         np.testing.assert_allclose(new.lsts.hour[0], np.mean(lsts, axis=0), rtol=1e-10)
+
+
+class TestModelWithNaNData:
+    """The model is averaged over all times, also where some data are missing."""
+
+    @staticmethod
+    def _modelled(gsd: GSData) -> tuple[GSData, np.ndarray]:
+        rng = np.random.default_rng(3)
+        model = gsd.data + rng.normal(size=gsd.data.shape)
+        data = gsd.data.copy()
+        nsamples = gsd.nsamples.copy()
+        data[:, :, 0, 4] = np.nan  # no data at one time in one channel
+        nsamples[:, :, 0, 4] = 0
+        return gsd.update(data=data, nsamples=nsamples, model=model), model
+
+    def test_model_kept(self, gsd_ones: GSData):
+        data, model = self._modelled(gsd_ones)
+        new = average_over_times(data, use_resids=True)
+        np.testing.assert_allclose(new.model[:, :, 0], np.mean(model, axis=2))
+        assert np.all(np.isfinite(new.data))
+
+    def test_nan_model_raises(self, gsd_ones: GSData):
+        data, _ = self._modelled(gsd_ones)
+        # Residuals given for NaN data lose the model there.
+        lost = data.update(residuals=data.residuals)
+        assert np.isnan(lost.model[0, 0, 0, 4])
+        with pytest.raises(ValueError, match="model is NaN"):
+            average_over_times(lost, use_resids=True)

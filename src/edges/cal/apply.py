@@ -27,13 +27,13 @@ def approximate_temperature(
 
     if reverse:
         udata = (data.data - tload) / tns
-        resid = data.residuals / tns if data.residuals is not None else None
+        model = (data.model - tload) / tns if data.model is not None else None
     else:
         udata = data.data * tns + tload
-        resid = data.residuals * tns if data.residuals is not None else None
+        model = data.model * tns + tload if data.model is not None else None
 
     return data.update(
         data=udata,
         data_unit="uncalibrated" if reverse else "uncalibrated_temp",
-        residuals=resid,
+        model=model,
     )

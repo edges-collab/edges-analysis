@@ -144,7 +144,15 @@ def average_over_times(
         if use_resids:
             sum_resids = np.nansum(data.residuals * w, axis=-2)
             mean_resids = sum_resids / ntot
-            mean_model = np.nanmean(data.model, axis=-2)
+            # The model is averaged (unweighted) over all times, so it must be known
+            # at all times in every channel that has data.
+            if np.any(np.isnan(data.model).any(axis=-2) & (ntot > 0)):
+                raise ValueError(
+                    "The model is NaN at some times in channels that have data (e.g. "
+                    "it was given as residuals to NaN data, or read from a GSH5 file "
+                    "older than 2.3), so the mean model cannot be formed there."
+                )
+            mean_model = np.mean(data.model, axis=-2)
             new_data = mean_model + mean_resids
         else:
             sum_data = np.nansum(data.data * w, axis=-2)
@@ -194,7 +202,7 @@ def average_over_times(
         new_aux = None
     return data.update(
         data=new_data[:, :, None, :],
-        residuals=mean_resids[:, :, None, :] if use_resids else None,
+        model=mean_model[:, :, None, :] if use_resids else None,
         times=times,
         time_ranges=time_ranges,
         lsts=Longitude(np.atleast_2d(np.mean(lsts[ww], axis=0)) * un.hourangle),
