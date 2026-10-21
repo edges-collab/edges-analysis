@@ -127,6 +127,12 @@ def test_lazy_subpackages_accessible(name):
     assert out == "True"
 
 
+def test_root_dir_lists_lazy_subpackages():
+    names = dir(edges)
+    assert {"alanmode", "inference"} <= set(names)
+    assert names == sorted(names)
+
+
 def test_root_getattr_unknown():
     with pytest.raises(AttributeError, match="no attribute 'not_a_thing'"):
         _ = edges.not_a_thing
