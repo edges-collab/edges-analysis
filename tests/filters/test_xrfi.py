@@ -877,3 +877,28 @@ def test_flag_if_broken_does_not_alter_info_flags(freq, sky_pl_1d):
     assert last is not flags
     assert not np.all(last)
     assert info.total_flags[-1] == np.sum(last)
+
+
+def test_flag_if_broken_at_max_iter_does_not_alter_info_flags(freq, sky_pl_1d):
+    """Regression test: flagging everything at max_iter mutated info.flags[-1]."""
+    rng = np.random.default_rng(12)
+    data = sky_pl_1d + rng.normal(scale=0.01, size=sky_pl_1d.size)
+    # RFI of graded strength, so that each iteration flags more channels and the
+    # flags are still changing when max_iter is reached.
+    data[::50] += np.geomspace(0.05, 10.0, data[::50].size)
+
+    with pytest.warns(UserWarning, match="max iterations"):
+        flags, info = xrfi.xrfi_iterative(
+            data,
+            freqs=freq,
+            data_modeler=xrfi.LinearModeler(model=mdl.EdgesPoly(n_terms=5)),
+            std_modeler=xrfi.LinearModeler(model=mdl.Polynomial(n_terms=3)),
+            max_iter=2,
+            flag_if_broken=True,
+        )
+
+    assert np.all(flags)
+    last = info.flags[-1]
+    assert last is not flags
+    assert not np.all(last)
+    assert info.total_flags[-1] == np.sum(last)
