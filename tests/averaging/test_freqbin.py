@@ -338,3 +338,19 @@ def test_gauss_smooth_channel_correlation_with_zero_lags():
     mat = nm.smoothing_matrix(nf, 8, kind="gauss", decimate_at=0, mask=np.ones(nf))
     var_out = nm.propagate_channel_covariance(1 / n, mat, rho)
     np.testing.assert_allclose(sm.nsamples[0, 0, 0], 1 / var_out, rtol=1e-10)
+
+
+def test_freq_bin_keeps_model_where_data_is_nan(gsd_ones: GSData):
+    model = np.broadcast_to(
+        np.arange(gsd_ones.nfreqs, dtype=float), gsd_ones.data.shape
+    )
+    data = model + 0.1
+    nsamples = gsd_ones.nsamples.copy()
+    data[..., :2] = np.nan  # the first bin has no data
+    nsamples[..., :2] = 0
+    new = freqbin.freq_bin(
+        gsd_ones.update(data=data, nsamples=nsamples, model=model), bins=2
+    )
+    np.testing.assert_allclose(new.model, model[..., ::2] + 0.5)
+    assert np.all(np.isnan(new.data[..., 0]))
+    np.testing.assert_allclose(new.residuals[..., 1:], 0.1)

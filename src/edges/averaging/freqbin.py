@@ -67,20 +67,22 @@ def freq_bin(
     if debias and data.residuals is None:
         raise ValueError("Cannot debias without data residuals!")
 
-    d, w, r = avg.bin_data(
+    d, w, _ = avg.bin_data(
         data=data.data,
         weights=data.flagged_nsamples,
-        residuals=data.residuals if debias else None,
+        model=data.model if debias else None,
         bins=bins,
         axis=-1,
     )
+    # The binned model is the unweighted mean of the model in each bin.
+    model = avg.bin_data(data.model, bins=bins, axis=-1)[0] if debias else None
 
     return data.update(
         data=d,
         nsamples=w,
         flags={k: v for k, v in data.flags.items() if "freq" not in v.axes},
         freqs=np.array([np.mean(data.freqs.value[b]) for b in bins]) * data.freqs.unit,
-        residuals=r,
+        model=model,
     )
 
 

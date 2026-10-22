@@ -1071,7 +1071,7 @@ requires-dist = [
     { name = "pooch" },
     { name = "psutil" },
     { name = "py7zr" },
-    { name = "pygsdata", git = "https://github.com/edges-collab/pygsdata?rev=235ff8d6e9e9a8dccf0ead544cac37d257c5c29c" },
+    { name = "pygsdata", specifier = ">=0.5.0" },
     { name = "pyyaml" },
     { name = "questionary" },
     { name = "read-acq" },
@@ -3099,8 +3099,8 @@ wheels = [
 
 [[package]]
 name = "pygsdata"
-version = "0.4.1.dev5+g235ff8d6e"
-source = { git = "https://github.com/edges-collab/pygsdata?rev=235ff8d6e9e9a8dccf0ead544cac37d257c5c29c#235ff8d6e9e9a8dccf0ead544cac37d257c5c29c" }
+version = "0.5.0"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "astropy" },
     { name = "attrs" },
@@ -3112,6 +3112,7 @@ dependencies = [
     { name = "scipy" },
     { name = "typing-extensions" },
 ]
+sdist = { url = "https://files.pythonhosted.org/packages/75/ee/f97a89e0b9433d093a3ed0f9226106ade63706d6c237605e80f74d890675/pygsdata-0.5.0.tar.gz", hash = "sha256:232c0743e94b5f9483de84736368f11f93566fce6b08ea601bc360b19b4a4956", size = 173679, upload-time = "2026-10-22T10:40:25.48Z" }
 
 [[package]]
 name = "pyparsing"

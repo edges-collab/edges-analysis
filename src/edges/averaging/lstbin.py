@@ -284,7 +284,7 @@ def lst_bin(
     lsts[lsts < bins[0]] += 24
 
     spec = np.zeros((data.nloads, data.npols, len(bins) - 1, data.nfreqs))
-    resids = np.zeros_like(spec) if use_model_residuals else None
+    models = np.zeros_like(spec) if use_model_residuals else None
     nsmpls = np.zeros_like(spec)
 
     for iload in range(data.nloads):
@@ -293,16 +293,17 @@ def lst_bin(
             for b in itertools.pairwise(bins)
         ]
 
-        spec[iload], nsmpls[iload], r = bin_data(
+        spec[iload], nsmpls[iload], _ = bin_data(
             data.data[iload],
-            residuals=data.residuals[iload] if use_model_residuals else None,
+            model=data.model[iload] if use_model_residuals else None,
             weights=data.flagged_nsamples[iload],
             bins=bbins,
             axis=-2,
         )
 
         if use_model_residuals:
-            resids[iload] = r
+            # The binned model is the unweighted mean of the model in each bin.
+            models[iload] = bin_data(data.model[iload], bins=bbins, axis=-2)[0]
 
     lst_ranges = np.tile(
         np.array(list(itertools.pairwise(bins)))[:, None], (1, data.nloads, 1)
@@ -359,7 +360,7 @@ def lst_bin(
 
     return data.update(
         data=spec,
-        residuals=resids,
+        model=models,
         nsamples=nsmpls,
         flags={"empty_lsts": flg},
         lsts=lstbins,

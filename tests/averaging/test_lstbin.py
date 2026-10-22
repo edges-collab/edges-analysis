@@ -218,6 +218,11 @@ class TestModelWithNaNData:
         np.testing.assert_allclose(new.model[:, :, 0], np.mean(model, axis=2))
         assert np.all(np.isfinite(new.data))
 
+    def test_lst_bin_model_kept(self, gsd_ones: GSData):
+        data, model = self._modelled(gsd_ones)
+        new = lst_bin(data, binsize=24.0)
+        np.testing.assert_allclose(new.model[:, :, 0], np.mean(model, axis=2))
+
     def test_nan_model_raises(self, gsd_ones: GSData):
         data, _ = self._modelled(gsd_ones)
         # Residuals given for NaN data lose the model there.
