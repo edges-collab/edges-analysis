@@ -86,6 +86,10 @@ class GSDataLinearModel:
         """Calculate the data spectra given the input GSData object."""
         return self._apply_model(gsdata, gsdata.residuals, sign=1)
 
+    def get_model(self, gsdata: GSData) -> np.ndarray:
+        """Evaluate the model at the frequencies of the input GSData object."""
+        return self._apply_model(gsdata, np.zeros_like(gsdata.data), sign=1)
+
     @classmethod
     def from_gsdata(
         cls,
@@ -257,4 +261,5 @@ def add_model(
     data_model = GSDataLinearModel.from_gsdata(
         model, data, nsamples_strategy=nsamples_strategy
     )
-    return data.update(residuals=data_model.get_residuals(data))
+    # The model is stored in its own right, so it is kept where the data are NaN.
+    return data.update(model=data_model.get_model(data))

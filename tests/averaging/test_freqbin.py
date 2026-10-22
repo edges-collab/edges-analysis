@@ -163,10 +163,8 @@ def test_gauss_smooth_nsamples_effective_formula(gsd_ones: GSData, use_nsamples:
 def test_gauss_smooth_empty_channels(gsd_ones: GSData):
     nsamples = gsd_ones.nsamples.copy()
     data = gsd_ones.data.copy()
-    # A wide gap of flagged channels filled with "RFI": the windows entirely within
-    # the gap (the kernel spans +-2 channels) have no unflagged data, and those that
-    # overlap its edges take the smoothed value of the unflagged data. Neither may
-    # take on the RFI values.
+    # A wide gap of flagged channels filled with "RFI": the empty output channels
+    # must not take on the RFI values.
     nsamples[..., 5:20] = 0
     data[..., 5:20] = 1e6
     out = freqbin.gauss_smooth(
@@ -182,31 +180,28 @@ def test_gauss_smooth_empty_channels(gsd_ones: GSData):
     assert not np.any(empty[..., 20:])
     np.testing.assert_array_equal(out.flags["gauss_smooth"].flags, empty)
     np.testing.assert_array_equal(out.complete_flags, empty)
-    # Within two channels of the gap edges, the window holds unflagged data (all
-    # ones): the empty channels take its smoothed value.
-    edge = np.r_[5:7, 18:20]
-    np.testing.assert_allclose(out.data[..., edge], 1, rtol=1e-12)
-    # No unflagged data in the window, and no model: no estimate.
-    assert np.all(np.isnan(out.data[..., 7:18]))
-    assert np.all(out.data[~np.isnan(out.data)] < 2)
+    assert np.all(np.isnan(out.data[empty]))
+    np.testing.assert_allclose(out.data[~empty], 1, rtol=1e-12)
 
 
 def test_gauss_smooth_empty_channels_with_residuals_keep_model(gsd_ones: GSData):
     rng = np.random.default_rng(5)
     nsamples = gsd_ones.nsamples.copy()
     nsamples[..., 5:20] = 0
-    model = 1000 * (gsd_ones.freqs.to_value("MHz") / 75.0) ** -2.5
+    model = np.broadcast_to(
+        1000 * (gsd_ones.freqs.to_value("MHz") / 75.0) ** -2.5, gsd_ones.data.shape
+    )
     resids = rng.normal(scale=0.1, size=gsd_ones.data.shape)
-    data = gsd_ones.update(data=model + resids, residuals=resids, nsamples=nsamples)
+    data = gsd_ones.update(data=model + resids, model=model, nsamples=nsamples)
     out = freqbin.gauss_smooth(
         data, size=1, decimate=False, nsmooth=2, maintain_flags=1, use_residuals=True
     )
     empty = out.nsamples == 0
     assert np.all(empty[..., 5:20])
-    assert np.all(np.isfinite(out.data))
-    np.testing.assert_allclose(out.model, np.broadcast_to(model, out.data.shape))
-    # Windows with no unflagged data: zero residual, so the data equal the model.
-    np.testing.assert_array_equal(out.residuals[..., 7:18], 0)
+    assert np.all(np.isnan(out.data[empty]))
+    assert np.all(np.isfinite(out.data[~empty]))
+    # The model is kept everywhere, including the empty channels.
+    np.testing.assert_array_equal(out.model, model)
 
 
 def test_gauss_smooth_twice_keeps_good_channels():
@@ -241,13 +236,17 @@ def test_gauss_smooth_twice_keeps_good_channels():
     )
     good = second.nsamples > 0
     assert np.all(np.isfinite(second.data[good]))
+    assert np.all(np.isnan(second.data[~good]))
+    # The model of the fit survives in the empty channels of both smoothings.
     assert np.all(np.isfinite(second.model))
 
 
 def test_gauss_smooth_nan_model_raises(gsd_ones: GSData):
     data = gsd_ones.data.copy()
     data[..., 10] = np.nan
+    # Residuals given for NaN data cannot recover the model there.
     gsd = gsd_ones.update(data=data, residuals=np.zeros_like(data))
+    assert np.all(np.isnan(gsd.model[..., 10]))
     with pytest.raises(ValueError, match="model is NaN"):
         freqbin.gauss_smooth(gsd, size=1, decimate=False, use_residuals=True)
 
@@ -339,3 +338,19 @@ def test_gauss_smooth_channel_correlation_with_zero_lags():
     mat = nm.smoothing_matrix(nf, 8, kind="gauss", decimate_at=0, mask=np.ones(nf))
     var_out = nm.propagate_channel_covariance(1 / n, mat, rho)
     np.testing.assert_allclose(sm.nsamples[0, 0, 0], 1 / var_out, rtol=1e-10)
+
+
+def test_freq_bin_keeps_model_where_data_is_nan(gsd_ones: GSData):
+    model = np.broadcast_to(
+        np.arange(gsd_ones.nfreqs, dtype=float), gsd_ones.data.shape
+    )
+    data = model + 0.1
+    nsamples = gsd_ones.nsamples.copy()
+    data[..., :2] = np.nan  # the first bin has no data
+    nsamples[..., :2] = 0
+    new = freqbin.freq_bin(
+        gsd_ones.update(data=data, nsamples=nsamples, model=model), bins=2
+    )
+    np.testing.assert_allclose(new.model, model[..., ::2] + 0.5)
+    assert np.all(np.isnan(new.data[..., 0]))
+    np.testing.assert_allclose(new.residuals[..., 1:], 0.1)

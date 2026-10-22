@@ -377,6 +377,7 @@ def bin_data(
     weights: np.ndarray | None = None,
     bins: list[np.ndarray | slice] | None = None,
     axis: int = -1,
+    model: np.ndarray | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Bin data, in an un-biased way if possible.
 
@@ -398,6 +399,11 @@ def bin_data(
         indexes into the axis over which to bin, or a slice object.
     axis
         The axis over which to bin.
+    model
+        The model of the data, if known (instead of ``residuals``, which are then
+        ``data - model``). Unlike the residuals, the model is known where the data
+        are NaN, so it gives the right (unweighted) mean model in each bin. It must
+        not be NaN.
 
     Returns
     -------
@@ -408,7 +414,17 @@ def bin_data(
     residuals
         The binned residuals (if provided).
     """
-    if residuals is not None:
+    if model is not None:
+        if residuals is not None:
+            raise ValueError("Only one of model and residuals may be given.")
+        if np.any(np.isnan(model)):
+            raise ValueError(
+                "The model is NaN, so the mean model cannot be formed (e.g. it was "
+                "given as residuals to NaN data, or read from a GSH5 file older than "
+                "2.3)."
+            )
+        residuals = data - model
+    elif residuals is not None:
         model = data - residuals
 
     if axis < 0:
