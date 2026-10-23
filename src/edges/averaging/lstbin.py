@@ -110,7 +110,7 @@ def average_over_times(
         )
         # Unweighted model mean over the *same* samples (w > 0 and finite model).
         # Do not use data.model (= data - residual): NaN data or leftover 0s
-        # after flagging would enter np.nanmean as fake sky (icicles).
+        # If used, this would enter np.nanmean as fake sky (icicles).
         model = data.data - data.residuals
         contrib = (w_resid > 0) & np.isfinite(model)
         n_good = np.sum(contrib, axis=-2)

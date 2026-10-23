@@ -368,7 +368,7 @@ def bin_data(
                 m_w = None
             m = weighted_mean(m, weights=m_w, axis=axis)[0]
             r, w = weighted_mean(r, weights=w, axis=axis)
-            # No residual weight => empty bin (not model-only).
+            # No residual weight => empty bin
             d = np.where(np.asarray(w) > 0, r + m, np.nan)
         else:
             d = slice_along_axis(data, bn, axis=axis)
