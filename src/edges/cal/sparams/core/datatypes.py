@@ -4,7 +4,7 @@ These small classes are used throughout the rest of the ``sparams`` sub-package.
 """
 
 from functools import cached_property
-from typing import Self
+from typing import TYPE_CHECKING, Self
 
 import attrs
 import numpy as np
@@ -16,6 +16,10 @@ from edges.frequencies import get_mask
 from edges.io import calobsdef, read_s1p
 from edges.serialization import hickleable
 from edges.tools import linear_to_decibels
+
+if TYPE_CHECKING:
+    from .network_component_models import Calkit
+    from .s11model import S11ModelParams
 
 
 @hickleable
@@ -236,6 +240,69 @@ class SParams:
         """The Voltage Standing Wave Ratio (VSWR) of the network output."""
         return (1 + np.abs(self.s22)) / (1 - np.abs(self.s22))
 
+    @classmethod
+    def from_calkit_measurements(
+        cls,
+        measurements: "CalkitReadings",
+        model: "CalkitReadings | Calkit | None" = None,
+    ) -> Self:
+        """Compute S-parameters of a 2-port network from calkit measurements.
+
+        This is a thin wrapper around
+        :func:`~edges.cal.sparams.core.sparam_calibration.sparams_from_calkit_measurements`
+        (Eq. 3 of Monsalve et al., 2016).
+
+        Parameters
+        ----------
+        measurements
+            The actual measurements of the calkit standards.
+        model
+            A model of the calkit standards: either the model reflection
+            coefficients at the measured frequencies (:class:`CalkitReadings`), or a
+            :class:`~edges.cal.sparams.Calkit`, which is evaluated at the measured
+            frequencies. If None, ideal standards are assumed.
+
+        Returns
+        -------
+        sparams
+            The S-parameters of the network between the reference plane of the
+            measurements and the standards. Only the product S12*S21 is determined
+            by the calibration; S12 and S21 are both set to its square root, taken
+            on the branch that is continuous across frequency.
+        """
+        from .sparam_calibration import sparams_from_calkit_measurements
+
+        return sparams_from_calkit_measurements(measurements, model)
+
+    def smoothed(
+        self,
+        params: "S11ModelParams | dict[str, S11ModelParams]",
+        freqs: tp.FreqType | None = None,
+    ) -> Self:
+        """Smooth all S-parameters using the S11 modeling procedure.
+
+        This is a thin wrapper around
+        :func:`~edges.cal.sparams.core.s11model.smooth_sparams`.
+
+        Parameters
+        ----------
+        params
+            The set of parameters defining the model used to smooth/interpolate,
+            either one set for all S-parameters, or a dict of them keyed by
+            ``"s11"``, ``"s12"``, ``"s21"`` and ``"s22"``.
+        freqs
+            Optional new frequencies onto which to interpolate. If not given,
+            retain the same set of frequencies.
+
+        Returns
+        -------
+        smoothed_sparams
+            A new SParams object that has been smoothed.
+        """
+        from .s11model import smooth_sparams
+
+        return smooth_sparams(self, params, freqs=freqs)
+
 
 @hickleable
 @attrs.define(kw_only=True, frozen=True)
@@ -352,6 +419,109 @@ class ReflectionCoefficient:
         """Alias for reflection_coefficient."""
         return self.reflection_coefficient
 
+    def de_embed(self, sparams: SParams) -> Self:
+        """Remove the effect of a 2-port network from this reflection coefficient.
+
+        See Eq. 2 of Monsalve et al., 2016 or
+        https://en.wikipedia.org/wiki/Scattering_parameters#S-parameters_in_amplifier_design
+
+        Parameters
+        ----------
+        sparams
+            The S-matrix of the 2-port network / subsystem, defined at the same
+            frequencies as this reflection coefficient.
+
+        Returns
+        -------
+        gamma_de_embedded
+            The reflection coefficient at the desired reference plane, on the other
+            side of the 2-port network.
+
+        See Also
+        --------
+        embed
+            The inverse operation.
+
+        Notes
+        -----
+        Given this reflection coefficient, observed at a reference plane on one
+        side of an electrical component/subsystem, this returns the reflection
+        coefficient at the reference plane on the other side of the subsystem::
+
+           ---         ------------
+          |VNA| ---|---| SUBSYTEM |---|---
+           ---         ------------
+                   ^                  ^
+                   |                  |
+               MEAS. REF.          DESIRED REF.
+                 PLANE               PLANE
+
+        """
+        gamma_in = self.reflection_coefficient
+        return type(self)(
+            freqs=self.freqs,
+            reflection_coefficient=(gamma_in - sparams.s11)
+            / (sparams.s22 * (gamma_in - sparams.s11) + sparams.s12 * sparams.s21),
+        )
+
+    def embed(self, sparams: SParams) -> Self:
+        """Add the effect of a 2-port network to this reflection coefficient.
+
+        This is the inverse of :meth:`de_embed`.
+
+        Parameters
+        ----------
+        sparams
+            The S-matrix of the 2-port network, defined at the same frequencies as
+            this reflection coefficient.
+
+        Returns
+        -------
+        gamma_ref
+            The reflection coefficient at the reference plane on the other side of
+            the 2-port network.
+
+        See Also
+        --------
+        de_embed
+            The inverse operation.
+        """
+        gamma_in = self.reflection_coefficient
+        return type(self)(
+            freqs=self.freqs,
+            reflection_coefficient=(
+                sparams.s11
+                + (sparams.s12 * sparams.s21 * gamma_in) / (1 - sparams.s22 * gamma_in)
+            ),
+        )
+
+    def smoothed(
+        self,
+        params: "S11ModelParams",
+        freqs: tp.FreqType | None = None,
+    ) -> Self:
+        """Return a new, smoothed/modelled, reflection coefficient.
+
+        This is a thin wrapper around
+        :func:`~edges.cal.sparams.core.s11model.new_s11_modelled`.
+
+        Parameters
+        ----------
+        params
+            The set of parameters defining the model used to smooth/interpolate.
+        freqs
+            Optional new frequencies onto which to interpolate. If not given,
+            retain the same set of frequencies.
+
+        Returns
+        -------
+        modelled_s11
+            A new ReflectionCoefficient object that has been smoothed.
+        """
+        from .s11model import new_s11_modelled
+
+        return new_s11_modelled(self, params, freqs=freqs)
+
 
 @attrs.define
 class CalkitReadings:
@@ -437,3 +607,24 @@ class CalkitReadings:
                 freqs=freqs, reflection_coefficient=np.zeros(n, dtype=complex)
             ),
         )
+
+    def de_embed(self, sparams: SParams) -> Self:
+        """Remove the effect of a 2-port network from each standard measurement.
+
+        This applies :meth:`ReflectionCoefficient.de_embed` to each of the open,
+        short and match readings.
+
+        Parameters
+        ----------
+        sparams
+            The S-parameters of the 2-port network to de-embed.
+
+        Returns
+        -------
+        readings
+            The calkit readings referenced to the other side of the 2-port network.
+        """
+        return type(self)(**{
+            kind: getattr(self, kind).de_embed(sparams)
+            for kind in ("open", "short", "match")
+        })

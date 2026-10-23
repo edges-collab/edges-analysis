@@ -31,7 +31,6 @@ Flagging and Filtering
     :template: module.rst
 
     edges.filters.filters
-    edges.filters.lst_model
     edges.filters.runners
 
 Auxiliary Data

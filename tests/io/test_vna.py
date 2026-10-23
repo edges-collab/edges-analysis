@@ -220,3 +220,48 @@ def test_pseudo_option_line_ignored(tmp_path: Path):
     t = read_s1p(fl)
     np.testing.assert_allclose(t["frequency"].to_value("Hz"), FREQS_HZ, rtol=1e-14)
     np.testing.assert_allclose(t["s11"], S11, rtol=1e-12)
+
+
+class TestSParamsTableRoundTrip:
+    @staticmethod
+    def _sparams() -> SParams:
+        rng = np.random.default_rng(42)
+        n = 20
+        freq = np.linspace(50, 100, n) * un.MHz
+
+        def cplx():
+            return rng.normal(size=n) + 1j * rng.normal(size=n)
+
+        return SParams(freq=freq, s11=cplx(), s12=cplx(), s21=cplx(), s22=cplx())
+
+    def test_round_trip(self):
+        sp = self._sparams()
+        new = SParams.from_table(sp.to_table())
+        np.testing.assert_allclose(new.freq.to_value("MHz"), sp.freq.to_value("MHz"))
+        for name in ("s11", "s12", "s21", "s22"):
+            np.testing.assert_allclose(
+                getattr(new, name), getattr(sp, name), rtol=1e-15, atol=0
+            )
+
+    def test_round_trip_s11_only(self):
+        sp = SParams(freq=np.linspace(50, 100, 5) * un.MHz, s11=np.ones(5) * 0.5j)
+        new = SParams.from_table(sp.to_table())
+        np.testing.assert_allclose(new.s11, sp.s11, rtol=1e-15, atol=0)
+        assert new.s12 is None
+        assert new.s21 is None
+        assert new.s22 is None
+
+    @pytest.mark.parametrize("key", ["freq", "frequency"])
+    def test_from_table_accepts_both_frequency_keys(self, key: str):
+        sp = self._sparams()
+        table = sp.to_table()
+        if key != "freq":
+            table.rename_column("freq", key)
+        new = SParams.from_table(table)
+        np.testing.assert_allclose(new.freq.to_value("MHz"), sp.freq.to_value("MHz"))
+
+    def test_from_table_no_frequency_raises(self):
+        table = self._sparams().to_table()
+        table.remove_column("freq")
+        with pytest.raises(KeyError, match="frequency"):
+            SParams.from_table(table)

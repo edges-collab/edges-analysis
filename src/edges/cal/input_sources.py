@@ -1,7 +1,6 @@
 """Definition of a class that contains all the data required for a calibration load."""
 
 from collections.abc import Callable
-from functools import cached_property
 from typing import Self
 
 import attrs
@@ -228,9 +227,13 @@ class InputSource:
         gain = self.loss
         return gain * self.spectrum.temp_ave + (1 - gain) * self.ambient_temperature
 
-    @cached_property
+    @property
     def temp_ave(self) -> np.ndarray:
-        """The average temperature of the thermistor (over frequency and time)."""
+        """The loss-corrected average temperature of the source (over time).
+
+        This is recomputed on each access (it is cheap), so that it stays consistent
+        if ``loss``, ``ambient_temperature`` or ``spectrum`` are changed.
+        """
         return self.get_temp_with_loss()
 
     @property
