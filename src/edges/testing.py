@@ -36,13 +36,6 @@ def _sky_model() -> dict[str, Any]:
     }
 
 
-def __getattr__(name: str) -> Any:
-    """Provide the (formerly eagerly-loaded) sky-model module attributes lazily."""
-    if name in ("model", "msky", "mgha", "spl75"):
-        return _sky_model()[name]
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
-
 def create_mock_edges_data(
     flow: un.Quantity[un.MHz] = 50 * un.MHz,
     fhigh: un.Quantity[un.MHz] = 100 * un.MHz,

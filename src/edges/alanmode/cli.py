@@ -12,7 +12,6 @@ from edges.cal.calibrator import Calibrator
 
 from ..cal import plots
 from ..cal.calobs import CalibrationObservation
-from ..cli import app  # ruff: ignore[unused-import]  (kept for backwards compatibility)
 from . import (
     alancal as acal,
 )
