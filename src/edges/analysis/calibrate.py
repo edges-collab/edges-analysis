@@ -92,12 +92,12 @@ def apply_noise_wave_calibration(
             if data.data_unit == "uncalibrated_temp"
             else data.model
         )
-        resids = (new_data - (qmodel * a + b)).to_value("K")
+        model = (qmodel * a + b).to_value("K")
     else:
-        resids = None
+        model = None
 
     return data.update(
-        data=new_data.to_value("K"), data_unit="temperature", residuals=resids
+        data=new_data.to_value("K"), data_unit="temperature", model=model
     )
 
 
@@ -152,7 +152,7 @@ def apply_loss_correction(
     return data.update(
         data=spec,
         data_unit="temperature",
-        residuals=None,
+        model=None,
     )
 
 
@@ -188,13 +188,10 @@ def apply_beam_factor_directly(data: GSData, beam_file: str | Path) -> GSData:
             "Can only apply beam correction to data with a single load"
         )
 
-    new_data = data.data.copy()
-    resids = data.residuals.copy() if data.residuals is not None else None
     bf = np.loadtxt(beam_file)
-    new_data *= bf[:, 3]
-    if resids is not None:
-        resids *= bf[:, 3]
-    return data.update(data=new_data, residuals=resids, data_unit="temperature")
+    new_data = data.data * bf[:, 3]
+    model = data.model * bf[:, 3] if data.model is not None else None
+    return data.update(data=new_data, model=model, data_unit="temperature")
 
 
 @gsregister("calibrate")
@@ -286,7 +283,7 @@ def apply_beam_correction(
 
     new_data = data.data.copy()
 
-    resids = data.residuals.copy() if data.residuals is not None else None
+    model = data.model.copy() if data.model is not None else None
 
     for i, (lst0, lst1) in enumerate(data.lst_ranges[:, 0, :]):
         new = beam.between_lsts(lst0.hour, lst1.hour) if cut_to_data_lsts else beam
@@ -300,7 +297,7 @@ def apply_beam_correction(
             )
 
         new_data[:, :, i] /= bf
-        if resids is not None:
-            resids[:, :, i] /= bf
+        if model is not None:
+            model[:, :, i] /= bf
 
-    return data.update(data=new_data, residuals=resids, data_unit="temperature")
+    return data.update(data=new_data, model=model, data_unit="temperature")

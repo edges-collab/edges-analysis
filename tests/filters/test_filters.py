@@ -646,3 +646,25 @@ class TestFilterLogging:
             filters.apply_flags(gsd_ones, flags=GSFlag(flags=flags, axes=("time",)))
         assert "0.00% + 10.00% → 10.00%" in caplog.text
         assert "<+10.00%>" in caplog.text
+
+
+def test_rms_rfi_filter_ignores_zero_weight_nan(gsd_ones: GSData):
+    """A NaN residual in an empty channel must not stop the flagging of the spectrum."""
+    rng = np.random.default_rng(11)
+    resids = rng.normal(scale=0.1, size=gsd_ones.data.shape)
+    resids[..., 7] = 5.0  # an outlier in every spectrum
+    data = gsd_ones.update(data=1000 + resids, residuals=resids)
+    clean = filters.rms_rfi_filter.func(data, threshold=3)
+    assert np.all(clean.flags[..., 7])
+
+    nsamples = data.nsamples.copy()
+    nsamples[..., 15] = 0
+    with_nan = resids.copy()
+    with_nan[..., 15] = np.nan
+    empty = data.update(nsamples=nsamples)
+    expected = filters.rms_rfi_filter.func(empty, threshold=3).flags
+    got = filters.rms_rfi_filter.func(
+        empty.update(data=1000 + with_nan, residuals=with_nan), threshold=3
+    ).flags
+    np.testing.assert_array_equal(got, expected)
+    assert np.all(got[..., 7])

@@ -657,6 +657,26 @@ class TestBinData:
 
         np.testing.assert_allclose(res1, res2)
 
+    def test_with_model_and_nan_data(self):
+        model = np.array([1.0, 2.0, 3.0, 4.0])
+        data = model + np.array([0.1, np.nan, 0.3, -0.1])
+        weights = np.array([1.0, 0.0, 1.0, 1.0])
+        res, w, r = bin_data(data, model=model, weights=weights)
+        # The mean model uses all channels, including the one without data.
+        np.testing.assert_allclose(res, 2.5 + np.mean([0.1, 0.3, -0.1]))
+        np.testing.assert_allclose(r, np.mean([0.1, 0.3, -0.1]))
+        assert w == 3
+
+    def test_model_and_residuals_both_given(self):
+        data = np.ones(4)
+        with pytest.raises(ValueError, match="Only one of model and residuals"):
+            bin_data(data, model=data, residuals=data)
+
+    def test_nan_model_raises(self):
+        data = np.ones(4)
+        with pytest.raises(ValueError, match="model is NaN"):
+            bin_data(data, model=np.array([1.0, np.nan, 1.0, 1.0]))
+
     def test_with_multiple_bins(self):
         data = np.array([1, 2, 3, 4], dtype=float)
         bins = [slice(0, 2), slice(2, 4)]

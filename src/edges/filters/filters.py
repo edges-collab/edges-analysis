@@ -899,10 +899,16 @@ def rms_rfi_filter(
     threshold: float = 3.0,
     nsamples_strategy: NsamplesStrategy = NsamplesStrategy.FLAGGED_NSAMPLES,
 ) -> GSFlag:
-    """Flag specific channel-integrations via their outlier-ness compared to RMS."""
+    """Flag specific channel-integrations via their outlier-ness compared to RMS.
+
+    The RMS of each spectrum is the weighted RMS of its residuals over frequency.
+    Channels with zero weight (or NaN residuals) do not contribute, whatever their
+    value.
+    """
     w = get_weights_from_strategy(data, nsamples_strategy)[0]
 
-    rms = np.sqrt(np.average(np.square(data.residuals), weights=w, axis=-1))[..., None]
+    rms = np.sqrt(averaging.weighted_mean(data=data.residuals**2, weights=w)[0])
+    rms = rms[..., None]
     return GSFlag(
         flags=data.residuals > rms * threshold, axes=("load", "pol", "time", "freq")
     )
