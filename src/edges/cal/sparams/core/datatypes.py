@@ -240,11 +240,12 @@ class SParams:
         """The Voltage Standing Wave Ratio (VSWR) of the network output."""
         return (1 + np.abs(self.s22)) / (1 - np.abs(self.s22))
 
-    @staticmethod
+    @classmethod
     def from_calkit_measurements(
+        cls,
         measurements: "CalkitReadings",
         model: "CalkitReadings | Calkit | None" = None,
-    ) -> "SParams":
+    ) -> Self:
         """Compute S-parameters of a 2-port network from calkit measurements.
 
         This is a thin wrapper around
@@ -277,7 +278,7 @@ class SParams:
         self,
         params: "S11ModelParams | dict[str, S11ModelParams]",
         freqs: tp.FreqType | None = None,
-    ) -> "SParams":
+    ) -> Self:
         """Smooth all S-parameters using the S11 modeling procedure.
 
         This is a thin wrapper around
@@ -418,7 +419,7 @@ class ReflectionCoefficient:
         """Alias for reflection_coefficient."""
         return self.reflection_coefficient
 
-    def de_embed(self, sparams: SParams) -> "ReflectionCoefficient":
+    def de_embed(self, sparams: SParams) -> Self:
         """Remove the effect of a 2-port network from this reflection coefficient.
 
         See Eq. 2 of Monsalve et al., 2016 or
@@ -457,13 +458,13 @@ class ReflectionCoefficient:
 
         """
         gamma_in = self.reflection_coefficient
-        return ReflectionCoefficient(
+        return type(self)(
             freqs=self.freqs,
             reflection_coefficient=(gamma_in - sparams.s11)
             / (sparams.s22 * (gamma_in - sparams.s11) + sparams.s12 * sparams.s21),
         )
 
-    def embed(self, sparams: SParams) -> "ReflectionCoefficient":
+    def embed(self, sparams: SParams) -> Self:
         """Add the effect of a 2-port network to this reflection coefficient.
 
         This is the inverse of :meth:`de_embed`.
@@ -486,7 +487,7 @@ class ReflectionCoefficient:
             The inverse operation.
         """
         gamma_in = self.reflection_coefficient
-        return ReflectionCoefficient(
+        return type(self)(
             freqs=self.freqs,
             reflection_coefficient=(
                 sparams.s11
@@ -498,7 +499,7 @@ class ReflectionCoefficient:
         self,
         params: "S11ModelParams",
         freqs: tp.FreqType | None = None,
-    ) -> "ReflectionCoefficient":
+    ) -> Self:
         """Return a new, smoothed/modelled, reflection coefficient.
 
         This is a thin wrapper around
@@ -607,7 +608,7 @@ class CalkitReadings:
             ),
         )
 
-    def de_embed(self, sparams: SParams) -> "CalkitReadings":
+    def de_embed(self, sparams: SParams) -> Self:
         """Remove the effect of a 2-port network from each standard measurement.
 
         This applies :meth:`ReflectionCoefficient.de_embed` to each of the open,
@@ -623,7 +624,7 @@ class CalkitReadings:
         readings
             The calkit readings referenced to the other side of the 2-port network.
         """
-        return CalkitReadings(**{
+        return type(self)(**{
             kind: getattr(self, kind).de_embed(sparams)
             for kind in ("open", "short", "match")
         })

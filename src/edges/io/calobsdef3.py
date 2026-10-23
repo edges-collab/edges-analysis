@@ -227,54 +227,6 @@ def get_s1p_files(
     return {name: files[label] for name, label in labels.items()}
 
 
-def from_edges3_layout(
-    cls: type[CalkitFileSpec],
-    root_dir: Path | str,
-    load: S11LoadName,
-    year: int,
-    day: int,
-    hour: int | str = "first",
-    allow_closest_s11_within: int = 5,
-    s11_dir: tp.PathLike = DEFAULT_S11_DIR,
-) -> CalkitFileSpec:
-    """Create a CalkitFileSpec (or subclass) from a standard EDGES-3 layout.
-
-    This is a functional alias of :meth:`CalkitFileSpec.from_edges3_layout`, kept for
-    backwards compatibility.
-
-    Parameters
-    ----------
-    cls
-        The class to instantiate (:class:`~edges.io.calobsdef.CalkitFileSpec` or a
-        subclass of it).
-    root_dir
-        The root directory to search in
-    load
-        The name of the load for which the calkit observations were taken.
-    year
-        The year of observation.
-    day
-        The day of observation
-    hour
-        The hour of observation, or "first" for automaic search.
-    allow_closest_s11_within
-        The number of surrounding days (either side) to search for S11. Days are
-        tried in the order day+1, day-1, day+2, ..., so the later day wins a tie.
-    s11_dir
-        Directory holding the ``.s1p`` files, relative to ``root_dir`` (or absolute).
-        It can contain a ``{year}`` placeholder.
-    """
-    return cls.from_edges3_layout(
-        root_dir=root_dir,
-        load=load,
-        year=year,
-        day=day,
-        hour=hour,
-        allow_closest_s11_within=allow_closest_s11_within,
-        s11_dir=s11_dir,
-    )
-
-
 def _calkit_from_s1p_files(files: dict[str, Path]) -> CalkitFileSpec:
     """Build a calkit spec from the output of :func:`get_s1p_files`.
 

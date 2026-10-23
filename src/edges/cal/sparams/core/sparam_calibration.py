@@ -61,92 +61,6 @@ def gamma2impedance(
     return z0 * (1 + gamma) / (1 - gamma)
 
 
-def gamma_de_embed(
-    gamma: ReflectionCoefficient,
-    sparams: SParams,
-) -> ReflectionCoefficient:
-    """Remove the effect of a 2-port network from a reflection coefficient.
-
-    See Eq. 2 of Monsalve et al., 2016 or
-    https://en.wikipedia.org/wiki/Scattering_parameters#S-parameters_in_amplifier_design
-
-    Parameters
-    ----------
-    gamma
-        The reflection coefficient measured at the reference plane "in front"
-        of the 2-port network / subsystem. The shape should be (N,), where N is the
-        number of frequency points.
-    sparams
-        The S-matrix of the 2-port network / subsystem.
-        The shape should be (2, 2, N), where N is the number of frequency points.
-
-    Returns
-    -------
-    gamma_de_embedded
-        The reflection coefficient at the desired reference plane, on the other
-        side of the 2-port network. The shape is (N,), where N is the number of
-        frequency points.
-
-    See Also
-    --------
-    gamma_embed
-        The inverse function to this one.
-    ReflectionCoefficient.de_embed
-        The equivalent method, to which this function delegates.
-
-    Notes
-    -----
-    Given the reflection coefficient observed at a reference plane on one side of
-    an electrical component/subsystem, this function returns the reflection coefficient
-    at the reference plane on the other side of the subsystem::
-
-       ---         ------------
-      |VNA| ---|---| SUBSYTEM |---|---
-       ---         ------------
-               ^                  ^
-               |                  |
-           MEAS. REF.          DESIRED REF.
-             PLANE               PLANE
-
-    """
-    return gamma.de_embed(sparams)
-
-
-def gamma_embed(
-    gamma: ReflectionCoefficient,
-    sparams: SParams,
-) -> ReflectionCoefficient:
-    """Add the effect of a 2-port network to a reflection coefficient.
-
-    See notes for :func:`gamma_de_embed`. This is the inverse function to that one.
-
-    Parameters
-    ----------
-    sparams
-        The S-matrix of the two-port networok. Shape should be (2, 2, N), where N is the
-        number of frequency points.
-    gamma
-        The reflection coefficient at the referance plan on one side
-        of the 2-port network. Shape should be (N,), where N is the number of
-        frequency points.
-
-    Returns
-    -------
-    gamma_ref
-         The reflection coefficient at the reference plane on the other side
-         of the 2-port network. Shape is (N,), where N is the number of frequency
-         points.
-
-    See Also
-    --------
-    gamma_de_embed
-        The inverse function to this one.
-    ReflectionCoefficient.embed
-        The equivalent method, to which this function delegates.
-    """
-    return gamma.embed(sparams)
-
-
 def continuous_sqrt(product: np.ndarray) -> np.ndarray:
     """Square root of a complex quantity, on a branch continuous along the last axis.
 
@@ -285,29 +199,6 @@ def _solve_osl_systems(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     for i in np.flatnonzero(~full_rank):
         x[i] = np.linalg.lstsq(a[i], b[i], rcond=None)[0]
     return x
-
-
-def de_embed_network_from_calkit_measurements(
-    measurements: CalkitReadings, sparams: SParams
-) -> CalkitReadings:
-    """Remove the effect of a 2-port network from each calkit standard measurement.
-
-    This applies :func:`gamma_de_embed` to each of the open, short and match readings.
-    It is equivalent to (and delegates to) :meth:`CalkitReadings.de_embed`.
-
-    Parameters
-    ----------
-    measurements
-        The measurements of the calkit standards.
-    sparams
-        The S-parameters of the 2-port network to de-embed.
-
-    Returns
-    -------
-    readings
-        The calkit readings referenced to the other side of the 2-port network.
-    """
-    return measurements.de_embed(sparams)
 
 
 def average_reflection_coefficients(

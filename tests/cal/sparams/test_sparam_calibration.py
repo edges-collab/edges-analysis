@@ -25,7 +25,7 @@ class TestGammaEmbed:
         smatrix = sp.SParams(s11=np.zeros(100), s12=np.ones(100), freqs=freqs)
         np.testing.assert_allclose(
             s11.reflection_coefficient,
-            sp.gamma_embed(s11, smatrix).reflection_coefficient,
+            s11.embed(smatrix).reflection_coefficient,
         )
 
     def test_gamma_impedance_roundtrip(self):
@@ -50,7 +50,7 @@ class TestGammaEmbed:
         smat = sp.SParams(s11=s11, s12=s12, s22=s22, freqs=freqs)
 
         np.testing.assert_allclose(
-            sp.gamma_de_embed(sp.gamma_embed(gamma, smat), smat).reflection_coefficient,
+            gamma.embed(smat).de_embed(smat).reflection_coefficient,
             gamma.reflection_coefficient,
         )
 
