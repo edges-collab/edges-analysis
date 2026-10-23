@@ -729,6 +729,143 @@ def xrfi_iterative_sliding_window(
 xrfi_iterative_sliding_window.ndim = (1,)
 
 
+def xrfi_iterative_sliding_window_exclude_range(
+    spectrum: np.ndarray,
+    *,
+    freqs: np.ndarray,
+    model: mdl.Model,
+    flags=None,
+    window_frac: int = 16,
+    min_window_size: int = 10,
+    max_iter: int = 100,
+    threshold: float = 2.5,
+    watershed: dict | None = None,
+    reflag_thresh: float = 1.01,
+    fit_kwargs: dict | None = None,
+    weights: np.ndarray | None = None,
+    exclude_freq_ranges: tuple[tuple[float, float], ...] | None = None,
+):
+    """Flag RFI with a sliding RMS window, optionally leaving frequencies out of the fit.
+
+    This is a copy of :func:`xrfi_iterative_sliding_window`. The flagging loop is the
+    same. ``exclude_freq_ranges`` is the only addition: those channels keep their
+    weights for the sliding RMS, but their weight is set to zero while the Fourier
+    model is fit. The model is still evaluated on the full frequency grid, so residuals
+    inside an excluded range are data minus that extrapolation.
+
+    Parameters
+    ----------
+    exclude_freq_ranges
+        Inclusive ``(low, high)`` intervals in the same units as ``freqs``. Channels
+        inside any interval are omitted from the model fit. ``None`` fits every channel
+        that has weight, matching :func:`xrfi_iterative_sliding_window`.
+
+    Other parameters are the same as :func:`xrfi_iterative_sliding_window`.
+    """
+    fmod = model.at(x=freqs) if not isinstance(model, mdl.FixedLinearModel) else model
+
+    fit_kwargs = fit_kwargs or {}
+
+    if flags is None:
+        flags = np.zeros(len(spectrum), dtype=bool)
+
+    weights = (~flags).astype(float) if weights is None else np.where(flags, 0, weights)
+
+    orig_weights = weights.copy()
+
+    n = len(spectrum)
+    m = max(n // window_frac, min_window_size)
+    prev_n_flags = 0
+
+    n_flags_changed_list = []
+    total_flags_list = []
+    model_list = []
+    std_list = []
+    flags_list = []
+    potential_reflags = set()
+
+    excluded = np.zeros(n, dtype=bool)
+    if exclude_freq_ranges:
+        for low, high in exclude_freq_ranges:
+            excluded |= (freqs >= low) & (freqs <= high)
+
+    for it in range(max_iter):
+        fit_weights = np.where(excluded, 0.0, weights)
+        fit = fmod.fit(ydata=spectrum, weights=fit_weights, **fit_kwargs)
+
+        model_list.append(fit.evaluate())
+
+        rms = np.zeros(n)
+        avs = np.zeros(n)
+        for i in range(n):
+            rng = slice(max(i - m, 0), min(n, i + m + 1))
+            size = np.sum(weights[rng])
+            av = np.sum(fit.residual[rng] * weights[rng]) / size
+
+            rms[i] = np.sqrt(
+                np.sum((fit.residual[rng] - av) ** 2 * weights[rng]) / size
+            )
+            avs[i] = av
+
+            # Now while *INSIDE* the loop over frequencies, apply new flags.
+            nsig = fit.residual[i] / (threshold * rms[i])
+
+            # If this channel was previously flagged, but only *just*,
+            # give it a chance to get un-flagged. This is useful when
+            # trying to reproduce Alan's results, because the model fit
+            # on the first iteration is much harder to get the same as Alan.
+            if i in potential_reflags and nsig <= 1:
+                weights[i] = 1  # unflag
+
+                if watershed:
+                    for mult, nbins in watershed.items():
+                        if mult < reflag_thresh and i + nbins < n and i - nbins >= 0:
+                            weights[i - nbins : i + nbins + 1] = orig_weights[
+                                i - nbins : i + nbins + 1
+                            ]
+                potential_reflags.remove(i)
+
+            if nsig > 1:
+                weights[i] = 0
+
+                if nsig < reflag_thresh and it < 2:
+                    potential_reflags.add(i)
+
+                if watershed:
+                    for mult, nbins in watershed.items():
+                        if nsig > mult and i + nbins < n and i - nbins >= 0:
+                            weights[i - nbins : i + nbins + 1] = 0
+        n_flags = np.sum(weights == 0)
+        std_list.append(rms)
+        n_flags_changed_list.append(n_flags - prev_n_flags)
+        total_flags_list.append(n_flags)
+        flags_list.append(~(weights.astype(bool)))
+
+        if n_flags <= prev_n_flags:
+            break
+
+        prev_n_flags = n_flags
+
+    return (
+        ~(weights.astype(bool)),
+        IterativeXRFIInfo(
+            n_flags_changed=n_flags_changed_list,
+            total_flags=total_flags_list,
+            model_params=[],
+            data_models=model_list,
+            std_params=[],
+            stds=std_list,
+            thresholds=[threshold] * it,
+            x=freqs,
+            data=spectrum,
+            flags=flags_list,
+        ),
+    )
+
+
+xrfi_iterative_sliding_window_exclude_range.ndim = (1,)
+
+
 def xrfi_watershed(
     spectrum: np.ndarray | None = None,
     *,
