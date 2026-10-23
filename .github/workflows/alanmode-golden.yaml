@@ -1,0 +1,69 @@
+name: alanmode bit-exact
+
+# Checks that a pull request leaves the alanmode calibration results bit-identical.
+# The last bits of the results depend on the platform, so instead of committing
+# snapshots, this writes them from the base of the pull request and compares them
+# with its head, on the same runner. See tests/alanmode/make_golden.py.
+#
+# A pull request that intentionally changes the results will fail this check; say so
+# in the pull request. A pull request that changes numpy or scipy (e.g. via uv.lock)
+# changes the platform fingerprint, and the comparison is then skipped.
+on:
+  pull_request:
+    paths:
+      - "src/**"
+      - "tests/alanmode/**"
+      - "tests/data/alanmode/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/alanmode-golden.yaml"
+
+concurrency:
+  group: alanmode-golden-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  bit-exact:
+    name: Bit-exact vs base
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout head
+        uses: actions/checkout@v7
+        with:
+          path: head
+
+      - name: Checkout base
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version-file: head/pyproject.toml
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      # The generator of the base is used when it has one, so that the snapshots hold
+      # what the base defines; before the generator existed, the head's is used.
+      - name: Write snapshots from base
+        run: |
+          gen="${GITHUB_WORKSPACE}/base/tests/alanmode/make_golden.py"
+          if [ ! -f "$gen" ]; then
+            gen="${GITHUB_WORKSPACE}/head/tests/alanmode/make_golden.py"
+          fi
+          echo "Using generator $gen"
+          cd base
+          uv sync --locked
+          uv run --no-sync python "$gen" --outdir "${RUNNER_TEMP}/alanmode-golden"
+
+      - name: Compare head with base
+        working-directory: head
+        env:
+          EDGES_ALANMODE_GOLDEN_DIR: ${{ runner.temp }}/alanmode-golden
+        run: |
+          uv sync --locked --all-extras --dev
+          uv run --no-sync pytest tests/alanmode/test_golden.py -rs --no-cov
