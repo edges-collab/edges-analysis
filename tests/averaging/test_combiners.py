@@ -50,6 +50,15 @@ class TestAverageMultipleObjects:
 
         assert new == new2
 
+    def test_nan_model_raises(self, mock_season: list[GSData]):
+        modelled = [d.update(model=d.data.copy()) for d in mock_season]
+        data = modelled[0].data.copy()
+        data[..., 0, 4] = np.nan
+        # Residuals given for NaN data lose the model there.
+        modelled[0] = modelled[0].update(data=data, residuals=modelled[0].residuals)
+        with pytest.raises(ValueError, match="model of an object is NaN"):
+            combiners.average_multiple_objects(*modelled, use_resids=True)
+
     def test_bad_inputs(self, mock_season, mock):
         with pytest.raises(ValueError, match="All objects must have the same shape"):
             combiners.average_multiple_objects(mock_season[0], mock)

@@ -124,3 +124,18 @@ def test_invalid_weights_raise_as_before():
         GSDataLinearModel.from_gsdata(
             mdl.LinLog(n_terms=3), gsd, nsamples_strategy=STRATEGY
         )
+
+
+def test_add_model_keeps_model_where_data_is_nan():
+    from edges.analysis.datamodel import add_model
+    from edges.testing import create_mock_edges_data
+
+    gsd = create_mock_edges_data(add_noise=True, ntime=2)
+    data = gsd.data.copy()
+    nsamples = gsd.nsamples.copy()
+    data[..., 10:15] = np.nan
+    nsamples[..., 10:15] = 0
+    gsd = gsd.update(data=data, nsamples=nsamples)
+    new = add_model(gsd, model=mdl.LinLog(n_terms=3))
+    assert np.all(np.isfinite(new.model))
+    assert np.all(np.isnan(new.residuals[..., 10:15]))

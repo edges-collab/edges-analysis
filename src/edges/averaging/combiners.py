@@ -92,6 +92,7 @@ class _RunningAverage:
     sum_wdata: np.ndarray | None = None
     sum_model: np.ndarray | None = None
     nmodel: np.ndarray | None = None
+    nan_model: np.ndarray | None = None
     nobj: int = 0
 
     def add(self, obj: GSData) -> None:
@@ -120,8 +121,10 @@ class _RunningAverage:
             if self.sum_model is None:
                 self.sum_model = np.zeros(obj.data.shape, dtype=model.dtype)
                 self.nmodel = np.zeros(obj.data.shape[:-1])
+                self.nan_model = np.zeros(obj.data.shape, dtype=bool)
             self.sum_model += np.where(np.isnan(model), 0, model)
             self.nmodel += ~np.all(np.isnan(model), axis=-1)
+            self.nan_model |= np.isnan(model)
 
     def result(self, template: GSData) -> GSData:
         """Compute the average, with metadata taken from ``template``."""
@@ -133,17 +136,24 @@ class _RunningAverage:
         final[mask] /= self.wtot[mask]
 
         if self.use_resids:
-            residuals = final
+            # The model is averaged (unweighted) over all objects, so it must be known
+            # for all of them in every channel that has data.
+            if np.any(self.nan_model & mask):
+                raise ValueError(
+                    "The model of an object is NaN in channels that have data (e.g. "
+                    "it was given as residuals to NaN data, or read from a GSH5 file "
+                    "older than 2.3), so the mean model cannot be formed there."
+                )
             with warnings.catch_warnings():
                 warnings.filterwarnings("ignore")
                 tot_model = self.sum_model / self.nmodel[..., None]
-            final = tot_model + residuals
+            final = tot_model + final
         else:
-            residuals = None
+            tot_model = None
 
         return template.update(
             data=final,
-            residuals=residuals,
+            model=tot_model,
             nsamples=self.ntot,
             flags={},
         )
