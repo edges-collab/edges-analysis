@@ -37,7 +37,7 @@ jobs:
             python-version: "3.12"
             testtype: 'warnfail'
     steps:
-      - uses: actions/checkout@master
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - uses: actions/setup-python@v7
