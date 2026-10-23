@@ -11,8 +11,8 @@ from astropy.table import QTable
 from astropy.time import TIME_DELTA_SCALES, Time, TimeDelta
 
 from .. import types as tp
-from ..io.serialization import hickleable
 from ..io.thermistor import read_thermistor_csv
+from ..serialization import hickleable
 
 IgnoreTimesType = int | float | un.Quantity[un.percent] | un.Quantity[un.s]
 

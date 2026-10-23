@@ -9,7 +9,8 @@ from astropy import units as un
 from pygsdata.attrs import npfield
 
 from edges import types as tp
-from edges.io import CalObsDefEDGES2, CalObsDefEDGES3, hickleable
+from edges.io import CalObsDefEDGES2, CalObsDefEDGES3
+from edges.serialization import hickleable
 
 from . import sparams as sp
 from .sparams import ReflectionCoefficient

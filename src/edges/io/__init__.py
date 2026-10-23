@@ -29,7 +29,6 @@ __all__ = [
     "ReceiverS11",
     "SParams",
     "get_mean_temperature",
-    "hickleable",
     "read_auxiliary_data",
     "read_s1p",
     "read_temperature_log",
@@ -50,7 +49,6 @@ from .calobsdef import (
     ReceiverS11,
 )
 from .calobsdef3 import CalObsDefEDGES3, LoadDefEDGES3
-from .serialization import hickleable
 from .templogs import get_mean_temperature, read_temperature_log, read_tmp_file
 from .thermistor import read_thermistor_csv
 from .vna import SParams, read_s1p

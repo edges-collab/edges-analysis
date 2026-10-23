@@ -16,7 +16,7 @@ from astropy.convolution import Gaussian1DKernel, convolve
 from .. import types as tp
 from ..cached_property import cached_property, safe_property
 from ..io import calobsdef, calobsdef3
-from ..io.serialization import hickleable
+from ..serialization import hickleable
 from . import loss
 from . import noise_waves as nw
 from . import sparams as sp

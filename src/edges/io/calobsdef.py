@@ -16,8 +16,8 @@ import yaml
 from astropy import units as un
 from bidict import bidict
 
-from .. import DATA_PATH
 from .. import types as tp
+from ..data import DATA_PATH
 
 if TYPE_CHECKING:
     from .calobsdef3 import S11LoadName

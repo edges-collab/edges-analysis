@@ -13,7 +13,7 @@ import scipy as sp
 import scipy.linalg
 from threadpoolctl import ThreadpoolController
 
-from ..io.serialization import hickleable
+from ..serialization import hickleable
 from . import core
 
 
