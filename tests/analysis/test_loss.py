@@ -100,3 +100,12 @@ def test_builtin_loss_file_missing_raises():
         loss.ground_loss(
             np.linspace(50, 100, 11), ":", instrument="low", configuration="90deg"
         )
+
+
+@pytest.mark.parametrize("func", [loss.ground_loss, loss.antenna_loss])
+@pytest.mark.parametrize("unit", [un.MHz, un.GHz, un.kHz])
+def test_loss_accepts_quantity_frequencies(func, unit):
+    freq = np.linspace(60, 140, 81)
+    expected = func(freq, ":", instrument="mid")
+    got = func((freq * un.MHz).to(unit), ":", instrument="mid")
+    np.testing.assert_allclose(got, expected, rtol=1e-12, atol=0)

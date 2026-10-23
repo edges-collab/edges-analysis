@@ -6,7 +6,7 @@ from astropy import units as un
 from pygsdata import GSData
 
 from edges import modeling as mdl
-from edges.analysis import calibrate
+from edges.analysis import calibrate, loss
 from edges.cal import Calibrator, apply
 from edges.cal.sparams import ReflectionCoefficient, S11ModelParams
 from edges.sim.antenna_beam_factor import BeamFactor
@@ -250,6 +250,26 @@ class TestApplyLossCorrection:
             mock, ambient_temp=300 * un.K, loss_function=loss
         )
         np.testing.assert_array_equal(data.data, mock.data)
+
+    @pytest.mark.parametrize("loss_function", [loss.ground_loss, loss.antenna_loss])
+    def test_builtin_loss_function(self, mock: GSData, loss_function):
+        """Regression test: GSData.freqs is a Quantity, which np.polyval rejected."""
+        tamb = 290.0 * un.K
+        data = calibrate.apply_loss_correction(
+            mock,
+            ambient_temp=tamb,
+            loss_function=loss_function,
+            filename=":",
+            instrument="mid",
+        )
+        expected_loss = loss_function(
+            mock.freqs.to_value("MHz"), filename=":", instrument="mid"
+        )
+        assert not np.allclose(expected_loss, 1.0)
+        expected = calibrate.apply_loss_correction(
+            mock, ambient_temp=tamb, loss=expected_loss
+        )
+        np.testing.assert_allclose(data.data, expected.data, rtol=1e-12, atol=0)
 
     def test_zero_temp(self, mock: GSData):
         loss = np.ones(mock.nfreqs) * 2

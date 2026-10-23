@@ -449,7 +449,8 @@ def xrfi_iterative(
             stacklevel=2,
         )
         if flag_if_broken:
-            flags[:] = True
+            # Don't modify in-place: ``flags`` aliases the last entry of flag_list.
+            flags = np.ones_like(flags)
 
     elif data_modeler.stopping_condition(
         flags, counter
@@ -459,7 +460,8 @@ def xrfi_iterative(
             stacklevel=2,
         )
         if flag_if_broken:
-            flags[:] = True
+            # Don't modify in-place: ``flags`` aliases the last entry of flag_list.
+            flags = np.ones_like(flags)
 
     return (
         flags,
