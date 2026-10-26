@@ -199,8 +199,34 @@ class TestAcrossMidnight:
         np.testing.assert_allclose(new.lsts.hour[0], np.mean(lsts, axis=0), rtol=1e-10)
 
 
+class TestFlaggedModelExcluded:
+    def test_average_over_times_and_lst_bin(self, mock_with_model: GSData):
+        # A flagged time whose data and residual were zeroed must not enter the mean
+        # model as fake sky (an "icicle").
+        src = mock_with_model.update(auxiliary_measurements=None)
+        data = src.data.copy()
+        resid = src.residuals.copy()
+        data[..., 0, 0] = 0.0
+        resid[..., 0, 0] = 0.0
+        flags = np.zeros((src.ntimes, src.nfreqs), dtype=bool)
+        flags[0, 0] = True
+        flagged = src.update(
+            data=data,
+            residuals=resid,
+            flags={"t0c0": GSFlag(flags=flags, axes=("time", "freq"))},
+        )
+        model = data - resid
+        good = np.mean(model[0, 0, 1:, 0])
+
+        avg = average_over_times(flagged, use_resids=True)
+        np.testing.assert_allclose(avg.model[0, 0, 0, 0], good)
+
+        binned = lst_bin(flagged, binsize=24.0, use_model_residuals=True)
+        np.testing.assert_allclose(binned.model[0, 0, 0, 0], good)
+
+
 class TestModelWithNaNData:
-    """The model is averaged over all times, also where some data are missing."""
+    """The model is averaged over the times that have data, and kept where none do."""
 
     @staticmethod
     def _modelled(gsd: GSData) -> tuple[GSData, np.ndarray]:
@@ -212,24 +238,33 @@ class TestModelWithNaNData:
         nsamples[:, :, 0, 4] = 0
         return gsd.update(data=data, nsamples=nsamples, model=model), model
 
+    @staticmethod
+    def _expected_model(model: np.ndarray) -> np.ndarray:
+        # No data at time 0 in channel 4, so that time does not enter the mean model.
+        expected = np.mean(model, axis=2)
+        expected[..., 4] = np.mean(model[:, :, 1:, 4], axis=2)
+        return expected
+
     def test_model_kept(self, gsd_ones: GSData):
         data, model = self._modelled(gsd_ones)
         new = average_over_times(data, use_resids=True)
-        np.testing.assert_allclose(new.model[:, :, 0], np.mean(model, axis=2))
+        np.testing.assert_allclose(new.model[:, :, 0], self._expected_model(model))
         assert np.all(np.isfinite(new.data))
 
     def test_lst_bin_model_kept(self, gsd_ones: GSData):
         data, model = self._modelled(gsd_ones)
         new = lst_bin(data, binsize=24.0)
-        np.testing.assert_allclose(new.model[:, :, 0], np.mean(model, axis=2))
+        np.testing.assert_allclose(new.model[:, :, 0], self._expected_model(model))
 
-    def test_nan_model_raises(self, gsd_ones: GSData):
+    def test_lost_model_has_no_weight(self, gsd_ones: GSData):
         data, _ = self._modelled(gsd_ones)
         # Residuals given for NaN data lose the model there.
         lost = data.update(residuals=data.residuals)
         assert np.isnan(lost.model[0, 0, 0, 4])
-        with pytest.raises(ValueError, match="model is NaN"):
-            average_over_times(lost, use_resids=True)
+        new = average_over_times(lost, use_resids=True)
+        # That time has no weight, so the mean model is over the other times.
+        np.testing.assert_allclose(new.model[:, :, 0], np.nanmean(lost.model, axis=2))
+        assert np.all(np.isfinite(new.data))
 
 
 class TestLstBinNsamplesStrategy:

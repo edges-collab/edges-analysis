@@ -58,11 +58,13 @@ def average_multiple_objects(
 
     Notes
     -----
-    With ``use_resids``, the average is the unweighted mean of the models of all the
-    objects plus the weighted mean of their residuals (B18; EDGES memo 183), so the
-    model of an object contributes to every channel, including channels in which its
-    data are flagged. The model must therefore be known (not NaN) for every object in
-    every channel that has data; otherwise an error is raised.
+    With ``use_resids``, the average is the unweighted mean of the models plus the
+    weighted mean of the residuals (B18; EDGES memo 183). The mean model is over the
+    same objects as the residuals, i.e. only those that have weight in a channel:
+    including the model of an object whose data are flagged there would bias the mean
+    wherever only some of the objects have data. Objects with a non-finite residual
+    in a channel have zero weight (and zero nsamples) there; so do objects whose data
+    are NaN there (their model is lost with the residual).
     """
     if any(obj.data.shape != objs[0].data.shape for obj in objs[1:]):
         raise ValueError("All objects must have the same shape to average them.")
@@ -111,7 +113,8 @@ class _RunningAverage:
     sum_wdata: np.ndarray | None = None
     sum_model: np.ndarray | None = None
     nmodel: np.ndarray | None = None
-    nan_model: np.ndarray | None = None
+    sum_model_w: np.ndarray | None = None
+    nmodel_w: np.ndarray | None = None
     nobj: int = 0
 
     def add(self, obj: GSData) -> None:
@@ -123,6 +126,10 @@ class _RunningAverage:
 
         w, n = get_weights_from_strategy(obj, self.nsamples_strategy)
         d = obj.residuals if self.use_resids else obj.data
+        if self.use_resids:
+            # A non-finite residual carries no information: zero weight and nsamples.
+            w = np.where(np.isfinite(d), w, 0.0)
+            n = np.where(np.isfinite(d), n, 0.0)
         wd = np.where(np.isnan(d * w), 0, d * w)
 
         if self.wtot is None:
@@ -140,11 +147,16 @@ class _RunningAverage:
             if self.sum_model is None:
                 self.sum_model = np.zeros(obj.data.shape, dtype=model.dtype)
                 self.nmodel = np.zeros(obj.data.shape)
-                self.nan_model = np.zeros(obj.data.shape, dtype=bool)
+                self.sum_model_w = np.zeros(obj.data.shape, dtype=model.dtype)
+                self.nmodel_w = np.zeros(obj.data.shape)
             finite = np.isfinite(model)
+            # Sums over all objects (used only to keep the model in empty channels)...
             self.sum_model += np.where(finite, model, 0)
             self.nmodel += finite
-            self.nan_model |= ~finite
+            # ...and over the objects that have weight (the model of the estimator).
+            contributing = (w > 0) & finite
+            self.sum_model_w += np.where(contributing, model, 0)
+            self.nmodel_w += contributing
 
     def result(self, template: GSData) -> GSData:
         """Compute the average, with metadata taken from ``template``."""
@@ -158,19 +170,14 @@ class _RunningAverage:
         final[mask] = self.sum_wdata[mask] / self.wtot[mask]
 
         if self.use_resids:
-            # The model is averaged (unweighted) over all objects, so it must be known
-            # for all of them in every channel that has data.
-            if np.any(self.nan_model & mask):
-                raise ValueError(
-                    "The model of an object is NaN in channels that have data (e.g. "
-                    "it was given as residuals to NaN data, or read from a GSH5 file "
-                    "older than 2.3), so the mean model cannot be formed there."
-                )
-            # Mean model over the objects whose model is known in each channel (all of
-            # them, in channels with data); NaN where none is.
+            # Mean model over the objects that have weight in each channel. Channels
+            # that have none are empty, where the model is kept as the mean over all
+            # objects whose model is known there (NaN where none is).
             tot_model = np.full_like(self.sum_model, np.nan)
             known = self.nmodel > 0
             tot_model[known] = self.sum_model[known] / self.nmodel[known]
+            used = self.nmodel_w > 0
+            tot_model[used] = self.sum_model_w[used] / self.nmodel_w[used]
             final = np.where(mask, tot_model + final, self.fill_value)
         else:
             tot_model = None

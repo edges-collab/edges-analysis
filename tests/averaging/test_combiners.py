@@ -50,14 +50,20 @@ class TestAverageMultipleObjects:
 
         assert new == new2
 
-    def test_nan_model_raises(self, mock_season: list[GSData]):
+    def test_lost_model_has_no_weight(self, mock_season: list[GSData]):
         modelled = [d.update(model=d.data.copy()) for d in mock_season]
         data = modelled[0].data.copy()
         data[..., 0, 4] = np.nan
         # Residuals given for NaN data lose the model there.
         modelled[0] = modelled[0].update(data=data, residuals=modelled[0].residuals)
-        with pytest.raises(ValueError, match="model of an object is NaN"):
-            combiners.average_multiple_objects(*modelled, use_resids=True)
+        assert np.isnan(modelled[0].model[..., 0, 4]).all()
+
+        # The object has no weight there, so the others alone set the average (the
+        # lost model does not make the mean model NaN, nor does it bias it).
+        avg = combiners.average_multiple_objects(*modelled, use_resids=True)
+        others = combiners.average_multiple_objects(*modelled[1:], use_resids=True)
+        np.testing.assert_allclose(avg.data[..., 0, 4], others.data[..., 0, 4])
+        np.testing.assert_allclose(avg.model[..., 0, 4], others.model[..., 0, 4])
 
     def test_bad_inputs(self, mock_season, mock):
         with pytest.raises(ValueError, match="All objects must have the same shape"):
@@ -220,23 +226,29 @@ class TestEmptyChannels:
         assert np.all(np.isnan(avg.model[..., 2]))
         assert np.all(np.isnan(avg.data[..., 2]))
 
-        # Averaging it again with an object that has data there fails loudly, rather
-        # than treating the unknown model as 0 K.
-        with pytest.raises(ValueError, match="model of an object is NaN"):
-            combiners.average_multiple_objects(avg, modelled_nights[0], use_resids=True)
+        # Averaging it again with an object that has data there: the unknown model
+        # has no weight, so it is neither treated as 0 K nor does it pull the mean.
+        again = combiners.average_multiple_objects(
+            avg, modelled_nights[0], use_resids=True
+        )
+        np.testing.assert_allclose(again.data[..., 2], modelled_nights[0].data[..., 2])
+        np.testing.assert_allclose(
+            again.model[..., 2], modelled_nights[0].model[..., 2]
+        )
 
-    def test_model_mean_includes_flagged_objects(self, modelled_nights):
-        """The B18 estimator (EDGES memo 183).
+    def test_model_mean_excludes_flagged_objects(self, modelled_nights):
+        """The B18 estimator (EDGES memo 183), debiased.
 
-        The unweighted mean of all the objects' models plus the weighted mean of the
-        residuals, including objects whose data are flagged in the channel.
+        The unweighted mean of the models of the objects that have weight in the
+        channel plus the weighted mean of their residuals: an object whose data are
+        flagged in the channel does not pull the mean model.
         """
         a = _flag_channel(modelled_nights[0], 2)
         b = modelled_nights[1]
         avg = combiners.average_multiple_objects(
             a, b, use_resids=True, nsamples_strategy=NsamplesStrategy.FLAGGED_NSAMPLES
         )
-        expected = 0.5 * (a.model[..., 2] + b.model[..., 2]) + b.residuals[..., 2]
+        expected = b.model[..., 2] + b.residuals[..., 2]
         np.testing.assert_allclose(avg.data[..., 2], expected)
 
     @pytest.mark.parametrize("use_resids", [True, False])

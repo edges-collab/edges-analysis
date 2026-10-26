@@ -662,10 +662,23 @@ class TestBinData:
         data = model + np.array([0.1, np.nan, 0.3, -0.1])
         weights = np.array([1.0, 0.0, 1.0, 1.0])
         res, w, r = bin_data(data, model=model, weights=weights)
-        # The mean model uses all channels, including the one without data.
-        np.testing.assert_allclose(res, 2.5 + np.mean([0.1, 0.3, -0.1]))
+        # The mean model is over the samples that have weight, not the one without
+        # data (otherwise flagged samples bias the mean).
+        np.testing.assert_allclose(
+            res, np.mean([1.0, 3.0, 4.0]) + np.mean([0.1, 0.3, -0.1])
+        )
         np.testing.assert_allclose(r, np.mean([0.1, 0.3, -0.1]))
         assert w == 3
+
+    def test_zero_weight_zero_model_excluded(self):
+        # A flagged sample with model=0 must not pull the unweighted mean model.
+        data = np.array([101.0, 0.0])
+        residuals = np.array([1.0, 0.0])
+        weights = np.array([1.0, 0.0])
+        res, w, r = bin_data(data, residuals=residuals, weights=weights)
+        np.testing.assert_allclose(res, 101.0)
+        np.testing.assert_allclose(r, 1.0)
+        assert w == 1.0
 
     def test_model_and_residuals_both_given(self):
         data = np.ones(4)

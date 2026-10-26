@@ -235,6 +235,46 @@ def weighted_sum(
     return sm, weights
 
 
+def contributing_mean(
+    values: np.ndarray, contributing: np.ndarray, axis: int = -1
+) -> np.ndarray:
+    """Unweighted mean of ``values`` over the entries that contribute to an average.
+
+    This is the model mean of the unbiased estimator of EDGES memo 183 (see
+    :func:`bin_data`): the mean of the models of the samples that actually enter the
+    weighted mean of the residuals. A flagged sample (zero weight) has a model, but
+    including it would bias the average in channels where only some samples have data.
+
+    Where no entry contributes (an empty channel) there is no data to be unbiased, so
+    the mean over all finite values is returned instead, which keeps the model
+    available there. It is NaN where no value is finite.
+
+    Parameters
+    ----------
+    values
+        The values (usually models) to average.
+    contributing
+        Boolean array, the same shape as ``values``, that is True for the entries that
+        contribute to the average.
+    axis
+        The axis over which to average.
+    """
+    values = np.asarray(values, dtype=float)
+    finite = np.isfinite(values)
+    use = np.asarray(contributing, dtype=bool) & finite
+
+    def _mean(mask):
+        count = np.sum(mask, axis=axis)
+        total = np.sum(np.where(mask, values, 0.0), axis=axis)
+        out = np.full(count.shape, np.nan)
+        np.divide(total, count, out=out, where=count > 0)
+        return out, count
+
+    mean, count = _mean(use)
+    fallback, _ = _mean(finite)
+    return np.where(count > 0, mean, fallback)
+
+
 def weighted_mean(
     data: np.ndarray,
     weights: np.ndarray | None = None,
@@ -402,8 +442,9 @@ def bin_data(
     model
         The model of the data, if known (instead of ``residuals``, which are then
         ``data - model``). Unlike the residuals, the model is known where the data
-        are NaN, so it gives the right (unweighted) mean model in each bin. It must
-        not be NaN.
+        are NaN, so it gives the right (unweighted) mean model in each bin. The mean
+        is over the samples that have weight (see :func:`contributing_mean`), where
+        the model must not be NaN.
 
     Returns
     -------
@@ -417,11 +458,13 @@ def bin_data(
     if model is not None:
         if residuals is not None:
             raise ValueError("Only one of model and residuals may be given.")
-        if np.any(np.isnan(model)):
+        # Only samples with weight enter the mean model, so only there must it be known.
+        used = np.ones(model.shape, dtype=bool) if weights is None else weights > 0
+        if np.any(np.isnan(model) & used):
             raise ValueError(
-                "The model is NaN, so the mean model cannot be formed (e.g. it was "
-                "given as residuals to NaN data, or read from a GSH5 file older than "
-                "2.3)."
+                "The model is NaN where there is weight, so the mean model cannot be "
+                "formed (e.g. it was given as residuals to NaN data, or read from a "
+                "GSH5 file older than 2.3)."
             )
         residuals = data - model
     elif residuals is not None:
@@ -452,7 +495,10 @@ def bin_data(
             m = slice_along_axis(model, bn, axis=axis)
             r = slice_along_axis(residuals, bn, axis=axis)
 
-            m = weighted_mean(m, axis=axis)[0]
+            # Memo estimator: unweighted model mean over the samples that have weight
+            # (flagged samples must not pull the model) + weighted residual mean.
+            contributing = np.ones(m.shape, dtype=bool) if w is None else (w > 0)
+            m = contributing_mean(m, contributing, axis=axis)
             r, w = weighted_mean(r, weights=w, axis=axis)
             d = r + m
         else:

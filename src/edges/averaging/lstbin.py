@@ -13,7 +13,7 @@ from pygsdata import GSData, GSFlag, gsregister
 from pygsdata.coordinates import lsts_to_times
 from pygsdata.utils import angle_centre
 
-from .averaging import bin_data
+from .averaging import bin_data, contributing_mean
 from .utils import NsamplesStrategy, get_weights_from_strategy
 
 logger = logging.getLogger(__name__)
@@ -136,6 +136,11 @@ def average_over_times(
 
     w, n = get_weights_from_strategy(data, nsamples_strategy)
 
+    if use_resids:
+        # Samples with a non-finite residual carry no information: zero weight.
+        w = np.where(np.isfinite(data.residuals), w, 0.0)
+        n = np.where(np.isfinite(data.residuals), n, 0.0)
+
     ntot = np.sum(w, axis=-2)
     nsamples_tot = np.sum(n, axis=-2)
 
@@ -144,15 +149,10 @@ def average_over_times(
         if use_resids:
             sum_resids = np.nansum(data.residuals * w, axis=-2)
             mean_resids = sum_resids / ntot
-            # The model is averaged (unweighted) over all times, so it must be known
-            # at all times in every channel that has data.
-            if np.any(np.isnan(data.model).any(axis=-2) & (ntot > 0)):
-                raise ValueError(
-                    "The model is NaN at some times in channels that have data (e.g. "
-                    "it was given as residuals to NaN data, or read from a GSH5 file "
-                    "older than 2.3), so the mean model cannot be formed there."
-                )
-            mean_model = np.mean(data.model, axis=-2)
+            # The model is averaged (unweighted) over the times that have weight, i.e.
+            # the same ones as the residuals (EDGES memo 183). Empty channels keep the
+            # mean over all times that have a model.
+            mean_model = contributing_mean(data.model, w > 0, axis=-2)
             new_data = mean_model + mean_resids
         else:
             sum_data = np.nansum(data.data * w, axis=-2)
@@ -313,8 +313,12 @@ def lst_bin(
             nsmpls[iload, :, ibin] = n[iload][:, bn].sum(axis=-2)
 
         if use_model_residuals:
-            # The binned model is the unweighted mean of the model in each bin.
-            models[iload] = bin_data(data.model[iload], bins=bbins, axis=-2)[0]
+            # The binned model is the unweighted mean of the model over the samples
+            # that have weight in each bin (the ones that enter the data's mean).
+            for ibin, bn in enumerate(bbins):
+                models[iload, :, ibin] = contributing_mean(
+                    data.model[iload][:, bn], w[iload][:, bn] > 0, axis=-2
+                )
 
     lst_ranges = np.tile(
         np.array(list(itertools.pairwise(bins)))[:, None], (1, data.nloads, 1)
