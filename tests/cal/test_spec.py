@@ -177,6 +177,115 @@ class TestTemperatureRangeSelection:
         np.testing.assert_allclose(mean.data, 0.8, rtol=1e-12)
 
 
+def _synthetic_state_jump(
+    ntime: int = 40, jump: slice = slice(10, 15), excess: float = 1.008
+) -> GSData:
+    """Noiseless three-position spectra with a jump of the noise source.
+
+    Outside ``jump``, P_L = 1 and P_LNS = 2, so that R = P_L / (P_LNS - P_L) = 1, and
+    the antenna has Q = 0.2. Within ``jump``, the noise-source excess is multiplied by
+    ``excess`` (R falls by ~0.8% for the default) and the antenna has Q = 0.5.
+    """
+    nfreq = 64
+    t0 = Time("2023-03-01T12:00:00", scale="utc")
+    t_ant = t0 + np.arange(ntime) * 39.0 * un.s
+    times = Time(
+        np.stack([(t_ant + i * 13 * un.s).jd for i in range(3)], axis=1), format="jd"
+    )
+    p_load = np.ones(ntime)
+    p_ns = np.full(ntime, 2.0)
+    q_true = np.full(ntime, 0.2)
+    p_ns[jump] = p_load[jump] + excess
+    q_true[jump] = 0.5
+    data = np.zeros((3, 1, ntime, nfreq))
+    data[0, 0] = (p_load + q_true * (p_ns - p_load))[:, None]
+    data[1, 0] = p_load[:, None]
+    data[2, 0] = p_ns[:, None]
+    return GSData(
+        data=data,
+        freqs=np.linspace(50, 120, nfreq) * un.MHz,
+        times=times,
+        telescope=const.KNOWN_TELESCOPES["edges-low"],
+        loads=("ant", "internal_load", "internal_load_plus_noise_source"),
+        data_unit="power",
+    )
+
+
+class TestFlagDataOutsideRTolerance:
+    """Selecting integrations by the receiver state, R = P_L / (P_LNS - P_L)."""
+
+    def test_jump_is_flagged(self):
+        mask = spectra.flag_data_outside_r_tolerance(
+            _synthetic_state_jump(), tolerance=0.003
+        )
+        expected = np.ones(40, dtype=bool)
+        expected[10:15] = False
+        np.testing.assert_array_equal(mask, expected)
+
+    def test_within_tolerance_is_kept(self):
+        mask = spectra.flag_data_outside_r_tolerance(
+            _synthetic_state_jump(), tolerance=0.01
+        )
+        assert mask.all()
+
+    def test_explicit_reference(self):
+        """With the reference at the jumped level, the jump is kept instead."""
+        mask = spectra.flag_data_outside_r_tolerance(
+            _synthetic_state_jump(), tolerance=0.003, reference=1 / 1.008
+        )
+        expected = np.zeros(40, dtype=bool)
+        expected[10:15] = True
+        np.testing.assert_array_equal(mask, expected)
+
+    def test_band_outside_data(self):
+        with pytest.raises(ValueError, match="no channels"):
+            spectra.flag_data_outside_r_tolerance(
+                _synthetic_state_jump(),
+                tolerance=0.003,
+                freq_range=(150 * un.MHz, 160 * un.MHz),
+            )
+
+    def test_all_flagged(self):
+        with pytest.raises(RuntimeError, match="masked all"):
+            spectra.flag_data_outside_r_tolerance(
+                _synthetic_state_jump(), tolerance=0.003, reference=2.0
+            )
+
+    def test_get_ave_and_var_spec(self):
+        data = _synthetic_state_jump()
+        mean, var = spectra.get_ave_and_var_spec(data, r_tolerance=0.003)
+        np.testing.assert_allclose(mean.data, 0.2, rtol=1e-12)
+        np.testing.assert_allclose(var.data, 0, atol=1e-20)
+        np.testing.assert_array_equal(var.nsamples, 35)
+
+        mean, _ = spectra.get_ave_and_var_spec(data)
+        np.testing.assert_allclose(mean.data, (35 * 0.2 + 5 * 0.5) / 40, rtol=1e-12)
+
+    def test_reference_after_ignore_times(self):
+        """The reference R is the median of the integrations that remain.
+
+        Here the first 30 integrations are ignored, leaving 10 of which the last 5
+        are jumped: the median is then halfway between the two levels, so that
+        neither is more than 0.5% from it, and nothing is flagged at 0.5%.
+        """
+        data = _synthetic_state_jump(jump=slice(35, 40))
+        mean, _ = spectra.get_ave_and_var_spec(data, ignore_times=30, r_tolerance=0.005)
+        np.testing.assert_allclose(mean.data, 0.35, rtol=1e-12)
+
+    def test_from_loaddef(self, tmp_path):
+        specfile = tmp_path / "jump.gsh5"
+        _synthetic_state_jump().write_gsh5(specfile)
+        spec = LoadSpectrum.from_loaddef(
+            specfiles=[specfile],
+            load_name="ambient",
+            temperature=300 * un.K,
+            f_low=50 * un.MHz,
+            ignore_times=0,
+            r_tolerance=0.003,
+        )
+        np.testing.assert_allclose(spec.averaged_q, 0.2, rtol=1e-12)
+
+
 class TestLoadSpectrum:
     def test_read(self, caldef: CalObsDefEDGES2):
         for load in ["ambient", "hot_load", "open", "short"]:
