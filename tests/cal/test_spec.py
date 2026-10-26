@@ -272,6 +272,21 @@ class TestFlagDataOutsideRTolerance:
         mean, _ = spectra.get_ave_and_var_spec(data, ignore_times=30, r_tolerance=0.005)
         np.testing.assert_allclose(mean.data, 0.35, rtol=1e-12)
 
+    def test_with_temperature_range(self, tmp_path):
+        """R is selected along with the data by the temperature range."""
+        syn = _write_synthetic_load(tmp_path)
+        data = GSData.from_file(syn["specfile"])
+        therm = ThermistorReadings.from_csv(syn["thermfile"])
+        mean, var = spectra.get_ave_and_var_spec(
+            data,
+            thermistor=therm,
+            temperature_range=(syn["t_cool"] - 0.5 * un.K, syn["t_cool"] + 0.5 * un.K),
+            r_tolerance=0.003,
+            r_freq_range=(50 * un.MHz, 100 * un.MHz),
+        )
+        np.testing.assert_allclose(mean.data, 0.2, rtol=1e-12)
+        np.testing.assert_array_equal(var.nsamples, 10)
+
     def test_from_loaddef(self, tmp_path):
         specfile = tmp_path / "jump.gsh5"
         _synthetic_state_jump().write_gsh5(specfile)
