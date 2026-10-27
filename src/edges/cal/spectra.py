@@ -79,6 +79,100 @@ def flag_data_outside_temperature_range(
     return temp_mask
 
 
+def flag_data_outside_r_tolerance(
+    data: GSData,
+    tolerance: float,
+    freq_range: tuple[tp.FreqType, tp.FreqType] = (70 * un.MHz, 110 * un.MHz),
+    reference: float | None = None,
+) -> NDArray[np.bool]:
+    """Get a mask that flags integrations whose receiver state is out of tolerance.
+
+    The state of the receiver is monitored by the ratio of the power in the
+    internal-load position to the noise-source excess, R = P_L / (P_LNS - P_L), which
+    is independent of the gain and of the source (for a simple receiver,
+    R = (T_L + T_rcv) / T_NS). A jump of the noise-source temperature, for example,
+    appears as a step in R. For each integration, the powers of the two internal
+    positions are averaged over ``freq_range`` before forming R.
+
+    Parameters
+    ----------
+    data
+        The three-position spectra, including the loads 'internal_load' and
+        'internal_load_plus_noise_source'.
+    tolerance
+        The largest fractional deviation of R from the reference, |R/R_ref - 1|, of an
+        integration that is kept.
+    freq_range
+        The frequency range over which the powers are averaged. The default, 70-110
+        MHz, lies above the out-of-band noise of the EDGES-2 low-band receiver.
+    reference
+        The reference value of R. By default, the median of R over the integrations
+        (separately for each polarization).
+
+    Returns
+    -------
+    mask
+        A boolean array with one entry per integration: True for the integrations to
+        keep, i.e. those within the tolerance in every polarization.
+    """
+    return _r_tolerance_mask(
+        receiver_state_ratio(data, freq_range), tolerance, reference
+    )
+
+
+def receiver_state_ratio(
+    data: GSData,
+    freq_range: tuple[tp.FreqType, tp.FreqType] = (70 * un.MHz, 110 * un.MHz),
+) -> NDArray[np.floating]:
+    """Get the receiver-state ratio R = P_L / (P_LNS - P_L) of each integration.
+
+    The powers of the two internal positions are averaged over ``freq_range`` before
+    forming the ratio. See :func:`flag_data_outside_r_tolerance`.
+
+    Parameters
+    ----------
+    data
+        The three-position spectra, including the loads 'internal_load' and
+        'internal_load_plus_noise_source'.
+    freq_range
+        The frequency range over which the powers are averaged.
+
+    Returns
+    -------
+    r
+        An array of shape (npol, ntime).
+    """
+    band = (data.freqs >= freq_range[0]) & (data.freqs <= freq_range[1])
+    if not np.any(band):
+        raise ValueError(
+            f"The data have no channels in the frequency range {freq_range} used for R."
+        )
+    iload = data.loads.index("internal_load")
+    ilns = data.loads.index("internal_load_plus_noise_source")
+    p_l = np.nanmean(data.data[iload][..., band], axis=-1)
+    p_lns = np.nanmean(data.data[ilns][..., band], axis=-1)
+    return p_l / (p_lns - p_l)
+
+
+def _r_tolerance_mask(
+    r: NDArray[np.floating], tolerance: float, reference: float | None
+) -> NDArray[np.bool]:
+    """Mask of the integrations (last axis of ``r``) within the R tolerance."""
+    ref = np.nanmedian(r, axis=-1, keepdims=True) if reference is None else reference
+    mask = np.all(np.abs(r / ref - 1) <= tolerance, axis=0)
+
+    if not np.any(mask):
+        raise RuntimeError(
+            "The R tolerance has masked all spectra! "
+            f"Tolerance: {tolerance}; reference R: {np.ravel(ref)}; "
+            f"range of R: {(np.nanmin(r), np.nanmax(r))}."
+        )
+    logger.info(
+        f"R tolerance {tolerance}: keeping {mask.sum()} of {mask.size} integrations."
+    )
+    return mask
+
+
 def get_ave_and_var_spec(
     data: GSData,
     thermistor: ThermistorReadings | None = None,
@@ -94,11 +188,21 @@ def get_ave_and_var_spec(
     variance_model: Literal["empirical", "analytic"] = "empirical",
     n_eff: float | None = None,
     channel_correlation: np.ndarray | None = None,
+    r_tolerance: float | None = None,
+    r_freq_range: tuple[tp.FreqType, tp.FreqType] = (70 * un.MHz, 110 * un.MHz),
 ) -> tuple[GSData, GSData]:
     """Get the mean and variance of the spectra.
 
     Parameters
     ----------
+    r_tolerance
+        If given, only use integrations whose receiver state, R = P_L / (P_LNS - P_L)
+        averaged over ``r_freq_range``, is within this fractional tolerance of its
+        median over the integrations that remain after ``ignore_times`` and
+        ``temperature_range``. See :func:`flag_data_outside_r_tolerance`.
+    r_freq_range
+        The frequency range over which R is evaluated for ``r_tolerance``. It is
+        independent of ``f_low`` and ``f_high``.
     frequency_smoothing
         How to average frequency bins together (only used if ``freq_bin_size > 1``).
         The default, 'gauss', does Gaussian filtering (this is the same as Alan's C
@@ -118,6 +222,10 @@ def get_ave_and_var_spec(
         used for ``variance_model='analytic'``. By default, that of the four-term
         Blackman-Harris window.
     """
+    # R of each integration, from the full band so that r_freq_range may lie outside
+    # (f_low, f_high); it is selected in time along with the data below.
+    r = receiver_state_ratio(data, r_freq_range) if r_tolerance is not None else None
+
     data = select_freqs(data, freq_range=(f_low, f_high))
 
     spec_timestamps = data.times[:, time_coordinate_swpos]  # jd
@@ -134,12 +242,20 @@ def get_ave_and_var_spec(
         load=data.loads[time_coordinate_swpos],
     )
     spec_timestamps = spec_timestamps[ignore_ninteg:]
+    if r is not None:
+        r = r[:, ignore_ninteg:]
 
     if temperature_range is not None:
         temp_mask = flag_data_outside_temperature_range(
             temperature_range, spec_timestamps, thermistor
         )
         data = select_times(data, indx=temp_mask)
+        if r is not None:
+            r = r[:, temp_mask]
+
+    if r_tolerance is not None:
+        r_mask = _r_tolerance_mask(r, r_tolerance, reference=None)
+        data = select_times(data, indx=r_mask)
 
     q = dicke_calibration(data)
 
@@ -294,6 +410,8 @@ class LoadSpectrum:
         variance_model: Literal["empirical", "analytic"] = "empirical",
         n_eff: float | None = None,
         channel_correlation: np.ndarray | None = None,
+        r_tolerance: float | None = None,
+        r_freq_range: tuple[tp.FreqType, tp.FreqType] = (70 * un.MHz, 110 * un.MHz),
         invalidate_cache: bool = False,
         cache_dir: Path | None = None,
         temperature: tp.TemperatureType | None = None,
@@ -357,6 +475,11 @@ class LoadSpectrum:
             :func:`get_ave_and_var_spec`.
         channel_correlation
             See :func:`get_ave_and_var_spec`.
+        r_tolerance
+            If given, only use integrations whose receiver state R is within this
+            fractional tolerance of its median; see :func:`get_ave_and_var_spec`.
+        r_freq_range
+            The frequency range over which R is evaluated for ``r_tolerance``.
         invalidate_cache
             If True, do not use any cached spectra even if they exist.
         cache_dir
@@ -440,6 +563,8 @@ class LoadSpectrum:
             variance_model=variance_model,
             n_eff=n_eff,
             channel_correlation=channel_correlation,
+            r_tolerance=r_tolerance,
+            r_freq_range=r_freq_range,
         )
 
         if temperature is None:
