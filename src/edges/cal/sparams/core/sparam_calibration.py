@@ -61,100 +61,6 @@ def gamma2impedance(
     return z0 * (1 + gamma) / (1 - gamma)
 
 
-def gamma_de_embed(
-    gamma: ReflectionCoefficient,
-    sparams: SParams,
-) -> ReflectionCoefficient:
-    """Remove the effect of a 2-port network from a reflection coefficient.
-
-    See Eq. 2 of Monsalve et al., 2016 or
-    https://en.wikipedia.org/wiki/Scattering_parameters#S-parameters_in_amplifier_design
-
-    Parameters
-    ----------
-    gamma
-        The reflection coefficient measured at the reference plane "in front"
-        of the 2-port network / subsystem. The shape should be (N,), where N is the
-        number of frequency points.
-    sparams
-        The S-matrix of the 2-port network / subsystem.
-        The shape should be (2, 2, N), where N is the number of frequency points.
-
-    Returns
-    -------
-    gamma_de_embedded
-        The reflection coefficient at the desired reference plane, on the other
-        side of the 2-port network. The shape is (N,), where N is the number of
-        frequency points.
-
-    See Also
-    --------
-    gamma_embed
-        The inverse function to this one.
-
-    Notes
-    -----
-    Given the reflection coefficient observed at a reference plane on one side of
-    an electrical component/subsystem, this function returns the reflection coefficient
-    at the reference plane on the other side of the subsystem::
-
-       ---         ------------
-      |VNA| ---|---| SUBSYTEM |---|---
-       ---         ------------
-               ^                  ^
-               |                  |
-           MEAS. REF.          DESIRED REF.
-             PLANE               PLANE
-
-    """
-    gamma_in = gamma.reflection_coefficient
-    return ReflectionCoefficient(
-        freqs=gamma.freqs,
-        reflection_coefficient=(gamma_in - sparams.s11)
-        / (sparams.s22 * (gamma_in - sparams.s11) + sparams.s12 * sparams.s21),
-    )
-
-
-def gamma_embed(
-    gamma: ReflectionCoefficient,
-    sparams: SParams,
-) -> ReflectionCoefficient:
-    """Add the effect of a 2-port network to a reflection coefficient.
-
-    See notes for :func:`gamma_de_embed`. This is the inverse function to that one.
-
-    Parameters
-    ----------
-    sparams
-        The S-matrix of the two-port networok. Shape should be (2, 2, N), where N is the
-        number of frequency points.
-    gamma
-        The reflection coefficient at the referance plan on one side
-        of the 2-port network. Shape should be (N,), where N is the number of
-        frequency points.
-
-    Returns
-    -------
-    gamma_ref
-         The reflection coefficient at the reference plane on the other side
-         of the 2-port network. Shape is (N,), where N is the number of frequency
-         points.
-
-    See Also
-    --------
-    gamma_de_embed
-        The inverse function to this one.
-    """
-    gamma_in = gamma.reflection_coefficient
-    return ReflectionCoefficient(
-        freqs=gamma.freqs,
-        reflection_coefficient=(
-            sparams.s11
-            + (sparams.s12 * sparams.s21 * gamma_in) / (1 - sparams.s22 * gamma_in)
-        ),
-    )
-
-
 def continuous_sqrt(product: np.ndarray) -> np.ndarray:
     """Square root of a complex quantity, on a branch continuous along the last axis.
 
@@ -295,31 +201,6 @@ def _solve_osl_systems(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     return x
 
 
-def de_embed_network_from_calkit_measurements(
-    measurements: CalkitReadings, sparams: SParams
-) -> CalkitReadings:
-    """Remove the effect of a 2-port network from each calkit standard measurement.
-
-    This applies :func:`gamma_de_embed` to each of the open, short and match readings.
-
-    Parameters
-    ----------
-    measurements
-        The measurements of the calkit standards.
-    sparams
-        The S-parameters of the 2-port network to de-embed.
-
-    Returns
-    -------
-    readings
-        The calkit readings referenced to the other side of the 2-port network.
-    """
-    return CalkitReadings(**{
-        kind: getattr(measurements, kind).de_embed(sparams)
-        for kind in ("open", "short", "match")
-    })
-
-
 def average_reflection_coefficients(
     s: Sequence[ReflectionCoefficient],
 ) -> ReflectionCoefficient:
@@ -396,10 +277,3 @@ def average_sparams(s: Sequence[SParams]) -> SParams:
         s21=np.mean([ss.s21 for ss in s], axis=0),
         s22=np.mean([ss.s22 for ss in s], axis=0),
     )
-
-
-# Patch some of these functions onto the class definitions, for convenience.
-ReflectionCoefficient.de_embed = gamma_de_embed
-ReflectionCoefficient.embed = gamma_embed
-SParams.from_calkit_measurements = staticmethod(sparams_from_calkit_measurements)
-CalkitReadings.de_embed = de_embed_network_from_calkit_measurements

@@ -76,3 +76,18 @@ class TestTempWithLoss:
         np.testing.assert_allclose(
             src.temp_ave.to_value("K"), loss * 370 + (1 - loss) * 296, rtol=1e-14
         )
+
+    def test_temp_ave_updates_after_setting_loss(self, gsd_averaged: GSData):
+        """Regression test: temp_ave was cached and went stale on mutation."""
+        src = self._source(gsd_averaged, np.ones(gsd_averaged.nfreqs))
+        np.testing.assert_allclose(src.temp_ave.to_value("K"), 370.0, rtol=0, atol=0)
+
+        src.loss = np.zeros(gsd_averaged.nfreqs)
+        np.testing.assert_allclose(src.temp_ave.to_value("K"), 296.0, rtol=0, atol=0)
+
+    def test_temp_ave_updates_after_setting_ambient(self, gsd_averaged: GSData):
+        src = self._source(gsd_averaged, np.zeros(gsd_averaged.nfreqs))
+        np.testing.assert_allclose(src.temp_ave.to_value("K"), 296.0, rtol=0, atol=0)
+
+        src.ambient_temperature = 300.0 * un.K
+        np.testing.assert_allclose(src.temp_ave.to_value("K"), 300.0, rtol=0, atol=0)

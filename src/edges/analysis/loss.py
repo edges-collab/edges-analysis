@@ -54,12 +54,18 @@ def low2_balun_connector_loss(
     return mdl(ants11)
 
 
-def _get_loss(fname: str | Path, freq: np.ndarray, n_terms: int) -> np.ndarray:
+def _get_loss(
+    fname: str | Path, freq: np.ndarray | un.Quantity, n_terms: int
+) -> np.ndarray:
     """Fit a polynomial with ``n_terms`` terms to a tabulated loss, and evaluate it.
 
     The file has two columns: frequency (MHz) and the fractional loss. The returned
-    value is the gain, ``1 - loss``.
+    value is the gain, ``1 - loss``. ``freq`` may be a Quantity (any frequency unit)
+    or a plain array in MHz.
     """
+    if isinstance(freq, un.Quantity):
+        freq = freq.to_value(un.MHz)
+
     gr = np.genfromtxt(fname)
     fr = gr[:, 0]
     dr = gr[:, 1]
@@ -72,7 +78,7 @@ def _get_loss(fname: str | Path, freq: np.ndarray, n_terms: int) -> np.ndarray:
 
 def _get_loss_from_datafile(
     filename: str | Path,
-    freq: np.ndarray,
+    freq: np.ndarray | un.Quantity,
     instrument: str | None,
     configuration: str,
     loss_type: str,
@@ -107,7 +113,7 @@ def _get_loss_from_datafile(
 
 
 def ground_loss(
-    freq: np.ndarray,
+    freq: np.ndarray | un.Quantity,
     filename: str | Path,
     instrument: str | None = None,
     configuration: str = "",
@@ -119,8 +125,9 @@ def ground_loss(
 
     Parameters
     ----------
-    freq : array-like
-        Frequency in MHz. For mid-band (low-band), between 50 and 150 (120) MHz.
+    freq : array-like or Quantity
+        Frequencies. Either a Quantity with frequency units, or a plain array in
+        MHz. For mid-band (low-band), between 50 and 150 (120) MHz.
     filename : path
         File in which value of the ground loss for this instrument are tabulated.
         If it is exactly ``":"``, the built-in file for ``instrument`` (and
@@ -157,7 +164,7 @@ def ground_loss(
 
 
 def antenna_loss(
-    freq: np.ndarray,
+    freq: np.ndarray | un.Quantity,
     filename: str | Path,
     instrument: str | None = None,
     configuration: str = "",
@@ -169,8 +176,9 @@ def antenna_loss(
 
     Parameters
     ----------
-    freq : array-like
-        Frequency in MHz. For mid-band (low-band), between 50 and 150 (120) MHz.
+    freq : array-like or Quantity
+        Frequencies. Either a Quantity with frequency units, or a plain array in
+        MHz. For mid-band (low-band), between 50 and 150 (120) MHz.
     filename : path
         File in which value of the antenna loss for this instrument are tabulated.
         If it is exactly ``":"``, the built-in antenna-loss file for ``instrument``

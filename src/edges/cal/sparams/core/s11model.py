@@ -296,8 +296,3 @@ def smooth_sparams(
         out |= {"s12": s12, "s21": s12}
 
     return SParams(freqs=freqs, **out)
-
-
-# Attach methods to classes for
-ReflectionCoefficient.smoothed = new_s11_modelled
-SParams.smoothed = smooth_sparams

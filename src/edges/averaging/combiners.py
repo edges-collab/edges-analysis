@@ -1,7 +1,6 @@
 """Functions for combining multiple GSData files/objects."""
 
 import logging
-import warnings
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -19,6 +18,7 @@ def average_multiple_objects(
     *objs: Sequence[GSData],
     nsamples_strategy: NsamplesStrategy = NsamplesStrategy.FLAGGED_NSAMPLES,
     use_resids: bool | None = None,
+    fill_value: float = np.nan,
 ) -> GSData:
     """Average multiple GSData objects together.
 
@@ -40,6 +40,10 @@ def average_multiple_objects(
         If True, the residuals will be averaged and added to the average model. If
         False, the residuals will be ignored. If None, the residuals will be used if
         they are present in all objects, and otherwise ignored.
+    fill_value : float
+        The data of channels to which no object contributes any weight (as in
+        :func:`~edges.averaging.lstbin.average_over_times`). Defaults to NaN. Their
+        nsamples are zero, and the model (if any) is kept there.
 
     Returns
     -------
@@ -51,6 +55,14 @@ def average_multiple_objects(
     ValueError
         If the objects do not all have the same shape, or if use_resids is True and one
         or more of the objects has no residuals.
+
+    Notes
+    -----
+    With ``use_resids``, the average is the unweighted mean of the models of all the
+    objects plus the weighted mean of their residuals (B18; EDGES memo 183), so the
+    model of an object contributes to every channel, including channels in which its
+    data are flagged. The model must therefore be known (not NaN) for every object in
+    every channel that has data; otherwise an error is raised.
     """
     if any(obj.data.shape != objs[0].data.shape for obj in objs[1:]):
         raise ValueError("All objects must have the same shape to average them.")
@@ -61,7 +73,11 @@ def average_multiple_objects(
     if use_resids and any(obj.residuals is None for obj in objs):
         raise ValueError("One or more of the input objects has no residuals.")
 
-    acc = _RunningAverage(nsamples_strategy=nsamples_strategy, use_resids=use_resids)
+    acc = _RunningAverage(
+        nsamples_strategy=nsamples_strategy,
+        use_resids=use_resids,
+        fill_value=fill_value,
+    )
     for obj in objs:
         acc.add(obj)
 
@@ -83,10 +99,13 @@ class _RunningAverage:
         The strategy used to weight each object.
     use_resids
         Whether to average residuals (and models separately), or the data directly.
+    fill_value
+        The data of channels to which no object contributes any weight.
     """
 
     nsamples_strategy: NsamplesStrategy
     use_resids: bool
+    fill_value: float = np.nan
     wtot: np.ndarray | None = None
     ntot: np.ndarray | None = None
     sum_wdata: np.ndarray | None = None
@@ -120,20 +139,23 @@ class _RunningAverage:
             model = obj.model
             if self.sum_model is None:
                 self.sum_model = np.zeros(obj.data.shape, dtype=model.dtype)
-                self.nmodel = np.zeros(obj.data.shape[:-1])
+                self.nmodel = np.zeros(obj.data.shape)
                 self.nan_model = np.zeros(obj.data.shape, dtype=bool)
-            self.sum_model += np.where(np.isnan(model), 0, model)
-            self.nmodel += ~np.all(np.isnan(model), axis=-1)
-            self.nan_model |= np.isnan(model)
+            finite = np.isfinite(model)
+            self.sum_model += np.where(finite, model, 0)
+            self.nmodel += finite
+            self.nan_model |= ~finite
 
     def result(self, template: GSData) -> GSData:
         """Compute the average, with metadata taken from ``template``."""
         if self.nobj == 0:
             raise ValueError("No objects were added to the average.")
 
-        final = self.sum_wdata.copy()
+        # Channels to which no object contributes weight are empty: their data are
+        # fill_value (not the zero of an empty sum).
         mask = self.wtot > 0
-        final[mask] /= self.wtot[mask]
+        final = np.full_like(self.sum_wdata, self.fill_value)
+        final[mask] = self.sum_wdata[mask] / self.wtot[mask]
 
         if self.use_resids:
             # The model is averaged (unweighted) over all objects, so it must be known
@@ -144,10 +166,12 @@ class _RunningAverage:
                     "it was given as residuals to NaN data, or read from a GSH5 file "
                     "older than 2.3), so the mean model cannot be formed there."
                 )
-            with warnings.catch_warnings():
-                warnings.filterwarnings("ignore")
-                tot_model = self.sum_model / self.nmodel[..., None]
-            final = tot_model + final
+            # Mean model over the objects whose model is known in each channel (all of
+            # them, in channels with data); NaN where none is.
+            tot_model = np.full_like(self.sum_model, np.nan)
+            known = self.nmodel > 0
+            tot_model[known] = self.sum_model[known] / self.nmodel[known]
+            final = np.where(mask, tot_model + final, self.fill_value)
         else:
             tot_model = None
 
@@ -163,6 +187,7 @@ def average_files_pairwise(
     *files: str | Path,
     nsamples_strategy: NsamplesStrategy = NsamplesStrategy.FLAGGED_NSAMPLES,
     use_resids: bool | None = None,
+    fill_value: float = np.nan,
 ) -> GSData:
     """Average multiple files together, reading at most two at a time.
 
@@ -182,6 +207,8 @@ def average_files_pairwise(
         If True, the residuals will be averaged and added to the average model. If
         False, the residuals will be ignored. If None, the residuals will be used if
         they are present in all files, and otherwise ignored.
+    fill_value : float
+        The data of channels to which no file contributes any weight. Defaults to NaN.
 
     Returns
     -------
@@ -208,11 +235,11 @@ def average_files_pairwise(
     accs = {}
     if use_resids is not False and first.residuals is not None:
         accs[True] = _RunningAverage(
-            nsamples_strategy=nsamples_strategy, use_resids=True
+            nsamples_strategy=nsamples_strategy, use_resids=True, fill_value=fill_value
         )
     if not use_resids:
         accs[False] = _RunningAverage(
-            nsamples_strategy=nsamples_strategy, use_resids=False
+            nsamples_strategy=nsamples_strategy, use_resids=False, fill_value=fill_value
         )
 
     for i, fl in enumerate(files):

@@ -28,8 +28,6 @@ from .core.sparam_calibration import (
     average_reflection_coefficients,
     average_sparams,
     gamma2impedance,
-    gamma_de_embed,
-    gamma_embed,
     impedance2gamma,
 )
 from .devices.hot_load_cable import (

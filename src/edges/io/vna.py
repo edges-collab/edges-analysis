@@ -291,11 +291,39 @@ class SParams:
             raise ValueError("Frequency must be 1D")
 
     @classmethod
-    def from_table(cls, table: QTable):
-        """Create an SParams object from a table."""
+    def from_table(cls, table: QTable) -> Self:
+        """Create an SParams object from a table.
+
+        Parameters
+        ----------
+        table
+            A table with a frequency column (named either ``frequency``, as produced
+            by :func:`read_s1p`, or ``freq``, as produced by :meth:`to_table`) and
+            optional complex columns ``s11``, ``s12``, ``s21`` and ``s22``.
+
+        Returns
+        -------
+        SParams
+            The S-parameters held in the table.
+
+        Raises
+        ------
+        KeyError
+            If the table has neither a ``frequency`` nor a ``freq`` column.
+        """
+        if "frequency" in table.colnames:
+            freq_key = "frequency"
+        elif "freq" in table.colnames:
+            freq_key = "freq"
+        else:
+            raise KeyError(
+                "Table must have a 'frequency' (or 'freq') column. "
+                f"Got columns: {table.colnames}"
+            )
+
         # We slice each entry here so that we copy values, so we don't use a weakref
         return cls(
-            freq=table["frequency"][:],
+            freq=table[freq_key][:],
             s11=table["s11"][:] if "s11" in table.columns else None,
             s12=table["s12"][:] if "s12" in table.columns else None,
             s21=table["s21"][:] if "s21" in table.columns else None,

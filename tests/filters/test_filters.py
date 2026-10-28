@@ -62,6 +62,65 @@ class TestAuxFilter:
         with pytest.raises(ValueError, match="bad_key not in data"):
             filters.aux_filter(mock, maxima={"bad_key": 0})
 
+    @staticmethod
+    def _with_quantity_aux(mock: GSData) -> GSData:
+        # Mimic the units produced by edges.io.auxiliary readers.
+        n = mock.ntimes
+        return mock.update(
+            auxiliary_measurements={
+                "ambient_hum": np.linspace(10.0, 90.0, n) * un.percent,
+                "ambient_temp": np.linspace(270.0, 310.0, n) * un.K,
+                "receiver_temp": np.linspace(20.0, 40.0, n) * un.deg_C,
+            }
+        )
+
+    @pytest.mark.parametrize(
+        ("key", "maximum"),
+        [
+            ("ambient_hum", 50.0),
+            ("ambient_hum", 50.0 * un.percent),
+            ("ambient_hum", 0.5 * un.dimensionless_unscaled),
+            ("ambient_temp", 290.0),
+            ("ambient_temp", 290.0 * un.K),
+            ("ambient_temp", 16.85 * un.deg_C),
+            ("receiver_temp", 30.0),
+            ("receiver_temp", 30.0 * un.deg_C),
+            ("receiver_temp", 303.15 * un.K),
+        ],
+    )
+    def test_quantity_aux_maxima(self, mock, key, maximum):
+        mock = self._with_quantity_aux(mock)
+        data = filters.aux_filter(mock, maxima={key: maximum})
+        aux = mock.auxiliary_measurements[key].value
+        expected = aux > aux[0] + (aux[-1] - aux[0]) / 2 + 1e-8
+        np.testing.assert_array_equal(data.flags["aux_filter"].flags, expected)
+        assert 0 < np.sum(expected) < mock.ntimes
+
+    @pytest.mark.parametrize(
+        ("key", "minimum"),
+        [
+            ("ambient_hum", 50.0),
+            ("ambient_temp", 290.0 * un.K),
+            ("receiver_temp", 30.0),
+        ],
+    )
+    def test_quantity_aux_minima(self, mock, key, minimum):
+        mock = self._with_quantity_aux(mock)
+        data = filters.aux_filter(mock, minima={key: minimum})
+        aux = mock.auxiliary_measurements[key].value
+        expected = aux < aux[0] + (aux[-1] - aux[0]) / 2 - 1e-8
+        np.testing.assert_array_equal(data.flags["aux_filter"].flags, expected)
+        assert 0 < np.sum(expected) < mock.ntimes
+
+    def test_quantity_threshold_incompatible_units(self, mock):
+        mock = self._with_quantity_aux(mock)
+        with pytest.raises(un.UnitConversionError):
+            filters.aux_filter(mock, maxima={"ambient_hum": 290 * un.K})
+
+    def test_quantity_threshold_unitless_column(self, mock):
+        with pytest.raises(ValueError, match="has no unit"):
+            filters.aux_filter(mock, maxima={"ambient_hum": 50 * un.percent})
+
 
 def test_sun_filter(mock):
     run_filter_check(

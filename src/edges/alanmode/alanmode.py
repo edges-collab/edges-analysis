@@ -885,8 +885,8 @@ class Edges3CalobsParams:
 
             # Update the precision of the raws11s because we need to match the
             # C-code which writes to file and reads it back in.
-            s11freq = raws11s[load].freqs
-            np.round(s11freq, decimals=16, out=s11freq)
+            # Don't round in-place: the freqs array belongs to a frozen object.
+            s11freq = np.round(raws11s[load].freqs, decimals=16)
             raws11s[load] = (
                 np.round(raws11s[load].reflection_coefficient.real, decimals=16)
                 + np.round(raws11s[load].reflection_coefficient.imag, decimals=16) * 1j

@@ -124,16 +124,65 @@ def gsdata_filter(multi_data: bool = False):
     return inner
 
 
+def _aux_values_and_threshold(
+    aux, key: str, threshold: float | un.Quantity
+) -> tuple[np.ndarray, float | np.ndarray]:
+    """Get unitless auxiliary values and a threshold expressed in the same unit.
+
+    Parameters
+    ----------
+    aux
+        The auxiliary measurements table (or mapping) of a GSData object.
+    key
+        The column to extract.
+    threshold
+        The threshold. A plain float is interpreted in the column's own unit; a
+        Quantity is converted to the column's unit.
+
+    Returns
+    -------
+    values
+        The column values as a plain array, in the column's own unit.
+    threshold
+        The threshold as a plain number in the column's unit.
+    """
+    col = aux[key]
+    unit = getattr(col, "unit", None)
+    values = col.value if isinstance(col, un.Quantity) else np.asarray(col)
+
+    if isinstance(threshold, un.Quantity):
+        if unit is None:
+            raise ValueError(
+                f"Threshold for auxiliary column '{key}' was given with units "
+                f"({threshold.unit}) but the column has no unit. Pass a plain float."
+            )
+        threshold = threshold.to_value(unit, equivalencies=un.temperature())
+
+    return values, threshold
+
+
 @gsregister("filter")
 @gsdata_filter()
 def aux_filter(
     *,
     data: GSData,
-    minima: dict[str, float] | None = None,
-    maxima: dict[str, float] | None = None,
+    minima: dict[str, float | un.Quantity] | None = None,
+    maxima: dict[str, float | un.Quantity] | None = None,
 ) -> GSFlag:
     """
     Perform an auxiliary filter on the object.
+
+    Thresholds may be given either as plain floats or as astropy Quantities.
+
+    * A plain float is interpreted in the *native unit of the auxiliary column*
+      it is compared to. For example, the ``ambient_hum`` column produced by
+      :func:`edges.io.auxiliary.read_weather_file` is in percent, so a maximum of
+      ``80`` means 80%; ``receiver_temp`` from the thermlog is in degC, so a
+      maximum of ``30`` means 30 degC; ``ambient_temp`` is in K. Columns without
+      units are compared directly to the float.
+    * A Quantity is converted to the column's unit before comparison (temperature
+      equivalencies are enabled, so e.g. a threshold in K can be applied to a
+      column in degC). Quantity thresholds require the column to carry units.
 
     Parameters
     ----------
@@ -146,6 +195,14 @@ def aux_filter(
     -------
     flags
         Boolean array giving which entries are bad.
+
+    Raises
+    ------
+    ValueError
+        If a key is not in the auxiliary measurements, or if a Quantity threshold
+        is given for a column without units.
+    astropy.units.UnitConversionError
+        If a Quantity threshold has units incompatible with its column.
     """
     minima = minima or {}
     maxima = maxima or {}
@@ -170,7 +227,8 @@ def aux_filter(
                 f"{k} not in data.auxiliary_measurements. "
                 f"Allowed: {data.auxiliary_measurements.keys()}"
             )
-        filt(data.auxiliary_measurements[k] < v, f"{k} minimum", flags)
+        values, threshold = _aux_values_and_threshold(data.auxiliary_measurements, k, v)
+        filt(values < threshold, f"{k} minimum", flags)
 
     for k, v in maxima.items():
         if k not in data.auxiliary_measurements.keys():  # ruff: ignore[in-dict-keys]
@@ -178,7 +236,8 @@ def aux_filter(
                 f"{k} not in data.auxiliary_measurements. "
                 f"Allowed: {data.auxiliary_measurements.keys()}"
             )
-        filt(data.auxiliary_measurements[k] > v, f"{k} maximum", flags)
+        values, threshold = _aux_values_and_threshold(data.auxiliary_measurements, k, v)
+        filt(values > threshold, f"{k} maximum", flags)
 
     return GSFlag(flags=flags, axes=("time",))
 

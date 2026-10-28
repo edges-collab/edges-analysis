@@ -125,9 +125,11 @@ def apply_loss_correction(
         the losses.
     loss_function
         A function to compute the loss. The function must accept an array of frequencies
-        as its first argument, and may accept arbitrary other keyword arguments, which
-        will can be passed as kwargs to this function. Either this or loss must be
-        specified.
+        as its first argument (``data.freqs``, an astropy Quantity, is passed), and
+        may accept arbitrary other keyword arguments, which can be passed as kwargs
+        to this function. The built-in :func:`edges.analysis.loss.ground_loss` and
+        :func:`edges.analysis.loss.antenna_loss` can be used directly. Either this or
+        loss must be specified.
 
     Notes
     -----

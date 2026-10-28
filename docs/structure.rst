@@ -61,7 +61,7 @@ present (including none)::
                     {ReceiverReading|Open|Short|Match}<RR>.s1p
                 SwitchingState<NN>/
                     {Open|Short|Match|ExternalOpen|ExternalShort|ExternalMatch}<RR>.s1p
-                {LongCableOpen|LongCableShort|Ambient|HotLoad}<NN>/
+                {LongCableOpen|LongCableShorted|Ambient|HotLoad}<NN>/
                     {Open|Short|Match|External}<RR>.s1p
                 <AntSimX><NN>/
                     {Open|Short|Match|External}<RR>.s1p
@@ -136,7 +136,7 @@ Contents Format:
         - Contains ``{Open|Short|Match|ExternalOpen|ExternalShort|ExternalMatch}<RR>.s1p``.
           These are again all measurements of different internal/external standards. Again,
           see notes on ``<RR>`` above.
-    * ``{Ambient|HotLoad|LongCableOpen|LongCableShort}<NN>/``
+    * ``{Ambient|HotLoad|LongCableOpen|LongCableShorted}<NN>/``
         - *All* of these options *must* be present. They represent the S11 measurements
           of the four calibration loads. Repeat number must be greater or equal to one.
         - Each contains *all* of ``{External|Short|Open|Match}<RR>.s1p``.
