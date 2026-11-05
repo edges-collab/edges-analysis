@@ -23,7 +23,7 @@ from .. import types as tp
 from ..averaging.freqbin import gauss_smooth
 from ..averaging.lstbin import average_over_times
 from ..cal.apply import approximate_temperature
-from ..cal.calobs import CalibrationObservation, Calibrator, InputSource
+from ..cal.calobs import CalibrationObservation, Calibrator
 from ..cal.dicke import dicke_calibration
 from ..cal.loss import (
     LossFunctionGivenSparams,
@@ -589,16 +589,14 @@ def _s11_model_params(
 
 def _get_load_s11s(
     params: EdgesScriptParams,
-    s11cold,
-    s11hot,
-    s11open,
-    s11short,
+    s11cold: np.ndarray,
+    s11hot: np.ndarray,
+    s11open: np.ndarray,
+    s11short: np.ndarray,
     s11mask: np.ndarray,
     s11freq: tp.FreqType,
-    spec_freqs: tp.FreqType,
-) -> tuple[
-    dict[str, ReflectionCoefficient], S11ModelParams, dict[str, ReflectionCoefficient]
-]:
+) -> tuple[dict[str, ReflectionCoefficient], S11ModelParams]:
+    """Return the raw S11s of the loads (within fstart/fstop) and their model."""
     raw_s11s = {
         name: ReflectionCoefficient(
             reflection_coefficient=s11[s11mask],
@@ -613,16 +611,16 @@ def _get_load_s11s(
     }
 
     s11_modelling_params = _s11_model_params(params.nfit2, fourier=params.nfit2 > 16)
-
-    s11_models = {
-        name: s11.smoothed(params=s11_modelling_params, freqs=spec_freqs)
-        for name, s11 in raw_s11s.items()
-    }
-
-    return raw_s11s, s11_modelling_params, s11_models
+    return raw_s11s, s11_modelling_params
 
 
-def _get_receiver_s11(params: EdgesScriptParams, s11lna, s11mask, s11freq, spec_fq):
+def _get_receiver_s11(
+    params: EdgesScriptParams,
+    s11lna: np.ndarray,
+    s11mask: np.ndarray,
+    s11freq: tp.FreqType,
+) -> tuple[ReflectionCoefficient, S11ModelParams]:
+    """Return the raw S11 of the receiver (within fstart/fstop) and its model."""
     raw_receiver = ReflectionCoefficient(
         reflection_coefficient=s11lna[s11mask],
         freqs=s11freq,
@@ -630,8 +628,7 @@ def _get_receiver_s11(params: EdgesScriptParams, s11lna, s11mask, s11freq, spec_
     receiver_model = _s11_model_params(
         params.nfit3, fourier=params.nfit3 > 16 or params.lna_poly == 0
     )
-    receiver = raw_receiver.smoothed(receiver_model, freqs=spec_fq)
-    return raw_receiver, receiver_model, receiver
+    return raw_receiver, receiver_model
 
 
 def _get_hotload_loss(
@@ -713,7 +710,10 @@ def edges(
     """A function that does what the edges3.c and edges2k.c C-code do.
 
     The primary purpose of this function is to model the input S11's, and then
-    determine the noise-wave parameters.
+    determine the noise-wave parameters. The :class:`CalibrationObservation` is
+    assembled with :meth:`CalibrationObservation.from_components` (as in
+    :mod:`edges.cal`), from the given spectra and the raw S11s within
+    ``fstart``/``fstop``.
 
     Parameters
     ----------
@@ -759,39 +759,39 @@ def edges(
     elif kwargs:
         params = attrs.evolve(params, **kwargs)
 
-    # First set up the S11 models
+    # First set up the spectra, then the raw S11s and their models.
     specs = _get_specs(spcold, sphot, spopen, spshort, params, tload, tcal)
     spec_fq = specs["ambient"].freqs
 
     s11mask = get_mask(s11freq, low=params.fstart * un.MHz, high=params.fstop * un.MHz)
     s11freq = s11freq[s11mask]
 
-    raw_load_s11s, s11_model_params, load_s11s = _get_load_s11s(
-        params, s11cold, s11hot, s11open, s11short, s11mask, s11freq, spec_fq
+    raw_load_s11s, s11_model_params = _get_load_s11s(
+        params, s11cold, s11hot, s11open, s11short, s11mask, s11freq
     )
-    raw_receiver, receiver_model_params, receiver = _get_receiver_s11(
-        params, s11lna, s11mask, s11freq, spec_fq=spec_fq
+    raw_receiver, receiver_model_params = _get_receiver_s11(
+        params, s11lna, s11mask, s11freq
     )
 
     hot_loss_model = _get_hotload_loss(
         params, s11rig, s12rig, s22rig, s11mask, s11freq, spec_fq
     )
 
-    loads = {
-        name: InputSource(
-            spectrum=specs[name],
-            reflection_coefficient=load_s11s[name],
-            raw_s11=raw_load_s11s[name],
-            loss=hot_loss_model(load_s11s[name])
-            if name == "hot_load" and hot_loss_model
-            else np.ones(spec_fq.size),
-            ambient_temperature=params.tcold * un.K,
-        )
-        for name in specs
-    }
-
-    calobs = CalibrationObservation(
-        loads=loads, receiver=receiver, raw_receiver=raw_receiver
+    # The raw S11s are already restricted to fstart/fstop (and stored that way), so
+    # the S11 models are fit to all of them. The hot-load loss model is already
+    # defined at the frequencies of the spectra, so it must not be smoothed again
+    # (loss_model_params=None). As in the C code, the ambient temperature of every
+    # load is tcold.
+    calobs = CalibrationObservation.from_components(
+        spectra=specs,
+        raw_s11s=raw_load_s11s,
+        raw_receiver=raw_receiver,
+        s11_model_params=s11_model_params,
+        receiver_model_params=receiver_model_params,
+        s11_freq_range=None,
+        loss_models={"hot_load": hot_loss_model},
+        loss_model_params=None,
+        ambient_temperature=params.tcold * un.K,
     )
     calibrator = get_noise_wave_calibration_iterative(
         calobs,
