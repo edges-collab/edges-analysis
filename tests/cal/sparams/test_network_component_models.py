@@ -490,7 +490,7 @@ class TestTwoPortNetwork:
         s11 = rng.uniform(0, 1, size=10) + rng.uniform(0, 1, size=10) * 1j
         s12 = rng.uniform(0, 1, size=10) + rng.uniform(0, 1, size=10) * 1j
 
-        sparams = dt.SParams(s11=s11, s12=s12, freqs=freqs)
+        sparams = dt.SParams(s11=s11, s12=s12, s21=s12, s22=s11, freqs=freqs)
         network = ncm.TwoPortNetwork.from_smatrix(sparams, z0=50 * un.Ohm)
         out_sp = network.as_sparams(freqs=freqs, source_impedance=50)
         assert out_sp == sparams

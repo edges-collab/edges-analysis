@@ -12,7 +12,6 @@ from edges.cal.sparams import (
     S11ModelParams,
     SParams,
     get_delay,
-    smooth_sparams,
 )
 from edges.cal.sparams.core.s11model import _delay_objective
 
@@ -98,7 +97,7 @@ class TestSmoothSparams:
         )
 
     def test_trivial(self):
-        smoothed = smooth_sparams(self.sparams, params=self.params)
+        smoothed = self.sparams.smoothed(params=self.params)
 
         np.testing.assert_allclose(self.sparams.s11, smoothed.s11, atol=1e-6)
         np.testing.assert_allclose(self.sparams.s12, smoothed.s12, atol=1e-6)
@@ -106,9 +105,7 @@ class TestSmoothSparams:
         np.testing.assert_allclose(self.sparams.s22, smoothed.s22, atol=1e-6)
 
     def test_passing_freqs_trivial(self):
-        smoothed = smooth_sparams(
-            self.sparams, params=self.params, freqs=self.sparams.freqs
-        )
+        smoothed = self.sparams.smoothed(params=self.params, freqs=self.sparams.freqs)
 
         np.testing.assert_allclose(self.sparams.s11, smoothed.s11, atol=1e-6)
         np.testing.assert_allclose(self.sparams.s12, smoothed.s12, atol=1e-6)
@@ -116,8 +113,7 @@ class TestSmoothSparams:
         np.testing.assert_allclose(self.sparams.s22, smoothed.s22, atol=1e-6)
 
     def test_passing_individual_params(self):
-        smoothed = smooth_sparams(
-            self.sparams,
+        smoothed = self.sparams.smoothed(
             params={
                 "s11": self.params,
                 "s12": self.params,
@@ -169,15 +165,15 @@ class TestSmoothSparamsPhaseWrap:
         )
 
     def test_combined(self):
-        smoothed = smooth_sparams(self.sparams, params=self._params(True))
+        smoothed = self.sparams.smoothed(params=self._params(True))
         np.testing.assert_allclose(smoothed.s12 * smoothed.s21, self.s12s21, atol=1e-6)
 
     def test_separate(self):
-        smoothed = smooth_sparams(self.sparams, params=self._params(False))
+        smoothed = self.sparams.smoothed(params=self._params(False))
         np.testing.assert_allclose(smoothed.s12 * smoothed.s21, self.s12s21, atol=1e-6)
 
     def test_combined_s12_is_continuous(self):
         """The square root of the smoothed product follows a continuous branch."""
-        smoothed = smooth_sparams(self.sparams, params=self._params(True))
+        smoothed = self.sparams.smoothed(params=self._params(True))
         np.testing.assert_array_equal(smoothed.s12, smoothed.s21)
         assert np.all(np.real(smoothed.s12[1:] * np.conj(smoothed.s12[:-1])) > 0)

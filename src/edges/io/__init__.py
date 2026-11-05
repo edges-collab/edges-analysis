@@ -27,7 +27,6 @@ __all__ = [
     "LoadDefEDGES3",
     "LoadS11",
     "ReceiverS11",
-    "SParams",
     "get_mean_temperature",
     "read_auxiliary_data",
     "read_s1p",
@@ -51,7 +50,7 @@ from .calobsdef import (
 from .calobsdef3 import CalObsDefEDGES3, LoadDefEDGES3
 from .templogs import get_mean_temperature, read_temperature_log, read_tmp_file
 from .thermistor import read_thermistor_csv
-from .vna import SParams, read_s1p
+from .vna import read_s1p
 
 TEST_DATA_PATH = Path(__file__).parent / "test_data"
 

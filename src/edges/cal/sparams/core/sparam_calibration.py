@@ -1,18 +1,16 @@
 """Functions for calibrating S-parameter measurements.
 
-Functions for de-embedding and embedding 2-port networks,
-as well as generating S-parameters from calkit measurements.
+Functions for converting between impedances and reflection coefficients, for
+averaging S-parameters, and helpers used by
+:meth:`~edges.cal.sparams.SParams.from_calkit_measurements` to generate
+S-parameters from calkit measurements.
 """
 
 from collections.abc import Sequence
-from typing import TYPE_CHECKING
 
 import numpy as np
 
-from .datatypes import CalkitReadings, ReflectionCoefficient, SParams
-
-if TYPE_CHECKING:
-    from .network_component_models import Calkit
+from .datatypes import ReflectionCoefficient, SParams
 
 
 def impedance2gamma(
@@ -106,67 +104,6 @@ def continuous_sqrt(product: np.ndarray) -> np.ndarray:
 _STANDARDS = ("open", "short", "match")
 
 
-def sparams_from_calkit_measurements(
-    measurements: CalkitReadings,
-    model: "CalkitReadings | Calkit | None" = None,
-) -> SParams:
-    """Compute S-parameters of a 2-port network from calkit measurements.
-
-    This uses Eq. 3 of Monsalve et al., 2016.
-
-    Parameters
-    ----------
-    measurements
-        The actual measurements of the calkit standards.
-    model
-        A model of the calkit standards: either the model reflection coefficients
-        at the measured frequencies (:class:`CalkitReadings`), or a
-        :class:`~edges.cal.sparams.Calkit`, which is evaluated at the measured
-        frequencies. If None, ideal standards are assumed.
-
-    Returns
-    -------
-    sparams
-        The S-parameters of the network between the reference plane of the
-        measurements and the standards. Only the product S12*S21 is determined by
-        the calibration; S12 and S21 are both set to its square root, taken on the
-        branch that is continuous across frequency (see :func:`continuous_sqrt`), so
-        that S12 and S21 do not flip sign where the phase of S12*S21 crosses ±π.
-    """
-    from .network_component_models import Calkit
-
-    freq = measurements.freqs
-
-    if isinstance(model, Calkit):
-        model = model.at_freqs(freq)
-    elif model is None:
-        model = CalkitReadings.ideal(freqs=freq)
-
-    # One 3x3 linear system per frequency: rows are the (open, short, match)
-    # standards, with model reflection m and measured reflection b,
-    # [1, m, m*b] @ [e00, e01e10 - e00 e11, e11] = b.
-    m = np.stack(
-        [np.asarray(getattr(model, k).reflection_coefficient) for k in _STANDARDS],
-        axis=-1,
-    )
-    b = np.stack(
-        [
-            np.asarray(getattr(measurements, k).reflection_coefficient)
-            for k in _STANDARDS
-        ],
-        axis=-1,
-    )
-    a = np.stack([np.ones_like(m), m, m * b], axis=-1)
-    x = _solve_osl_systems(a, b)
-
-    s11 = x[:, 0]
-    s12s21 = x[:, 1] + x[:, 0] * x[:, 2]
-    s22 = x[:, 2]
-
-    s12 = continuous_sqrt(s12s21)
-    return SParams(freqs=freq, s11=s11, s12=s12, s21=s12, s22=s22)
-
-
 def _solve_osl_systems(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     """Solve a stack of square linear systems ``a[i] @ x[i] = b[i]``.
 
@@ -218,8 +155,9 @@ def align_transmission_signs(s: Sequence[SParams]) -> list[SParams]:
     the first set by more than 90 degrees in phase, both its S12 and S21 are negated.
     The product S12*S21, and S11 and S22, are unchanged. This puts S-parameters
     whose S12 and S21 are only defined up to a common sign (as from
-    :func:`sparams_from_calkit_measurements`) on a common square-root branch, so that
-    they can be averaged or interpolated element by element.
+    :meth:`~edges.cal.sparams.SParams.from_calkit_measurements`) on a common
+    square-root branch, so that they can be averaged or interpolated element by
+    element.
 
     Parameters
     ----------
@@ -252,12 +190,13 @@ def average_sparams(s: Sequence[SParams]) -> SParams:
 
     S12 and S21 are often only known up to a common sign (only their product is
     determined by a one-port calibration, see
-    :func:`sparams_from_calkit_measurements`). Before averaging, the sign of S12
-    and S21 of each set is therefore aligned, frequency by frequency, to the first
-    set: wherever an S21 points away from the first set's S21 (by more than 90
-    degrees in phase), both its S12 and S21 are negated. This leaves each S12*S21
-    unchanged and avoids the cancellation that occurs when the sets sit on
-    different square-root branches. S11 and S22 are averaged directly.
+    :meth:`~edges.cal.sparams.SParams.from_calkit_measurements`). Before
+    averaging, the sign of S12 and S21 of each set is therefore aligned, frequency
+    by frequency, to the first set: wherever an S21 points away from the first
+    set's S21 (by more than 90 degrees in phase), both its S12 and S21 are negated.
+    This leaves each S12*S21 unchanged and avoids the cancellation that occurs when
+    the sets sit on different square-root branches. S11 and S22 are averaged
+    directly.
 
     Parameters
     ----------

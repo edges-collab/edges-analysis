@@ -1,6 +1,5 @@
 """Methods for modeling and smoothing ReflectionCoefficient (S11) data."""
 
-import logging
 from collections.abc import Callable
 
 import attrs
@@ -17,10 +16,7 @@ from edges.modeling import (
 from edges.modeling.xtransforms import UnitTransform
 from edges.serialization import hickleable
 
-from .datatypes import ReflectionCoefficient, SParams
-from .sparam_calibration import continuous_sqrt
-
-logger = logging.getLogger(__name__)
+from .datatypes import ReflectionCoefficient
 
 
 def get_delay(gamma: ReflectionCoefficient) -> un.Quantity[un.microsecond]:
@@ -203,96 +199,3 @@ def get_s11_model(
     )
 
     return DelayedS11Model(cmodel=cmodel, delay=delay)
-
-
-def new_s11_modelled(
-    gamma: ReflectionCoefficient,
-    params: S11ModelParams,
-    freqs: tp.FreqType | None = None,
-) -> ReflectionCoefficient:
-    """Create a new ReflectionCoefficient that has been smoothed/modelled.
-
-    Parameters
-    ----------
-    raw_s11
-        The input ReflectionCoefficient object.
-    params
-        The set of parameters defining the model used to smooth/interpolate.
-    freqs
-        Optional new frequencies onto which to interpolate. If not given, retain
-        the same set of frequencies.
-
-    Returns
-    -------
-    modelled_s11
-        A new ReflectionCoefficient object that has been smoothed.
-    """
-    if freqs is None:
-        freqs = gamma.freqs
-
-    model = get_s11_model(params, gamma=gamma)
-
-    logger.info(f"Using S11 model with delay={model.delay}")
-
-    return ReflectionCoefficient(freqs=freqs, reflection_coefficient=model(freqs))
-
-
-def smooth_sparams(
-    sparams: SParams,
-    params: S11ModelParams | dict[str, S11ModelParams],
-    freqs: tp.FreqType | None = None,
-) -> SParams:
-    """Smooth all S-parameters using the S11 modeling procedure.
-
-    Parameters
-    ----------
-    sparams
-        The input SParams object.
-    params
-        The set of parameters defining the model used to smooth/interpolate.
-    freqs
-        Optional new frequencies onto which to interpolate. If not given, retain
-        the same set of frequencies.
-
-    Returns
-    -------
-    smoothed_sparams
-        A new SParams object that has been smoothed.
-    """
-    if freqs is None:
-        freqs = sparams.freqs
-
-    if isinstance(params, S11ModelParams):
-        params = {"s11": params, "s12": params, "s21": params, "s22": params}
-
-    if not params["s11"].combine_s12s21:
-        keys = ["s11", "s12", "s21", "s22"]
-    else:
-        keys = ["s11", "s22"]
-
-    out = {
-        param_name: new_s11_modelled(
-            ReflectionCoefficient(
-                freqs=sparams.freqs, reflection_coefficient=getattr(sparams, param_name)
-            ),
-            params[param_name],
-            freqs=freqs,
-        ).reflection_coefficient
-        for param_name in keys
-    }
-
-    if params["s11"].combine_s12s21:
-        s12_s21 = ReflectionCoefficient(
-            freqs=sparams.freqs,
-            reflection_coefficient=(sparams.s12 * sparams.s21),
-        )
-        s12_s21_smoothed = new_s11_modelled(
-            s12_s21,
-            params["s12"],
-            freqs=freqs,
-        ).reflection_coefficient
-
-        s12 = continuous_sqrt(s12_s21_smoothed)
-        out |= {"s12": s12, "s21": s12}
-
-    return SParams(freqs=freqs, **out)
