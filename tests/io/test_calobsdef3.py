@@ -8,6 +8,7 @@ import pytest
 
 from edges.io import CalObsDefEDGES3, calobsdef3, templogs
 from edges.io.calobsdef import CalkitFileSpec
+from edges.io.loads import EDGES3_LAYOUT_NAMES
 
 
 @pytest.fixture(scope="module")
@@ -18,6 +19,33 @@ def mockroot(datadir: Path) -> Path:
 def test_all_files_present(smallcaldef_edges3: CalObsDefEDGES3):
     # Really we just needed to make the thing to test it.
     print(smallcaldef_edges3)
+
+
+def test_load_names_are_canonical(smallcaldef_edges3: CalObsDefEDGES3):
+    for name, load in smallcaldef_edges3.loads.items():
+        assert load.name == name
+
+
+@pytest.mark.parametrize("loadname", ["hot_load", "hot", "HotLoad"])
+def test_loaddef_any_spelling_finds_layout_files(mockroot: Path, loadname: str):
+    load = calobsdef3.LoadDefEDGES3.from_standard_layout(
+        mockroot, loadname, year=2023, day=70
+    )
+    assert load.name == "hot_load"
+    assert load.s11.external.stem.endswith("_hot")
+    assert all(fl.stem.endswith("_hot") for fl in load.spectra)
+
+
+def test_get_spectrum_files_canonical_name(mockroot: Path):
+    assert calobsdef3.get_spectrum_files(
+        "ambient", mockroot, 2023, 70
+    ) == calobsdef3.get_spectrum_files("amb", mockroot, 2023, 70)
+
+
+def test_get_s1p_files_canonical_name(mockroot: Path):
+    files = calobsdef3.get_s1p_files("ambient", 2023, 70, mockroot)
+    assert files == calobsdef3.get_s1p_files("amb", 2023, 70, mockroot)
+    assert files["input"].stem.endswith("_amb")
 
 
 def test_default_templog(smallcaldef_edges3: CalObsDefEDGES3, mockroot: Path):
@@ -341,6 +369,11 @@ class TestFromFiles:
         with pytest.raises(ValueError, match="not named like"):
             CalObsDefEDGES3.from_files(s11_files=[*s11_files, extra], spectra=spectra)
 
+    def test_unknown_spectra_key(self, s11_files, spectra):
+        spectra["hotload"] = spectra.pop("hot")
+        with pytest.raises(ValueError, match="Unknown calibration load 'hotload'"):
+            CalObsDefEDGES3.from_files(s11_files=s11_files, spectra=spectra)
+
     def test_missing_spectra(self, s11_files, spectra):
         del spectra["short"]
         with pytest.raises(FileNotFoundError, match="short"):
@@ -460,8 +493,8 @@ class TestS11SweepMatching:
             spectrum_dir="spectra/{load}",
         )
         for name, load in caldef.loads.items():
-            short = calobsdef3.LOADMAP.inverse[name]
-            assert load.s11.external == s11dir / f"2023_070_11_{short}.s1p"
+            label = EDGES3_LAYOUT_NAMES[name]
+            assert load.s11.external == s11dir / f"2023_070_11_{label}.s1p"
             assert load.s11.calkit.open == s11dir / "2023_070_11_O.s1p"
 
 

@@ -172,6 +172,13 @@ Additional contents: there also *may* exist any number of files with the same fo
 with the load name replaced with ``AntSim<X>``, where ``X`` represents the antenna simulator
 number (from 1-9).
 
+.. note::
+
+    The load names above are those of the file layout only. Within ``edges`` (e.g. as
+    attributes of :class:`edges.io.CalObsDefEDGES2` and as the ``name`` of each load
+    definition), the loads are called by their canonical names ``ambient``,
+    ``hot_load``, ``open`` and ``short`` (see :mod:`edges.io.loads`).
+
 Resistance Folder
 ~~~~~~~~~~~~~~~~~
 The contents have exactly the same formatting as the ``Spectra/`` folder, except that

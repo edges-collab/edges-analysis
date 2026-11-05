@@ -5,19 +5,18 @@ calibration observations. It does *not* implement any algorithms/methods on that
 making it easier to separate the algorithms from the data checking/reading.
 """
 
-import tomllib as toml
 import warnings
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar, Self
 
 import attrs
 import yaml
 from astropy import units as un
-from bidict import bidict
 
 from .. import types as tp
 from ..data import DATA_PATH
+from .loads import EDGES2_LAYOUT_NAMES, LOAD_NAMES, canonical_load_name
 
 if TYPE_CHECKING:
     from .calobsdef3 import S11LoadName
@@ -25,42 +24,22 @@ if TYPE_CHECKING:
 #: Default directory (relative to the root) holding the EDGES-3 ``.s1p`` files.
 DEFAULT_S11_DIR = "."
 
-with (DATA_PATH / "calibration_loads.toml").open("rb") as fl:
-    data = toml.load(fl)
-    LOAD_ALIASES = bidict({v["alias"]: k for k, v in data.items()})
-    LOAD_MAPPINGS = {
-        v: k
-        for k, val in data.items()
-        for v in [*val.get("misspells", []), val["alias"]]
-    }
 
-with (DATA_PATH / "antenna_simulators.toml").open("rb") as fl:
-    ANTENNA_SIMULATORS = toml.load(fl)
+def _load_and_layout_name(
+    loadname: str, layout_names: Mapping[str, str]
+) -> tuple[str, str]:
+    """Return the name of a load and its name in a file layout.
 
-# Dictionary of misspelled:true mappings.
-ANTSIM_REVERSE = {
-    v: k for k, val in ANTENNA_SIMULATORS.items() for v in val.get("misspells", [])
-}
-
-
-def _canonical_load_name(name: str) -> str:
-    """Return the canonical (snake-case) name of a calibration load.
-
-    Both the EDGES-2 file-layout names (e.g. ``HotLoad``) and their known variants
-    (e.g. ``Hot_Load``) are mapped to the canonical alias (e.g. ``hot_load``), as
-    defined in ``calibration_loads.toml``. Unknown names are returned unchanged.
-
-    Parameters
-    ----------
-    name
-        The name of the load.
-
-    Returns
-    -------
-    str
-        The canonical name of the load.
+    A calibration load (in any spelling accepted by
+    :func:`~edges.io.loads.canonical_load_name`) gets its canonical name and its name
+    in the layout. Any other input (e.g. an antenna simulator, ``AntSim3``) is
+    returned unchanged, as both its name and its layout name.
     """
-    return LOAD_ALIASES.inverse.get(LOAD_MAPPINGS.get(name, name), name)
+    try:
+        name = canonical_load_name(loadname)
+    except ValueError:
+        return loadname, loadname
+    return name, layout_names[name]
 
 
 def _list_of_path(x: Sequence[tp.PathLike]) -> list[Path]:
@@ -185,8 +164,10 @@ class CalkitFileSpec:
         root_dir
             The root directory to search in.
         load
-            The name of the load for which the calkit observations were taken
-            (e.g. ``"amb"`` or ``"lna"``).
+            The name of the load for which the calkit observations were taken: a
+            calibration load (any name accepted by
+            :func:`edges.io.loads.canonical_load_name`, e.g. ``"ambient"``), or
+            ``"lna"`` (the receiver) or ``"ant"`` (the antenna).
         year
             The year of observation.
         day
@@ -252,7 +233,9 @@ class LoadDefEDGES2:
     Parameters
     ----------
     name
-        The name of the load.
+        The name of the load. For a calibration load, this is its canonical name (one
+        of :data:`edges.io.loads.LOAD_NAMES`, e.g. ``hot_load``), not its name in the
+        file layout (e.g. ``HotLoad``).
     thermistor
         The thermistor measurements of the load.
     s11
@@ -295,17 +278,22 @@ class LoadDefEDGES2:
         root
             The root directory of the observation.
         loadname
-            The name of the load to search for.
+            The name of the load to search for. A calibration load can be given by
+            any name accepted by :func:`edges.io.loads.canonical_load_name` (e.g.
+            ``hot_load`` or ``HotLoad``): its files are found by its name in the
+            EDGES-2 layout (:data:`edges.io.loads.EDGES2_LAYOUT_NAMES`), and the
+            returned definition has its canonical name. Any other input (e.g. an
+            antenna simulator, ``AntSim3``) is found, and named, by ``loadname`` as
+            given.
         run_num
             The run number to search for.
         rep_num
             The repeat number to search for.
         sparams_file
             An optional file containing S-parameters of the load device (e.g. the
-            semi-rigid cable for a hot load). For the hot load (named ``HotLoad`` in
-            the standard layout, or any alias of it), this defaults to the built-in
-            semi-rigid cable file ``semi_rigid_s_parameters_WITH_HEADER.txt``, so that
-            the hot-load cable loss is applied.
+            semi-rigid cable for a hot load). For the hot load, this defaults to the
+            built-in semi-rigid cable file ``semi_rigid_s_parameters_WITH_HEADER.txt``,
+            so that the hot-load cable loss is applied.
 
         Raises
         ------
@@ -321,32 +309,42 @@ class LoadDefEDGES2:
         """
         root = Path(root)
         _check_edges2_rootdir(root)
+        name, layout_name = _load_and_layout_name(loadname, EDGES2_LAYOUT_NAMES)
+
+        # Some observations name their files with a variant spelling of the load
+        # (e.g. ``Hot_Load``): files named as given take precedence over files with
+        # the standard layout name.
+        if loadname != layout_name and any(
+            (root / "Resistance").glob(f"{loadname}_{run_num:02}_*.csv")
+        ):
+            layout_name = loadname
 
         # Get Resistance
-        res = _sorted_glob(root / "Resistance", f"{loadname}_{run_num:02}_*.csv")
+        res = _sorted_glob(root / "Resistance", f"{layout_name}_{run_num:02}_*.csv")
         if len(res) > 1:
             warnings.warn(
-                f"Found {len(res)} Resistance files for {loadname} run {run_num:02}: "
-                f"{[fl.name for fl in res]}. Using the first, {res[0].name}.",
+                f"Found {len(res)} Resistance files for {layout_name} run "
+                f"{run_num:02}: {[fl.name for fl in res]}. Using the first, "
+                f"{res[0].name}.",
                 stacklevel=2,
             )
         res = res[0]
-        spec = _sorted_glob(root / "Spectra", f"{loadname}_{run_num:02}_*.acq")
+        spec = _sorted_glob(root / "Spectra", f"{layout_name}_{run_num:02}_*.acq")
 
-        s11dir = root / "S11" / f"{loadname}{run_num:02}"
+        s11dir = root / "S11" / f"{layout_name}{run_num:02}"
         clk = CalkitFileSpec.from_edges2_layout(s11dir, rep_num)
         repnum = clk.open.stem[-2:]
         s11 = LoadS11(calkit=clk, external=s11dir / f"External{repnum}.s1p")
 
         # By default, the hot load uses a semi-rigid cable S-parameter file.
-        if _canonical_load_name(loadname) == "hot_load" and sparams_file is None:
+        if name == "hot_load" and sparams_file is None:
             sparams_file = DATA_PATH / "semi_rigid_s_parameters_WITH_HEADER.txt"
 
         return cls(
             thermistor=res,
             s11=s11,
             spectra=spec,
-            name=loadname,
+            name=name,
             sparams_file=sparams_file,
         )
 
@@ -592,24 +590,15 @@ class CalObsDefEDGES2:
         )
 
         # Now, get the Loads
-        open_ = LoadDefEDGES2.from_standard_layout(
-            rootdir, "LongCableOpen", run_num=run_num, rep_num=repeat_num
-        )
-        short = LoadDefEDGES2.from_standard_layout(
-            rootdir, "LongCableShorted", run_num=run_num, rep_num=repeat_num
-        )
-        hotload = LoadDefEDGES2.from_standard_layout(
-            rootdir, "HotLoad", run_num=run_num, rep_num=repeat_num
-        )
-        ambient = LoadDefEDGES2.from_standard_layout(
-            rootdir, "Ambient", run_num=run_num, rep_num=repeat_num
-        )
+        loads = {
+            name: LoadDefEDGES2.from_standard_layout(
+                rootdir, name, run_num=run_num, rep_num=repeat_num
+            )
+            for name in LOAD_NAMES
+        }
 
         return cls(
-            open=open_,
-            short=short,
-            hot_load=hotload,
-            ambient=ambient,
+            **loads,
             internal_switch=swsate,
             receiver_s11=rcv,
             run_num=run_num,

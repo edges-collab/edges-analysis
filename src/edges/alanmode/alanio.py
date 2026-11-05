@@ -14,17 +14,17 @@ from edges.cal.loss import LossFunctionGivenSparams
 from .. import types as tp
 from ..cal import CalibrationObservation, Calibrator
 from ..const import KNOWN_TELESCOPES
+from ..io.loads import EDGES3_LAYOUT_NAMES
 
-# A bi-directional mapping between load-names as used in the C code
-# vs load names in the python code.
-LOADMAP = bidict({
-    "amb": "ambient",
-    "hot": "hot_load",
-    "open": "open",
-    "short": "short",
-})
+#: A bi-directional mapping from the load names used in the S11 files of the C code
+#: (which are the names of the EDGES-3 layout, e.g. ``amb``) to the canonical load
+#: names (e.g. ``ambient``).
+LOADMAP: bidict[str, str] = bidict(EDGES3_LAYOUT_NAMES.inverse)
 
-SPEC_LOADMAP = bidict({
+#: A bi-directional mapping from the load names used in the averaged-spectrum files
+#: of the C code (``spe_<load>r.txt``) to the canonical load names. These are the
+#: same as in :data:`LOADMAP`, except that the ambient load is called ``load``.
+SPEC_LOADMAP: bidict[str, str] = bidict({
     "load": "ambient",
     "hot": "hot_load",
     "open": "open",

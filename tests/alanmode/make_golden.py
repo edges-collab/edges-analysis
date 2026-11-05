@@ -73,7 +73,7 @@ B18_DEFPARAMS = am.Edges2CalobsParams(
     / "s11_calibration_low_band_LNA25degC_2015-09-16-12-30-29_simulator2_long.txt",
     # The ACQ files are not used, since the averaged spectra are in the repository.
     ambient_acqs=[],
-    hotload_acqs=[],
+    hot_load_acqs=[],
     open_acqs=[],
     short_acqs=[],
 )

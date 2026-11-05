@@ -51,6 +51,8 @@ from astropy import units as un
 from astropy.table import QTable
 from astropy.time import Time
 
+from .loads import LoadName, canonical_load_name
+
 #: Mapping of the numeric codes in temperature logs to column names. The codes are the
 #: PR59 thermal controller registers listed in Table 1 of EDGES memo 300: 100 front-end
 #: box temperature, 101 ambient load temperature, 102 hot load temperature, 103
@@ -362,12 +364,42 @@ def get_mean_temperature(
     temperature_table: QTable,
     start_time: Time | None = None,
     end_time: Time | None = None,
-    load: Literal["box", "amb", "hot", "open", "short"] = "box",
-):
+    load: LoadName | Literal["box"] = "box",
+) -> un.Quantity:
     """Get the mean temperature for a particular load from the temperature table.
 
     NaN values (missing or corrupted readings) are ignored.
+
+    Parameters
+    ----------
+    temperature_table
+        The temperature table, as returned by :func:`read_temperature_log`.
+    start_time
+        If given, only use entries at or after this time.
+    end_time
+        If given, only use entries at or before this time.
+    load
+        The calibration load, in any spelling accepted by
+        :func:`edges.io.loads.canonical_load_name` (e.g. ``"hot_load"`` or
+        ``"hot"``), or ``"box"`` for the temperature of the receiver box. The hot load
+        uses the hot-load thermistor (code 102); the ambient, open and short loads
+        (which are at the temperature of the receiver box) and ``"box"`` use the
+        ambient-load thermistor (code 101).
+
+    Returns
+    -------
+    Quantity
+        The mean temperature.
+
+    Raises
+    ------
+    ValueError
+        If ``load`` is not a known load, or the table has no entries between
+        ``start_time`` and ``end_time``.
     """
+    if load != "box":
+        load = canonical_load_name(load)
+
     if start_time is not None or end_time is not None:
         if start_time is None:
             start_time = temperature_table["time"].min()
@@ -388,8 +420,6 @@ def get_mean_temperature(
 
         temperature_table = temperature_table[mask]
 
-    if load in ("hot", "hot_load"):
+    if load == "hot_load":
         return np.nanmean(temperature_table["hot_load_temperature"])
-    if load in ("amb", "ambient", "open", "short", "box"):
-        return np.nanmean(temperature_table["amb_load_temperature"])
-    raise ValueError(f"Unknown load {load}")
+    return np.nanmean(temperature_table["amb_load_temperature"])

@@ -16,6 +16,7 @@ from astropy.convolution import Gaussian1DKernel, convolve
 from .. import types as tp
 from ..cached_property import cached_property, safe_property
 from ..io import calobsdef, calobsdef3
+from ..io.loads import LOAD_NAMES, canonical_load_keys
 from ..serialization import hickleable
 from . import loss
 from . import noise_waves as nw
@@ -102,7 +103,9 @@ class CalibrationObservation:
             Keyword arguments used to instantiate the calibrator :class:`LoadSpectrum`
             objects. See its documentation for relevant parameters. Parameters under
             the key "default" are used for _all_ calibrator sources, and parameters
-            under the name of a source are used for that source only.
+            under the name of a source (in any spelling accepted by
+            :func:`edges.io.loads.canonical_load_name`) are used for that source
+            only.
         s11_kwargs
             Keyword arguments used to calibrate and model the reflection coefficients
             of all calibrator sources (see :meth:`InputSource.from_caldef`). The key
@@ -128,9 +131,11 @@ class CalibrationObservation:
             are fit over the full measured (VNA) band. Either way, the final output is
             calibrated only between the given freq range.
         loss_models
-            A dictionary of loss models for each source. If a particular source has no
-            loss its entry can be missing or None. By default, the hot load uses the
-            cable S-parameters in ``caldef.hot_load.sparams_file``, if it is set.
+            A dictionary of loss models for each source, keyed by load name (in any
+            spelling accepted by :func:`edges.io.loads.canonical_load_name`). If a
+            particular source has no loss its entry can be missing or None. By
+            default, the hot load uses the cable S-parameters in
+            ``caldef.hot_load.sparams_file``, if it is set.
         loss_model_params
             Parameters used to smooth the S-parameters of loss models onto the
             frequencies of the spectra. If None, use
@@ -151,7 +156,7 @@ class CalibrationObservation:
                 else caldef.receiver_s11[0].calkit_match_resistance,
             )
 
-        loss_models = dict(loss_models or {})
+        loss_models = canonical_load_keys(loss_models or {})
         if "hot_load" not in loss_models and caldef.hot_load.sparams_file is not None:
             hot_load_cable_sparams = sp.read_semi_rigid_cable_sparams_file(
                 caldef.hot_load.sparams_file, f_low=f_low, f_high=f_high
@@ -213,7 +218,9 @@ class CalibrationObservation:
             Keyword arguments used to instantiate the calibrator :class:`LoadSpectrum`
             objects. See its documentation for relevant parameters. Parameters under
             the key "default" are used for _all_ calibrator sources, and parameters
-            under the name of a source are used for that source only.
+            under the name of a source (in any spelling accepted by
+            :func:`edges.io.loads.canonical_load_name`) are used for that source
+            only.
         s11_kwargs
             Keyword arguments used to calibrate and model the reflection coefficients
             of all calibrator sources (see :meth:`InputSource.from_caldef`). The key
@@ -234,14 +241,15 @@ class CalibrationObservation:
             are fit over the full measured (VNA) band. Either way, the final output is
             calibrated only between the given freq range.
         loss_models
-            A dictionary of loss models for each source. If a particular source has no
-            loss its entry can be missing or None. By default, the only source with loss
-            is the hot_load, which uses a 4" cable.
+            A dictionary of loss models for each source, keyed by load name (in any
+            spelling accepted by :func:`edges.io.loads.canonical_load_name`). If a
+            particular source has no loss its entry can be missing or None. By
+            default, the only source with loss is the hot_load, which uses a 4" cable.
         kwargs
             Passed through to :meth:`_from_caldef` (e.g. ``loss_model_params``).
             Unknown keywords raise a TypeError.
         """
-        loss_models = dict(loss_models or {})
+        loss_models = canonical_load_keys(loss_models or {})
         if "hot_load" not in loss_models:
             loss_models["hot_load"] = loss.get_cable_loss_model("UT-141C-SP")
 
@@ -300,7 +308,9 @@ class CalibrationObservation:
             Keyword arguments used to instantiate the calibrator :class:`LoadSpectrum`
             objects. See its documentation for relevant parameters. Parameters under
             the key "default" are used for _all_ calibrator sources, and parameters
-            under the name of a source are used for that source only.
+            under the name of a source (in any spelling accepted by
+            :func:`edges.io.loads.canonical_load_name`) are used for that source
+            only.
         s11_kwargs
             Keyword arguments used to calibrate and model the reflection coefficients
             of all calibrator sources (see :meth:`InputSource.from_caldef`). The key
@@ -323,8 +333,9 @@ class CalibrationObservation:
             are fit over the full measured (VNA) band. Either way, the final output is
             calibrated only between the given freq range.
         loss_models
-            A dictionary of loss models for each source. If a particular source has no
-            loss its entry can be missing or None.
+            A dictionary of loss models for each source, keyed by load name (in any
+            spelling accepted by :func:`edges.io.loads.canonical_load_name`). If a
+            particular source has no loss its entry can be missing or None.
         loss_model_params
             Parameters used to smooth the S-parameters of loss models onto the
             frequencies of the spectra. If None, use
@@ -354,7 +365,13 @@ class CalibrationObservation:
 
         raw_receiver = sp.get_gamma_receiver_from_filespec(caldef, **receiver_kwargs)
 
-        spectrum_kwargs = {k: dict(v) for k, v in spectrum_kwargs.items()}
+        spectrum_kwargs = {
+            k: dict(v)
+            for k, v in canonical_load_keys(
+                spectrum_kwargs, other_keys=("default",)
+            ).items()
+        }
+        loss_models = canonical_load_keys(loss_models)
         spectrum_kwargs.setdefault("default", {})
         spectrum_kwargs["default"].setdefault("freq_bin_size", freq_bin_size)
 
@@ -381,7 +398,8 @@ class CalibrationObservation:
 
         loads |= {
             src: get_load(src, ambient_temperature=amb.temp_ave)
-            for src in ("hot_load", "open", "short")
+            for src in LOAD_NAMES
+            if src != "ambient"
         }
 
         # Smooth the receiver s11 (optionally fitting only within [f_low, f_high]).

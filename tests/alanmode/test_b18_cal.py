@@ -46,7 +46,7 @@ def b18cal(tmpdir, testdata_path):
             DATA / "Ambient_01_2015_245_02_00_00_lab.acq",
             DATA / "Ambient_01_2015_246_02_00_00_lab.acq",
         ],
-        hotload_acqs=[
+        hot_load_acqs=[
             DATA / "HotLoad_01_2015_246_04_00_00_lab.acq",
             DATA / "HotLoad_01_2015_247_00_00_00_lab.acq",
         ],

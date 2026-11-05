@@ -15,13 +15,14 @@ from read_acq.read_acq import Ancillary
 
 from .. import types as tp
 from ..const import KNOWN_TELESCOPES
+from .loads import EDGES3_LAYOUT_NAMES
 
 logger = logging.getLogger(__name__)
 
 # Values of the fastspec ``--instrument`` header item for EDGES-3. Unlike EDGES-2
 # (where it is the band, e.g. "low2"), EDGES-3 writes one file per load, named by
-# the load being measured.
-EDGES3_LOADS = frozenset({"ant", "amb", "hot", "open", "short"})
+# the load being measured (with its name in the EDGES-3 layout), or the antenna.
+EDGES3_LOADS = frozenset({"ant", *EDGES3_LAYOUT_NAMES.values()})
 
 # Fastspec ``--site`` values of EDGES-3 deployments that have a telescope preset.
 EDGES3_SITES = {"mro": "edges3", "hmp": "edges3-devon"}

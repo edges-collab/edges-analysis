@@ -14,6 +14,7 @@ High-Level File Specification
     :toctree: _autosummary
     :template: module.rst
 
+    edges.io.loads
     edges.io.calobsdef
     edges.io.calobsdef3
     edges.io.ants11
