@@ -108,6 +108,24 @@ class TestInputSource:
         assert new.reflection_coefficient.freqs.size == load.freqs.size
         assert new.name == ""
 
+    def test_from_caldef_given_s11_model_and_spectrum_range(
+        self, caldef: CalObsDefEDGES2
+    ):
+        """S11 model parameters and a spectrum range given in the kwargs are used."""
+        params = sp.input_source_model_params(name="short")
+        params = attrs.evolve(params, model=params.model.with_nterms(11))
+        load = InputSource.from_caldef(
+            caldef,
+            load_name="short",
+            ambient_temperature=300.0 * un.K,
+            s11_kwargs={"model_params": params},
+            spec_kwargs={"f_low": 60 * un.MHz, "f_high": 90 * un.MHz},
+        )
+        assert load.freqs.min() >= 60 * un.MHz
+        assert load.freqs.max() <= 90 * un.MHz
+        expected = load._raw_s11.smoothed(params, freqs=load.freqs)
+        np.testing.assert_array_equal(load.reflection_coefficient.s11, expected.s11)
+
 
 class TestTempWithLoss:
     """Limits of the loss-corrected source temperature."""

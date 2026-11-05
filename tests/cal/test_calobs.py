@@ -347,6 +347,26 @@ def test_restrict_s11_model_freqs_receiver(
         )
 
 
+def test_loss_model_params(calobs: CalibrationObservation, caldef: CalObsDefEDGES2):
+    """loss_model_params sets how the hot-load cable S-parameters are smoothed."""
+    kw = {"f_low": 50 * un.MHz, "f_high": 100 * un.MHz}
+    default = CalibrationObservation.from_edges2_caldef(
+        caldef, loss_model_params=sp.hot_load_cable_model_params(), **kw
+    )
+    np.testing.assert_array_equal(default.hot_load.loss, calobs.hot_load.loss)
+
+    other = CalibrationObservation.from_edges2_caldef(
+        caldef,
+        loss_model_params=sp.hot_load_cable_model_params(
+            model=mdl.Fourier(
+                n_terms=9, transform=mdl.ZerotooneTransform(range=(0, 1)), period=1.5
+            )
+        ),
+        **kw,
+    )
+    assert not np.array_equal(other.hot_load.loss, calobs.hot_load.loss)
+
+
 # The inputs of CalibrationObservation.from_components that are given per load.
 _PER_LOAD_INPUTS = ("spectra", "raw_s11s", "s11_model_params")
 
