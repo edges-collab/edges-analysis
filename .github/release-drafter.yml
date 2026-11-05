@@ -41,13 +41,20 @@ categories:
 name-template: 'v$RESOLVED_VERSION'
 tag-template: 'v$RESOLVED_VERSION'
 
+# This is the 8.x maintenance branch: it only gets v8-compatible bug fixes, released
+# as v8 versions. Its draft and previous release are those targeting this branch, and
+# only v8 tags count.
+filter-by-commitish: true
+filter-by-range: '^8'
+# PRs that break the API belong on main (v9). This also leaves out the part of #334
+# that was merged before this branch was created and is reverted here.
+exclude-labels:
+  - "API Breaking"
+
 # The next version is resolved from the labels of the PRs merged since the last
 # release: the highest bump wins. Fixes that change results (type: accuracy) are a
-# minor bump; only API Breaking is a major one.
+# minor bump. There are no major bumps on this branch.
 version-resolver:
-  major:
-    labels:
-      - "API Breaking"
   minor:
     labels:
       - "type: feature: ui"
