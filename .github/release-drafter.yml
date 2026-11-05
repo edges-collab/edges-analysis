@@ -41,6 +41,10 @@ categories:
 name-template: 'v$RESOLVED_VERSION'
 tag-template: 'v$RESOLVED_VERSION'
 
+# Only releases made from this branch count as its draft and previous release, so
+# that v8 bug-fix releases from the 8.x maintenance branch do not mix in.
+filter-by-commitish: true
+
 # The next version is resolved from the labels of the PRs merged since the last
 # release: the highest bump wins. Fixes that change results (type: accuracy) are a
 # minor bump; only API Breaking is a major one.
