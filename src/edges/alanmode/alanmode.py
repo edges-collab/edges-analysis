@@ -485,19 +485,81 @@ def _get_specs(
     return specs
 
 
-def _fourier_or_polynomial(
+def _s11_model_params(
     n_terms: int,
+    *,
     fourier: bool,
-    fourier_transform: mdl.XTransform,
-    polynomial_transform: mdl.XTransform,
-) -> mdl.Model:
-    """Return the S11 model of the C code: a Fourier series or a polynomial.
+    fourier_transform: mdl.XTransform | None = None,
+    polynomial_transform: mdl.XTransform | None = None,
+    set_transform_range: bool = True,
+    fit_method: str = "alan-qrd",
+    find_model_delay: bool = True,
+    combine_s12s21: bool = True,
+) -> S11ModelParams:
+    """Return the parameters of an S11 model as used by the C code.
 
-    Only the Fourier series takes a period (1.5, as in the C code).
+    The C code models S11s with either a Fourier series (with a period of 1.5) or a
+    polynomial, fitted to the real and imaginary parts separately. This is the single
+    place where alanmode builds these parameters; the call sites differ only in the
+    keyword arguments.
+
+    Parameters
+    ----------
+    n_terms
+        The number of terms of the model.
+    fourier
+        Whether to use a Fourier series (otherwise a polynomial).
+    fourier_transform
+        The coordinate transform of the Fourier series. Required if
+        ``set_transform_range`` is False. If ``set_transform_range`` is True, its range
+        is replaced by the frequency range of the data when fitting, so by default a
+        :class:`~edges.modeling.ZerotooneTransform` whose range is a placeholder.
+    polynomial_transform
+        The coordinate transform of the polynomial. Required if
+        ``set_transform_range`` is False. If ``set_transform_range`` is True, its scale
+        is replaced by the centre of the frequency range of the data when fitting, so
+        by default a :class:`~edges.modeling.Log10Transform` whose scale is a
+        placeholder.
+    set_transform_range
+        Whether to set the range (or scale) of the transform from the data when
+        fitting (see :class:`~edges.cal.sparams.S11ModelParams`).
+    fit_method
+        The method used to fit the model.
+    find_model_delay
+        Whether to find and remove a delay before fitting the model.
+    combine_s12s21
+        Whether to model the product S12*S21 (only used for two-port S-parameters).
+
+    Returns
+    -------
+    S11ModelParams
+        The parameters of the S11 model.
     """
+    if set_transform_range:
+        # Placeholders: the range and the scale are set from the data when fitting.
+        if fourier_transform is None:
+            fourier_transform = mdl.ZerotooneTransform(range=(1, 2))
+        if polynomial_transform is None:
+            polynomial_transform = mdl.Log10Transform(scale=1)
+    elif fourier_transform is None or polynomial_transform is None:
+        raise ValueError(
+            "fourier_transform and polynomial_transform are required if "
+            "set_transform_range is False"
+        )
+
     if fourier:
-        return mdl.Fourier(n_terms=n_terms, transform=fourier_transform, period=1.5)
-    return mdl.Polynomial(n_terms=n_terms, transform=polynomial_transform)
+        model = mdl.Fourier(n_terms=n_terms, transform=fourier_transform, period=1.5)
+    else:
+        model = mdl.Polynomial(n_terms=n_terms, transform=polynomial_transform)
+
+    return S11ModelParams(
+        model=model,
+        complex_model_type=mdl.ComplexRealImagModel,
+        set_transform_range=set_transform_range,
+        fit_method=fit_method,
+        find_model_delay=find_model_delay,
+        combine_s12s21=combine_s12s21,
+    )
 
 
 def _get_load_s11s(
@@ -525,18 +587,7 @@ def _get_load_s11s(
         )
     }
 
-    s11_modelling_params = S11ModelParams(
-        model=_fourier_or_polynomial(
-            n_terms=params.nfit2,
-            fourier=params.nfit2 > 16,
-            fourier_transform=mdl.ZerotooneTransform(range=(1, 2)),
-            polynomial_transform=mdl.Log10Transform(scale=1),
-        ),
-        complex_model_type=mdl.ComplexRealImagModel,
-        set_transform_range=True,
-        fit_method="alan-qrd",
-        find_model_delay=True,
-    )
+    s11_modelling_params = _s11_model_params(params.nfit2, fourier=params.nfit2 > 16)
 
     s11_models = {
         name: s11.smoothed(params=s11_modelling_params, freqs=spec_freqs)
@@ -551,17 +602,8 @@ def _get_receiver_s11(params: EdgesScriptParams, s11lna, s11mask, s11freq, spec_
         reflection_coefficient=s11lna[s11mask],
         freqs=s11freq,
     )
-    receiver_model = S11ModelParams(
-        model=_fourier_or_polynomial(
-            n_terms=params.nfit3,
-            fourier=params.nfit3 > 16 or params.lna_poly == 0,
-            fourier_transform=mdl.ZerotooneTransform(range=(1, 2)),
-            polynomial_transform=mdl.Log10Transform(scale=120),
-        ),
-        complex_model_type=mdl.ComplexRealImagModel,
-        set_transform_range=True,
-        fit_method="alan-qrd",
-        find_model_delay=True,
+    receiver_model = _s11_model_params(
+        params.nfit3, fourier=params.nfit3 > 16 or params.lna_poly == 0
     )
     receiver = raw_receiver.smoothed(receiver_model, freqs=spec_fq)
     return raw_receiver, receiver_model, receiver
@@ -582,18 +624,18 @@ def _get_hotload_loss(
         if s11rig is None or s12rig is None or s22rig is None:
             raise ValueError("must provide rigid cable s11/s12/s22 if Lh=-2")
 
-        hlc_model_params = S11ModelParams(
-            model=_fourier_or_polynomial(
-                n_terms=params.nfit2,
-                fourier=params.nfit2 > 16,
-                fourier_transform=mdl.ZerotooneTransform(
-                    range=(s11freq.min().to_value("MHz"), s11freq.max().to_value("MHz"))
-                ),
-                polynomial_transform=mdl.Log10Transform(scale=1),
+        # Unlike for the S11s of the loads and the receiver, the transforms are fixed
+        # here (not set from the data), and no delay is removed before fitting.
+        hlc_model_params = _s11_model_params(
+            params.nfit2,
+            fourier=params.nfit2 > 16,
+            fourier_transform=mdl.ZerotooneTransform(
+                range=(s11freq.min().to_value("MHz"), s11freq.max().to_value("MHz"))
             ),
+            polynomial_transform=mdl.Log10Transform(scale=1),
             set_transform_range=False,
-            complex_model_type=mdl.ComplexRealImagModel,
             fit_method="lstsq",
+            find_model_delay=False,
             combine_s12s21=False,
         )
 
