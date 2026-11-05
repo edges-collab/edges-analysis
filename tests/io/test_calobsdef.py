@@ -182,6 +182,22 @@ def test_loaddef_any_spelling_finds_layout_files(mock_calobs_dir: Path, loadname
     assert load.sparams_file.name == "semi_rigid_s_parameters_WITH_HEADER.txt"
 
 
+def test_loaddef_variant_spelling_on_disk(tmp_path: Path, mock_calobs_dir: Path):
+    # An observation whose files use a variant spelling of the load name (here
+    # ``Hot_Load``) is found by that spelling, and the load gets its canonical name.
+    root = tmp_path / mock_calobs_dir.name
+    shutil.copytree(mock_calobs_dir, root)
+    for sub, pattern in (("Resistance", "HotLoad_*"), ("Spectra", "HotLoad_*")):
+        for fl in (root / sub).glob(pattern):
+            fl.rename(fl.with_name(fl.name.replace("HotLoad", "Hot_Load")))
+    (root / "S11" / "HotLoad01").rename(root / "S11" / "Hot_Load01")
+
+    load = calobsdef.LoadDefEDGES2.from_standard_layout(root, "Hot_Load")
+    assert load.name == "hot_load"
+    assert load.thermistor.name.startswith("Hot_Load_01_")
+    assert load.s11.external.parent.name == "Hot_Load01"
+
+
 def test_loaddef_non_calibration_load_is_kept(mock_calobs_dir: Path):
     load = calobsdef.LoadDefEDGES2.from_standard_layout(mock_calobs_dir, "AntSim3")
     assert load.name == "AntSim3"

@@ -311,6 +311,14 @@ class LoadDefEDGES2:
         _check_edges2_rootdir(root)
         name, layout_name = _load_and_layout_name(loadname, EDGES2_LAYOUT_NAMES)
 
+        # Some observations name their files with a variant spelling of the load
+        # (e.g. ``Hot_Load``): files named as given take precedence over files with
+        # the standard layout name.
+        if loadname != layout_name and any(
+            (root / "Resistance").glob(f"{loadname}_{run_num:02}_*.csv")
+        ):
+            layout_name = loadname
+
         # Get Resistance
         res = _sorted_glob(root / "Resistance", f"{layout_name}_{run_num:02}_*.csv")
         if len(res) > 1:
