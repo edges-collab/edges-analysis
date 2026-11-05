@@ -269,7 +269,7 @@ def test_composite_roundtrip(tmpdir):
     mdl2 = mdl.Polynomial(n_terms=5, parameters=[0, 1, 2, 3, 4])
     cmp = mdl.CompositeModel(models={"lin": mdl1, "pl": mdl2})
 
-    from edges.io.serialization import converter
+    from edges.serialization import converter
 
     converter.unstructure(mdl1)
     converter.unstructure(mdl2)

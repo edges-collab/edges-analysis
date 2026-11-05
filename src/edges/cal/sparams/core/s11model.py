@@ -8,7 +8,6 @@ import numpy as np
 from astropy import units as un
 
 from edges import types as tp
-from edges.io.serialization import hickleable
 from edges.modeling import (
     ComplexMagPhaseModel,
     ComplexRealImagModel,
@@ -16,6 +15,7 @@ from edges.modeling import (
     Model,
 )
 from edges.modeling.xtransforms import UnitTransform
+from edges.serialization import hickleable
 
 from .datatypes import ReflectionCoefficient, SParams
 from .sparam_calibration import continuous_sqrt

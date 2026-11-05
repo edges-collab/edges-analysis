@@ -9,8 +9,8 @@ import numpy as np
 from astropy import units as un
 
 from edges import types as tp
-from edges.io import hickleable
 from edges.modeling import CompositeModel, Model
+from edges.serialization import hickleable
 
 from ..tools import ComplexSpline, Spline
 from ..units import vld_unit

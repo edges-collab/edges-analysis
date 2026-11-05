@@ -9,7 +9,7 @@ import attrs
 import numpy as np
 import yaml
 
-from ..io.serialization import hickleable
+from ..serialization import hickleable
 from ..tools import as_readonly
 from . import composite, fitting
 from . import data_transforms as dt

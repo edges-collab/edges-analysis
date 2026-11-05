@@ -8,7 +8,7 @@ import attrs
 import numpy as np
 import yaml
 
-from ..io.serialization import hickleable
+from ..serialization import hickleable
 from . import data_transforms as dt
 from . import fitting
 from .core import FixedLinearModel, Model

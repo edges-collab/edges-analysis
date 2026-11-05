@@ -1,7 +1,15 @@
-"""The edges analysis package."""
+"""The edges analysis package.
 
-from importlib.metadata import PackageNotFoundError, version
-from pathlib import Path
+Sub-packages that register processing functions with :mod:`pygsdata` (via
+``gsregister``, so that they are available by name in
+``pygsdata.GSDATA_PROCESSORS``) are imported eagerly, so that ``import edges`` keeps
+registering all of them. The remaining sub-packages (``alanmode`` and ``inference``)
+are imported lazily on first attribute access (PEP 562), e.g. ``edges.inference`` or
+``from edges import alanmode``.
+"""
+
+import importlib
+from typing import TYPE_CHECKING
 
 __all__ = [
     "DATA_PATH",
@@ -22,35 +30,35 @@ __all__ = [
     "types",
 ]
 
-try:
-    __version__ = version("edges-analysis")
-except PackageNotFoundError:
-    # package is not installed
-    __version__ = "unknown"
+from ._version import __version__
+from .data import DATA_PATH, get_data_path
 
-
-DATA_PATH = Path(__file__).parent / "data"
-
-
-def get_data_path(pth: str | Path) -> Path:
-    """Impute the global data path to a given input in place of a colon."""
-    if isinstance(pth, str):
-        return DATA_PATH / pth[1:] if pth.startswith(":") else Path(pth)
-    return pth
-
-
-from . import (
-    alanmode,
+# These sub-packages register GSData processors with pygsdata on import, and so must
+# be imported eagerly.
+from . import (  # isort: skip
     analysis,
     averaging,
     cal,
     filters,
-    inference,
-    io,
-    modeling,
-    sim,
-    tools,
-    types,
 )
+from . import io, modeling, serialization, sim, tools, types
+from .cal import apply as _cal_apply  # registers approximate_temperature
 from .frequencies import edges_raw_freqs
-from .io import serialization
+
+if TYPE_CHECKING:
+    from . import alanmode, inference
+
+_LAZY_SUBPACKAGES = frozenset({"alanmode", "inference"})
+
+
+def __getattr__(name: str):
+    """Import the heavier, non-registering sub-packages on first access."""
+    if name in _LAZY_SUBPACKAGES:
+        # Importing the sub-module also sets it as an attribute of this package.
+        return importlib.import_module(f"{__name__}.{name}")
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def __dir__() -> list[str]:
+    """List the public attributes, including lazily-imported sub-packages."""
+    return sorted(set(globals()) | _LAZY_SUBPACKAGES)

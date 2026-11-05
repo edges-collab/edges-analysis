@@ -9,6 +9,7 @@ Package Config and Utilities
     edges.config
     edges.tools
     edges.frequencies
+    edges.serialization
     edges.testing
     edges.types
     edges.units

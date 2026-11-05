@@ -7,7 +7,7 @@ from typing import ClassVar
 import attrs
 import numpy as np
 
-from ..io.serialization import hickleable
+from ..serialization import hickleable
 from . import core
 from .xtransforms import Log10Transform, LogTransform, ScaleTransform, XTransform
 

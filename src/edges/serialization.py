@@ -18,7 +18,7 @@ from astropy.time import Time
 from astropy.units import Quantity, Unit
 from astropy.units.core import UnitBase
 
-from .. import types as tp
+from . import types as tp
 
 T = TypeVar("T")
 

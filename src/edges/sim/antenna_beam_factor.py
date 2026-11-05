@@ -11,7 +11,7 @@ from astropy.coordinates import Longitude
 
 from edges import const
 from edges import modeling as mdl
-from edges.io.serialization import hickleable
+from edges.serialization import hickleable
 from edges.sim import sky_models
 from edges.sim.beams import Beam
 

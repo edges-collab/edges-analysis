@@ -11,7 +11,7 @@ from astropy.time import Time
 from astropy.units import Quantity, Unit
 from astropy.units.core import UnitBase
 
-from edges.io.serialization import converter, hickleable
+from edges.serialization import converter, hickleable
 
 
 @hickleable
@@ -267,3 +267,50 @@ def test_write_object_to_hdf5_closes_file_on_error(tmp_path, monkeypatch):
     obj.write(tmp_path / "obj.h5")
     assert _n_open_h5_files() == before
     assert _HickleBase.from_file(tmp_path / "obj.h5") == obj
+
+
+@hickleable
+@attrs.define
+class _Thing:
+    """A hickleable class defined outside the package."""
+
+    x: int
+    arr: np.ndarray
+
+
+def test_files_do_not_depend_on_module_paths(tmp_path):
+    from edges import modeling as mdl
+    from edges import serialization
+
+    model = mdl.CompositeModel(
+        models={
+            "lin": mdl.PhysicalLin(
+                parameters=[0, 1, 2], xtransform=mdl.ScaleTransform(scale=1.5)
+            ),
+            "pl": mdl.Polynomial(n_terms=3, parameters=[0, 1, 2]),
+        }
+    )
+
+    serialization.write_object_to_hdf5(model, tmp_path / "model.h5")
+    assert serialization.load_hdf5(mdl.CompositeModel, tmp_path / "model.h5") == model
+    assert mdl.CompositeModel.from_file(tmp_path / "model.h5") == model
+
+    thing = _Thing(x=3, arr=np.arange(4.0))
+    thing.write(tmp_path / "thing.h5")
+    loaded = serialization.load_hdf5(_Thing, tmp_path / "thing.h5")
+    assert loaded.x == 3
+    np.testing.assert_allclose(loaded.arr, thing.arr, rtol=0, atol=0)
+
+    # Classes are looked up by their bare ``__classname__`` (not a module path), so
+    # files do not depend on where the serialization module lives: no module path
+    # of the package appears anywhere in the raw file (incl. hickle's pickled type
+    # table), while the class names do.
+    for fname, clsname in [
+        ("model.h5", b"CompositeModel"),
+        ("thing.h5", b"_Thing"),
+    ]:
+        raw = (tmp_path / fname).read_bytes()
+        assert clsname in raw
+        assert b"__classname__" in raw
+        assert b"edges" not in raw
+        assert b"serialization" not in raw

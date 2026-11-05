@@ -7,7 +7,7 @@ import attrs
 import numpy as np
 import yaml
 
-from ..io.serialization import hickleable
+from ..serialization import hickleable
 
 
 def _transform_yaml_constructor(loader: yaml.SafeLoader, node: yaml.nodes.MappingNode):

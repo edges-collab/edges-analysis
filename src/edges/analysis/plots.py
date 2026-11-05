@@ -1,6 +1,9 @@
 """Plotting utilities."""
 
-import matplotlib.pyplot as plt
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import numpy as np
 from astropy import units as apu
 from pygsdata import GSData
@@ -10,6 +13,9 @@ from .. import modeling as mdl
 from ..averaging import averaging
 from ..averaging.lstbin import average_over_times
 from .datamodel import add_model
+
+if TYPE_CHECKING:
+    import matplotlib.pyplot as plt
 
 
 def plot_time_average(
@@ -50,6 +56,8 @@ def plot_time_average(
         The offset to add to the data before plotting. Useful if plotting multiple
         averages on the same axis.
     """
+    import matplotlib.pyplot as plt
+
     if ax is not None:
         pass
     else:
@@ -116,6 +124,8 @@ def plot_daily_residuals(
     ----------------
     All other parameters are passed through to :func:`plot_time_average`.
     """
+    import matplotlib.pyplot as plt
+
     if ax is None:
         _fig, ax = plt.subplots(1, 1)
 

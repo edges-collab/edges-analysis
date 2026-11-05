@@ -16,10 +16,9 @@ from attrs import define
 from pygsdata import GSData, GSFlag, gsregister
 from pygsdata.select import _mask_times, select_freqs
 
-from edges import __version__
-
 from .. import modeling as mdl
 from .. import types as tp
+from .._version import __version__
 from ..averaging import NsamplesStrategy, averaging, get_weights_from_strategy
 from .runners import run_xrfi
 

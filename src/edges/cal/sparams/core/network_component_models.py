@@ -31,7 +31,7 @@ from pygsdata.attrs import unit_validator as unv
 
 from edges import modeling as mdl
 from edges import types as tp
-from edges.io.serialization import hickleable
+from edges.serialization import hickleable
 
 from . import sparam_calibration as ee
 from .datatypes import CalkitReadings, ReflectionCoefficient, SParams
