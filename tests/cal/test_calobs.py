@@ -345,3 +345,211 @@ def test_restrict_s11_model_freqs_receiver(
         np.testing.assert_allclose(
             load.reflection_coefficient.s11, expected.s11, rtol=0, atol=1e-10
         )
+
+
+# The inputs of CalibrationObservation.from_components that are given per load.
+_PER_LOAD_INPUTS = ("spectra", "raw_s11s", "s11_model_params")
+
+
+class TestFromComponents:
+    """CalibrationObservation.from_components, shared by edges.cal and alanmode."""
+
+    f_low = 50 * un.MHz
+    f_high = 100 * un.MHz
+
+    def _components(self, calobs: CalibrationObservation) -> dict:
+        """The components that the session ``calobs`` was built from."""
+        return {
+            "spectra": {name: load.spectrum for name, load in calobs.loads.items()},
+            "raw_s11s": {name: load._raw_s11 for name, load in calobs.loads.items()},
+            "raw_receiver": calobs._raw_receiver,
+        }
+
+    def test_same_as_from_edges2_caldef(
+        self, calobs: CalibrationObservation, caldef: CalObsDefEDGES2
+    ):
+        """Assembling the read components gives exactly the caldef result."""
+        new = CalibrationObservation.from_components(
+            **self._components(calobs),
+            s11_model_params={
+                name: sp.input_source_model_params(name=name) for name in calobs.loads
+            },
+            receiver_model_params=sp.receiver_model_params(),
+            s11_freq_range=(self.f_low, self.f_high),
+            loss_models={
+                "hot_load": LossFunctionGivenSparams(
+                    sp.read_semi_rigid_cable_sparams_file(
+                        caldef.hot_load.sparams_file,
+                        f_low=self.f_low,
+                        f_high=self.f_high,
+                    )
+                )
+            },
+            loss_model_params=sp.hot_load_cable_model_params(),
+        )
+
+        assert new.load_names == calobs.load_names
+        np.testing.assert_array_equal(new.receiver.s11, calobs.receiver.s11)
+        assert new._raw_receiver is calobs._raw_receiver
+        for name, load in calobs.loads.items():
+            other = new.loads[name]
+            assert other.name == name
+            assert other.spectrum is load.spectrum
+            assert other._raw_s11 is load._raw_s11
+            np.testing.assert_array_equal(
+                other.reflection_coefficient.s11, load.reflection_coefficient.s11
+            )
+            np.testing.assert_array_equal(other.loss, load.loss)
+            np.testing.assert_array_equal(
+                other.ambient_temperature, load.ambient_temperature
+            )
+            np.testing.assert_array_equal(other.temp_ave, load.temp_ave)
+
+    def test_separate_s11_freq_range(self, calobs: CalibrationObservation):
+        """The S11 models are fit within s11_freq_range, not the spectrum range."""
+        s11_range = (45 * un.MHz, 120 * un.MHz)
+        params = sp.input_source_model_params(name="ambient")
+        rcv_params = sp.receiver_model_params()
+        comps = self._components(calobs)
+        new = CalibrationObservation.from_components(
+            **comps,
+            s11_model_params=params,
+            receiver_model_params=rcv_params,
+            s11_freq_range=s11_range,
+        )
+        assert new.freqs.min() >= self.f_low
+        assert new.freqs.max() <= self.f_high
+
+        for name, load in new.loads.items():
+            raw = comps["raw_s11s"][name]
+            # The raw S11 is stored as given (over the full measured band).
+            assert load._raw_s11 is raw
+            expected = raw.select_frequencies(*s11_range).smoothed(
+                params, freqs=new.freqs
+            )
+            np.testing.assert_array_equal(load.reflection_coefficient.s11, expected.s11)
+            # No loss models were given.
+            np.testing.assert_array_equal(load.loss, 1.0)
+
+        expected = (
+            comps["raw_receiver"]
+            .select_frequencies(*s11_range)
+            .smoothed(rcv_params, freqs=new.freqs)
+        )
+        np.testing.assert_array_equal(new.receiver.s11, expected.s11)
+
+    def test_no_s11_freq_range_fits_all_raw_s11s(self, calobs: CalibrationObservation):
+        params = sp.input_source_model_params(name="ambient")
+        rcv_params = sp.receiver_model_params()
+        comps = self._components(calobs)
+        new = CalibrationObservation.from_components(
+            **comps, s11_model_params=params, receiver_model_params=rcv_params
+        )
+        for name, load in new.loads.items():
+            expected = comps["raw_s11s"][name].smoothed(params, freqs=new.freqs)
+            np.testing.assert_array_equal(load.reflection_coefficient.s11, expected.s11)
+        expected = comps["raw_receiver"].smoothed(rcv_params, freqs=new.freqs)
+        np.testing.assert_array_equal(new.receiver.s11, expected.s11)
+
+    def test_ambient_temperature(self, calobs: CalibrationObservation):
+        comps = self._components(calobs)
+        kw = {
+            "s11_model_params": sp.input_source_model_params(name="ambient"),
+            "receiver_model_params": sp.receiver_model_params(),
+        }
+        given = CalibrationObservation.from_components(
+            **comps, ambient_temperature=300 * un.K, **kw
+        )
+        for load in given.loads.values():
+            assert load.ambient_temperature == 300 * un.K
+
+        default = CalibrationObservation.from_components(**comps, **kw)
+        assert default.ambient.ambient_temperature == 298 * un.K
+        for name in ("hot_load", "open", "short"):
+            np.testing.assert_array_equal(
+                default.loads[name].ambient_temperature, default.ambient.temp_ave
+            )
+
+    def test_loss_model_used_as_given_without_params(
+        self, calobs: CalibrationObservation, caldef: CalObsDefEDGES2
+    ):
+        """Without loss_model_params, loss-model S-params are not smoothed."""
+        sparams = sp.read_semi_rigid_cable_sparams_file(
+            caldef.hot_load.sparams_file, f_low=self.f_low, f_high=self.f_high
+        )
+        assert sparams.freqs.size != calobs.freqs.size
+        kw = {
+            **self._components(calobs),
+            "s11_model_params": sp.input_source_model_params(name="ambient"),
+            "receiver_model_params": sp.receiver_model_params(),
+        }
+        with pytest.raises(ValueError, match="same length as the S-params"):
+            CalibrationObservation.from_components(
+                **kw, loss_models={"hot_load": LossFunctionGivenSparams(sparams)}
+            )
+
+        # S-params already at the frequencies of the spectra are used as they are.
+        smoothed = sparams.smoothed(
+            sp.hot_load_cable_model_params(), freqs=calobs.freqs
+        )
+        new = CalibrationObservation.from_components(
+            **kw, loss_models={"HotLoad": LossFunctionGivenSparams(smoothed)}
+        )
+        np.testing.assert_array_equal(
+            new.hot_load.loss,
+            LossFunctionGivenSparams(smoothed)(new.hot_load.reflection_coefficient),
+        )
+        np.testing.assert_array_equal(new.ambient.loss, 1.0)
+
+    @pytest.mark.parametrize(
+        ("keep", "match"),
+        [
+            ({"raw_s11s": ("ambient", "hot_load")}, "for the same loads"),
+            (
+                dict.fromkeys(_PER_LOAD_INPUTS, ("hot_load",)),
+                "must include the ambient load",
+            ),
+            ({"s11_model_params": ("ambient",)}, "No s11_model_params given"),
+            (
+                dict.fromkeys(_PER_LOAD_INPUTS, ("ambient",)),
+                "loss_models given for unknown loads",
+            ),
+        ],
+    )
+    def test_bad_inputs(
+        self,
+        calobs: CalibrationObservation,
+        keep: dict[str, tuple[str, ...]],
+        match: str,
+    ):
+        """Inconsistent loads raise (``keep`` restricts some inputs to some loads)."""
+        params = sp.input_source_model_params(name="ambient")
+        kw = {
+            **self._components(calobs),
+            "s11_model_params": dict.fromkeys(calobs.loads, params),
+            "receiver_model_params": sp.receiver_model_params(),
+            "loss_models": {"open": None},
+        }
+        for key, names in keep.items():
+            kw[key] = {name: kw[key][name] for name in names}
+
+        with pytest.raises(ValueError, match=match):
+            CalibrationObservation.from_components(**kw)
+
+    def test_unknown_load_name(self, calobs: CalibrationObservation):
+        with pytest.raises(ValueError, match="Unknown calibration load 'foo'"):
+            CalibrationObservation.from_components(
+                **self._components(calobs),
+                s11_model_params=sp.input_source_model_params(name="ambient"),
+                receiver_model_params=sp.receiver_model_params(),
+                loss_models={"foo": None},
+            )
+
+    def test_unknown_kwarg(self, calobs: CalibrationObservation):
+        with pytest.raises(TypeError, match="not_a_parameter"):
+            CalibrationObservation.from_components(
+                **self._components(calobs),
+                s11_model_params=sp.input_source_model_params(name="ambient"),
+                receiver_model_params=sp.receiver_model_params(),
+                not_a_parameter=1,
+            )

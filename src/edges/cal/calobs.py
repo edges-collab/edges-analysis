@@ -6,6 +6,7 @@ a one-stop interface for everything related to calibration.
 """
 
 import copy
+from collections.abc import Callable, Mapping
 from typing import Any, Self
 
 import attrs
@@ -22,8 +23,9 @@ from . import loss
 from . import noise_waves as nw
 from . import sparams as sp
 from .calibrator import Calibrator
-from .input_sources import InputSource
+from .input_sources import InputSource, _read_load_from_caldef
 from .loss import LossFunctionGivenSparams
+from .spectra import LoadSpectrum
 
 
 @hickleable
@@ -31,6 +33,10 @@ from .loss import LossFunctionGivenSparams
 class CalibrationObservation:
     """
     An object representing a full Calibration Observation.
+
+    It is usually created with :meth:`from_edges2_caldef` or
+    :meth:`from_edges3_caldef` (which read all the data from a calibration
+    definition), or with :meth:`from_components` (from already-read spectra and S11s).
 
     Parameters
     ----------
@@ -375,10 +381,16 @@ class CalibrationObservation:
         spectrum_kwargs.setdefault("default", {})
         spectrum_kwargs["default"].setdefault("freq_bin_size", freq_bin_size)
 
-        def get_load(name, ambient_temperature=298 * un.K):
-            return InputSource.from_caldef(
-                caldef=caldef,
-                load_name=name,
+        if loss_model_params is None:
+            loss_model_params = sp.hot_load_cable_model_params()
+
+        spectra = {}
+        raw_s11s = {}
+        for name in LOAD_NAMES:
+            spectra[name], raw_s11s[name] = _read_load_from_caldef(
+                caldef,
+                name,
+                internal_switch=internal_switch,
                 f_low=f_low,
                 f_high=f_high,
                 s11_kwargs=s11_kwargs,
@@ -386,29 +398,158 @@ class CalibrationObservation:
                     **spectrum_kwargs["default"],
                     **spectrum_kwargs.get(name, {}),
                 },
-                ambient_temperature=ambient_temperature,
-                restrict_s11_freqs=restrict_s11_model_freqs,
-                loss_model=loss_models.get(name, None),
-                loss_model_params=loss_model_params,
-                internal_switch=internal_switch,
             )
 
-        amb = get_load("ambient")
-        loads = {"ambient": amb}
+        s11_model_params = s11_kwargs.get("model_params")
+        if s11_model_params is None:
+            s11_model_params = {
+                name: sp.input_source_model_params(name=name) for name in LOAD_NAMES
+            }
 
+        return cls.from_components(
+            spectra=spectra,
+            raw_s11s=raw_s11s,
+            raw_receiver=raw_receiver,
+            s11_model_params=s11_model_params,
+            receiver_model_params=rcv_model_params,
+            s11_freq_range=(f_low, f_high) if restrict_s11_model_freqs else None,
+            loss_models=loss_models,
+            loss_model_params=loss_model_params,
+            **kwargs,
+        )
+
+    @classmethod
+    def from_components(
+        cls,
+        *,
+        spectra: Mapping[str, LoadSpectrum],
+        raw_s11s: Mapping[str, sp.ReflectionCoefficient],
+        raw_receiver: sp.ReflectionCoefficient,
+        s11_model_params: sp.S11ModelParams | Mapping[str, sp.S11ModelParams],
+        receiver_model_params: sp.S11ModelParams,
+        s11_freq_range: tuple[tp.FreqType, tp.FreqType] | None = None,
+        loss_models: Mapping[str, Callable | None] | None = None,
+        loss_model_params: sp.S11ModelParams | None = None,
+        ambient_temperature: tp.TemperatureType | None = None,
+        **kwargs,
+    ) -> Self:
+        """Assemble a CalibrationObservation from already-read spectra and S11s.
+
+        This is the single place where the input sources and the receiver of a
+        calibration observation are put together: the S11s are modelled at the
+        frequencies of the spectra and the losses of the sources are computed (see
+        :meth:`InputSource.from_components`). It reads no data, so the spectra and the
+        raw S11s may come from anywhere. :meth:`from_edges2_caldef` and
+        :meth:`from_edges3_caldef` read them from a calibration definition, while
+        :func:`edges.alanmode.edges` uses spectra and S11s produced like Alan's C code.
+
+        Parameters
+        ----------
+        spectra
+            The (already averaged) spectrum of each input source, keyed by load name
+            (in any spelling accepted by :func:`edges.io.loads.canonical_load_name`).
+            Must include the ambient load. The input sources are ordered as here, but
+            with the ambient load first.
+        raw_s11s
+            The calibrated, un-modelled reflection coefficient of each input source,
+            keyed by load name. Must have the same loads as ``spectra``. These are
+            stored as given (see ``s11_freq_range``) as the raw S11s of the sources.
+        raw_receiver
+            The calibrated, un-modelled reflection coefficient of the receiver. It is
+            stored as given.
+        s11_model_params
+            The parameters of the model of the reflection coefficients of the input
+            sources: either one set for all sources, or a mapping from load name to
+            the parameters of each source.
+        receiver_model_params
+            The parameters of the model of the reflection coefficient of the receiver.
+        s11_freq_range
+            The ``(f_low, f_high)`` range of the measured S11 frequencies to which the
+            S11 models (of the input sources and of the receiver) are fit. This is
+            independent of the frequencies of the spectra, at which the models are
+            evaluated. If None, the models are fit to all the frequencies of the raw
+            S11s (so to restrict both the fit and the stored raw S11s to a range,
+            restrict the raw S11s before passing them).
+        loss_models
+            A callable loss model for each input source, keyed by load name. A source
+            that is missing (or None) has no loss.
+        loss_model_params
+            Parameters used to smooth the S-parameters of loss models that are defined
+            at a different number of frequencies than the spectra (see
+            :meth:`InputSource.from_components`). If None, the loss models are used as
+            given.
+        ambient_temperature
+            The ambient temperature of every input source when the spectra were taken
+            (used only to calculate the loss). If None, the ambient load has an ambient
+            temperature of 298 K, and the other sources take the (loss-corrected)
+            average temperature of the ambient load.
+        **kwargs
+            Passed through to the class constructor.
+
+        Returns
+        -------
+        CalibrationObservation
+            The calibration observation.
+
+        Raises
+        ------
+        ValueError
+            If ``spectra`` and ``raw_s11s`` are not given for the same loads, if they
+            do not include the ambient load, or if a key is not a load name.
+        """
+        spectra = canonical_load_keys(spectra)
+        raw_s11s = canonical_load_keys(raw_s11s)
+        loss_models = canonical_load_keys(loss_models or {})
+        if isinstance(s11_model_params, Mapping):
+            s11_model_params = canonical_load_keys(s11_model_params)
+        else:
+            s11_model_params = dict.fromkeys(spectra, s11_model_params)
+
+        if spectra.keys() != raw_s11s.keys():
+            raise ValueError(
+                "spectra and raw_s11s must be given for the same loads, got "
+                f"{sorted(spectra)} and {sorted(raw_s11s)}."
+            )
+        if "ambient" not in spectra:
+            raise ValueError("spectra must include the ambient load.")
+        if missing := spectra.keys() - s11_model_params.keys():
+            raise ValueError(f"No s11_model_params given for {sorted(missing)}.")
+        if unknown := loss_models.keys() - spectra.keys():
+            raise ValueError(f"loss_models given for unknown loads {sorted(unknown)}.")
+
+        def get_load(name: str, ambient_temp: tp.TemperatureType) -> InputSource:
+            return InputSource.from_components(
+                spectrum=spectra[name],
+                raw_s11=raw_s11s[name],
+                s11_model_params=s11_model_params[name],
+                s11_freq_range=s11_freq_range,
+                loss_model=loss_models.get(name),
+                loss_model_params=loss_model_params,
+                ambient_temperature=ambient_temp,
+                name=name,
+            )
+
+        amb = get_load(
+            "ambient",
+            298 * un.K if ambient_temperature is None else ambient_temperature,
+        )
+        loads = {"ambient": amb}
         loads |= {
-            src: get_load(src, ambient_temperature=amb.temp_ave)
-            for src in LOAD_NAMES
-            if src != "ambient"
+            name: get_load(
+                name,
+                amb.temp_ave if ambient_temperature is None else ambient_temperature,
+            )
+            for name in spectra
+            if name != "ambient"
         }
 
-        # Smooth the receiver s11 (optionally fitting only within [f_low, f_high]).
+        # Smooth the receiver s11 (optionally fitting only within s11_freq_range).
         receiver_to_fit = (
-            raw_receiver.select_frequencies(f_low, f_high)
-            if restrict_s11_model_freqs
-            else raw_receiver
+            raw_receiver
+            if s11_freq_range is None
+            else raw_receiver.select_frequencies(*s11_freq_range)
         )
-        receiver = receiver_to_fit.smoothed(rcv_model_params, freqs=amb.freqs)
+        receiver = receiver_to_fit.smoothed(receiver_model_params, freqs=amb.freqs)
 
         return cls(
             loads=loads,
