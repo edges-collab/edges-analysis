@@ -1,3 +1,4 @@
+import inspect
 import re
 import shutil
 from itertools import pairwise
@@ -482,6 +483,11 @@ class TestCalkitFromEdges3Layout:
             files
         ) == CalkitFileSpec.from_edges3_layout(mockroot, "amb", 2023, 70)
 
+    def test_free_function_alias(self, mockroot: Path):
+        assert calobsdef3.from_edges3_layout(
+            CalkitFileSpec, mockroot, "amb", 2023, 70
+        ) == CalkitFileSpec.from_edges3_layout(mockroot, "amb", 2023, 70)
+
     def test_matches_standard_layout(self, mockroot: Path):
         caldef = CalObsDefEDGES3.from_standard_layout(
             rootdir=mockroot, year=2023, day=70
@@ -495,3 +501,8 @@ class TestCalkitFromEdges3Layout:
             CalkitFileSpec.from_edges3_layout(
                 tmp_path, "amb", 2023, 70, allow_closest_s11_within=0
             )
+
+    def test_defined_in_class_body(self):
+        attr = inspect.getattr_static(CalkitFileSpec, "from_edges3_layout")
+        assert isinstance(attr, classmethod)
+        assert attr.__func__.__qualname__ == "CalkitFileSpec.from_edges3_layout"

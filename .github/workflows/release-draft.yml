@@ -1,6 +1,10 @@
 name: Update Draft Release
 
-on: push
+# Each long-lived branch keeps its own draft: main drafts the next release, and
+# 8.x (the v8 maintenance branch) drafts the next v8 bug-fix release.
+on:
+  push:
+    branches: [main, "8.x"]
 permissions:
   contents: write
   pull-requests: write
