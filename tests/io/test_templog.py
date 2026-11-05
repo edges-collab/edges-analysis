@@ -91,8 +91,28 @@ def test_get_mean_temperature(templog_table: QTable):
             templog_table, start_time=Time("2000-01-01"), end_time=Time("2000-01-02")
         )
 
-    with pytest.raises(ValueError, match="Unknown load fake"):
+    with pytest.raises(ValueError, match="Unknown calibration load 'fake'"):
         templogs.get_mean_temperature(templog_table, load="fake")
+
+
+@pytest.mark.parametrize(
+    ("canonical", "layout"), [("ambient", "amb"), ("hot_load", "hot")]
+)
+def test_get_mean_temperature_canonical_names(
+    templog_table: QTable, canonical: str, layout: str
+):
+    assert templogs.get_mean_temperature(
+        templog_table, load=canonical
+    ) == templogs.get_mean_temperature(templog_table, load=layout)
+
+
+def test_get_mean_temperature_box_is_ambient(templog_table: QTable):
+    assert templogs.get_mean_temperature(
+        templog_table, load="box"
+    ) == templogs.get_mean_temperature(templog_table, load="ambient")
+    assert templogs.get_mean_temperature(
+        templog_table, load="hot_load"
+    ) != templogs.get_mean_temperature(templog_table, load="ambient")
 
 
 def test_entry_parsed_by_code():

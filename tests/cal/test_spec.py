@@ -389,7 +389,7 @@ class TestLoadSpectrum:
         )
 
         all_cached_files = list(tmp_path.glob("*.gsh5"))
-        assert any(fl.name.startswith("Ambient_") for fl in all_cached_files)
+        assert any(fl.name.startswith("ambient_") for fl in all_cached_files)
 
         assert spec == spec2
 

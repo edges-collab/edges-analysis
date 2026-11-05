@@ -5,10 +5,9 @@ import warnings
 from collections.abc import Mapping, Sequence
 from datetime import date, timedelta
 from pathlib import Path
-from typing import ClassVar, Literal, Self, get_args
+from typing import ClassVar, Literal, Self
 
 import attrs
-from bidict import bidict
 
 from .. import types as tp
 from .calobsdef import (
@@ -17,23 +16,18 @@ from .calobsdef import (
     LoadS11,
     ReceiverS11,
     _list_of_path,
+    _load_and_layout_name,
     _vld_path_exists,
 )
+from .loads import EDGES3_LAYOUT_NAMES, LOAD_NAMES, LoadName, canonical_load_keys
 
-S11LoadName = Literal["amb", "ant", "hot", "open", "short", "lna"]
-SpecLoadName = Literal["amb", "ant", "hot", "open", "short"]
-CalLoadName = Literal["amb", "hot", "open", "short"]
-
-LOADMAP = bidict({
-    "amb": "ambient",
-    "hot": "hot_load",
-    "open": "open",
-    "short": "short",
-    "lna": "lna",
-})
+#: The inputs with S11 measurements: the calibration loads, the receiver (``"lna"``)
+#: and the antenna (``"ant"``).
+S11LoadName = LoadName | Literal["lna", "ant"]
 
 #: Default directory template (relative to the root) holding the spectrum files.
-#: It is formatted with ``load`` and ``year``.
+#: It is formatted with ``load`` (the name of the load in the EDGES-3 layout, e.g.
+#: ``amb``) and ``year``.
 DEFAULT_SPECTRUM_DIR = "mro/{load}/{year}"
 #: Default temperature log (relative to the root).
 DEFAULT_TEMPLOG = "temperature_logger/temperature.log"
@@ -179,7 +173,11 @@ def get_s1p_files(
     Parameters
     ----------
     load
-        The name of the load.
+        The name of the input: a calibration load (any name accepted by
+        :func:`edges.io.loads.canonical_load_name`, e.g. ``"ambient"`` or
+        ``"amb"``), ``"lna"`` (the receiver) or ``"ant"`` (the antenna). Files are
+        found by the name of the input in the EDGES-3 layout
+        (:data:`edges.io.loads.EDGES3_LAYOUT_NAMES`).
     year
         The year of the S11 measurement.
     day
@@ -208,9 +206,10 @@ def get_s1p_files(
     FileNotFoundError
         If no complete sweep is found.
     """
-    prefix = "lna_" if load == "lna" else ""
+    _, label = _load_and_layout_name(load, EDGES3_LAYOUT_NAMES)
+    prefix = "lna_" if label == "lna" else ""
     labels = {
-        "input": load,
+        "input": label,
         "open": f"{prefix}O",
         "short": f"{prefix}S",
         "match": f"{prefix}L",
@@ -240,7 +239,7 @@ def _calkit_from_s1p_files(files: dict[str, Path]) -> CalkitFileSpec:
 
 
 def get_spectrum_files(
-    load: Literal["amb", "hot", "short", "open"],
+    load: LoadName | Literal["ant"],
     root: Path,
     year: int,
     day: int,
@@ -253,7 +252,11 @@ def get_spectrum_files(
     Parameters
     ----------
     load
-        The name of the load.
+        The name of the load: a calibration load (any name accepted by
+        :func:`edges.io.loads.canonical_load_name`, e.g. ``"ambient"`` or
+        ``"amb"``), or ``"ant"`` (the antenna). Files are found by the name of the
+        load in the EDGES-3 layout (:data:`edges.io.loads.EDGES3_LAYOUT_NAMES`),
+        which is also what fills the ``{load}`` placeholder of ``spectrum_dir``.
     root
         The root directory of the data.
     year
@@ -289,6 +292,7 @@ def get_spectrum_files(
         (files are split at UTC midnight), but are not included. To include them,
         use :meth:`CalObsDefEDGES3.from_files`.
     """
+    _, load = _load_and_layout_name(load, EDGES3_LAYOUT_NAMES)
     d = _resolve_dir(Path(root), spectrum_dir, load=load, year=year)
     glob = f"{year}_{day:03d}_??_??_??_{load}.{fmt}"
     files = sorted(d.glob(glob))
@@ -352,7 +356,9 @@ class LoadDefEDGES3:
     Parameters
     ----------
     name
-        The name of the load.
+        The name of the load. For a calibration load, this is its canonical name (one
+        of :data:`edges.io.loads.LOAD_NAMES`, e.g. ``hot_load``), not its name in the
+        file layout (e.g. ``hot``).
     s11
         The S11 measurement files.
     spectra
@@ -383,7 +389,7 @@ class LoadDefEDGES3:
     def from_standard_layout(
         cls,
         root: Path,
-        loadname: CalLoadName,
+        loadname: LoadName,
         year: int,
         day: int,
         s11_year: int | None = None,
@@ -407,7 +413,11 @@ class LoadDefEDGES3:
         root : PathLike
             The root directory containing the data.
         loadname
-            The name of the load to gather files for.
+            The name of the load to gather files for, in any spelling accepted by
+            :func:`edges.io.loads.canonical_load_name` (e.g. ``hot_load`` or
+            ``hot``). Its files are found by its name in the EDGES-3 layout
+            (:data:`edges.io.loads.EDGES3_LAYOUT_NAMES`), and the returned definition
+            has its canonical name.
         year : int
             The year of the observation.
         day : int
@@ -431,7 +441,8 @@ class LoadDefEDGES3:
             It can contain a ``{year}`` placeholder.
         spectrum_dir
             Directory holding the spectrum files, relative to ``root`` (or absolute).
-            It can contain ``{load}`` and ``{year}`` placeholders.
+            It can contain ``{load}`` (the name of the load in the EDGES-3 layout)
+            and ``{year}`` placeholders.
         templog
             The temperature log file(s), relative to ``root`` (or absolute). Several
             files are merged. By default, ``temperature_logger/temperature.log`` is
@@ -453,6 +464,7 @@ class LoadDefEDGES3:
             If multiple files are found where only one is expected.
         """
         root = Path(root)
+        name, layout_name = _load_and_layout_name(loadname, EDGES3_LAYOUT_NAMES)
         if s11_year is None:
             s11_year = year
         if s11_day is None:
@@ -460,7 +472,7 @@ class LoadDefEDGES3:
 
         # First Get the S11s (all from the same sweep).
         files = get_s1p_files(
-            load=loadname,
+            load=layout_name,
             year=s11_year,
             day=s11_day,
             root_dir=root,
@@ -475,7 +487,7 @@ class LoadDefEDGES3:
 
         # Now get spectra
         spectra = get_spectrum_files(
-            loadname,
+            layout_name,
             root=root,
             year=year,
             day=day,
@@ -488,7 +500,7 @@ class LoadDefEDGES3:
             s11=s11,
             spectra=spectra,
             templog=_resolve_templog(root, templog),
-            name=loadname,
+            name=name,
         )
 
 
@@ -578,10 +590,10 @@ class CalObsDefEDGES3:
             ``short`` must each be given exactly once. Files with other labels
             (e.g. ``ant``) are ignored. The files need not share a timestamp.
         spectra
-            The spectrum files for each load, keyed by load name (either short names
-            ``amb``, ``hot``, ``open``, ``short`` or long names ``ambient``,
-            ``hot_load``, ``open``, ``short``). Each value is a file or a list of
-            files, which are sorted by name (i.e. time) and concatenated.
+            The spectrum files for each calibration load, keyed by load name (in any
+            spelling accepted by :func:`edges.io.loads.canonical_load_name`, e.g.
+            ``hot_load`` or ``hot``). Each value is a file or a list of files, which
+            are sorted by name (i.e. time) and concatenated.
         templog
             The temperature log file(s), merged if more than one.
         receiver_metadata
@@ -600,17 +612,18 @@ class CalObsDefEDGES3:
             If any required S11 file or load spectra are not given.
         ValueError
             If an S11 file is not named as expected, or more than one S11 file has
-            the same label.
+            the same label, or if a key of ``spectra`` is not the name of a
+            calibration load (or more than one key names the same load).
         """
         s11 = _label_s11_files(s11_files)
 
-        loads = get_args(CalLoadName)
-        required = ["O", "S", "L", "lna_O", "lna_S", "lna_L", "lna", *loads]
+        labels = [EDGES3_LAYOUT_NAMES[load] for load in LOAD_NAMES]
+        required = ["O", "S", "L", "lna_O", "lna_S", "lna_L", "lna", *labels]
         if missing := [label for label in required if label not in s11]:
             raise FileNotFoundError(f"No S11 files given for labels {missing}")
 
-        spectra = {LOADMAP.inverse.get(k, k): v for k, v in spectra.items()}
-        if missing := [load for load in loads if load not in spectra]:
+        spectra = canonical_load_keys(spectra)
+        if missing := [load for load in LOAD_NAMES if load not in spectra]:
             raise FileNotFoundError(f"No spectrum files given for loads {missing}")
 
         def _calkit(prefix: str = "") -> CalkitFileSpec:
@@ -628,12 +641,14 @@ class CalObsDefEDGES3:
 
         load_calkit = _calkit()
         loaddefs = {}
-        for load in loads:
+        for load in LOAD_NAMES:
             files = spectra[load]
             files = [files] if isinstance(files, str | Path) else files
-            loaddefs[LOADMAP[load]] = LoadDefEDGES3(
+            loaddefs[load] = LoadDefEDGES3(
                 name=load,
-                s11=LoadS11(calkit=load_calkit, external=s11[load]),
+                s11=LoadS11(
+                    calkit=load_calkit, external=s11[EDGES3_LAYOUT_NAMES[load]]
+                ),
                 spectra=sorted(map(Path, files)),
                 templog=templog,
             )
@@ -695,7 +710,8 @@ class CalObsDefEDGES3:
             absolute). It can contain a ``{year}`` placeholder.
         spectrum_dir
             Directory holding the spectrum files, relative to ``rootdir`` (or
-            absolute). It can contain ``{load}`` and ``{year}`` placeholders.
+            absolute). It can contain ``{load}`` (the name of the load in the
+            EDGES-3 layout) and ``{year}`` placeholders.
         templog
             The temperature log file(s), relative to ``rootdir`` (or absolute).
             Several files are merged, de-duplicating overlapping entries. By default,
@@ -764,7 +780,7 @@ class CalObsDefEDGES3:
         }
 
         loads = {
-            LOADMAP[load]: LoadDefEDGES3.from_standard_layout(loadname=load, **kw)
-            for load in get_args(CalLoadName)
+            load: LoadDefEDGES3.from_standard_layout(loadname=load, **kw)
+            for load in LOAD_NAMES
         }
         return cls(receiver_s11=rcv, **loads)

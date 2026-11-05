@@ -28,6 +28,7 @@ __all__ = [
     "LoadS11",
     "ReceiverS11",
     "SParams",
+    "canonical_load_name",
     "get_mean_temperature",
     "read_auxiliary_data",
     "read_s1p",
@@ -49,6 +50,7 @@ from .calobsdef import (
     ReceiverS11,
 )
 from .calobsdef3 import CalObsDefEDGES3, LoadDefEDGES3
+from .loads import canonical_load_name
 from .templogs import get_mean_temperature, read_temperature_log, read_tmp_file
 from .thermistor import read_thermistor_csv
 from .vna import SParams, read_s1p

@@ -167,18 +167,26 @@ def test_standard_layout_hot_load_has_semirigid_sparams(
         assert calio.loads[name].sparams_file is None
 
 
-@pytest.mark.parametrize("name", ["HotLoad", "hot_load", "Hot_Load"])
-def test_canonical_load_name_hot_load(name: str):
-    assert calobsdef._canonical_load_name(name) == "hot_load"
+def test_standard_layout_load_names_are_canonical(calio: calobsdef.CalObsDefEDGES2):
+    for name, load in calio.loads.items():
+        assert load.name == name
+    assert calio.hot_load.thermistor.name.startswith("HotLoad_01_")
 
 
-@pytest.mark.parametrize(
-    ("name", "canonical"),
-    [("Ambient", "ambient"), ("LongCableOpen", "open"), ("cable_short", "short")],
-)
-def test_canonical_load_name_others(name: str, canonical: str):
-    assert calobsdef._canonical_load_name(name) == canonical
-    assert calobsdef._canonical_load_name("not-a-load") == "not-a-load"
+@pytest.mark.parametrize("loadname", ["HotLoad", "hot_load", "hot", "Hot_Load"])
+def test_loaddef_any_spelling_finds_layout_files(mock_calobs_dir: Path, loadname: str):
+    load = calobsdef.LoadDefEDGES2.from_standard_layout(mock_calobs_dir, loadname)
+    assert load.name == "hot_load"
+    assert load.thermistor.name.startswith("HotLoad_01_")
+    assert load.s11.external.parent.name == "HotLoad01"
+    assert load.sparams_file.name == "semi_rigid_s_parameters_WITH_HEADER.txt"
+
+
+def test_loaddef_non_calibration_load_is_kept(mock_calobs_dir: Path):
+    load = calobsdef.LoadDefEDGES2.from_standard_layout(mock_calobs_dir, "AntSim3")
+    assert load.name == "AntSim3"
+    assert load.spectra[0].name.startswith("AntSim3_01_")
+    assert load.sparams_file is None
 
 
 def _reverse_glob(monkeypatch: pytest.MonkeyPatch) -> None:
