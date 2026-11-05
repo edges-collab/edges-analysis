@@ -600,6 +600,7 @@ def _get_hotload_loss(
         hot_load_cable_s11 = SParams(
             s11=s11rig,
             s12=s12rig,
+            s21=s12rig,
             s22=s22rig,
             freqs=s11freq,
         ).smoothed(params=hlc_model_params, freqs=spec_fq)

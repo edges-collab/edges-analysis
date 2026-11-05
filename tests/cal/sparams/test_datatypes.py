@@ -45,13 +45,31 @@ class TestSParams:
         self.smatrix = _random_sparams(rng)
         self.rng = rng
 
-    def test_from_sparams(self):
-        """s21 and s22 default to s12 and s11 respectively."""
-        sp = dt.SParams(
-            freqs=self.smatrix.freqs, s11=self.smatrix.s11, s12=self.smatrix.s12
+    @pytest.mark.parametrize("missing", ["s21", "s22"])
+    def test_all_sparams_required(self, missing: str):
+        """S21 and S22 must be given explicitly (reciprocity is not assumed)."""
+        kwargs = {
+            "freqs": self.smatrix.freqs,
+            "s11": self.smatrix.s11,
+            "s12": self.smatrix.s12,
+            "s21": self.smatrix.s21,
+            "s22": self.smatrix.s22,
+        }
+        del kwargs[missing]
+        with pytest.raises(TypeError, match=missing):
+            dt.SParams(**kwargs)
+
+    def test_reciprocal_constructor(self):
+        sp = self.smatrix
+        symmetric = dt.SParams.reciprocal(freqs=sp.freqs, s11=sp.s11, s12=sp.s12)
+        np.testing.assert_array_equal(symmetric.s21, sp.s12)
+        np.testing.assert_array_equal(symmetric.s22, sp.s11)
+
+        recip = dt.SParams.reciprocal(
+            freqs=sp.freqs, s11=sp.s11, s12=sp.s12, s22=sp.s22
         )
-        assert np.allclose(sp.s21, sp.s12)
-        assert np.allclose(sp.s22, sp.s11)
+        np.testing.assert_array_equal(recip.s21, sp.s12)
+        np.testing.assert_array_equal(recip.s22, sp.s22)
 
     def test_roundtrip_transfer_matrix(self):
         transfer_matrix = self.smatrix.as_transfer_matrix()
@@ -89,6 +107,8 @@ class TestSParams:
             freqs=self.smatrix.freqs,
             s11=np.zeros(n, dtype=complex),
             s12=np.ones(n, dtype=complex),
+            s21=np.ones(n, dtype=complex),
+            s22=np.zeros(n, dtype=complex),
         )
         for casc in (
             self.smatrix.cascade_with(ident),
@@ -119,6 +139,8 @@ class TestSParams:
         lossless_smatrix = dt.SParams(
             s11=np.ones(10),
             s12=np.zeros(10),
+            s21=np.zeros(10),
+            s22=np.ones(10),
             freqs=freqs,
         )
         assert lossless_smatrix.is_lossless()
@@ -271,6 +293,17 @@ class TestSParams:
         )
         np.testing.assert_allclose(s.scalar_logarithmic_gain, expected_db)
 
+    def test_hdf5_roundtrip(self, tmp_path):
+        """All four S-parameters survive a write/read round trip."""
+        path = tmp_path / "sparams.h5"
+        self.smatrix.write(path)
+        new = dt.SParams.from_file(path)
+        assert new == self.smatrix
+        for name in ("s11", "s12", "s21", "s22"):
+            np.testing.assert_array_equal(
+                getattr(new, name), getattr(self.smatrix, name)
+            )
+
     def test_smatrix_alias(self):
         assert np.allclose(self.smatrix.s, self.smatrix.smatrix)
 
@@ -415,7 +448,7 @@ class TestReflectionCoefficient:
         with pytest.raises(
             ValueError, match="Number of frequencies in S-matrix must match"
         ):
-            dt.SParams(freqs=freqs, s11=s11, s12=s12)
+            dt.SParams(freqs=freqs, s11=s11, s12=s12, s21=s12, s22=s11)
 
 
 class TestCalkitReadings:

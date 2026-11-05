@@ -4,33 +4,25 @@ import numpy as np
 import pytest
 from astropy import units as un
 
-from edges.io.vna import SParams, read_s1p
+from edges.io.vna import read_s1p
 
 
 def test_s1p_read(datadir: Path):
     fl = (
         datadir / "Receiver01_25C_2019_11_26_040_to_200MHz/S11/Ambient01/External01.s1p"
     )
-    s1p = SParams.from_s1p_file(fl)
+    s1p = read_s1p(fl)
 
-    assert np.all(np.iscomplex(s1p.s11))
-    assert len(s1p.s11) == len(s1p.freq)
+    assert np.all(np.iscomplex(s1p["s11"]))
+    assert len(s1p["s11"]) == len(s1p["frequency"])
 
 
 def test_s1_read_db(datadir: Path):
     fl = datadir / "s11_db.s1p"
-    s1p = SParams.from_s1p_file(fl)
+    s1p = read_s1p(fl)
 
-    assert np.all(np.iscomplex(s1p.s11))
-    assert len(s1p.s11) == len(s1p.freq)
-
-
-def test_bad_s11_input_to_vna():
-    with pytest.raises(ValueError, match="s-parameters must be complex"):
-        SParams(freq=np.linspace(50, 100, 100) * un.MHz, s11=np.linspace(0, 1, 100))
-
-    with pytest.raises(ValueError, match="Shape of s11 does not match"):
-        SParams(freq=np.linspace(50, 100, 100) * un.MHz, s11=np.linspace(0, 1, 70) + 0j)
+    assert np.all(np.iscomplex(s1p["s11"]))
+    assert len(s1p["s11"]) == len(s1p["frequency"])
 
 
 # ---------------------------------------------------------------------------------
@@ -80,13 +72,13 @@ def _write_touchstone(
 def test_s2p_read_column_order(tmp_path: Path, fmt: str):
     """Touchstone v1 s2p columns are f, S11, S21, S12, S22 (all formats)."""
     fl = _write_touchstone(tmp_path / "net.s2p", [S11, S21, S12, S22], fmt=fmt)
-    sp = SParams.from_s1p_file(fl)
+    sp = read_s1p(fl)
 
-    np.testing.assert_allclose(sp.freq.to_value("Hz"), FREQS_HZ, rtol=1e-15)
-    np.testing.assert_allclose(sp.s11, S11, rtol=1e-12)
-    np.testing.assert_allclose(sp.s21, S21, rtol=1e-12)
-    np.testing.assert_allclose(sp.s12, S12, rtol=1e-12)
-    np.testing.assert_allclose(sp.s22, S22, rtol=1e-12)
+    np.testing.assert_allclose(sp["frequency"].to_value("Hz"), FREQS_HZ, rtol=1e-15)
+    np.testing.assert_allclose(sp["s11"], S11, rtol=1e-12)
+    np.testing.assert_allclose(sp["s21"], S21, rtol=1e-12)
+    np.testing.assert_allclose(sp["s12"], S12, rtol=1e-12)
+    np.testing.assert_allclose(sp["s22"], S22, rtol=1e-12)
 
 
 @pytest.mark.parametrize("fmt", ["RI", "MA", "DB"])
@@ -220,48 +212,3 @@ def test_pseudo_option_line_ignored(tmp_path: Path):
     t = read_s1p(fl)
     np.testing.assert_allclose(t["frequency"].to_value("Hz"), FREQS_HZ, rtol=1e-14)
     np.testing.assert_allclose(t["s11"], S11, rtol=1e-12)
-
-
-class TestSParamsTableRoundTrip:
-    @staticmethod
-    def _sparams() -> SParams:
-        rng = np.random.default_rng(42)
-        n = 20
-        freq = np.linspace(50, 100, n) * un.MHz
-
-        def cplx():
-            return rng.normal(size=n) + 1j * rng.normal(size=n)
-
-        return SParams(freq=freq, s11=cplx(), s12=cplx(), s21=cplx(), s22=cplx())
-
-    def test_round_trip(self):
-        sp = self._sparams()
-        new = SParams.from_table(sp.to_table())
-        np.testing.assert_allclose(new.freq.to_value("MHz"), sp.freq.to_value("MHz"))
-        for name in ("s11", "s12", "s21", "s22"):
-            np.testing.assert_allclose(
-                getattr(new, name), getattr(sp, name), rtol=1e-15, atol=0
-            )
-
-    def test_round_trip_s11_only(self):
-        sp = SParams(freq=np.linspace(50, 100, 5) * un.MHz, s11=np.ones(5) * 0.5j)
-        new = SParams.from_table(sp.to_table())
-        np.testing.assert_allclose(new.s11, sp.s11, rtol=1e-15, atol=0)
-        assert new.s12 is None
-        assert new.s21 is None
-        assert new.s22 is None
-
-    @pytest.mark.parametrize("key", ["freq", "frequency"])
-    def test_from_table_accepts_both_frequency_keys(self, key: str):
-        sp = self._sparams()
-        table = sp.to_table()
-        if key != "freq":
-            table.rename_column("freq", key)
-        new = SParams.from_table(table)
-        np.testing.assert_allclose(new.freq.to_value("MHz"), sp.freq.to_value("MHz"))
-
-    def test_from_table_no_frequency_raises(self):
-        table = self._sparams().to_table()
-        table.remove_column("freq")
-        with pytest.raises(KeyError, match="frequency"):
-            SParams.from_table(table)

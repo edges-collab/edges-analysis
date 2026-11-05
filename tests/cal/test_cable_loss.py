@@ -38,7 +38,7 @@ def _loss(sparams: SParams, gamma_load: np.ndarray) -> np.ndarray:
 def test_lossless_matched_line():
     rng = np.random.default_rng(0)
     phase = np.exp(-2j * np.pi * FREQS.to_value("MHz") / 37)
-    sp = SParams(freqs=FREQS, s11=np.zeros(N), s12=phase, s22=np.zeros(N))
+    sp = SParams(freqs=FREQS, s11=np.zeros(N), s12=phase, s21=phase, s22=np.zeros(N))
 
     loss = _loss(sp, _random_load(rng))
     np.testing.assert_allclose(loss, 1, rtol=0, atol=1e-12)
@@ -60,7 +60,7 @@ def test_unitary_mismatched_two_port(rho):
         ident, np.broadcast_to(np.eye(2), ident.shape), atol=1e-12
     )
 
-    sp = SParams(freqs=FREQS, s11=r, s12=t, s22=rp)
+    sp = SParams(freqs=FREQS, s11=r, s12=t, s21=t, s22=rp)
     loss = _loss(sp, _random_load(rng))
     np.testing.assert_allclose(loss, 1, rtol=0, atol=1e-10)
 
@@ -73,6 +73,7 @@ def test_matched_attenuator(g):
         freqs=FREQS,
         s11=np.zeros(N),
         s12=np.sqrt(g) * np.ones(N),
+        s21=np.sqrt(g) * np.ones(N),
         s22=np.zeros(N),
     )
     gamma_load = _random_load(rng)
@@ -92,7 +93,13 @@ def test_passive_reciprocal_network_gain_bounded():
         smax = np.linalg.svd(s, compute_uv=False)[:, 0]
         s *= (rng.uniform(0.2, 0.999, N) / smax)[:, None, None]
 
-        sp = SParams(freqs=FREQS, s11=s[:, 0, 0], s12=s[:, 0, 1], s22=s[:, 1, 1])
+        sp = SParams(
+            freqs=FREQS,
+            s11=s[:, 0, 0],
+            s12=s[:, 0, 1],
+            s21=s[:, 0, 1],
+            s22=s[:, 1, 1],
+        )
         loss = _loss(sp, _random_load(rng))
         assert np.all(loss >= 0)
         assert np.all(loss <= 1 + 1e-10)
@@ -101,7 +108,11 @@ def test_passive_reciprocal_network_gain_bounded():
 def test_loss_function_given_sparams():
     g = 0.8
     sp = SParams(
-        freqs=FREQS, s11=np.zeros(N), s12=np.sqrt(g) * np.ones(N), s22=np.zeros(N)
+        freqs=FREQS,
+        s11=np.zeros(N),
+        s12=np.sqrt(g) * np.ones(N),
+        s21=np.sqrt(g) * np.ones(N),
+        s22=np.zeros(N),
     )
     func = LossFunctionGivenSparams(sp)
     gamma = ReflectionCoefficient(freqs=FREQS, reflection_coefficient=np.zeros(N))

@@ -6,7 +6,6 @@ from edges.cal import sparams as sp
 from edges.cal.sparams.core.sparam_calibration import (
     align_transmission_signs,
     continuous_sqrt,
-    sparams_from_calkit_measurements,
 )
 from edges.cal.sparams.devices.internal_switch import (
     combine_internal_switch_sparams,
@@ -22,7 +21,13 @@ class TestGammaEmbed:
             reflection_coefficient=rng.normal(size=100), freqs=freqs
         )
 
-        smatrix = sp.SParams(s11=np.zeros(100), s12=np.ones(100), freqs=freqs)
+        smatrix = sp.SParams(
+            s11=np.zeros(100),
+            s12=np.ones(100),
+            s21=np.ones(100),
+            s22=np.zeros(100),
+            freqs=freqs,
+        )
         np.testing.assert_allclose(
             s11.reflection_coefficient,
             s11.embed(smatrix).reflection_coefficient,
@@ -47,7 +52,7 @@ class TestGammaEmbed:
             reflection_coefficient=rng.uniform(0, 1, size=10)
             + rng.uniform(0, 1, size=10) * 1j,
         )
-        smat = sp.SParams(s11=s11, s12=s12, s22=s22, freqs=freqs)
+        smat = sp.SParams(s11=s11, s12=s12, s21=s12, s22=s22, freqs=freqs)
 
         np.testing.assert_allclose(
             gamma.embed(smat).de_embed(smat).reflection_coefficient,
@@ -219,7 +224,7 @@ class TestOSLCalibration:
         meas = _measure(kit.at_freqs(self.freqs), err)
 
         for model in (kit, kit.at_freqs(self.freqs)):
-            est = sparams_from_calkit_measurements(meas, model)
+            est = sp.SParams.from_calkit_measurements(meas, model)
             np.testing.assert_allclose(est.s11, err.s11, atol=1e-12)
             np.testing.assert_allclose(est.s22, err.s22, atol=1e-12)
             np.testing.assert_allclose(est.s12 * est.s21, err.s12 * err.s21, atol=1e-12)
@@ -235,13 +240,13 @@ class TestOSLCalibration:
 
     def test_ideal_standards_and_readings_give_identity(self):
         ideal = sp.CalkitReadings.ideal(self.freqs)
-        est = sparams_from_calkit_measurements(ideal)
+        est = sp.SParams.from_calkit_measurements(ideal)
         np.testing.assert_allclose(est.s11, 0, atol=1e-14)
         np.testing.assert_allclose(est.s22, 0, atol=1e-14)
         np.testing.assert_allclose(est.s12 * est.s21, 1, rtol=1e-14)
 
         # Same with the ideal model given explicitly.
-        est = sparams_from_calkit_measurements(ideal, model=ideal)
+        est = sp.SParams.from_calkit_measurements(ideal, model=ideal)
         np.testing.assert_allclose(est.s12 * est.s21, 1, rtol=1e-14)
 
     def test_calkit_readings_de_embed(self):
@@ -265,7 +270,7 @@ class TestInternalSwitchAveraging:
         """S12 and S21 from OSL follow the continuous square-root branch."""
         err = _error_network(self.freqs, np.random.default_rng(4), delay_ns=5.0)
         kit = sp.AGILENT_85033E.at_freqs(self.freqs)
-        est = sparams_from_calkit_measurements(_measure(kit, err), kit)
+        est = sp.SParams.from_calkit_measurements(_measure(kit, err), kit)
         np.testing.assert_allclose(
             est.s12, continuous_sqrt(err.s12 * err.s21), rtol=1e-10
         )
@@ -394,7 +399,7 @@ class TestBatchedOSLSolve:
         # LU- and SVD-based solves of these well-conditioned 3x3 systems agree to
         # rounding (a few hundred ulps at most).
         _assert_matches_osl_reference(
-            sparams_from_calkit_measurements(meas, kit),
+            sp.SParams.from_calkit_measurements(meas, kit),
             _osl_reference(meas, kit),
             rtol=1e-11,
         )
@@ -424,7 +429,7 @@ class TestBatchedOSLSolve:
         # S12*S21 at the singular frequencies is zero up to rounding (it is
         # computed with cancellation, and squared after a square root), hence atol.
         _assert_matches_osl_reference(
-            sparams_from_calkit_measurements(meas, model),
+            sp.SParams.from_calkit_measurements(meas, model),
             _osl_reference(meas, model),
             rtol=1e-12,
             atol=1e-14,
@@ -442,4 +447,4 @@ class TestBatchedOSLSolve:
             match=ideal.match,
         )
         with pytest.raises(np.linalg.LinAlgError):
-            sparams_from_calkit_measurements(meas)
+            sp.SParams.from_calkit_measurements(meas)

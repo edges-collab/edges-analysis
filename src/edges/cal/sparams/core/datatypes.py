@@ -3,6 +3,7 @@
 These small classes are used throughout the rest of the ``sparams`` sub-package.
 """
 
+import logging
 from functools import cached_property
 from typing import TYPE_CHECKING, Self
 
@@ -21,6 +22,8 @@ if TYPE_CHECKING:
     from .network_component_models import Calkit
     from .s11model import S11ModelParams
 
+logger = logging.getLogger(__name__)
+
 
 @hickleable
 @attrs.define(frozen=True, kw_only=True, slots=False)
@@ -31,6 +34,24 @@ class SParams:
     methods are based on https://en.wikipedia.org/wiki/Scattering_parameters.
 
     See also https://en.wikipedia.org/wiki/Two-port_network#Interrelation_of_parameters
+
+    Parameters
+    ----------
+    freqs
+        The frequencies at which the S-parameters are defined.
+    s11
+        The input reflection coefficient, same length as ``freqs``.
+    s12
+        The reverse transmission coefficient, same length as ``freqs``.
+    s22
+        The output reflection coefficient, same length as ``freqs``.
+    s21
+        The forward transmission coefficient, same length as ``freqs``.
+
+    Notes
+    -----
+    All four S-parameters are required: neither reciprocity (S21 = S12) nor
+    symmetry (S22 = S11) is assumed.
     """
 
     freqs: tp.FreqType = npfield(dtype=float, possible_ndims=(1,), unit=un.MHz)
@@ -66,14 +87,6 @@ class SParams:
                 "Number of frequencies in S-matrix must match freqs length."
             )
 
-    @s22.default
-    def _s22_default(self):
-        return self.s11
-
-    @s21.default
-    def _s21_default(self):
-        return self.s12
-
     @property
     def s(self) -> np.ndarray:
         """The S-matrix as a 2x2xN array."""
@@ -104,6 +117,39 @@ class SParams:
             s12=s[0, 1],
             s21=s[1, 0],
             s22=s[1, 1],
+        )
+
+    @classmethod
+    def reciprocal(
+        cls,
+        freqs: tp.FreqType,
+        s11: np.ndarray,
+        s12: np.ndarray,
+        s22: np.ndarray | None = None,
+    ) -> Self:
+        """Create the S-parameters of a reciprocal 2-port network.
+
+        A reciprocal network has S21 = S12. If ``s22`` is not given, the network is
+        also taken to be symmetric, with S22 = S11.
+
+        Parameters
+        ----------
+        freqs
+            The frequencies of the S-parameters.
+        s11
+            The S11 parameter.
+        s12
+            The S12 parameter, also used as S21.
+        s22
+            The S22 parameter. If not given, S11 is used.
+
+        Returns
+        -------
+        sparams
+            The S-parameters of the network.
+        """
+        return cls(
+            freqs=freqs, s11=s11, s12=s12, s21=s12, s22=s11 if s22 is None else s22
         )
 
     @classmethod
@@ -248,9 +294,7 @@ class SParams:
     ) -> Self:
         """Compute S-parameters of a 2-port network from calkit measurements.
 
-        This is a thin wrapper around
-        :func:`~edges.cal.sparams.core.sparam_calibration.sparams_from_calkit_measurements`
-        (Eq. 3 of Monsalve et al., 2016).
+        This uses Eq. 3 of Monsalve et al., 2016.
 
         Parameters
         ----------
@@ -268,11 +312,47 @@ class SParams:
             The S-parameters of the network between the reference plane of the
             measurements and the standards. Only the product S12*S21 is determined
             by the calibration; S12 and S21 are both set to its square root, taken
-            on the branch that is continuous across frequency.
+            on the branch that is continuous across frequency (see
+            :func:`~edges.cal.sparams.core.sparam_calibration.continuous_sqrt`), so
+            that S12 and S21 do not flip sign where the phase of S12*S21 crosses ±π.
         """
-        from .sparam_calibration import sparams_from_calkit_measurements
+        from .network_component_models import Calkit
+        from .sparam_calibration import (
+            _STANDARDS,
+            _solve_osl_systems,
+            continuous_sqrt,
+        )
 
-        return sparams_from_calkit_measurements(measurements, model)
+        freq = measurements.freqs
+
+        if isinstance(model, Calkit):
+            model = model.at_freqs(freq)
+        elif model is None:
+            model = CalkitReadings.ideal(freqs=freq)
+
+        # One 3x3 linear system per frequency: rows are the (open, short, match)
+        # standards, with model reflection m and measured reflection b,
+        # [1, m, m*b] @ [e00, e01e10 - e00 e11, e11] = b.
+        m = np.stack(
+            [np.asarray(getattr(model, k).reflection_coefficient) for k in _STANDARDS],
+            axis=-1,
+        )
+        b = np.stack(
+            [
+                np.asarray(getattr(measurements, k).reflection_coefficient)
+                for k in _STANDARDS
+            ],
+            axis=-1,
+        )
+        a = np.stack([np.ones_like(m), m, m * b], axis=-1)
+        x = _solve_osl_systems(a, b)
+
+        s11 = x[:, 0]
+        s12s21 = x[:, 1] + x[:, 0] * x[:, 2]
+        s22 = x[:, 2]
+
+        s12 = continuous_sqrt(s12s21)
+        return cls(freqs=freq, s11=s11, s12=s12, s21=s12, s22=s22)
 
     def smoothed(
         self,
@@ -281,15 +361,18 @@ class SParams:
     ) -> Self:
         """Smooth all S-parameters using the S11 modeling procedure.
 
-        This is a thin wrapper around
-        :func:`~edges.cal.sparams.core.s11model.smooth_sparams`.
+        Each S-parameter is smoothed with :meth:`ReflectionCoefficient.smoothed`.
 
         Parameters
         ----------
         params
             The set of parameters defining the model used to smooth/interpolate,
             either one set for all S-parameters, or a dict of them keyed by
-            ``"s11"``, ``"s12"``, ``"s21"`` and ``"s22"``.
+            ``"s11"``, ``"s12"``, ``"s21"`` and ``"s22"``. If
+            ``params["s11"].combine_s12s21`` is True, the product S12*S21 is
+            smoothed (with ``params["s12"]``) instead of S12 and S21 separately,
+            and the smoothed S12 and S21 are both set to the square root of the
+            smoothed product, on the branch continuous across frequency.
         freqs
             Optional new frequencies onto which to interpolate. If not given,
             retain the same set of frequencies.
@@ -299,9 +382,43 @@ class SParams:
         smoothed_sparams
             A new SParams object that has been smoothed.
         """
-        from .s11model import smooth_sparams
+        from .s11model import S11ModelParams
+        from .sparam_calibration import continuous_sqrt
 
-        return smooth_sparams(self, params, freqs=freqs)
+        if freqs is None:
+            freqs = self.freqs
+
+        if isinstance(params, S11ModelParams):
+            params = {"s11": params, "s12": params, "s21": params, "s22": params}
+
+        if not params["s11"].combine_s12s21:
+            keys = ["s11", "s12", "s21", "s22"]
+        else:
+            keys = ["s11", "s22"]
+
+        out = {
+            param_name: ReflectionCoefficient(
+                freqs=self.freqs, reflection_coefficient=getattr(self, param_name)
+            )
+            .smoothed(params[param_name], freqs=freqs)
+            .reflection_coefficient
+            for param_name in keys
+        }
+
+        if params["s11"].combine_s12s21:
+            s12_s21 = ReflectionCoefficient(
+                freqs=self.freqs,
+                reflection_coefficient=(self.s12 * self.s21),
+            )
+            s12_s21_smoothed = s12_s21.smoothed(
+                params["s12"],
+                freqs=freqs,
+            ).reflection_coefficient
+
+            s12 = continuous_sqrt(s12_s21_smoothed)
+            out |= {"s12": s12, "s21": s12}
+
+        return type(self)(freqs=freqs, **out)
 
 
 @hickleable
@@ -502,8 +619,8 @@ class ReflectionCoefficient:
     ) -> Self:
         """Return a new, smoothed/modelled, reflection coefficient.
 
-        This is a thin wrapper around
-        :func:`~edges.cal.sparams.core.s11model.new_s11_modelled`.
+        The model is fitted with
+        :func:`~edges.cal.sparams.core.s11model.get_s11_model`.
 
         Parameters
         ----------
@@ -518,9 +635,16 @@ class ReflectionCoefficient:
         modelled_s11
             A new ReflectionCoefficient object that has been smoothed.
         """
-        from .s11model import new_s11_modelled
+        from .s11model import get_s11_model
 
-        return new_s11_modelled(self, params, freqs=freqs)
+        if freqs is None:
+            freqs = self.freqs
+
+        model = get_s11_model(params, gamma=self)
+
+        logger.info(f"Using S11 model with delay={model.delay}")
+
+        return ReflectionCoefficient(freqs=freqs, reflection_coefficient=model(freqs))
 
 
 @attrs.define
