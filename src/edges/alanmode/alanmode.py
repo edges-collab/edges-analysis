@@ -53,34 +53,53 @@ logger = logging.getLogger(__name__)
 
 def reads1p1(
     res: float,
-    s11_file_open: str,
-    s11_file_short: str,
-    s11_file_load: str,
-    s11_file_ant: str,
+    s11_file_open: str | Path,
+    s11_file_short: str | Path,
+    s11_file_load: str | Path,
+    s11_file_ant: str | Path,
     loadps: float = 33.0,
     openps: float = 33.0,
     shortps: float = 33.0,
 ) -> sp.ReflectionCoefficient:
-    """Reads the s1p1 file and returns the data."""
-    standards = CalkitReadings(
-        open=sp.ReflectionCoefficient.from_s1p(s11_file_open),
-        short=sp.ReflectionCoefficient.from_s1p(s11_file_short),
-        match=sp.ReflectionCoefficient.from_s1p(s11_file_load),
-    )
-    load = sp.ReflectionCoefficient.from_s1p(s11_file_ant)
-    freq = standards.freqs
+    """Read and calibrate an S11 measured with the VNA, as the C function reads1p1.
 
-    calkit = sp.get_calkit(sp.AGILENT_ALAN, resistance_of_match=res * un.ohm)
+    The S11 is calibrated with the internal open/short/load measurements, using
+    :func:`edges.cal.sparams.calibrate_gamma_src` with the ``AGILENT_ALAN`` calkit,
+    updated with the given match resistance and delays of the standards.
 
-    calkit = calkit.clone(
+    Parameters
+    ----------
+    res
+        The resistance of the match (load) standard, in Ohms.
+    s11_file_open, s11_file_short, s11_file_load
+        The ``.s1p`` files of the measurements of the open, short and match (load)
+        standards.
+    s11_file_ant
+        The ``.s1p`` file of the measurement of the device (load, antenna or LNA).
+    loadps, openps, shortps
+        The offset delays of the match (load), open and short standards, in ps.
+
+    Returns
+    -------
+    ReflectionCoefficient
+        The calibrated reflection coefficient of the device.
+    """
+    calkit = sp.get_calkit(
+        sp.AGILENT_ALAN,
+        resistance_of_match=res * un.ohm,
         short={"offset_delay": shortps * un.ps},
         open={"offset_delay": openps * un.ps},
         match={"offset_delay": loadps * un.ps},
     )
-    smatrix = sp.SParams.from_calkit_measurements(
-        model=calkit.at_freqs(freq), measurements=standards
+    return sp.calibrate_gamma_src(
+        gamma_src=sp.ReflectionCoefficient.from_s1p(s11_file_ant),
+        internal_osl=CalkitReadings(
+            open=sp.ReflectionCoefficient.from_s1p(s11_file_open),
+            short=sp.ReflectionCoefficient.from_s1p(s11_file_short),
+            match=sp.ReflectionCoefficient.from_s1p(s11_file_load),
+        ),
+        internal_calkit=calkit,
     )
-    return load.de_embed(smatrix)
 
 
 def corrcsv(
@@ -89,25 +108,31 @@ def corrcsv(
     cabdiel: float,
     cabloss: float,
 ) -> sp.ReflectionCoefficient:
-    """Corrects the S11 data (LNA) for cable effects.
+    """Correct the receiver (LNA) S11 for the cable to the VNA, as the C corrcsv.
 
-    This function is a direct translation of the C-code function corrcsv.
+    This calls :func:`edges.cal.sparams.correct_receiver_for_extra_cable`. Unlike
+    :func:`edges.cal.sparams.calibrate_gamma_receiver`, the correction is applied even
+    if the cable length is zero, as in the C code.
 
     Parameters
     ----------
     s11
-        The S11 data.
-    cablen : float
+        The S11 of the receiver.
+    cablen
         The cable length, in inches.
-    cabdiel : float
+    cabdiel
         The cable dielectric constant, as a percent.
-    cabloss : float
+    cabloss
         The cable loss, as a percent.
+
+    Returns
+    -------
+    ReflectionCoefficient
+        The corrected S11 of the receiver.
     """
-    cable_length = (cablen * un.imperial.inch).to("m")
     return correct_receiver_for_extra_cable(
         gamma=s11,
-        cable_length=cable_length,
+        cable_length=(cablen * un.imperial.inch).to("m"),
         cable_loss_percent=cabloss,
         cable_dielectric_percent=cabdiel,
     )
