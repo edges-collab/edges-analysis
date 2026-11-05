@@ -233,6 +233,7 @@ def lst_bin(
     in_gha: bool = False,
     use_model_residuals: bool | None = None,
     reference_time: float | Time | str = "mean",
+    nsamples_strategy: NsamplesStrategy = NsamplesStrategy.FLAGGED_NSAMPLES,
 ):
     """Average data within bins of LST.
 
@@ -259,6 +260,12 @@ def lst_bin(
         this time). This can be a float (JD), an astropy Time, or one of 'min', 'max'
         or 'mean' (default). These strings use the corresponding min/max/mean time in
         the data object as the reference time.
+    nsamples_strategy
+        The strategy that defines the weight of each sample in the average (see
+        :class:`~edges.averaging.utils.NsamplesStrategy`). The default,
+        ``FLAGGED_NSAMPLES``, weights each sample by its flagged nsamples. Whatever
+        the strategy, the nsamples of the output are the sums of the flagged
+        nsamples in each bin, as in :func:`average_over_times`.
 
     Returns
     -------
@@ -286,6 +293,7 @@ def lst_bin(
     spec = np.zeros((data.nloads, data.npols, len(bins) - 1, data.nfreqs))
     models = np.zeros_like(spec) if use_model_residuals else None
     nsmpls = np.zeros_like(spec)
+    w, n = get_weights_from_strategy(data, nsamples_strategy)
 
     for iload in range(data.nloads):
         bbins = [
@@ -293,13 +301,16 @@ def lst_bin(
             for b in itertools.pairwise(bins)
         ]
 
-        spec[iload], nsmpls[iload], _ = bin_data(
+        spec[iload], _, _ = bin_data(
             data.data[iload],
             model=data.model[iload] if use_model_residuals else None,
-            weights=data.flagged_nsamples[iload],
+            weights=w[iload],
             bins=bbins,
             axis=-2,
         )
+        # The total (flagged) nsamples in each bin, whatever the weights.
+        for ibin, bn in enumerate(bbins):
+            nsmpls[iload, :, ibin] = n[iload][:, bn].sum(axis=-2)
 
         if use_model_residuals:
             # The binned model is the unweighted mean of the model in each bin.

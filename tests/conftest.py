@@ -3,6 +3,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from astropy import units as un
+from astropy.coordinates import SkyCoord
 from astropy.time import Time
 from astropy.utils import iers
 from pygsdata import GSData
@@ -30,6 +31,33 @@ from edges.testing import create_mock_edges_data
 iers.conf.auto_download = False
 iers.conf.auto_max_age = None
 iers.conf.iers_degraded_accuracy = "ignore"
+
+# Fixed ICRS positions for objects that library code resolves by name (e.g.
+# ``galaxy_filter`` calls ``SkyCoord.from_name("Galactic Center")``), so that the
+# test suite does not depend on the CDS Sesame name resolver being reachable.
+# Values are exactly what Sesame returns for each name: SIMBAD object
+# "NAME Galactic Center", ICRS 17 45 39.602 -29 00 22.00 (2018A&A...612A...1H).
+_KNOWN_SKY_COORDS = {
+    "Galactic Center": (266.41500889, -29.00611111),
+}
+
+
+@pytest.fixture(autouse=True)
+def _offline_sky_coord_names(monkeypatch) -> dict[str, tuple[float, float]]:
+    """Resolve well-known object names without querying Sesame over the network.
+
+    Returns the mapping of names to fixed (RA, Dec) in degrees.
+    """
+    original = SkyCoord.from_name.__func__
+
+    def from_name(cls, name, *args, **kwargs):
+        if name in _KNOWN_SKY_COORDS:
+            ra, dec = _KNOWN_SKY_COORDS[name]
+            return cls(ra=ra * un.deg, dec=dec * un.deg, frame="icrs")
+        return original(cls, name, *args, **kwargs)
+
+    monkeypatch.setattr(SkyCoord, "from_name", classmethod(from_name))
+    return _KNOWN_SKY_COORDS
 
 
 @pytest.fixture(scope="session")

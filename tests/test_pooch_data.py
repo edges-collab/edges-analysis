@@ -1,5 +1,6 @@
 import tempfile
 from pathlib import Path
+from types import SimpleNamespace
 
 import py7zr
 import pytest
@@ -142,7 +143,9 @@ def b18_repo(tmp_path: Path, monkeypatch):
 
     import pooch
 
-    monkeypatch.setattr(pooch.core.time, "sleep", lambda _: None)
+    # Give pooch.core a private clock so retries don't sleep, without patching the
+    # shared time.sleep (pooch.core only uses time.sleep).
+    monkeypatch.setattr(pooch.core, "time", SimpleNamespace(sleep=lambda _: None))
     content = b"some data"
     repo = pooch.create(
         path=tmp_path,

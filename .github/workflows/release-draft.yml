@@ -1,6 +1,10 @@
 name: Update Draft Release
 
-on: push
+# Each long-lived branch keeps its own draft: main drafts the next release, and
+# 8.x (the v8 maintenance branch) drafts the next v8 bug-fix release.
+on:
+  push:
+    branches: [main, "8.x"]
 permissions:
   contents: write
   pull-requests: write
@@ -15,6 +19,6 @@ jobs:
           fetch-depth: 0
 
       - name: Publish the release notes
-        uses: release-drafter/release-drafter@v7.7.0
+        uses: release-drafter/release-drafter@v7.10.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

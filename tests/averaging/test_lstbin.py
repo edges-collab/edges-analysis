@@ -230,3 +230,55 @@ class TestModelWithNaNData:
         assert np.isnan(lost.model[0, 0, 0, 4])
         with pytest.raises(ValueError, match="model is NaN"):
             average_over_times(lost, use_resids=True)
+
+
+class TestLstBinNsamplesStrategy:
+    """lst_bin weights the samples according to nsamples_strategy."""
+
+    @staticmethod
+    def _data(model: bool = False) -> GSData:
+        rng = np.random.default_rng(11)
+        d = create_mock_edges_data(add_noise=True, ntime=12).update(
+            auxiliary_measurements=None
+        )
+        d = d.update(nsamples=rng.uniform(0.5, 3.0, d.nsamples.shape))
+        if model:
+            from edges import modeling as mdl
+            from edges.analysis.datamodel import add_model
+
+            d = add_model(d, model=mdl.LinLog(n_terms=3))
+        return d
+
+    def test_default_is_flagged_nsamples(self):
+        d = self._data()
+        a = lst_bin(d, binsize=24.0)
+        b = lst_bin(
+            d, binsize=24.0, nsamples_strategy=NsamplesStrategy.FLAGGED_NSAMPLES
+        )
+        np.testing.assert_array_equal(a.data, b.data)
+        n = d.flagged_nsamples
+        np.testing.assert_allclose(
+            a.data[:, :, 0], np.sum(n * d.data, axis=2) / np.sum(n, axis=2)
+        )
+
+    def test_uniform_weights(self):
+        d = self._data()
+        out = lst_bin(
+            d, binsize=24.0, nsamples_strategy=NsamplesStrategy.FLAGGED_NSAMPLES_UNIFORM
+        )
+        np.testing.assert_allclose(out.data[:, :, 0], np.mean(d.data, axis=2))
+        # nsamples are the summed flagged nsamples whatever the weights
+        np.testing.assert_allclose(
+            out.nsamples[:, :, 0], np.sum(d.flagged_nsamples, axis=2)
+        )
+
+    def test_uniform_weights_with_model(self):
+        d = self._data(model=True)
+        out = lst_bin(
+            d,
+            binsize=24.0,
+            use_model_residuals=True,
+            nsamples_strategy=NsamplesStrategy.FLAGGED_NSAMPLES_UNIFORM,
+        )
+        expected = np.mean(d.model, axis=2) + np.mean(d.residuals, axis=2)
+        np.testing.assert_allclose(out.data[:, :, 0], expected)
