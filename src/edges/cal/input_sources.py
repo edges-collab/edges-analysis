@@ -10,6 +10,7 @@ from pygsdata.attrs import npfield
 
 from edges import types as tp
 from edges.io import CalObsDefEDGES2, CalObsDefEDGES3
+from edges.io.loads import canonical_load_name
 from edges.serialization import hickleable
 
 from . import sparams as sp
@@ -113,7 +114,10 @@ class InputSource:
         caldef
             The calibration definition object that points to all the required datafiles.
         load_name
-            The name of the load within the calibration definition to use.
+            The name of the load within the calibration definition to use, in any
+            spelling accepted by :func:`edges.io.loads.canonical_load_name` (e.g.
+            ``"hot_load"`` or ``"HotLoad"``). The returned source has the canonical
+            name.
         internal_switch
             The internal switch S-parameters to calibrate the source reflection
             coefficient (optional -- use for EDGES 2). Note tat you can compute
@@ -148,7 +152,14 @@ class InputSource:
         load
             The InputSource object, containing all info about spectra and S11's for
             that input source.
+
+        Raises
+        ------
+        ValueError
+            If ``load_name`` is not a known calibration load.
         """
+        load_name = canonical_load_name(load_name)
+
         # Copy so that we never modify the caller's dictionaries.
         spec_kwargs = dict(spec_kwargs or {})
         s11_kwargs = dict(s11_kwargs or {})

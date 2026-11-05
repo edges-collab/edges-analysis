@@ -12,14 +12,19 @@ from edges.io import CalObsDefEDGES2
 
 
 class TestInputSource:
-    def test_input_source_from_caldef(self, caldef: CalObsDefEDGES2):
+    @pytest.mark.parametrize("load_name", ["hot_load", "HotLoad"])
+    def test_input_source_from_caldef(self, caldef: CalObsDefEDGES2, load_name: str):
         load = InputSource.from_caldef(
-            caldef, load_name="hot_load", ambient_temperature=300.0 * un.K
+            caldef, load_name=load_name, ambient_temperature=300.0 * un.K
         )
 
         assert load.name == "hot_load"
         mask = ~np.isnan(load.averaged_q)
         assert np.all(load.averaged_q[mask] == load.spectrum.averaged_q[mask])
+
+    def test_unknown_load_name(self, caldef: CalObsDefEDGES2):
+        with pytest.raises(ValueError, match="Unknown calibration load 'hotload'"):
+            InputSource.from_caldef(caldef, load_name="hotload")
 
     def test_bad_inputs(self, caldef: CalObsDefEDGES2):
         """Test that bad inputs raise appropriate errors."""

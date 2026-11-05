@@ -260,6 +260,14 @@ def test_kwargs_reach_all_loads_and_are_not_mutated(caldef: CalObsDefEDGES2):
     assert loss_models == {"open": None}
 
 
+@pytest.mark.parametrize("kwarg", ["loss_models", "spectrum_kwargs"])
+def test_unknown_load_keys_raise(caldef: CalObsDefEDGES2, kwarg: str):
+    with pytest.raises(ValueError, match="Unknown calibration load 'hotload'"):
+        CalibrationObservation.from_edges2_caldef(
+            caldef, f_low=50 * un.MHz, f_high=100 * un.MHz, **{kwarg: {"hotload": {}}}
+        )
+
+
 def test_restrict_s11_freqs(caldef: CalObsDefEDGES2):
     f_low, f_high = 50 * un.MHz, 100 * un.MHz
     load = InputSource.from_caldef(
