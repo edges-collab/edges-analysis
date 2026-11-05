@@ -59,6 +59,18 @@ class TestSParams:
         with pytest.raises(TypeError, match=missing):
             dt.SParams(**kwargs)
 
+    def test_reciprocal_constructor(self):
+        sp = self.smatrix
+        symmetric = dt.SParams.reciprocal(freqs=sp.freqs, s11=sp.s11, s12=sp.s12)
+        np.testing.assert_array_equal(symmetric.s21, sp.s12)
+        np.testing.assert_array_equal(symmetric.s22, sp.s11)
+
+        recip = dt.SParams.reciprocal(
+            freqs=sp.freqs, s11=sp.s11, s12=sp.s12, s22=sp.s22
+        )
+        np.testing.assert_array_equal(recip.s21, sp.s12)
+        np.testing.assert_array_equal(recip.s22, sp.s22)
+
     def test_roundtrip_transfer_matrix(self):
         transfer_matrix = self.smatrix.as_transfer_matrix()
 

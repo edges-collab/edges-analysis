@@ -120,6 +120,39 @@ class SParams:
         )
 
     @classmethod
+    def reciprocal(
+        cls,
+        freqs: tp.FreqType,
+        s11: np.ndarray,
+        s12: np.ndarray,
+        s22: np.ndarray | None = None,
+    ) -> Self:
+        """Create the S-parameters of a reciprocal 2-port network.
+
+        A reciprocal network has S21 = S12. If ``s22`` is not given, the network is
+        also taken to be symmetric, with S22 = S11.
+
+        Parameters
+        ----------
+        freqs
+            The frequencies of the S-parameters.
+        s11
+            The S11 parameter.
+        s12
+            The S12 parameter, also used as S21.
+        s22
+            The S22 parameter. If not given, S11 is used.
+
+        Returns
+        -------
+        sparams
+            The S-parameters of the network.
+        """
+        return cls(
+            freqs=freqs, s11=s11, s12=s12, s21=s12, s22=s11 if s22 is None else s22
+        )
+
+    @classmethod
     def from_transfer_matrix(cls, freqs: tp.FreqType, t: np.ndarray) -> Self:
         """Create an SMatrix from a transfer matrix.
 
