@@ -18,7 +18,7 @@ from edges.alanmode.alanmode import (
     _acqplot7amoon,
     _average_spectra,
 )
-from edges.cal import ReflectionCoefficient
+from edges.cal import LoadSpectrum, ReflectionCoefficient
 from edges.cal.sparams import S11ModelParams
 from edges.config import config
 from edges.data import fetch_b18_cal_outputs
@@ -390,6 +390,73 @@ class TestEdgesParams:
         assert self._params_used(monkeypatch) == am.EdgesScriptParams()
 
 
+class TestEdgesCalobs:
+    """How :func:`edges` assembles its CalibrationObservation."""
+
+    def test_calobs(self, monkeypatch, gsd_averaged: GSData):
+        params = am.EdgesScriptParams(fstart=45.0, fstop=150.0, tcold=300.0, Lh=-1)
+        specs = {
+            name: LoadSpectrum(q=gsd_averaged, temp_ave=temp * un.K)
+            for name, temp in (
+                ("ambient", 300.0),
+                ("hot_load", 400.0),
+                ("open", 300.0),
+                ("short", 300.0),
+            )
+        }
+        monkeypatch.setattr(am.alanmode, "_get_specs", lambda *args: specs)
+        monkeypatch.setattr(
+            am.alanmode,
+            "get_noise_wave_calibration_iterative",
+            lambda calobs, **kwargs: "calibrator",
+        )
+
+        s11freq = np.linspace(40, 200, 161) * un.MHz
+        f = s11freq.to_value("MHz")
+        s11 = (0.2 + 1e-3 * f) * np.exp(1j * 0.01 * f)
+        calobs, calibrator, s11_params, rcv_params, hot_loss = am.edges(
+            spcold=None,
+            sphot=None,
+            spopen=None,
+            spshort=None,
+            s11freq=s11freq,
+            s11hot=s11,
+            s11cold=s11,
+            s11lna=s11,
+            s11open=s11,
+            s11short=s11,
+            tload=300 * un.K,
+            tcal=1000 * un.K,
+            params=params,
+        )
+        assert calibrator == "calibrator"
+        assert calobs.load_names == ("ambient", "hot_load", "open", "short")
+
+        # The raw S11s are stored within fstart/fstop, and the models are fit to them.
+        s11mask = (f >= 45) & (f <= 150)
+        for name, load in calobs.loads.items():
+            assert load.name == name
+            assert load.spectrum is specs[name]
+            assert load.ambient_temperature == 300.0 * un.K
+            np.testing.assert_array_equal(
+                load._raw_s11.freqs.to_value("MHz"), f[s11mask]
+            )
+            np.testing.assert_array_equal(load._raw_s11.s11, s11[s11mask])
+            expected = load._raw_s11.smoothed(s11_params, freqs=load.freqs)
+            np.testing.assert_array_equal(load.reflection_coefficient.s11, expected.s11)
+            if name == "hot_load":
+                np.testing.assert_array_equal(
+                    load.loss, hot_loss(load.reflection_coefficient)
+                )
+                assert np.all(load.loss < 1)
+            else:
+                np.testing.assert_array_equal(load.loss, 1.0)
+
+        np.testing.assert_array_equal(calobs._raw_receiver.s11, s11[s11mask])
+        expected = calobs._raw_receiver.smoothed(rcv_params, freqs=calobs.freqs)
+        np.testing.assert_array_equal(calobs.receiver.s11, expected.s11)
+
+
 class TestCorrcsv:
     def test_zero_cable_length(self):
         freqs = np.linspace(50, 100, 101) * un.MHz
@@ -417,9 +484,13 @@ class TestGetLoadS11s:
     def test_model_type(self, nfit2: int, model_type: type):
         s11, mask, s11freq = self._inputs()
         params = am.EdgesScriptParams(nfit2=nfit2)
-        raw, model_params, models = am.alanmode._get_load_s11s(
-            params, s11, s11, s11, s11, mask, s11freq, s11freq
+        raw, model_params = am.alanmode._get_load_s11s(
+            params, s11, s11, s11, s11, mask, s11freq
         )
+        models = {
+            name: s.smoothed(params=model_params, freqs=s11freq)
+            for name, s in raw.items()
+        }
         assert isinstance(model_params.model, model_type)
         assert model_params.model.n_terms == nfit2
         for name, model in models.items():
