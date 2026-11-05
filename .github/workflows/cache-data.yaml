@@ -2,12 +2,12 @@ name: Cache Test Data
 
 # Downloads the data the tests need from Zenodo into the pooch cache, and saves it
 # with actions/cache. Pull requests can only restore caches saved on their own branch
-# or on the base branch, so this also runs on pushes to main (and weekly, so that the
-# cache is never evicted for being unused). The tests then rarely touch Zenodo.
+# or on the base branch, so this also runs on pushes to main and 8.x (and weekly, so
+# that the cache is never evicted for being unused). The tests then rarely touch Zenodo.
 on:
   workflow_call:
   push:
-    branches: [main]
+    branches: [main, "8.x"]
   schedule:
     - cron: "17 4 * * 1"
   workflow_dispatch:
