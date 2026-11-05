@@ -22,7 +22,13 @@ class TestGammaEmbed:
             reflection_coefficient=rng.normal(size=100), freqs=freqs
         )
 
-        smatrix = sp.SParams(s11=np.zeros(100), s12=np.ones(100), freqs=freqs)
+        smatrix = sp.SParams(
+            s11=np.zeros(100),
+            s12=np.ones(100),
+            s21=np.ones(100),
+            s22=np.zeros(100),
+            freqs=freqs,
+        )
         np.testing.assert_allclose(
             s11.reflection_coefficient,
             s11.embed(smatrix).reflection_coefficient,
@@ -47,7 +53,7 @@ class TestGammaEmbed:
             reflection_coefficient=rng.uniform(0, 1, size=10)
             + rng.uniform(0, 1, size=10) * 1j,
         )
-        smat = sp.SParams(s11=s11, s12=s12, s22=s22, freqs=freqs)
+        smat = sp.SParams(s11=s11, s12=s12, s21=s12, s22=s22, freqs=freqs)
 
         np.testing.assert_allclose(
             gamma.embed(smat).de_embed(smat).reflection_coefficient,

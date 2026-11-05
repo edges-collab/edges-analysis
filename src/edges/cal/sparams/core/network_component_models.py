@@ -160,7 +160,7 @@ class TransmissionLine:
 
         s11 = (Zo**2 - Zp**2) * np.sinh(γl) / denom
         s12 = 2 * Zo * Zp / denom
-        return SParams(freqs=self.freqs, s11=s11, s12=s12)
+        return SParams(freqs=self.freqs, s11=s11, s12=s12, s21=s12, s22=s11)
 
 
 @attrs.define(kw_only=True, frozen=True, slots=False)

@@ -31,6 +31,24 @@ class SParams:
     methods are based on https://en.wikipedia.org/wiki/Scattering_parameters.
 
     See also https://en.wikipedia.org/wiki/Two-port_network#Interrelation_of_parameters
+
+    Parameters
+    ----------
+    freqs
+        The frequencies at which the S-parameters are defined.
+    s11
+        The input reflection coefficient, same length as ``freqs``.
+    s12
+        The reverse transmission coefficient, same length as ``freqs``.
+    s22
+        The output reflection coefficient, same length as ``freqs``.
+    s21
+        The forward transmission coefficient, same length as ``freqs``.
+
+    Notes
+    -----
+    All four S-parameters are required: neither reciprocity (S21 = S12) nor
+    symmetry (S22 = S11) is assumed.
     """
 
     freqs: tp.FreqType = npfield(dtype=float, possible_ndims=(1,), unit=un.MHz)
@@ -65,14 +83,6 @@ class SParams:
             raise ValueError(
                 "Number of frequencies in S-matrix must match freqs length."
             )
-
-    @s22.default
-    def _s22_default(self):
-        return self.s11
-
-    @s21.default
-    def _s21_default(self):
-        return self.s12
 
     @property
     def s(self) -> np.ndarray:

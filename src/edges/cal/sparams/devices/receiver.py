@@ -117,7 +117,7 @@ def correct_receiver_for_extra_cable(
         lossf=1 + cable_loss_percent * 0.01,
         dielf=1 + cable_dielectric_percent * 0.01,
     )
-    sparams = SParams(freqs=gamma.freqs, s11=s11, s12=s12)
+    sparams = SParams(freqs=gamma.freqs, s11=s11, s12=s12, s21=s12, s22=s11)
     return gamma.embed(sparams) if cable_length > 0.0 else gamma.de_embed(sparams)
 
 
