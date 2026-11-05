@@ -31,3 +31,9 @@ def test_alanmode_help_lists_commands():
     out = _edges("alanmode", "--help")
     assert "cal-edges2" in out
     assert "cal-edges3" in out
+
+
+def test_alanmode_cal_edges2_help_uses_canonical_load_names():
+    out = _edges("alanmode", "cal-edges2", "--help")
+    assert "--data.hot-load-acqs" in out
+    assert "hotload" not in out

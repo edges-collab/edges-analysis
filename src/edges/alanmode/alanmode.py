@@ -50,8 +50,6 @@ from . import alanio
 
 logger = logging.getLogger(__name__)
 
-SOURCES = ["ambient", "hot_load", "open", "short"]
-
 
 def reads1p1(
     res: float,
@@ -463,11 +461,11 @@ def _get_specs(
 ) -> dict[str, LoadSpectrum]:
     specs = {}
 
-    for name, spec, temp in zip(
-        SOURCES,
-        [spcold, sphot, spopen, spshort],
-        [params.tcold, params.thot, params.tcab, params.tcab],
-        strict=False,
+    for name, spec, temp in (
+        ("ambient", spcold, params.tcold),
+        ("hot_load", sphot, params.thot),
+        ("open", spopen, params.tcab),
+        ("short", spshort, params.tcab),
     ):
         specs[name] = LoadSpectrum(
             q=approximate_temperature(
@@ -519,8 +517,11 @@ def _get_load_s11s(
             reflection_coefficient=s11[s11mask],
             freqs=s11freq,
         )
-        for name, s11 in zip(
-            SOURCES, [s11cold, s11hot, s11open, s11short], strict=False
+        for name, s11 in (
+            ("ambient", s11cold),
+            ("hot_load", s11hot),
+            ("open", s11open),
+            ("short", s11short),
         )
     }
 
@@ -910,7 +911,7 @@ class Edges2CalobsParams:
         precalibrated file in Raul's legacy output format (CSV).
     ambient_acqs
         A list of paths to the ambient acq spectra files.
-    hotload_acqs
+    hot_load_acqs
         A list of paths to the hot load acq spectra files.
     open_acqs
         A list of paths to the open acq spectra files.
@@ -920,7 +921,7 @@ class Edges2CalobsParams:
 
     s11_path: Path
     ambient_acqs: list[Path]
-    hotload_acqs: list[Path]
+    hot_load_acqs: list[Path]
     open_acqs: list[Path]
     short_acqs: list[Path]
 
@@ -936,7 +937,7 @@ class Edges2CalobsParams:
         """Return a dictionary of all associated spectrum files."""
         return {
             "ambient": self.ambient_acqs,
-            "hot_load": self.hotload_acqs,
+            "hot_load": self.hot_load_acqs,
             "open": self.open_acqs,
             "short": self.short_acqs,
         }
