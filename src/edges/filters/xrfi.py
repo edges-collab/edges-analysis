@@ -916,7 +916,7 @@ def xrfi_iterative_sliding_window_2d(
     freqs: np.ndarray,
     model: mdl.Model,
     lsts: np.ndarray | None = None,
-    lst_terms: int = 3,
+    lst_terms: int | None = 3,
     flags=None,
     window_frac: int = 16,
     min_window_size: int = 10,
@@ -936,7 +936,8 @@ def xrfi_iterative_sliding_window_2d(
     * **Model.** One joint model is fit to all LST bins: every term of ``model`` (the
       frequency model, e.g. a 37-term Fourier series) times a polynomial in LST with
       ``lst_terms`` terms, on the occupied LST range mapped to [0, 1]. It is refit on
-      every iteration with the current weights.
+      every iteration with the current weights. With ``lst_terms=None`` each LST bin
+      gets its own term, so each bin is fit on its own, as in 1D.
     * **Window.** The local RMS of the residuals at ``(t, i)`` is taken over LST bins
       ``t - time_half_width .. t + time_half_width`` and channels
       ``i - m .. i + m`` with ``m = max(n_freq // window_frac, min_window_size)``,
@@ -965,7 +966,8 @@ def xrfi_iterative_sliding_window_2d(
         equivalent for regularly binned LSTs.
     lst_terms
         The number of terms of the polynomial in LST (at most the number of occupied
-        LST bins).
+        LST bins). If None, one term per LST bin: the model of each bin is fit to that
+        bin alone, the same model as in 1D, so only the RMS window is 2D.
     flags, window_frac, min_window_size, max_iter, threshold, watershed, reflag_thresh
         As in :func:`xrfi_iterative_sliding_window`.
     time_half_width
@@ -1015,7 +1017,8 @@ def xrfi_iterative_sliding_window_2d(
     flags_list = []
     potential_reflags = set()
 
-    if rows.size:
+    lst_basis = None
+    if rows.size and lst_terms is not None:
         lst_basis, _ = mdl.polynomial_basis(
             lsts, np.any(orig_weights > 0, axis=1), lst_terms
         )

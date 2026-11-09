@@ -43,7 +43,7 @@ def polynomial_basis(
 
 def fit_tensor_product(
     freq_basis: np.ndarray,
-    second_basis: np.ndarray,
+    second_basis: np.ndarray | None,
     data: np.ndarray,
     weights: np.ndarray,
     rows: np.ndarray | None = None,
@@ -58,7 +58,8 @@ def fit_tensor_product(
         (e.g. ``FixedLinearModel.basis``).
     second_basis
         The basis along the first axis of ``data``, of shape ``(n_terms, n_rows)``
-        (e.g. from :func:`polynomial_basis`).
+        (e.g. from :func:`polynomial_basis`). If None, one term per row: every row is
+        fit on its own, and rows with no weight in the fit are NaN.
     data
         The data, of shape ``(n_rows, n_freq)``. Values with zero weight are ignored
         (they may be NaN).
@@ -79,11 +80,26 @@ def fit_tensor_product(
         The fitted model at every row and frequency, of shape ``(n_rows, n_freq)``.
     """
     freq_basis = np.asarray(freq_basis, dtype=float)
-    second_basis = np.asarray(second_basis, dtype=float)
     data = np.asarray(data, dtype=float)
     weights = np.asarray(weights, dtype=float)
     if rows is None:
         rows = np.where(np.any(weights > 0, axis=1))[0]
+
+    if second_basis is None:
+        out = np.full(data.shape, np.nan)
+        for t in rows:
+            if np.any(weights[t] > 0):
+                out[t] = fit_tensor_product(
+                    freq_basis,
+                    np.ones((1, 1)),
+                    data[t : t + 1],
+                    weights[t : t + 1],
+                    rows=np.array([0]),
+                    method=method,
+                )[0]
+        return out
+
+    second_basis = np.asarray(second_basis, dtype=float)
 
     n_freq_terms = freq_basis.shape[0]
     n_second_terms = second_basis.shape[0]

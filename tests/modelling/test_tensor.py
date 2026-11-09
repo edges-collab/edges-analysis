@@ -44,6 +44,20 @@ def test_fit_tensor_product_recovers_exact_model(setup, method):
     np.testing.assert_allclose(model, data, atol=1e-8)
 
 
+@pytest.mark.parametrize("method", ["lstsq", "alan-qrd"])
+def test_fit_tensor_product_one_term_per_row(setup, method):
+    freq_basis, _, data = setup
+    weights = np.ones_like(data)
+    weights[4] = 0
+    model = mdl.fit_tensor_product(freq_basis, None, data, weights, method=method)
+    for t in (0, 3, 9):
+        fit = mdl.fit_tensor_product(
+            freq_basis, np.ones((1, 1)), data[t : t + 1], weights[t : t + 1]
+        )
+        np.testing.assert_allclose(model[t], fit[0], atol=1e-8)
+    assert np.all(np.isnan(model[4]))
+
+
 def test_fit_tensor_product_ignores_zero_weight_samples(setup):
     freq_basis, lst_basis, data = setup
     corrupted = data.copy()

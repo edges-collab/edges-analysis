@@ -61,6 +61,29 @@ def test_single_lst_bin_matches_1d(freqs, seed):
     assert info_2d.n_iters == info_1d.n_iters
 
 
+def test_one_term_per_lst_bin_matches_1d_per_bin(freqs):
+    """With lst_terms=None and no time extent, each LST bin is flagged as in 1D."""
+    data, _ = _inject(_lst_sky(freqs), strength=(0.2, 3.0))
+    kwargs = {
+        "freqs": freqs,
+        "model": mdl.EdgesPoly(n_terms=6),
+        "window_frac": 16,
+        "threshold": 3.0,
+        "max_iter": 20,
+        "reflag_thresh": 1.0,
+        "watershed": {1.0: 1, 10.0: 2},
+        "fit_kwargs": {"method": "alan-qrd"},
+    }
+    flags_1d = np.array([
+        xrfi.xrfi_iterative_sliding_window(row.copy(), **kwargs)[0] for row in data
+    ])
+    flags_2d, _ = xrfi.xrfi_iterative_sliding_window_2d(
+        data.copy(), lst_terms=None, time_half_width=0, **kwargs
+    )
+    assert flags_1d.any()
+    np.testing.assert_array_equal(flags_2d, flags_1d)
+
+
 def test_finds_rfi_in_lst_frequency(freqs):
     """The joint model follows a sky that changes with LST, so only RFI is flagged."""
     data, truth = _inject(_lst_sky(freqs))
