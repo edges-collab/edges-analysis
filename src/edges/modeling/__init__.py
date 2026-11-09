@@ -14,6 +14,7 @@ from .models import (
     PhysicalLin,
     Polynomial,
 )
+from .tensor import fit_tensor_product, polynomial_basis
 from .xtransforms import (
     IdentityTransform,
     Log10Transform,

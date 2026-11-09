@@ -910,76 +910,6 @@ def xrfi_iterative_sliding_window(
 xrfi_iterative_sliding_window.ndim = (1,)
 
 
-def _lst_basis(
-    lsts: np.ndarray, occupied: np.ndarray, n_terms: int
-) -> tuple[np.ndarray, int]:
-    """Polynomial basis in LST, on the occupied LST range mapped to [0, 1].
-
-    Returns the basis, of shape ``(n_terms, n_lst)``, and the number of terms used,
-    which is at most the number of occupied LST bins.
-    """
-    n_terms = max(1, min(int(n_terms), int(np.sum(occupied))))
-    lo, hi = np.min(lsts[occupied]), np.max(lsts[occupied])
-    x = (lsts - lo) / (hi - lo) if hi > lo else np.zeros_like(lsts, dtype=float)
-    return np.array([x**k for k in range(n_terms)]), n_terms
-
-
-def _fit_tensor_model(
-    freq_basis: np.ndarray,
-    lst_basis: np.ndarray,
-    data: np.ndarray,
-    weights: np.ndarray,
-    rows: np.ndarray,
-    method: str = "lstsq",
-) -> np.ndarray:
-    """Weighted fit of ``sum_{j,k} c_jk * freq_basis[j](f) * lst_basis[k](t)``.
-
-    With ``method="alan-qrd"`` the normal equations are built as in Alan's C code
-    (summed one LST bin at a time, unscaled) and solved with its QR decomposition.
-    Otherwise the design matrix of the samples with weight, scaled by ``sqrt(w)`` and
-    with normalised columns, is solved with :func:`numpy.linalg.lstsq`, like the
-    ``lstsq`` method of :class:`~edges.modeling.ModelFit`.
-
-    Returns the model evaluated at every LST bin and frequency.
-    """
-    n_freq_terms = freq_basis.shape[0]
-    n_lst_terms = lst_basis.shape[0]
-
-    if method == "alan-qrd":
-        from ..modeling.fitting import _c_qrd
-
-        npar = n_freq_terms * n_lst_terms
-        aarr = np.zeros((npar, npar))
-        bbrr = np.zeros(npar)
-        for t in rows:
-            w = weights[t]
-            y = np.where(w > 0, data[t], 0.0)
-            wa = np.multiply(freq_basis, w, order="C")
-            gram = np.dot(wa, freq_basis.T)
-            proj = np.dot(wa, y)
-            lt = lst_basis[:, t]
-            aarr += np.kron(np.outer(lt, lt), gram)
-            bbrr += np.kron(lt, proj)
-        _, coeffs = _c_qrd(aarr, bbrr)
-    else:
-        use = np.zeros(weights.shape, dtype=bool)
-        use[rows] = weights[rows] > 0
-        t_idx, f_idx = np.nonzero(use)
-        sqrt_w = np.sqrt(weights[t_idx, f_idx])
-        design = (lst_basis[:, t_idx][:, None, :] * freq_basis[None, :, f_idx]).reshape(
-            n_lst_terms * n_freq_terms, -1
-        ).T * sqrt_w[:, None]
-        norms = np.linalg.norm(design, axis=0)
-        norms[norms == 0] = 1.0
-        coeffs = (
-            np.linalg.lstsq(design / norms, data[t_idx, f_idx] * sqrt_w, rcond=None)[0]
-            / norms
-        )
-
-    coeffs = np.asarray(coeffs).reshape(n_lst_terms, n_freq_terms)
-    return lst_basis.T @ (coeffs @ freq_basis)
-
-
 def xrfi_iterative_sliding_window_2d(
     spectrum: np.ndarray,
     *,
@@ -1086,12 +1016,14 @@ def xrfi_iterative_sliding_window_2d(
     potential_reflags = set()
 
     if rows.size:
-        lst_basis, _ = _lst_basis(lsts, np.any(orig_weights > 0, axis=1), lst_terms)
+        lst_basis, _ = mdl.polynomial_basis(
+            lsts, np.any(orig_weights > 0, axis=1), lst_terms
+        )
 
     for it in range(max_iter):
         if not rows.size:
             break
-        model_2d = _fit_tensor_model(
+        model_2d = mdl.fit_tensor_product(
             freq_basis, lst_basis, spectrum, weights, rows, method=method
         )
         residual = spectrum - model_2d
