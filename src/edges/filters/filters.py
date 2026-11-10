@@ -415,6 +415,9 @@ rfi_watershed_filter = gsregister("filter")(
 rfi_iterative_sliding_window = gsregister("filter")(
     gsdata_filter()(_RFIFilterFactory("iterative_sliding_window"))
 )
+rfi_iterative_sliding_window_2d = gsregister("filter")(
+    gsdata_filter()(_RFIFilterFactory("iterative_sliding_window_2d"))
+)
 
 
 @gsregister("filter")

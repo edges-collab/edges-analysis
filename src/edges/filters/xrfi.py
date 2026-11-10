@@ -910,6 +910,219 @@ def xrfi_iterative_sliding_window(
 xrfi_iterative_sliding_window.ndim = (1,)
 
 
+def xrfi_iterative_sliding_window_2d(
+    spectrum: np.ndarray,
+    *,
+    freqs: np.ndarray,
+    model: mdl.Model,
+    lsts: np.ndarray | None = None,
+    lst_terms: int | None = 3,
+    flags=None,
+    window_frac: int = 16,
+    min_window_size: int = 10,
+    time_half_width: int = 2,
+    max_iter: int = 100,
+    threshold: float = 2.5,
+    watershed: dict | None = None,
+    reflag_thresh: float = 1.01,
+    fit_kwargs: dict | None = None,
+    weights: np.ndarray | None = None,
+    whiten: bool = True,
+):
+    """Flag RFI in LST-frequency, with a joint model fit and a sliding RMS window.
+
+    This is the 2D counterpart of :func:`xrfi_iterative_sliding_window`, taking a whole
+    day of LST-binned spectra at once. The iteration is the same; what changes is:
+
+    * **Model.** One joint model is fit to all LST bins: every term of ``model`` (the
+      frequency model, e.g. a 37-term Fourier series) times a polynomial in LST with
+      ``lst_terms`` terms, on the occupied LST range mapped to [0, 1]. It is refit on
+      every iteration with the current weights. With ``lst_terms=None`` each LST bin
+      gets its own term, so each bin is fit on its own, as in 1D.
+    * **Window.** The local RMS of the residuals at ``(t, i)`` is taken over LST bins
+      ``t - time_half_width .. t + time_half_width`` and channels
+      ``i - m .. i + m`` with ``m = max(n_freq // window_frac, min_window_size)``,
+      clipped to the data. With ``whiten=True`` every residual is first multiplied by
+      the square root of its original weight (e.g. nsamples), so all samples are in
+      units of their own expected noise, and the RMS and threshold use these scaled
+      residuals, every unflagged sample counting equally. Otherwise the residuals of
+      all LST bins are pooled as they are, weighted by ``weights``, as in 1D; LST bins
+      with few samples then sit above a threshold set by their better-filled
+      neighbours. Samples with zero weight are left out of the window sums, so empty
+      LST bins (whose data may be NaN) do not contribute.
+    * **Sweep.** Flags are applied inside the sweep, as in 1D: channels are visited
+      from low to high frequency and, at each channel, every occupied LST bin in
+      order, so a new flag is already in the window of the next LST bin and channel.
+
+    Thresholding (positive outliers only), the watershed (along frequency only, as in
+    1D), the re-flagging rule and the stopping rule (the total number of zero-weight
+    samples stops increasing) are as in :func:`xrfi_iterative_sliding_window`. LST
+    bins with no weight are left as they are.
+
+    Parameters
+    ----------
+    spectrum
+        The LST-binned spectra to flag, of shape ``(n_lst, n_freq)``.
+    freqs
+        The frequencies of the spectra.
+    model
+        The frequency model (e.g. ``mdl.Fourier(n_terms=37, ...)``).
+    lsts
+        The LST (or any coordinate) of each row. By default the row index, which is
+        equivalent for regularly binned LSTs.
+    lst_terms
+        The number of terms of the polynomial in LST (at most the number of occupied
+        LST bins). If None, one term per LST bin: the model of each bin is fit to that
+        bin alone, the same model as in 1D, so only the RMS window is 2D.
+    flags, window_frac, min_window_size, max_iter, threshold, watershed, reflag_thresh
+        As in :func:`xrfi_iterative_sliding_window`.
+    time_half_width
+        The number of LST bins on either side of a bin in its RMS window.
+    fit_kwargs
+        Use ``{"method": "alan-qrd"}`` to solve the fit with Alan's QR decomposition
+        (unscaled normal equations, as in the C code); any other method solves the
+        column-normalised design matrix with :func:`numpy.linalg.lstsq`.
+    weights
+        The weights of the spectra (e.g. nsamples), of shape ``(n_lst, n_freq)``.
+    whiten
+        Whether to scale the residuals by the square root of the original weights
+        before taking the window RMS and thresholding. With uniform weights this
+        makes no difference.
+
+    Returns
+    -------
+    flags
+        Boolean array of the same shape as ``spectrum``.
+    info
+        An :class:`IterativeXRFIInfo` whose models and stds are 2D arrays.
+    """
+    spectrum = np.asarray(spectrum, dtype=float)
+    if spectrum.ndim != 2:
+        raise ValueError("spectrum must be 2D, (n_lst, n_freq)")
+    n_lst, n = spectrum.shape
+
+    if flags is None:
+        flags = np.zeros(spectrum.shape, dtype=bool)
+    weights = (
+        (~flags).astype(float)
+        if weights is None
+        else np.where(flags, 0, np.asarray(weights, dtype=float))
+    )
+    orig_weights = weights.copy()
+
+    rows = np.where(np.any(orig_weights > 0, axis=1))[0]
+    lsts = np.arange(n_lst, dtype=float) if lsts is None else np.asarray(lsts, float)
+    fmod = model.at(x=freqs) if not isinstance(model, mdl.FixedLinearModel) else model
+    freq_basis = np.asarray(fmod.basis, dtype=float)
+    method = (fit_kwargs or {}).get("method", "lstsq")
+
+    m = max(n // window_frac, min_window_size)
+    mt = max(int(time_half_width), 0)
+
+    prev_n_flags = 0
+    n_flags_changed_list = []
+    total_flags_list = []
+    model_list = []
+    std_list = []
+    flags_list = []
+    potential_reflags = set()
+
+    lst_basis = None
+    if rows.size and lst_terms is not None:
+        lst_basis, _ = mdl.polynomial_basis(
+            lsts, np.any(orig_weights > 0, axis=1), lst_terms
+        )
+
+    for it in range(max_iter):
+        if not rows.size:
+            break
+        model_2d = mdl.fit_tensor_product(
+            freq_basis, lst_basis, spectrum, weights, rows, method=method
+        )
+        residual = spectrum - model_2d
+        model_list.append(model_2d)
+        rms = np.full(spectrum.shape, np.nan)
+        if whiten:
+            scale = np.sqrt(orig_weights)
+            score = np.where(orig_weights > 0, residual * scale, 0.0)
+
+        for i in range(n):
+            fsl = slice(max(i - m, 0), min(n, i + m + 1))
+            for t in rows:
+                tsl = slice(max(t - mt, 0), min(n_lst, t + mt + 1))
+                w = weights[tsl, fsl]
+                with np.errstate(invalid="ignore", divide="ignore"):
+                    if whiten:
+                        use = w > 0
+                        z = score[tsl, fsl]
+                        size = np.sum(use)
+                        av = np.sum(np.where(use, z, 0.0)) / size
+                        z_rms = np.sqrt(
+                            np.sum(np.where(use, (z - av) ** 2, 0.0)) / size
+                        )
+                        rms[t, i] = z_rms / scale[t, i]
+                        nsig = score[t, i] / (threshold * z_rms)
+                    else:
+                        r = residual[tsl, fsl]
+                        size = np.sum(w)
+                        av = np.sum(np.where(w > 0, r, 0.0) * w) / size
+                        rms[t, i] = np.sqrt(
+                            np.sum(np.where(w > 0, (r - av) ** 2, 0.0) * w) / size
+                        )
+                        nsig = residual[t, i] / (threshold * rms[t, i])
+
+                if (t, i) in potential_reflags and nsig <= 1:
+                    weights[t, i] = 1
+                    if watershed:
+                        for mult, nbins in watershed.items():
+                            if (
+                                mult < reflag_thresh
+                                and i + nbins < n
+                                and i - nbins >= 0
+                            ):
+                                rng = slice(i - nbins, i + nbins + 1)
+                                weights[t, rng] = orig_weights[t, rng]
+                    potential_reflags.remove((t, i))
+
+                if nsig > 1:
+                    weights[t, i] = 0
+                    if nsig < reflag_thresh and it < 2:
+                        potential_reflags.add((t, i))
+                    if watershed:
+                        for mult, nbins in watershed.items():
+                            if nsig > mult and i + nbins < n and i - nbins >= 0:
+                                weights[t, i - nbins : i + nbins + 1] = 0
+
+        n_flags = int(np.sum(weights == 0))
+        std_list.append(rms)
+        n_flags_changed_list.append(n_flags - prev_n_flags)
+        total_flags_list.append(n_flags)
+        flags_list.append(~(weights.astype(bool)))
+
+        if n_flags <= prev_n_flags:
+            break
+        prev_n_flags = n_flags
+
+    return (
+        ~(weights.astype(bool)),
+        IterativeXRFIInfo(
+            n_flags_changed=n_flags_changed_list,
+            total_flags=total_flags_list,
+            model_params=[],
+            data_models=model_list,
+            std_params=[],
+            stds=std_list,
+            thresholds=[threshold] * len(model_list),
+            x=freqs,
+            data=spectrum,
+            flags=flags_list,
+        ),
+    )
+
+
+xrfi_iterative_sliding_window_2d.ndim = (2,)
+
+
 def xrfi_watershed(
     spectrum: np.ndarray | None = None,
     *,
