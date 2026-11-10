@@ -927,6 +927,7 @@ def xrfi_iterative_sliding_window_2d(
     reflag_thresh: float = 1.01,
     fit_kwargs: dict | None = None,
     weights: np.ndarray | None = None,
+    whiten: bool = True,
 ):
     """Flag RFI in LST-frequency, with a joint model fit and a sliding RMS window.
 
@@ -941,9 +942,14 @@ def xrfi_iterative_sliding_window_2d(
     * **Window.** The local RMS of the residuals at ``(t, i)`` is taken over LST bins
       ``t - time_half_width .. t + time_half_width`` and channels
       ``i - m .. i + m`` with ``m = max(n_freq // window_frac, min_window_size)``,
-      clipped to the data. Residuals of all LST bins are pooled as they are, weighted
-      by ``weights`` (no per-bin normalisation). Samples with zero weight are left out
-      of the window sums, so empty LST bins (whose data may be NaN) do not contribute.
+      clipped to the data. With ``whiten=True`` every residual is first multiplied by
+      the square root of its original weight (e.g. nsamples), so all samples are in
+      units of their own expected noise, and the RMS and threshold use these scaled
+      residuals, every unflagged sample counting equally. Otherwise the residuals of
+      all LST bins are pooled as they are, weighted by ``weights``, as in 1D; LST bins
+      with few samples then sit above a threshold set by their better-filled
+      neighbours. Samples with zero weight are left out of the window sums, so empty
+      LST bins (whose data may be NaN) do not contribute.
     * **Sweep.** Flags are applied inside the sweep, as in 1D: channels are visited
       from low to high frequency and, at each channel, every occupied LST bin in
       order, so a new flag is already in the window of the next LST bin and channel.
@@ -978,6 +984,10 @@ def xrfi_iterative_sliding_window_2d(
         column-normalised design matrix with :func:`numpy.linalg.lstsq`.
     weights
         The weights of the spectra (e.g. nsamples), of shape ``(n_lst, n_freq)``.
+    whiten
+        Whether to scale the residuals by the square root of the original weights
+        before taking the window RMS and thresholding. With uniform weights this
+        makes no difference.
 
     Returns
     -------
@@ -1032,20 +1042,34 @@ def xrfi_iterative_sliding_window_2d(
         residual = spectrum - model_2d
         model_list.append(model_2d)
         rms = np.full(spectrum.shape, np.nan)
+        if whiten:
+            scale = np.sqrt(orig_weights)
+            score = np.where(orig_weights > 0, residual * scale, 0.0)
 
         for i in range(n):
             fsl = slice(max(i - m, 0), min(n, i + m + 1))
             for t in rows:
                 tsl = slice(max(t - mt, 0), min(n_lst, t + mt + 1))
                 w = weights[tsl, fsl]
-                r = residual[tsl, fsl]
                 with np.errstate(invalid="ignore", divide="ignore"):
-                    size = np.sum(w)
-                    av = np.sum(np.where(w > 0, r, 0.0) * w) / size
-                    rms[t, i] = np.sqrt(
-                        np.sum(np.where(w > 0, (r - av) ** 2, 0.0) * w) / size
-                    )
-                    nsig = residual[t, i] / (threshold * rms[t, i])
+                    if whiten:
+                        use = w > 0
+                        z = score[tsl, fsl]
+                        size = np.sum(use)
+                        av = np.sum(np.where(use, z, 0.0)) / size
+                        z_rms = np.sqrt(
+                            np.sum(np.where(use, (z - av) ** 2, 0.0)) / size
+                        )
+                        rms[t, i] = z_rms / scale[t, i]
+                        nsig = score[t, i] / (threshold * z_rms)
+                    else:
+                        r = residual[tsl, fsl]
+                        size = np.sum(w)
+                        av = np.sum(np.where(w > 0, r, 0.0) * w) / size
+                        rms[t, i] = np.sqrt(
+                            np.sum(np.where(w > 0, (r - av) ** 2, 0.0) * w) / size
+                        )
+                        nsig = residual[t, i] / (threshold * rms[t, i])
 
                 if (t, i) in potential_reflags and nsig <= 1:
                     weights[t, i] = 1
