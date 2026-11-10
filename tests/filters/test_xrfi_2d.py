@@ -84,6 +84,31 @@ def test_one_term_per_lst_bin_matches_1d_per_bin(freqs):
     np.testing.assert_array_equal(flags_2d, flags_1d)
 
 
+def test_whitening_keeps_lightly_filled_lst_bins(freqs):
+    """A bin with few samples is noisier; whitening stops it being flagged wholesale."""
+    nsamples = np.full((NLST, NFREQ), 75.0)
+    nsamples[-1] = 4.0
+    rng = np.random.default_rng(3)
+    data = _lst_sky(freqs, noise=0.0) + rng.normal(size=nsamples.shape) * 0.1 / np.sqrt(
+        nsamples
+    )
+    data, truth = _inject(data, strength=(0.3, 3.0))
+    kwargs = {
+        "freqs": freqs,
+        "model": mdl.EdgesPoly(n_terms=6),
+        "weights": nsamples,
+        "lst_terms": None,
+        "threshold": 3.5,
+        "max_iter": 20,
+        "reflag_thresh": 1.0,
+    }
+    whitened, _ = xrfi.xrfi_iterative_sliding_window_2d(data.copy(), **kwargs)
+    raw, _ = xrfi.xrfi_iterative_sliding_window_2d(data.copy(), whiten=False, **kwargs)
+    assert np.all(whitened[truth])
+    assert np.mean(whitened[~truth]) < 0.01
+    assert np.mean(raw[-1]) > 0.2
+
+
 def test_finds_rfi_in_lst_frequency(freqs):
     """The joint model follows a sky that changes with LST, so only RFI is flagged."""
     data, truth = _inject(_lst_sky(freqs))
