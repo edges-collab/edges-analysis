@@ -53,34 +53,53 @@ logger = logging.getLogger(__name__)
 
 def reads1p1(
     res: float,
-    s11_file_open: str,
-    s11_file_short: str,
-    s11_file_load: str,
-    s11_file_ant: str,
+    s11_file_open: str | Path,
+    s11_file_short: str | Path,
+    s11_file_load: str | Path,
+    s11_file_ant: str | Path,
     loadps: float = 33.0,
     openps: float = 33.0,
     shortps: float = 33.0,
 ) -> sp.ReflectionCoefficient:
-    """Reads the s1p1 file and returns the data."""
-    standards = CalkitReadings(
-        open=sp.ReflectionCoefficient.from_s1p(s11_file_open),
-        short=sp.ReflectionCoefficient.from_s1p(s11_file_short),
-        match=sp.ReflectionCoefficient.from_s1p(s11_file_load),
-    )
-    load = sp.ReflectionCoefficient.from_s1p(s11_file_ant)
-    freq = standards.freqs
+    """Read and calibrate an S11 measured with the VNA, as the C function reads1p1.
 
-    calkit = sp.get_calkit(sp.AGILENT_ALAN, resistance_of_match=res * un.ohm)
+    The S11 is calibrated with the internal open/short/load measurements, using
+    :func:`edges.cal.sparams.calibrate_gamma_src` with the ``AGILENT_ALAN`` calkit,
+    updated with the given match resistance and delays of the standards.
 
-    calkit = calkit.clone(
+    Parameters
+    ----------
+    res
+        The resistance of the match (load) standard, in Ohms.
+    s11_file_open, s11_file_short, s11_file_load
+        The ``.s1p`` files of the measurements of the open, short and match (load)
+        standards.
+    s11_file_ant
+        The ``.s1p`` file of the measurement of the device (load, antenna or LNA).
+    loadps, openps, shortps
+        The offset delays of the match (load), open and short standards, in ps.
+
+    Returns
+    -------
+    ReflectionCoefficient
+        The calibrated reflection coefficient of the device.
+    """
+    calkit = sp.get_calkit(
+        sp.AGILENT_ALAN,
+        resistance_of_match=res * un.ohm,
         short={"offset_delay": shortps * un.ps},
         open={"offset_delay": openps * un.ps},
         match={"offset_delay": loadps * un.ps},
     )
-    smatrix = sp.SParams.from_calkit_measurements(
-        model=calkit.at_freqs(freq), measurements=standards
+    return sp.calibrate_gamma_src(
+        gamma_src=sp.ReflectionCoefficient.from_s1p(s11_file_ant),
+        internal_osl=CalkitReadings(
+            open=sp.ReflectionCoefficient.from_s1p(s11_file_open),
+            short=sp.ReflectionCoefficient.from_s1p(s11_file_short),
+            match=sp.ReflectionCoefficient.from_s1p(s11_file_load),
+        ),
+        internal_calkit=calkit,
     )
-    return load.de_embed(smatrix)
 
 
 def corrcsv(
@@ -89,25 +108,31 @@ def corrcsv(
     cabdiel: float,
     cabloss: float,
 ) -> sp.ReflectionCoefficient:
-    """Corrects the S11 data (LNA) for cable effects.
+    """Correct the receiver (LNA) S11 for the cable to the VNA, as the C corrcsv.
 
-    This function is a direct translation of the C-code function corrcsv.
+    This calls :func:`edges.cal.sparams.correct_receiver_for_extra_cable`. Unlike
+    :func:`edges.cal.sparams.calibrate_gamma_receiver`, the correction is applied even
+    if the cable length is zero, as in the C code.
 
     Parameters
     ----------
     s11
-        The S11 data.
-    cablen : float
+        The S11 of the receiver.
+    cablen
         The cable length, in inches.
-    cabdiel : float
+    cabdiel
         The cable dielectric constant, as a percent.
-    cabloss : float
+    cabloss
         The cable loss, as a percent.
+
+    Returns
+    -------
+    ReflectionCoefficient
+        The corrected S11 of the receiver.
     """
-    cable_length = (cablen * un.imperial.inch).to("m")
     return correct_receiver_for_extra_cable(
         gamma=s11,
-        cable_length=cable_length,
+        cable_length=(cablen * un.imperial.inch).to("m"),
         cable_loss_percent=cabloss,
         cable_dielectric_percent=cabdiel,
     )
@@ -485,19 +510,81 @@ def _get_specs(
     return specs
 
 
-def _fourier_or_polynomial(
+def _s11_model_params(
     n_terms: int,
+    *,
     fourier: bool,
-    fourier_transform: mdl.XTransform,
-    polynomial_transform: mdl.XTransform,
-) -> mdl.Model:
-    """Return the S11 model of the C code: a Fourier series or a polynomial.
+    fourier_transform: mdl.XTransform | None = None,
+    polynomial_transform: mdl.XTransform | None = None,
+    set_transform_range: bool = True,
+    fit_method: str = "alan-qrd",
+    find_model_delay: bool = True,
+    combine_s12s21: bool = True,
+) -> S11ModelParams:
+    """Return the parameters of an S11 model as used by the C code.
 
-    Only the Fourier series takes a period (1.5, as in the C code).
+    The C code models S11s with either a Fourier series (with a period of 1.5) or a
+    polynomial, fitted to the real and imaginary parts separately. This is the single
+    place where alanmode builds these parameters; the call sites differ only in the
+    keyword arguments.
+
+    Parameters
+    ----------
+    n_terms
+        The number of terms of the model.
+    fourier
+        Whether to use a Fourier series (otherwise a polynomial).
+    fourier_transform
+        The coordinate transform of the Fourier series. Required if
+        ``set_transform_range`` is False. If ``set_transform_range`` is True, its range
+        is replaced by the frequency range of the data when fitting, so by default a
+        :class:`~edges.modeling.ZerotooneTransform` whose range is a placeholder.
+    polynomial_transform
+        The coordinate transform of the polynomial. Required if
+        ``set_transform_range`` is False. If ``set_transform_range`` is True, its scale
+        is replaced by the centre of the frequency range of the data when fitting, so
+        by default a :class:`~edges.modeling.Log10Transform` whose scale is a
+        placeholder.
+    set_transform_range
+        Whether to set the range (or scale) of the transform from the data when
+        fitting (see :class:`~edges.cal.sparams.S11ModelParams`).
+    fit_method
+        The method used to fit the model.
+    find_model_delay
+        Whether to find and remove a delay before fitting the model.
+    combine_s12s21
+        Whether to model the product S12*S21 (only used for two-port S-parameters).
+
+    Returns
+    -------
+    S11ModelParams
+        The parameters of the S11 model.
     """
+    if set_transform_range:
+        # Placeholders: the range and the scale are set from the data when fitting.
+        if fourier_transform is None:
+            fourier_transform = mdl.ZerotooneTransform(range=(1, 2))
+        if polynomial_transform is None:
+            polynomial_transform = mdl.Log10Transform(scale=1)
+    elif fourier_transform is None or polynomial_transform is None:
+        raise ValueError(
+            "fourier_transform and polynomial_transform are required if "
+            "set_transform_range is False"
+        )
+
     if fourier:
-        return mdl.Fourier(n_terms=n_terms, transform=fourier_transform, period=1.5)
-    return mdl.Polynomial(n_terms=n_terms, transform=polynomial_transform)
+        model = mdl.Fourier(n_terms=n_terms, transform=fourier_transform, period=1.5)
+    else:
+        model = mdl.Polynomial(n_terms=n_terms, transform=polynomial_transform)
+
+    return S11ModelParams(
+        model=model,
+        complex_model_type=mdl.ComplexRealImagModel,
+        set_transform_range=set_transform_range,
+        fit_method=fit_method,
+        find_model_delay=find_model_delay,
+        combine_s12s21=combine_s12s21,
+    )
 
 
 def _get_load_s11s(
@@ -525,18 +612,7 @@ def _get_load_s11s(
         )
     }
 
-    s11_modelling_params = S11ModelParams(
-        model=_fourier_or_polynomial(
-            n_terms=params.nfit2,
-            fourier=params.nfit2 > 16,
-            fourier_transform=mdl.ZerotooneTransform(range=(1, 2)),
-            polynomial_transform=mdl.Log10Transform(scale=1),
-        ),
-        complex_model_type=mdl.ComplexRealImagModel,
-        set_transform_range=True,
-        fit_method="alan-qrd",
-        find_model_delay=True,
-    )
+    s11_modelling_params = _s11_model_params(params.nfit2, fourier=params.nfit2 > 16)
 
     s11_models = {
         name: s11.smoothed(params=s11_modelling_params, freqs=spec_freqs)
@@ -551,17 +627,8 @@ def _get_receiver_s11(params: EdgesScriptParams, s11lna, s11mask, s11freq, spec_
         reflection_coefficient=s11lna[s11mask],
         freqs=s11freq,
     )
-    receiver_model = S11ModelParams(
-        model=_fourier_or_polynomial(
-            n_terms=params.nfit3,
-            fourier=params.nfit3 > 16 or params.lna_poly == 0,
-            fourier_transform=mdl.ZerotooneTransform(range=(1, 2)),
-            polynomial_transform=mdl.Log10Transform(scale=120),
-        ),
-        complex_model_type=mdl.ComplexRealImagModel,
-        set_transform_range=True,
-        fit_method="alan-qrd",
-        find_model_delay=True,
+    receiver_model = _s11_model_params(
+        params.nfit3, fourier=params.nfit3 > 16 or params.lna_poly == 0
     )
     receiver = raw_receiver.smoothed(receiver_model, freqs=spec_fq)
     return raw_receiver, receiver_model, receiver
@@ -582,18 +649,18 @@ def _get_hotload_loss(
         if s11rig is None or s12rig is None or s22rig is None:
             raise ValueError("must provide rigid cable s11/s12/s22 if Lh=-2")
 
-        hlc_model_params = S11ModelParams(
-            model=_fourier_or_polynomial(
-                n_terms=params.nfit2,
-                fourier=params.nfit2 > 16,
-                fourier_transform=mdl.ZerotooneTransform(
-                    range=(s11freq.min().to_value("MHz"), s11freq.max().to_value("MHz"))
-                ),
-                polynomial_transform=mdl.Log10Transform(scale=1),
+        # Unlike for the S11s of the loads and the receiver, the transforms are fixed
+        # here (not set from the data), and no delay is removed before fitting.
+        hlc_model_params = _s11_model_params(
+            params.nfit2,
+            fourier=params.nfit2 > 16,
+            fourier_transform=mdl.ZerotooneTransform(
+                range=(s11freq.min().to_value("MHz"), s11freq.max().to_value("MHz"))
             ),
+            polynomial_transform=mdl.Log10Transform(scale=1),
             set_transform_range=False,
-            complex_model_type=mdl.ComplexRealImagModel,
             fit_method="lstsq",
+            find_model_delay=False,
             combine_s12s21=False,
         )
 

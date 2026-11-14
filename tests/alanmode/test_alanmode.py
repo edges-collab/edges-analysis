@@ -19,6 +19,7 @@ from edges.alanmode.alanmode import (
     _average_spectra,
 )
 from edges.cal import ReflectionCoefficient
+from edges.cal.sparams import S11ModelParams
 from edges.config import config
 from edges.data import fetch_b18_cal_outputs
 from edges.frequencies import edges_raw_freqs
@@ -428,6 +429,93 @@ class TestGetLoadS11s:
                 atol=1e-4,
                 rtol=0,
             )
+
+
+class TestS11ModelParams:
+    """The S11 model parameters built for the loads, receiver and hot-load cable."""
+
+    @pytest.mark.parametrize(
+        ("fourier", "model"),
+        [
+            (
+                True,
+                mdl.Fourier(
+                    n_terms=27,
+                    transform=mdl.ZerotooneTransform(range=(1, 2)),
+                    period=1.5,
+                ),
+            ),
+            (
+                False,
+                mdl.Polynomial(n_terms=27, transform=mdl.Log10Transform(scale=1)),
+            ),
+        ],
+    )
+    def test_set_transform_range(self, fourier: bool, model: mdl.Model):
+        params = am.alanmode._s11_model_params(27, fourier=fourier)
+        assert params == S11ModelParams(
+            model=model,
+            complex_model_type=mdl.ComplexRealImagModel,
+            set_transform_range=True,
+            fit_method="alan-qrd",
+            find_model_delay=True,
+        )
+
+    def test_hot_load_cable(self):
+        fourier_transform = mdl.ZerotooneTransform(range=(50, 190))
+        polynomial_transform = mdl.Log10Transform(scale=1)
+        kwargs = {
+            "fourier_transform": fourier_transform,
+            "polynomial_transform": polynomial_transform,
+            "set_transform_range": False,
+            "fit_method": "lstsq",
+            "find_model_delay": False,
+            "combine_s12s21": False,
+        }
+        expected = S11ModelParams(
+            model=mdl.Polynomial(n_terms=8, transform=polynomial_transform),
+            complex_model_type=mdl.ComplexRealImagModel,
+            set_transform_range=False,
+            fit_method="lstsq",
+            combine_s12s21=False,
+        )
+        assert am.alanmode._s11_model_params(8, fourier=False, **kwargs) == expected
+
+        params = am.alanmode._s11_model_params(27, fourier=True, **kwargs)
+        assert params.model == mdl.Fourier(
+            n_terms=27, transform=fourier_transform, period=1.5
+        )
+        assert params == attrs.evolve(expected, model=params.model)
+
+    def test_fixed_transforms_required(self):
+        with pytest.raises(ValueError, match="required if set_transform_range"):
+            am.alanmode._s11_model_params(
+                8,
+                fourier=False,
+                fourier_transform=mdl.ZerotooneTransform(range=(50, 190)),
+                set_transform_range=False,
+            )
+
+    @pytest.mark.parametrize("fourier", [True, False])
+    def test_placeholder_transform_is_irrelevant(self, fourier: bool):
+        """The range/scale of the transform is set from the data when fitting."""
+        freqs = np.linspace(50, 190, 141) * un.MHz
+        f = freqs.to_value("MHz")
+        s11 = ReflectionCoefficient(
+            reflection_coefficient=(0.2 + 1e-3 * f) * np.exp(1j * 0.01 * f),
+            freqs=freqs,
+        )
+        params = am.alanmode._s11_model_params(7, fourier=fourier)
+        other = am.alanmode._s11_model_params(
+            7,
+            fourier=fourier,
+            fourier_transform=mdl.ZerotooneTransform(range=(0, 1)),
+            polynomial_transform=mdl.Log10Transform(scale=120),
+        )
+        np.testing.assert_array_equal(
+            s11.smoothed(params, freqs=freqs).reflection_coefficient,
+            s11.smoothed(other, freqs=freqs).reflection_coefficient,
+        )
 
 
 def test_edges3_calobs_params_datadir_from_config(tmp_path: Path):
